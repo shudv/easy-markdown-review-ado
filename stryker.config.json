@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing config. Uses the vitest runner scoped to the fast jsdom `unit` project (the `storybook` browser project is too slow/flaky to run per-mutant). Mutates the pure-logic TS modules that the unit suite actually exercises; the SDK-glue containers and browser-only React shells are excluded (same set that vitest.config.ts drops from coverage).",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.stryker.config.ts"
+  },
+  "reporters": ["html", "clear-text", "progress"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/mutation.html"
+  },
+  "coverageAnalysis": "perTest",
+  "incremental": true,
+  "incrementalFile": "reports/stryker-incremental.json",
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": 85
+  },
+  "mutate": [
+    "src/**/*.{ts,tsx}",
+    "!src/**/*.d.ts",
+    "!src/**/*.stories.tsx",
+    "!src/**/*.html",
+    "!src/comments/fixtures.ts",
+    "!src/types.ts",
+    "!src/shell/types.ts",
+    "!src/globals.d.ts",
+    "!src/telemetry/**",
+    "!src/shell/adoGitData.ts",
+    "!src/shell/adoCommentApi.ts",
+    "!src/shell/commentHousing.ts",
+    "!src/shell/commentPermission.ts",
+    "!src/editing/adoDocEdit.ts",
+    "!src/theme/markdownStyles.ts",
+    "!src/theme/theme.ts",
+    "!src/pr-tab/pr-tab.tsx",
+    "!src/pr-tab/PrTabApp.tsx",
+    "!src/hub/DocumentsApp.tsx",
+    "!src/hub/DocumentsHubApp.tsx",
+    "!src/hub/markdownReader.tsx",
+    "!src/hub/markdownReviewHub.tsx",
+    "!src/**/*.tsx"
+  ]
+}

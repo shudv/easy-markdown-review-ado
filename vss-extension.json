@@ -1,0 +1,73 @@
+{
+  "manifestVersion": 1,
+  "id": "easy-markdown-review",
+  "version": "0.0.1",
+  "publisher": "REPLACE_ME",
+  "public": true,
+  "name": "Easy Markdown Review",
+  "description": "Review Markdown like a Word doc in Azure DevOps: comment on rendered prose in pull requests, render Mermaid diagrams, see what changed, and browse every doc. Git stays the source of truth.",
+  "categories": ["Azure Repos"],
+  "tags": [
+    "markdown",
+    "review",
+    "pull request",
+    "design doc",
+    "documents",
+    "comments"
+  ],
+  "icons": {
+    "default": "static/logo.png"
+  },
+  "targets": [{ "id": "Microsoft.VisualStudio.Services" }],
+  "content": {
+    "details": {
+      "path": "static/overview.md"
+    }
+  },
+  "files": [
+    { "path": "dist", "addressable": true },
+    { "path": "static", "addressable": true }
+  ],
+  "scopes": ["vso.code", "vso.threads_full", "vso.identity", "vso.work"],
+  "contributions": [
+    {
+      "id": "markdown-review-pr-tab",
+      "type": "ms.vss-web.tab",
+      "description": "Tab on the pull request details page that renders Markdown files with a Word-doc-style review experience.",
+      "targets": ["ms.vss-code-web.pr-tabs"],
+      "properties": {
+        "name": "Markdown Review",
+        "uri": "dist/pr-tab/pr-tab.html"
+      }
+    },
+    {
+      "id": "documents-hub-group",
+      "type": "ms.vss-web.hub-group",
+      "description": "Top-level Documents hub group, parallel to Azure Repos. Hosts the repo-scoped Markdown documents browser with its own in-hub repo selector, so it doesn't inherit (or duplicate) the Repos repo picker.",
+      "targets": ["ms.vss-web.project-hub-groups-collection"],
+      "properties": {
+        "name": "Documents",
+        "order": 100,
+        "icon": {
+          "light": "static/documents-hub-light.png",
+          "dark": "static/documents-hub-dark.png"
+        }
+      }
+    },
+    {
+      "id": "documents-hub",
+      "type": "ms.vss-web.hub",
+      "description": "Full-page Markdown documents browser + reader with inline comments. Direct nav shows the repo-scoped file view (with an in-hub repo selector); a bookmarked / shared deep-link URL opens a specific file + repo directly.",
+      "targets": [".documents-hub-group"],
+      "properties": {
+        "name": "Documents",
+        "order": 1,
+        "uri": "dist/hub/documents-hub.html",
+        "icon": {
+          "light": "static/documents-hub-light.png",
+          "dark": "static/documents-hub-dark.png"
+        }
+      }
+    }
+  ]
+}

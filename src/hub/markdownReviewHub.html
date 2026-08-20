@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown Review</title>
+    <style>
+      /* First-paint placeholder shown while the bundle downloads and the SDK
+         initialises, before React's createRoot replaces #root. Theme-neutral
+         (currentColor) so it works on either light or dark host themes. */
+      #emr-boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #emr-boot span {
+        width: 18px;
+        height: 18px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        border-radius: 50%;
+        opacity: 0.45;
+        animation: emr-boot-spin 0.7s linear infinite;
+      }
+      @keyframes emr-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #emr-boot span {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="emr-boot" aria-hidden="true"><span></span></div>
+    </div>
+  </body>
+</html>

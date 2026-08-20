@@ -1,0 +1,8 @@
+Native comment media review checklist
+
+1. The PNG stays within the comment rail.
+2. The animated GIF stays within the comment rail and animates.
+3. Hovering or focusing media reveals View full size.
+4. The full-size viewer supports Fit and Actual size.
+5. Open original opens the Azure DevOps attachment.
+6. The checklist attachment is visually distinct and downloadable.

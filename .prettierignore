@@ -1,0 +1,27 @@
+# Dependencies & lockfiles
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build output & caches
+dist/
+build/
+.webpack-cache/
+
+# Generated coverage reports
+coverage/
+
+# Generated icon assets
+assets/icons/
+
+# Certificates & secrets
+certs/
+
+# Vendored or generated artifacts
+*.vsix
+*.min.js
+*.min.css
+
+# Sandbox fixture documents — authored verbatim and pushed to ADO as-is,
+# so their formatting is intentional and must not be reflowed.
+sandbox/repos/

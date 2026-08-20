@@ -1,0 +1,73 @@
+// Hub chrome: a full-viewport flex column with a slim top bar (Back + file
+// name) above the reader, plus the centered empty/landing state. The reader
+// itself (PrShell) is styled by pr-tab/styles.scss; this file only lays out
+// the surrounding hub frame so it reaches edge-to-edge in full-screen mode.
+
+.emr-hub__reader {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.emr-hub__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  background: var(--background-color, #fff);
+}
+
+.emr-hub__back {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--text-primary-color, inherit);
+
+  &:hover {
+    background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  }
+}
+
+.emr-hub__path {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emr-hub__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.emr-hub__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 32px;
+}
+
+.emr-hub__empty-inner {
+  max-width: 520px;
+  text-align: center;
+
+  h1 {
+    margin: 0 0 12px;
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--text-secondary-color, inherit);
+  }
+}

@@ -1,0 +1,15 @@
+{
+  // Dedicated project for type-aware ESLint only. The base tsconfig.json
+  // excludes test/ and scripts/, and tsconfig.test.json inherits that
+  // exclude — so neither can supply type information for the test files to
+  // typescript-eslint. This project widens the include and clears the
+  // exclude so every linted source/test file is covered.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "build"]
+}

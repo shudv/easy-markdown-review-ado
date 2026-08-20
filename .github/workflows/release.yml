@@ -1,0 +1,67 @@
+name: Publish extension
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: marketplace-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Package & publish
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    env:
+      AZDO_PUBLISHER_ID: ${{ vars.AZDO_PUBLISHER_ID }}
+      AZDO_PAT: ${{ secrets.AZDO_MARKETPLACE_PAT }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Validate release configuration
+        shell: bash
+        run: |
+          test -n "$AZDO_PUBLISHER_ID" || {
+            echo "::error::Repository variable AZDO_PUBLISHER_ID is not configured."
+            exit 1
+          }
+          test -n "$AZDO_PAT" || {
+            echo "::error::Repository secret AZDO_MARKETPLACE_PAT is not configured."
+            exit 1
+          }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build icons
+        run: npm run icons:build
+
+      - name: Package VSIX
+        run: node scripts/package-extension.mjs --mode prod
+
+      - name: Preserve VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: build/*.vsix
+          if-no-files-found: error
+
+      - name: Publish to Azure DevOps Marketplace
+        run: node scripts/publish-extension.mjs --mode prod --no-package
+
+      - name: Attach VSIX to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" build/*.vsix --clobber

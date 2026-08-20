@@ -1,0 +1,19 @@
+# Normalize line endings to LF for all text files so Prettier's
+# `endOfLine: "lf"` check is deterministic on every platform (Windows
+# checkouts previously got CRLF via core.autocrlf, which made
+# `format:check` fail locally while passing in Linux CI).
+* text=auto eol=lf
+
+# Binary assets must never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.vsix binary
+*.pfx binary

@@ -1,0 +1,474 @@
+{
+  "description": "Declarative spec for the Easy Markdown Review ADO sandbox. The setup script (scripts/setup-ado-sandbox.mjs) reads this file plus the content under sandbox/repos/** and provisions an Azure DevOps project that exercises the extension: multiple repos, deep folder trees, large/varied Markdown, and — crucially — COMPLETED pull requests (the only PRs the Documents-hub routing considers) alongside active ones and an empty repo.",
+  "repos": [
+    {
+      "name": "doc-links-showcase",
+      "description": "Relative-link routing exemplar: a nested doc tree whose pages link to each other with sibling, parent (../), grandparent (../../), root-absolute (/…), in-page #anchor, and non-Markdown links. One active PR edits two cross-linked guides so the PR tab exercises in-PR (select in place) vs out-of-PR (open the hub) routing.",
+      "pullRequests": [
+        {
+          "title": "Expand the installation and configuration guides",
+          "branch": "feature/expand-guides",
+          "description": "Adds a prerequisites section to the install guide and a logging note to the configuration guide. The two guides link to each other (both in this PR) and to docs outside the PR, so the reader's relative-link routing can be exercised in the PR tab.",
+          "overlay": "expand-guides",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/docs/guides/install.md",
+              "status": "active",
+              "rightStartLine": 1,
+              "rightEndLine": 1,
+              "comments": [
+                "Handy for testing: configure.md is in this PR (selects in place), but getting-started.md and the README are not (they open the hub in a new tab)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "service-architecture",
+      "description": "Engineering design docs. Large Mermaid-heavy overview, deep nesting, several merged PRs plus one active streaming PoC.",
+      "pullRequests": [
+        {
+          "title": "Refine projector retry + clarify open questions",
+          "branch": "feature/refine-projector",
+          "description": "Tightens the projector section and resolves two open questions from the architecture review.",
+          "overlay": "refine-projector",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/docs/architecture/services/projector.md",
+              "status": "fixed",
+              "rightStartLine": 9,
+              "rightEndLine": 9,
+              "comments": [
+                "Should the retry budget be per-marketplace or global? Per-marketplace keeps one slow sink from starving the others.",
+                "Agreed — made it per-marketplace with an independent circuit breaker. Updated here."
+              ]
+            },
+            {
+              "filePath": "/docs/architecture/overview.md",
+              "status": "closed",
+              "rightStartLine": 3,
+              "rightEndLine": 3,
+              "comments": [
+                "Can we quantify the lag in the Context section? 'several minutes' is vague.",
+                "Done — now states 3–7 minutes with the incident count."
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Add marketplace adapter with circuit breakers",
+          "branch": "feature/circuit-breakers",
+          "description": "Introduces a dedicated marketplace-adapter component and documents the per-marketplace circuit breaker behaviour.",
+          "overlay": "circuit-breakers",
+          "complete": true,
+          "mergeStrategy": "noFastForward",
+          "threads": [
+            {
+              "filePath": "/docs/architecture/services/marketplace-adapter.md",
+              "status": "active",
+              "rightStartLine": 1,
+              "rightEndLine": 1,
+              "comments": [
+                "Nice. One question: what trips the breaker — error rate, latency, or both?"
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Document event-bus retention policy",
+          "branch": "feature/retention-policy",
+          "description": "Records the 14-day-hot / 90-day-cold retention decision in ADR 0002.",
+          "overlay": "retention-policy",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": []
+        },
+        {
+          "title": "PoC: streaming ingestion (do not merge yet)",
+          "branch": "feature/streaming-poc",
+          "description": "Active PR — exists so the Documents hub can prove it ignores active PRs for routing.",
+          "overlay": "streaming-poc",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/docs/architecture/overview.md",
+              "status": "active",
+              "rightStartLine": 20,
+              "rightEndLine": 20,
+              "comments": [
+                "Holding this open until the retention PR lands. Routing should NOT pick this up."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "platform-runbooks",
+      "description": "Operational runbooks. Many small/medium files; three merged PRs.",
+      "pullRequests": [
+        {
+          "title": "Update on-call rotation and escalation",
+          "branch": "feature/update-oncall",
+          "description": "Refreshes the on-call runbook with the new escalation matrix.",
+          "overlay": "update-oncall",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/runbooks/on-call.md",
+              "status": "fixed",
+              "rightStartLine": 7,
+              "rightEndLine": 7,
+              "comments": [
+                "Escalation should page the secondary after 15 min, not 30.",
+                "Fixed — secondary now pages at 15 minutes."
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Harden database failover steps",
+          "branch": "feature/db-failover",
+          "description": "Adds pre-flight checks and a verification step to the failover runbook.",
+          "overlay": "db-failover",
+          "complete": true,
+          "mergeStrategy": "noFastForward",
+          "threads": []
+        },
+        {
+          "title": "Clarify deploy rollback decision tree",
+          "branch": "feature/clarify-rollback",
+          "description": "Rewrites the rollback decision tree as a Mermaid flowchart.",
+          "overlay": "clarify-rollback",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/runbooks/deploy-rollback.md",
+              "status": "closed",
+              "rightStartLine": 5,
+              "rightEndLine": 5,
+              "comments": [
+                "A diagram would make this far easier to follow at 2am.",
+                "Added a flowchart — much clearer now."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "product-rfcs",
+      "description": "Product RFC process. Mix of merged and active PRs.",
+      "pullRequests": [
+        {
+          "title": "Accept RFC-0002: comment anchoring",
+          "branch": "feature/accept-anchoring",
+          "description": "Marks RFC-0002 accepted and records the chosen anchoring strategy.",
+          "overlay": "accept-anchoring",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/rfcs/0002-comment-anchoring.md",
+              "status": "fixed",
+              "rightStartLine": 11,
+              "rightEndLine": 11,
+              "comments": [
+                "Do we fall back to fuzzy matching when the quote anchor drifts?",
+                "Yes — text-position first, then text-quote fuzzy fallback. Documented."
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Revise RFC-0003 offline mode scope",
+          "branch": "feature/offline-revisions",
+          "description": "Narrows the offline-mode RFC to read-only caching for v1.",
+          "overlay": "offline-revisions",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": []
+        },
+        {
+          "title": "Draft RFC-0004: review telemetry",
+          "branch": "feature/draft-telemetry",
+          "description": "Active draft PR — kept open to test active-PR handling.",
+          "overlay": "draft-telemetry",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "api-reference",
+      "description": "API reference docs. Large tables and code blocks; two merged PRs.",
+      "pullRequests": [
+        {
+          "title": "Document PR thread endpoints",
+          "branch": "feature/document-threads",
+          "description": "Adds the pull-request thread create/update endpoints to the REST reference.",
+          "overlay": "document-threads",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/api/rest/pull-requests.md",
+              "status": "fixed",
+              "rightStartLine": 30,
+              "rightEndLine": 30,
+              "comments": [
+                "The thread context fields need an example payload.",
+                "Added a full request/response example below the table."
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Add SDK quick-start examples",
+          "branch": "feature/sdk-examples",
+          "description": "Fleshes out the SDK getting-started page with runnable snippets.",
+          "overlay": "sdk-examples",
+          "complete": true,
+          "mergeStrategy": "noFastForward",
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "team-handbook",
+      "description": "Team handbook. Nested by discipline; one merged PR.",
+      "pullRequests": [
+        {
+          "title": "Expand code-review expectations",
+          "branch": "feature/expand-code-review",
+          "description": "Adds reviewer SLAs and a checklist to the code-review guide.",
+          "overlay": "expand-code-review",
+          "complete": true,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/handbook/engineering/code-review.md",
+              "status": "closed",
+              "rightStartLine": 13,
+              "rightEndLine": 13,
+              "comments": [
+                "Can we set an explicit first-response SLA?",
+                "Added: first response within one business day."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "diff-showcase",
+      "description": "A one-file gallery for minimal block-level diffs: precise prose and code tokens, formatting ranges, links, heading text, list markers, checklist state, tables, additions, removals, Mermaid changes, and compact Before disclosures for genuinely ambiguous rewrites. Every case is isolated by unchanged content anchors.",
+      "pullRequests": [
+        {
+          "title": "Showcase block-level diff confidence",
+          "branch": "feature/block-diff-confidence",
+          "description": "A comprehensive one-file diff gallery with each change isolated by stable content anchors. Precise cases cover prose, partial hard-wrap reconstruction, heading levels, list markers, checklist state, combined marker/checklist changes, code tokens, titled/long/added/removed links, nested formatting, formatting ranges, tables, Mermaid, additions, and removals. Separate wholesale prose, quote, and code rewrites exercise compact Before fallback.",
+          "overlay": "complex-diff",
+          "complete": false,
+          "mergeStrategy": "squash",
+          "threads": [
+            {
+              "filePath": "/guide.md",
+              "status": "active",
+              "rightStartLine": 20,
+              "rightEndLine": 20,
+              "comments": [
+                "Good call adding a Prerequisites section — the Node version tripped up two new hires last month."
+              ]
+            },
+            {
+              "filePath": "/guide.md",
+              "status": "fixed",
+              "rightStartLine": 105,
+              "rightEndLine": 105,
+              "comments": [
+                "Checking the network tab is much better guidance than 'look for a stack trace'.",
+                "Agreed — reworded it to point at the failing request and the build manifest hash."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "production-markdown-showcase",
+      "description": "Production-derived Markdown dialect coverage: reference definitions, GitHub alerts, safe HTML details/cards, definition continuations, code-fence options, section moves, and deleted-document review.",
+      "pullRequests": [
+        {
+          "title": "Exercise production Markdown syntax and retire a legacy guide",
+          "branch": "feature/production-markdown-syntax",
+          "description": "An active PR derived from Markdown patterns seen in GitHub Docs, MDN, React, Kubernetes, Rust, and VS Code documentation. It changes a reference-link definition, alert body, details body, definition continuation, safe HTML card, code-fence options, and section order while keeping stable anchors between cases. It also deletes removed-in-pr.md so the extension must load the base version and present it read-only.",
+          "overlay": "exercise-production-syntax",
+          "deletePaths": ["/removed-in-pr.md"],
+          "complete": false,
+          "mergeStrategy": "squash",
+          "attachments": [
+            {
+              "fileName": "logo.png",
+              "source": "static/logo.png"
+            },
+            {
+              "fileName": "showcase.gif",
+              "source": "static/showcase.gif"
+            },
+            {
+              "fileName": "comment-media-review-checklist.txt",
+              "source": "sandbox/assets/comment-media-review-checklist.txt"
+            }
+          ],
+          "threads": [
+            {
+              "filePath": "/production-syntax.md",
+              "status": "active",
+              "rightStartLine": 12,
+              "rightEndLine": 12,
+              "comments": [
+                "The alert body should retain its semantic callout styling while showing only the changed words."
+              ]
+            },
+            {
+              "filePath": "/production-syntax.md",
+              "status": "active",
+              "rightStartLine": 5,
+              "rightEndLine": 5,
+              "comments": [
+                "[EMR native media showcase]\n\nThe PNG should stay contained within the comment and open at full size:\n\n![logo.png]({{attachment:logo.png}})\n\nThe larger animated GIF should remain contained, animate, and open in the viewer:\n\n![showcase.gif]({{attachment:showcase.gif}})\n\nDownloadable attachment:\n\n[comment-media-review-checklist.txt]({{attachment:comment-media-review-checklist.txt}})"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frontmatter-showcase",
+      "description": "A single config.md with a rich YAML frontmatter block, rendered as a compact metadata card. Its one PR edits the metadata (and the prose body stays an anchor) so the card can be reviewed in a real PR — note that frontmatter is NOT diffed: it always renders as its final version, so the card shows the post-edit metadata with no highlight overlay.",
+      "pullRequests": [
+        {
+          "title": "Publish the widget platform config",
+          "branch": "feature/publish-config",
+          "description": "Edits the config metadata (status Draft \\u2192 Published, version bump, a new reviewers key, a maintainer swap, an added onboarding tag, and a removed region key). Frontmatter is not diffed, so the metadata card simply renders its final version; the prose body is untouched.",
+          "overlay": "edit-frontmatter",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/config.md",
+              "status": "active",
+              "rightStartLine": 3,
+              "rightEndLine": 3,
+              "comments": [
+                "Flipping status to Published here is what gates the release pipeline — good to land this before the tag."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ai-skills",
+      "description": "Reusable AI agent skills plus the human guidelines they automate. One ACTIVE PR revises the customer incident-response guidelines and updates the ICM investigation skill that references them — a rich two-file diff exercising YAML frontmatter cards, Mermaid edits and adds, table cell + added-row edits, code blocks, list edits, inline prose edits and removed sections, each isolated by unchanged anchors.",
+      "pullRequests": [
+        {
+          "title": "Revise incident-response guidelines and update the ICM skill",
+          "branch": "feature/revise-incident-guidelines",
+          "description": "An **active** PR that revises the customer incident-response guidelines and updates the ICM investigation skill that references them — a rich two-file diff. Every change is bracketed by an unchanged content line so it renders as a clean add (green) / delete (red) / inline word edit rather than a merged amber block.\n\n**guidelines/incident-response.md**\n- Frontmatter: status Draft → Published, version 1.3.0 → 2.0.0, a new `reviewers` key, `severity_levels` 4 → 5, an added `onboarding` tag (renders as a metadata card, not diffed).\n- Intro reworded to link the ICM skill, and the 'if you are unsure' note reworded (inline word edits).\n- Severity table: a new **Sev 0** row (green) and the Sev 2 cadence 60 → 45 min (row edit), separated by the unchanged Sev 1 row.\n- New **Triage decision tree** section with a Mermaid flowchart (pure add).\n- The response-lifecycle Mermaid gains a `communicate` node (diagram edit — left accent bar).\n- Roles: the incident-commander item reworded (inline) and a new **Scribe** item (green), separated by the unchanged comms-lead item.\n- The deprecated **Legacy paging policy** section is removed (delete, red).\n- New **Communication templates** section with a sequence diagram and a status-update code block (pure add).\n\n**skills/icm-investigation/SKILL.md**\n- Frontmatter: description reworded, version 0.4.0 → 1.0.0, added `owner` and `guidelines` keys, a new `severity` tag (not diffed).\n- The guideline reference reworded into a real link (inline word edit).\n- Inputs table: the Incident ID note gains an example (row edit) and a new **Severity** row (green), separated by the unchanged Service-name row.\n- The workflow Mermaid gains a severity decision (diagram edit — left accent bar).\n- New **Data sources** section with a table and a Kusto query block (pure add).\n- Step 1 reworded (inline list edit).\n- The **Manual fallback** section is removed (delete, red).\n\nUnchanged anchors: the section headings and untouched paragraphs, the table header + Sev 1 / 3 / 4 rows, and the Output and Safety sections.",
+          "overlay": "revise-incident-guidelines",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/guidelines/incident-response.md",
+              "status": "active",
+              "rightStartLine": 27,
+              "rightEndLine": 27,
+              "comments": [
+                "Adding Sev 0 for confirmed data loss / security is the right call — the 15-minute cadence matches what security response already expects."
+              ]
+            },
+            {
+              "filePath": "/skills/icm-investigation/SKILL.md",
+              "status": "fixed",
+              "rightStartLine": 26,
+              "rightEndLine": 26,
+              "comments": [
+                "Should the skill propose a severity, or leave that call to the on-call engineer?",
+                "It proposes one from impact now — see the new Severity input row; the engineer can still override it."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "two-dot-diff-repro",
+      "description": "Repro for the stale-master (two-dot vs three-dot) diff-base bug: `main` advances past the fork point AFTER the branch is created, so files also touched on `main` lose or duplicate their PR highlights unless the diff uses the merge base. The active PR renders blank/incorrect diffs on the unfixed build. Uses `advanceTarget` (see sandbox/README.md).",
+      "pullRequests": [
+        {
+          "title": "Reword the guide (stale-master diff repro)",
+          "branch": "feature/reword-guide",
+          "description": "Master advances past the fork point after the branch forks (two-dot vs three-dot diff base).",
+          "overlay": "reword-guide",
+          "advanceTarget": "advance-main",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "added-file-diff-repro",
+      "description": "Repro for the batched getFileDiffs failure: a PR that ADDS a `.md` file (`new-page.md`) alongside a modified one (`guide.md`). The added file doesn't exist at the base commit, so ADO's single-batch getFileDiffs 404s the WHOLE request (VS403420) and the modified file's diff vanishes too on the unfixed build — unless added files are excluded from the batch (`diffableFilePaths`).",
+      "pullRequests": [
+        {
+          "title": "Reword the guide and add a new page",
+          "branch": "feature/add-page",
+          "description": "Adds new-page.md and rewords guide.md; the added file blanks the whole PR's diffs on the unfixed build.",
+          "overlay": "add-page",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "loose-list-diff-repro",
+      "description": "Repro for the loose-list inline-diff blank-line bug: a LOOSE ordered list (blank lines between items, so each item's prose is wrapped in a `<p>`) with one item reworded. On the unfixed build the inline word-diff ran against the whole `<li>`, wrapping the whitespace between the `<li>` and its `<p>` in empty `<ins>`/`<del>` that rendered as blank lines above and below the item; the fix targets the inner `<p>`.",
+      "pullRequests": [
+        {
+          "title": "Reword a checklist item (loose-list diff repro)",
+          "branch": "feature/reword-checklist-item",
+          "description": "Rewords one item of a loose (blank-line-separated) list; the edited item must inline-diff inside its `<p>` without stray blank lines.",
+          "overlay": "reword-item",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "table-diff-showcase",
+      "description": "A focused table-diff gallery in one Markdown file. Its active PR covers value and header edits, full replacements, structural rows/columns, confidence fallbacks, and shared inline semantics including formatting+target, text+image metadata, link wrapping, and dense sibling links/images.",
+      "pullRequests": [
+        {
+          "title": "Showcase granular and structural table diffs",
+          "branch": "feature/table-diff-gallery",
+          "description": "A one-file visual gallery for table diff behavior. Thirty-two isolated cases cover single/multi-cell edits, complete replacement, header and row/column structure, additions/removals/swaps, confidence fallbacks for unanchored/repeated/empty/partially replaced schemas, rich wrapping content, formatting+target metadata, text+image metadata, link wrapping, and multiple link/image index stability. Every table includes stable context so accidental over-highlighting is easy to spot.",
+          "overlay": "table-diff-gallery",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
+      "name": "markdown-review-sandbox-v2",
+      "description": "Intentionally has files but NO pull requests — exercises the Documents-hub empty state (commenting disabled until a PR exists). Maps to the project's auto-created default repo.",
+      "pullRequests": []
+    }
+  ]
+}

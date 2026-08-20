@@ -1,0 +1,5772 @@
+// Styling for the Markdown Review PR tab.
+// Word-doc-style review: 3-column body (docnav | article | rail).
+// Inline diff markings replace the old left-margin changebar.
+// Rendered article inherits from github-markdown-css; we layer on top.
+
+:root {
+  --emr-bg: #ffffff;
+  --emr-fg: #1f1f1f;
+  --emr-muted: #6e6e6e;
+  // DocNav tonal hierarchy: file rows sit at the strongest (near-black) tone so
+  // they read as the parent of their nested heading rows, which recede to a
+  // muted tone. Kept as tokens so the light/dark/HC themes each tune the gap.
+  --emr-nav-file-fg: #141414;
+  --emr-nav-heading-fg: #595959;
+  --emr-faint: #f3f3f3;
+  --emr-rule: #e5e5e5;
+  --emr-rule-strong: #cccccc;
+  // Divider between the document and the side panes. Transparent by default —
+  // the doc/pane background contrast carries the separation — but a strong line
+  // in high-contrast themes, where the panes share the document's background.
+  --emr-pane-divider: transparent;
+  // The document reads as a card floating on the pane-grey backdrop: a hairline
+  // edge and a whisper of shadow. `--emr-card-gap` is now ONLY the gap below the
+  // card (document bottom edge → status bar); the top/left/right edges sit flush
+  // against the ADO-matching chrome so the reader claims the full real estate
+  // and reads as one seamless surface. Kept theme-agnostic (defined once here);
+  // the edge/shadow tune per theme.
+  --emr-card-gap: 6px;
+  --emr-card-border: rgba(0, 0, 0, 0.09);
+  --emr-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --emr-accent: #0066b8;
+  --emr-accent-soft: #e6f0fa;
+  // Side panes (doc-nav + comment rail) adopt the ADO PR-page background so they
+  // blend into the surrounding chrome; the document keeps its own `--emr-bg`
+  // reading surface, distinct from the host. `--palette-neutral-2` is the ADO
+  // token the PR details page sits on (rgb 248,248,248 in light) — NOT
+  // `--background-color`, which is the white content bg. The raw-triplet
+  // fallback matches it when standalone (Storybook / dev preview).
+  --emr-rail-bg: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+  --emr-balloon-bg: #ffffff;
+  --emr-balloon-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --emr-balloon-shadow-active:
+    0 4px 12px rgba(0, 102, 184, 0.18), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  // Balloon variants. Resolved threads dim slightly; orphaned cards (their
+  // anchor text has been deleted) read as a quiet near-bg surface.
+  --emr-balloon-resolved-bg: #f7f7f7;
+  --emr-balloon-orphaned-bg: #fbfbfb;
+  --emr-balloon-orphan-quote-bg: rgba(0, 0, 0, 0.03);
+
+  --emr-hl-active: #fff3a8;
+  --emr-hl-active-strong: #ffd966;
+  --emr-hl-active-fg: var(--emr-fg);
+  --emr-hl-border: rgba(0, 0, 0, 0.08);
+  --emr-hl-resolved: #f0f0f0;
+  --emr-hl-resolved-strong: #e0e0e0;
+
+  --emr-diff-added: #2da44e;
+  --emr-diff-modified: #bf8700;
+  --emr-diff-deleted: #cf222e;
+  --emr-status-closed: #8250df;
+
+  // Diff wash / inline-mark opacities. Kept as tokens so each theme can tune
+  // legibility: the light palette stays deliberately quiet, while dark themes
+  // (where a low-opacity tint over a dark surface nearly vanishes) boost them.
+  --emr-diff-wash: 9%;
+  // Granular (list-item / table-row) tints run a touch stronger than the block
+  // wash so a single changed row still reads.
+  --emr-diff-wash-granular: 12%;
+  --emr-diff-word-added-bg: 15%;
+  --emr-diff-word-removed-bg: 9%;
+  --emr-diff-word-removed-strike: 50%;
+  // How far the removed-word text is pulled toward the deleted hue (rest is fg).
+  --emr-diff-word-removed-fg: 55%;
+  --emr-selection-bg: rgba(0, 102, 184, 0.18);
+  --emr-diff-cell-bg: 16%;
+
+  --emr-header-h: 64px;
+  // Top breathing room above the reader columns. The DocNav + article get it
+  // from the grid's padding-top; the comment rail from a margin-top on its
+  // first child. Both sticky headers therefore pin at exactly this offset when
+  // scrollTop=0 and stay locked there as the article scrolls — no drift. Kept
+  // tight (the old floating toolbar that needed a taller band is gone).
+  --emr-shell-top: 10px;
+  --emr-grid-rail: 340px;
+  // Width of the two edge scrollbars: the document overview (custom diff ruler)
+  // on the left and the comment rail's custom bar (the same ruler, minus the
+  // diff ticks) on the right. Both are styled from the shared tokens below so
+  // the two edges read the same.
+  --emr-scrollbar-w: 12px;
+  // Shared scrollbar look — both custom ruler thumbs (the document overview AND
+  // the comment rail bar) use these, so a slim rounded thumb with an identical
+  // 8px top/bottom inset reads the same on both edges.
+  --emr-scrollbar-thumb: color-mix(in srgb, var(--emr-fg) 22%, transparent);
+  --emr-scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--emr-fg) 34%,
+    transparent
+  );
+  --emr-scrollbar-inset: 8px;
+  // DocNav matches the rail width so the layout reads as a balanced
+  // three-column sheet. The extra width also gives nested folder paths
+  // (e.g. `src/components/foo.tsx`) room to render without ellipsis.
+  // The reader's nav-width preference sets `--emr-nav-scale` inline on `.emr-app`
+  // (from `readerPrefs.navWidthPct`, default 1 = the base 340px). The width is
+  // resolved on the consumer (`.emr-body__nav`) — deliberately NOT via an
+  // intermediate token here — because a `calc(... var(--emr-nav-scale))` declared
+  // on `:root` substitutes the default scale (1) at `:root` and inherits that
+  // fixed px downward, ignoring the `.emr-app` override. Reading the variable on
+  // the nav element itself picks up the inherited inline value, so dragging the
+  // border (and the toolbar stepper) actually resizes the rail.
+  --emr-nav-scale: 1;
+  // Comment-rail width preference (from `readerPrefs.commentWidthPct`), set
+  // inline on `.emr-app`. A `:root` fallback of 1 guarantees `.emr-rail`'s
+  // flex-basis calc stays valid even if the inline value is ever missing, so the
+  // rail can never collapse to a content-sized width.
+  --emr-rail-scale: 1;
+  // Dynamic-mode floor for the document region: it FILLS the space between the
+  // fixed nav + comment rails but never shrinks below this. Below what the
+  // visible columns need, the reader disables (`.is-too-narrow`) rather than crush.
+  // Kept in sync with `READER_DOC_MIN_W` in readerPrefs.ts (the degradation calc).
+  --emr-doc-min-w: 440px;
+  --emr-article-max: 760px;
+  // Internal gutter at the leading edge of the article column where the
+  // section chevron and inline diff bar live. Sized so both affordances
+  // sit outside the visual text without leaking into the DocNav rail.
+  --emr-article-gutter: 28px;
+  // Visible document text starts after the grid's 32px paper inset plus the
+  // article gutter that houses section chevrons and diff bars. Reuse that same
+  // effective inset as the baseline for the paper's breathing room.
+  --emr-document-text-inset: calc(32px + var(--emr-article-gutter));
+  // The first heading's line box adds a little visual whitespace above its
+  // glyphs, so a mathematically equal block inset reads too tall. Pull the
+  // vertical inset in slightly for optical balance with the horizontal edge.
+  --emr-document-block-inset: calc(var(--emr-document-text-inset) - 8px);
+  // Reader typography, driven by the floating document toolbar. The reading
+  // font applies to PROSE only (code keeps its monospace face); the scale
+  // multiplies the base reading size. Both default to the standard reading
+  // experience and are overridden inline from the reader's saved preferences.
+  --emr-reader-font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
+  --emr-reader-scale: 1;
+}
+
+// ---------------------------------------------------------------------------
+// Theme variants. The light palette above is the unconditional default.
+// Each block below overrides only the colour tokens — geometry tokens
+// (--emr-header-h, --emr-grid-*) stay shared so theme swaps never reflow
+// the layout.
+//
+// The active theme is selected by writing `data-emr-theme` on the
+// documentElement; see `src/theme/theme.ts`.
+// ---------------------------------------------------------------------------
+
+:root[data-emr-theme="dark"] {
+  --emr-bg: #1f1f1f;
+  --emr-fg: #e6e6e6;
+  --emr-muted: #a0a0a0;
+  --emr-nav-file-fg: #f5f5f5;
+  --emr-nav-heading-fg: #969696;
+  --emr-faint: #2a2a2a;
+  --emr-rule: #3a3a3a;
+  --emr-rule-strong: #555555;
+  --emr-card-border: rgba(255, 255, 255, 0.08);
+  --emr-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --emr-accent: #4cc2ff;
+  --emr-accent-soft: rgba(76, 194, 255, 0.16);
+  // Adopt the ADO PR-page background (see the light block); fallback for standalone.
+  --emr-rail-bg: rgba(var(--palette-neutral-2, 38, 38, 38), 1);
+  --emr-balloon-bg: #2a2a2a;
+  --emr-balloon-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --emr-balloon-shadow-active:
+    0 4px 12px rgba(76, 194, 255, 0.28), 0 2px 4px rgba(0, 0, 0, 0.4);
+
+  --emr-balloon-resolved-bg: #242424;
+  --emr-balloon-orphaned-bg: #232323;
+  --emr-balloon-orphan-quote-bg: rgba(255, 255, 255, 0.05);
+
+  --emr-hl-active: rgba(255, 217, 102, 0.62);
+  --emr-hl-active-strong: rgba(255, 217, 102, 0.85);
+  // Pin the highlighted text to a dark colour so the yellow background
+  // actually carries enough contrast (light-on-yellow was unreadable).
+  --emr-hl-active-fg: #1a1a1a;
+  --emr-hl-border: rgba(255, 255, 255, 0.08);
+  --emr-hl-resolved: rgba(255, 255, 255, 0.08);
+  --emr-hl-resolved-strong: rgba(255, 255, 255, 0.18);
+
+  --emr-diff-added: #3fb950;
+  --emr-diff-modified: #d29922;
+  --emr-diff-deleted: #f85149;
+  --emr-status-closed: #b083f0;
+
+  // Boost the diff wash / inline-mark opacities for dark: a 9% tint over a
+  // near-black surface is barely perceptible, so the added/edited washes and
+  // the inline word marks are lifted for legibility while staying "soft".
+  --emr-diff-wash: 22%;
+  --emr-diff-wash-granular: 28%;
+  --emr-diff-word-added-bg: 32%;
+  --emr-diff-word-removed-bg: 24%;
+  --emr-diff-word-removed-strike: 70%;
+  --emr-diff-word-removed-fg: 72%;
+  --emr-diff-cell-bg: 30%;
+  // Native text selection must stay visibly distinct from the near-black paper.
+  --emr-selection-bg: rgba(76, 194, 255, 0.42);
+}
+
+// High-contrast light: pure white background, pure black foreground,
+// strong outlines instead of soft hover fills. Drop shadows are killed
+// because Windows HC themes hide them.
+:root[data-emr-theme="hc-light"] {
+  --emr-bg: #ffffff;
+  --emr-fg: #000000;
+  --emr-muted: #000000;
+  // High-contrast: keep BOTH at max contrast (no muting) — hierarchy comes from
+  // the file label's weight/size only, so contrast requirements aren't violated.
+  --emr-nav-file-fg: #000000;
+  --emr-nav-heading-fg: #000000;
+  --emr-faint: #ffffff;
+  --emr-rule: #000000;
+  --emr-rule-strong: #000000;
+  --emr-pane-divider: var(--emr-rule);
+  --emr-card-border: var(--emr-rule);
+  --emr-card-shadow: none;
+  --emr-accent: #0033cc;
+  --emr-accent-soft: #ffffff;
+  --emr-rail-bg: #ffffff;
+  --emr-balloon-bg: #ffffff;
+  --emr-balloon-shadow: none;
+  --emr-balloon-shadow-active: none;
+
+  --emr-balloon-resolved-bg: #ffffff;
+  --emr-balloon-orphaned-bg: #ffffff;
+  --emr-balloon-orphan-quote-bg: #f0f0f0;
+
+  --emr-hl-active: #ffff00;
+  --emr-hl-active-strong: #ffff00;
+  --emr-hl-active-fg: #000000;
+  --emr-hl-border: #000000;
+  --emr-hl-resolved: #ffffff;
+  --emr-hl-resolved-strong: #ffffff;
+
+  --emr-diff-added: #007a00;
+  --emr-diff-modified: #6a4500;
+  --emr-diff-deleted: #b30000;
+  --emr-status-closed: #5a1e9e;
+  --emr-selection-bg: Highlight;
+}
+
+// High-contrast dark: pure black + yellow accent (Windows HC default).
+:root[data-emr-theme="hc-dark"] {
+  --emr-bg: #000000;
+  --emr-fg: #ffffff;
+  --emr-muted: #ffffff;
+  --emr-nav-file-fg: #ffffff;
+  --emr-nav-heading-fg: #ffffff;
+  --emr-faint: #000000;
+  --emr-rule: #ffffff;
+  --emr-rule-strong: #ffffff;
+  --emr-pane-divider: var(--emr-rule);
+  --emr-card-border: var(--emr-rule);
+  --emr-card-shadow: none;
+  --emr-accent: #ffd80b;
+  --emr-accent-soft: #000000;
+  --emr-rail-bg: #000000;
+  --emr-balloon-bg: #000000;
+  --emr-balloon-shadow: none;
+  --emr-balloon-shadow-active: none;
+
+  --emr-balloon-resolved-bg: #000000;
+  --emr-balloon-orphaned-bg: #000000;
+  --emr-balloon-orphan-quote-bg: #1a1a1a;
+
+  --emr-hl-active: #ffd80b;
+  --emr-hl-active-strong: #ffd80b;
+  --emr-hl-active-fg: #000000;
+  --emr-hl-border: #ffffff;
+  --emr-hl-resolved: #000000;
+  --emr-hl-resolved-strong: #000000;
+
+  --emr-diff-added: #1aff1a;
+  --emr-diff-modified: #ffd80b;
+  --emr-diff-deleted: #ff5c5c;
+  --emr-status-closed: #d8b6ff;
+  --emr-selection-bg: Highlight;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--emr-bg);
+  color: var(--emr-fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+// The shell is a full-height flex app that owns ALL scrolling via its inner
+// scrollers (nav tree, document, comment rail). Its mount root must NEVER
+// scroll — without this guard, a transient overflow during boot (before the
+// flex `min-height:0` constraints settle) flashes the window scrollbar at the
+// viewport's far-right edge and shifts the whole layout left, then back. Scoped
+// to `#root` (the real app mount) so Storybook's own root is untouched.
+#root {
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font-family: inherit;
+}
+
+// ---------------------------------------------------------------------------
+// App shell
+// ---------------------------------------------------------------------------
+
+.emr-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+// ---------------------------------------------------------------------------
+// Buttons / toggles
+// ---------------------------------------------------------------------------
+
+.emr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--emr-rule-strong);
+  background: var(--emr-bg);
+  color: var(--emr-fg);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 80ms ease,
+    border-color 80ms ease;
+
+  &:hover {
+    border-color: var(--emr-accent);
+  }
+
+  &.is-active {
+    background: var(--emr-accent-soft);
+    border-color: var(--emr-accent);
+    color: var(--emr-accent);
+  }
+
+  &.primary {
+    background: var(--emr-accent);
+    border-color: var(--emr-accent);
+    color: #fff;
+
+    &:hover {
+      background: #0058a3;
+      border-color: #0058a3;
+    }
+  }
+
+  &.subtle {
+    border-color: transparent;
+    background: transparent;
+    color: var(--emr-muted);
+
+    &:hover {
+      background: var(--emr-faint);
+      color: var(--emr-fg);
+    }
+  }
+
+  &.danger {
+    background: transparent;
+    border-color: transparent;
+    color: #b32424;
+
+    &:hover {
+      background: rgba(179, 36, 36, 0.08);
+      color: #8b1919;
+      border-color: transparent;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Body / grid
+// ---------------------------------------------------------------------------
+
+// Fixed, left-anchored navigation rail — the first flow child of the frame, so
+// it hugs the viewport's left edge. A full-height divider (border-right) splits
+// it from the document. Holds the DocNav heading tree, which scrolls internally
+// (`.emr-docnav-list`) while its header stays put.
+.emr-body__nav {
+  flex: 0 0 calc(340px * var(--emr-nav-scale));
+  // Hard cap at the +30% pref bound so a bad scale can never widen the rail.
+  max-width: calc(340px * 1.3);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--emr-shell-top) 0 0 24px;
+  border-right: 1px solid var(--emr-pane-divider);
+  // Side panes (nav + comment rail) sit one tonal step off the document
+  // (`--emr-bg`) so the reading column reads as the distinct centre surface.
+  background: var(--emr-rail-bg);
+  // Anchor the drag-resize handle to the rail's right border.
+  position: relative;
+  // Stop the divider at the document card's bottom edge instead of letting it
+  // protrude through the card gap to the status bar.
+  margin-bottom: var(--emr-card-gap);
+}
+
+// Drag-to-resize affordance on the nav rail's right border: an invisible strip
+// straddling the edge whose only cue is the resize cursor on hover. The handle
+// captures the pointer on press, so that cursor holds for the whole drag.
+// Double-click resets the width.
+.emr-nav-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -5px;
+  width: 14px;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+// Focus mode: hide the nav but keep it MOUNTED so its expand/scroll state
+// survives toggling. The document reclaims the freed width (it fills).
+.emr-app.is-nav-hidden .emr-body__nav {
+  display: none;
+}
+
+.emr-body {
+  // Anchored layout: the document region FILLS the gap between the fixed left
+  // nav and the fixed right comment rail (no centring auto-margins). It honours
+  // a min-width floor (`--emr-doc-min-w`); below what the visible columns need,
+  // the whole reader disables (`.is-too-narrow`) rather than squishing the prose.
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: var(--emr-doc-min-w);
+  overflow-y: auto;
+  // Wide article content (tables, code) can still scroll horizontally inside
+  // the document region without shoving the comment rail off-screen.
+  overflow-x: auto;
+  // The custom overview bar (DiffMinimap) IS the vertical scrollbar, so hide the
+  // native vertical one from the very FIRST paint — statically, reserving NO
+  // gutter. (The old `scrollbar-gutter: stable` reserved a gutter that the JS-
+  // toggled `emr-scroller--custom-bar` class then COLLAPSED once it mounted,
+  // flashing the native bar + shifting the article ~12px on boot.) Firefox has
+  // no per-axis control so this hides both; the webkit rule at the end keeps the
+  // HORIZONTAL bar for wide content (the custom bar is Y-only).
+  scrollbar-width: none;
+  // Its own scroll container; contain overscroll so reaching the article's
+  // top/bottom never chains the wheel to the page or the comment rail.
+  overscroll-behavior: contain;
+  background: var(--emr-bg);
+  position: relative;
+  // Lift the reading surface off the pane-grey backdrop as a card: a hairline
+  // edge, soft shadow and near-sharp corners. Only the BOTTOM keeps a gap (to
+  // the status bar); the top/left/right edges sit flush against the ADO-matching
+  // chrome so nothing is wasted and the reader reads as one seamless surface —
+  // the hairline border alone separates the white paper from the grey chrome.
+  margin: 0 0 var(--emr-card-gap);
+  border: 1px solid var(--emr-card-border);
+  // Paper reads with crisp corners; keep just a 2px whisker off dead-sharp so
+  // the edge doesn't alias harshly against the backdrop.
+  border-radius: 2px;
+  box-shadow: var(--emr-card-shadow);
+  // Chromium/Edge: hide only the VERTICAL native scrollbar (the custom bar
+  // replaces Y); keep the horizontal one for wide / zoomed layouts.
+  &::-webkit-scrollbar:vertical {
+    width: 0;
+  }
+}
+
+.emr-grid {
+  display: grid;
+  // The nav is now its own left rail (`.emr-body__nav`) and the comment rail is
+  // a sibling scroller, so the grid is a single flexible article column that
+  // FILLS the document region — the article widens with the available space
+  // (Dynamic reading width) down to the region's min-width floor.
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  // Fill `.emr-body`. The vertical inset is optically balanced against the
+  // effective horizontal text inset (32px + the article affordance gutter).
+  width: 100%;
+  padding: var(--emr-document-block-inset) 32px;
+  align-items: start;
+  position: relative;
+}
+
+// ---------------------------------------------------------------------------
+// Article column
+// ---------------------------------------------------------------------------
+
+.emr-article-wrap {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  // Dynamic reading width: the article FILLS the document region and aligns to
+  // the left nav (not centred). Symmetric gutters (`.emr-rendered` padding) keep
+  // the text off the left affordance strip + the comment-rail divider.
+  width: 100%;
+  justify-self: stretch;
+}
+
+.emr-rendered {
+  // Symmetric gutters around the article body. The left gutter hosts
+  // the section chevron and inline diff bar; the right gutter gives
+  // the text breathing room from the dashed rail separator. Both are
+  // sized off `--emr-article-gutter` so the layout stays balanced.
+  padding-left: var(--emr-article-gutter);
+  padding-right: var(--emr-article-gutter);
+
+  h1:first-child,
+  h2:first-child {
+    margin-top: 0;
+  }
+
+  .emr-repo-image-frame {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    overflow: hidden;
+    vertical-align: top;
+    background: var(--emr-faint);
+    border: 1px solid var(--emr-rule);
+    border-radius: 4px;
+
+    &.is-loading,
+    &.is-error {
+      min-width: min(240px, 100%);
+      min-height: 96px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    &.is-loading::after,
+    &.is-error::after {
+      padding: 12px;
+      color: var(--emr-muted);
+      font-family: var(--emr-ui, sans-serif);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    &.is-loading::after {
+      content: "Loading image";
+    }
+
+    &.is-error::after {
+      content: "Image unavailable";
+    }
+  }
+
+  .emr-repo-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+
+    &.is-loading,
+    &.is-error {
+      display: none;
+    }
+  }
+}
+
+// The reading font is prose-only: code, pre and other fixed-width elements keep
+// their monospace face regardless of the chosen reading font (only their size
+// scales, since it is em-relative to `.emr-rendered`). Matches github-markdown-
+// css's own specificity and, loading after it, wins the tie.
+.emr-rendered code,
+.emr-rendered pre,
+.emr-rendered kbd,
+.emr-rendered samp {
+  font-family: var(
+    --emr-mono,
+    ui-monospace,
+    "Cascadia Code",
+    SFMono-Regular,
+    Consolas,
+    monospace
+  );
+}
+
+// github-markdown-css paints `.markdown-body` with its own canvas colour
+// (`--color-canvas-default`, a near-black in dark mode) which doesn't match the
+// EMR reader background and shows up as a boxed panel. It also sets its own
+// font-family / 16px / line-height on `.markdown-body`. The article carries
+// BOTH classes, so `.emr-rendered.markdown-body` (specificity 0,2,0) reliably
+// beats github's `.markdown-body` (0,1,0) regardless of stylesheet order (github
+// injects its <style> at RUNTIME, so it would otherwise win the tie) — this is
+// what makes the reader font + size selections actually take effect on the prose.
+.emr-rendered.markdown-body {
+  background: transparent;
+  // Reader-controlled typography. `code`/`pre` are re-pinned to monospace below,
+  // so only their SIZE scales (it's em-relative). Base 14.5px = standard reading.
+  font-family: var(--emr-reader-font);
+  font-size: calc(14.5px * var(--emr-reader-scale, 1));
+  line-height: 1.6;
+
+  details {
+    margin: 10px 0;
+    padding: 6px 10px;
+    border: 1px solid var(--emr-rule);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--emr-fg) 2%, transparent);
+  }
+
+  summary {
+    color: var(--emr-fg);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .markdown-alert {
+    --emr-alert-color: var(--emr-accent);
+    margin: 10px 0;
+    padding: 7px 10px;
+    color: var(--emr-fg);
+    background: color-mix(in srgb, var(--emr-alert-color) 7%, transparent);
+    border-left: 3px solid var(--emr-alert-color);
+
+    &.markdown-alert-warning,
+    &.markdown-alert-caution {
+      --emr-alert-color: var(--emr-diff-modified);
+    }
+
+    &.markdown-alert-important {
+      --emr-alert-color: var(--emr-diff-deleted);
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .markdown-alert-title {
+    margin: 0 0 2px;
+    color: var(--emr-alert-color);
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+// github-markdown-css bakes its prose colours as fixed hex (not variables), so
+// the article stays regular light/dark even when the chrome flips to HC. Repaint
+// the high-impact surfaces from the --emr-* HC tokens so the document matches the
+// chrome's max-contrast palette (covers both hc-light and hc-dark).
+:root[data-emr-theme="hc-light"] .emr-rendered.markdown-body,
+:root[data-emr-theme="hc-dark"] .emr-rendered.markdown-body {
+  color: var(--emr-fg);
+
+  a,
+  a:hover,
+  a:visited {
+    color: var(--emr-accent);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  strong,
+  b {
+    color: var(--emr-fg);
+  }
+
+  h1,
+  h2 {
+    border-bottom-color: var(--emr-rule);
+  }
+
+  blockquote {
+    color: var(--emr-fg);
+    border-left-color: var(--emr-rule);
+  }
+
+  hr {
+    background: var(--emr-rule);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    color: var(--emr-fg);
+    background: var(--emr-balloon-orphan-quote-bg);
+    border: 1px solid var(--emr-rule);
+  }
+
+  // A <code> inside a <pre> is already inside the bordered block — don't double it.
+  pre code,
+  pre kbd,
+  pre samp {
+    color: inherit;
+    background: transparent;
+    border: 0;
+  }
+
+  table tr {
+    background: var(--emr-bg);
+    border-top-color: var(--emr-rule);
+  }
+
+  table tr:nth-child(2n) {
+    background: var(--emr-bg);
+  }
+
+  table th,
+  table td {
+    border-color: var(--emr-rule);
+  }
+}
+
+.emr-rendered ::selection {
+  background: var(--emr-selection-bg);
+}
+
+// ---------------------------------------------------------------------------
+// Custom reader scrollbar with an inline diff overview (DiffMinimap). ONE bar
+// replacing the native scrollbar: a draggable thumb (= the on-screen region)
+// over a track that, when "view changes" is on, charts each edit at its
+// proportional position (green add / amber edit / red delete). It overlays a
+// non-scrolling frame around the reader so it stays pinned to the viewport's
+// right edge at any scroll offset / zoom. Native scrollbar hidden while active.
+// ---------------------------------------------------------------------------
+
+// The reader is a single flex ROW of ANCHORED columns spanning the full
+// viewport width:
+//   [nav rail] [document scroller] [doc overview bar] [comment rail] [comment bar]
+// The nav hugs the left edge (fixed width); the document FILLS the middle
+// (Dynamic width, min-width floor); the comment rail + its overview bar hug the
+// right edge (fixed width). The document + comment scrollers are independent
+// siblings — never nested — so reaching the article's end can't chain-scroll
+// the comments. When the frame is too narrow for the visible columns the reader
+// disables cleanly (`.is-too-narrow`); `overflow-x` is only a last-resort guard.
+.emr-body-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  // `overflow-x: auto` is a last-resort guard for very narrow layouts. But
+  // setting ONE axis to a non-`visible` value makes the OTHER compute to `auto`
+  // too — so without pinning it, the frame gains an implicit VERTICAL scrollbar.
+  // The frame spans the full reader width, so that scrollbar sits at its right
+  // edge (== the comment rail's right edge), and any transient vertical overflow
+  // during boot flashes it there and shifts the layout. Vertical scrolling is
+  // owned by the inner scrollers (document + rail), never the frame, so clip it.
+  overflow-x: auto;
+  overflow-y: hidden;
+  // The pane-grey backdrop the document card floats on (the nav + comment rails
+  // already carry this tone, so the whole chrome reads as one surface with the
+  // white document lifted off it).
+  background: var(--emr-rail-bg);
+}
+
+// Graceful degradation: when the frame is narrower than the visible columns
+// need (a very narrow window, or zoomed in), the reader disables cleanly. The
+// PrShell ResizeObserver toggles `.is-too-narrow`, which hides every reader
+// column + the toolbar and lets the notice card fill the frame instead of
+// squishing the prose or scrolling horizontally.
+.emr-too-narrow {
+  display: none;
+}
+.emr-app.is-too-narrow .emr-body__nav,
+.emr-app.is-too-narrow .emr-body,
+.emr-app.is-too-narrow .emr-rail,
+.emr-app.is-too-narrow .emr-nav-reopen,
+.emr-app.is-too-narrow .emr-rail-reopen {
+  display: none;
+}
+.emr-app.is-too-narrow .emr-too-narrow {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.emr-too-narrow-card {
+  max-width: 320px;
+  text-align: center;
+  color: var(--emr-muted);
+
+  svg {
+    color: var(--emr-rule-strong);
+    margin-bottom: 10px;
+  }
+
+  h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    color: var(--emr-fg);
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+// The document overview scrollbar lives INSIDE the document scroller, hugging
+// its right edge. Its anchor is a zero-height `position: sticky` element pinned
+// to the scroll viewport's top, so the absolutely-positioned ruler inside it
+// stays fixed to the reader's right edge at any scroll offset instead of
+// scrolling away with the article. `pointer-events: none` lets clicks fall
+// through to the article; the ruler re-enables them on itself. Keeping the bar
+// inside the document lets the comment rail sit flush against it, so the rail's
+// resize handle can align with the document's right edge.
+.emr-diff-scrollbar-anchor {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.emr-diff-ruler {
+  // Minimal overview bar: a thin (3px) strip FLUSH with the document's right
+  // interior edge — no track, so the change ticks themselves ARE the bar. Height
+  // is set inline to the document's exact visible height (see DiffMinimap) so it
+  // spans the reading surface top-to-bottom.
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 3px;
+  box-sizing: border-box;
+  // No clip: the thumb grows LEFT (into the reserved gutter) on hover, so it
+  // must be free to extend past the 3px strip.
+  overflow: visible;
+  cursor: pointer;
+  pointer-events: auto;
+  background: transparent;
+}
+
+// The draggable thumb (= the on-screen region). Its top + height are set inline
+// in px via native-scrollbar math (min grabbable size handled there). Semi-
+// transparent so the diff ticks beneath show through where they overlap.
+.emr-diff-ruler-thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 2px;
+  background: var(--emr-scrollbar-thumb);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    left 120ms ease,
+    background-color 120ms ease;
+
+  // Slightly bigger on hover (grows LEFT, away from the resize handle) so the
+  // thin strip stays easy to grab.
+  .emr-diff-ruler:hover & {
+    left: -4px;
+  }
+
+  &:hover {
+    background: var(--emr-scrollbar-thumb-hover);
+  }
+  &:active {
+    cursor: grabbing;
+    left: -4px;
+    background: color-mix(in srgb, var(--emr-fg) 36%, transparent);
+  }
+}
+
+// A single change tick. Muted purely via LOW opacity over the track (NOT by
+// mixing toward --emr-fg, which turned the red delete tick near-black in light
+// themes) so each hue stays true and light; the active run lifts a touch.
+.emr-diff-ruler-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 3px;
+  // Match the document card's 2px corner radius so the ticks read as soft, not
+  // sharp.
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 120ms ease;
+
+  // When the thumb/viewport is on a tick, lift its opacity so the scroll
+  // position reads at a glance without the bar moving.
+  &.is-active {
+    opacity: 0.72;
+  }
+
+  &--added {
+    background: var(--emr-diff-added);
+  }
+  &--modified {
+    background: var(--emr-diff-modified);
+  }
+  &--deleted {
+    background: var(--emr-diff-deleted);
+    // A deletion has (almost) no on-screen height, so its tick would collapse to
+    // the 3px minimum and read fainter than the change it represents. Give it a
+    // solid floor + a touch more presence so a removed section is never missed.
+    min-height: 6px;
+    opacity: 0.66;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid diagram placeholders.
+//
+// `rehypeMermaidPlaceholder` emits `<div class="emr-mermaid">` containing
+// a `<pre class="emr-mermaid-fallback">` with the raw diagram source. The
+// browser-side `hydrateMermaid` swaps the `<pre>` for the rendered `<svg>`.
+// Styles handle both states: the fallback reads as a normal code block so
+// users with JS disabled still see something useful, and the hydrated
+// state center-aligns the SVG inside the article's reading column.
+// ---------------------------------------------------------------------------
+
+.emr-rendered .emr-mermaid {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--emr-faint);
+  border: 1px solid var(--emr-rule);
+  border-radius: 6px;
+  // Center any direct child (the SVG once hydrated; the <pre> beforehand).
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: auto;
+
+  &[data-hydrated="true"] {
+    background: transparent;
+    border-color: transparent;
+    padding: 8px 0;
+  }
+  &[data-mermaid-error] {
+    border-color: rgba(207, 34, 46, 0.4);
+    background: rgba(207, 34, 46, 0.04);
+  }
+
+  > svg {
+    max-width: 100%;
+    height: auto;
+  }
+  // Once hydrated, size the diagram from its captured natural width scaled by
+  // the reader's text-size control (`--emr-reader-scale`), never exceeding the
+  // reading column. The SVG viewBox scales the nodes AND their text together,
+  // so diagrams track the reading size like the prose.
+  &[data-hydrated="true"] > svg {
+    width: calc(
+      var(--emr-diagram-natural-w, 100%) * var(--emr-reader-scale, 1)
+    );
+    max-width: 100%;
+    height: auto;
+  }
+
+  .emr-mermaid-fallback {
+    margin: 0;
+    padding: 8px 12px;
+    width: 100%;
+    background: transparent;
+    color: var(--emr-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+    border: 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// YAML frontmatter metadata card.
+//
+// `extractFrontmatter` lifts a leading `---…---` block out of the source and
+// `renderFrontmatterHtml` renders it as a `<div class="emr-frontmatter">`
+// definition card prepended to the article. It reads as a quiet, structured
+// masthead — a subtle tinted panel with a key/value grid — so document
+// metadata is legible without competing with the prose below.
+// ---------------------------------------------------------------------------
+
+.emr-frontmatter {
+  // No background panel and no divider rule — the key/value grid reads as a
+  // compact metadata masthead on its own, and the margin below separates it
+  // from the prose. Diff changes are carried entirely by the inline word marks.
+  // Top padding gives the first row breathing room from the reader chrome
+  // above, which reads noticeably cleaner in dark mode.
+  margin: 0 0 18px;
+  padding: 14px 0 0;
+  // Track the reader's chosen font + size (a touch smaller than the prose) so
+  // the metadata masthead responds to the typography controls like the body.
+  font-family: var(--emr-reader-font);
+  font-size: calc(12px * var(--emr-reader-scale, 1));
+  line-height: 1.4;
+
+  // github-markdown-css styles `.markdown-body dl dt` / `dl dd` at specificity
+  // (0,1,2) — MORE specific than a lone `.emr-frontmatter-key` class — so its
+  // `margin-top: 1rem` / `margin-bottom: 1rem` / `padding: 0 1rem` / italic
+  // `dt` win in the real reader and blow the card open. Nesting under
+  // `.emr-frontmatter` lifts these to (0,2,0) so they win, and we explicitly
+  // zero the github box props. (The visual story now loads github-markdown-css
+  // too, so this stays honest.)
+  .emr-frontmatter-grid {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(56px, max-content) 1fr;
+    // `baseline` lines the key label up with the first line of its value —
+    // including rows whose value wraps onto multiple lines or renders as tag
+    // pills — so the two columns never drift vertically.
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 3px;
+  }
+
+  .emr-frontmatter-row {
+    display: contents;
+  }
+
+  .emr-frontmatter-key {
+    margin: 0;
+    padding: 0;
+    color: var(--emr-muted);
+    font-weight: 600;
+    font-style: normal;
+    text-transform: capitalize;
+    letter-spacing: 0.01em;
+    overflow-wrap: anywhere;
+  }
+
+  .emr-frontmatter-value {
+    margin: 0;
+    padding: 0;
+    color: var(--emr-fg);
+    overflow-wrap: anywhere;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Highlights inside the article (anchored to comment threads)
+// ---------------------------------------------------------------------------
+
+.emr-highlight {
+  background-color: var(--emr-hl-active);
+  color: var(--emr-hl-active-fg);
+  border-bottom: 1px solid var(--emr-hl-border);
+  border-radius: 2px;
+  padding: 0 1px;
+  // Offset the horizontal padding with a matching negative margin: wrapping a
+  // selection in the highlight then costs ZERO layout width, so the surrounding
+  // prose never shifts sideways the moment the anchor is applied. The tint
+  // still bleeds 1px past the glyphs for a padded look.
+  margin: 0 -1px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+
+  &:hover,
+  &.is-hover {
+    background-color: var(--emr-hl-active-strong);
+  }
+
+  &.is-active {
+    background-color: var(--emr-hl-active-strong);
+    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
+    animation: emr-hl-pulse 600ms ease-out 1;
+  }
+
+  &.is-resolved {
+    background-color: var(--emr-hl-resolved);
+    border-bottom-color: transparent;
+    // Resolved threads dim the text along with the bg — we want them
+    // to fade into the page so the reader's eye isn't drawn back.
+    color: inherit;
+
+    &:hover,
+    &.is-active {
+      background-color: var(--emr-hl-resolved-strong);
+    }
+  }
+}
+
+@keyframes emr-hl-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(191, 135, 0, 0.55);
+  }
+  60% {
+    box-shadow: 0 0 0 8px rgba(191, 135, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rail (right column) with absolutely-positioned balloons
+// ---------------------------------------------------------------------------
+
+// The comment rail's outer column. Carries the WIDTH (scaled independently of
+// the nav by `--emr-rail-scale`) and hosts the drag-resize handle on its left
+// border. Non-scrolling + `position: relative` so the absolute handle stays put
+// while the inner `.emr-rail-scroll` scrolls.
+.emr-rail {
+  flex: 0 0 calc(var(--emr-grid-rail) * var(--emr-rail-scale));
+  // Hard floor/cap at the comment pref bounds (70–130%): the pane can't balloon
+  // past a fixed width or shrink to an unreadable column, even on a bad scale.
+  min-width: calc(var(--emr-grid-rail) * 0.7);
+  max-width: calc(var(--emr-grid-rail) * 1.3);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+// STABLE scroll container wrapping the comment rail. It stays mounted while the
+// content swaps between the loading skeleton and the loaded list, so the
+// far-right comment bar (which reads it via a direct railRef) always observes +
+// re-measures the right node. Fills its `.emr-rail` column (which owns the
+// width); the width scales with `--emr-rail-scale`.
+.emr-rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  // Reserve the scrollbar's width even when it isn't visible, so the comment
+  // column keeps balanced side margins whether or not it's scrolling (and the
+  // content never reflows the instant the scrollbar appears).
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  // Anchored right: hugs the viewport's right edge. The document/pane colour
+  // contrast carries the separation, so no visible divider (a line only in HC).
+  border-left: 1px solid var(--emr-pane-divider);
+  // A tonal step off the document (`--emr-bg`) so the rail reads as its own
+  // surface; balloons (`--emr-balloon-bg`) then sit as raised cards on it.
+  background: var(--emr-rail-bg);
+  // Native scrollbar on the rail's right edge, styled to match the document
+  // overview bar (a slim rounded thumb in the shared scrollbar tint, inset from
+  // the top/bottom) so both reader edges read the same. Firefox gets the thin
+  // width + thumb colour; Chromium/Edge get the fuller webkit styling below.
+  scrollbar-width: thin;
+  scrollbar-color: var(--emr-scrollbar-thumb) transparent;
+  // Match the document card's bottom inset so the left divider does not leave
+  // a short vertical spur in the gap above the status bar.
+  margin-bottom: var(--emr-card-gap);
+  &::-webkit-scrollbar {
+    width: var(--emr-scrollbar-w);
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    // Mirror the custom ruler's 8px top/bottom inset.
+    margin: var(--emr-scrollbar-inset) 0;
+  }
+  &::-webkit-scrollbar-thumb {
+    // A 4px transparent border clipped to the padding box leaves a slim thumb
+    // centred in the track — the same capsule as the document ruler's thumb.
+    background: var(--emr-scrollbar-thumb);
+    background-clip: padding-box;
+    border: 4px solid transparent;
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--emr-scrollbar-thumb-hover);
+    background-clip: padding-box;
+  }
+}
+
+// Focus mode: hiding the comments panel removes the rail (and its native
+// scrollbar) so the document reclaims the space. (The rail stays mounted — just
+// display:none — so in-progress comment drafts and thread state survive.)
+.emr-app.is-comments-hidden .emr-rail {
+  display: none;
+}
+
+// Drag-to-resize affordance on the comment rail's LEFT border. The minimal diff
+// bar now sits FLUSH against the document's right interior edge, so the resize
+// grab starts just OUTSIDE it (at the document's right edge, on the rail side)
+// rather than straddling — otherwise it would sit on top of the 3px bar and
+// steal its drag. An invisible strip whose only cue is the resize cursor; the
+// handle captures the pointer on press so the cursor holds for the whole drag.
+// Double-click resets the width.
+.emr-rail-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 14px;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+// ── Pane collapse / reopen ───────────────────────────────────────────────
+// Dragging a rail's resize handle past its floor collapses the pane. A collapsed
+// pane adds NO visible chrome: the freed document edge is the reopen handle — an
+// invisible col-resize hit strip (the drag counterpart to the status-bar toggle).
+// The nav handle hugs the left edge (nothing else lives there). The comment
+// handle sits just INSIDE the overview scrollbar — which always hugs the right
+// edge — offset clear of it so the two never fight, with a band wide enough to
+// grab comfortably.
+.emr-nav-reopen,
+.emr-rail-reopen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+.emr-nav-reopen {
+  left: 0;
+}
+.emr-rail-reopen {
+  // Offset by the scrollbar's width so the grab band clears the edge ruler.
+  right: var(--emr-scrollbar-w);
+}
+
+// ── Reader status bar ────────────────────────────────────────────────────
+// The reader's single docked control surface (Word's status-bar model): a slim
+// full-width strip along the reader's bottom edge. Document status (word count +
+// PR word delta) sits on the left; the Navigation / Comments / Changes toggles,
+// a reading-font popover, the text-size stepper, refresh and feedback sit on the
+// right. Quiet neutral chrome; accent only on an active toggle or on hover.
+.emr-statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px 0 16px;
+  background: var(--emr-rail-bg);
+  border-top: 1px solid var(--emr-rule);
+  font-size: 15px;
+  color: var(--emr-muted);
+  white-space: nowrap;
+}
+.emr-app.is-too-narrow .emr-statusbar {
+  display: none;
+}
+.emr-statusbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.emr-statusbar-words {
+  font-variant-numeric: tabular-nums;
+
+  b {
+    color: var(--emr-fg);
+    font-weight: 600;
+  }
+}
+.emr-statusbar-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.emr-statusbar-delta-add {
+  color: var(--emr-diff-added);
+  font-weight: 600;
+}
+.emr-statusbar-delta-rem {
+  color: var(--emr-diff-deleted);
+  font-weight: 600;
+}
+.emr-statusbar-spacer {
+  flex: 1 1 auto;
+}
+.emr-statusbar-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.emr-statusbar-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--emr-rule);
+  flex: 0 0 auto;
+}
+// Buttons: view toggles, the Aa trigger, refresh, feedback.
+.emr-statusbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--emr-muted);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color 80ms ease,
+    color 80ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+
+  svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+  }
+}
+// Toggle "on" (panel shown): colour-only — the icon + label take the accent, no
+// fill, so the bar stays visually light. "off" inherits the muted base.
+.emr-statusbar-btn.is-toggle[aria-pressed="true"] {
+  color: var(--emr-accent);
+}
+.emr-statusbar-refresh,
+.emr-statusbar-feedback {
+  padding: 0 6px;
+}
+.emr-statusbar-refresh {
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  &.is-refreshing svg {
+    animation: emr-spin 0.8s linear infinite;
+  }
+}
+.emr-statusbar-aa {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--emr-fg);
+}
+.emr-statusbar-caret {
+  width: 11px;
+  height: 11px;
+  opacity: 0.7;
+}
+
+// Text-size stepper — a bordered −/value/+ cluster.
+.emr-statusbar-size {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--emr-rule);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-left: 2px;
+}
+.emr-statusbar-size-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--emr-muted);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+.emr-statusbar-size-val {
+  min-width: 48px;
+  height: 24px;
+  border: 0;
+  border-left: 1px solid var(--emr-rule);
+  border-right: 1px solid var(--emr-rule);
+  background: transparent;
+  text-align: center;
+  font: inherit;
+  font-size: 15px;
+  color: var(--emr-fg);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+}
+
+// Reading-font popover — opens UPWARD from the Aa trigger (the bar sits at the
+// bottom), right-aligned so it never spills off the reader's right edge.
+.emr-statusbar-type {
+  position: relative;
+  flex: 0 0 auto;
+}
+.emr-statusbar-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule);
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 208px;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 160ms ease;
+  z-index: 20;
+}
+.emr-statusbar-type.is-open .emr-statusbar-pop {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.emr-statusbar-pop-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--emr-muted);
+  padding: 0 4px 2px;
+}
+// Kindle-style font list — each row rendered in its own face.
+.emr-statusbar-fontlist {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.emr-statusbar-font {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--emr-fg);
+  cursor: pointer;
+  font-size: 15px;
+  text-align: left;
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+  &[aria-pressed="true"] {
+    background: var(--emr-accent-soft);
+  }
+}
+.emr-statusbar-font-check {
+  width: 15px;
+  height: 15px;
+  color: var(--emr-accent);
+  opacity: 0;
+  flex: 0 0 auto;
+}
+.emr-statusbar-font[aria-pressed="true"] .emr-statusbar-font-check {
+  opacity: 1;
+}
+// Font faces for the list rows (mirror READER_FONTS in readerPrefs.ts).
+.emr-font-system {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
+}
+.emr-font-sitka {
+  font-family: "Sitka Text", Sitka, Cambria, Georgia, serif;
+}
+.emr-font-georgia {
+  font-family: Georgia, "Times New Roman", serif;
+}
+.emr-font-palatino {
+  font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+.emr-font-verdana {
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+@media (prefers-reduced-motion: reduce) {
+  .emr-statusbar-pop {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .emr-statusbar-btn-label {
+    display: none;
+  }
+
+  .emr-statusbar-btn {
+    padding-inline: 6px;
+  }
+}
+
+.emr-rail-col {
+  // The rail's CONTENT container inside `.emr-rail-scroll`. NO top padding here:
+  // padding on the scroll container itself double-offsets a sticky child, so the
+  // shell-top gap instead lives as a margin on the first child below (mirroring
+  // how the DocNav grid's padding works) — the header pins at exactly
+  // `--emr-shell-top`, aligned with the DocNav header. The left padding is the
+  // column gap to the article.
+  padding: 0 4px 96px 12px;
+}
+
+// The shell-top gap as a margin on whichever element leads the rail (the
+// sticky header, or the read-only banner when present). A margin on a CHILD
+// (like the DocNav grid's padding) sets the header's flow position to
+// `--emr-shell-top` WITHOUT the double-offset that container padding-top causes
+// — so "COMMENTS" pins on the same line as "DOCUMENTS", and the first balloon
+// sits just below the header rather than tucked under it.
+.emr-rail-col > :first-child {
+  margin-top: var(--emr-shell-top);
+}
+
+// Clicking / cycling to a comment scrolls it to the top of the rail. Offset the
+// scroll target below the sticky header (the shell-top gap + the single toolbar
+// row) with a CONSTANT so the comment lands fully in view, not tucked under the
+// "COMMENTS" strip. PrShell's `scrollIntoView({ block: "start" })` respects it.
+.emr-rail-col .emr-balloon {
+  scroll-margin-top: calc(var(--emr-shell-top) + 44px);
+}
+
+// The anchored comments render as a plain vertical FLOW list (no absolute
+// positioning), so they can never overlap; spacing is a simple gap. The
+// unanchored trays render below it inside the same scrolling rail column.
+.emr-rail-positioned {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+// Pull-request "version stepper" strip — the rail header's second row.
+// A quiet banded line that names the pull request comments on this
+// document route to (number + title) and, when the document has review
+// history, flanks it with ‹ › chevrons to walk between versions. Lives
+// inside the sticky header so it stays pinned with the toolbar above it.
+.emr-rail-version {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--emr-faint);
+  border: 1px solid var(--emr-rule);
+  min-width: 0;
+}
+
+// PR number + title, taking the space between the chevrons. The title
+// truncates with an ellipsis so long titles never push the strip wider
+// than the rail column.
+.emr-rail-version-pr {
+  display: flex;
+  align-items: baseline;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.emr-rail-version-num {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.emr-rail-version-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--emr-fg);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  // Quiet middot separating the PR number from its title.
+  &::before {
+    content: "·";
+    margin: 0 6px;
+    color: var(--emr-muted);
+    font-weight: 400;
+  }
+}
+
+// Subtle status hint via the number colour. Active = accent blue (the live
+// PR comments write to); completed = success green (an older snapshot).
+.emr-rail-version.is-active .emr-rail-version-num {
+  color: var(--emr-link, #0078d4);
+}
+.emr-rail-version.is-completed .emr-rail-version-num {
+  color: rgb(16, 124, 16);
+}
+
+// Step chevrons flanking the PR pill. Slightly narrower than a default
+// icon button so the strip stays compact.
+.emr-history-chevron {
+  flex: 0 0 auto;
+  width: 22px;
+}
+
+.emr-rail-title-pr-link {
+  text-decoration: none;
+  font-weight: 600;
+
+  &[href]:hover {
+    text-decoration: underline;
+  }
+}
+
+// Banner shown above the comment rail when commenting is disabled
+// (no completed PR targets this document).
+.emr-rail-readonly-banner {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--emr-rule);
+  border-radius: 6px;
+  background: var(--emr-faint);
+  color: var(--emr-fg);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+// Sticky wrapper around the rail's toolbar + search field. As the body
+// scrolls, this strip stays pinned to the top of the rail column so the
+// "Comments" header, count, Resolved toggle, and search input are always
+// reachable. The balloons (and previous-versions / anchor-missing
+// sections) scroll behind it under an opaque background.
+.emr-rail-sticky-header {
+  // Matches the rail's padding-top (and the DocNav sticky-top) so the
+  // "COMMENTS" header lines up with the "DOCUMENTS" header + article top at
+  // every scroll position.
+  position: sticky;
+  top: var(--emr-shell-top);
+  // Above the active balloon (`z-index: 5`) so a selected comment scrolling up
+  // tucks UNDER the header instead of painting over it.
+  z-index: 6;
+  // Opaque, matching the tinted rail so scrolling balloons tuck under cleanly.
+  background: var(--emr-rail-bg);
+  // Bleed outside the rail-col's content box so balloons scrolling up
+  // behind the header don't leak their box-shadow into the column's
+  // left padding (12px gap to the article) or past the right edge.
+  // Without this, a faint vertical sliver of balloon shadow stays
+  // visible on either side of the "COMMENTS" strip while a comment
+  // passes underneath. We compensate the negative margins with
+  // equal padding so the toolbar contents stay aligned with the
+  // balloons below.
+  margin-left: -12px;
+  padding-left: 12px;
+  margin-right: -8px;
+  padding-right: 8px;
+
+  // Opaque scrim covering the strip between the body top and this sticky
+  // header. Without it, comment balloons scroll up through the
+  // `--emr-shell-top` gap and visually leak above the "COMMENTS" toolbar.
+  // Positioned absolutely against the sticky header itself so it travels
+  // pinned to the viewport top as the user scrolls.
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--emr-shell-top);
+    background: var(--emr-rail-bg);
+    pointer-events: none;
+  }
+}
+
+// Two-row rail header wrapper. Row 1 is the comment toolbar; row 2 is the
+// optional PR version stepper. Stacking them keeps each row uncramped — the
+// toolbar carries only comment controls, the stepper carries the PR identity.
+.emr-rail-header {
+  display: flex;
+  flex-direction: column;
+}
+
+// Toolbar row at the top of the rail. Holds the "Comments" label (which is
+// swapped for an inline search input when the user activates search), the
+// prev/next comment cyclers, the search toggle, and the show-resolved
+// toggle. No border-bottom or shadow: the rail's negative space + the
+// balloons' own borders carry the region break, matching the docs-comments
+// tools we mirror (Word, Google Docs, GitHub PR margin comments).
+.emr-rail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 6px;
+  min-height: 28px;
+}
+
+// Lead region: the "Comments" label / all-resolved badge / prev-next cycler,
+// or the inline search input. Takes all the flexible width so its contents can
+// grow and shrink without ever displacing the pinned action buttons.
+.emr-rail-toolbar-lead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  // Not clipped: the filter dropdown (the "Comments" label) opens downward out
+  // of the toolbar row, so the lead must let it overflow. Text ellipsis is
+  // handled on the label/search children themselves, not here.
+  overflow: visible;
+}
+
+// Action region: search + show/hide-resolved toggles + host actions. Pinned to
+// the right with a fixed intrinsic width so nothing in the lead can shift them
+// — the layout-stability fix for the header (clicking a toggle no longer nudges
+// its neighbours).
+.emr-rail-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.emr-rail-title {
+  flex: 0 1 auto;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--emr-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// All-comments-resolved delight, now a compact circular check that sits inline
+// next to the COMMENTS label (the wordy pill was replaced to keep the header
+// tight and the right-hand controls stable — its text lives in the tooltip).
+// Only colour + a soft scale pop animate, so nothing around it reflows.
+.emr-rail-resolved {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: 4px;
+  color: var(--emr-diff-added);
+  animation: emr-rail-resolved-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.emr-rail-resolved-check {
+  flex: 0 0 auto;
+}
+
+.emr-rail-resolved-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: emr-rail-check-draw 460ms ease-out 140ms both;
+}
+
+// Soft one-shot entrance: the check pops in with a gentle scale + a fading
+// green ring. Uses only transform / opacity / filter so surrounding toolbar
+// items never shift.
+@keyframes emr-rail-resolved-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes emr-rail-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+// Respect reduced-motion: keep the colour, drop the ripple + check draw.
+@media (prefers-reduced-motion: reduce) {
+  .emr-rail-resolved {
+    animation: none;
+  }
+  .emr-rail-resolved-check path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+// Inline search input that takes over the title's slot when the user
+// clicks the magnifier. Visually weightless — the surrounding toolbar
+// + the active-state magnifier-X swap is the affordance.
+.emr-rail-search-inline {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--emr-fg);
+  padding: 0;
+  height: 22px;
+  line-height: 22px;
+
+  &::placeholder {
+    color: var(--emr-muted);
+  }
+
+  // Hide WebKit's default search-clear control — we render our own
+  // close button (the X icon on the search-toggle button).
+  &::-webkit-search-cancel-button {
+    appearance: none;
+    display: none;
+  }
+}
+
+.emr-rail-empty {
+  color: var(--emr-muted);
+  font-size: 12px;
+  font-style: italic;
+  padding: 12px 0;
+}
+
+.emr-balloon {
+  position: absolute;
+  // Sit flush against the rail's `padding-left` gutter so the breathing
+  // space between the dashed separator and the balloon mirrors the
+  // breathing space between the article text and the dashed separator
+  // (both governed by `--emr-article-gutter`).
+  left: 0;
+  right: 0;
+  background: var(--emr-balloon-bg);
+  border: 1px solid var(--emr-rule);
+  border-radius: 8px;
+  box-shadow: var(--emr-balloon-shadow);
+  padding: 10px 12px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    top 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+
+  &.is-active {
+    z-index: 5;
+    box-shadow: var(--emr-balloon-shadow-active);
+    border-color: var(--emr-accent);
+    cursor: default;
+  }
+
+  &.is-resolved {
+    opacity: 0.7;
+    background: var(--emr-balloon-resolved-bg);
+
+    &.is-active {
+      opacity: 1;
+    }
+  }
+
+  &.is-orphaned {
+    border-style: dashed;
+    border-color: var(--emr-rule-strong);
+    background: var(--emr-balloon-orphaned-bg);
+  }
+
+  &.is-draft {
+    border-color: var(--emr-accent);
+    border-style: dashed;
+  }
+}
+
+.emr-balloon-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.emr-balloon-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--emr-faint);
+  color: var(--emr-muted);
+
+  &.status-active {
+    background: rgba(0, 102, 184, 0.12);
+    color: var(--emr-accent);
+  }
+  &.status-resolved {
+    background: rgba(45, 164, 78, 0.12);
+    color: var(--emr-diff-added);
+  }
+  &.status-wontFix {
+    background: rgba(207, 34, 46, 0.12);
+    color: var(--emr-diff-deleted);
+  }
+  &.status-closed {
+    background: color-mix(in srgb, var(--emr-status-closed) 16%, transparent);
+    color: var(--emr-status-closed);
+  }
+  &.status-pending {
+    background: color-mix(in srgb, var(--emr-diff-modified) 18%, transparent);
+    color: var(--emr-diff-modified);
+  }
+  &.status-orphaned {
+    background: rgba(110, 110, 110, 0.12);
+    color: var(--emr-muted);
+  }
+}
+
+.emr-balloon-meta {
+  font-size: 11px;
+  color: var(--emr-muted);
+  margin-left: auto;
+}
+
+// Orphan cards: the quoted text that used to anchor the thread.
+.emr-balloon-orphan-quote {
+  display: block;
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--emr-balloon-orphan-quote-bg);
+  border-left: 3px solid var(--emr-rule-strong);
+  border-radius: 0 4px 4px 0;
+  color: var(--emr-muted);
+
+  .emr-balloon-orphan-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--emr-muted);
+    margin-right: 6px;
+  }
+
+  .emr-balloon-orphan-text {
+    color: var(--emr-fg);
+    font-style: italic;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
+.emr-comment {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  align-items: flex-start;
+  // No separator between stacked comments — keep the card visually quiet,
+  // mirroring the reference (Loop/Word) design.
+  & + .emr-comment {
+    padding-top: 4px;
+  }
+}
+
+.emr-avatar {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--emr-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+  overflow: hidden;
+}
+
+.emr-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.emr-avatar.sz-sm {
+  // Sized to roughly span the two-line meta block (name + date) so the
+  // comment row reads like a single card, matching the reference design.
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.emr-comment-body {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  .emr-comment-meta {
+    // Stack name on line 1, date (+ optional "edited" badge) on line 2.
+    // Keeps long display names from squishing the timestamp out of view.
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    font-size: 11px;
+    color: var(--emr-muted);
+    min-width: 0;
+    flex: 1 1 auto;
+
+    .name {
+      color: var(--emr-fg);
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 1.3;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .date {
+      font-size: 11px;
+      line-height: 1.3;
+      color: var(--emr-muted);
+    }
+
+    .emr-comment-meta-time {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+  }
+
+  .emr-comment-content {
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+
+    p:first-child {
+      margin-top: 0;
+    }
+    p:last-child {
+      margin-bottom: 0;
+    }
+    p {
+      margin: 6px 0;
+    }
+    code {
+      background: var(--emr-faint);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    pre {
+      background: var(--emr-faint);
+      padding: 8px;
+      border-radius: 4px;
+      overflow: auto;
+      font-size: 12px;
+    }
+    a {
+      color: var(--emr-accent);
+    }
+
+    .emr-comment-media {
+      position: relative;
+      display: inline-flex;
+      max-width: 100%;
+      overflow: hidden;
+      vertical-align: top;
+      background: var(--emr-faint);
+      border: 1px solid var(--emr-rule);
+      border-radius: 5px;
+
+      &.is-error,
+      &.is-loading {
+        min-width: 120px;
+        min-height: 72px;
+        align-items: center;
+        justify-content: center;
+
+        &::after {
+          padding: 10px;
+          color: var(--emr-muted);
+          font-size: 11px;
+          text-align: center;
+        }
+      }
+
+      &.is-error::after {
+        content: "Image unavailable";
+      }
+
+      &.is-loading {
+        cursor: progress;
+
+        &::after {
+          content: "Loading image";
+        }
+      }
+    }
+
+    .emr-comment-image {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: min(260px, 42vh);
+      object-fit: contain;
+
+      &.is-loading,
+      .emr-comment-media.is-error & {
+        opacity: 0;
+      }
+    }
+
+    a.emr-comment-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 5px 8px;
+      color: var(--emr-fg);
+      background: var(--emr-faint);
+      border: 1px solid var(--emr-rule-strong);
+      border-radius: 4px;
+      text-decoration: none;
+
+      &::before {
+        content: "\1f4ce";
+        flex: 0 0 auto;
+        font-family: "Segoe UI Symbol", sans-serif;
+        font-size: 13px;
+      }
+
+      &:hover {
+        color: var(--emr-accent);
+        border-color: var(--emr-accent);
+        background: var(--emr-accent-soft);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--emr-accent);
+        outline-offset: 2px;
+      }
+    }
+  }
+}
+
+// "edited" badge in the comment meta row.
+.emr-comment-edited {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--emr-muted);
+  font-style: italic;
+  cursor: help;
+}
+
+// Visually-hidden but accessible to screen readers.
+.emr-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Reactions (ADO's six kinds: Like, Dislike, Heart, Hooray, Smile, Confused).
+// ---------------------------------------------------------------------------
+
+.emr-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.emr-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 5px;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--emr-fg);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    transform: translateY(-1px);
+  }
+
+  &.is-mine {
+    background: var(--emr-accent-soft);
+    border-color: var(--emr-accent);
+    color: var(--emr-accent);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .emr-reaction-emoji {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .emr-reaction-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-comment action row (react / edit / delete). Lives inside .emr-comment.
+// Hidden by default; revealed on comment hover or when the picker is open.
+// ---------------------------------------------------------------------------
+
+.emr-comment-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  margin-top: 4px;
+  // Subtle by default; pop on hover.
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.emr-comment:hover .emr-comment-actions,
+.emr-comment-actions:focus-within,
+.emr-comment-actions:has(.emr-comment-confirm) {
+  opacity: 1;
+}
+
+.emr-comment-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  color: var(--emr-muted);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+
+  &.danger {
+    color: #b32424;
+    &:hover {
+      background: rgba(179, 36, 36, 0.08);
+      color: #8b1919;
+    }
+  }
+}
+
+.emr-add-reaction {
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+
+  .emr-add-reaction-plus {
+    font-size: 10px;
+    color: var(--emr-muted);
+    margin-left: 1px;
+  }
+}
+
+// Single-action Like button (no picker — ADO PR comments only support Like).
+.emr-like-action {
+  gap: 4px;
+
+  .emr-like-label {
+    font-size: 11px;
+  }
+
+  &.is-mine {
+    color: var(--emr-fg);
+    background: var(--emr-accent-soft);
+
+    &:hover {
+      background: var(--emr-accent-soft);
+    }
+  }
+}
+
+.emr-comment-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--emr-fg);
+  padding: 2px 4px 2px 6px;
+  background: var(--emr-faint);
+  border-radius: 4px;
+}
+
+// ---------------------------------------------------------------------------
+// (Reaction picker styles removed — we only render a single Like button now.)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// New Loop-style per-comment chrome: header row (meta + top-right tools),
+// popover menu, like chip, reply trigger.
+// ---------------------------------------------------------------------------
+
+.emr-comment-header {
+  display: flex;
+  // Vertically center the tools cluster against the two-line meta block.
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+}
+
+// Top-right tool cluster. The like pill (when count>0) is always visible;
+// the hover-only inner wrapper carries the ⋯ / 1-click 👍 affordances.
+.emr-comment-tools {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.emr-comment-tools-hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.emr-comment:hover .emr-comment-tools-hover,
+.emr-comment-tools-hover:focus-within,
+// Keep affordances visible while the menu (popover) is open.
+.emr-comment-tools:has(.emr-popover) .emr-comment-tools-hover {
+  opacity: 1;
+}
+
+.emr-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--emr-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 80ms ease,
+    color 80ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+
+  &.is-active {
+    color: var(--emr-accent);
+    background: var(--emr-accent-soft);
+  }
+
+  &.is-open {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+// Rich comment filter (rail toolbar) — a compact funnel + count trigger that
+// opens the filter-mode menu. Replaces the old binary show/hide-resolved eye
+// toggle. The trigger reuses `.emr-icon-btn` but widens to seat the count.
+.emr-comment-filter {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+// The "Comments" header label doubles as the filter trigger: it reads like the
+// old COMMENTS title (uppercase, muted) but is a button with a caret, and takes
+// the accent whenever a non-default filter or the "only this file" scope is on.
+.emr-rail-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--emr-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    color 100ms ease,
+    background-color 100ms ease;
+
+  &:hover,
+  &.is-open {
+    color: var(--emr-fg);
+    background: var(--emr-faint);
+  }
+}
+
+.emr-rail-filter-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emr-rail-filter-caret {
+  flex: 0 0 auto;
+  opacity: 0.75;
+  transition: transform 120ms ease;
+
+  .emr-rail-filter-trigger.is-open & {
+    transform: rotate(180deg);
+  }
+}
+
+// Compound selector (`.emr-popover.emr-comment-filter-menu`) so these beat the
+// base `.emr-popover` rule, which is later in source and sets `right: 0` — that
+// combined with our `left: 0` was pinning the menu to the narrow trigger width
+// and clipping the longest row.
+.emr-popover.emr-comment-filter-menu {
+  // Wide enough for the longest, count-less row ("Only comments on this file")
+  // so it never clips.
+  min-width: 236px;
+  // The trigger sits at the LEFT of the header, so open the menu left-aligned
+  // under it (the shared `.emr-popover` defaults to right-aligned).
+  left: 0;
+  right: auto;
+}
+
+// Two labelled sections inside the filter popover: the status modes, then the
+// "only this file" scope toggle, separated by a hairline divider.
+.emr-comment-filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.emr-comment-filter-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--emr-rule);
+}
+
+.emr-comment-filter-option {
+  gap: 6px;
+
+  &.is-selected {
+    color: var(--emr-accent);
+    font-weight: 600;
+  }
+}
+
+.emr-comment-filter-check {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--emr-accent);
+}
+
+.emr-comment-filter-option-label {
+  flex: 1 1 auto;
+}
+
+.emr-comment-filter-option-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--emr-muted);
+
+  .emr-comment-filter-option.is-selected & {
+    color: var(--emr-accent);
+  }
+}
+
+// Tight grouping for the prev/next chevron pair in the DocNav and rail
+// toolbars. The two buttons sit flush against each other (gap: 0) so they
+// read as a single navigation control, with a slim `i/N` counter pinned
+// to their right edge. The surrounding flex gap preserves separation
+// from the title/search slots.
+.emr-cycler-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+
+// Chevron buttons sit slightly narrower than other icon buttons so the
+// pair reads as a tight nav control instead of two unrelated icons.
+.emr-cycler-btn {
+  width: 20px;
+}
+
+// Rail comment navigator: pinned to the RIGHT of the header lead, with the two
+// arrows stacked VERTICALLY (a compact spinner) beside a prominent
+// "current / total" readout. Scoped to the rail so the DocNav's horizontal
+// cycler is untouched.
+.emr-rail-toolbar-lead .emr-cycler-group {
+  margin-left: auto;
+  gap: 6px;
+}
+
+.emr-cycler-arrows {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--emr-rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.emr-cycler-arrows .emr-cycler-btn {
+  width: 18px;
+  height: 12px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  // Chevrons carry a stronger-than-muted colour so they stay legible at this
+  // small size in BOTH themes (mixing toward the foreground bumps contrast
+  // against the toolbar without going to a heavy full-black/white).
+  color: color-mix(in srgb, var(--emr-fg) 72%, var(--emr-muted));
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  &:hover:not(:disabled) {
+    color: var(--emr-fg);
+  }
+
+  // Hairline divider between the stacked arrows.
+  & + .emr-cycler-btn {
+    border-top: 1px solid var(--emr-rule);
+  }
+}
+
+// Compact "current / total" counter. Tabular numerals keep the width
+// stable as the index ticks past 9 → 10, the slash is dimmed so the
+// numbers carry the visual weight.
+.emr-cycler-count {
+  display: inline-flex;
+  align-items: baseline;
+  margin-left: 4px;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--emr-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  flex: 0 0 auto;
+}
+
+// The rail navigator emphasises the selected index (bold, full-contrast) and
+// dims the total, so "which comment am I on" reads at a glance. Same size as
+// the rest of the readout — weight and colour carry the emphasis, not size.
+.emr-cycler-count-cur {
+  font-weight: 700;
+  color: var(--emr-fg);
+}
+
+.emr-cycler-count-total {
+  color: var(--emr-muted);
+}
+
+.emr-cycler-count-sep {
+  margin: 0 2px;
+  opacity: 0.55;
+}
+
+// Push the DocNav search-toggle button to the far right of its header so the
+// title stays anchored left. (The comment rail handles this with its own
+// `.emr-rail-toolbar-actions` wrapper instead.)
+.emr-docnav-title + .emr-icon-btn {
+  margin-left: auto;
+}
+
+.emr-popover {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  min-width: 180px;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule);
+  border-radius: 6px;
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.12),
+    0 2px 4px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.emr-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--emr-fg);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--emr-faint);
+    outline: none;
+  }
+
+  &.is-danger {
+    color: #b32424;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(179, 36, 36, 0.08);
+      color: #8b1919;
+    }
+  }
+}
+
+.emr-popover-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--emr-muted);
+  flex: 0 0 16px;
+
+  // Danger items want the icon to inherit the warning color too.
+  .emr-popover-item.is-danger & {
+    color: currentColor;
+  }
+}
+
+.emr-popover-confirm {
+  padding: 8px 10px 6px;
+  min-width: 200px;
+}
+
+.emr-popover-confirm-text {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--emr-fg);
+  line-height: 1.35;
+}
+
+.emr-popover-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+// Top-right like button. Visually it's an icon-button with a count next to
+// it — same chrome as `.emr-icon-btn` so it sits flush with the ⋯ button.
+// Always rendered when at least one user has reacted; doubles as a toggle
+// for the current user's own like.
+.emr-like-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--emr-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 80ms ease,
+    color 80ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+
+  &.is-mine {
+    color: var(--emr-accent);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  .emr-like-pill-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// Emoji thumb used inside .emr-icon-btn and .emr-like-pill. Fixing a square
+// box plus line-height:1 keeps it visually aligned with the SVG ⋯ glyph
+// next to it (emojis otherwise sit slightly low because of their large
+// intrinsic line-box).
+.emr-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  line-height: 1;
+  // Render emoji color (not currentColor) so the thumb stays vibrant even
+  // when the surrounding text is muted.
+  color: initial;
+  // Remove the emoji's default text underline / baseline shift.
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Segoe UI Symbol", system-ui, sans-serif;
+  font-variant-emoji: emoji;
+}
+
+// Compact "X liked this" chip beneath the comment body.
+.emr-like-chip-row {
+  margin-top: 4px;
+}
+
+.emr-like-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 6px;
+  border-radius: 999px;
+  background: var(--emr-faint);
+  border: 1px solid var(--emr-rule);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--emr-fg);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-accent-soft);
+    border-color: var(--emr-accent);
+  }
+
+  &.is-mine {
+    background: var(--emr-accent-soft);
+    border-color: var(--emr-accent);
+    color: var(--emr-accent);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  .emr-like-chip-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// Bottom-of-balloon reply trigger — looks like a subtle text field; on
+// click, the parent swaps it out for the full Composer.
+.emr-reply-trigger {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  text-align: left;
+  border: 1px solid var(--emr-rule);
+  border-radius: 6px;
+  background: var(--emr-bg);
+  color: var(--emr-muted);
+  font-size: 12px;
+  cursor: text;
+  transition:
+    border-color 80ms ease,
+    background-color 80ms ease;
+
+  &:hover {
+    border-color: var(--emr-rule-strong);
+    background: var(--emr-faint);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--emr-accent);
+    box-shadow: 0 0 0 2px var(--emr-accent-soft);
+  }
+}
+
+.emr-reply-zone {
+  margin-top: 6px;
+}
+
+// ---------------------------------------------------------------------------
+// Comment composer (inline editor)
+// ---------------------------------------------------------------------------
+
+.emr-composer {
+  margin-top: 8px;
+
+  // Reserve room above / below the composer when JS calls `scrollIntoView`
+  // on it. The top reserve clears `.emr-rail-sticky-header` (--emr-shell-top
+  // + its content height of ~78px) so the composer never ends up tucked
+  // underneath the sticky "COMMENTS" toolbar. The bottom reserve keeps the
+  // submit/cancel actions a hair off the viewport edge.
+  scroll-margin-top: 120px;
+  scroll-margin-bottom: 16px;
+
+  .emr-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    font-size: 11px;
+
+    button {
+      background: transparent;
+      border: 0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--emr-muted);
+
+      &.is-active {
+        background: var(--emr-accent-soft);
+        color: var(--emr-accent);
+        font-weight: 600;
+      }
+    }
+  }
+
+  .emr-textarea {
+    width: 100%;
+    min-height: 70px;
+    resize: vertical;
+    border: 1px solid var(--emr-rule-strong);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+    // Theme-aware surface — without these the textarea falls back to the UA
+    // default (white bg / black text), which looks broken in dark mode.
+    background: var(--emr-bg);
+    color: var(--emr-fg);
+
+    &::placeholder {
+      color: var(--emr-muted);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--emr-accent);
+      box-shadow: 0 0 0 2px rgba(0, 102, 184, 0.15);
+    }
+  }
+
+  .emr-preview {
+    border: 1px dashed var(--emr-rule-strong);
+    border-radius: 4px;
+    padding: 10px;
+    min-height: 70px;
+    font-size: 13px;
+    background: var(--emr-bg);
+
+    p:first-child {
+      margin-top: 0;
+    }
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .emr-composer-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    justify-content: flex-end;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Floating "Add comment" bubble
+// ---------------------------------------------------------------------------
+
+.emr-selection-bubble {
+  position: absolute;
+  z-index: 60;
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  display: flex;
+  gap: 2px;
+
+  button {
+    background: transparent;
+    border: 0;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Historical / orphaned disclosures
+// ---------------------------------------------------------------------------
+
+.emr-rail-section {
+  margin-top: 32px;
+  border-top: 1px dashed var(--emr-rule);
+  padding-top: 12px;
+}
+
+.emr-rail-section + .emr-rail-section {
+  margin-top: 24px;
+}
+
+.emr-rail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--emr-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  width: 100%;
+
+  &:hover {
+    color: var(--emr-fg);
+  }
+}
+
+.emr-rail-section-count {
+  background: var(--emr-faint);
+  border-radius: 10px;
+  padding: 1px 6px;
+  color: var(--emr-muted);
+  font-size: 10px;
+  text-transform: none;
+}
+
+.emr-rail-section-body {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// Inline (non-positioned) cards inside the historical/orphaned sections.
+.emr-balloon.inline {
+  position: static;
+  left: auto;
+  right: auto;
+  animation: emr-balloon-in 240ms ease-out 1;
+}
+
+@keyframes emr-balloon-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Orphan tray uses a non-clickable header (it can't be collapsed).
+.emr-rail-section-header.is-static {
+  cursor: default;
+}
+
+// General ("Overview") tray: a PR-wide, not-anchored-to-this-file section.
+// Styled distinctly from the file's own anchored discussion — a solid rule and
+// a soft tinted surface — so it reads as a separate area, and it's collapsible
+// (starts collapsed) so it stays out of the way until wanted.
+.emr-rail-section--general {
+  margin-top: 24px;
+  border-top: 1px solid var(--emr-rule-strong);
+}
+
+.emr-rail-section-header--toggle {
+  cursor: pointer;
+}
+
+.emr-rail-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Chevron rotates: points right when collapsed, down when expanded.
+.emr-rail-section-twist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--emr-muted);
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+
+  &[data-collapsed="true"] {
+    transform: rotate(0deg);
+  }
+}
+
+// General balloons read as a distinct, quieter surface (a faint tint) so they
+// don't look like more of this file's threads.
+.emr-balloon.is-general {
+  background: var(--emr-balloon-orphaned-bg);
+}
+
+// Orphaned-file tray: each thread is prefixed with the (now-absent) file name
+// so the reader knows which removed file it belonged to.
+.emr-rail-orphan-file-item + .emr-rail-orphan-file-item {
+  margin-top: 8px;
+}
+
+.emr-rail-orphan-file-label {
+  font-size: 11px;
+  font-family:
+    "SFMono-Regular", "Cascadia Mono", "Consolas", "Liberation Mono", monospace;
+  color: var(--emr-muted);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ---------------------------------------------------------------------------
+// Loading / error / empty
+// ---------------------------------------------------------------------------
+
+.emr-loading {
+  color: var(--emr-muted);
+  padding: 24px;
+  // A gentle pulse so a longer wait still feels alive rather than frozen.
+  // Disabled under reduced-motion below.
+  animation: emr-skel-pulse 1.6s ease-in-out infinite;
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton placeholders
+// ---------------------------------------------------------------------------
+// Shown in the article + comment-rail columns while a newly selected file's
+// source streams in. The DocNav file tree stays mounted, so only the middle
+// and rail fade to these shimmer placeholders — no full-page blank flash.
+// The shimmer animates `background-position` only (no layout/paint of text),
+// and is fully disabled under `prefers-reduced-motion`.
+//
+// Colours are theme-neutral translucent greys layered over `--emr-bg`, so
+// the same placeholders read correctly in both light and dark themes without
+// per-theme overrides.
+
+@mixin emr-skel-surface {
+  border-radius: 6px;
+  background-color: rgba(128, 128, 128, 0.16);
+  background-image: linear-gradient(
+    100deg,
+    rgba(128, 128, 128, 0) 20%,
+    rgba(128, 128, 128, 0.22) 40%,
+    rgba(128, 128, 128, 0.22) 60%,
+    rgba(128, 128, 128, 0) 80%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  background-position: 180% 0;
+  animation: emr-skel-shimmer 1.4s ease-in-out infinite;
+}
+
+.emr-article-wrap.emr-skeleton {
+  // Fade in so a fast cache hit (no skeleton) and a slow load both feel calm.
+  animation: emr-skel-fade-in 160ms ease-out both;
+  // Loaded prose adds this gutter on `.emr-rendered`; mirror it while loading
+  // so shimmer lines and final text share the same left/right edges.
+  padding-inline: var(--emr-article-gutter);
+}
+
+.emr-skel-line {
+  @include emr-skel-surface;
+  height: 14px;
+  margin: 0 0 14px;
+}
+
+.emr-skel-title {
+  height: 28px;
+  width: 55%;
+  margin-bottom: 24px;
+}
+
+.emr-skel-block {
+  @include emr-skel-surface;
+  height: 120px;
+  margin: 8px 0 22px;
+  border-radius: 8px;
+}
+
+.emr-skel-w90 {
+  width: 92%;
+}
+.emr-skel-w85 {
+  width: 86%;
+}
+.emr-skel-w80 {
+  width: 80%;
+}
+.emr-skel-w75 {
+  width: 74%;
+}
+.emr-skel-w70 {
+  width: 68%;
+}
+.emr-skel-w60 {
+  width: 58%;
+}
+.emr-skel-w65 {
+  width: 64%;
+}
+.emr-skel-w50 {
+  width: 48%;
+}
+
+.emr-rail-col.emr-skeleton {
+  animation: emr-skel-fade-in 160ms ease-out both;
+}
+
+.emr-rail-skel-card {
+  @include emr-skel-surface;
+  height: 76px;
+  margin: 0 0 14px;
+  border-radius: 8px;
+}
+
+@keyframes emr-skel-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@keyframes emr-skel-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes emr-skel-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-loading {
+    animation: none;
+  }
+  .emr-skel-line,
+  .emr-skel-block,
+  .emr-rail-skel-card {
+    animation: none;
+    background-image: none;
+  }
+  .emr-article-wrap.emr-skeleton,
+  .emr-rail-col.emr-skeleton {
+    animation: none;
+  }
+}
+
+.emr-error {
+  padding: 24px 32px;
+  color: #cd3030;
+
+  h2 {
+    margin-top: 0;
+  }
+
+  pre {
+    background: #fbeaea;
+    padding: 12px;
+    border-radius: 4px;
+    overflow: auto;
+    white-space: pre-wrap;
+    color: #333;
+    font-size: 12px;
+  }
+
+  .emr-error-retry {
+    margin-top: 12px;
+    padding: 6px 16px;
+    font: inherit;
+    font-size: 13px;
+    color: #fff;
+    background: #0067b8;
+    border: 1px solid #0067b8;
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:hover {
+      background: #005ba1;
+    }
+  }
+}
+
+// Inline toast used for transient persistence errors (e.g. ADO API failed).
+// Sits below the header so it never overlaps the article scroll.
+.emr-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--emr-rule);
+
+  &--error {
+    background: #fbeaea;
+    color: #8a1f1f;
+    border-bottom-color: #ecc2c2;
+  }
+
+  .emr-toast-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .emr-toast-msg {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .emr-toast-dismiss {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.06);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mentions (inline pills + floating picker)
+//
+// Mentions are persisted as markdown links with our custom `mention://`
+// scheme; `rehypeMentions` swaps each one for a `<span class="emr-mention
+// emr-mention-<kind>">` so we can style them as compact inline pills.
+// The MentionPicker below is the floating typeahead used while composing.
+// ---------------------------------------------------------------------------
+
+.emr-mention {
+  // We render as plain `inline` (rather than inline-flex) so that long
+  // pill content — typically a PR or work item title — can break onto
+  // multiple lines when it would otherwise bleed past the right edge
+  // of the comment bubble. `box-decoration-break: clone` makes the
+  // pill's background/padding/rounded corners render correctly on
+  // each line so the wrapped pill still reads as a single chip.
+  display: inline;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--emr-accent-soft, rgba(0, 102, 184, 0.08));
+  color: var(--emr-accent, #0066b8);
+  font-weight: 500;
+  font-size: 0.95em;
+  line-height: 1.4;
+  text-decoration: none;
+  // Pills break at word boundaries when possible; if the content is
+  // one un-breakable token wider than the column (rare, but defensive)
+  // we still break rather than overflow.
+  overflow-wrap: anywhere;
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: var(--emr-accent-soft-strong, rgba(0, 102, 184, 0.14));
+  }
+
+  // Inline state dot used by workitem / pullrequest pills.
+  .emr-mention-state-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #888;
+    margin-right: 6px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+
+  // Per-status PR dot colors when no inline style is present.
+  .emr-mention-state-dot.emr-pr-state-active {
+    background: #0066b8;
+  }
+  .emr-mention-state-dot.emr-pr-state-completed {
+    background: #2e8540;
+  }
+  .emr-mention-state-dot.emr-pr-state-abandoned {
+    background: #777;
+  }
+}
+
+.emr-mention-user {
+  // People pill: same accent treatment but a softer chrome since they're
+  // very common in design-doc reviews and shouldn't compete with prose.
+  background: rgba(0, 102, 184, 0.1);
+}
+
+.emr-mention-workitem {
+  background: rgba(31, 31, 31, 0.06);
+  color: #1f1f1f;
+}
+
+.emr-mention-pullrequest {
+  background: rgba(31, 31, 31, 0.06);
+  color: #1f1f1f;
+}
+
+// ---------------------------------------------------------------------------
+// Floating mention picker (typeahead surfaced from the Composer textarea)
+// ---------------------------------------------------------------------------
+
+.emr-mention-picker {
+  z-index: 120;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule, #e5e5e5);
+  border-radius: 8px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  font-size: 13px;
+}
+
+.emr-mention-picker-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--emr-muted, #6e6e6e);
+  background: var(--emr-faint, #fafafa);
+  border-bottom: 1px solid var(--emr-rule, #e5e5e5);
+}
+
+.emr-mention-picker-empty {
+  padding: 12px;
+  color: var(--emr-muted, #6e6e6e);
+  font-style: italic;
+}
+
+.emr-mention-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.emr-mention-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+
+  &:hover,
+  &.is-selected {
+    background: var(--emr-accent-soft, rgba(0, 102, 184, 0.08));
+  }
+}
+
+.emr-mention-picker-type {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: #ddd;
+  color: #333;
+
+  &[data-wi-type*="bug"] {
+    background: #f3d8d8;
+    color: #a8000c;
+  }
+  &[data-wi-type*="task"] {
+    background: #fff1c2;
+    color: #6a4d00;
+  }
+  &[data-wi-type*="story"],
+  &[data-wi-type*="scenario"] {
+    background: #d8e8f8;
+    color: #084978;
+  }
+  &[data-wi-type*="feature"] {
+    background: #e3d8f3;
+    color: #5b2e8c;
+  }
+  &[data-wi-type*="epic"] {
+    background: #f8d8e8;
+    color: #8c2e5b;
+  }
+}
+
+.emr-mention-picker-type-pr {
+  background: var(--emr-accent-soft, rgba(0, 102, 184, 0.12));
+  color: var(--emr-accent, #0066b8);
+  letter-spacing: 0.04em;
+}
+
+.emr-mention-picker-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.emr-mention-picker-primary {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emr-mention-picker-id {
+  color: var(--emr-muted, #6e6e6e);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+
+.emr-mention-picker-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--emr-muted, #6e6e6e);
+  margin-top: 1px;
+
+  .emr-mention-state-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #888;
+    display: inline-block;
+  }
+
+  .emr-mention-state-dot.emr-pr-state-active {
+    background: #0066b8;
+  }
+  .emr-mention-state-dot.emr-pr-state-completed {
+    background: #2e8540;
+  }
+  .emr-mention-state-dot.emr-pr-state-abandoned {
+    background: #777;
+  }
+}
+
+.emr-mention-picker-sep {
+  margin: 0 2px;
+  color: var(--emr-rule, #c8c8c8);
+}
+// ---------------------------------------------------------------------------
+// Document navigation rail (left column)
+//
+// Replaces the old right-edge minimap with a labeled, scroll-spy list of
+// headings + section bulk-toggle actions. Sticky so it stays in view as
+// the user scrolls the article body. Collapsible to an icon strip so the
+// article still gets the full width of the column when not needed.
+// ---------------------------------------------------------------------------
+
+.emr-docnav {
+  // Fills its own left rail (`.emr-body__nav`), the fixed full-height left
+  // column of the anchored layout that owns the divider + outer padding. The
+  // heading list (`.emr-docnav-list`) scrolls internally; the header stays put.
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 12px 4px 0;
+  user-select: none;
+  font-size: 12.5px;
+  color: var(--emr-fg);
+}
+
+.emr-docnav-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 8px;
+  min-height: 28px;
+}
+
+.emr-docnav-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--emr-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+// more than one repo with markdown. The repo name itself is the trigger: it
+// reads like the uppercase title label (no heavy control chrome) and opens a
+// clean dropdown of every repo. The menu is rendered with `position: fixed`
+// (set inline from the trigger rect) because the rail clips overflow.
+.emr-docnav-repo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.emr-docnav-repo-btn {
+  width: 100%;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--emr-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 5px;
+  margin: -3px -5px;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    color: var(--emr-fg);
+    background: var(--emr-hover, rgba(128, 128, 128, 0.14));
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--communication-foreground, #0078d4);
+  }
+}
+
+// The repo name is real content, not a label: natural case (it overrides the
+// uppercase `.emr-docnav-title` styling for the single-repo static title) and
+// only as wide as it needs so the chevron tucks in right beside it. Ellipsizes
+// only when the name can't fit the available header width.
+.emr-docnav-repo-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12.5px;
+  // Enough line box to clear descenders (e.g. the "p" in "api-reference");
+  // `line-height: 1` clips them under `overflow: hidden`.
+  line-height: 1.4;
+}
+
+// Subtle monochrome git-repo glyph shown before the repo name in the picker
+// trigger, the single-repo static title, and each dropdown option. Drawn in
+// `currentColor` at reduced opacity so it stays a quiet affordance rather than
+// a bright brand mark.
+.emr-docnav-repo-glyph {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+
+.emr-docnav-repo-chevron {
+  flex: 0 0 auto;
+  opacity: 0.65;
+  transition: transform 0.15s ease;
+
+  .emr-docnav-repo-btn[aria-expanded="true"] & {
+    transform: rotate(180deg);
+  }
+}
+
+// The popover. Fixed-positioned (inline top/left), so it floats above the rail
+// instead of being clipped by its `overflow: hidden`. The bordered shell clips
+// its children so the filter header and scrolling results list share its
+// rounded corners; in paginated mode the list scrolls while the filter stays
+// pinned at the top.
+.emr-docnav-repo-menu {
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  max-height: min(60vh, 360px);
+  background: var(--emr-bg, Canvas);
+  border: 1px solid var(--emr-border, rgba(128, 128, 128, 0.28));
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+// Keyword filter row pinned above the scrolling results (paginated mode only).
+.emr-docnav-repo-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--emr-border, rgba(128, 128, 128, 0.2));
+}
+
+.emr-docnav-repo-filter-glyph {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.emr-docnav-repo-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--emr-fg);
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 0;
+
+  &::placeholder {
+    color: var(--emr-muted);
+  }
+}
+
+// Scrolling results region. In non-paginated mode this is the menu's only
+// child and behaves exactly like the old menu (scrolls, 4px padding).
+.emr-docnav-repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+// Loading / empty footer row inside the results list.
+.emr-docnav-repo-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--emr-muted);
+}
+
+.emr-docnav-repo-spinner {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--emr-border, rgba(128, 128, 128, 0.4));
+  border-top-color: var(--communication-foreground, #0078d4);
+  animation: emr-spin 0.7s linear infinite;
+}
+
+.emr-docnav-repo-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--emr-fg);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--emr-hover, rgba(128, 128, 128, 0.14));
+  }
+
+  &.is-selected {
+    font-weight: 600;
+  }
+}
+
+.emr-docnav-repo-option-check {
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--communication-foreground, #0078d4);
+}
+
+.emr-docnav-repo-option-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emr-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Empty-state shell shown when the selected repo has no markdown. The DocNav
+// header (with its live repo picker) stays mounted so the user can switch; the
+// article area carries a centered, muted explanation card.
+.emr-docs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.emr-docs-empty-card {
+  max-width: 380px;
+  text-align: center;
+  color: var(--emr-muted);
+
+  .emr-docnav-repo-glyph {
+    width: 28px;
+    height: 28px;
+    opacity: 0.4;
+    margin-bottom: 4px;
+  }
+
+  h2 {
+    margin: 8px 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--emr-fg);
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  code {
+    font-size: 0.92em;
+  }
+}
+
+.emr-docnav-actions {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+// ---------------------------------------------------------------------------
+// Inline search input that takes over the title's slot in the docnav
+// header when the user clicks the magnifier. Mirrors `.emr-rail-search-inline`
+// so the file/comment search affordances look and feel identical.
+// ---------------------------------------------------------------------------
+.emr-docnav-search-inline {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--emr-fg);
+  padding: 0;
+  height: 22px;
+  line-height: 22px;
+
+  &::placeholder {
+    color: var(--emr-muted);
+  }
+
+  // Hide WebKit's default search-clear control — we render our own
+  // close button (the X icon on the search-toggle button).
+  &::-webkit-search-cancel-button {
+    appearance: none;
+    display: none;
+  }
+}
+
+.emr-docnav-search-empty {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--emr-muted);
+  line-height: 1.4;
+}
+
+.emr-docnav-search-status {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--emr-muted);
+  font-style: italic;
+}
+
+// Surfaced when an ALM Code Search call returns an "unavailable"
+// outcome (extension not installed, auth blew up, network failure,
+// etc.). Sits above the local results so the user knows why the
+// remote search isn't contributing matches but still sees what the
+// local filter found.
+.emr-docnav-search-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 0 0 4px;
+  border: 1px solid var(--emr-rule);
+  border-radius: 3px;
+  background: var(--emr-faint, rgba(0, 0, 0, 0.03));
+  color: var(--emr-muted);
+  font-size: 11px;
+  line-height: 1.35;
+
+  svg {
+    flex: 0 0 auto;
+    color: var(--emr-muted);
+  }
+  span {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.emr-docnav-search-result {
+  // Reuse the file-row visual language but always single-line and never
+  // owns heading sub-children.
+  padding-left: 6px;
+  min-height: 22px;
+
+  &.is-active {
+    border-left-color: var(--emr-accent);
+    background: var(--emr-accent-soft);
+  }
+}
+
+.emr-docnav-search-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 3px;
+  min-width: 0;
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+}
+
+.emr-docnav-search-name {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+
+.emr-docnav-search-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--emr-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  margin-left: auto;
+}
+
+// ---------------------------------------------------------------------------
+// Lazy folder rows — visually almost identical to regular folders, but
+// the chevron carries a spinner while a fetch is in flight and a faint
+// "…" hint sits at the right of the label so users know there's more
+// coming.
+// ---------------------------------------------------------------------------
+.emr-docnav-dir-branch.is-lazy {
+  .emr-docnav-twist {
+    color: var(--emr-muted);
+  }
+  .emr-docnav-lazy-hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--emr-muted);
+    opacity: 0.7;
+    padding-right: 4px;
+  }
+}
+
+.emr-docnav-item.is-loading {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.emr-docnav-spinner {
+  animation: emr-docnav-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes emr-docnav-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.emr-docnav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  // Hide native scrollbar most of the time; appear only when hovered.
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  &:hover {
+    scrollbar-color: var(--emr-rule-strong) transparent;
+  }
+}
+
+// One branch in the tree: the row itself + (optionally) a children container.
+.emr-docnav-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+// Container holding the descendants of a parent branch. Indentation is
+// applied to each item via `--emr-nav-depth` rather than here so the
+// hover/active backgrounds extend full-width.
+.emr-docnav-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.emr-docnav-item {
+  // The row is a flex container with three slots: twist (chevron), label
+  // (text + badge), and an implicit right edge. We render the row as a
+  // `<div>` (not a `<button>`) so the twist and label can be separate
+  // interactive children without violating nested-button rules.
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 3px;
+  border-left: 2px solid transparent;
+  line-height: 1.3;
+  font-size: 12.5px;
+  // Tightened from 24 → 20 to remove the slightly-too-airy feel of the
+  // previous tree. Combined with the reduced label padding below this
+  // halves the per-row vertical footprint.
+  min-height: 20px;
+  color: var(--emr-fg);
+  // Indent by depth in the heading tree. The first 14px keeps a stable
+  // gutter for the twist; each subsequent level adds another 14px.
+  padding-left: calc(2px + var(--emr-nav-depth, 0) * 14px);
+  padding-right: 6px;
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+  // The single emphasised row in the tree: the active item gets a left
+  // accent rule, a soft accent background, accent text colour, AND a
+  // semibold label. Every other row stays at the regular weight so the
+  // active row reads as the only important thing on the column.
+  &.is-active {
+    border-left-color: var(--emr-accent);
+    background: var(--emr-accent-soft);
+    color: var(--emr-accent);
+
+    .emr-docnav-label {
+      font-weight: 600;
+    }
+  }
+
+  // H3/H4 quietly recede so the visual hierarchy matches the heading scale.
+  // Heading rows (H2) sit at a muted tone so they read as CHILDREN of the
+  // near-black file row above them; H3/H4 recede further still. This tonal
+  // ladder (file → H2 → H3/H4) is the primary file-vs-heading separation.
+  &.lvl-2 {
+    color: var(--emr-nav-heading-fg);
+  }
+  &.lvl-3 {
+    color: var(--emr-muted);
+  }
+  &.lvl-4 {
+    color: var(--emr-muted);
+    font-size: 12px;
+  }
+}
+
+// The twist (chevron) button. Tight hit-target so the row can stay
+// compact; rotates on `data-collapsed`.
+.emr-docnav-twist {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--emr-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  transition:
+    transform 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+  // Default state: branch is expanded → chevron points down.
+  transform: rotate(90deg);
+
+  &:hover {
+    color: var(--emr-fg);
+    background: rgba(0, 0, 0, 0.05);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: -2px;
+  }
+  // Collapsed → chevron points right (its natural orientation).
+  &[data-collapsed="true"] {
+    transform: rotate(0deg);
+  }
+}
+
+// Spacer that occupies the same footprint as the twist on leaf items so
+// labels at the same depth still line up vertically.
+.emr-docnav-twist-spacer {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
+// The scroll-on-click label (text + badge). This is the wide hit-target
+// of the row.
+.emr-docnav-label {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  // Tighter vertical padding — the row already gets its min-height
+  // from the parent `.emr-docnav-item`, so 1px is enough to keep the
+  // hit target generous without inflating the row.
+  padding: 1px 4px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: -2px;
+  }
+}
+
+.emr-docnav-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Compact thread-count badge: amber for unresolved, muted grey for
+// everything-resolved. Sits flush-right inside the nav item so the eye
+// can scan the rail for "where is the conversation".
+.emr-docnav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0 5px;
+  // 20px holds a 2-digit count without growing the badge. Three-digit counts
+  // still grow naturally; for the typical 1-99 range, file names retain a
+  // stable amount of room across rows.
+  min-width: 20px;
+  height: 14px;
+  border-radius: 999px;
+  font-size: 10px;
+  // 500 instead of 600 \u2014 the badge is still emphasised relative to the
+  // regular row text but no longer shouts the same weight as the
+  // active highlight.
+  font-weight: 500;
+  line-height: 1;
+  flex: 0 0 auto;
+
+  &.is-open {
+    background: #fff3a8;
+    color: #6b5300;
+  }
+  &.is-resolved {
+    background: var(--emr-faint);
+    color: var(--emr-muted);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// File rows (top-level nodes inside the DocNav tree).
+//
+// Replaces the old top-bar file picker. Each file in the PR is a top-level
+// row showing a change-type chip, the basename, and compact +/- diff
+// stats. Single-selection model: exactly one row in the tree carries the
+// `.is-active` highlight at any moment — either the active heading
+// (scroll-spy) or, when no heading is active (user is at the top of the
+// document), the currently-loaded file row. The file row never repeats
+// the highlight when a heading owns it, so the user always sees exactly
+// one selection. The "current file" is otherwise implicit: it's the row
+// whose heading children are rendered beneath it.
+// ---------------------------------------------------------------------------
+
+.emr-docnav-file-branch {
+  // Keep the tree dense: consecutive document groups sit at the same 1px gap
+  // as the rest of the ladder. File rows are differentiated by their (bolder,
+  // slightly larger) label, and the currently-open file by the shared
+  // `.is-active` accent box — no extra whitespace or separators needed.
+  & + .emr-docnav-file-branch,
+  & + .emr-docnav-dir-branch {
+    margin-top: 1px;
+  }
+}
+
+// Folder rows: like file rows but with a chevron + folder icon. Now
+// rendered at the same regular weight as everything else so the eye
+// reads the tree as a uniform ladder; only the active row is
+// emphasised. Indentation is driven by `--emr-nav-depth` so a
+// deeply-nested file still aligns under its folder regardless of how
+// many ancestors collapsed.
+.emr-docnav-dir-branch {
+  // Same dense 1px rhythm as file branches — no extra group whitespace.
+  & + .emr-docnav-file-branch,
+  & + .emr-docnav-dir-branch {
+    margin-top: 1px;
+  }
+}
+
+.emr-docnav-item.emr-docnav-dir {
+  min-height: 20px;
+  color: var(--emr-muted);
+  font-weight: 400;
+}
+
+.emr-docnav-dir-label {
+  gap: 6px;
+  font-weight: inherit;
+  // Folders read as labels, not paths — use the surrounding UI font at
+  // a slightly smaller size so the file rows below stay the primary
+  // ladder.
+  .emr-docnav-item-text {
+    font-size: 12px;
+  }
+}
+
+.emr-docnav-folder-icon {
+  // Reuse the file-icon flex sizing but switch off the per-change-type
+  // background — folders carry their own SVG glyph.
+  background: transparent !important;
+  color: var(--emr-muted);
+}
+
+.emr-docnav-item.emr-docnav-file {
+  min-height: 22px;
+  // Regular weight by default — only the active file is bolded by the
+  // shared `.emr-docnav-item.is-active` rule above. This drops the
+  // "every row is shouting" feel of the old design.
+  font-weight: 400;
+  // Strongest (near-black) tone so files clearly out-rank the muted heading
+  // rows nested beneath them.
+  color: var(--emr-nav-file-fg);
+}
+
+.emr-docnav-file-label {
+  // Slightly tighter gap than the heading label — file rows pack a
+  // status chip, name, diff stats and an optional badge, so 6px keeps
+  // them grouped without crowding.
+  gap: 6px;
+  font-weight: inherit;
+  min-width: 0;
+}
+
+.emr-docnav-file-icon {
+  // Lightweight change-type chip: a single coloured letter, no filled
+  // background. The old design's saturated A/M/R/D squares dominated
+  // every row; with just a coloured glyph the eye reads the file name
+  // first and only picks up the change colour when scanning.
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  flex: 0 0 auto;
+  letter-spacing: 0;
+  color: var(--emr-muted);
+
+  &.is-added {
+    color: var(--emr-diff-added);
+  }
+  &.is-modified {
+    color: var(--emr-diff-modified);
+  }
+  &.is-renamed {
+    color: var(--emr-accent);
+  }
+  &.is-deleted {
+    color: var(--emr-diff-deleted);
+  }
+}
+
+.emr-docnav-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  // Keep monospace for file names — paths and dotted extensions are
+  // easier to scan in a fixed-width font. Slightly larger (13px) and
+  // semibold (600), in the strongest near-black tone, so file rows clearly
+  // out-rank the muted, regular-weight 12px heading rows nested beneath —
+  // the differentiation comes from weight, size AND tone together.
+  font-family:
+    "SFMono-Regular", "Cascadia Mono", "Consolas", "Liberation Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--emr-nav-file-fg);
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible sections (rendered article)
+//
+// `rehypeCollapsibleSections` wraps each heading + its following content
+// in `<section class="emr-section emr-section-level-N">`. Toggling the
+// `data-collapsed="true"` attribute hides everything except the heading.
+// A thin chevron sits in the page gutter and rotates to reflect state.
+// ---------------------------------------------------------------------------
+
+.emr-rendered .emr-section {
+  position: relative;
+  // Subtle indent for nested sections so the visual hierarchy follows
+  // the heading hierarchy without competing with the rendered text.
+  &.emr-section-level-2 {
+    padding-left: 0;
+  }
+  &.emr-section-level-3 {
+    padding-left: 0;
+  }
+
+  // Body content fades in/out gently when the section toggles. We can't
+  // animate `display: none` directly, so we rely on opacity + the user's
+  // perception of the layout shift.
+  > *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+    transition: opacity 140ms ease;
+  }
+
+  // Chevron sits just outside the article column in the changebar gutter.
+  // Subtly always-visible so users discover the affordance without hovering.
+  > h1,
+  > h2,
+  > h3,
+  > h4,
+  > h5,
+  > h6 {
+    position: relative;
+    cursor: pointer;
+    transition: color 120ms ease;
+
+    &::before {
+      content: "";
+      position: absolute;
+      // Size scales with the heading's font-size so the chevron reads as
+      // proportional next to both an h1 (~29px \u2192 ~23px chevron) and
+      // an h4 (~14px \u2192 ~12px chevron). 0.8em is the visual sweet
+      // spot \u2014 substantial enough to read as a clear affordance,
+      // small enough to stay inside the 28px `--emr-article-gutter`
+      // with a 4px right-edge gap (no leak into the DocNav column).
+      width: 0.8em;
+      height: 0.8em;
+      left: calc(-0.8em - 4px);
+      // Centered on the heading's first-line vertical middle. The site's
+      // headings all use a 1.25 line-height ratio, so line-box center is
+      // at 0.625em from the heading's content-top \u2014 stable across
+      // every heading size and unaffected by margins/padding-bottom.
+      top: 0.625em;
+      // Use mask-image so the chevron picks up the heading's currentColor
+      // (so it tints accent-blue when the user hovers the heading).
+      background-color: currentColor;
+      $emr-chevron-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,6 8,10 12,6'/></svg>");
+      mask-image: $emr-chevron-svg;
+      -webkit-mask-image: $emr-chevron-svg;
+      mask-size: contain;
+      -webkit-mask-size: contain;
+      mask-repeat: no-repeat;
+      -webkit-mask-repeat: no-repeat;
+      mask-position: center;
+      -webkit-mask-position: center;
+      color: var(--emr-muted);
+      transform: translateY(-50%);
+      transition:
+        transform 160ms ease,
+        opacity 140ms ease,
+        background-color 140ms ease;
+      opacity: 0.32;
+    }
+
+    &:hover {
+      color: var(--emr-accent);
+    }
+    &:hover::before {
+      opacity: 0.95;
+    }
+
+    // When a heading is also a diff-block, its wash card is pulled left by the
+    // shared `margin-left: -6px`. The chevron is positioned from the heading's
+    // shifted border edge, so it gets a matching +6px compensation to stay
+    // aligned with every other chevron. (Inline word-diff headings carry no
+    // card, so they need no compensation.)
+    &.emr-diff-block:not(.emr-diff-block--inline)::before {
+      left: calc(-0.8em - 4px + 6px);
+    }
+  }
+
+  // Collapsed: chevron points right, body content hidden.
+  &[data-collapsed="true"] {
+    > h1::before,
+    > h2::before,
+    > h3::before,
+    > h4::before,
+    > h5::before,
+    > h6::before {
+      transform: translateY(-50%) rotate(-90deg);
+      opacity: 0.95;
+    }
+
+    // Hide every child of the section except the heading itself.
+    > *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+      display: none !important;
+    }
+  }
+
+  // The document-title section wraps the whole document, so collapsing it is
+  // meaningless — suppress the chevron and the clickable affordance on its
+  // heading. Nested sections keep theirs.
+  &.emr-section--doc-title {
+    > h1,
+    > h2,
+    > h3,
+    > h4,
+    > h5,
+    > h6 {
+      cursor: default;
+
+      &::before {
+        content: none;
+      }
+
+      &:hover {
+        color: inherit;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Documents hub (src/documents-hub) — minimal chrome wrapping the shared
+// three-pane grid. The repo picker and refresh button live inside the
+// DocNav rail header (via slot props), so the hub doesn't need a
+// dedicated header strip above the grid — it mirrors the PR-tab layout.
+// ---------------------------------------------------------------------------
+
+.emr-docs-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.emr-docs-refresh-btn {
+  flex: 0 0 auto;
+
+  &[disabled] {
+    cursor: progress;
+  }
+}
+
+// Generic spinner — any SvgRefresh-style icon with .is-spinning
+// rotates. Used by both the docs-hub repo refresh button and the
+// per-PR thread refresh button in PrShell's rail header.
+.emr-icon.is-spinning {
+  animation: emr-spin 0.8s linear infinite;
+}
+
+@keyframes emr-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Make the PrShell .emr-app stretch to fill the docs container so the
+// rail + article share the full available height.
+.emr-docs-app .emr-app {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+// In the Documents hub the reader sits directly below the hub's own header,
+// which is a different tone than the reader's grey backdrop — so the card's
+// seamless flush top (which reads right only against matching chrome) butts
+// awkwardly against it. Restore a top gap on the document card here, matching
+// its bottom gap, so it floats clear of that header on the grey backdrop.
+.emr-docs-app .emr-body {
+  margin-top: var(--emr-card-gap);
+}
+
+// "No active PR" banner shown above the shell for repos with no PR to
+// route comments to. Keeps the markdown viewable but flags persistence
+// limitation.
+.emr-docs-banner {
+  margin: 8px 48px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--emr-rule-strong);
+  border-left-width: 3px;
+  border-left-color: var(--emr-warning, #c97d00);
+  border-radius: 4px;
+  background: var(--emr-faint);
+  color: var(--emr-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+// Shell-shaped placeholder shown while a repo's threads resolve. Keeps the
+// DocNav (and live repo picker) mounted and the three-column grid intact so a
+// repo switch never collapses the page to a blank centred line.
+.emr-reader-loading-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.emr-loading-statusbar {
+  flex: 0 0 28px;
+  height: 28px;
+  background: var(--emr-rail-bg);
+  border-top: 1px solid var(--emr-rule);
+}
+
+.emr-docnav-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 4px 0;
+}
+
+// ---------------------------------------------------------------------------
+// Standalone-only floating theme picker.
+//
+// Pinned to the bottom-left of the viewport so it never overlaps the
+// CommentRail (which sits on the right). Production iframes never
+// mount this component — production syncs to the ADO host theme
+// automatically.
+// ---------------------------------------------------------------------------
+
+.emr-theme-picker {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 200;
+  font-size: 12px;
+  // Stack the menu above the trigger when open.
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.emr-theme-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--emr-bg);
+  color: var(--emr-fg);
+  border: 1px solid var(--emr-rule-strong);
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: var(--emr-balloon-shadow);
+  transition:
+    border-color 80ms ease,
+    background-color 80ms ease;
+  font: inherit;
+  font-size: 12px;
+
+  &:hover {
+    border-color: var(--emr-accent);
+  }
+
+  &.is-open {
+    border-color: var(--emr-accent);
+  }
+
+  .emr-icon {
+    color: var(--emr-muted);
+  }
+
+  .emr-theme-picker-label {
+    color: var(--emr-fg);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+}
+
+.emr-theme-picker-menu {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule-strong);
+  border-radius: 8px;
+  box-shadow: var(--emr-balloon-shadow);
+  min-width: 200px;
+}
+
+.emr-theme-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--emr-fg);
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+
+  &.is-active {
+    background: var(--emr-accent-soft);
+    font-weight: 600;
+  }
+}
+
+// Small color swatch next to each item — gives a visual hint of what the
+// theme looks like without forcing the user to switch first.
+.emr-theme-picker-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--emr-rule-strong);
+  flex: 0 0 auto;
+
+  &--light {
+    background: #ffffff;
+    border-color: #cccccc;
+  }
+  &--dark {
+    background: #1f1f1f;
+    border-color: #555555;
+  }
+  &--hc-light {
+    background: #ffffff;
+    border-color: #000000;
+    border-width: 2px;
+  }
+  &--hc-dark {
+    background: #000000;
+    border-color: #ffd80b;
+    border-width: 2px;
+  }
+}
+
+// Single-file "side panel" layout (the in-context "Open in Markdown Review"
+// panel launched from Repos → Files). The DocNav file tree is unmounted, so
+// the grid collapses to two tracks — a flexible article column and the fixed
+// comment rail — and the article/rail reclaim columns 1 and 2 respectively.
+.emr-grid--no-nav {
+  // Single-file panels cap the article to a readable measure (the full reader
+  // lets it fill instead).
+  max-width: calc(
+    var(--emr-article-max) + var(--emr-article-gutter) * 2 + 64px
+  );
+}
+
+// Single-file panels can be narrow; keep the legacy shrink-and-scroll behaviour
+// (no fixed floor / graceful-disable) so the in-context panel still fits.
+.emr-body-frame--no-nav .emr-body {
+  min-width: 0;
+}
+
+// The in-context panel (PanelSize.Large) is narrower than a full page, so on
+// narrow surfaces reclaim horizontal space for the article: trim the shell
+// padding, shrink the comment rail, and tighten the article gutters so the
+// prose keeps a comfortable measure instead of collapsing toward one word per
+// line. Scoped to the no-nav (single-file panel) layout so the PR tab and full
+// reader are unaffected.
+@media (max-width: 1180px) {
+  // Rail width lives on the frame now (the rail is its sibling, not a grid
+  // child), so the responsive shrink must target the frame to cascade in.
+  .emr-body-frame--no-nav {
+    --emr-grid-rail: 280px;
+  }
+  .emr-grid--no-nav {
+    --emr-article-gutter: 16px;
+    padding-left: 20px;
+    padding-right: 20px;
+    max-width: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .emr-body-frame--no-nav {
+    --emr-grid-rail: 240px;
+  }
+  .emr-grid--no-nav {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Diff decorations
+// ---------------------------------------------------------------------------
+// `decorateDiffRanges()` (src/markdown/diffDecorations.ts) tags changed
+// block elements with `.emr-diff-block` (+ a kind modifier) and inserts a
+// `.emr-diff-deleted-marker` where lines were removed. The visual language
+// highlights the changed content itself — a soft colour wash (green = added,
+// amber = edited) or, for a reworded prose block, an inline word-level diff.
+// Changed Mermaid diagrams and image-only blocks get a quiet left accent bar.
+// The whole layer is suppressed when the reader toggles changes off.
+.emr-rendered {
+  .emr-diff-block {
+    // Give the wash a rounded card shape. Negative margins keep the prose
+    // column from shifting so anchors, headings and code blocks line up
+    // exactly as they do without a diff. The left inset (6px) is intentionally
+    // smaller than it once was so the wash starts a touch inward — and is
+    // shared by every diff-block (headings and prose alike) so all highlight
+    // left edges line up.
+    position: relative;
+    border-radius: 6px;
+    margin-left: -6px;
+    margin-right: -8px;
+    padding-left: 6px;
+    padding-right: 8px;
+    // A soft, low-opacity tint of the change hue — the background alone
+    // signals the change; no accent bar or corner tag needed. The opacity is a
+    // theme token so dark mode can lift it (a 9% tint vanishes on dark).
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash),
+      transparent
+    );
+    // Soft entrance so toggling changes on doesn't feel jarring.
+    transition: background 140ms ease;
+
+    &--added {
+      --emr-diff-bar: var(--emr-diff-added);
+    }
+    &--modified {
+      --emr-diff-bar: var(--emr-diff-modified);
+    }
+
+    // --- Contiguous grouping (data-diff-group) -----------------------------
+    // A run of adjacent same-kind blocks paints as ONE continuous card.
+    // Continuation blocks square their touching corners and collapse the
+    // inter-block gap so the tint is unbroken.
+    &[data-diff-group="start"] {
+      border-radius: 6px 6px 0 0;
+      margin-bottom: 0;
+      padding-bottom: 6px;
+    }
+    &[data-diff-group="mid"] {
+      border-radius: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+    &[data-diff-group="end"] {
+      border-radius: 0 0 6px 6px;
+      margin-top: 0;
+      padding-top: 6px;
+    }
+
+    // --- Inline word-diff blocks -------------------------------------------
+    // When a modified block carries an inline word-level diff, the coloured
+    // words themselves tell the whole story — so the block sheds its card
+    // entirely (no wash). It reads as ordinary prose with just the changed
+    // words marked.
+    &--inline {
+      background: none;
+      border-radius: 0;
+      margin-left: 0;
+      margin-right: 0;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    // --- Diagrams + image-only blocks --------------------------------------
+    // Large visual media can't usefully carry a full-width wash. Keep only a
+    // quiet left marker (hue by kind), matching the Mermaid treatment.
+    &.emr-diff-mermaid,
+    &.emr-diff-image {
+      background: none;
+      border-radius: 0;
+      margin-left: 0;
+      margin-right: 0;
+      padding-left: 12px;
+      border-left: 3px solid
+        color-mix(
+          in srgb,
+          var(--emr-diff-bar, var(--emr-rule)) 70%,
+          transparent
+        );
+    }
+  }
+
+  // --- Granular list items + table rows ------------------------------------
+  // A changed list ITEM or table ROW is decorated on its own (not the whole
+  // list/table), so only the item/row that changed highlights. These can't use
+  // the card treatment — negative margins break list indentation and
+  // border-radius / padding break table layout — so they get a flat tint
+  // scoped to the row/item.
+  li.emr-diff-block {
+    --emr-diff-bar: var(--emr-diff-added);
+    // Override the block-card box that the base `.emr-diff-block` rule applies
+    // for paragraphs/headings (its negative left margin would pull the whole
+    // item — bullet included — out of alignment). Tint the item DIRECTLY, not
+    // via a `z-index: -1` pseudo-element: a negative-z band paints behind
+    // `.markdown-body`'s opaque white background and disappears entirely.
+    // The list marker lives in the `<ul>` padding OUTSIDE the item's content
+    // box, so a background on the item wraps only the text and the bullet
+    // stays put in the gutter, aligned with its siblings. Small asymmetric
+    // padding gives the text breathing room without shifting it.
+    margin: 0;
+    padding: 1px 6px 1px 4px;
+    border-radius: 4px;
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-bar) var(--emr-diff-wash-granular),
+      transparent
+    );
+
+    &.emr-diff-block--modified {
+      --emr-diff-bar: var(--emr-diff-modified);
+    }
+
+    // An edited list item that got an inline word diff needs no row tint —
+    // the coloured words carry it.
+    &.emr-diff-block--inline {
+      background: none;
+      padding: 0;
+    }
+
+    &.emr-diff-list-marker-change::marker {
+      color: var(--emr-diff-modified);
+      font-weight: 700;
+    }
+
+    .emr-diff-task-state-change {
+      outline: 2px solid
+        color-mix(in srgb, var(--emr-diff-modified) 78%, transparent);
+      outline-offset: 2px;
+    }
+  }
+
+  // Table rows: tint the row's cells (a background on `<tr>` is unreliable
+  // under `border-collapse`, so colour the `<td>`/`<th>` instead).
+  //
+  // When we could resolve WHICH cells changed (data-diff-cells), only those
+  // cells are tinted (see `.emr-diff-cell` below) — a single-cell edit lights
+  // just that cell, a column edit lights just that column. Otherwise (added
+  // row, or cells we couldn't line up) the WHOLE row tints.
+  tr.emr-diff-block {
+    background: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+
+    &:not([data-diff-cells]) > td,
+    &:not([data-diff-cells]) > th {
+      background: color-mix(
+        in srgb,
+        var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash-granular),
+        transparent
+      );
+    }
+
+    // Modified rows carry the amber hue; the base default is green (added).
+    &.emr-diff-block--modified {
+      --emr-diff-bar: var(--emr-diff-modified);
+    }
+  }
+
+  // Frontmatter metadata rows: each key row is a granular leaf (like a table
+  // row). The value change is shown as an inline word-diff (green added /
+  // struck-red removed words — see `.emr-word-added/.emr-word-removed`), so the
+  // value cell is NEVER washed (a background would stretch to the right). The
+  // only wash is the KEY label of a wholly-added row, so a brand-new key reads
+  // green; a modified row leaves its unchanged key neutral.
+  .emr-frontmatter-row.emr-diff-block--added > .emr-frontmatter-key {
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-added) var(--emr-diff-wash-granular),
+      transparent
+    );
+    border-radius: 4px;
+  }
+
+  // A single changed cell within an edited row.
+  td.emr-diff-cell,
+  th.emr-diff-cell {
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-modified) var(--emr-diff-cell-bg),
+      transparent
+    );
+  }
+
+  td.emr-diff-cell--added,
+  th.emr-diff-cell--added {
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-added) var(--emr-diff-cell-bg),
+      transparent
+    );
+  }
+
+  td.emr-diff-cell--removed,
+  th.emr-diff-cell--removed {
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) var(--emr-diff-cell-bg),
+      transparent
+    );
+
+    .emr-word-removed {
+      color: color-mix(in srgb, var(--emr-diff-deleted) 65%, var(--emr-fg));
+      text-decoration: none;
+      background: transparent;
+    }
+  }
+
+  td.emr-diff-cell--metadata,
+  th.emr-diff-cell--metadata {
+    background: transparent;
+  }
+
+  .emr-diff-before-control {
+    position: relative;
+    z-index: 4;
+    display: block;
+    height: 0;
+    margin: 0;
+    pointer-events: none;
+  }
+
+  .emr-diff-before-trigger {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    z-index: 1;
+    box-sizing: border-box;
+    width: max-content;
+    min-width: min(38px, calc(100% - 6px));
+    max-width: calc(100% - 6px);
+    height: 18px;
+    padding: 0 5px;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--emr-diff-modified) 82%, var(--emr-fg));
+    background: color-mix(in srgb, var(--emr-diff-modified) 8%, var(--emr-bg));
+    border: 0;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 650;
+    line-height: 18px;
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 100ms ease,
+      background-color 100ms ease;
+
+    &:focus-visible {
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 1px;
+    }
+
+    &[aria-expanded="true"] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  .emr-diff-before-control:hover .emr-diff-before-trigger,
+  .emr-diff-before-control:focus-within .emr-diff-before-trigger,
+  .emr-diff-before-control:has(+ .emr-diff-before-panel + :hover)
+    .emr-diff-before-trigger,
+  li:hover > .emr-diff-before-control .emr-diff-before-trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .emr-diff-table-comparison {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .emr-diff-source-only {
+    position: relative;
+    width: min(100%, 720px);
+    margin: 4px 0;
+    padding: 5px 48px 5px 8px;
+    color: var(--emr-fg);
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-modified) var(--emr-diff-wash),
+      transparent
+    );
+    border-left: 2px solid var(--emr-diff-modified);
+
+    &.emr-diff-block--added {
+      background: color-mix(
+        in srgb,
+        var(--emr-diff-added) var(--emr-diff-wash),
+        transparent
+      );
+      border-left-color: var(--emr-diff-added);
+    }
+
+    .emr-diff-source-only-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--emr-muted);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .emr-diff-source-only-current,
+    .emr-diff-before-panel--source pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      font-size: 11px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .emr-diff-before-panel--source {
+      margin: 0 0 4px;
+      padding-right: 8px;
+    }
+  }
+
+  .emr-diff-before-panel.markdown-body {
+    display: block;
+    margin: 2px 0 4px;
+    padding: 5px 48px 5px 8px;
+    color: var(--emr-fg);
+    background: color-mix(in srgb, var(--emr-fg) 3%, var(--emr-bg));
+    border: 0;
+    border-left: 2px solid color-mix(in srgb, var(--emr-fg) 30%, transparent);
+    border-radius: 0 3px 3px 0;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .emr-diff-before-label {
+      display: none;
+    }
+
+    .emr-diff-before-content > :first-child {
+      margin-top: 0;
+    }
+
+    .emr-diff-before-content > :last-child {
+      margin-bottom: 0;
+    }
+
+    table {
+      width: auto;
+      margin: 0;
+      border-collapse: collapse;
+    }
+
+    :is(th, td) {
+      padding: 5px 8px;
+      border: 1px solid var(--emr-rule);
+      background: transparent;
+    }
+  }
+
+  // When the cell's change is shown as an inline word diff, drop the flat wash
+  // so only the green/red word marks read (mirrors `.emr-diff-block--inline`).
+  td.emr-diff-cell--inline:not(.emr-diff-cell--removed),
+  th.emr-diff-cell--inline:not(.emr-diff-cell--removed) {
+    background: transparent;
+  }
+
+  .emr-diff-explained-change {
+    position: relative;
+    cursor: help;
+
+    &::after {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 6px);
+      z-index: 40;
+      width: max-content;
+      max-width: min(280px, 70vw);
+      padding: 5px 7px;
+      color: var(--emr-bg);
+      background: var(--emr-fg);
+      border: 1px solid var(--emr-rule-strong);
+      border-radius: 4px;
+      box-shadow: var(--emr-balloon-shadow);
+      content: attr(data-diff-tooltip);
+      font-family: "Segoe UI", sans-serif;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 1.3;
+      text-align: left;
+      text-decoration: none;
+      text-transform: none;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(2px);
+      transition:
+        opacity 100ms ease,
+        transform 100ms ease,
+        visibility 100ms ease;
+    }
+
+    &:hover::after,
+    &:focus-visible::after {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 2px;
+    }
+
+    &.emr-diff-explained-change--right::after {
+      right: 0;
+      left: auto;
+    }
+  }
+
+  .emr-diff-format-change {
+    border-radius: 2px;
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-modified) var(--emr-diff-cell-bg),
+      transparent
+    );
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .emr-diff-task-tooltip-anchor {
+    display: inline-block;
+    position: relative;
+    line-height: 1;
+    vertical-align: baseline;
+
+    &::after {
+      left: 0;
+      transform: translateY(2px);
+    }
+
+    &:hover::after,
+    &:focus-visible::after {
+      transform: translateY(0);
+    }
+  }
+
+  .emr-diff-list-marker-change.emr-diff-explained-change {
+    &::after {
+      left: 0;
+      transform: translateY(2px);
+    }
+
+    &:hover::after,
+    &:focus-visible::after {
+      transform: translateY(0);
+    }
+  }
+
+  // Inline word-level diff marks (rendered inside a modified block). Kept
+  // deliberately quiet — a soft tint with no borders or underlines — so the
+  // prose stays readable while the change is still obvious. Colours come from
+  // the per-theme `--emr-diff-*` tokens so they read well in light + dark.
+  .emr-word-added {
+    text-decoration: none;
+    border-radius: 2px;
+    padding: 0 1px;
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-added) var(--emr-diff-word-added-bg),
+      transparent
+    );
+  }
+
+  .emr-word-removed {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) var(--emr-diff-word-removed-strike),
+      transparent
+    );
+    border-radius: 2px;
+    padding: 0 1px;
+    color: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) var(--emr-diff-word-removed-fg),
+      var(--emr-fg)
+    );
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) var(--emr-diff-word-removed-bg),
+      transparent
+    );
+  }
+
+  // Punctuation- or whitespace-only removals (a lone comma, period, colon,
+  // dash, or a merged space) carry no ink at strike height, so `line-through`
+  // floats above the glyph as a detached dash — or, on a mid-height glyph like
+  // an em dash, doubles into a blur. Drop the strike for these and let the red
+  // tint + hue carry the "removed" signal; nudge the wash up a touch so a lone
+  // comma still registers now that the strike is gone.
+  .emr-word-removed--tight {
+    text-decoration: none;
+    background: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) calc(var(--emr-diff-word-removed-bg) + 4%),
+      transparent
+    );
+  }
+
+  .emr-diff-metadata {
+    display: inline-flex;
+    margin-left: 5px;
+    vertical-align: baseline;
+    font-family: "Segoe UI", sans-serif;
+    text-decoration: none;
+
+    .emr-diff-metadata-trigger {
+      display: inline-grid;
+      width: 22px;
+      height: 22px;
+      place-items: center;
+      padding: 0;
+      color: color-mix(in srgb, var(--emr-diff-modified) 82%, var(--emr-fg));
+      background: color-mix(
+        in srgb,
+        var(--emr-diff-modified) 9%,
+        var(--emr-bg)
+      );
+      border: 1px solid
+        color-mix(in srgb, var(--emr-diff-modified) 38%, var(--emr-rule));
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    &.emr-diff-metadata--structure .emr-diff-metadata-trigger {
+      width: auto;
+      height: 20px;
+      padding: 0 5px;
+      font-size: 11px;
+      line-height: 18px;
+      white-space: nowrap;
+    }
+
+    &.is-warning .emr-diff-metadata-trigger {
+      color: var(--emr-diff-modified);
+      border-color: color-mix(
+        in srgb,
+        var(--emr-diff-modified) 45%,
+        var(--emr-rule)
+      );
+    }
+
+    .emr-diff-metadata-panel {
+      position: fixed;
+      z-index: 1000;
+      inset: auto;
+      margin: 0;
+      display: none;
+      width: min(440px, calc(100vw - 16px));
+      max-height: min(320px, calc(100vh - 16px));
+      padding: 8px 10px;
+      color: var(--emr-fg);
+      background: var(--emr-bg);
+      border: 1px solid var(--emr-rule);
+      border-radius: 5px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+      font-size: 11px;
+      line-height: 1.45;
+      overflow: auto;
+      overflow-wrap: anywhere;
+    }
+
+    .emr-diff-metadata-panel:popover-open,
+    &.is-open .emr-diff-metadata-panel {
+      display: grid;
+      gap: 5px;
+    }
+
+    .emr-diff-metadata-row {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 6px;
+    }
+
+    .emr-diff-metadata-label {
+      font-weight: 600;
+    }
+
+    .emr-diff-metadata-target-diff {
+      display: block;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 10.5px;
+      line-height: 1.55;
+    }
+
+    .emr-diff-metadata-row--before {
+      color: color-mix(in srgb, var(--emr-diff-deleted) 65%, var(--emr-fg));
+    }
+
+    .emr-diff-metadata-row--after {
+      color: color-mix(in srgb, var(--emr-diff-added) 65%, var(--emr-fg));
+    }
+  }
+
+  // Reduced-motion: keep the colour, drop the fade.
+  @media (prefers-reduced-motion: reduce) {
+    .emr-diff-block {
+      transition: none;
+    }
+  }
+
+  // Deletion marker: lines that were removed have no surviving DOM, so the
+  // decorator drops this thin strip where they used to be. Collapsed by
+  // default to a small chip; clicking reveals the removed text.
+  .emr-diff-deleted-marker:not(.emr-diff-deleted-table-row) {
+    position: relative;
+    margin: 6px 0;
+    padding-left: 4px;
+
+    // The removed-content card carries its own red left border, so the old
+    // far-gutter rail was a redundant second red bar that also overlapped the
+    // section chevron. Dropped for a cleaner single-border look.
+    .emr-diff-deleted-rail {
+      display: none;
+    }
+
+    .emr-diff-deleted-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      line-height: 1.4;
+      color: var(--emr-diff-deleted);
+      background: color-mix(in srgb, var(--emr-diff-deleted) 9%, transparent);
+      border: 1px solid
+        color-mix(in srgb, var(--emr-diff-deleted) 28%, transparent);
+      border-radius: 999px;
+      padding: 1px 9px;
+      cursor: pointer;
+      transition: background 120ms ease;
+
+      &::before {
+        content: "−";
+        font-weight: 700;
+      }
+
+      &:hover {
+        background: color-mix(
+          in srgb,
+          var(--emr-diff-deleted) 16%,
+          transparent
+        );
+      }
+    }
+
+    .emr-diff-deleted-body {
+      margin: 6px 0 2px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: color-mix(in srgb, var(--emr-diff-deleted) 55%, var(--emr-fg));
+      background: color-mix(
+        in srgb,
+        var(--emr-diff-deleted) var(--emr-diff-cell-bg),
+        transparent
+      );
+      border-left: 2px solid
+        color-mix(in srgb, var(--emr-diff-deleted) 40%, transparent);
+      border-radius: 0 6px 6px 0;
+
+      // Plain-text fallback (no Markdown renderer supplied): keep the raw
+      // preformatted look with a strike.
+      &:is(pre) {
+        white-space: pre-wrap;
+        text-decoration: line-through;
+        text-decoration-color: color-mix(
+          in srgb,
+          var(--emr-diff-deleted) 50%,
+          transparent
+        );
+      }
+
+      // Rendered-Markdown variant: let block elements read naturally but tint
+      // them as removed. Tighten the first/last block margins so the card hugs
+      // its content, and strike inline text to signal deletion without making
+      // headings unreadable.
+      &.markdown-body {
+        background: color-mix(in srgb, var(--emr-diff-deleted) 6%, transparent);
+
+        > :first-child {
+          margin-top: 0;
+        }
+        > :last-child {
+          margin-bottom: 0;
+        }
+
+        p,
+        li,
+        td {
+          text-decoration: line-through;
+          text-decoration-color: color-mix(
+            in srgb,
+            var(--emr-diff-deleted) 45%,
+            transparent
+          );
+        }
+
+        .emr-diff-deleted-table {
+          margin: 0;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+          color: color-mix(in srgb, var(--emr-diff-deleted) 65%, var(--emr-fg));
+          border-bottom: none;
+        }
+
+        // The removed content is a static preview, not a live document — its
+        // headings must not act like collapsible sections. Suppress the
+        // gutter chevron (which otherwise pokes across the red left border)
+        // and the pointer affordance.
+        .emr-section > :is(h1, h2, h3, h4, h5, h6) {
+          cursor: default;
+
+          &::before {
+            display: none;
+          }
+        }
+      }
+    }
+  }
+
+  tr.emr-diff-deleted-table-row {
+    > td {
+      color: color-mix(in srgb, var(--emr-diff-deleted) 55%, var(--emr-fg));
+      background: color-mix(
+        in srgb,
+        var(--emr-diff-deleted) var(--emr-diff-cell-bg),
+        transparent
+      );
+      text-decoration: none;
+    }
+  }
+}
+
+// --- Mermaid "view source" affordance ------------------------------------
+
+.emr-mermaid {
+  position: relative;
+}
+
+.emr-mermaid-source-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  padding: 3px 9px;
+  font-family: var(--emr-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--emr-muted);
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+
+  .emr-mermaid:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: var(--emr-accent);
+    border-color: var(--emr-accent);
+  }
+}
+
+.emr-mermaid-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+// ── Draft guard dialog ─────────────────────────────────────────────────────
+.emr-draft-guard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.emr-draft-guard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(440px, 100%);
+  padding: 18px 20px;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule-strong);
+  border-radius: 10px;
+  box-shadow: var(--emr-balloon-shadow-active);
+}
+
+.emr-draft-guard-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--emr-fg);
+}
+
+.emr-draft-guard-body {
+  font-size: 13px;
+  color: var(--emr-fg);
+
+  p {
+    margin: 0 0 10px;
+  }
+}
+
+.emr-draft-guard-snippet {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--emr-rule-strong);
+  background: var(--emr-faint);
+  border-radius: 4px;
+  color: var(--emr-fg-muted);
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.emr-draft-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.emr-mermaid-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 100%);
+  max-height: 100%;
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule-strong);
+  border-radius: 10px;
+  box-shadow: var(--emr-balloon-shadow-active);
+  overflow: hidden;
+}
+
+.emr-mermaid-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--emr-rule);
+  background: var(--emr-faint);
+}
+
+.emr-mermaid-modal-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--emr-fg);
+}
+
+.emr-mermaid-modal-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.emr-mermaid-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.emr-mermaid-modal-source {
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  border-right: 1px solid var(--emr-rule);
+  font-family: var(--emr-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--emr-fg);
+  background: var(--emr-bg);
+  white-space: pre;
+}
+
+// Word-level diff of the diagram definition (shown when the diagram changed
+// in the PR). Mirrors the article's inline marks, scoped here since the modal
+// renders outside `.emr-rendered`.
+.emr-mermaid-modal-source-diff {
+  white-space: pre-wrap;
+
+  .emr-word-added {
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--emr-diff-added) 18%, transparent);
+    text-decoration: none;
+  }
+  .emr-word-removed {
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--emr-diff-deleted) 55%, var(--emr-fg));
+    background: color-mix(in srgb, var(--emr-diff-deleted) 12%, transparent);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(
+      in srgb,
+      var(--emr-diff-deleted) 50%,
+      transparent
+    );
+  }
+
+  // Punctuation/whitespace-only removals (arrows, brackets, commas — dense in
+  // Mermaid source) have no ink at strike height, so drop the strike here too
+  // and lean on the tint, mirroring `.emr-rendered .emr-word-removed--tight`.
+  .emr-word-removed--tight {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--emr-diff-deleted) 16%, transparent);
+  }
+}
+
+.emr-mermaid-modal-preview {
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--emr-bg);
+}

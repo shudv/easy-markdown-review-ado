@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../dist-e2e",
+    "noEmit": true,
+    "types": ["node"],
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": [
+    "**/*.ts",
+    "../visual/**/*.ts",
+    "../playwright.config.ts",
+    "../playwright.visual.config.ts"
+  ],
+  "exclude": ["node_modules"]
+}

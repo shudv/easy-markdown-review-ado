@@ -75,12 +75,12 @@ export const E2E = {
    * Fully-qualified id (`publisher.extension`) of the installed *dev*
    * extension. Used to address its hub contribution directly by URL so the
    * specs never depend on the exact left-nav label. Defaults to
-   * `<AZDO_PUBLISHER_ID>.easy-markdown-review-<AZDO_DEV_ID_SUFFIX>`; override
+   * `<AZDO_PUBLISHER_ID>.emr-<AZDO_DEV_ID_SUFFIX>`; override
    * with `AZDO_E2E_EXTENSION_ID` for another install.
    */
   extensionId: env(
     "AZDO_E2E_EXTENSION_ID",
-    `${PUBLISHER}.easy-markdown-review-${DEV_ID_SUFFIX}`,
+    `${PUBLISHER}.emr-${DEV_ID_SUFFIX}`,
   ),
   /** Contribution id of the Documents hub (vss-extension.json). */
   hubId: env("AZDO_E2E_HUB_ID", "documents-hub"),

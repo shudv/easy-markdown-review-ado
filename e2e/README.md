@@ -40,7 +40,7 @@ gives us: the dev extension's `baseUri` is `https://localhost:3000/`
    ```
 
    `publish:dev` packages with `baseUri = https://localhost:3000/` and shares the
-   private dev extension (id `easy-markdown-review-<AZDO_DEV_ID_SUFFIX>`, default
+   private dev extension (id `emr-<AZDO_DEV_ID_SUFFIX>`, default
    suffix `devlocal`) with the org. Replace `<your-org>` with your Azure DevOps
    org short name (the last path segment of `AZDO_ORG_URL`). You only need
    `--share-with` the first time.
@@ -87,25 +87,25 @@ personal defaults have been replaced with generic placeholders, so **each dev
 supplies their own account** via `.env` — nothing in the repo hard-codes a
 specific identity. Set these in `.env`:
 
-| Variable                          | Default                                             | Meaning                                                  |
-| --------------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `AZDO_ORG_URL`                    | `https://dev.azure.com/your-org`                    | Collection root (your org)                               |
-| `AZDO_E2E_PROJECT`                | `AZDO_TEST_PROJECT` / `markdown-review-sandbox-v2`  | Sandbox project                                          |
-| `AZDO_E2E_REPO`                   | `api-reference`                                     | Primary repo the specs read from                         |
-| `AZDO_E2E_MD_PATH`                | `/api/rest/pull-requests.md`                        | A real `.md` file in the primary repo                    |
-| `AZDO_E2E_MD_PATH_A2`             | `/api/rest/repositories.md`                         | A 2nd `.md` file in the primary repo                     |
-| `AZDO_E2E_REPO_B`                 | `team-handbook`                                     | Second repo (per-repo persistence)                       |
-| `AZDO_E2E_MD_PATH_B`              | `/handbook/engineering/code-review.md`              | A real `.md` file in the second repo                     |
-| `AZDO_E2E_DEV_ORIGIN`             | `https://localhost:3000`                            | Where the dev bundles are served                         |
-| `AZDO_E2E_TITLE_SUFFIX`           | `" (dev)"`                                          | Suffix on the dev contribution titles                    |
-| `AZDO_E2E_EXTENSION_ID`           | `<AZDO_PUBLISHER_ID>.easy-markdown-review-<suffix>` | Installed dev extension id (derived from your publisher) |
-| `AZDO_E2E_ACCOUNT`                | `your Azure DevOps account`                         | Sign-in hint shown by `npm run e2e:auth`                 |
-| `AZDO_E2E_HUB_ID`                 | `documents-hub`                                     | Documents hub contribution id                            |
-| `AZDO_E2E_PR_TAB_ID`              | `markdown-review-pr-tab`                            | PR-tab contribution id                                   |
-| `AZDO_E2E_PR_REPO`                | `api-reference`                                     | Repo whose PR the PR-tab spec drives                     |
-| `AZDO_E2E_PR_TITLE`               | `Document PR thread endpoints`                      | Title of the PR the spec discovers                       |
-| `AZDO_E2E_COMMENT_MEDIA_REPO`     | `production-markdown-showcase`                      | Repo carrying native media attachments                   |
-| `AZDO_E2E_COMMENT_MEDIA_PR_TITLE` | `Exercise production Markdown syntax...`            | Active PR used by the native media spec                  |
+| Variable                          | Default                                            | Meaning                                                  |
+| --------------------------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| `AZDO_ORG_URL`                    | `https://dev.azure.com/your-org`                   | Collection root (your org)                               |
+| `AZDO_E2E_PROJECT`                | `AZDO_TEST_PROJECT` / `markdown-review-sandbox-v2` | Sandbox project                                          |
+| `AZDO_E2E_REPO`                   | `api-reference`                                    | Primary repo the specs read from                         |
+| `AZDO_E2E_MD_PATH`                | `/api/rest/pull-requests.md`                       | A real `.md` file in the primary repo                    |
+| `AZDO_E2E_MD_PATH_A2`             | `/api/rest/repositories.md`                        | A 2nd `.md` file in the primary repo                     |
+| `AZDO_E2E_REPO_B`                 | `team-handbook`                                    | Second repo (per-repo persistence)                       |
+| `AZDO_E2E_MD_PATH_B`              | `/handbook/engineering/code-review.md`             | A real `.md` file in the second repo                     |
+| `AZDO_E2E_DEV_ORIGIN`             | `https://localhost:3000`                           | Where the dev bundles are served                         |
+| `AZDO_E2E_TITLE_SUFFIX`           | `" (dev)"`                                         | Suffix on the dev contribution titles                    |
+| `AZDO_E2E_EXTENSION_ID`           | `<AZDO_PUBLISHER_ID>.emr-<suffix>`                 | Installed dev extension id (derived from your publisher) |
+| `AZDO_E2E_ACCOUNT`                | `your Azure DevOps account`                        | Sign-in hint shown by `npm run e2e:auth`                 |
+| `AZDO_E2E_HUB_ID`                 | `documents-hub`                                    | Documents hub contribution id                            |
+| `AZDO_E2E_PR_TAB_ID`              | `markdown-review-pr-tab`                           | PR-tab contribution id                                   |
+| `AZDO_E2E_PR_REPO`                | `api-reference`                                    | Repo whose PR the PR-tab spec drives                     |
+| `AZDO_E2E_PR_TITLE`               | `Document PR thread endpoints`                     | Title of the PR the spec discovers                       |
+| `AZDO_E2E_COMMENT_MEDIA_REPO`     | `production-markdown-showcase`                     | Repo carrying native media attachments                   |
+| `AZDO_E2E_COMMENT_MEDIA_PR_TITLE` | `Exercise production Markdown syntax...`           | Active PR used by the native media spec                  |
 
 ## What each spec asserts
 

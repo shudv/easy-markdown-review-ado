@@ -59,7 +59,7 @@ npm install
 6. **Package + install** (once):
 
    ```PowerShell
-   npm run package:dev        # → build/<your-publisher-id>.easy-markdown-review-dev-<ts>.vsix
+   npm run package:dev        # → build/<your-publisher-id>.emr-dev-<ts>.vsix
    ```
 
    At `https://marketplace.visualstudio.com/manage/publishers/<your-publisher-id>`: **New extension → Azure DevOps** → upload the `.vsix` → right-click → **Share/Unshare** → add `<your-org>`. Then in ADO: **Organization settings → Extensions → Shared** → install.

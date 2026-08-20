@@ -11,7 +11,7 @@
 //      timestamped version suffix so repeated dev publishes don't collide.
 //   4. Invokes `tfx extension create` with that overrides file.
 //
-// Output: build/<publisher>.easy-markdown-review-<version>.vsix
+// Output: build/<publisher>.emr-<version>.vsix
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";

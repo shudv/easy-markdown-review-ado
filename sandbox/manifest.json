@@ -22,6 +22,15 @@
               ]
             }
           ]
+        },
+        {
+          "title": "Render an LFS image added in a pull request",
+          "branch": "feature/lfs-image",
+          "description": "Adds a Markdown document and its repository-relative image as Git LFS content so the live PR tab exercises Azure DevOps LFS resolution.",
+          "overlay": "lfs-image",
+          "lfsPaths": ["/assets/lfs-review-flow.svg"],
+          "complete": false,
+          "threads": []
         }
       ]
     },

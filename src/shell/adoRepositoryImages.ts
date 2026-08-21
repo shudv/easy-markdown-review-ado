@@ -5,6 +5,7 @@ import {
 } from "azure-devops-extension-api/Git";
 
 import { repositoryImageMimeType } from "../markdown/documentImages";
+import { fetchRepositoryImageContent } from "./adoRepositoryImages.helpers";
 import { withRetry } from "./retry";
 
 const objectUrls = new Map<string, Promise<string | undefined>>();
@@ -30,18 +31,12 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
     try {
       const content = await withRetry(
         () =>
-          getClient(GitRestClient).getItemContent(
+          fetchRepositoryImageContent(getClient(GitRestClient), {
             repositoryId,
-            path,
             project,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
+            path,
             versionDescriptor,
-            true,
-          ),
+          }),
         {
           mode: "read",
           attempts: 2,

@@ -12,6 +12,7 @@
 // Authentication: AZDO_BEARER_TOKEN (short-lived) or AZDO_PAT.
 
 import { writeFile, readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -372,21 +373,168 @@ async function walkFiles(dir) {
   return out;
 }
 
+function normalizeAdoPath(path) {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function lfsAttributesChange(paths, existingPaths, changedPaths) {
+  if (!paths?.length) return null;
+  const attributesPath = "/.gitattributes";
+  if (existingPaths.has(attributesPath) || changedPaths.has(attributesPath)) {
+    throw new Error(
+      "Sandbox lfsPaths cannot update a repository that already defines /.gitattributes",
+    );
+  }
+  const patterns = paths.map((path) => {
+    const pattern = normalizeAdoPath(path).slice(1);
+    if (!pattern || /[\r\n]/.test(pattern)) {
+      throw new Error(`Invalid Git LFS sandbox path: ${path}`);
+    }
+    return `${pattern.replace(/([\\ \t#])/g, "\\$1")} filter=lfs diff=lfs merge=lfs -text`;
+  });
+  return {
+    changeType: "add",
+    item: { path: attributesPath },
+    newContent: { content: `${patterns.join("\n")}\n`, contentType: "rawtext" },
+  };
+}
+
+const FETCH_MANAGED_HEADERS = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+async function sendLfsAction(action, method, body, contentType) {
+  const url = new URL(action.href);
+  const isAdoHost =
+    url.hostname === new URL(ORG_URL).hostname ||
+    url.hostname.endsWith(".visualstudio.com");
+  url.username = "";
+  url.password = "";
+  const actionHeaders = Object.fromEntries(
+    Object.entries(action.header ?? {}).filter(
+      ([name]) => !FETCH_MANAGED_HEADERS.has(name.toLowerCase()),
+    ),
+  );
+  const headers = {
+    ...(isAdoHost ? { Authorization: AUTH_HEADER } : {}),
+    ...actionHeaders,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+  };
+  let response;
+  try {
+    response = await fetch(url, { method, headers, body });
+  } catch (err) {
+    const cause = err instanceof Error ? err.cause : undefined;
+    const detail =
+      cause && typeof cause === "object"
+        ? `${cause.code ?? "network"}: ${cause.message ?? String(cause)}`
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    throw new Error(
+      `Git LFS ${method} ${url.hostname}${url.pathname} failed (${detail})`,
+    );
+  }
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `Git LFS ${method} ${shortUrl(url.href)} → ${response.status} ${response.statusText}\n  ${detail}`,
+    );
+  }
+}
+
+async function ensureLfsObject(repo, refName, content) {
+  const oid = createHash("sha256").update(content).digest("hex");
+  const size = content.byteLength;
+  const endpoint = `${repo.webUrl.replace(/\/+$/, "")}/info/lfs/objects/batch`;
+  const { body } = await ado("POST", endpoint, {
+    body: {
+      operation: "upload",
+      transfers: ["basic"],
+      ref: { name: refName },
+      objects: [{ oid, size }],
+    },
+    headers: {
+      Accept: "application/vnd.git-lfs+json",
+      "Content-Type": "application/vnd.git-lfs+json",
+    },
+  });
+  const object = body?.objects?.[0];
+  if (!object || object.error) {
+    throw new Error(
+      `Git LFS batch rejected ${oid}: ${JSON.stringify(object?.error ?? body)}`,
+    );
+  }
+  if (object.actions?.upload) {
+    await sendLfsAction(
+      object.actions.upload,
+      "PUT",
+      content,
+      "application/octet-stream",
+    );
+  }
+  if (object.actions?.verify) {
+    await sendLfsAction(
+      object.actions.verify,
+      "POST",
+      JSON.stringify({ oid, size }),
+      "application/vnd.git-lfs+json",
+    );
+  }
+  return [
+    "version https://git-lfs.github.com/spec/v1",
+    `oid sha256:${oid}`,
+    `size ${size}`,
+    "",
+  ].join("\n");
+}
+
 /**
  * Read every file under `dir` into an ADO `changes[]` array. A path that
  * already exists on the target branch becomes an `edit`; a new path an `add`.
  */
-async function readDirAsChanges(dir, existingPaths) {
+async function readDirAsChanges(dir, existingPaths, options = {}) {
   const files = (await walkFiles(dir)).sort();
+  const lfsPaths = new Set(
+    (options.lfsPaths ?? []).map((path) => normalizeAdoPath(path)),
+  );
+  const foundLfsPaths = new Set();
   const changes = [];
   for (const full of files) {
     const adoPath = "/" + relative(dir, full).split(sep).join("/");
-    const content = await readFile(full, "utf8");
+    let content;
+    if (lfsPaths.has(adoPath)) {
+      if (!options.repo || !options.refName) {
+        throw new Error(`Git LFS context missing for ${adoPath}`);
+      }
+      content = await ensureLfsObject(
+        options.repo,
+        options.refName,
+        await readFile(full),
+      );
+      foundLfsPaths.add(adoPath);
+    } else {
+      content = await readFile(full, "utf8");
+    }
     changes.push({
       changeType: existingPaths.has(adoPath) ? "edit" : "add",
       item: { path: adoPath },
       newContent: { content, contentType: "rawtext" },
     });
+  }
+  for (const path of lfsPaths) {
+    if (!foundLfsPaths.has(path)) {
+      throw new Error(`Git LFS sandbox file not found: ${path}`);
+    }
   }
   return changes;
 }
@@ -659,20 +807,30 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
   // 1) Branch + overlay commit.
   let head = await getBranchHead(repo.id, branch);
   if (!head) {
-    await createBranchAt(repo.id, branch, mainHead);
     const overlayDir = join(repoDir, "prs", prSpec.overlay);
     const existingPaths = await getExistingFilePaths(repo.id, target);
-    const changes = await readDirAsChanges(overlayDir, existingPaths);
+    const changes = await readDirAsChanges(overlayDir, existingPaths, {
+      lfsPaths: prSpec.lfsPaths,
+      repo,
+      refName: `refs/heads/${target}`,
+    });
+    const changedPaths = new Set(changes.map((change) => change.item.path));
+    const attributesChange = lfsAttributesChange(
+      prSpec.lfsPaths,
+      existingPaths,
+      changedPaths,
+    );
+    if (attributesChange) {
+      changes.push(attributesChange);
+      changedPaths.add(attributesChange.item.path);
+    }
     changes.push(
-      ...readDeleteChanges(
-        prSpec.deletePaths,
-        existingPaths,
-        new Set(changes.map((change) => change.item.path)),
-      ),
+      ...readDeleteChanges(prSpec.deletePaths, existingPaths, changedPaths),
     );
     if (changes.length === 0) {
       throw new Error(`No overlay files or deletePaths for ${prSpec.branch}`);
     }
+    await createBranchAt(repo.id, branch, mainHead);
     head = await pushCommit(repo.id, `refs/heads/${branch}`, mainHead, {
       comment: prSpec.title,
       changes,

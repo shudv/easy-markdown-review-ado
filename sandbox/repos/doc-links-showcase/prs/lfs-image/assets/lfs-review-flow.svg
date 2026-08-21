@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" role="img" aria-labelledby="title desc">
+  <title id="title">Markdown review flow</title>
+  <desc id="desc">A document moves from author to review to approval.</desc>
+  <rect width="640" height="240" fill="#f5f7f8"/>
+  <g fill="none" stroke="#286c78" stroke-width="4">
+    <rect x="40" y="76" width="150" height="88" rx="4" fill="#ffffff"/>
+    <rect x="245" y="76" width="150" height="88" rx="4" fill="#ffffff"/>
+    <rect x="450" y="76" width="150" height="88" rx="4" fill="#ffffff"/>
+    <path d="M190 120h45m160 0h45"/>
+    <path d="m226 110 10 10-10 10m205-20 10 10-10 10"/>
+  </g>
+  <g fill="#17323a" font-family="Segoe UI, sans-serif" font-size="20" text-anchor="middle">
+    <text x="115" y="127">Author</text>
+    <text x="320" y="127">Review</text>
+    <text x="525" y="127">Approve</text>
+  </g>
+</svg>

@@ -231,4 +231,32 @@ test.describe("Relative doc links (real ADO host)", () => {
     await expectReaderHeading(frame, /^Installation$/i);
     await expectRepositoryImage(frame);
   });
+
+  test("a Git LFS image added in the PR renders in the PR tab", async ({
+    page,
+  }) => {
+    const prId = await discoverPullRequestId(
+      page,
+      E2E.docLinksRepo,
+      E2E.docLinksLfsPrTitle,
+      "active",
+    );
+    await gotoPrTab(page, E2E.docLinksRepo, prId);
+
+    const frame = prTabFrame(page);
+    await waitForFrameRoot(frame);
+    await expectReaderHeading(frame, /^Git LFS Image$/i);
+
+    const image = frame.getByAltText("Review flow stored in Git LFS");
+    await expect(image).toBeVisible({ timeout: 30_000 });
+    await expect(image).toHaveAttribute("src", /^blob:/);
+    await expect
+      .poll(() =>
+        image.evaluate((element: HTMLImageElement) => ({
+          width: element.naturalWidth,
+          height: element.naturalHeight,
+        })),
+      )
+      .toEqual({ width: 640, height: 240 });
+  });
 });

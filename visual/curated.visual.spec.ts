@@ -70,6 +70,11 @@ const SHOTS: Shot[] = [
     settledSelector: ".markdown-body .emr-highlight",
   },
   {
+    title: "Visual/DocumentsHub",
+    name: "High Contrast Dark",
+    settledSelector: ".markdown-body .emr-highlight",
+  },
+  {
     // Diff-highlighting layer in isolation (light + dark): add wash, inline
     // word-diff, deleted-marker.
     title: "Visual/ArticleDiff",

@@ -51,7 +51,14 @@ describe("ReaderLoadingShell", () => {
   it("restores the surface layout and typography before data loads", () => {
     localStorage.setItem(
       READER_TYPE_KEY,
-      JSON.stringify({ fontId: "georgia", sizePct: 115 }),
+      JSON.stringify({
+        fontId: "atkinson",
+        sizePct: 115,
+        lineSpacingPct: 125,
+        paragraphSpacingPct: 125,
+        letterSpacingPct: 125,
+        wordSpacingPct: 125,
+      }),
     );
     localStorage.setItem(
       layoutStorageKey("pr"),
@@ -68,9 +75,21 @@ describe("ReaderLoadingShell", () => {
     expect(shell.classList.contains("is-nav-hidden")).toBe(true);
     expect(shell.classList.contains("is-comments-hidden")).toBe(false);
     expect(shell.style.getPropertyValue("--emr-reader-font")).toContain(
-      "Georgia",
+      "Atkinson Hyperlegible",
     );
     expect(shell.style.getPropertyValue("--emr-reader-scale")).toBe("1.15");
+    expect(shell.style.getPropertyValue("--emr-reader-line-height")).toBe(
+      "1.675",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-letter-spacing")).toBe(
+      "0.02em",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-word-spacing")).toBe(
+      "0.04em",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe(
+      "17.6px",
+    );
     expect(shell.style.getPropertyValue("--emr-nav-scale")).toBe("1.2");
     expect(shell.style.getPropertyValue("--emr-rail-scale")).toBe("0.85");
   });

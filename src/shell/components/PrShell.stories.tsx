@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+import {
+  expect,
+  fireEvent,
+  fn,
+  userEvent,
+  waitFor,
+  within,
+} from "storybook/test";
 
 import { LocalOnlyCommentApi, type CreatedThreadIds } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
@@ -1420,6 +1427,21 @@ export const SingleFile: Story = {
  * persist).
  */
 export const ReaderStatusBarControls: Story = {
+  beforeEach: () => {
+    const NativeFontFace = window.FontFace;
+    class AvailableFontFace {
+      status = "unloaded";
+
+      async load(): Promise<FontFace> {
+        this.status = "loaded";
+        return this as unknown as FontFace;
+      }
+    }
+    window.FontFace = AvailableFontFace as unknown as typeof FontFace;
+    return () => {
+      window.FontFace = NativeFontFace;
+    };
+  },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
@@ -1430,6 +1452,8 @@ export const ReaderStatusBarControls: Story = {
       [...canvasElement.querySelectorAll<HTMLElement>(sel)].find((el) =>
         el.textContent?.includes(text),
       )!;
+    const paragraph = q<HTMLParagraphElement>(".emr-rendered.markdown-body p");
+    expect(getComputedStyle(paragraph).marginBottom).toBe("16px");
 
     // Focus mode: hide the nav, then the comments — the app root reflects it.
     await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
@@ -1437,22 +1461,30 @@ export const ReaderStatusBarControls: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Comments" }));
     await waitFor(() => expect(app.className).toContain("is-comments-hidden"));
 
-    // Reading type: open the font popover, pick a serif font, enlarge, reset.
+    // Reading type: pick a serif font, enlarge, and increase prose spacing.
     await userEvent.click(q(".emr-statusbar-type .emr-statusbar-btn"));
-    await userEvent.click(byText(".emr-statusbar-font", "Georgia"));
+    await userEvent.click(byText(".emr-statusbar-font", "Sitka"));
     await waitFor(() =>
       expect(app.style.getPropertyValue("--emr-reader-font")).toContain(
-        "Georgia",
+        "Sitka",
       ),
     );
-    await userEvent.click(canvas.getByRole("button", { name: "Larger text" }));
+    fireEvent.change(canvas.getByRole("slider", { name: "Text size" }), {
+      target: { value: "125" },
+    });
     await waitFor(() =>
-      expect(app.style.getPropertyValue("--emr-reader-scale")).not.toBe("1"),
+      expect(app.style.getPropertyValue("--emr-reader-scale")).toBe("1.25"),
     );
-    // Clicking the size value resets it to 100% (scale 1).
-    await userEvent.click(q(".emr-statusbar-size-val"));
+    fireEvent.change(canvas.getByRole("slider", { name: "Text spacing" }), {
+      target: { value: "125" },
+    });
     await waitFor(() =>
-      expect(app.style.getPropertyValue("--emr-reader-scale")).toBe("1"),
+      expect(app.style.getPropertyValue("--emr-reader-line-height")).toBe(
+        "1.675",
+      ),
+    );
+    expect(app.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe(
+      "17.6px",
     );
   },
 };

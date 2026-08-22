@@ -3,8 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   READER_FONTS,
   DEFAULT_FONT_ID,
-  READER_SIZE_STEPS,
+  READER_PERCENT_MIN,
+  READER_PERCENT_MAX,
+  READER_SPACING_UI_MIN,
+  READER_SPACING_UI_MAX,
   DEFAULT_SIZE_PCT,
+  DEFAULT_LINE_SPACING_PCT,
+  DEFAULT_PARAGRAPH_SPACING_PCT,
+  DEFAULT_LETTER_SPACING_PCT,
+  DEFAULT_WORD_SPACING_PCT,
   NAV_WIDTH_MIN_PCT,
   NAV_WIDTH_MAX_PCT,
   COMMENT_WIDTH_MIN_PCT,
@@ -12,10 +19,13 @@ import {
   DEFAULT_COMMENT_WIDTH_PCT,
   DEFAULT_READER_PREFS,
   READER_TYPE_KEY,
+  detectAvailableReaderFonts,
   layoutStorageKey,
   resolveReaderFont,
-  clampSizePct,
-  stepSizePct,
+  clampReaderPct,
+  snapReaderPct,
+  nudgeReaderPct,
+  readerSpacingValues,
   clampNavWidthPct,
   clampCommentWidthPct,
   widthScale,
@@ -30,51 +40,124 @@ import {
   maxRailWidthPct,
 } from "../src/shell/readerPrefs";
 
+const spacingPrefs = (pct: number) => ({
+  lineSpacingPct: pct,
+  paragraphSpacingPct: pct,
+  letterSpacingPct: pct,
+  wordSpacingPct: pct,
+});
+
 describe("readerPrefs — curated font list", () => {
   it("puts the default (system) font first so it is the fallback", () => {
     expect(READER_FONTS[0]!.id).toBe(DEFAULT_FONT_ID);
-    expect(READER_FONTS).toHaveLength(5);
+    expect(READER_FONTS.map((font) => font.id)).toEqual([
+      "system",
+      "atkinson",
+      "sitka",
+      "georgia",
+      "verdana",
+    ]);
   });
 
   it("resolves a known font id to its definition", () => {
     expect(resolveReaderFont("sitka").name).toBe("Sitka");
-    expect(resolveReaderFont("georgia").name).toBe("Georgia");
+    expect(resolveReaderFont("atkinson").name).toBe("Atkinson Hyperlegible");
   });
 
-  it("falls back to the default font for an unknown id", () => {
+  it("falls back to the default font for unknown and removed ids", () => {
     expect(resolveReaderFont("does-not-exist")).toBe(READER_FONTS[0]);
+    expect(resolveReaderFont("palatino")).toBe(READER_FONTS[0]);
     expect(resolveReaderFont("").id).toBe(DEFAULT_FONT_ID);
+  });
+
+  it("keeps System plus only locally available curated fonts", async () => {
+    const available = await detectAvailableReaderFonts(async (family) =>
+      ["Sitka Text", "Verdana"].includes(family),
+    );
+    expect(available.map((font) => font.id)).toEqual([
+      "system",
+      "sitka",
+      "verdana",
+    ]);
+  });
+
+  it("keeps only System when font availability cannot be checked", async () => {
+    expect(
+      (
+        await detectAvailableReaderFonts(async () => {
+          throw new Error("font check unavailable");
+        })
+      ).map((font) => font.id),
+    ).toEqual(["system"]);
   });
 });
 
-describe("readerPrefs — text-size stepping", () => {
-  it("snaps an arbitrary percentage to the nearest step", () => {
-    expect(clampSizePct(100)).toBe(100); // exact
-    expect(clampSizePct(97)).toBe(100); // rounds up to nearest
-    expect(clampSizePct(84)).toBe(80); // rounds down to nearest
-    expect(clampSizePct(-50)).toBe(READER_SIZE_STEPS[0]); // below the floor
-    expect(clampSizePct(9999)).toBe(
-      READER_SIZE_STEPS[READER_SIZE_STEPS.length - 1],
-    ); // above the ceiling
+describe("readerPrefs — continuous reader percentages", () => {
+  it("rounds and clamps arbitrary percentages", () => {
+    expect(clampReaderPct(100)).toBe(100);
+    expect(clampReaderPct(108.4)).toBe(108);
+    expect(clampReaderPct(-50)).toBe(READER_PERCENT_MIN);
+    expect(clampReaderPct(9999)).toBe(READER_PERCENT_MAX);
   });
 
-  it("steps one notch up and down through the steps", () => {
-    expect(stepSizePct(100, 1)).toBe(115);
-    expect(stepSizePct(100, -1)).toBe(90);
-    // A non-negative dir steps up (the `dir < 0 ? -1 : 1` branch).
-    expect(stepSizePct(100, 0)).toBe(115);
+  it("sticks values near the default to exactly 100", () => {
+    expect(snapReaderPct(97)).toBe(100);
+    expect(snapReaderPct(103)).toBe(100);
+    expect(snapReaderPct(96)).toBe(96);
+    expect(snapReaderPct(104)).toBe(104);
   });
 
-  it("clamps stepping at both ends", () => {
-    const min = READER_SIZE_STEPS[0]!;
-    const max = READER_SIZE_STEPS[READER_SIZE_STEPS.length - 1]!;
-    expect(stepSizePct(max, 1)).toBe(max);
-    expect(stepSizePct(min, -1)).toBe(min);
+  it("nudges by five points and clamps at both ends", () => {
+    expect(nudgeReaderPct(100, 1)).toBe(105);
+    expect(nudgeReaderPct(100, -1)).toBe(95);
+    expect(nudgeReaderPct(READER_PERCENT_MAX, 1)).toBe(READER_PERCENT_MAX);
+    expect(nudgeReaderPct(READER_PERCENT_MIN, -1)).toBe(READER_PERCENT_MIN);
   });
 
-  it("snaps a stray value to a step before stepping", () => {
-    // 97 snaps to 100, then one notch up is 115.
-    expect(stepSizePct(97, 1)).toBe(115);
+  it("uses separate 100–200 bounds for spacing percentages", () => {
+    expect(
+      snapReaderPct(80, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX),
+    ).toBe(100);
+    expect(
+      nudgeReaderPct(195, 1, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX),
+    ).toBe(200);
+    expect(
+      nudgeReaderPct(200, 1, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX),
+    ).toBe(200);
+  });
+
+  it("maps a coupled 125% to a conservative general-purpose balance", () => {
+    expect(readerSpacingValues(spacingPrefs(125))).toEqual({
+      lineHeight: 1.675,
+      letterSpacingEm: 0.02,
+      wordSpacingEm: 0.04,
+      paragraphSpacingPx: 17.6,
+    });
+  });
+
+  it("resolves independently persisted spacing dimensions", () => {
+    expect(
+      readerSpacingValues({
+        lineSpacingPct: 125,
+        paragraphSpacingPct: 100,
+        letterSpacingPct: 100,
+        wordSpacingPct: 100,
+      }),
+    ).toEqual({
+      lineHeight: 1.675,
+      paragraphSpacingPx: 16,
+      letterSpacingEm: 0,
+      wordSpacingEm: 0,
+    });
+  });
+
+  it("resolves the spacing ceiling without size-range clamping", () => {
+    expect(readerSpacingValues(spacingPrefs(200))).toEqual({
+      lineHeight: 1.9,
+      paragraphSpacingPx: 22.4,
+      letterSpacingEm: 0.08,
+      wordSpacingEm: 0.16,
+    });
   });
 });
 
@@ -145,16 +228,24 @@ describe("readerPrefs — sanitize", () => {
   it("keeps valid fields and snaps the size + rail widths", () => {
     expect(
       sanitizeReaderPrefs({
-        fontId: "georgia",
+        fontId: "atkinson",
         sizePct: 132,
+        lineSpacingPct: 124.6,
+        paragraphSpacingPct: 111.2,
+        letterSpacingPct: 96,
+        wordSpacingPct: 103,
         showNav: false,
         showComments: false,
         navWidthPct: 120,
         commentWidthPct: 85,
       }),
     ).toEqual({
-      fontId: "georgia",
-      sizePct: 130,
+      fontId: "atkinson",
+      sizePct: 132,
+      lineSpacingPct: 125,
+      paragraphSpacingPct: 111,
+      letterSpacingPct: 100,
+      wordSpacingPct: 100,
       showNav: false,
       showComments: false,
       navWidthPct: 120,
@@ -175,6 +266,10 @@ describe("readerPrefs — sanitize", () => {
     const out = sanitizeReaderPrefs({
       fontId: "unknown",
       sizePct: "big",
+      lineSpacingPct: "wide",
+      paragraphSpacingPct: null,
+      letterSpacingPct: false,
+      wordSpacingPct: "wide",
       showNav: "yes",
       showComments: 0,
       navWidthPct: "wide",
@@ -182,6 +277,10 @@ describe("readerPrefs — sanitize", () => {
     });
     expect(out.fontId).toBe(DEFAULT_FONT_ID);
     expect(out.sizePct).toBe(DEFAULT_SIZE_PCT);
+    expect(out.lineSpacingPct).toBe(DEFAULT_LINE_SPACING_PCT);
+    expect(out.paragraphSpacingPct).toBe(DEFAULT_PARAGRAPH_SPACING_PCT);
+    expect(out.letterSpacingPct).toBe(DEFAULT_LETTER_SPACING_PCT);
+    expect(out.wordSpacingPct).toBe(DEFAULT_WORD_SPACING_PCT);
     expect(out.showNav).toBe(true);
     expect(out.showComments).toBe(true);
     expect(out.navWidthPct).toBe(DEFAULT_NAV_WIDTH_PCT);
@@ -195,6 +294,12 @@ describe("readerPrefs — sanitize", () => {
     expect(sanitizeReaderPrefs({ sizePct: Infinity }).sizePct).toBe(
       DEFAULT_SIZE_PCT,
     );
+    expect(
+      sanitizeReaderPrefs({ lineSpacingPct: Number.NaN }).lineSpacingPct,
+    ).toBe(DEFAULT_LINE_SPACING_PCT);
+    expect(
+      sanitizeReaderPrefs({ wordSpacingPct: Infinity }).wordSpacingPct,
+    ).toBe(DEFAULT_WORD_SPACING_PCT);
   });
 });
 
@@ -208,8 +313,9 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
 
   it("splits typography (shared key) from layout (per-surface key)", () => {
     const prefs = {
-      fontId: "palatino",
+      fontId: "atkinson",
       sizePct: 115,
+      ...spacingPrefs(125),
       showNav: false,
       showComments: true,
       navWidthPct: 130,
@@ -219,13 +325,19 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     expect(localStorage.getItem(READER_TYPE_KEY)).not.toBeNull();
     expect(localStorage.getItem(layoutStorageKey("pr"))).not.toBeNull();
     expect(readReaderPrefs("pr")).toEqual(prefs);
+    expect(JSON.parse(localStorage.getItem(READER_TYPE_KEY)!)).toEqual({
+      fontId: "atkinson",
+      sizePct: 115,
+      ...spacingPrefs(125),
+    });
   });
 
   it("shares typography across surfaces but keeps layout per-surface", () => {
     // The PR tab hides both panels + widens the nav.
     writeReaderPrefs("pr", {
-      fontId: "georgia",
+      fontId: "atkinson",
       sizePct: 130,
+      ...spacingPrefs(120),
       showNav: false,
       showComments: false,
       navWidthPct: 130,
@@ -235,8 +347,9 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     // (default panels shown, default rail widths) — the PR tab's focus doesn't
     // bleed across.
     expect(readReaderPrefs("hub")).toEqual({
-      fontId: "georgia",
+      fontId: "atkinson",
       sizePct: 130,
+      ...spacingPrefs(120),
       showNav: true,
       showComments: true,
       navWidthPct: DEFAULT_NAV_WIDTH_PCT,
@@ -247,6 +360,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     writeReaderPrefs("hub", {
       fontId: "sitka",
       sizePct: 90,
+      ...spacingPrefs(110),
       showNav: true,
       showComments: true,
       navWidthPct: 70,
@@ -255,6 +369,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     expect(readReaderPrefs("pr")).toEqual({
       fontId: "sitka",
       sizePct: 90,
+      ...spacingPrefs(110),
       showNav: false,
       showComments: false,
       navWidthPct: 130,
@@ -264,6 +379,32 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
 
   it("returns the defaults when nothing is stored", () => {
     expect(readReaderPrefs("pr")).toEqual(DEFAULT_READER_PREFS);
+  });
+
+  it("hydrates the legacy font + size schema with default spacing", () => {
+    localStorage.setItem(
+      READER_TYPE_KEY,
+      JSON.stringify({ fontId: "atkinson", sizePct: 115 }),
+    );
+
+    expect(readReaderPrefs("pr")).toEqual({
+      ...DEFAULT_READER_PREFS,
+      fontId: "atkinson",
+      sizePct: 115,
+    });
+  });
+
+  it("falls back for a removed font and ignores the unshipped composite field", () => {
+    localStorage.setItem(
+      READER_TYPE_KEY,
+      JSON.stringify({ fontId: "palatino", sizePct: 115, spacingPct: 120 }),
+    );
+
+    expect(readReaderPrefs("pr")).toEqual({
+      ...DEFAULT_READER_PREFS,
+      fontId: DEFAULT_FONT_ID,
+      sizePct: 115,
+    });
   });
 
   it("degrades to defaults on corrupt JSON in either key", () => {

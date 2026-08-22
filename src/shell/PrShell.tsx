@@ -54,7 +54,7 @@ import {
   readReaderPrefs,
   writeReaderPrefs,
   resolveReaderFont,
-  stepSizePct,
+  readerSpacingValues,
   clampNavWidthPct,
   clampCommentWidthPct,
   readerMinWidth,
@@ -62,7 +62,6 @@ import {
   widthScale,
   dragClosesPane,
   dragReopensPane,
-  DEFAULT_SIZE_PCT,
   DEFAULT_NAV_WIDTH_PCT,
   DEFAULT_COMMENT_WIDTH_PCT,
   type ReaderPrefs,
@@ -404,13 +403,19 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     (fontId: string) => setReaderPrefs((p) => ({ ...p, fontId })),
     [],
   );
-  const stepReaderSize = React.useCallback(
-    (dir: number) =>
-      setReaderPrefs((p) => ({ ...p, sizePct: stepSizePct(p.sizePct, dir) })),
+  const setReaderSize = React.useCallback(
+    (sizePct: number) => setReaderPrefs((p) => ({ ...p, sizePct })),
     [],
   );
-  const resetReaderSize = React.useCallback(
-    () => setReaderPrefs((p) => ({ ...p, sizePct: DEFAULT_SIZE_PCT })),
+  const setReaderSpacing = React.useCallback(
+    (spacingPct: number) =>
+      setReaderPrefs((p) => ({
+        ...p,
+        lineSpacingPct: spacingPct,
+        paragraphSpacingPct: spacingPct,
+        letterSpacingPct: spacingPct,
+        wordSpacingPct: spacingPct,
+      })),
     [],
   );
   const resetNavWidth = React.useCallback(
@@ -2103,9 +2108,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const navHidden = props.hideDocNav || !readerPrefs.showNav;
   const commentsHidden = !readerPrefs.showComments;
   const readerFont = resolveReaderFont(readerPrefs.fontId);
+  const readerSpacing = readerSpacingValues(readerPrefs);
   const readerStyle = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(readerPrefs.sizePct / 100),
+    "--emr-reader-line-height": String(readerSpacing.lineHeight),
+    "--emr-reader-letter-spacing": `${readerSpacing.letterSpacingEm}em`,
+    "--emr-reader-word-spacing": `${readerSpacing.wordSpacingEm}em`,
+    "--emr-reader-paragraph-spacing": `${readerSpacing.paragraphSpacingPx}px`,
     "--emr-nav-scale": String(widthScale(readerPrefs.navWidthPct)),
     "--emr-rail-scale": String(widthScale(readerPrefs.commentWidthPct)),
   } as React.CSSProperties;
@@ -2409,9 +2419,10 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             wordDelta={docWordDelta}
             fontId={readerPrefs.fontId}
             sizePct={readerPrefs.sizePct}
+            spacingPct={readerPrefs.lineSpacingPct}
             onFontChange={setReaderFont}
-            onSizeStep={stepReaderSize}
-            onSizeReset={resetReaderSize}
+            onSizeChange={setReaderSize}
+            onSpacingChange={setReaderSpacing}
             showNav={readerPrefs.showNav}
             onToggleNav={toggleReaderNav}
             navToggleable={navToggleable}

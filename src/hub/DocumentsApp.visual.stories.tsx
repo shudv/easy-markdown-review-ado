@@ -10,7 +10,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { waitFor } from "storybook/test";
+import { expect, waitFor } from "storybook/test";
 
 import { FIXTURE_AUTHORS } from "../comments/fixtures";
 import type { DocRepo } from "../shell/types";
@@ -168,5 +168,35 @@ export const Default: Story = {
       },
       { timeout: 5000 },
     );
+  },
+};
+
+/** High contrast: both pane dividers align to the document's inset card. */
+export const HighContrastDark: Story = {
+  decorators: [
+    (Story) => {
+      React.useLayoutEffect(() => {
+        const root = document.documentElement;
+        const previous = root.getAttribute("data-emr-theme");
+        root.setAttribute("data-emr-theme", "hc-dark");
+        return () => {
+          if (previous) root.setAttribute("data-emr-theme", previous);
+          else root.removeAttribute("data-emr-theme");
+        };
+      }, []);
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    await Default.play!({ canvasElement } as never);
+    const body = canvasElement.querySelector<HTMLElement>(".emr-body")!;
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const rail = canvasElement.querySelector<HTMLElement>(".emr-rail-scroll")!;
+    const bodyRect = body.getBoundingClientRect();
+
+    expect(nav.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+    expect(rail.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+    expect(nav.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
+    expect(rail.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
   },
 };

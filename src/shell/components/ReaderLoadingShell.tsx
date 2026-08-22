@@ -5,7 +5,12 @@ import React, {
 } from "react";
 
 import type { DraftScope } from "../draftStorage";
-import { readReaderPrefs, resolveReaderFont, widthScale } from "../readerPrefs";
+import {
+  readReaderPrefs,
+  readerSpacingValues,
+  resolveReaderFont,
+  widthScale,
+} from "../readerPrefs";
 
 interface ReaderLoadingShellProps {
   scope: DraftScope;
@@ -25,9 +30,14 @@ export function ReaderLoadingShell({
 }: ReaderLoadingShellProps): ReactElement {
   const prefs = readReaderPrefs(scope);
   const readerFont = resolveReaderFont(prefs.fontId);
+  const readerSpacing = readerSpacingValues(prefs);
   const style = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(prefs.sizePct / 100),
+    "--emr-reader-line-height": String(readerSpacing.lineHeight),
+    "--emr-reader-letter-spacing": `${readerSpacing.letterSpacingEm}em`,
+    "--emr-reader-word-spacing": `${readerSpacing.wordSpacingEm}em`,
+    "--emr-reader-paragraph-spacing": `${readerSpacing.paragraphSpacingPx}px`,
     "--emr-nav-scale": String(widthScale(prefs.navWidthPct)),
     "--emr-rail-scale": String(widthScale(prefs.commentWidthPct)),
   } as CSSProperties;

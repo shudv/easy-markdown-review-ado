@@ -141,6 +141,10 @@
   --emr-reader-font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
   --emr-reader-scale: 1;
+  --emr-reader-line-height: 1.6;
+  --emr-reader-letter-spacing: 0em;
+  --emr-reader-word-spacing: 0em;
+  --emr-reader-paragraph-spacing: 16px;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +606,8 @@ button {
     Consolas,
     monospace
   );
+  letter-spacing: 0;
+  word-spacing: 0;
 }
 
 // github-markdown-css paints `.markdown-body` with its own canvas colour
@@ -618,7 +624,13 @@ button {
   // so only their SIZE scales (it's em-relative). Base 14.5px = standard reading.
   font-family: var(--emr-reader-font);
   font-size: calc(14.5px * var(--emr-reader-scale, 1));
-  line-height: 1.6;
+  line-height: var(--emr-reader-line-height, 1.6);
+  letter-spacing: var(--emr-reader-letter-spacing, 0em);
+  word-spacing: var(--emr-reader-word-spacing, 0em);
+
+  p {
+    margin-bottom: var(--emr-reader-paragraph-spacing, 16px);
+  }
 
   details {
     margin: 10px 0;
@@ -1369,57 +1381,186 @@ button {
   opacity: 0.7;
 }
 
-// Text-size stepper — a bordered −/value/+ cluster.
-.emr-statusbar-size {
-  display: inline-flex;
+// Shared continuous percentage slider. Compact in the status bar; the popover
+// variant lets its track consume the available menu width.
+.emr-percent-slider {
+  --emr-percent-progress: 50%;
+  --emr-percent-axis: 50%;
+  display: grid;
+  grid-template-columns: 20px 82px 20px 36px;
   align-items: center;
-  border: 1px solid var(--emr-rule);
-  border-radius: 6px;
-  overflow: hidden;
-  margin-left: 2px;
-}
-.emr-statusbar-size-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
+  column-gap: 2px;
   height: 24px;
-  border: 0;
+  margin-left: 2px;
+
+  &.is-fluid {
+    width: 100%;
+    grid-template-columns: 20px minmax(0, 1fr) 20px 36px;
+    margin-left: 0;
+
+    .emr-percent-track,
+    input[type="range"] {
+      width: 100%;
+    }
+  }
+}
+
+.emr-percent-track {
+  position: relative;
+  width: 82px;
+  height: 16px;
+
+  &::before,
+  &::after {
+    position: absolute;
+    top: var(--emr-percent-axis);
+    left: 0;
+    height: 1px;
+    content: "";
+    transform: translateY(-0.5px);
+    pointer-events: none;
+  }
+
+  &::before {
+    width: 100%;
+    background: var(--emr-rule-strong);
+  }
+
+  &::after {
+    width: var(--emr-percent-progress);
+    background: var(--emr-accent);
+  }
+}
+
+.emr-percent-track input[type="range"] {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 82px;
+  height: 16px;
+  margin: 0;
   background: transparent;
-  color: var(--emr-muted);
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    background: var(--emr-faint);
-    color: var(--emr-fg);
+  &::-webkit-slider-runnable-track {
+    height: 1px;
+    background: transparent;
   }
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 6px;
+    height: 6px;
+    margin-top: -2.5px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--emr-accent);
+    transition:
+      width 100ms ease,
+      height 100ms ease,
+      margin-top 100ms ease;
+  }
+
+  &::-moz-range-track,
+  &::-moz-range-progress {
+    height: 1px;
+    background: transparent;
+  }
+
+  &::-moz-range-thumb {
+    width: 6px;
+    height: 6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--emr-accent);
+    transition:
+      width 100ms ease,
+      height 100ms ease;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.emr-percent-track:hover input[type="range"],
+.emr-percent-track input[type="range"]:focus-visible,
+.emr-percent-track input[type="range"]:active {
+  &::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    margin-top: -5.5px;
+  }
+
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.emr-percent-default-marker {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  bottom: 2px;
+  left: var(--emr-percent-default-position, 50%);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--emr-fg);
+  opacity: 0.5;
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+
+.emr-percent-adjust {
+  position: relative;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--emr-fg);
+  cursor: pointer;
+
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: default;
   }
 
-  svg {
-    width: 14px;
-    height: 14px;
+  &::before,
+  &.is-plus::after {
+    position: absolute;
+    content: "";
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  &::before {
+    top: var(--emr-percent-axis);
+    left: 4px;
+    width: 12px;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+
+  &.is-plus::after {
+    top: var(--emr-percent-axis);
+    left: 50%;
+    width: 2px;
+    height: 12px;
+    transform: translate(-50%, -50%);
   }
 }
-.emr-statusbar-size-val {
-  min-width: 48px;
-  height: 24px;
-  border: 0;
-  border-left: 1px solid var(--emr-rule);
-  border-right: 1px solid var(--emr-rule);
-  background: transparent;
-  text-align: center;
-  font: inherit;
-  font-size: 15px;
-  color: var(--emr-fg);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
 
-  &:hover {
-    background: var(--emr-faint);
-  }
+.emr-percent-output {
+  min-width: 36px;
+  color: var(--emr-fg);
+  font-size: 14px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
 // Reading-font popover — opens UPWARD from the Aa trigger (the bar sits at the
@@ -1440,7 +1581,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 208px;
+  min-width: 280px;
+  max-width: calc(100vw - 20px);
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
@@ -1460,6 +1602,17 @@ button {
   letter-spacing: 0.06em;
   color: var(--emr-muted);
   padding: 0 4px 2px;
+}
+.emr-statusbar-pop-section {
+  margin-top: 4px;
+  padding: 10px 4px 0;
+  border-top: 1px solid var(--emr-rule);
+
+  &.is-only {
+    margin-top: 0;
+    padding-top: 4px;
+    border-top: 0;
+  }
 }
 // Kindle-style font list — each row rendered in its own face.
 .emr-statusbar-fontlist {
@@ -1503,14 +1656,15 @@ button {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
 }
+.emr-font-atkinson {
+  font-family:
+    "Atkinson Hyperlegible", "Segoe UI", system-ui, Arial, sans-serif;
+}
 .emr-font-sitka {
   font-family: "Sitka Text", Sitka, Cambria, Georgia, serif;
 }
 .emr-font-georgia {
   font-family: Georgia, "Times New Roman", serif;
-}
-.emr-font-palatino {
-  font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
 }
 .emr-font-verdana {
   font-family: Verdana, Geneva, Tahoma, sans-serif;
@@ -1528,6 +1682,51 @@ button {
 
   .emr-statusbar-btn {
     padding-inline: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .emr-statusbar {
+    padding-inline: 6px;
+  }
+
+  .emr-statusbar-status {
+    display: none;
+  }
+
+  .emr-statusbar-controls {
+    gap: 0;
+  }
+
+  .emr-statusbar-sep {
+    margin-inline: 2px;
+  }
+
+  .emr-statusbar-btn {
+    padding-inline: 4px;
+  }
+
+  .emr-percent-slider:not(.is-fluid) {
+    grid-template-columns: 18px 42px 18px 34px;
+    column-gap: 1px;
+
+    .emr-percent-track,
+    .emr-percent-track input[type="range"] {
+      width: 42px;
+    }
+
+    .emr-percent-adjust {
+      width: 18px;
+
+      &::before {
+        left: 3px;
+      }
+    }
+
+    .emr-percent-output {
+      min-width: 34px;
+      font-size: 13px;
+    }
   }
 }
 
@@ -4594,8 +4793,12 @@ button {
 // which is a different tone than the reader's grey backdrop — so the card's
 // seamless flush top (which reads right only against matching chrome) butts
 // awkwardly against it. Restore a top gap on the document card here, matching
-// its bottom gap, so it floats clear of that header on the grey backdrop.
-.emr-docs-app .emr-body {
+// its bottom gap, so it floats clear of that header on the grey backdrop. Apply
+// the same inset to both side panes: their HC dividers must start and stop on
+// the document card's edges rather than leaving short vertical spurs.
+.emr-docs-app .emr-body,
+.emr-docs-app .emr-body__nav,
+.emr-docs-app .emr-rail-scroll {
   margin-top: var(--emr-card-gap);
 }
 

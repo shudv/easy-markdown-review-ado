@@ -4,15 +4,26 @@
 // control now lives here.
 //
 //   left  — document status: word count + the PR word-count delta.
-//   right — Navigation · Comments · Changes toggles, an "Aa" reading-font
-//           popover, a text-size stepper, Refresh, and Feedback.
+//   right — Navigation · Comments · Changes toggles, an "Aa" reading-font /
+//           spacing popover, a text-size slider, Refresh, and Feedback.
 //
 // All state lives with the host (PrShell) and arrives via props; this component
 // owns only the transient font-popover open state.
 
 import * as React from "react";
 
-import { READER_FONTS, READER_SIZE_STEPS } from "../readerPrefs";
+import {
+  clampReaderPct,
+  DEFAULT_FONT_ID,
+  detectAvailableReaderFonts,
+  nudgeReaderPct,
+  READER_FONTS,
+  READER_PERCENT_MAX,
+  READER_PERCENT_MIN,
+  READER_SPACING_UI_MAX,
+  READER_SPACING_UI_MIN,
+  snapReaderPct,
+} from "../readerPrefs";
 import { formatWordDelta, type WordCountDelta } from "../prShellHelpers";
 
 export interface ReaderStatusBarProps {
@@ -23,14 +34,18 @@ export interface ReaderStatusBarProps {
 
   /** Selected reading-font id (see `READER_FONTS`). */
   fontId: string;
-  /** Selected text size as a percentage step. */
+  /** Selected text size as a continuous percentage. */
   sizePct: number;
+  /** Selected combined text spacing percentage. */
+  spacingPct: number;
   /** Choose a reading font. */
   onFontChange: (fontId: string) => void;
-  /** Step the text size one notch (`+1` larger / `-1` smaller). */
-  onSizeStep: (dir: number) => void;
-  /** Reset the text size to 100%. */
-  onSizeReset: () => void;
+  /** Set the continuous text-size percentage. */
+  onSizeChange: (sizePct: number) => void;
+  /** Set the combined text-spacing percentage. */
+  onSpacingChange: (spacingPct: number) => void;
+  /** Optional deterministic availability override for embeds and tests. */
+  availableFontIds?: readonly string[];
 
   /** Whether the document-navigation panel is currently shown. */
   showNav: boolean;
@@ -184,40 +199,103 @@ function IconRefresh(): React.ReactElement {
   );
 }
 
-function IconMinus(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
-function IconPlus(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
 /** A CSS class per font id so each list row renders in its own face. */
 function fontClass(id: string): string {
   return `emr-font-${id}`;
+}
+
+async function loadLocalReaderFont(
+  family: string,
+  id: string,
+): Promise<boolean> {
+  if (typeof FontFace !== "function") return false;
+  const face = new FontFace(
+    `emr-local-probe-${id}`,
+    `local(${JSON.stringify(family)})`,
+  );
+  await face.load();
+  return face.status === "loaded";
+}
+
+interface PercentSliderProps {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  fluid?: boolean;
+  min?: number;
+  max?: number;
+  showDefaultMarker?: boolean;
+}
+
+function PercentSlider({
+  label,
+  value,
+  onChange,
+  fluid = false,
+  min = READER_PERCENT_MIN,
+  max = READER_PERCENT_MAX,
+  showDefaultMarker = true,
+}: PercentSliderProps): React.ReactElement {
+  const displayValue = Math.max(min, Math.min(max, value));
+  const progress = ((displayValue - min) / (max - min)) * 100;
+  const defaultPosition = ((100 - min) / (max - min)) * 100;
+  const nudge = (dir: number) =>
+    onChange(nudgeReaderPct(displayValue, dir, min, max));
+  const style = {
+    "--emr-percent-progress": `${progress}%`,
+    "--emr-percent-default-position": `${defaultPosition}%`,
+  } as React.CSSProperties;
+
+  return (
+    <div
+      className={`emr-percent-slider${fluid ? " is-fluid" : ""}`}
+      style={style}
+    >
+      <button
+        className="emr-percent-adjust is-minus"
+        type="button"
+        aria-label={`Decrease ${label.toLowerCase()}`}
+        disabled={displayValue <= min}
+        onClick={() => nudge(-1)}
+      />
+      <span className="emr-percent-track">
+        <input
+          type="range"
+          aria-label={label}
+          aria-valuetext={`${displayValue}%`}
+          min={min}
+          max={max}
+          step="1"
+          value={displayValue}
+          onChange={(event) =>
+            onChange(snapReaderPct(Number(event.currentTarget.value), min, max))
+          }
+          onKeyDown={(event) => {
+            const delta =
+              event.key === "ArrowLeft" || event.key === "ArrowDown"
+                ? -1
+                : event.key === "ArrowRight" || event.key === "ArrowUp"
+                  ? 1
+                  : 0;
+            if (delta === 0) return;
+            event.preventDefault();
+            onChange(clampReaderPct(displayValue + delta, min, max));
+          }}
+        />
+        {showDefaultMarker ? (
+          <span className="emr-percent-default-marker" aria-hidden="true" />
+        ) : null}
+      </span>
+      <button
+        className="emr-percent-adjust is-plus"
+        type="button"
+        aria-label={`Increase ${label.toLowerCase()}`}
+        disabled={displayValue >= max}
+        onClick={() => nudge(1)}
+      />
+      <output className="emr-percent-output">{displayValue}%</output>
+    </div>
+  );
 }
 
 export function ReaderStatusBar(
@@ -228,9 +306,11 @@ export function ReaderStatusBar(
     wordDelta,
     fontId,
     sizePct,
+    spacingPct,
     onFontChange,
-    onSizeStep,
-    onSizeReset,
+    onSizeChange,
+    onSpacingChange,
+    availableFontIds,
     showNav,
     onToggleNav,
     navToggleable,
@@ -247,9 +327,34 @@ export function ReaderStatusBar(
 
   const typeRef = React.useRef<HTMLDivElement>(null);
   const [typeOpen, setTypeOpen] = React.useState(false);
+  const overriddenFonts = React.useMemo(() => {
+    if (!availableFontIds) return undefined;
+    const ids = new Set([DEFAULT_FONT_ID, ...availableFontIds]);
+    return READER_FONTS.filter((font) => ids.has(font.id));
+  }, [availableFontIds]);
+  const [detectedFonts, setDetectedFonts] = React.useState<
+    readonly (typeof READER_FONTS)[number][]
+  >(() => READER_FONTS.filter((font) => !font.localFamily));
+  const availableFonts = overriddenFonts ?? detectedFonts;
+  const effectiveFontId = availableFonts.some((font) => font.id === fontId)
+    ? fontId
+    : DEFAULT_FONT_ID;
+  const hasAlternativeFonts = availableFonts.some(
+    (font) => font.id !== DEFAULT_FONT_ID,
+  );
 
-  const canShrink = sizePct > READER_SIZE_STEPS[0];
-  const canGrow = sizePct < READER_SIZE_STEPS[READER_SIZE_STEPS.length - 1];
+  React.useEffect(() => {
+    if (overriddenFonts) return undefined;
+    let cancelled = false;
+    void detectAvailableReaderFonts(loadLocalReaderFont).then((fonts) => {
+      /* v8 ignore next -- defensive unmount guard; no observable UI branch */
+      if (cancelled) return;
+      setDetectedFonts(fonts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [overriddenFonts]);
 
   // Close the font popover on an outside pointer-down or Escape.
   React.useEffect(() => {
@@ -354,7 +459,7 @@ export function ReaderStatusBar(
             className="emr-statusbar-btn"
             aria-haspopup="true"
             aria-expanded={typeOpen}
-            title="Reading font"
+            title="Reading preferences"
             onClick={() => setTypeOpen((o) => !o)}
           >
             <span className="emr-statusbar-aa">Aa</span>
@@ -363,54 +468,51 @@ export function ReaderStatusBar(
           <div
             className="emr-statusbar-pop"
             role="group"
-            aria-label="Reading font"
+            aria-label="Reading preferences"
           >
-            <div className="emr-statusbar-pop-label">Reading font</div>
-            <div className="emr-statusbar-fontlist">
-              {READER_FONTS.map((font) => (
-                <button
-                  key={font.id}
-                  type="button"
-                  className={`emr-statusbar-font ${fontClass(font.id)}`}
-                  aria-pressed={font.id === fontId}
-                  onClick={() => onFontChange(font.id)}
-                >
-                  <span>{font.name}</span>
-                  <IconCheck />
-                </button>
-              ))}
+            {hasAlternativeFonts ? (
+              <>
+                <div className="emr-statusbar-pop-label">Reading font</div>
+                <div className="emr-statusbar-fontlist">
+                  {availableFonts.map((font) => (
+                    <button
+                      key={font.id}
+                      type="button"
+                      className={`emr-statusbar-font ${fontClass(font.id)}`}
+                      aria-pressed={font.id === effectiveFontId}
+                      onClick={() => onFontChange(font.id)}
+                    >
+                      <span>{font.name}</span>
+                      <IconCheck />
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+            <div
+              className={`emr-statusbar-pop-section${
+                hasAlternativeFonts ? "" : " is-only"
+              }`}
+            >
+              <div className="emr-statusbar-pop-label">Text spacing</div>
+              <PercentSlider
+                label="Text spacing"
+                value={spacingPct}
+                onChange={onSpacingChange}
+                fluid
+                min={READER_SPACING_UI_MIN}
+                max={READER_SPACING_UI_MAX}
+                showDefaultMarker={false}
+              />
             </div>
           </div>
         </div>
 
-        <div className="emr-statusbar-size">
-          <button
-            type="button"
-            className="emr-statusbar-size-btn"
-            aria-label="Smaller text"
-            disabled={!canShrink}
-            onClick={() => onSizeStep(-1)}
-          >
-            <IconMinus />
-          </button>
-          <button
-            type="button"
-            className="emr-statusbar-size-val"
-            title="Reset to 100%"
-            onClick={onSizeReset}
-          >
-            {sizePct}%
-          </button>
-          <button
-            type="button"
-            className="emr-statusbar-size-btn"
-            aria-label="Larger text"
-            disabled={!canGrow}
-            onClick={() => onSizeStep(1)}
-          >
-            <IconPlus />
-          </button>
-        </div>
+        <PercentSlider
+          label="Text size"
+          value={sizePct}
+          onChange={onSizeChange}
+        />
 
         {onRefresh || feedbackHref ? (
           <div className="emr-statusbar-sep" aria-hidden="true" />

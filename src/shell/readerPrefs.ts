@@ -1,6 +1,6 @@
-// Reader preferences — the reading font, text size and panel visibility the
-// reader has chosen from the floating document toolbar. Typography (font +
-// size) persists under a SINGLE global key so reading comfort follows the
+// Reader preferences — the reading font, text size, text spacing and panel
+// visibility the reader has chosen from the status bar. Typography persists
+// under a SINGLE global key so reading comfort follows the
 // reader across every surface; panel visibility + nav width persist PER surface
 // (keyed by `DraftScope`), because the PR tab and the Documents hub navigate
 // differently — hiding a panel or resizing the nav in one shouldn't reshape the
@@ -18,13 +18,14 @@ export interface ReaderFont {
   name: string;
   /** The `font-family` stack applied to the document prose. */
   stack: string;
+  /** Primary local family name to probe; absent means always available. */
+  localFamily?: string;
 }
 
-// A deliberately small, curated set (Kindle-style) rather than an arbitrary
-// font picker. Two sans (System / Verdana) and three screen-friendly serifs.
-// "System" is the same UI sans as the surrounding app chrome; the serifs suit
-// long-form reading. Mono is intentionally absent — code always renders in its
-// own monospace face regardless of this choice.
+// A deliberately small, role-based set rather than an arbitrary font picker:
+// the native system sans plus distinct accessibility, screen-sans and serif
+// options when installed. Mono is intentionally absent — code always renders
+// in its own monospace face regardless of this choice.
 export const READER_FONTS: readonly ReaderFont[] = [
   {
     id: "system",
@@ -33,39 +34,49 @@ export const READER_FONTS: readonly ReaderFont[] = [
       '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif',
   },
   {
+    id: "atkinson",
+    name: "Atkinson Hyperlegible",
+    stack: '"Atkinson Hyperlegible", "Segoe UI", system-ui, Arial, sans-serif',
+    localFamily: "Atkinson Hyperlegible Regular",
+  },
+  {
     id: "sitka",
     name: "Sitka",
     stack: '"Sitka Text", Sitka, Cambria, Georgia, serif',
+    localFamily: "Sitka Text",
   },
   {
     id: "georgia",
     name: "Georgia",
     stack: 'Georgia, "Times New Roman", serif',
-  },
-  {
-    id: "palatino",
-    name: "Palatino",
-    stack: '"Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif',
+    localFamily: "Georgia",
   },
   {
     id: "verdana",
     name: "Verdana",
     stack: "Verdana, Geneva, Tahoma, sans-serif",
+    localFamily: "Verdana",
   },
 ];
 
 /** The out-of-the-box reading font (the system UI sans). */
 export const DEFAULT_FONT_ID = "system";
 
-// Text-size steps as a percentage of the reader's base size, with extra room
-// on the small end so a reader can pull dense docs in tight. Discrete steps
-// (no free slider) keep the control simple and avoid fiddly in-between sizes.
-export const READER_SIZE_STEPS: readonly number[] = [
-  70, 80, 90, 100, 115, 130, 150,
-];
+/** Continuous text-size range. */
+export const READER_PERCENT_MIN = 50;
+export const READER_PERCENT_MAX = 150;
+/** Current coupled spacing UI only expands from the readable default. */
+export const READER_SPACING_UI_MIN = 100;
+export const READER_SPACING_UI_MAX = 200;
+export const READER_PERCENT_NUDGE = 5;
+export const READER_PERCENT_SNAP_RADIUS = 3;
 
 /** The out-of-the-box text size (100% = the reader's base size). */
 export const DEFAULT_SIZE_PCT = 100;
+export const DEFAULT_LINE_SPACING_PCT = 100;
+export const DEFAULT_PARAGRAPH_SPACING_PCT = 100;
+export const DEFAULT_LETTER_SPACING_PCT = 100;
+export const DEFAULT_WORD_SPACING_PCT = 100;
 
 // Document-navigation width bounds, as a percentage of the default rail width.
 // The reader drags the nav's right border to resize it anywhere in this range
@@ -95,8 +106,16 @@ export const DEFAULT_COMMENT_WIDTH_PCT = 100;
 export interface ReaderPrefs {
   /** Selected reading font id (see `READER_FONTS`). */
   fontId: string;
-  /** Selected text size as a percentage step (see `READER_SIZE_STEPS`). */
+  /** Selected text size as a continuous percentage (50–150). */
   sizePct: number;
+  /** Line-height preference as a continuous percentage (50–150). */
+  lineSpacingPct: number;
+  /** Paragraph-spacing preference as a continuous percentage (50–150). */
+  paragraphSpacingPct: number;
+  /** Letter-spacing preference as a continuous percentage (50–150). */
+  letterSpacingPct: number;
+  /** Word-spacing preference as a continuous percentage (50–150). */
+  wordSpacingPct: number;
   /** Whether the document-navigation panel is shown. */
   showNav: boolean;
   /** Whether the comments panel is shown. */
@@ -111,6 +130,10 @@ export interface ReaderPrefs {
 export const DEFAULT_READER_PREFS: ReaderPrefs = {
   fontId: DEFAULT_FONT_ID,
   sizePct: DEFAULT_SIZE_PCT,
+  lineSpacingPct: DEFAULT_LINE_SPACING_PCT,
+  paragraphSpacingPct: DEFAULT_PARAGRAPH_SPACING_PCT,
+  letterSpacingPct: DEFAULT_LETTER_SPACING_PCT,
+  wordSpacingPct: DEFAULT_WORD_SPACING_PCT,
   showNav: true,
   showComments: true,
   navWidthPct: DEFAULT_NAV_WIDTH_PCT,
@@ -133,50 +156,87 @@ export function resolveReaderFont(id: string): ReaderFont {
   return READER_FONTS.find((f) => f.id === id) ?? READER_FONTS[0]!;
 }
 
-/** Snap an arbitrary percentage to the nearest step in `steps`. */
-function clampToSteps(pct: number, steps: readonly number[]): number {
-  let best = steps[0];
-  let bestDelta = Math.abs(pct - best);
-  for (const step of steps) {
-    const delta = Math.abs(pct - step);
-    if (delta < bestDelta) {
-      best = step;
-      bestDelta = delta;
-    }
-  }
-  return best;
+/** Resolve the curated registry against an asynchronous local-font probe. */
+export async function detectAvailableReaderFonts(
+  loadLocal: (family: string, id: string) => Promise<boolean>,
+): Promise<readonly ReaderFont[]> {
+  const availability = await Promise.all(
+    READER_FONTS.map(async (font) => {
+      if (!font.localFamily) return true;
+      try {
+        return await loadLocal(font.localFamily, font.id);
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return READER_FONTS.filter((_font, index) => availability[index]);
 }
 
-/**
- * Step one notch up (`dir > 0`) or down (`dir < 0`) through `steps`, clamped at
- * the ends. Snaps to the current step first so a stray stored value still moves
- * predictably.
- */
-function stepThroughSteps(
+/** Clamp and round a finite reader percentage within the supplied bounds. */
+export function clampReaderPct(
+  pct: number,
+  min = READER_PERCENT_MIN,
+  max = READER_PERCENT_MAX,
+): number {
+  return Math.round(Math.max(min, Math.min(max, pct)));
+}
+
+/** Snap percentages near the default to exactly 100%, then clamp. */
+export function snapReaderPct(
+  pct: number,
+  min = READER_PERCENT_MIN,
+  max = READER_PERCENT_MAX,
+): number {
+  const clamped = clampReaderPct(pct, min, max);
+  return Math.abs(clamped - 100) <= READER_PERCENT_SNAP_RADIUS ? 100 : clamped;
+}
+
+/** Nudge a percentage by 5 points in either direction. */
+export function nudgeReaderPct(
   pct: number,
   dir: number,
-  steps: readonly number[],
+  min = READER_PERCENT_MIN,
+  max = READER_PERCENT_MAX,
 ): number {
-  const current = clampToSteps(pct, steps);
-  const idx = steps.indexOf(current);
-  const next = Math.min(
-    steps.length - 1,
-    Math.max(0, idx + (dir < 0 ? -1 : 1)),
+  return snapReaderPct(
+    pct + (dir < 0 ? -1 : 1) * READER_PERCENT_NUDGE,
+    min,
+    max,
   );
-  return steps[next];
 }
 
-/** Snap an arbitrary percentage to the nearest valid size step. */
-export function clampSizePct(pct: number): number {
-  return clampToSteps(pct, READER_SIZE_STEPS);
+export interface ReaderSpacingValues {
+  lineHeight: number;
+  letterSpacingEm: number;
+  wordSpacingEm: number;
+  paragraphSpacingPx: number;
 }
 
-/**
- * Step the text size one notch up (`dir > 0`) or down (`dir < 0`) through
- * `READER_SIZE_STEPS`, clamped at the ends.
- */
-export function stepSizePct(pct: number, dir: number): number {
-  return stepThroughSteps(pct, dir, READER_SIZE_STEPS);
+export interface ReaderSpacingPrefs {
+  lineSpacingPct: number;
+  paragraphSpacingPct: number;
+  letterSpacingPct: number;
+  wordSpacingPct: number;
+}
+
+/** Resolve four independent preferences into their prose-spacing dimensions. */
+export function readerSpacingValues(
+  prefs: ReaderSpacingPrefs,
+): ReaderSpacingValues {
+  const spacingDelta = (pct: number) =>
+    clampReaderPct(pct, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX) - 100;
+  const lineDelta = spacingDelta(prefs.lineSpacingPct);
+  const paragraphDelta = spacingDelta(prefs.paragraphSpacingPct);
+  const letterDelta = spacingDelta(prefs.letterSpacingPct);
+  const wordDelta = spacingDelta(prefs.wordSpacingPct);
+  const decimal = (value: number) => Number(value.toFixed(4));
+  return {
+    lineHeight: decimal(1.6 + lineDelta * 0.003),
+    paragraphSpacingPx: decimal(16 + paragraphDelta * 0.064),
+    letterSpacingEm: decimal(Math.max(0, letterDelta) * 0.0008),
+    wordSpacingEm: decimal(Math.max(0, wordDelta) * 0.0016),
+  };
 }
 
 function clampWidthPct(pct: number, minPct: number): number {
@@ -235,8 +295,21 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
       : DEFAULT_FONT_ID;
   const sizePct =
     typeof v.sizePct === "number" && Number.isFinite(v.sizePct)
-      ? clampSizePct(v.sizePct)
+      ? snapReaderPct(v.sizePct)
       : DEFAULT_SIZE_PCT;
+  const readSpacingPct = (
+    key: keyof Pick<
+      ReaderPrefs,
+      | "lineSpacingPct"
+      | "paragraphSpacingPct"
+      | "letterSpacingPct"
+      | "wordSpacingPct"
+    >,
+    fallback: number,
+  ) =>
+    typeof v[key] === "number" && Number.isFinite(v[key])
+      ? snapReaderPct(v[key], READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)
+      : fallback;
   const navWidthPct =
     typeof v.navWidthPct === "number" && Number.isFinite(v.navWidthPct)
       ? clampNavWidthPct(v.navWidthPct)
@@ -248,6 +321,16 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
   return {
     fontId,
     sizePct,
+    lineSpacingPct: readSpacingPct("lineSpacingPct", DEFAULT_LINE_SPACING_PCT),
+    paragraphSpacingPct: readSpacingPct(
+      "paragraphSpacingPct",
+      DEFAULT_PARAGRAPH_SPACING_PCT,
+    ),
+    letterSpacingPct: readSpacingPct(
+      "letterSpacingPct",
+      DEFAULT_LETTER_SPACING_PCT,
+    ),
+    wordSpacingPct: readSpacingPct("wordSpacingPct", DEFAULT_WORD_SPACING_PCT),
     showNav: typeof v.showNav === "boolean" ? v.showNav : true,
     showComments: typeof v.showComments === "boolean" ? v.showComments : true,
     navWidthPct,
@@ -267,8 +350,8 @@ function readStored(key: string): unknown {
 
 /**
  * Best-effort read of the reader's prefs for `scope`: the GLOBAL typography
- * (font + size) merged with THIS surface's own layout (panel visibility + nav
- * width). Missing / unreadable halves fall back to the defaults.
+ * (font + size + spacing dimensions) merged with THIS surface's own layout
+ * (panel visibility + nav width). Missing / unreadable halves use defaults.
  */
 export function readReaderPrefs(scope: DraftScope): ReaderPrefs {
   return sanitizeReaderPrefs({
@@ -285,7 +368,14 @@ export function writeReaderPrefs(scope: DraftScope, prefs: ReaderPrefs): void {
   try {
     localStorage.setItem(
       READER_TYPE_KEY,
-      JSON.stringify({ fontId: prefs.fontId, sizePct: prefs.sizePct }),
+      JSON.stringify({
+        fontId: prefs.fontId,
+        sizePct: prefs.sizePct,
+        lineSpacingPct: prefs.lineSpacingPct,
+        paragraphSpacingPct: prefs.paragraphSpacingPct,
+        letterSpacingPct: prefs.letterSpacingPct,
+        wordSpacingPct: prefs.wordSpacingPct,
+      }),
     );
     localStorage.setItem(
       layoutStorageKey(scope),

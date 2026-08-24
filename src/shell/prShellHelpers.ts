@@ -12,6 +12,54 @@ import type {
   RepositoryImageResolver,
 } from "../markdown/documentImages";
 
+export interface ReaderActivity {
+  /** Stable operation identity used while delayed visibility is pending. */
+  id: string;
+  /** Concise status-bar message, including an ellipsis for ongoing work. */
+  label: string;
+  /** Larger values take precedence when operations overlap. */
+  priority: number;
+}
+
+export function buildReaderActivities(input: {
+  navigationActivities: readonly ReaderActivity[];
+  commentSyncing: boolean;
+  fileRefreshing: boolean;
+  historicalLoading: boolean;
+  documentLoading: boolean;
+}): ReaderActivity[] {
+  const activities = [...input.navigationActivities];
+  if (input.commentSyncing) {
+    activities.push({
+      id: "comment-sync",
+      label: input.fileRefreshing
+        ? "Refreshing files and comments…"
+        : "Syncing comments…",
+      priority: input.fileRefreshing ? 60 : 20,
+    });
+  } else if (input.fileRefreshing) {
+    activities.push({
+      id: "file-refresh",
+      label: "Refreshing files…",
+      priority: 60,
+    });
+  }
+  if (input.historicalLoading) {
+    activities.push({
+      id: "history",
+      label: "Loading document version…",
+      priority: 100,
+    });
+  } else if (input.documentLoading) {
+    activities.push({
+      id: "document",
+      label: "Loading document…",
+      priority: 100,
+    });
+  }
+  return activities;
+}
+
 export function bindRepositoryImageResolver(
   resolveImage: DocumentImageResolver | undefined,
   documentPath: string,

@@ -8,10 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TextQuoteAnchor } from "../src/types";
 import {
+  addCommentDraftTarget,
   clearDraft,
   createThrottledDraftWriter,
   draftSnippet,
   draftStorageKey,
+  implicitCommentDraft,
   loadDraft,
   NEW_DRAFT_THREAD_ID,
   saveDraft,
@@ -33,6 +35,43 @@ function newDraft(overrides: Partial<PersistedDraft> = {}): PersistedDraft {
     ...overrides,
   };
 }
+
+describe("add comment draft targets", () => {
+  it("creates a first-position implicit anchor without quoting text", () => {
+    expect(implicitCommentDraft("docs/a.md")).toEqual({
+      path: "docs/a.md",
+      threadId: NEW_DRAFT_THREAD_ID,
+      anchor: {
+        exact: "",
+        prefix: "",
+        suffix: "",
+        line: 1,
+        endLine: 1,
+        column: 1,
+        endColumn: 1,
+        implicit: true,
+      },
+    });
+  });
+
+  it("keeps a current-file selection draft when plus is clicked", () => {
+    const selected = {
+      path: "docs/a.md",
+      threadId: NEW_DRAFT_THREAD_ID,
+      anchor,
+    };
+    expect(addCommentDraftTarget(selected, "docs/a.md")).toBe(selected);
+  });
+
+  it("starts an implicit draft when the current draft cannot supply an anchor", () => {
+    expect(
+      addCommentDraftTarget(
+        { path: "docs/a.md", threadId: "reply", anchor: null },
+        "docs/b.md",
+      ).anchor?.implicit,
+    ).toBe(true);
+  });
+});
 
 function replyDraft(overrides: Partial<PersistedDraft> = {}): PersistedDraft {
   return {

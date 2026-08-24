@@ -94,7 +94,7 @@ describe("ReaderLoadingShell", () => {
     expect(shell.style.getPropertyValue("--emr-rail-scale")).toBe("0.85");
   });
 
-  it("uses the settled three-pane DOM and silent shimmer placeholders", () => {
+  it("uses the settled three-pane DOM with shimmer and status-bar progress", () => {
     const shell = mount("hub");
 
     expect(
@@ -103,9 +103,18 @@ describe("ReaderLoadingShell", () => {
     expect(shell.querySelector(".emr-body-frame > .emr-body")).toBeTruthy();
     expect(shell.querySelector(".emr-body-frame > .emr-rail")).toBeTruthy();
     expect(shell.querySelector(".emr-docnav-skel")).toBeTruthy();
+    expect(
+      shell.querySelector(".emr-docnav-header .emr-skel-header-label"),
+    ).toBeTruthy();
     expect(shell.querySelector(".emr-article-wrap.emr-skeleton")).toBeTruthy();
     expect(shell.querySelector(".emr-rail-col.emr-skeleton")).toBeTruthy();
-    expect(shell.textContent).toBe("");
+    expect(
+      shell.querySelector(".emr-rail-header .emr-skel-header-label"),
+    ).toBeTruthy();
+    expect(shell.querySelector(".emr-loading-statusbar")?.textContent).toBe(
+      "Loading reader",
+    );
+    expect(shell.querySelector(".emr-statusbar-spinner")).toBeTruthy();
   });
 
   it("matches the no-nav geometry used by direct document links", () => {
@@ -130,6 +139,9 @@ describe("ReaderLoadingShell", () => {
     expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe(
       "Repository",
     );
+    expect(
+      shell.querySelector(".emr-docnav-header.emr-skel-header"),
+    ).toBeNull();
 
     React.act(() => root!.unmount());
     root = null;

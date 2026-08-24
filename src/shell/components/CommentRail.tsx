@@ -84,6 +84,8 @@ interface RailProps {
   filterMode: CommentFilterMode;
   /** Change the active comment filter. */
   onFilterModeChange: (mode: CommentFilterMode) => void;
+  /** Start a current-file comment with an implicit, invisible anchor. */
+  onAddComment?: () => void;
   /** Whether the "only comments on this file" scope toggle is on. */
   onlyThisFile?: boolean;
   /** Toggle the "only this file" scope. */
@@ -157,6 +159,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
     filterCounts,
     filterMode,
     onFilterModeChange,
+    onAddComment,
     onlyThisFile = false,
     onOnlyThisFileChange,
     readOnly = false,
@@ -208,14 +211,21 @@ export function CommentRail(props: RailProps): React.ReactElement {
   const activeInOrphanedFiles =
     activeThreadId != null &&
     visibleOrphanedFileThreads.some((t) => t.id === activeThreadId);
-  const generalExpanded = !generalCollapsed || activeInGeneral;
+  const searchActive = commentQuery.trim().length > 0;
+  const generalExpanded =
+    !generalCollapsed ||
+    activeInGeneral ||
+    (searchActive && visibleGeneralThreads.length > 0);
   const orphanedFilesExpanded =
-    !orphanedFilesCollapsed || activeInOrphanedFiles;
+    !orphanedFilesCollapsed ||
+    activeInOrphanedFiles ||
+    (searchActive && visibleOrphanedFileThreads.length > 0);
 
   // Show the rail header when there are comments OR a (visible) routed PR to
   // link to. When the pill is suppressed (PR tab) the PR alone doesn't warrant
   // a header — comments do.
   const showHeader =
+    !readOnly ||
     totalCommentCount > 0 ||
     orphanedFileThreads.length > 0 ||
     (!!routedPr && !hidePrPill);
@@ -259,6 +269,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
             routedPr={routedPr}
             historyNav={historyNav}
             hidePrPill={hidePrPill}
+            onAddComment={readOnly ? undefined : onAddComment}
             headerActions={headerActions}
           />
         </div>
@@ -279,9 +290,11 @@ export function CommentRail(props: RailProps): React.ReactElement {
               >
                 <div className="emr-balloon-header">
                   <span className="emr-balloon-status status-active">New</span>
-                  <span className="emr-balloon-meta">
-                    Anchored to: <em>“{truncate(draftAnchor.exact, 40)}”</em>
-                  </span>
+                  {draftAnchor.implicit ? null : (
+                    <span className="emr-balloon-meta">
+                      Anchored to: <em>“{truncate(draftAnchor.exact, 40)}”</em>
+                    </span>
+                  )}
                 </div>
                 <Composer
                   submitLabel="Comment"

@@ -92,6 +92,7 @@ const baseArgs = {
   filterCounts: { all: 4, active: 3, resolved: 1, mine: 1 },
   filterMode: "all" as const,
   onFilterModeChange: fn(),
+  onAddComment: fn(),
   routedPr: {
     prId: 42,
     title: "Add docs",
@@ -182,6 +183,56 @@ export const OrphanedFileTray: Story = {
   },
 };
 
+/** Search reveals matching cross-file sections without changing collapse preferences. */
+export const SearchExpandsAllSections: Story = {
+  args: { orphanedFileThreads: ORPHANED_FILE },
+  render: (args) => {
+    const [query, setQuery] = React.useState("note");
+    return (
+      <CommentRail
+        {...args}
+        commentQuery={query}
+        onCommentQueryChange={setQuery}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const general = /General comments/;
+    const removed = /Comments on files no longer in this PR/;
+    await waitFor(() => {
+      expect(
+        canvas
+          .getByRole("button", { name: general })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+      expect(
+        canvas
+          .getByRole("button", { name: removed })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+    });
+    await expect(canvas.getByText("Comment on PR-level note")).toBeTruthy();
+    await expect(canvas.getByText("Comment on Removed-file note")).toBeTruthy();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Close search" }));
+    await waitFor(() => {
+      expect(
+        canvas
+          .getByRole("button", { name: general })
+          .getAttribute("aria-expanded"),
+      ).toBe("false");
+      expect(
+        canvas
+          .getByRole("button", { name: removed })
+          .getAttribute("aria-expanded"),
+      ).toBe("false");
+    });
+    await expect(canvas.queryByText("Comment on PR-level note")).toBeNull();
+    await expect(canvas.queryByText("Comment on Removed-file note")).toBeNull();
+  },
+};
+
 /**
  * "Only this file" scope drops the General + orphaned-file trays entirely, so
  * only comments anchored to the current file remain.
@@ -264,6 +315,31 @@ export const WithDraft: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".is-draft")).toBeTruthy(),
     );
+  },
+};
+
+/** Header plus starts a file-scoped comment without a visible quote label. */
+export const ImplicitDraft: Story = {
+  args: {
+    activeThreadId: null,
+    draftAnchor: {
+      exact: "",
+      prefix: "",
+      suffix: "",
+      line: 1,
+      endLine: 1,
+      column: 1,
+      endColumn: 1,
+      implicit: true,
+    },
+    draftY: 0,
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "New comment" }));
+    await expect(args.onAddComment).toHaveBeenCalledOnce();
+    await expect(canvas.queryByText(/Anchored to:/)).toBeNull();
+    await expect(canvasElement.querySelector(".is-draft")).toBeTruthy();
   },
 };
 
@@ -384,6 +460,31 @@ export const ReadOnlyEmpty: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("No comments on this file.")).toBeTruthy();
     await expect(canvas.getByRole("status")).toBeTruthy();
+  },
+};
+
+/** A routed PR keeps the read-only rail header visible even with no comments. */
+export const ReadOnlyRoutedPrOnly: Story = {
+  args: {
+    currentThreads: [],
+    generalThreads: [],
+    orphanedFileThreads: [],
+    orphanedThreadIds: new Set<string>(),
+    hiddenThreadIds: new Set<string>(),
+    yByThreadId: new Map(),
+    activeThreadId: null,
+    readOnly: true,
+    totalCommentCount: 0,
+    resolvedThreadCount: 0,
+    openThreadCount: 0,
+    filterCounts: { all: 0, active: 0, resolved: 0, mine: 0 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("PR #42")).toBeTruthy();
+    await expect(
+      canvas.queryByRole("button", { name: "New comment" }),
+    ).toBeNull();
   },
 };
 

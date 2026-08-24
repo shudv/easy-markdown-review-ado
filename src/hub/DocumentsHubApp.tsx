@@ -710,10 +710,11 @@ export function DocumentsHubApp(): React.ReactElement {
   // identity changes when `routingPrByPath` updates, so the pill appears on the
   // next render once routing lands.
   const routedPrForPath = React.useCallback(
-    (repoId: string, path: string): RoutedPrInfo | undefined => {
+    (repoId: string, path: string): RoutedPrInfo | null | undefined => {
       const key = `${repoId}\u0000${path}`;
+      if (!(key in routingPrByPath)) return undefined;
       const pr = routingPrByPath[key];
-      if (!pr || typeof pr.pullRequestId !== "number") return undefined;
+      if (!pr || typeof pr.pullRequestId !== "number") return null;
       const rawRepo = stateRef.current?.rawRepoById.get(repoId);
       return {
         prId: pr.pullRequestId,

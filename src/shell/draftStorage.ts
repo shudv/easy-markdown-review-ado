@@ -30,6 +30,39 @@ export interface DraftTarget {
   anchor: TextQuoteAnchor | null;
 }
 
+export function implicitCommentDraft(path: string): DraftTarget {
+  return {
+    path,
+    threadId: NEW_DRAFT_THREAD_ID,
+    anchor: {
+      exact: "",
+      prefix: "",
+      suffix: "",
+      line: 1,
+      endLine: 1,
+      column: 1,
+      endColumn: 1,
+      implicit: true,
+    },
+  };
+}
+
+/** Keep a live selection draft; otherwise start an implicit file comment. */
+export function addCommentDraftTarget(
+  current: DraftTarget | null,
+  path: string,
+): DraftTarget {
+  if (
+    current?.path === path &&
+    current.threadId === NEW_DRAFT_THREAD_ID &&
+    current.anchor &&
+    !current.anchor.implicit
+  ) {
+    return current;
+  }
+  return implicitCommentDraft(path);
+}
+
 /**
  * A persisted in-progress comment draft — either a brand-new comment
  * (`threadId === NEW_DRAFT_THREAD_ID`, carrying its selection `anchor`) or a

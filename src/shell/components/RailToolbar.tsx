@@ -11,6 +11,7 @@ import * as React from "react";
 
 import { CommentFilterMenu } from "./CommentFilterMenu";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
+import { PlusIcon, SearchIcon } from "./icons";
 
 /**
  * Comment-history stepper controls: ‹ › chevrons that walk a document's review
@@ -71,6 +72,8 @@ interface RailToolbarProps {
    * redundant.
    */
   hidePrPill?: boolean;
+  /** Start a file-scoped comment without a visible text anchor. */
+  onAddComment?: () => void;
   /** Optional extra controls appended at the right end of the toolbar. */
   headerActions?: React.ReactNode;
 }
@@ -90,6 +93,7 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
     routedPr,
     historyNav,
     hidePrPill,
+    onAddComment,
     headerActions,
   } = props;
 
@@ -108,6 +112,8 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
   }, [commentQuery, searchOpen]);
 
   const canSearch = hasVisibleComments || commentQuery.length > 0;
+  const showPrLabel = !!routedPr && !hidePrPill;
+  const showVersionRow = showPrLabel || !!historyNav;
 
   // Every thread on this file is resolved (and there was at least one to
   // resolve). The header trades the count for a quiet green "all resolved"
@@ -183,6 +189,17 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
           stable — nothing in the lead can push these around.
         */}
         <div className="emr-rail-toolbar-actions">
+          {onAddComment ? (
+            <button
+              type="button"
+              className="emr-icon-btn"
+              title="New comment"
+              aria-label="New comment"
+              onClick={onAddComment}
+            >
+              <PlusIcon />
+            </button>
+          ) : null}
           {canSearch ? (
             <button
               type="button"
@@ -192,14 +209,19 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
               aria-pressed={searchOpen}
               onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
             >
-              {searchOpen ? <SvgX /> : <SvgSearch />}
+              {searchOpen ? <SvgX /> : <SearchIcon />}
             </button>
           ) : null}
           {headerActions}
         </div>
       </div>
-      {routedPr && !hidePrPill ? (
-        <div className={`emr-rail-version is-${routedPr.status}`}>
+      {showVersionRow ? (
+        <div
+          className={`emr-rail-version${
+            showPrLabel ? ` is-${routedPr.status}` : " is-history-only"
+          }`}
+          aria-label={showPrLabel ? undefined : "Comment history"}
+        >
           {historyNav ? (
             <button
               type="button"
@@ -212,26 +234,28 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
               <SvgChevronLeft />
             </button>
           ) : null}
-          <span
-            className="emr-rail-version-pr"
-            title={`Routes to PR #${routedPr.prId}: ${routedPr.title}`}
-          >
-            {routedPr.url ? (
-              <a
-                className="emr-rail-title-pr-link emr-rail-version-num"
-                href={routedPr.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                PR #{routedPr.prId}
-              </a>
-            ) : (
-              <span className="emr-rail-title-pr-link emr-rail-version-num">
-                PR #{routedPr.prId}
-              </span>
-            )}
-            <span className="emr-rail-version-title">{routedPr.title}</span>
-          </span>
+          {showPrLabel ? (
+            <span
+              className="emr-rail-version-pr"
+              title={`Routes to PR #${routedPr.prId}: ${routedPr.title}`}
+            >
+              {routedPr.url ? (
+                <a
+                  className="emr-rail-title-pr-link emr-rail-version-num"
+                  href={routedPr.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  PR #{routedPr.prId}
+                </a>
+              ) : (
+                <span className="emr-rail-title-pr-link emr-rail-version-num">
+                  PR #{routedPr.prId}
+                </span>
+              )}
+              <span className="emr-rail-version-title">{routedPr.title}</span>
+            </span>
+          ) : null}
           {historyNav ? (
             <button
               type="button"
@@ -259,21 +283,6 @@ const iconStrokeProps = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
-
-function SvgSearch(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  );
-}
 
 function SvgX(): React.ReactElement {
   return (

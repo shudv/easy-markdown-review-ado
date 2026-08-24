@@ -5,6 +5,7 @@ import React, {
 } from "react";
 
 import type { DraftScope } from "../draftStorage";
+import { ReaderActivityIndicator } from "./readerActivity";
 import {
   readReaderPrefs,
   readerSpacingValues,
@@ -48,7 +49,6 @@ export function ReaderLoadingShell({
         prefs.showNav && !hideDocNav ? "" : " is-nav-hidden"
       }${prefs.showComments ? "" : " is-comments-hidden"}`}
       style={style}
-      role="status"
       aria-label={ariaLabel}
       aria-busy="true"
     >
@@ -63,7 +63,14 @@ export function ReaderLoadingShell({
                   {titleSlot}
                   {headerActions}
                 </div>
-              ) : null}
+              ) : (
+                <div
+                  className="emr-docnav-header emr-skel-header"
+                  aria-hidden="true"
+                >
+                  <div className="emr-skel-header-label emr-skel-w60" />
+                </div>
+              )}
               <div className="emr-docnav-skel" aria-hidden="true">
                 <div className="emr-skel-line emr-skel-w80" />
                 <div className="emr-skel-line emr-skel-w60" />
@@ -92,13 +99,28 @@ export function ReaderLoadingShell({
         <div className="emr-rail">
           <div className="emr-rail-scroll">
             <aside className="emr-rail-col emr-skeleton" aria-hidden="true">
+              <RailHeaderSkeleton />
               <div className="emr-rail-skel-card" />
               <div className="emr-rail-skel-card" />
             </aside>
           </div>
         </div>
       </div>
-      <div className="emr-loading-statusbar" aria-hidden="true" />
+      <div className="emr-loading-statusbar">
+        <ReaderActivityIndicator
+          activity={{ id: "boot", label: ariaLabel, priority: 100 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RailHeaderSkeleton(): ReactElement {
+  return (
+    <div className="emr-rail-header emr-skel-header">
+      <div className="emr-rail-toolbar">
+        <div className="emr-skel-header-label emr-skel-w50" />
+      </div>
     </div>
   );
 }

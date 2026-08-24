@@ -476,12 +476,12 @@
     },
     {
       "name": "iteration-history-showcase",
-      "description": "One active pull request whose Markdown document is revised through seven successive source-branch pushes. Exercises the status-bar iteration picker, Latest labeling, and real source-to-source diffs for arbitrary ranges within one PR.",
+      "description": "One active pull request whose Markdown document is revised through ten native iterations, including an anchored, orphaned, then reanchored comment. Exercises the status-bar iteration picker, Latest labeling, and real source-to-source diffs for arbitrary ranges within one PR.",
       "pullRequests": [
         {
           "title": "Develop the document review workflow",
           "branch": "feature/iterate-review-workflow",
-          "description": "A deliberately long-running review. Seven successive pushes evolve the same Markdown file from initial goals through launch approval so native ADO PR iterations and arbitrary iteration ranges can be tested.",
+          "description": "A deliberately long-running review. Ten iterations evolve the same Markdown file from initial goals through launch approval and an anchor lifecycle so native ADO iteration ranges and reanchoring can be tested.",
           "overlay": "01-review-goals",
           "iterations": [
             {
@@ -507,10 +507,41 @@
             {
               "title": "Finalize the review workflow launch",
               "overlay": "07-finalize-launch"
+            },
+            {
+              "title": "Establish the anchor lifecycle baseline",
+              "overlay": "08-anchor-baseline"
+            },
+            {
+              "title": "Remove the anchored scope sentence",
+              "overlay": "09-anchor-removed"
+            },
+            {
+              "title": "Restore the anchored scope sentence",
+              "overlay": "10-anchor-restored"
             }
           ],
           "complete": false,
           "threads": [
+            {
+              "filePath": "/docs/review-workflow.md",
+              "status": "active",
+              "rightStartLine": 61,
+              "rightEndLine": 61,
+              "properties": {
+                "emrSchema": {
+                  "$type": "System.String",
+                  "$value": "1"
+                },
+                "emrAnchor": {
+                  "$type": "System.String",
+                  "$value": "{\"exact\":\"The first release covers engineering design notes and operational runbooks.\",\"prefix\":\"## Scope\\n\\n\",\"suffix\":\"\"}"
+                }
+              },
+              "comments": [
+                "[EMR iteration anchor lifecycle] This comment is anchored in update 8, loses its text anchor in update 9, and reanchors in update 10."
+              ]
+            },
             {
               "filePath": "/docs/review-workflow.md",
               "status": "active",

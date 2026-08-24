@@ -118,6 +118,82 @@ export const Default: Story = {
   },
 };
 
+/** Implicit file anchors report layout positions without decorating prose. */
+export const ImplicitAnchors: Story = {
+  args: {
+    threads: [
+      {
+        id: "t-implicit",
+        filePath: "/doc.md",
+        status: "active",
+        anchor: {
+          exact: "",
+          prefix: "",
+          suffix: "",
+          line: 1,
+          endLine: 1,
+          column: 1,
+          endColumn: 1,
+          implicit: true,
+        },
+        comments: [],
+      },
+    ],
+    activeThreadId: null,
+    draftAnchor: {
+      exact: "",
+      prefix: "",
+      suffix: "",
+      line: 1,
+      endLine: 1,
+      column: 1,
+      endColumn: 1,
+      implicit: true,
+    },
+    diff: [],
+  },
+  play: async ({ args, canvasElement }) => {
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelectorAll(".emr-implicit-anchor").length,
+      ).toBe(2),
+    );
+    await expect(canvasElement.querySelector(".emr-highlight")).toBeNull();
+    await expect(args.onAnchorsResolved).toHaveBeenCalled();
+  },
+};
+
+/** Empty rendered content still gives an implicit comment a top-of-file marker. */
+export const ImplicitAnchorEmptyDocument: Story = {
+  args: {
+    pristineHtml: "",
+    threads: [
+      {
+        id: "t-implicit-empty",
+        filePath: "/empty.md",
+        status: "active",
+        anchor: {
+          exact: "",
+          prefix: "",
+          suffix: "",
+          line: 1,
+          implicit: true,
+        },
+        comments: [],
+      },
+    ],
+    activeThreadId: null,
+    draftAnchor: null,
+    diff: [],
+  },
+  play: async ({ args, canvasElement }) => {
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-implicit-anchor")).toBeTruthy(),
+    );
+    await expect(args.onAnchorsResolved).toHaveBeenCalled();
+  },
+};
+
 /** Repository-relative images hydrate from the host; external images pass through. */
 export const RepositoryImage: Story = {
   args: {

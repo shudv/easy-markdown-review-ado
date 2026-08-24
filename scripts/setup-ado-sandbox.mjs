@@ -730,7 +730,27 @@ function expandAttachmentUrls(content, attachmentUrls) {
   });
 }
 
-/** Seed comment threads on a PR, idempotently (skips if non-system threads exist). */
+function propertyValue(properties, key) {
+  const property = properties?.[key];
+  return property && typeof property === "object" && "$value" in property
+    ? property.$value
+    : property;
+}
+
+function assertDeclaredProperties(existingThread, declaredProperties) {
+  for (const [key, expected] of Object.entries(declaredProperties ?? {})) {
+    if (
+      propertyValue(existingThread.properties, key) !==
+      propertyValue({ [key]: expected }, key)
+    ) {
+      throw new Error(
+        `PR thread ${existingThread.id} has incompatible ${key} metadata`,
+      );
+    }
+  }
+}
+
+/** Seed comment threads on a PR, idempotently by root-comment content. */
 async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
   if (!threads || threads.length === 0) return 0;
   const { body } = await ado(
@@ -744,21 +764,52 @@ async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
       !t.isDeleted &&
       (t.comments ?? []).some((c) => c.commentType !== "system"),
   );
-  if (existing.length > 0) {
-    log.ok(`PR #${prId} already has ${existing.length} thread(s)`);
-    return existing.length;
-  }
+  const existingByRootBody = new Map(
+    existing
+      .map((thread) => [thread.comments?.[0]?.content, thread])
+      .filter(([content]) => !!content),
+  );
   let created = 0;
+  let repliesCreated = 0;
   for (const t of threads) {
+    const rootContent = expandAttachmentUrls(t.comments[0], attachmentUrls);
+    const existingThread = existingByRootBody.get(rootContent);
+    if (existingThread) {
+      assertDeclaredProperties(existingThread, t.properties);
+      const existingBodies = new Set(
+        existingThread.comments.map((comment) => comment.content),
+      );
+      const rootId = existingThread.comments[0]?.id ?? 1;
+      for (let i = 1; i < t.comments.length; i++) {
+        const content = expandAttachmentUrls(t.comments[i], attachmentUrls);
+        if (existingBodies.has(content)) continue;
+        await ado(
+          "POST",
+          `${ORG_URL}/${encodeURIComponent(
+            PROJECT_NAME,
+          )}/_apis/git/repositories/${repoId}/pullrequests/${prId}/threads/${existingThread.id}/comments?api-version=7.1`,
+          {
+            body: {
+              parentCommentId: rootId,
+              content,
+              commentType: "text",
+            },
+          },
+        );
+        repliesCreated++;
+      }
+      continue;
+    }
     const threadBody = {
       comments: [
         {
           parentCommentId: 0,
-          content: expandAttachmentUrls(t.comments[0], attachmentUrls),
+          content: rootContent,
           commentType: "text",
         },
       ],
       status: THREAD_STATUS.has(t.status) ? t.status : "active",
+      ...(t.properties ? { properties: t.properties } : {}),
     };
     if (t.filePath) {
       threadBody.threadContext = {
@@ -794,10 +845,17 @@ async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
         },
       );
     }
+    existingByRootBody.set(rootContent, thread);
     created++;
   }
-  log.ok(`Seeded ${created} thread(s) on PR #${prId}`);
-  return created;
+  if (created > 0) log.ok(`Seeded ${created} thread(s) on PR #${prId}`);
+  if (repliesCreated > 0)
+    log.ok(
+      `Seeded ${repliesCreated} missing repl${repliesCreated === 1 ? "y" : "ies"} on PR #${prId}`,
+    );
+  if (created === 0 && repliesCreated === 0)
+    log.ok(`PR #${prId} already has all declared thread fixtures`);
+  return existing.length + created;
 }
 
 /** Wait for ADO to compute a mergeable state, then complete (merge) the PR. */

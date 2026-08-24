@@ -1,4 +1,5 @@
 import type { DocumentImageResolver } from "../markdown/documentImages";
+import type { ReaderActivity } from "./components/readerActivity";
 // PrShell — shared shell for both the real ADO PR tab and the standalone
 // dev preview. Owns the selected file, view mode, thread store, active
 // thread, and draft anchor. All data arrives via props so callers can swap
@@ -44,7 +45,8 @@ import { CommentRail } from "./components/CommentRail";
 import { buildRailModel } from "./components/CommentRail.helpers";
 import {
   countCommentFilters,
-  threadMatchesFilter,
+  threadMatchesQuery,
+  threadVisibleForCommentView,
   type CommentFilterCounts,
   type CommentFilterMode,
 } from "./components/commentFilter";
@@ -91,6 +93,7 @@ import {
   isCommentUiClickTarget,
   countWords,
   wordCountDelta,
+  buildReaderActivities,
   bindRepositoryImageResolver,
   type DocPrRef,
   type HistoryStop,
@@ -99,6 +102,7 @@ import {
 import { useDraftPersistence } from "./useDraftPersistence";
 import {
   NEW_DRAFT_THREAD_ID,
+  addCommentDraftTarget,
   draftSnippet,
   type DraftScope,
   type DraftTarget,
@@ -124,7 +128,7 @@ interface PrShellProps {
   /** Message shown in the read-only banner. */
   readOnlyMessage?: string;
   /** PR these comments route through; renders a pill at the top of the comment column. */
-  routedPr?: RoutedPrInfo;
+  routedPr?: RoutedPrInfo | null;
   /**
    * Per-document routed-PR resolver (Documents hub per-document routing). When
    * provided, the rail PR pill reflects the *selected file's* routing PR
@@ -132,7 +136,7 @@ interface PrShellProps {
    * the most recent completed PR that changed it. Returns undefined until the
    * routing PR resolves, so the pill simply stays hidden until then.
    */
-  routedPrForPath?: (path: string) => RoutedPrInfo | undefined;
+  routedPrForPath?: (path: string) => RoutedPrInfo | null | undefined;
   /** Folder paths known to exist but not yet enumerated; forwarded to DocNav. */
   unloadedFolders?: ReadonlyArray<string>;
   /** Lazy folder expansion; undefined when every file is already loaded. */
@@ -247,6 +251,8 @@ interface PrShellProps {
    * persistence (standalone/preview embeds).
    */
   draftScope?: DraftScope;
+  /** Enables Documents Hub routing behavior and layout-specific chrome. */
+  documentsMode?: boolean;
 }
 
 /** Compact summary of the PR a Documents-hub document routes its comments to. */
@@ -365,10 +371,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // Effective routed-PR pill. Per-document mode resolves it from the selected
   // file (its own routing PR); otherwise the single `routedPr` prop is used.
   const routedPrForPath = props.routedPrForPath;
-  const effectiveRoutedPr = React.useMemo<RoutedPrInfo | undefined>(
+  const routedPrResolution = React.useMemo<RoutedPrInfo | null | undefined>(
     () => (routedPrForPath ? routedPrForPath(selectedPath) : routedPr),
     [routedPrForPath, selectedPath, routedPr],
   );
+  const effectiveRoutedPr = routedPrResolution ?? undefined;
 
   // Keep the identity resolver pointed at the current effective CommentApi.
   /* v8 ignore start -- else-arm hit only when the effective CommentApi lacks resolveIdentities */
@@ -448,6 +455,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // document below its floor and tip the reader into the too-narrow state — and
   // the too-narrow observer (below) watches it.
   const bodyFrameRef = React.useRef<HTMLDivElement | null>(null);
+  const commentsAvailableRef = React.useRef(true);
   // Nav + comment resize: dragging a rail's inner-border handle sets THAT rail's
   // width live (continuous, clamped). The handle captures the pointer on press,
   // so every move — and the resize cursor — stays bound to it as the pointer
@@ -496,9 +504,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         return;
       }
       setReaderPrefs((p) => {
-        const commentPx = Math.round(
-          (NAV_BASE_WIDTH * p.commentWidthPct) / 100,
-        );
+        const commentPx = commentsAvailableRef.current
+          ? Math.round((NAV_BASE_WIDTH * p.commentWidthPct) / 100)
+          : 0;
         const cap = maxRailWidthPct(frameWidth, commentPx);
         return {
           ...p,
@@ -641,37 +649,6 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // show a calm notice instead of crushing the prose. Single-file panels keep
   // their legacy shrink-and-scroll behaviour, so they never trip this.
   const [tooNarrow, setTooNarrow] = React.useState(false);
-  React.useLayoutEffect(() => {
-    // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
-    // never disable the reader.
-    if (props.hideDocNav) {
-      setTooNarrow(false);
-      return;
-    }
-    const frame = bodyFrameRef.current;
-    /* v8 ignore next -- the ref is always attached by the time a layout effect runs */
-    if (!frame) return;
-    // Always budget for the comment rail even when it's hidden: adding a
-    // comment auto-reveals it (see `revealComments`), so the layout must always
-    // have room for it — otherwise revealing it could overflow. Both rails scale
-    // with their own width preference, so budget both scaled widths.
-    const need = readerMinWidth(
-      readerPrefs.showNav,
-      true,
-      readerPrefs.navWidthPct,
-      readerPrefs.commentWidthPct,
-    );
-    const measure = (): void => setTooNarrow(frame.clientWidth < need);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(frame);
-    return () => observer.disconnect();
-  }, [
-    props.hideDocNav,
-    readerPrefs.showNav,
-    readerPrefs.navWidthPct,
-    readerPrefs.commentWidthPct,
-  ]);
   const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
     null,
   );
@@ -751,7 +728,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       const isSame =
         current !== null &&
         current.path === target.path &&
-        current.threadId === target.threadId;
+        current.threadId === target.threadId &&
+        (target.threadId !== NEW_DRAFT_THREAD_ID ||
+          JSON.stringify(current.anchor) === JSON.stringify(target.anchor));
       if (current === null || isSame || draft.getSnapshot().trim() === "") {
         if (!isSame) draft.clear();
         setActiveDraft(target);
@@ -1135,6 +1114,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [renderVersion, setRenderVersion] = React.useState(0);
+  const [navigationActivities, setNavigationActivities] = React.useState<
+    readonly ReaderActivity[]
+  >([]);
 
   // Comment rail search query (filters comments by body / author).
   const [commentQuery, setCommentQuery] = React.useState("");
@@ -1264,10 +1246,19 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const visibleForArticle = React.useMemo(() => {
     const out: CommentThread[] = [];
     for (const t of currentThreadsRaw) {
-      if (threadMatchesFilter(t, commentFilter, currentUser.id)) out.push(t);
+      if (
+        threadVisibleForCommentView(
+          t,
+          commentQuery,
+          commentFilter,
+          currentUser.id,
+        )
+      ) {
+        out.push(t);
+      }
     }
     return out;
-  }, [currentThreadsRaw, commentFilter, currentUser.id]);
+  }, [currentThreadsRaw, commentQuery, commentFilter, currentUser.id]);
 
   const threadCountsByPath: Record<string, number> = React.useMemo(() => {
     const out: Record<string, number> = {};
@@ -1581,6 +1572,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     },
     [requestDraft],
   );
+
+  const onAddImplicitComment = React.useCallback(() => {
+    requestDraft(
+      addCommentDraftTarget(activeDraftRef.current, selectedPathRef.current),
+    );
+  }, [requestDraft]);
 
   // A thread's "reply" trigger requests its reply composer, subject to the same
   // guard (an active draft elsewhere prompts the discard dialog first).
@@ -1917,23 +1914,47 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   );
   const hiddenSet = React.useMemo(() => {
     const s = new Set<string>();
-    // A thread is hidden when it does NOT match the active filter. The same
-    // rule applies across the anchored (current-file), General/Overview, and
-    // orphaned-file trays so every surface obeys one filter.
+    // Search spans all statuses; otherwise the selected filter applies. The
+    // same rule covers current-file, General, and orphaned-file sections.
     for (const t of currentThreadsRaw) {
-      if (!threadMatchesFilter(t, commentFilter, currentUser.id)) s.add(t.id);
+      if (
+        !threadVisibleForCommentView(
+          t,
+          commentQuery,
+          commentFilter,
+          currentUser.id,
+        )
+      )
+        s.add(t.id);
     }
     for (const t of generalThreads) {
-      if (!threadMatchesFilter(t, commentFilter, currentUser.id)) s.add(t.id);
+      if (
+        !threadVisibleForCommentView(
+          t,
+          commentQuery,
+          commentFilter,
+          currentUser.id,
+        )
+      )
+        s.add(t.id);
     }
     for (const t of orphanedFileThreads) {
-      if (!threadMatchesFilter(t, commentFilter, currentUser.id)) s.add(t.id);
+      if (
+        !threadVisibleForCommentView(
+          t,
+          commentQuery,
+          commentFilter,
+          currentUser.id,
+        )
+      )
+        s.add(t.id);
     }
     return s;
   }, [
     currentThreadsRaw,
     generalThreads,
     orphanedFileThreads,
+    commentQuery,
     commentFilter,
     currentUser.id,
   ]);
@@ -1971,6 +1992,23 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     ((usingHistoricalContent && historicalHtml === undefined) ||
       (baselineContentKey != null &&
         historicalSourceByKey[baselineContentKey] === undefined));
+  const readerActivities = React.useMemo(
+    () =>
+      buildReaderActivities({
+        navigationActivities,
+        commentSyncing: threadSync.isRefreshing,
+        fileRefreshing: fileRefreshInFlight,
+        historicalLoading,
+        documentLoading: loading,
+      }),
+    [
+      navigationActivities,
+      threadSync.isRefreshing,
+      fileRefreshInFlight,
+      historicalLoading,
+      loading,
+    ],
+  );
   const activePristineHtml = usingHistoricalContent
     ? (historicalHtml ?? "")
     : pristineHtml;
@@ -2035,15 +2073,6 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     return wordCountDelta(activeSource ?? "", activeDiff!);
   }, [showDiff, activeDiff, activeSource]);
   const viewingDeletedFile = currentFileChangeType === "deleted";
-  const activeReadOnly =
-    effectiveReadOnly || viewingHistorical || viewingDeletedFile;
-  const activeReadOnlyMessage = viewingHistorical
-    ? nativeIterationMode
-      ? "Comments are read-only while viewing a previous update."
-      : `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
-    : viewingDeletedFile
-      ? "This document was deleted in this pull request. Its previous version is read-only."
-      : effectiveReadOnlyMessage;
   const activeRoutedPr: RoutedPrInfo | undefined =
     viewingHistorical && !nativeIterationMode
       ? {
@@ -2055,6 +2084,55 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           url: activeStop.url,
         }
       : effectiveRoutedPr;
+  const commentsAvailable =
+    !props.documentsMode ||
+    routedPrResolution === undefined ||
+    activeRoutedPr?.status === "completed";
+  commentsAvailableRef.current = commentsAvailable;
+  const activeReadOnly =
+    effectiveReadOnly ||
+    viewingHistorical ||
+    viewingDeletedFile ||
+    !commentsAvailable;
+  const activeReadOnlyMessage = viewingHistorical
+    ? nativeIterationMode
+      ? "Comments are read-only while viewing a previous update."
+      : `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
+    : viewingDeletedFile
+      ? "This document was deleted in this pull request. Its previous version is read-only."
+      : !commentsAvailable
+        ? "Comments are unavailable until this document is part of a completed pull request."
+        : effectiveReadOnlyMessage;
+  React.useLayoutEffect(() => {
+    // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
+    // never disable the reader.
+    if (props.hideDocNav) {
+      setTooNarrow(false);
+      return;
+    }
+    const frame = bodyFrameRef.current;
+    /* v8 ignore next -- the ref is always attached by the time a layout effect runs */
+    if (!frame) return;
+    // Budget for the comment rail when it can be revealed. A document that has
+    // explicitly resolved without a housing PR has no comments UI to reserve.
+    const need = readerMinWidth(
+      readerPrefs.showNav,
+      commentsAvailable,
+      readerPrefs.navWidthPct,
+      readerPrefs.commentWidthPct,
+    );
+    const measure = (): void => setTooNarrow(frame.clientWidth < need);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [
+    props.hideDocNav,
+    commentsAvailable,
+    readerPrefs.showNav,
+    readerPrefs.navWidthPct,
+    readerPrefs.commentWidthPct,
+  ]);
   const historyNav =
     completedPrHistoryEnabled && historyStops.length > 1
       ? {
@@ -2108,21 +2186,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   );
 
   // ---- Comment search ----
-  // A thread matches when any comment body or author displayName contains the
-  // query (case-insensitive). Filtering applies only to the rail; article
-  // anchors are left untouched.
-  const normalizedQuery = commentQuery.trim().toLowerCase();
+  // Search spans every rail section and status. Article highlights use the
+  // same matching rule, so the prose and rail always show the same result set.
   const matchesQuery = React.useCallback(
-    (t: CommentThread): boolean => {
-      if (!normalizedQuery) return true;
-      for (const c of t.comments) {
-        if (c.bodyMarkdown.toLowerCase().includes(normalizedQuery)) return true;
-        if (c.author.displayName.toLowerCase().includes(normalizedQuery))
-          return true;
-      }
-      return false;
-    },
-    [normalizedQuery],
+    (t: CommentThread): boolean => threadMatchesQuery(t, commentQuery),
+    [commentQuery],
   );
   const filteredCurrentThreads = React.useMemo(
     () => currentThreadsRaw.filter(matchesQuery),
@@ -2257,7 +2325,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // the article through CSS custom properties set on the app root.
   const navToggleable = !props.hideDocNav;
   const navHidden = props.hideDocNav || !readerPrefs.showNav;
-  const commentsHidden = !readerPrefs.showComments;
+  const commentsHidden = !commentsAvailable || !readerPrefs.showComments;
   const readerFont = resolveReaderFont(readerPrefs.fontId);
   const readerSpacing = readerSpacingValues(readerPrefs);
   const readerStyle = {
@@ -2282,7 +2350,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         <div
           className={`emr-app${navHidden ? " is-nav-hidden" : ""}${
             commentsHidden ? " is-comments-hidden" : ""
-          }${tooNarrow ? " is-too-narrow" : ""}`}
+          }${props.documentsMode ? " is-documents-mode" : ""}${
+            tooNarrow ? " is-too-narrow" : ""
+          }`}
           style={readerStyle}
         >
           {persistError ? (
@@ -2343,6 +2413,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   // baseline — every file is just "present"), so it suppresses
                   // them.
                   showChangeIndicators={props.draftScope !== "hub"}
+                  onActivitiesChange={setNavigationActivities}
                 />
                 {/* Resize affordance on the rail's right border: drag to set
                     the nav width, double-click to reset. Mouse enhancement
@@ -2487,6 +2558,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     filterCounts={filterCounts}
                     filterMode={commentFilter}
                     onFilterModeChange={handleFilterModeChange}
+                    onAddComment={onAddImplicitComment}
                     onlyThisFile={onlyThisFile}
                     onOnlyThisFileChange={handleOnlyThisFileChange}
                     readOnly={activeReadOnly}
@@ -2496,7 +2568,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     }
                     routedPr={activeRoutedPr}
                     hidePrPill={
-                      hidePrPill || (nativeIterationMode && viewingHistorical)
+                      hidePrPill ||
+                      props.documentsMode ||
+                      (nativeIterationMode && viewingHistorical)
                     }
                     historyNav={historyNav}
                   />
@@ -2506,7 +2580,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   double-click resets. Mouse-only enhancement (aria-hidden),
                   mirroring the nav handle — full reader only (single-file panels
                   keep a fixed rail). */}
-              {navToggleable ? (
+              {navToggleable && commentsAvailable ? (
                 <div
                   className="emr-rail-resize"
                   title="Drag to resize comments (double-click to reset)"
@@ -2534,7 +2608,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                 onPointerCancel={onNavReopenEnd}
               />
             ) : null}
-            {navToggleable && commentsHidden ? (
+            {navToggleable && commentsAvailable && commentsHidden ? (
               <div
                 className="emr-rail-reopen"
                 title="Drag to reopen comments"
@@ -2580,6 +2654,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           <ReaderStatusBar
             wordCount={docWordCount}
             wordDelta={docWordDelta}
+            resolvedPullRequest={
+              props.documentsMode && activeRoutedPr?.status === "completed"
+                ? activeRoutedPr
+                : undefined
+            }
             fontId={readerPrefs.fontId}
             sizePct={readerPrefs.sizePct}
             spacingPct={readerPrefs.lineSpacingPct}
@@ -2590,6 +2669,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             onToggleNav={toggleReaderNav}
             navToggleable={navToggleable}
             showComments={readerPrefs.showComments}
+            commentsAvailable={commentsAvailable}
             onToggleComments={toggleReaderComments}
             commentThreadIds={commentCycleThreadIds}
             activeCommentThreadId={activeThreadId}
@@ -2611,6 +2691,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             onRefresh={canRefreshComments ? handleRefresh : undefined}
             refreshing={threadSync.isRefreshing || fileRefreshInFlight}
             refreshLabel={refreshLabel}
+            activities={readerActivities}
           />
         </div>
       </CommentApiProvider>
@@ -2624,12 +2705,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
 // decorative and disabled under `prefers-reduced-motion` (see styles.scss).
 function ArticleSkeleton(): React.ReactElement {
   return (
-    <div
-      className="emr-article-wrap emr-skeleton"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading document…"
-    >
+    <div className="emr-article-wrap emr-skeleton" aria-hidden="true">
       <div className="emr-skel-line emr-skel-title" />
       <div className="emr-skel-line emr-skel-w90" />
       <div className="emr-skel-line emr-skel-w75" />
@@ -2646,12 +2722,12 @@ function ArticleSkeleton(): React.ReactElement {
 // width (no reflow of the article) while threads for the new file resolve.
 function RailSkeleton(): React.ReactElement {
   return (
-    <aside
-      className="emr-rail-col emr-skeleton"
-      aria-label="Loading comments…"
-      role="status"
-      aria-busy="true"
-    >
+    <aside className="emr-rail-col emr-skeleton" aria-hidden="true">
+      <div className="emr-rail-header emr-skel-header" aria-hidden="true">
+        <div className="emr-rail-toolbar">
+          <div className="emr-skel-header-label emr-skel-w50" />
+        </div>
+      </div>
       <div className="emr-rail-skel-card" />
       <div className="emr-rail-skel-card" />
     </aside>

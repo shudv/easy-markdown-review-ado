@@ -75,6 +75,11 @@ const SHOTS: Shot[] = [
     settledSelector: ".markdown-body .emr-highlight",
   },
   {
+    title: "Visual/DocumentsHub",
+    name: "No Completed Pull Request",
+    settledSelector: ".markdown-body, .emr-app.is-comments-hidden",
+  },
+  {
     // Diff-highlighting layer in isolation (light + dark): add wash, inline
     // word-diff, deleted-marker.
     title: "Visual/ArticleDiff",
@@ -343,6 +348,14 @@ const SHOTS: Shot[] = [
     title: "Visual/PrTab",
     name: "Collapsed",
     settledSelector: ".emr-statusbar",
+    clip: ".emr-statusbar",
+  },
+  {
+    // Multi-comment stepping — catches alignment and count regressions around
+    // the Comments toggle without paying the tolerance cost of a full reader.
+    title: "Components/ReaderStatusBar",
+    name: "Comment Stepping",
+    settledSelector: ".emr-statusbar-comment-stepper",
     clip: ".emr-statusbar",
   },
   {

@@ -134,6 +134,34 @@ export const HidePrPill: Story = {
   },
 };
 
+/** Documents hides the duplicate PR label but keeps comment-history controls. */
+export const HiddenPrWithHistory: Story = {
+  args: {
+    hidePrPill: true,
+    historyNav: {
+      canNewer: true,
+      canOlder: true,
+      newerLabel: "View newer comments",
+      olderLabel: "View older comments",
+      onNewer: fn(),
+      onOlder: fn(),
+    },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByText(/PR #42/)).toBeNull();
+    await expect(canvas.getByLabelText("Comment history")).toBeTruthy();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Older version" }),
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Newer version" }),
+    );
+    await expect(args.historyNav?.onOlder).toHaveBeenCalledOnce();
+    await expect(args.historyNav?.onNewer).toHaveBeenCalledOnce();
+  },
+};
+
 /** No routed PR and no comments hides the PR badge and the filter menu. */
 export const Minimal: Story = {
   args: {

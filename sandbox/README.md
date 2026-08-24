@@ -92,7 +92,7 @@ creates the native comment thread.
 | `doc-links-showcase`           | Relative links plus repo SVG images in hub and active PR views        |
 | `ai-skills`                    | Skills + guidelines they automate; 1 **active** two-file rich PR      |
 | `table-diff-showcase`          | Active one-file PR covering granular and structural table diffs       |
-| `iteration-history-showcase`   | One active PR with 7 source pushes / native PR iterations             |
+| `iteration-history-showcase`   | Active PR with 10 iterations and an anchor/orphan/reanchor lifecycle  |
 | `production-markdown-showcase` | Active dialect/deletion PR with native PNG, GIF, and file attachments |
 | `markdown-review-sandbox-v2`   | Files but **no PRs** — the "commenting disabled" empty state          |
 

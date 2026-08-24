@@ -57,6 +57,11 @@ export interface TextQuoteAnchor {
    * when omitted.
    */
   endColumn?: number;
+  /**
+   * File-scoped comment created without a text selection. It persists at the
+   * first source position for ADO compatibility, but renders no text highlight.
+   */
+  implicit?: true;
 }
 
 export interface CommentAuthor {

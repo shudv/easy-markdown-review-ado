@@ -132,13 +132,13 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       threads
         .map(
           (t) =>
-            `${t.id}|${t.status}|${t.anchor.exact}|${t.anchor.prefix}|${t.anchor.suffix}`,
+            `${t.id}|${t.status}|${t.anchor.exact}|${t.anchor.prefix}|${t.anchor.suffix}|${t.anchor.line ?? ""}|${t.anchor.implicit === true}`,
         )
         .join("\n"),
     [threads],
   );
   const draftKey = draftAnchor
-    ? `${draftAnchor.exact}|${draftAnchor.prefix}|${draftAnchor.suffix}`
+    ? `${draftAnchor.exact}|${draftAnchor.prefix}|${draftAnchor.suffix}|${draftAnchor.line ?? ""}|${draftAnchor.implicit === true}`
     : "";
 
   // Signature so the layout effect re-runs when the diff ranges (or the
@@ -194,6 +194,20 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       classes: string,
     ): boolean => {
       const range = resolveAnchor(article, anchor);
+      if (anchor.implicit) {
+        const marker = document.createElement("span");
+        marker.className = "emr-implicit-anchor";
+        marker.dataset.threadId = threadId;
+        marker.setAttribute("aria-hidden", "true");
+        if (range) {
+          const insertion = range.cloneRange();
+          insertion.collapse(true);
+          insertion.insertNode(marker);
+        } else {
+          article.prepend(marker);
+        }
+        return true;
+      }
       if (!range) return false;
       const spans = wrapRangeWithHighlight(range, {
         className: `emr-highlight ${classes}`.trim(),
@@ -238,8 +252,9 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       let draftY: number | null = null;
 
       const seen = new Set<string>();
-      const highlights =
-        article!.querySelectorAll<HTMLElement>(".emr-highlight");
+      const highlights = article!.querySelectorAll<HTMLElement>(
+        ".emr-highlight, .emr-implicit-anchor",
+      );
       highlights.forEach((el) => {
         const tid = el.dataset.threadId;
         if (!tid || seen.has(tid)) return;

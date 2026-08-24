@@ -12,6 +12,48 @@ import {
 } from "./helpers";
 
 test.describe("PR iteration picker (real ADO host)", () => {
+  test("re-resolves a text anchor when stepping across revisions", async ({
+    page,
+  }) => {
+    const prId = await discoverPullRequestId(
+      page,
+      E2E.iterationRepo,
+      E2E.iterationPrTitle,
+      "active",
+    );
+    await gotoPrTab(page, E2E.iterationRepo, prId);
+
+    const frame = prTabFrame(page);
+    await waitForFrameRoot(frame);
+    const trigger = frame.locator(".emr-statusbar-iteration-trigger");
+    const anchor = frame.locator(
+      '.emr-highlight[data-thread-id]:has-text("The first release covers engineering design notes and operational runbooks.")',
+    );
+    const orphanedComment = frame.locator(".emr-balloon.is-orphaned", {
+      hasText: "EMR iteration anchor lifecycle",
+    });
+
+    await expect(trigger).toHaveText(/All updates/, { timeout: 45_000 });
+    await expect(anchor).toBeVisible({ timeout: 45_000 });
+    await expect(orphanedComment).toHaveCount(0);
+
+    await trigger.click();
+    const list = frame.getByRole("listbox", { name: "Review iterations" });
+    await list.getByRole("option", { name: /^9 / }).click();
+    await expect(trigger).toHaveText(/Update 8 → 9/);
+    await expect(anchor).toHaveCount(0);
+    await expect(orphanedComment).toBeVisible();
+    await expect(
+      frame.getByText("Comments with no anchor", { exact: true }),
+    ).toBeVisible();
+
+    await list.getByRole("option", { name: /^8 / }).click();
+    await expect(trigger).toHaveText(/Update 7 → 8/);
+    await expect(orphanedComment).toHaveCount(0);
+    await frame.getByRole("button", { name: "Changes" }).click();
+    await expect(anchor).toBeVisible();
+  });
+
   test("keeps All updates exclusive and compares numbered updates", async ({
     page,
   }) => {
@@ -51,11 +93,11 @@ test.describe("PR iteration picker (real ADO host)", () => {
 
     await expect(previous).toHaveAttribute(
       "aria-label",
-      /Previous comparison: Update 6 → 7/,
+      /Previous comparison: Update 9 → 10/,
     );
     await expect(next).toBeDisabled();
     await previous.click();
-    await expect(trigger).toHaveText(/Update 6 → 7/);
+    await expect(trigger).toHaveText(/Update 9 → 10/);
     await expect(next).toHaveAttribute(
       "aria-label",
       /Next comparison: All updates/,
@@ -67,14 +109,14 @@ test.describe("PR iteration picker (real ADO host)", () => {
     await trigger.click();
     const list = frame.getByRole("listbox", { name: "Review iterations" });
     await expect(list).toBeVisible();
-    await expect(list.getByRole("option")).toHaveCount(8);
+    await expect(list.getByRole("option")).toHaveCount(11);
     await expect(list.getByRole("option").first()).toHaveAccessibleName(/^1 /);
     await expect(list.getByRole("option").last()).toHaveAccessibleName(
       "All updates",
     );
     await expect(
       list.getByRole("option", {
-        name: /^7 Finalize the review workflow launch/,
+        name: /^10 Restore the anchored scope sentence/,
       }),
     ).toBeVisible();
     await expect(list.getByRole("option", { selected: true })).toHaveCount(1);

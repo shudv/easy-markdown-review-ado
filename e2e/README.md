@@ -104,7 +104,7 @@ specific identity. Set these in `.env`:
 | `AZDO_E2E_PR_TAB_ID`              | `markdown-review-pr-tab`                           | PR-tab contribution id                                   |
 | `AZDO_E2E_PR_REPO`                | `api-reference`                                    | Repo whose PR the PR-tab spec drives                     |
 | `AZDO_E2E_PR_TITLE`               | `Document PR thread endpoints`                     | Title of the PR the spec discovers                       |
-| `AZDO_E2E_ITERATION_REPO`         | `iteration-history-showcase`                       | Repo with one PR carrying 7 native iterations            |
+| `AZDO_E2E_ITERATION_REPO`         | `iteration-history-showcase`                       | Repo with 10 iterations and anchor lifecycle coverage    |
 | `AZDO_E2E_ITERATION_PR_TITLE`     | `Develop the document review workflow`             | Active PR used by the iteration picker spec              |
 | `AZDO_E2E_COMMENT_MEDIA_REPO`     | `production-markdown-showcase`                     | Repo carrying native media attachments                   |
 | `AZDO_E2E_COMMENT_MEDIA_PR_TITLE` | `Exercise production Markdown syntax...`           | Active PR used by the native media spec                  |

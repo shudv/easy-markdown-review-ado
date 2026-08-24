@@ -794,6 +794,21 @@ button {
   background: var(--emr-rail-bg);
 }
 
+// ---------------------------------------------------------------------------
+// Documents Hub-specific shell overrides
+// ---------------------------------------------------------------------------
+// The PR tab inherits side breathing room from its host chrome. Documents Hub
+// owns the viewport, so preserve a card gutter on each edge exposed by a
+// collapsed pane. The two rules compose when both panes are hidden and leave
+// the normal three-column layout untouched.
+.emr-app.is-documents-mode.is-nav-hidden .emr-body {
+  margin-left: var(--emr-card-gap);
+}
+
+.emr-app.is-documents-mode.is-comments-hidden .emr-body {
+  margin-right: var(--emr-card-gap);
+}
+
 // Graceful degradation: when the frame is narrower than the visible columns
 // need (a very narrow window, or zoomed in), the reader disables cleanly. The
 // PrShell ResizeObserver toggles `.is-too-narrow`, which hides every reader
@@ -1259,7 +1274,8 @@ button {
 // right. Quiet neutral chrome; accent only on an active toggle or on hover.
 .emr-statusbar {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   height: 32px;
   padding: 0 10px 0 16px;
@@ -1268,6 +1284,17 @@ button {
   font-size: 15px;
   color: var(--emr-muted);
   white-space: nowrap;
+}
+.emr-statusbar-left {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  justify-self: start;
+}
+.emr-statusbar-center {
+  min-width: 0;
+  max-width: min(36vw, 420px);
+  justify-self: center;
 }
 .emr-app.is-too-narrow .emr-statusbar {
   display: none;
@@ -1301,6 +1328,26 @@ button {
 .emr-statusbar-delta-rem {
   color: var(--emr-diff-deleted);
   font-weight: 600;
+}
+.emr-statusbar-resolved-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline-end: 6px;
+  color: var(--emr-muted);
+  text-decoration: none;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: currentColor;
+  }
+
+  &:is(a):hover,
+  &:is(a):focus-visible {
+    color: var(--emr-fg);
+    text-decoration: underline;
+  }
 }
 .emr-statusbar-iteration {
   position: relative;
@@ -1510,9 +1557,6 @@ button {
   font-size: 12px;
   white-space: nowrap;
 }
-.emr-statusbar-spacer {
-  flex: 1 1 auto;
-}
 .emr-statusbar-context-controls {
   display: inline-flex;
   align-items: center;
@@ -1523,6 +1567,36 @@ button {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
+  min-width: 0;
+  justify-self: end;
+}
+.emr-statusbar-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--emr-fg);
+}
+.emr-statusbar-activity-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emr-statusbar-spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: emr-statusbar-spin 800ms linear infinite;
+}
+@keyframes emr-statusbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .emr-statusbar-control-group {
   display: inline-flex;
@@ -1999,7 +2073,7 @@ button {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .emr-statusbar-btn-label {
     display: none;
   }
@@ -2009,12 +2083,9 @@ button {
   }
 }
 
-@media (max-width: 480px) {
-  .emr-statusbar {
-    padding-inline: 6px;
-  }
-
-  .emr-statusbar-status {
+@media (max-width: 900px) {
+  .emr-statusbar-words,
+  .emr-statusbar-delta {
     display: none;
   }
 
@@ -2055,6 +2126,26 @@ button {
       min-width: 34px;
       font-size: 13px;
     }
+  }
+}
+
+@media (max-width: 600px) {
+  .emr-statusbar:has(.emr-statusbar-activity) {
+    .emr-statusbar-context-controls,
+    .emr-statusbar-left .emr-statusbar-sep,
+    .emr-statusbar-controls > :not(.emr-statusbar-comment-controls) {
+      display: none;
+    }
+
+    .emr-statusbar-status {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .emr-statusbar {
+    padding-inline: 6px;
   }
 }
 
@@ -2110,6 +2201,10 @@ button {
   background: var(--emr-faint);
   border: 1px solid var(--emr-rule);
   min-width: 0;
+}
+
+.emr-rail-version.is-history-only {
+  justify-content: center;
 }
 
 // PR number + title, taking the space between the chevrons. The title
@@ -2969,6 +3064,11 @@ button {
   }
 }
 
+.emr-ui-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
 // Rich comment filter (rail toolbar) — a compact funnel + count trigger that
 // opens the filter-mode menu. Replaces the old binary show/hide-resolved eye
 // toggle. The trigger reuses `.emr-icon-btn` but widens to seat the count.
@@ -3637,6 +3737,20 @@ button {
   border-radius: 8px;
 }
 
+.emr-skel-header {
+  animation: emr-skel-fade-in 160ms ease-out both;
+}
+
+.emr-skel-header-label {
+  @include emr-skel-surface;
+  flex: 0 0 auto;
+}
+
+.emr-skel-header-label {
+  height: 12px;
+  margin-right: auto;
+}
+
 .emr-skel-w90 {
   width: 92%;
 }
@@ -3707,12 +3821,14 @@ button {
   }
   .emr-skel-line,
   .emr-skel-block,
+  .emr-skel-header-label,
   .emr-rail-skel-card {
     animation: none;
     background-image: none;
   }
   .emr-article-wrap.emr-skeleton,
-  .emr-rail-col.emr-skeleton {
+  .emr-rail-col.emr-skeleton,
+  .emr-skel-header {
     animation: none;
   }
 }
@@ -4100,14 +4216,14 @@ button {
   gap: 5px;
   font: inherit;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 20px;
   line-height: 1.4;
-  color: var(--emr-muted);
+  color: var(--emr-fg);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 3px 5px;
-  margin: -3px -5px;
+  margin: -3px 0;
   cursor: pointer;
   transition:
     background-color 0.12s ease,
@@ -4138,7 +4254,7 @@ button {
   text-align: left;
   text-transform: none;
   letter-spacing: normal;
-  font-size: 12.5px;
+  font-size: 20px;
   // Enough line box to clear descenders (e.g. the "p" in "api-reference");
   // `line-height: 1` clips them under `overflow: hidden`.
   line-height: 1.4;
@@ -4153,10 +4269,33 @@ button {
   opacity: 0.6;
 }
 
+// Current repository context: stronger name + one restrained accent cue. Keep
+// dropdown option glyphs neutral so the list remains easy to scan.
+.emr-docnav-repo-btn > .emr-docnav-repo-glyph,
+.emr-docnav-title > .emr-docnav-repo-glyph {
+  width: 18px;
+  height: 18px;
+  color: var(--emr-accent);
+  opacity: 1;
+}
+
+.emr-docnav-title > .emr-docnav-repo-name {
+  color: var(--emr-fg);
+  font-size: 20px;
+  font-weight: 600;
+}
+
 .emr-docnav-repo-chevron {
   flex: 0 0 auto;
-  opacity: 0.65;
+  margin-left: auto;
+  opacity: 0;
   transition: transform 0.15s ease;
+
+  .emr-docnav-repo-btn:hover &,
+  .emr-docnav-repo-btn:focus-visible &,
+  .emr-docnav-repo-btn[aria-expanded="true"] & {
+    opacity: 0.75;
+  }
 
   .emr-docnav-repo-btn[aria-expanded="true"] & {
     transform: rotate(180deg);
@@ -4232,6 +4371,12 @@ button {
   padding: 8px 10px;
   font-size: 12px;
   color: var(--emr-muted);
+}
+
+.emr-docnav-repo-page-status {
+  flex: 0 0 32px;
+  min-height: 32px;
+  box-sizing: border-box;
 }
 
 .emr-docnav-repo-spinner {
@@ -5071,8 +5216,14 @@ button {
 .emr-loading-statusbar {
   flex: 0 0 28px;
   height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
   background: var(--emr-rail-bg);
   border-top: 1px solid var(--emr-rule);
+  color: var(--emr-fg);
+  font-size: 15px;
 }
 
 .emr-docnav-skel {

@@ -10,7 +10,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { expect, waitFor } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { FIXTURE_AUTHORS } from "../comments/fixtures";
 import type { DocRepo } from "../shell/types";
@@ -80,6 +80,7 @@ const REPOS: DocRepo[] = [
       title: "Clarify the review checklist",
       author: shubhd.displayName,
       status: "completed",
+      url: "https://example.test/team-handbook/pullrequest/128",
     },
     detailsLoaded: true,
   },
@@ -172,6 +173,37 @@ export const Default: Story = {
     const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
     expect(getComputedStyle(nav).paddingLeft).toBe("24px");
     expect(getComputedStyle(docNav).paddingRight).toBe("12px");
+    expect(
+      within(canvasElement).getByRole("link", {
+        name: "Latest completed PR for this file: #128 Clarify the review checklist",
+      }),
+    ).toBeTruthy();
+  },
+};
+
+/** Without a completed PR, Documents Hub removes all unavailable comment UI. */
+export const NoCompletedPullRequest: Story = {
+  args: {
+    initialRepoId: "repo-api",
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (!canvasElement.querySelector(".markdown-body")) {
+        throw new Error("reader not rendered yet");
+      }
+    });
+    const canvas = within(canvasElement);
+    await expect(canvasElement.querySelector(".emr-app")?.classList).toContain(
+      "is-comments-hidden",
+    );
+    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+    await expect(
+      canvasElement.querySelector(".emr-statusbar-resolved-pr"),
+    ).toBeNull();
+    await expect(
+      getComputedStyle(canvasElement.querySelector<HTMLElement>(".emr-rail")!)
+        .display,
+    ).toBe("none");
   },
 };
 

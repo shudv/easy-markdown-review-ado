@@ -7,6 +7,8 @@ import {
   countCommentFilters,
   isMyThread,
   threadMatchesFilter,
+  threadMatchesQuery,
+  threadVisibleForCommentView,
   type CommentFilterMode,
 } from "../src/shell/components/commentFilter";
 import type { Comment, CommentThread, ThreadStatus } from "../src/types";
@@ -75,6 +77,26 @@ describe("threadMatchesFilter", () => {
   it("mine: matches threads the user participated in, regardless of status", () => {
     expect(threadMatchesFilter(mine, "mine", ME)).toBe(true);
     expect(threadMatchesFilter(active, "mine", ME)).toBe(false);
+  });
+});
+
+describe("comment search", () => {
+  const resolved = thread("r", "resolved", [OTHER]);
+  resolved.comments[0]!.bodyMarkdown = "Already addressed in the revision";
+  resolved.comments[0]!.author.displayName = "Alex Rivera";
+
+  it("matches body and author without case sensitivity", () => {
+    expect(threadMatchesQuery(resolved, "  ADDRESSED ")).toBe(true);
+    expect(threadMatchesQuery(resolved, "alex rivera")).toBe(true);
+    expect(threadMatchesQuery(resolved, "missing")).toBe(false);
+    expect(threadMatchesQuery(resolved, "   ")).toBe(true);
+  });
+
+  it("searches every status while an empty query uses the active filter", () => {
+    expect(
+      threadVisibleForCommentView(resolved, "addressed", "active", ME),
+    ).toBe(true);
+    expect(threadVisibleForCommentView(resolved, "", "active", ME)).toBe(false);
   });
 });
 

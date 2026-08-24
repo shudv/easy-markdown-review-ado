@@ -144,7 +144,7 @@ export const Default: Story = {
     expect(typePopover).toHaveAttribute("aria-hidden", "true");
     const visibleToolbarButtons = [
       ...canvasElement.querySelectorAll<HTMLButtonElement>(
-        ".emr-statusbar > button, .emr-statusbar-context-controls > button, .emr-statusbar-controls button",
+        ".emr-statusbar-left > button, .emr-statusbar-context-controls > button, .emr-statusbar-controls button",
       ),
     ].filter((button) => button.offsetParent !== null);
     expect(
@@ -273,6 +273,84 @@ export const Default: Story = {
     expect(
       canvas.getByRole("option", { name: /3 Improve review workflow/ }),
     ).toHaveAttribute("aria-selected", "false");
+  },
+};
+
+/** Highest-priority overlapping work owns the centered status message. */
+export const LoadingActivity: Story = {
+  args: {
+    activities: [
+      { id: "sync", label: "Syncing comments…", priority: 10 },
+      { id: "document", label: "Loading document…", priority: 100 },
+    ],
+    activityDelayMs: 0,
+  },
+  play: async ({ canvasElement }) => {
+    const status = await waitFor(() =>
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar-activity"),
+    );
+    await expect(status).toBeTruthy();
+    await expect(status).toHaveTextContent("Loading document…");
+    await expect(status).toHaveAttribute(
+      "title",
+      "Loading document… (2 operations running)",
+    );
+    const spinner = canvasElement.querySelector<HTMLElement>(
+      ".emr-statusbar-spinner",
+    )!;
+    await expect(getComputedStyle(spinner).animationName).toBe(
+      "emr-statusbar-spin",
+    );
+    await expect(spinner.getAnimations()).toHaveLength(1);
+    await expect(spinner.getAnimations()[0]?.playState).toBe("running");
+    await expect(
+      canvasElement.querySelector(".emr-statusbar-center"),
+    ).toBeTruthy();
+  },
+};
+
+/** Documents Hub surfaces the active document's latest resolved PR. */
+export const ResolvedPullRequest: Story = {
+  args: {
+    resolvedPullRequest: {
+      prId: 128,
+      title: "Clarify the review checklist",
+      url: "https://example.test/pullrequest/128",
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole("link", {
+      name: "Latest completed PR for this file: #128 Clarify the review checklist",
+    });
+    await expect(link).toHaveTextContent("PR #128");
+    await expect(link).toHaveAttribute(
+      "href",
+      "https://example.test/pullrequest/128",
+    );
+    const comments = within(canvasElement).getByRole("button", {
+      name: "Comments",
+    });
+    await expect(link.getBoundingClientRect().left).toBeGreaterThan(
+      comments.getBoundingClientRect().left,
+    );
+    await expect(link.closest(".emr-statusbar-comment-controls")).toBeTruthy();
+  },
+};
+
+/** Resolved PR metadata remains useful when the host cannot provide a URL. */
+export const ResolvedPullRequestWithoutLink: Story = {
+  args: {
+    resolvedPullRequest: {
+      prId: 128,
+      title: "Clarify the review checklist",
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const status = within(canvasElement).getByLabelText(
+      "Latest completed PR for this file: #128 Clarify the review checklist",
+    );
+    await expect(status.tagName).toBe("SPAN");
+    await expect(status).toHaveTextContent("PR #128");
   },
 };
 
@@ -555,6 +633,40 @@ export const CommentSteppingNoSelection: Story = {
     );
     expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
     expect(canvas.getByLabelText("Comment 3 of 3")).toBeTruthy();
+  },
+};
+
+/** A single visible comment needs no previous/next navigation. */
+export const SingleCommentWithoutStepper: Story = {
+  args: {
+    commentThreadIds: ["t1"],
+    activeCommentThreadId: "t1",
+    onCycleComment: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("button", { name: "Comments" })).toBeTruthy();
+    await expect(
+      canvas.queryByRole("button", { name: "Previous comment" }),
+    ).toBeNull();
+    await expect(
+      canvas.queryByRole("button", { name: "Next comment" }),
+    ).toBeNull();
+  },
+};
+
+/** No completed PR means no comments pane control or navigation. */
+export const CommentsUnavailable: Story = {
+  args: {
+    commentsAvailable: false,
+    commentThreadIds: ["t1", "t2"],
+    activeCommentThreadId: "t1",
+    onCycleComment: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+    await expect(canvas.queryByLabelText("Comment navigation")).toBeNull();
   },
 };
 

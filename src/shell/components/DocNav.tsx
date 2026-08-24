@@ -18,6 +18,8 @@ import * as React from "react";
 
 import type { ChangeType, FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
+import type { ReaderActivity } from "./readerActivity";
+import { SearchIcon } from "./icons";
 import {
   buildFolderTree,
   normalizeFolderPath,
@@ -89,6 +91,8 @@ interface DocNavProps {
    * indicators. Defaults to `true` (PR-like) when omitted.
    */
   showChangeIndicators?: boolean;
+  /** Reports long-running navigation work to the reader status bar. */
+  onActivitiesChange?: (activities: readonly ReaderActivity[]) => void;
 }
 
 /**
@@ -147,6 +151,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     titleSlot,
     headerActions,
     showChangeIndicators = true,
+    onActivitiesChange,
   } = props;
 
   // The selected file is also our `storageKey` for per-section persistence
@@ -241,6 +246,32 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     searchUnavailable,
     searchResults,
   } = useDocSearch(files, onSearchFiles);
+
+  const navigationActivities = React.useMemo<readonly ReaderActivity[]>(() => {
+    const activities: ReaderActivity[] = [];
+    if (loadingDirs.size > 0) {
+      activities.push({
+        id: "folder",
+        label:
+          loadingDirs.size === 1
+            ? `Loading ${[...loadingDirs][0]}…`
+            : `Loading ${loadingDirs.size} folders…`,
+        priority: 45,
+      });
+    }
+    if (remoteLoading) {
+      activities.push({
+        id: "document-search",
+        label: `Searching for “${trimmedQuery}”…`,
+        priority: 40,
+      });
+    }
+    return activities;
+  }, [loadingDirs, remoteLoading, trimmedQuery]);
+  React.useEffect(() => {
+    onActivitiesChange?.(navigationActivities);
+    return () => onActivitiesChange?.([]);
+  }, [navigationActivities, onActivitiesChange]);
 
   // After a manual click we suppress scroll-spy briefly so the smooth
   // scroll animation doesn't keep flipping `activeId` until it lands.
@@ -632,7 +663,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
               aria-pressed={searchOpen}
               onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
             >
-              {searchOpen ? <SvgX /> : <SvgSearch />}
+              {searchOpen ? <SvgX /> : <SearchIcon />}
             </button>
           ) : null}
         </div>
@@ -1167,27 +1198,6 @@ function SvgFolder(props: { open: boolean }): React.ReactElement {
       aria-hidden="true"
     >
       <path d="M1.5 3.5 a1 1 0 0 1 1 -1 H6 L7.5 4 H13.5 a1 1 0 0 1 1 1 V12 a1 1 0 0 1 -1 1 H2.5 a1 1 0 0 1 -1 -1 Z" />
-    </svg>
-  );
-}
-
-function SvgSearch(): React.ReactElement {
-  // Identical to RailToolbar's SvgSearch (same 14x14 size + 1.6 stroke) so the
-  // search affordance reads the same in the document and comment headers.
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }

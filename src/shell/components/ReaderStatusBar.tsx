@@ -33,12 +33,24 @@ import {
   type ReviewIterationRange,
   type WordCountDelta,
 } from "../prShellHelpers";
+import {
+  ReaderActivityIndicator,
+  selectReaderActivity,
+  useDelayedReaderActivity,
+  type ReaderActivity,
+} from "./readerActivity";
 
 export interface ReaderStatusBarProps {
   /** Approximate word count of the current document (0/undefined hides it). */
   wordCount?: number;
   /** Words the PR added / removed; shown as a delta when the diff is on. */
   wordDelta?: WordCountDelta;
+  /** Latest completed PR associated with the active Documents Hub document. */
+  resolvedPullRequest?: {
+    prId: number;
+    title: string;
+    url?: string;
+  };
 
   /** Selected reading-font id (see `READER_FONTS`). */
   fontId: string;
@@ -64,6 +76,8 @@ export interface ReaderStatusBarProps {
 
   /** Whether the comments panel is currently shown. */
   showComments: boolean;
+  /** Whether the active surface has a resolved comment target. */
+  commentsAvailable?: boolean;
   /** Toggle the comments panel. */
   onToggleComments: () => void;
   /** Visible comment thread ids in cycle order. */
@@ -98,6 +112,10 @@ export interface ReaderStatusBarProps {
   refreshing?: boolean;
   /** Tooltip / aria-label for the refresh control. */
   refreshLabel?: string;
+  /** Concurrent reader operations eligible for the centered activity display. */
+  activities?: readonly ReaderActivity[];
+  /** Anti-flicker delay before an activity is announced. Defaults to 250ms. */
+  activityDelayMs?: number;
 }
 
 export interface ReaderIterationOption {
@@ -279,6 +297,26 @@ function IconCheck(): React.ReactElement {
       aria-hidden="true"
     >
       <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function IconPullRequest(): React.ReactElement {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="5" r="2" />
+      <path d="M6 7v10" />
+      <path d="M18 7v3a5 5 0 0 1-5 5h-3" />
     </svg>
   );
 }
@@ -798,6 +836,7 @@ export function ReaderStatusBar(
   const {
     wordCount,
     wordDelta,
+    resolvedPullRequest,
     fontId,
     sizePct,
     spacingPct,
@@ -809,6 +848,7 @@ export function ReaderStatusBar(
     onToggleNav,
     navToggleable,
     showComments,
+    commentsAvailable = true,
     onToggleComments,
     commentThreadIds,
     activeCommentThreadId,
@@ -824,6 +864,8 @@ export function ReaderStatusBar(
     onRefresh,
     refreshing,
     refreshLabel,
+    activities = [],
+    activityDelayMs = 250,
   } = props;
 
   const typeRef = React.useRef<HTMLDivElement>(null);
@@ -887,8 +929,10 @@ export function ReaderStatusBar(
       ? formatWordDelta(wordDelta)
       : [];
   const showCommentStepper = !!(
+    commentsAvailable &&
     showComments &&
-    commentThreadIds?.length &&
+    commentThreadIds &&
+    commentThreadIds.length > 1 &&
     onCycleComment
   );
   const showIterationPicker = !!(
@@ -898,6 +942,14 @@ export function ReaderStatusBar(
     onIterationRangeChange
   );
   const showContextControls = showIterationPicker || changesAvailable;
+  const selectedActivity = React.useMemo(
+    () => selectReaderActivity(activities),
+    [activities],
+  );
+  const visibleActivity = useDelayedReaderActivity(
+    selectedActivity,
+    activityDelayMs,
+  );
 
   return (
     <div
@@ -905,103 +957,139 @@ export function ReaderStatusBar(
       role="toolbar"
       aria-label="Reader status and controls"
     >
-      {navToggleable ? (
-        <button
-          type="button"
-          className="emr-statusbar-btn is-toggle"
-          aria-pressed={showNav}
-          title={showNav ? "Hide navigation" : "Show navigation"}
-          onClick={onToggleNav}
-        >
-          <IconNav />
-          <span className="emr-statusbar-btn-label">Navigation</span>
-        </button>
-      ) : null}
-      {navToggleable &&
-      (showContextControls || hasCount || deltaParts.length > 0) ? (
-        <StatusBarSeparator />
-      ) : null}
-      {showContextControls ? (
-        <div className="emr-statusbar-context-controls">
-          {showIterationPicker ? (
-            <IterationPicker
-              options={iterationOptions!}
-              baseCommit={iterationBaseCommit}
-              range={iterationRange!}
-              onChange={onIterationRangeChange!}
-            />
-          ) : null}
-          {changesAvailable ? (
-            <button
-              type="button"
-              className="emr-statusbar-btn emr-statusbar-changes is-toggle"
-              aria-pressed={changesShown}
-              title={
-                changesShown
-                  ? "Hide the change highlights"
-                  : "Show what changed in this pull request"
-              }
-              onClick={onToggleChanges}
-            >
-              <IconChanges />
-              <span className="emr-sr-only">Changes</span>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {showContextControls && (hasCount || deltaParts.length > 0) ? (
-        <StatusBarSeparator />
-      ) : null}
-
-      <div className="emr-statusbar-status">
-        {hasCount ? (
-          <span className="emr-statusbar-words">
-            <b>{wordCount!.toLocaleString()}</b> words
-          </span>
-        ) : null}
-        {deltaParts.length > 0 ? (
-          <span className="emr-statusbar-delta">
-            {deltaParts.map((part) => (
-              <span
-                key={part.kind}
-                className={
-                  part.kind === "added"
-                    ? "emr-statusbar-delta-add"
-                    : "emr-statusbar-delta-rem"
-                }
-                aria-label={part.a11y}
-              >
-                {part.label}
-              </span>
-            ))}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="emr-statusbar-spacer" />
-
-      <div className="emr-statusbar-controls">
-        <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
-          {showCommentStepper ? (
-            <CommentStepper
-              threadIds={commentThreadIds}
-              activeThreadId={activeCommentThreadId ?? null}
-              onCycle={onCycleComment}
-            />
-          ) : null}
+      <div className="emr-statusbar-left">
+        {navToggleable ? (
           <button
             type="button"
             className="emr-statusbar-btn is-toggle"
-            aria-pressed={showComments}
-            title={showComments ? "Hide comments" : "Show comments"}
-            onClick={onToggleComments}
+            aria-pressed={showNav}
+            title={showNav ? "Hide navigation" : "Show navigation"}
+            onClick={onToggleNav}
           >
-            <IconComments />
-            <span className="emr-statusbar-btn-label">Comments</span>
+            <IconNav />
+            <span className="emr-statusbar-btn-label">Navigation</span>
           </button>
-        </div>
+        ) : null}
+        {navToggleable &&
+        (showContextControls || hasCount || deltaParts.length > 0) ? (
+          <StatusBarSeparator />
+        ) : null}
+        {showContextControls ? (
+          <div className="emr-statusbar-context-controls">
+            {showIterationPicker ? (
+              <IterationPicker
+                options={iterationOptions!}
+                baseCommit={iterationBaseCommit}
+                range={iterationRange!}
+                onChange={onIterationRangeChange!}
+              />
+            ) : null}
+            {changesAvailable ? (
+              <button
+                type="button"
+                className="emr-statusbar-btn emr-statusbar-changes is-toggle"
+                aria-pressed={changesShown}
+                title={
+                  changesShown
+                    ? "Hide the change highlights"
+                    : "Show what changed in this pull request"
+                }
+                onClick={onToggleChanges}
+              >
+                <IconChanges />
+                <span className="emr-sr-only">Changes</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {showContextControls && (hasCount || deltaParts.length > 0) ? (
+          <StatusBarSeparator />
+        ) : null}
 
-        <StatusBarSeparator />
+        <div className="emr-statusbar-status">
+          {hasCount ? (
+            <span className="emr-statusbar-words">
+              <b>{wordCount!.toLocaleString()}</b> words
+            </span>
+          ) : null}
+          {deltaParts.length > 0 ? (
+            <span className="emr-statusbar-delta">
+              {deltaParts.map((part) => (
+                <span
+                  key={part.kind}
+                  className={
+                    part.kind === "added"
+                      ? "emr-statusbar-delta-add"
+                      : "emr-statusbar-delta-rem"
+                  }
+                  aria-label={part.a11y}
+                >
+                  {part.label}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="emr-statusbar-center">
+        {visibleActivity ? (
+          <ReaderActivityIndicator
+            activity={visibleActivity}
+            activeCount={activities.length}
+          />
+        ) : null}
+      </div>
+
+      <div className="emr-statusbar-controls">
+        {commentsAvailable ? (
+          <>
+            <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
+              {showCommentStepper ? (
+                <CommentStepper
+                  threadIds={commentThreadIds}
+                  activeThreadId={activeCommentThreadId ?? null}
+                  onCycle={onCycleComment}
+                />
+              ) : null}
+              <button
+                type="button"
+                className="emr-statusbar-btn is-toggle"
+                aria-pressed={showComments}
+                title={showComments ? "Hide comments" : "Show comments"}
+                onClick={onToggleComments}
+              >
+                <IconComments />
+                <span className="emr-statusbar-btn-label">Comments</span>
+              </button>
+              {resolvedPullRequest ? (
+                resolvedPullRequest.url ? (
+                  <a
+                    className="emr-statusbar-resolved-pr"
+                    href={resolvedPullRequest.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
+                    aria-label={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
+                  >
+                    <IconPullRequest />
+                    <span>PR #{resolvedPullRequest.prId}</span>
+                  </a>
+                ) : (
+                  <span
+                    className="emr-statusbar-resolved-pr"
+                    title={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
+                    aria-label={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
+                  >
+                    <IconPullRequest />
+                    <span>PR #{resolvedPullRequest.prId}</span>
+                  </span>
+                )
+              ) : null}
+            </div>
+            <StatusBarSeparator />
+          </>
+        ) : null}
 
         <div className="emr-statusbar-control-group">
           <div

@@ -73,7 +73,6 @@ const baseArgs = {
   activeThreadId: "t2",
   currentUser: shubhd,
   onSelectThread: fn(),
-  onCycleThread: fn(),
   onReply: fn(),
   onResolve: fn(),
   onReopen: fn(),
@@ -207,20 +206,23 @@ export const OnlyThisFileScope: Story = {
 };
 
 /**
- * Navigation spans every visible comment: clicking the cycler's Next until it
- * reaches the (collapsed) cross-file tray AUTO-EXPANDS it, so the selection is
- * on screen. Uses a stateful wrapper so the cycler actually moves the selection.
+ * Selecting a comment in a collapsed cross-file tray from an external surface
+ * auto-expands the tray so the selection is on screen.
  */
 export const CyclerAutoExpandsTray: Story = {
   render: (args) => {
     const [active, setActive] = React.useState<string | null>(null);
     return (
-      <CommentRail
-        {...args}
-        activeThreadId={active}
-        onCycleThread={setActive}
-        onSelectThread={setActive}
-      />
+      <>
+        <button type="button" onClick={() => setActive("g1")}>
+          Select general comment
+        </button>
+        <CommentRail
+          {...args}
+          activeThreadId={active}
+          onSelectThread={setActive}
+        />
+      </>
     );
   },
   play: async ({ canvasElement }) => {
@@ -232,19 +234,9 @@ export const CyclerAutoExpandsTray: Story = {
     // Starts collapsed and its comment is hidden.
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(canvas.queryByText("Comment on PR-level note")).toBeNull();
-    // Cycle Next until it lands on the general comment (last in the order); the
-    // tray then auto-expands without a manual click.
-    for (let i = 0; i < 8; i++) {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Next comment" }),
-      );
-      if (
-        canvas
-          .getByRole("button", { name: trayName })
-          .getAttribute("aria-expanded") === "true"
-      )
-        break;
-    }
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Select general comment" }),
+    );
     expect(
       canvas
         .getByRole("button", { name: trayName })

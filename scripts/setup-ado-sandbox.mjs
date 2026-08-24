@@ -603,6 +603,76 @@ async function getPr(repoId, prId) {
   return body;
 }
 
+async function getPrIterations(repoId, prId) {
+  const { body } = await ado(
+    "GET",
+    `${ORG_URL}/${encodeURIComponent(
+      PROJECT_NAME,
+    )}/_apis/git/repositories/${repoId}/pullrequests/${prId}/iterations?api-version=7.1`,
+  );
+  return body?.value ?? [];
+}
+
+async function waitForPrIterationCount(
+  repoId,
+  prId,
+  expected,
+  timeoutMs = 45_000,
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const iterations = await getPrIterations(repoId, prId);
+    if (iterations.length >= expected) return iterations;
+    await sleep(1000);
+  }
+  throw new Error(
+    `PR #${prId} did not reach ${expected} iteration(s) within ${timeoutMs}ms`,
+  );
+}
+
+/** Push missing cumulative overlays to an open PR branch, one ADO iteration each. */
+async function ensurePrIterations(repo, repoDir, prSpec, pr) {
+  const specs = prSpec.iterations ?? [];
+  if (specs.length === 0) return;
+
+  const prId = pr.pullRequestId;
+  const existing = await getPrIterations(repo.id, prId);
+  // Creating the PR records iteration 1 from `overlay`; every declared entry
+  // below is one additional source-branch push / ADO PR iteration.
+  const alreadyApplied = Math.max(0, existing.length - 1);
+  if (alreadyApplied >= specs.length) {
+    log.ok(`PR #${prId} already has ${existing.length} iteration(s)`);
+    return;
+  }
+  if (pr.status !== "active") {
+    throw new Error(
+      `PR #${prId} is ${pr.status}; cannot add missing iterations to a non-active PR`,
+    );
+  }
+
+  for (let index = alreadyApplied; index < specs.length; index++) {
+    const spec = specs[index];
+    const branch = prSpec.branch;
+    const head = await getBranchHead(repo.id, branch);
+    if (!head) throw new Error(`Source branch ${branch} disappeared`);
+    const overlayDir = join(repoDir, "prs", spec.overlay);
+    const existingPaths = await getExistingFilePaths(repo.id, branch);
+    const changes = await readDirAsChanges(overlayDir, existingPaths);
+    if (changes.length === 0) {
+      throw new Error(`No overlay files under ${overlayDir}`);
+    }
+    const nextHead = await pushCommit(repo.id, `refs/heads/${branch}`, head, {
+      comment: spec.title,
+      changes,
+    });
+    const expected = index + 2;
+    await waitForPrIterationCount(repo.id, prId, expected);
+    log.ok(
+      `PR #${prId} iteration ${expected}: ${spec.title} (head=${short(nextHead)})`,
+    );
+  }
+}
+
 const THREAD_STATUS = new Set([
   "active",
   "fixed",
@@ -890,6 +960,11 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
     log.ok(`PR exists (#${pr.pullRequestId}, status=${pr.status})`);
   }
 
+  // Each cumulative overlay pushed after PR creation becomes one native ADO
+  // pull-request iteration. Keep this before thread seeding so line anchors
+  // target the final source snapshot declared by the fixture.
+  await ensurePrIterations(repo, repoDir, prSpec, pr);
+
   // 3) Attachments + threads — seed while the PR is still active so they
   // attach cleanly. Comment bodies can reference uploaded files with
   // `{{attachment:fileName}}` placeholders.
@@ -919,10 +994,14 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
 async function ensureRepoFromSpec(project, repoSpec) {
   const repo = await ensureNamedRepo(project.id, repoSpec.name);
   const repoDir = join(SANDBOX_DIR, "repos", repoSpec.name);
-  const mainHead = await ensureMain(repo, join(repoDir, "main"));
+  let mainHead = await ensureMain(repo, join(repoDir, "main"));
   const prs = [];
   for (const prSpec of repoSpec.pullRequests ?? []) {
     prs.push(await ensurePr(repo, repoDir, prSpec, mainHead));
+    // Completed PRs (and advanceTarget fixtures) can move main. Fork the next
+    // declared PR from that new tip so manifest order models real sequential
+    // document revisions instead of parallel branches from the initial seed.
+    mainHead = (await getBranchHead(repo.id, "main")) ?? mainHead;
   }
   return {
     name: repo.name,

@@ -475,6 +475,56 @@
       ]
     },
     {
+      "name": "iteration-history-showcase",
+      "description": "One active pull request whose Markdown document is revised through seven successive source-branch pushes. Exercises the status-bar iteration picker, Latest labeling, and real source-to-source diffs for arbitrary ranges within one PR.",
+      "pullRequests": [
+        {
+          "title": "Develop the document review workflow",
+          "branch": "feature/iterate-review-workflow",
+          "description": "A deliberately long-running review. Seven successive pushes evolve the same Markdown file from initial goals through launch approval so native ADO PR iterations and arbitrary iteration ranges can be tested.",
+          "overlay": "01-review-goals",
+          "iterations": [
+            {
+              "title": "Assign rollout ownership",
+              "overlay": "02-rollout-ownership"
+            },
+            {
+              "title": "Clarify the staged review flow",
+              "overlay": "03-review-stages"
+            },
+            {
+              "title": "Add quality gates and evidence",
+              "overlay": "04-quality-gates"
+            },
+            {
+              "title": "Document accessibility review",
+              "overlay": "05-accessibility"
+            },
+            {
+              "title": "Add pilot rollout and rollback plan",
+              "overlay": "06-rollout-plan"
+            },
+            {
+              "title": "Finalize the review workflow launch",
+              "overlay": "07-finalize-launch"
+            }
+          ],
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/docs/review-workflow.md",
+              "status": "active",
+              "rightStartLine": 59,
+              "rightEndLine": 59,
+              "comments": [
+                "This thread is anchored after the seventh push. Use the status-bar picker to compare iteration 1, adjacent revisions, and a middle-to-Latest range within this same PR."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "markdown-review-sandbox-v2",
       "description": "Intentionally has files but NO pull requests — exercises the Documents-hub empty state (commenting disabled until a PR exists). Maps to the project's auto-created default repo.",
       "pullRequests": []

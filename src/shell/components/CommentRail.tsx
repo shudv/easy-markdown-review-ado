@@ -42,8 +42,6 @@ interface RailProps {
   activeThreadId: string | null;
   currentUser: CommentAuthor;
   onSelectThread: (id: string) => void;
-  /** Rail toolbar prev/next: centers the balloon and opens its reply composer. */
-  onCycleThread?: (id: string) => void;
   onReply: (id: string, body: string) => void;
   onResolve: (id: string) => void;
   onReopen: (id: string) => void;
@@ -94,6 +92,8 @@ interface RailProps {
   readOnly?: boolean;
   /** Override the default read-only banner text. */
   readOnlyMessage?: string;
+  /** Hide the banner when read-only context is already explicit elsewhere. */
+  showReadOnlyBanner?: boolean;
   /** Optional badge at the top of the rail describing the routed PR. */
   routedPr?: {
     prId: number;
@@ -132,7 +132,6 @@ export function CommentRail(props: RailProps): React.ReactElement {
     activeThreadId,
     currentUser,
     onSelectThread,
-    onCycleThread,
     onReply,
     onResolve,
     onReopen,
@@ -162,6 +161,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
     onOnlyThisFileChange,
     readOnly = false,
     readOnlyMessage,
+    showReadOnlyBanner = true,
     routedPr,
     historyNav,
     hidePrPill,
@@ -189,7 +189,6 @@ export function CommentRail(props: RailProps): React.ReactElement {
     visibleGeneralThreads,
     visibleOrphanedFileThreads,
     hasVisibleComments,
-    cycleThreadIds,
   } = buildRailModel({
     currentThreads,
     generalThreads,
@@ -201,9 +200,8 @@ export function CommentRail(props: RailProps): React.ReactElement {
     onlyThisFile,
   });
 
-  // Auto-expand a cross-file tray while its comment is the active one (e.g. the
-  // prev/next cycler landed there), so the selected balloon is on screen and
-  // scroll-into-view can find it.
+  // Auto-expand a cross-file tray while its comment is active (e.g. status-bar
+  // navigation landed there), so the selected balloon is on screen.
   const activeInGeneral =
     activeThreadId != null &&
     visibleGeneralThreads.some((t) => t.id === activeThreadId);
@@ -238,7 +236,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
 
   return (
     <aside className="emr-rail-col" aria-label="Comments">
-      {readOnly ? (
+      {readOnly && showReadOnlyBanner ? (
         <div className="emr-rail-readonly-banner" role="status">
           {readOnlyMessage ??
             "Commenting is disabled because this document has no completed pull request."}
@@ -258,10 +256,6 @@ export function CommentRail(props: RailProps): React.ReactElement {
             onlyThisFile={onlyThisFile}
             /* v8 ignore next -- onOnlyThisFileChange is wired in every mounted usage; no-op fallback is defensive */
             onOnlyThisFileChange={onOnlyThisFileChange ?? (() => {})}
-            orderedThreadIds={cycleThreadIds}
-            activeThreadId={activeThreadId}
-            /* v8 ignore next -- onCycleThread is wired in every mounted usage; onSelectThread fallback is defensive */
-            onSelectThread={onCycleThread ?? onSelectThread}
             routedPr={routedPr}
             historyNav={historyNav}
             hidePrPill={hidePrPill}

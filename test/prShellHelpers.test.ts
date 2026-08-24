@@ -16,6 +16,11 @@ import {
   type HistoryStop,
   isCommentUiClickTarget,
   patchIfSet,
+  allReviewIterations,
+  betweenReviewUpdates,
+  oneReviewUpdate,
+  resolveReviewIterationRange,
+  sourceDiffRanges,
   stepStopIndex,
   wordCountDelta,
 } from "../src/shell/prShellHelpers";
@@ -172,16 +177,18 @@ describe("isCommentUiClickTarget", () => {
       '<div class="emr-selection-bubble"><i id="s">x</i></div>' +
       '<div class="emr-draft-guard-overlay"><i id="g">x</i></div>' +
       '<div class="emr-rail-header"><button id="n">next</button></div>' +
-      '<div class="emr-rail-section-header"><b id="t">tray</b></div>';
+      '<div class="emr-rail-section-header"><b id="t">tray</b></div>' +
+      '<div class="emr-statusbar-comment-stepper"><button id="c">next</button></div>';
     document.body.appendChild(root);
 
     expect(isCommentUiClickTarget(root.querySelector("#h"))).toBe(true);
     expect(isCommentUiClickTarget(root.querySelector("#b"))).toBe(true);
     expect(isCommentUiClickTarget(root.querySelector("#s"))).toBe(true);
     expect(isCommentUiClickTarget(root.querySelector("#g"))).toBe(true);
-    // The rail header (cycler/filter/search) + section toggles are comment UI.
+    // Rail/status controls and section toggles are comment UI.
     expect(isCommentUiClickTarget(root.querySelector("#n"))).toBe(true);
     expect(isCommentUiClickTarget(root.querySelector("#t"))).toBe(true);
+    expect(isCommentUiClickTarget(root.querySelector("#c"))).toBe(true);
 
     document.body.removeChild(root);
   });
@@ -308,6 +315,134 @@ describe("stepStopIndex", () => {
   it("clamps to 0 for an empty list", () => {
     expect(stepStopIndex(0, 1, 0)).toBe(0);
     expect(stepStopIndex(0, -1, 0)).toBe(0);
+  });
+});
+
+describe("review iteration selection", () => {
+  it("represents All updates as the full base-to-newest interval", () => {
+    expect(resolveReviewIterationRange(allReviewIterations(7), 7)).toEqual({
+      range: { fromUpdate: 0, toUpdate: 7 },
+      isAllChanges: true,
+      activeStopIndex: 0,
+      baselineStopIndex: null,
+    });
+  });
+
+  it("represents one update as its previous-to-current interval", () => {
+    expect(oneReviewUpdate(5, 7)).toEqual({
+      fromUpdate: 4,
+      toUpdate: 5,
+    });
+    expect(oneReviewUpdate(1, 7)).toEqual({
+      fromUpdate: 0,
+      toUpdate: 1,
+    });
+  });
+
+  it("starts a selected range before its earliest included update", () => {
+    expect(betweenReviewUpdates(5, 2, 7)).toEqual({
+      fromUpdate: 1,
+      toUpdate: 5,
+    });
+    expect(betweenReviewUpdates(3, 3, 7)).toEqual({
+      fromUpdate: 2,
+      toUpdate: 3,
+    });
+  });
+
+  it("maps comparison endpoints into newest-first stop indexes", () => {
+    expect(
+      resolveReviewIterationRange({ fromUpdate: 4, toUpdate: 5 }, 7),
+    ).toEqual({
+      range: { fromUpdate: 4, toUpdate: 5 },
+      isAllChanges: false,
+      activeStopIndex: 2,
+      baselineStopIndex: 3,
+    });
+    expect(
+      resolveReviewIterationRange({ fromUpdate: 2, toUpdate: 5 }, 7),
+    ).toEqual({
+      range: { fromUpdate: 2, toUpdate: 5 },
+      isAllChanges: false,
+      activeStopIndex: 2,
+      baselineStopIndex: 5,
+    });
+  });
+
+  it("uses the PR base before update 1 and clamps stale indices", () => {
+    expect(
+      resolveReviewIterationRange({ fromUpdate: 99, toUpdate: 100 }, 7),
+    ).toEqual({
+      range: { fromUpdate: 6, toUpdate: 7 },
+      isAllChanges: false,
+      activeStopIndex: 0,
+      baselineStopIndex: 1,
+    });
+  });
+});
+
+describe("sourceDiffRanges", () => {
+  it("returns no ranges for identical sources", () => {
+    expect(sourceDiffRanges("# Same\n", "# Same\n")).toEqual([]);
+  });
+
+  it("maps added lines into modified-source coordinates", () => {
+    expect(sourceDiffRanges("# Title\nold\n", "# Title\nold\nnew\n")).toEqual([
+      {
+        startLine: 3,
+        endLine: 3,
+        kind: "added",
+        linesAdded: 1,
+        linesDeleted: 0,
+      },
+    ]);
+  });
+
+  it("preserves original text and coordinates for modified lines", () => {
+    expect(
+      sourceDiffRanges(
+        "# Title\nold words\nnext\n",
+        "# Title\nnew words\nnext\n",
+      ),
+    ).toEqual([
+      {
+        startLine: 2,
+        endLine: 2,
+        kind: "modified",
+        originalText: "old words",
+        originalStartLine: 2,
+        originalEndLine: 2,
+        linesAdded: 1,
+        linesDeleted: 1,
+      },
+    ]);
+    expect(sourceDiffRanges("old", "new")).toEqual([
+      {
+        startLine: 1,
+        endLine: 1,
+        kind: "modified",
+        originalText: "old",
+        originalStartLine: 1,
+        originalEndLine: 1,
+        linesAdded: 1,
+        linesDeleted: 1,
+      },
+    ]);
+  });
+
+  it("creates an expandable marker for deleted lines", () => {
+    expect(
+      sourceDiffRanges("# Title\nremoved\nkeep\n", "# Title\nkeep\n"),
+    ).toEqual([
+      {
+        startLine: 2,
+        endLine: 2,
+        kind: "deleted-marker",
+        deletedContent: "removed",
+        linesAdded: 0,
+        linesDeleted: 1,
+      },
+    ]);
   });
 });
 

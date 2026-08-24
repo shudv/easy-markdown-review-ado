@@ -25,9 +25,6 @@ const meta = {
     onFilterModeChange: fn(),
     onlyThisFile: false,
     onOnlyThisFileChange: fn(),
-    orderedThreadIds: ["t1", "t2", "t3"],
-    activeThreadId: "t2",
-    onSelectThread: fn(),
     routedPr: {
       prId: 42,
       title: "Add docs",
@@ -42,15 +39,14 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Cyclers move the active thread; the search field opens and handles keys. */
+/** The search field opens and handles keys. */
 export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Next comment" }));
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Previous comment" }),
-    );
-    await expect(args.onSelectThread).toHaveBeenCalledTimes(2);
+    expect(canvas.queryByRole("button", { name: "Next comment" })).toBeNull();
+    expect(
+      canvas.queryByRole("button", { name: "Previous comment" }),
+    ).toBeNull();
 
     // Open search and exercise typing + key handling.
     await userEvent.click(
@@ -91,20 +87,6 @@ export const BlurCollapsesSearch: Story = {
   },
 };
 
-/** With nothing selected, prev/next wrap to the ends and the count shows a dash. */
-export const NoActiveSelection: Story = {
-  args: { activeThreadId: null },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Previous comment" }),
-    );
-    await expect(args.onSelectThread).toHaveBeenCalledWith("t3");
-    await userEvent.click(canvas.getByRole("button", { name: "Next comment" }));
-    await expect(args.onSelectThread).toHaveBeenCalledWith("t1");
-  },
-};
-
 /** All threads resolved shows the celebration; the filter menu is present. */
 export const AllResolved: Story = {
   args: {
@@ -114,8 +96,6 @@ export const AllResolved: Story = {
     filterMode: "active" as const,
     // Resolved threads are hidden by the Active filter, so nothing is shown.
     hasVisibleComments: false,
-    orderedThreadIds: [],
-    activeThreadId: null,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -170,8 +150,6 @@ export const NoSearchNoCyclers: Story = {
     hasVisibleComments: false,
     resolvedThreadCount: 0,
     filterCounts: { all: 0, active: 0, resolved: 0, mine: 0 },
-    orderedThreadIds: [],
-    activeThreadId: null,
     routedPr: undefined,
     headerActions: undefined,
   },

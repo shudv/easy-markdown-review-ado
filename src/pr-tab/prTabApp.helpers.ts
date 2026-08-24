@@ -4,6 +4,47 @@
 // these for its decision logic.
 
 import type { ChangeType } from "../types";
+import type { HistoryStop } from "../shell/prShellHelpers";
+
+interface PullRequestIterationLike {
+  id?: number;
+  description?: string;
+  createdDate?: Date | string;
+  sourceRefCommit?: CommitRefLike;
+  commits?: ReadonlyArray<CommitRefLike & { comment?: string }>;
+}
+
+/** Map ADO's chronological PR pushes into PrShell's newest-first stop model. */
+export function reviewIterationStops(
+  iterations: readonly PullRequestIterationLike[],
+  prId: number,
+): HistoryStop[] {
+  const valid = iterations.filter(
+    (iteration) =>
+      typeof iteration.id === "number" && !!iteration.sourceRefCommit?.commitId,
+  );
+  return valid
+    .map((iteration, chronologicalIndex) => {
+      const isCurrent = chronologicalIndex === valid.length - 1;
+      const lastCommit = iteration.commits?.[iteration.commits.length - 1];
+      const title =
+        iteration.description?.trim() ||
+        lastCommit?.comment?.trim() ||
+        `Iteration ${iteration.id}`;
+      const rawDate = iteration.createdDate;
+      const dateMs =
+        rawDate === undefined ? undefined : new Date(rawDate).getTime();
+      return {
+        commitId: isCurrent ? null : iteration.sourceRefCommit!.commitId!,
+        prId,
+        title,
+        ...(dateMs !== undefined && Number.isFinite(dateMs) ? { dateMs } : {}),
+        isCurrent,
+        readOnly: !isCurrent,
+      } satisfies HistoryStop;
+    })
+    .reverse();
+}
 
 /**
  * Resolve the active pull-request id from the pr-tab contribution config.

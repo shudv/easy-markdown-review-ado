@@ -1982,8 +1982,9 @@ interface RenderedCodeMetadata {
   options: string;
 }
 
-function codeMetadata(pre: Element): RenderedCodeMetadata {
-  const code = pre.querySelector("code")!;
+function codeMetadata(pre: Element): RenderedCodeMetadata | null {
+  const code = pre.querySelector("code");
+  if (!code) return null;
   const languageClass = Array.from(code.classList)
     .find((name) => name.startsWith("language-"))
     ?.slice("language-".length);
@@ -2138,6 +2139,7 @@ function readCodeMetadataChange(
   if (!original) return null;
   const before = codeMetadata(original);
   const after = codeMetadata(block);
+  if (!before || !after) return null;
   /* v8 ignore next -- this path is entered only for a source-level code metadata change */
   if (before.language === after.language && before.options === after.options) {
     return null;

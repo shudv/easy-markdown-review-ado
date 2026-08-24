@@ -3,6 +3,8 @@
 // render in the storybook/iframe harness). Keep these dependency-free.
 
 import { extractStatus } from "./retryClassify";
+import { diff_match_patch } from "diff-match-patch";
+
 import { diffWords } from "../markdown/wordDiff";
 import type { DiffRange } from "../types";
 import type {
@@ -84,15 +86,14 @@ export function patchIfSet<T>(
 /**
  * True when a click target sits inside comment UI chrome that should not be
  * treated as an outside-dismiss click. Besides the highlights / balloons /
- * bubbles themselves, this includes the rail HEADER (the filter dropdown,
- * search, and the prev/next cycler) and the collapsible section headers —
- * navigating or toggling those must not clear the active comment (the cycler
- * SETS it, and clearing it here would immediately undo that + defeat the
- * collapsed-tray auto-expand).
+ * bubbles themselves, this includes the rail header, status-bar comment
+ * stepper, and collapsible section headers — navigating or toggling those must
+ * not clear the active comment (the stepper SETS it, and clearing it here would
+ * immediately undo that + defeat collapsed-tray auto-expand).
  */
 export function isCommentUiClickTarget(target: Element | null): boolean {
   return !!target?.closest(
-    ".emr-highlight, .emr-balloon, .emr-selection-bubble, .emr-draft-guard-overlay, .emr-rail-header, .emr-rail-section-header",
+    ".emr-highlight, .emr-balloon, .emr-selection-bubble, .emr-draft-guard-overlay, .emr-rail-header, .emr-rail-section-header, .emr-statusbar-comment-stepper",
   );
 }
 
@@ -224,6 +225,68 @@ export interface HistoryStop {
 }
 
 /**
+ * Comparison endpoints over chronological PR updates; update 0 is the PR base.
+ * The picker selection contains updates `fromUpdate + 1` through `toUpdate`.
+ */
+export interface ReviewIterationRange {
+  fromUpdate: number;
+  toUpdate: number;
+}
+
+export interface ResolvedReviewIterationRange {
+  range: ReviewIterationRange;
+  isAllChanges: boolean;
+  /** Newer endpoint whose document content is rendered. */
+  activeStopIndex: number;
+  /** Older diff endpoint; null means the pull request merge base. */
+  baselineStopIndex: number | null;
+}
+
+export function allReviewIterations(updateCount: number): ReviewIterationRange {
+  return { fromUpdate: 0, toUpdate: Math.max(1, updateCount) };
+}
+
+export function oneReviewUpdate(
+  update: number,
+  updateCount: number,
+): ReviewIterationRange {
+  const toUpdate = Math.max(1, Math.min(update, Math.max(1, updateCount)));
+  return { fromUpdate: toUpdate - 1, toUpdate };
+}
+
+export function betweenReviewUpdates(
+  firstUpdate: number,
+  secondUpdate: number,
+  updateCount: number,
+): ReviewIterationRange {
+  const max = Math.max(1, updateCount);
+  const first = Math.max(1, Math.min(firstUpdate, max));
+  const second = Math.max(1, Math.min(secondUpdate, max));
+  if (first === second) return oneReviewUpdate(first, max);
+  return {
+    fromUpdate: Math.min(first, second) - 1,
+    toUpdate: Math.max(first, second),
+  };
+}
+
+/** Normalize an interval and map it to PrShell's newest-first stop indexes. */
+export function resolveReviewIterationRange(
+  requested: ReviewIterationRange,
+  updateCount: number,
+): ResolvedReviewIterationRange {
+  const max = Math.max(1, updateCount);
+  const toUpdate = Math.max(1, Math.min(requested.toUpdate, max));
+  const fromUpdate = Math.max(0, Math.min(requested.fromUpdate, toUpdate - 1));
+  const range = { fromUpdate, toUpdate };
+  return {
+    range,
+    isAllChanges: fromUpdate === 0 && toUpdate === max,
+    activeStopIndex: max - toUpdate,
+    baselineStopIndex: fromUpdate === 0 ? null : max - fromUpdate,
+  };
+}
+
+/**
  * Builds the ordered stepper stops for a document: position 0 is the live
  * "Current" head (writable, backed by the routing PR if there is one), followed
  * by the document's completed PRs newest-first. The routing PR is omitted from
@@ -257,6 +320,97 @@ export function buildHistoryStops(
     });
   }
   return [current, ...historical];
+}
+
+/** Build renderer-ready line ranges for an arbitrary source-to-source comparison. */
+export function sourceDiffRanges(
+  originalSource: string,
+  modifiedSource: string,
+): DiffRange[] {
+  if (originalSource === modifiedSource) return [];
+
+  const dmp = new diff_match_patch();
+  const encoded = dmp.diff_linesToChars_(originalSource, modifiedSource);
+  const diffs = dmp.diff_main(encoded.chars1, encoded.chars2, false);
+  dmp.diff_cleanupSemantic(diffs);
+  dmp.diff_charsToLines_(diffs, encoded.lineArray);
+
+  const ranges: DiffRange[] = [];
+  let originalLine = 1;
+  let modifiedLine = 1;
+  let index = 0;
+  while (index < diffs.length) {
+    const [operation, text] = diffs[index]!;
+    if (operation === 0) {
+      const count = sourceLineCount(text);
+      originalLine += count;
+      modifiedLine += count;
+      index += 1;
+      continue;
+    }
+
+    const originalStartLine = originalLine;
+    const modifiedStartLine = modifiedLine;
+    let deletedText = "";
+    let deletedLines = 0;
+    let addedLines = 0;
+    while (index < diffs.length && diffs[index]![0] !== 0) {
+      const [change, changeText] = diffs[index]!;
+      const count = sourceLineCount(changeText);
+      if (change < 0) {
+        deletedText += changeText;
+        deletedLines += count;
+        originalLine += count;
+      } else {
+        addedLines += count;
+        modifiedLine += count;
+      }
+      index += 1;
+    }
+
+    if (addedLines > 0 && deletedLines > 0) {
+      ranges.push({
+        startLine: modifiedStartLine,
+        endLine: modifiedStartLine + addedLines - 1,
+        kind: "modified",
+        originalText: stripFinalLineBreak(deletedText),
+        originalStartLine,
+        originalEndLine: originalStartLine + deletedLines - 1,
+        linesAdded: addedLines,
+        linesDeleted: deletedLines,
+      });
+    } else if (addedLines > 0) {
+      ranges.push({
+        startLine: modifiedStartLine,
+        endLine: modifiedStartLine + addedLines - 1,
+        kind: "added",
+        linesAdded: addedLines,
+        linesDeleted: 0,
+      });
+    } else {
+      ranges.push({
+        startLine: Math.max(1, modifiedStartLine),
+        endLine: Math.max(1, modifiedStartLine),
+        kind: "deleted-marker",
+        deletedContent: stripFinalLineBreak(deletedText),
+        linesAdded: 0,
+        linesDeleted: deletedLines,
+      });
+    }
+  }
+  return ranges;
+}
+
+function sourceLineCount(text: string): number {
+  let lines = text.endsWith("\n") ? 0 : 1;
+  for (const character of text) {
+    if (character === "\n") lines += 1;
+  }
+  return lines;
+}
+
+function stripFinalLineBreak(text: string): string {
+  return text.replace(/\r?\n$/, "");
 }
 
 /**

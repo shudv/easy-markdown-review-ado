@@ -101,6 +101,13 @@ export const E2E = {
    * authorize the `_apis` REST endpoint).
    */
   prTitle: env("AZDO_E2E_PR_TITLE", "Document PR thread endpoints"),
+  /** Repo containing one active PR with seven native source-push iterations. */
+  iterationRepo: env("AZDO_E2E_ITERATION_REPO", "iteration-history-showcase"),
+  /** Active multi-iteration PR used by the status-bar picker spec. */
+  iterationPrTitle: env(
+    "AZDO_E2E_ITERATION_PR_TITLE",
+    "Develop the document review workflow",
+  ),
   /** Repo whose PR the change-highlighting spec drives. */
   diffRepo: env("AZDO_E2E_DIFF_REPO", "diff-showcase"),
   /**

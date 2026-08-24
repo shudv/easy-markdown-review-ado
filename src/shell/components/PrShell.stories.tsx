@@ -320,16 +320,21 @@ export const ThreadEdit: Story = {
 export const ThreadCycle: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const railU = within(
-      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
     const nextBtn = await waitFor(() =>
-      railU.getByRole("button", { name: "Next comment" }),
+      status.getByRole("button", { name: "Next comment" }),
     );
     await userEvent.click(nextBtn);
     await userEvent.click(
-      railU.getByRole("button", { name: "Previous comment" }),
+      status.getByRole("button", { name: "Previous comment" }),
     );
+    expect(
+      within(
+        canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+      ).queryByRole("button", { name: "Next comment" }),
+    ).toBeNull();
   },
 };
 
@@ -344,6 +349,9 @@ export const CyclerExpandsCollapsedTray: Story = {
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
+    );
     const trayName = /General comments/;
     // The cross-file tray is present but collapsed, its comment not rendered.
     const tray = await waitFor(() =>
@@ -354,7 +362,7 @@ export const CyclerExpandsCollapsedTray: Story = {
     // Cycle Next until it lands on the general comment; the tray must expand.
     for (let i = 0; i < 12; i++) {
       await userEvent.click(
-        railU.getByRole("button", { name: "Next comment" }),
+        status.getByRole("button", { name: "Next comment" }),
       );
       if (
         railU
@@ -1427,6 +1435,43 @@ export const SingleFile: Story = {
  * persist).
  */
 export const ReaderStatusBarControls: Story = {
+  args: {
+    routedPr: {
+      prId: 7,
+      title: "Current routing PR",
+      status: "active",
+      url: "https://example.test/pr/7",
+    },
+    reviewIterationStops: [
+      {
+        commitId: null,
+        prId: 7,
+        title: "Finalize review workflow",
+        dateMs: Date.parse("2026-08-23T10:14:00Z"),
+        isCurrent: true,
+        readOnly: false,
+      },
+      {
+        commitId: "update-2",
+        prId: 7,
+        title: "Document accessibility review",
+        dateMs: Date.parse("2026-08-18T11:07:00Z"),
+        isCurrent: false,
+        readOnly: true,
+      },
+      {
+        commitId: "update-1",
+        prId: 7,
+        title: "Define review goals",
+        dateMs: Date.parse("2026-08-11T17:06:00Z"),
+        isCurrent: false,
+        readOnly: true,
+      },
+    ],
+    reviewIterationBaseCommit: "base",
+    loadFileSourceAt: async (path: string, commitId: string) =>
+      `> ${commitId}.\n\n${SOURCES[path] ?? ""}`,
+  },
   beforeEach: () => {
     const NativeFontFace = window.FontFace;
     class AvailableFontFace {
@@ -1454,6 +1499,42 @@ export const ReaderStatusBarControls: Story = {
       )!;
     const paragraph = q<HTMLParagraphElement>(".emr-rendered.markdown-body p");
     expect(getComputedStyle(paragraph).marginBottom).toBe("16px");
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy(),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    const selectedOptions = canvas.getAllByRole("option", { selected: true });
+    expect(selectedOptions).toHaveLength(1);
+    expect(selectedOptions[0]?.textContent).toContain("All updates");
+    await userEvent.click(
+      canvas.getByRole("option", { name: /2 Document accessibility review/ }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "Update 1 → 2" })).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-word-added")?.textContent).toBe(
+        "2",
+      ),
+    );
+    expect(canvasElement.querySelector(".emr-word-removed")?.textContent).toBe(
+      "1",
+    );
+    expect(
+      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
+    ).not.toBeNull();
+    await userEvent.click(
+      canvas.getByRole("option", { name: /1 Define review goals/ }),
+    );
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Base → Update 1" }),
+      ).toBeTruthy(),
+    );
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    expect(
+      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
+    ).not.toBeNull();
 
     // Focus mode: hide the nav, then the comments — the app root reflects it.
     await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
@@ -1489,6 +1570,32 @@ export const ReaderStatusBarControls: Story = {
   },
 };
 
+/** A failed native-iteration baseline settles on an error instead of loading forever. */
+export const ReaderStatusBarIterationLoadError: Story = {
+  args: {
+    ...ReaderStatusBarControls.args,
+    loadFileSourceAt: async (_path: string, commitId: string) => {
+      if (commitId === "base") throw new Error("base snapshot failed");
+      return `> ${commitId}.\n`;
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    await userEvent.click(
+      canvas.getByRole("option", { name: /1 Define review goals/ }),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-error")?.textContent).toContain(
+        "base snapshot failed",
+      ),
+    );
+    expect(canvasElement.querySelector(".emr-skeleton")).toBeNull();
+    expect(canvasElement.querySelector(".emr-word-added")).toBeNull();
+  },
+};
+
 /**
  * Nav resize: dragging the rail's right-border handle updates the nav width
  * live; double-clicking it resets to the default.
@@ -1500,6 +1607,25 @@ export const NavResize: Story = {
       expect(canvasElement.querySelector(".emr-nav-resize")).toBeTruthy(),
     );
     const handle = canvasElement.querySelector<HTMLElement>(".emr-nav-resize")!;
+    const navRail = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    const firstRow = canvasElement.querySelector<HTMLElement>(
+      ".emr-docnav-item.emr-docnav-file",
+    )!;
+    const badge = firstRow.querySelector<HTMLElement>(".emr-docnav-badge")!;
+    expect(getComputedStyle(navRail).paddingLeft).toBe("0px");
+    expect(getComputedStyle(docNav).paddingRight).toBe("0px");
+    expect(firstRow.getBoundingClientRect().left).toBeCloseTo(
+      navRail.getBoundingClientRect().left,
+      1,
+    );
+    expect(firstRow.getBoundingClientRect().right).toBeCloseTo(
+      docNav.getBoundingClientRect().right,
+      1,
+    );
+    expect(badge.getBoundingClientRect().right).toBeLessThan(
+      handle.getBoundingClientRect().left,
+    );
     // A move with no press in progress is ignored — the width stays put.
     handle.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -2108,12 +2234,7 @@ function stepLoaders() {
   };
 }
 
-/**
- * Comment-history stepper: the routed-PR pill gains ‹ › chevrons when a file
- * has earlier completed PRs. Stepping back swaps the document pane and rail to
- * the read-only snapshot at that PR; stepping forward returns to the live
- * (writable) current version.
- */
+/** Completed-PR document history remains on the comment rail. */
 export const CommentHistoryStepper: Story = {
   args: stepLoaders(),
   play: async ({ canvasElement }) => {
@@ -2121,20 +2242,9 @@ export const CommentHistoryStepper: Story = {
     const rail = () =>
       within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
 
-    // Chevrons appear once history resolves; Newer is disabled at the head.
     const older = await waitFor(() =>
       rail().getByRole("button", { name: "Older version" }),
     );
-    expect(
-      (
-        rail().getByRole("button", {
-          name: "Newer version",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-
-    // Step back to the most recent historical PR (#101): read-only banner +
-    // that PR's comments replace the live rail.
     await userEvent.click(older);
     await waitFor(() =>
       expect(
@@ -2151,22 +2261,13 @@ export const CommentHistoryStepper: Story = {
       ).toBeTruthy(),
     );
 
-    // Step to the oldest PR (#102); Older becomes disabled at the tail.
     await userEvent.click(
       rail().getByRole("button", { name: "Older version" }),
     );
     await waitFor(() =>
       expect(rail().getByText(/pull request #102/)).toBeTruthy(),
     );
-    expect(
-      (
-        rail().getByRole("button", {
-          name: "Older version",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
 
-    // Step forward twice to return to the live current version.
     await userEvent.click(
       rail().getByRole("button", { name: "Newer version" }),
     );
@@ -2196,9 +2297,9 @@ export const CommentHistoryStepper: Story = {
 };
 
 /**
- * Stepper resilience: history resolves, but the per-PR snapshot and thread
- * loaders reject. Stepping back still shows the read-only skeleton without
- * throwing — the failed loads are swallowed and logged.
+ * Picker resilience: history resolves, but the per-PR snapshot and thread
+ * loaders reject. Stepping back settles on an actionable error instead of an
+ * endless skeleton.
  */
 export const CommentHistoryStepperLoadErrors: Story = {
   args: {
@@ -2212,23 +2313,24 @@ export const CommentHistoryStepperLoadErrors: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const rail = () =>
-      within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
-
-    const older = await waitFor(() =>
-      rail().getByRole("button", { name: "Older version" }),
+    const rail = within(
+      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
-    // Stepping back triggers the failing snapshot loader -> skeleton stays.
+    const older = await waitFor(() =>
+      rail.getByRole("button", { name: "Older version" }),
+    );
     await userEvent.click(older);
     await waitFor(() =>
-      expect(canvasElement.querySelector(".emr-skeleton")).toBeTruthy(),
+      expect(canvasElement.querySelector(".emr-error")?.textContent).toContain(
+        "load this version",
+      ),
     );
+    expect(canvasElement.querySelector(".emr-skeleton")).toBeNull();
   },
 };
 
 /**
- * Stepper history-load failure: `loadDocHistory` rejects, so no chevrons are
- * ever shown and the document stays on its writable current version.
+ * History-load failure: no picker appears and the document stays current.
  */
 export const CommentHistoryStepperHistoryError: Story = {
   args: {
@@ -2239,12 +2341,11 @@ export const CommentHistoryStepperHistoryError: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const rail = within(
-      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
-    // The failed history load leaves the stepper chevrons absent.
     await waitFor(() =>
-      expect(rail.queryByRole("button", { name: "Older version" })).toBeNull(),
+      expect(status.queryByRole("button", { name: /Iteration/ })).toBeNull(),
     );
   },
 };
@@ -2282,7 +2383,6 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
     );
     await userEvent.click(older);
 
-    // Read-only banner for the historical PR appears...
     await waitFor(() =>
       expect(
         rail().getByText(
@@ -2290,7 +2390,7 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
         ),
       ).toBeTruthy(),
     );
-    // ...and the article shows the live-head content (there is no merge commit
+    // The article shows the live-head content (there is no merge commit
     // to snapshot), never a blank or perpetual skeleton.
     await waitFor(() =>
       expect(

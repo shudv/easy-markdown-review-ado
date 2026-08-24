@@ -1009,6 +1009,30 @@ describe("decorateDiffRanges — inline word diff", () => {
     expect(root.querySelector(`.${WORD_REMOVED_CLASS}`)?.textContent).toBe("1");
   });
 
+  it("skips code metadata when the rendered pre has no code child", () => {
+    const root = makeRoot([
+      { tag: "pre", start: 5, end: 5, html: "const x = 2;" },
+    ]);
+    expect(() =>
+      decorateDiffRanges(
+        root,
+        [
+          {
+            startLine: 5,
+            endLine: 5,
+            kind: "modified",
+            originalText: "const x = 1;",
+          },
+        ],
+        {
+          renderInline: (markdown) =>
+            `<pre><code class="language-ts">${markdown}</code></pre>`,
+        },
+      ),
+    ).not.toThrow();
+    expect(root.querySelector(".emr-diff-metadata")).toBeNull();
+  });
+
   it("does NOT inline when the block was mostly rewritten", () => {
     const root = makeRoot([
       {

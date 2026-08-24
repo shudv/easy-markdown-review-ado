@@ -1,6 +1,6 @@
 // Two-row rail header. Row 1 is the comment toolbar: the "Comments" label —
 // which doubles as the filter dropdown (status modes + an "only this file"
-// scope toggle) — a collapsible search field, and prev/next comment cyclers.
+// scope toggle) — and a collapsible search field.
 // Row 2 is the version stepper — a quiet banded strip naming the pull request
 // comments route to (number + title), flanked by ‹ › chevrons that walk the
 // document's review history when there is any: left steps older (back through
@@ -56,12 +56,6 @@ interface RailToolbarProps {
   onlyThisFile: boolean;
   /** Toggle the "only this file" scope. */
   onOnlyThisFileChange: (next: boolean) => void;
-  /** Visible thread ids in render order — drives prev/next cyclers. */
-  orderedThreadIds: string[];
-  /** Currently-selected thread id, or null. */
-  activeThreadId: string | null;
-  /** Set the active thread (used by prev/next buttons). */
-  onSelectThread: (id: string) => void;
   /** Optional routed PR shown inline next to the "Comments" label. */
   routedPr?: {
     prId: number;
@@ -93,9 +87,6 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
     onFilterModeChange,
     onlyThisFile,
     onOnlyThisFileChange,
-    orderedThreadIds,
-    activeThreadId,
-    onSelectThread,
     routedPr,
     historyNav,
     hidePrPill,
@@ -128,39 +119,12 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
     setSearchOpen(false);
   };
 
-  // Prev/next thread cyclers. Walk the visible thread list in render order,
-  // wrapping at both ends; with nothing selected, "next" lands on the first
-  // and "prev" on the last.
-  const curThreadIdx = activeThreadId
-    ? orderedThreadIds.indexOf(activeThreadId)
-    : -1;
-  const totalThreads = orderedThreadIds.length;
-  const canCycleThreads = totalThreads > 0;
-  const goPrevThread = () => {
-    const target =
-      curThreadIdx === -1
-        ? orderedThreadIds[totalThreads - 1]
-        : orderedThreadIds[(curThreadIdx - 1 + totalThreads) % totalThreads];
-    /* v8 ignore next -- target is always defined when there are threads to cycle; guard is defensive */
-    if (target) onSelectThread(target);
-  };
-  const goNextThread = () => {
-    const target =
-      curThreadIdx === -1
-        ? orderedThreadIds[0]
-        : orderedThreadIds[(curThreadIdx + 1) % totalThreads];
-    /* v8 ignore next -- target is always defined when there are threads to cycle; guard is defensive */
-    if (target) onSelectThread(target);
-  };
-
   return (
     <div className="emr-rail-header">
       <div className="emr-rail-toolbar">
         {/*
-          Lead region (flex:1): the "Comments" label + all-resolved badge +
-          prev/next cycler, OR the inline search input. Everything whose width
-          varies (the cycler count, the resolved badge appearing) lives here so
-          the right-hand action buttons never shift when it changes.
+          Lead region (flex:1): the "Comments" label + all-resolved badge, OR
+          the inline search input. The right-hand actions stay pinned.
         */}
         <div className="emr-rail-toolbar-lead">
           {searchOpen ? (
@@ -208,47 +172,6 @@ export function RailToolbar(props: RailToolbarProps): React.ReactElement {
                   aria-label="All comments resolved"
                 >
                   <SvgCheckCircle />
-                </span>
-              ) : null}
-              {canCycleThreads ? (
-                <span className="emr-cycler-group">
-                  <span
-                    className="emr-cycler-count"
-                    aria-live="polite"
-                    aria-label={
-                      curThreadIdx >= 0
-                        ? `Comment ${curThreadIdx + 1} of ${totalThreads}`
-                        : `${totalThreads} comments`
-                    }
-                  >
-                    <span className="emr-cycler-count-cur">
-                      {curThreadIdx >= 0 ? curThreadIdx + 1 : "\u2014"}
-                    </span>
-                    <span className="emr-cycler-count-sep">/</span>
-                    <span className="emr-cycler-count-total">
-                      {totalThreads}
-                    </span>
-                  </span>
-                  <span className="emr-cycler-arrows">
-                    <button
-                      type="button"
-                      className="emr-icon-btn emr-cycler-btn"
-                      title="Previous comment"
-                      aria-label="Previous comment"
-                      onClick={goPrevThread}
-                    >
-                      <SvgChevronUp />
-                    </button>
-                    <button
-                      type="button"
-                      className="emr-icon-btn emr-cycler-btn"
-                      title="Next comment"
-                      aria-label="Next comment"
-                      onClick={goNextThread}
-                    >
-                      <SvgChevronDown />
-                    </button>
-                  </span>
                 </span>
               ) : null}
             </>
@@ -410,34 +333,6 @@ function SvgCheckCircle(): React.ReactElement {
     >
       <circle cx="12" cy="12" r="9" />
       <path d="m8.4 12.3 2.5 2.5 4.7-5.1" strokeWidth={2} />
-    </svg>
-  );
-}
-
-function SvgChevronUp(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <polyline points="6 15 12 9 18 15" />
-    </svg>
-  );
-}
-
-function SvgChevronDown(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="14"
-      height="14"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }

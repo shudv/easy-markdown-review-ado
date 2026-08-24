@@ -6,9 +6,72 @@ import {
   diffableFilePaths,
   mapChangeType,
   pickPullRequestId,
+  reviewIterationStops,
   selectDiffCommits,
   withTimeout,
 } from "../src/pr-tab/prTabApp.helpers";
+
+describe("reviewIterationStops", () => {
+  it("maps chronological pushes to newest-first stops with Latest current", () => {
+    expect(
+      reviewIterationStops(
+        [
+          {
+            id: 1,
+            description: "Initial description",
+            createdDate: "2026-08-11T17:06:00Z",
+            sourceRefCommit: { commitId: "c1" },
+            commits: [{ commitId: "c1", comment: "Initial draft" }],
+          },
+          {
+            id: 2,
+            description: "Second revision",
+            createdDate: "2026-08-12T09:18:00Z",
+            sourceRefCommit: { commitId: "c2" },
+          },
+        ],
+        58,
+      ),
+    ).toEqual([
+      {
+        commitId: null,
+        prId: 58,
+        title: "Second revision",
+        dateMs: Date.parse("2026-08-12T09:18:00Z"),
+        isCurrent: true,
+        readOnly: false,
+      },
+      {
+        commitId: "c1",
+        prId: 58,
+        title: "Initial description",
+        dateMs: Date.parse("2026-08-11T17:06:00Z"),
+        isCurrent: false,
+        readOnly: true,
+      },
+    ]);
+  });
+
+  it("skips unusable iterations and falls back to an iteration label", () => {
+    expect(
+      reviewIterationStops(
+        [
+          { id: 1, description: "missing commit" },
+          { id: 2, sourceRefCommit: { commitId: "c2" } },
+        ],
+        9,
+      ),
+    ).toEqual([
+      {
+        commitId: null,
+        prId: 9,
+        title: "Iteration 2",
+        isCurrent: true,
+        readOnly: false,
+      },
+    ]);
+  });
+});
 
 describe("selectDiffCommits", () => {
   it("uses the iteration merge base + source tip (three-dot)", () => {

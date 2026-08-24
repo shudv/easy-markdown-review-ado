@@ -41,6 +41,7 @@ import { resolveDocLink, routeDocLink, samePath } from "../markdown/docLinks";
 import { ArticleView, type AnchorLayout } from "./components/ArticleView";
 import { DiffMinimap } from "./components/DiffMinimap";
 import { CommentRail } from "./components/CommentRail";
+import { buildRailModel } from "./components/CommentRail.helpers";
 import {
   countCommentFilters,
   threadMatchesFilter,
@@ -49,7 +50,10 @@ import {
 } from "./components/commentFilter";
 import { DocNav } from "./components/DocNav";
 import { DraftGuardDialog } from "./components/DraftGuardDialog";
-import { ReaderStatusBar } from "./components/ReaderStatusBar";
+import {
+  ReaderStatusBar,
+  type ReaderIterationOption,
+} from "./components/ReaderStatusBar";
 import {
   readReaderPrefs,
   writeReaderPrefs,
@@ -81,11 +85,16 @@ import {
   buildHistoryStops,
   stepStopIndex,
   historyChevronTooltip,
+  allReviewIterations,
+  resolveReviewIterationRange,
+  sourceDiffRanges,
   isCommentUiClickTarget,
   countWords,
   wordCountDelta,
   bindRepositoryImageResolver,
   type DocPrRef,
+  type HistoryStop,
+  type ReviewIterationRange,
 } from "./prShellHelpers";
 import { useDraftPersistence } from "./useDraftPersistence";
 import {
@@ -190,6 +199,10 @@ interface PrShellProps {
   loadThreadsForPr?: (prId: number, path: string) => Promise<CommentThread[]>;
   /** Loads the document's Markdown source at a specific commit (a history stop). */
   loadFileSourceAt?: (path: string, commitId: string) => Promise<string>;
+  /** Native iterations of the current PR, newest first with Latest at index 0. */
+  reviewIterationStops?: readonly HistoryStop[];
+  /** Merge base used for Update 1 and the dedicated All updates comparison. */
+  reviewIterationBaseCommit?: string;
   /**
    * Seeds the initially-selected document (deep-link routing, `?path=`). When
    * omitted the shell selects `pr.files[0]`. Read once at mount — a path that
@@ -776,9 +789,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const loadDocHistory = props.loadDocHistory;
   const loadThreadsForPr = props.loadThreadsForPr;
   const loadFileSourceAt = props.loadFileSourceAt;
-  const stepperEnabled = !!(
+  const completedPrHistoryEnabled = !!(
     loadDocHistory &&
     loadThreadsForPr &&
+    loadFileSourceAt
+  );
+  const nativeIterationMode = !!(
+    props.reviewIterationStops?.length &&
+    props.reviewIterationBaseCommit &&
     loadFileSourceAt
   );
   // Per-path review-history stops, the active stop index, and the historical
@@ -786,8 +804,23 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const [historyByPath, setHistoryByPath] = React.useState<
     Record<string, DocPrRef[]>
   >({});
-  const [stopIndex, setStopIndex] = React.useState(0);
+  const [completedHistoryStopIndex, setCompletedHistoryStopIndex] =
+    React.useState(0);
+  const nativeUpdateCount = Math.max(
+    1,
+    props.reviewIterationStops?.length ?? 1,
+  );
+  const [iterationRange, setIterationRange] =
+    React.useState<ReviewIterationRange>(() =>
+      allReviewIterations(nativeUpdateCount),
+    );
   const [historicalHtmlByKey, setHistoricalHtmlByKey] = React.useState<
+    Record<string, string>
+  >({});
+  const [historicalSourceByKey, setHistoricalSourceByKey] = React.useState<
+    Record<string, string>
+  >({});
+  const [historicalErrorByKey, setHistoricalErrorByKey] = React.useState<
     Record<string, string>
   >({});
   // Keyed by `path\u0000prId` (not PR id alone): one PR can change several
@@ -797,15 +830,34 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     Record<string, CommentThread[]>
   >({});
 
-  const docHistory = stepperEnabled
+  const docHistory = completedPrHistoryEnabled
     ? (historyByPath[selectedPath] ?? EMPTY_DOC_HISTORY)
     : EMPTY_DOC_HISTORY;
-  const historyStops = React.useMemo(
+  const completedPrHistoryStops = React.useMemo(
     () => buildHistoryStops(effectiveRoutedPr?.prId ?? null, docHistory),
     [effectiveRoutedPr, docHistory],
   );
-  const clampedStopIndex = Math.min(stopIndex, historyStops.length - 1);
-  const activeStop = historyStops[clampedStopIndex]!;
+  const historyStops = nativeIterationMode
+    ? props.reviewIterationStops!
+    : completedPrHistoryStops;
+  const resolvedIterationRange = resolveReviewIterationRange(
+    iterationRange,
+    historyStops.length,
+  );
+  const clampedStopIndex = nativeIterationMode
+    ? resolvedIterationRange.activeStopIndex
+    : Math.min(completedHistoryStopIndex, historyStops.length - 1);
+  const comparingIterations =
+    nativeIterationMode && !resolvedIterationRange.isAllChanges;
+  const activeStopIndex = nativeIterationMode
+    ? resolvedIterationRange.activeStopIndex
+    : clampedStopIndex;
+  const baselineStopIndex = nativeIterationMode
+    ? resolvedIterationRange.baselineStopIndex
+    : clampedStopIndex;
+  const activeStop = historyStops[activeStopIndex]!;
+  const baselineStop =
+    baselineStopIndex == null ? undefined : historyStops[baselineStopIndex];
   const viewingHistorical = !activeStop.isCurrent;
 
   const [threadState, dispatch] = React.useReducer(
@@ -938,13 +990,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // ---- comment-history stepper effects ----
   // Always start a freshly-opened document at its live "Current" head.
   React.useEffect(() => {
-    setStopIndex(0);
-  }, [selectedPath]);
+    setCompletedHistoryStopIndex(0);
+    setIterationRange(allReviewIterations(nativeUpdateCount));
+  }, [selectedPath, nativeUpdateCount]);
 
   // Load the selected document's review history the first time it's opened.
   const loadedHistoryPathsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
-    if (!stepperEnabled || !loadDocHistory || !selectedPath) return;
+    if (!completedPrHistoryEnabled || !loadDocHistory || !selectedPath) return;
     if (loadedHistoryPathsRef.current.has(selectedPath)) return;
     loadedHistoryPathsRef.current.add(selectedPath);
     let cancelled = false;
@@ -963,48 +1016,86 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [stepperEnabled, loadDocHistory, selectedPath]);
+  }, [completedPrHistoryEnabled, loadDocHistory, selectedPath]);
 
-  // Load the document's source at the active historical stop's merge commit.
+  // Load source + rendered HTML for every historical endpoint needed by the
+  // current selection. A range may need two commits; single selection needs one.
   const historicalContentKey =
     viewingHistorical && activeStop.commitId
       ? `${selectedPath}\u0000${activeStop.commitId}`
       : null;
-  React.useEffect(() => {
-    if (!historicalContentKey || !loadFileSourceAt || !activeStop.commitId) {
-      return;
+  const baselineCommitId =
+    baselineStop?.commitId ?? props.reviewIterationBaseCommit;
+  const baselineContentKey = comparingIterations
+    ? `${selectedPath}\u0000${baselineCommitId!}`
+    : null;
+  const historicalLoadTargets = React.useMemo(() => {
+    const targets = new Map<string, string>();
+    if (historicalContentKey && activeStop.commitId) {
+      targets.set(historicalContentKey, activeStop.commitId);
     }
-    if (historicalHtmlByKey[historicalContentKey]) return;
-    const commitId = activeStop.commitId;
+    if (baselineContentKey && baselineCommitId) {
+      targets.set(baselineContentKey, baselineCommitId);
+    }
+    return [...targets].map(([key, commitId]) => ({ key, commitId }));
+  }, [
+    historicalContentKey,
+    activeStop.commitId,
+    baselineContentKey,
+    baselineCommitId,
+  ]);
+  React.useEffect(() => {
+    if (!loadFileSourceAt || historicalLoadTargets.length === 0) return;
     let cancelled = false;
-    loadFileSourceAt(selectedPath, commitId)
-      .then(async (source) => {
-        /* v8 ignore next -- bails if the stop changed mid-load */
-        if (cancelled) return;
-        const html = await renderMarkdown(source);
-        /* v8 ignore next -- bails if the stop changed mid-render */
-        if (cancelled) return;
-        setHistoricalHtmlByKey((prev) => ({
-          ...prev,
-          [historicalContentKey]: html,
-        }));
-      })
-      .catch((err: unknown) => {
-        console.warn("[PrShell] loadFileSourceAt failed:", err);
-      });
+    for (const target of historicalLoadTargets) {
+      if (
+        historicalErrorByKey[target.key] !== undefined ||
+        (historicalHtmlByKey[target.key] !== undefined &&
+          historicalSourceByKey[target.key] !== undefined)
+      ) {
+        continue;
+      }
+      void loadFileSourceAt(selectedPath, target.commitId)
+        .then(async (source) => {
+          /* v8 ignore next -- bails if the selection changed mid-load */
+          if (cancelled) return;
+          const html = await renderMarkdown(source);
+          /* v8 ignore next -- bails if the selection changed mid-render */
+          if (cancelled) return;
+          setHistoricalSourceByKey((prev) => ({
+            ...prev,
+            [target.key]: source,
+          }));
+          setHistoricalHtmlByKey((prev) => ({
+            ...prev,
+            [target.key]: html,
+          }));
+        })
+        .catch((err: unknown) => {
+          /* v8 ignore next -- cleanup races ahead of a rejected request */
+          if (cancelled) return;
+          console.warn("[PrShell] loadFileSourceAt failed:", err);
+          setHistoricalErrorByKey((prev) => ({
+            ...prev,
+            [target.key]: errorMessage(err),
+          }));
+        });
+    }
     return () => {
       cancelled = true;
     };
   }, [
-    historicalContentKey,
     loadFileSourceAt,
     selectedPath,
-    activeStop.commitId,
+    historicalLoadTargets,
+    historicalErrorByKey,
     historicalHtmlByKey,
+    historicalSourceByKey,
   ]);
 
   // Load the active historical stop PR's threads (read-only).
-  const activeHistoricalPrId = viewingHistorical ? activeStop.prId : null;
+  const activeHistoricalPrId =
+    viewingHistorical && !nativeIterationMode ? activeStop.prId : null;
   React.useEffect(() => {
     if (activeHistoricalPrId == null || !loadThreadsForPr) return;
     const key = `${selectedPath}\u0000${activeHistoricalPrId}`;
@@ -1118,7 +1209,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // state / poller). When the stepper is parked on a historical stop we show
   // that PR's threads instead — read-only, loaded on demand and cached by id.
   const currentThreadsRaw = React.useMemo(() => {
-    if (viewingHistorical) {
+    if (viewingHistorical && !nativeIterationMode) {
       /* v8 ignore start -- historical-PR view branch; not exercised in the unit/storybook harness */
       return activeStop.prId != null
         ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStop.prId}`] ??
@@ -1129,6 +1220,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     return allThreadsForFile;
   }, [
     viewingHistorical,
+    nativeIterationMode,
     activeStop.prId,
     selectedPath,
     historicalThreadsByKey,
@@ -1465,24 +1557,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     [scrollDocToAnchor],
   );
 
-  // Cycle (prev/next) from the rail toolbar: select the thread, scroll the
-  // document to its anchor (the rail-follow effect brings the balloon into the
-  // rail's own view), and auto-open its reply composer.
+  // Cycle from the status bar: select the thread and scroll the document to its
+  // anchor. The rail-follow effect reveals the balloon and auto-expands any
+  // collapsed tray containing it. Replying remains an explicit rail action.
   const onCycleToThread = React.useCallback(
     (tid: string) => {
       setActiveThreadId(tid);
       track(events.commentNavigated());
       scrollDocToAnchor(tid);
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          /* v8 ignore next -- reply-trigger click is inert in headless cycle */
-          document
-            .querySelector<HTMLButtonElement>(
-              `.emr-rail-col .emr-balloon[data-thread-id="${CSS.escape(tid)}"] .emr-reply-trigger`,
-            )
-            ?.click();
-        });
-      });
     },
     [scrollDocToAnchor],
   );
@@ -1868,16 +1950,6 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   );
   const isWholeFileChange =
     currentFileChangeType === "added" || currentFileChangeType === "deleted";
-  // Whether the diff CAN be shown for the current file: the PR provides ranges,
-  // the file was edited (not added/removed wholesale), and we're on the live
-  // head (not a historical snapshot).
-  const diffAvailable =
-    !viewingHistorical &&
-    !isWholeFileChange &&
-    !!currentFileDiff &&
-    currentFileDiff.length > 0;
-  const showDiff = diffAvailable && !diffHidden;
-
   // ---- comment-history stepper: active-stop render values ----
   // A historical stop swaps the whole document view atomically — content,
   // threads, routed-PR pill and read-only state all follow the active stop, so
@@ -1890,8 +1962,15 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // (`historicalContentKey` is null), so fall back to the live head content
   // instead of rendering a blank, perpetually-"loading" article.
   const usingHistoricalContent = viewingHistorical && !!historicalContentKey;
+  const historicalLoadError = historicalLoadTargets.reduce<string | undefined>(
+    (found, target) => found ?? historicalErrorByKey[target.key],
+    undefined,
+  );
   const historicalLoading =
-    usingHistoricalContent && historicalHtml === undefined;
+    historicalLoadError === undefined &&
+    ((usingHistoricalContent && historicalHtml === undefined) ||
+      (baselineContentKey != null &&
+        historicalSourceByKey[baselineContentKey] === undefined));
   const activePristineHtml = usingHistoricalContent
     ? (historicalHtml ?? "")
     : pristineHtml;
@@ -1913,12 +1992,38 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       activeStop.commitId,
     ],
   );
+  const activeSource = usingHistoricalContent
+    ? historicalSourceByKey[historicalContentKey!]
+    : sourceByPath[selectedPath];
+  const baselineSource = comparingIterations
+    ? historicalSourceByKey[baselineContentKey!]
+    : undefined;
+  const iterationDiff = React.useMemo(
+    () =>
+      comparingIterations &&
+      baselineSource !== undefined &&
+      activeSource !== undefined
+        ? sourceDiffRanges(baselineSource, activeSource)
+        : undefined,
+    [comparingIterations, baselineSource, activeSource],
+  );
+  const activeDiff = comparingIterations ? iterationDiff : currentFileDiff;
+  const activeOriginalSource = comparingIterations
+    ? baselineSource
+    : currentOriginalSource;
+  const diffAvailable = comparingIterations
+    ? !!iterationDiff && iterationDiff.length > 0
+    : !viewingHistorical &&
+      !isWholeFileChange &&
+      !!currentFileDiff &&
+      currentFileDiff.length > 0;
+  const showDiff = diffAvailable && !diffHidden;
 
   // Subtle word-count badge for the doc-nav title. Uses the active document's
   // Markdown source; falls back to 0 (badge hidden) until the source loads.
   const docWordCount = React.useMemo(
-    () => countWords(sourceByPath[activeStorageKey] ?? ""),
-    [sourceByPath, activeStorageKey],
+    () => countWords(activeSource ?? ""),
+    [activeSource],
   );
   // When the diff is shown, also surface how the PR grew/shrank the prose:
   // words added vs. removed, derived from the changed line ranges. `showDiff`
@@ -1927,35 +2032,31 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   // the badge simply renders no `+/−` segment.
   const docWordDelta = React.useMemo(() => {
     if (!showDiff) return undefined;
-    return wordCountDelta(
-      sourceByPath[activeStorageKey] ?? "",
-      currentFileDiff!,
-    );
-  }, [showDiff, currentFileDiff, sourceByPath, activeStorageKey]);
+    return wordCountDelta(activeSource ?? "", activeDiff!);
+  }, [showDiff, activeDiff, activeSource]);
   const viewingDeletedFile = currentFileChangeType === "deleted";
   const activeReadOnly =
     effectiveReadOnly || viewingHistorical || viewingDeletedFile;
   const activeReadOnlyMessage = viewingHistorical
-    ? `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
+    ? nativeIterationMode
+      ? "Comments are read-only while viewing a previous update."
+      : `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
     : viewingDeletedFile
       ? "This document was deleted in this pull request. Its previous version is read-only."
       : effectiveReadOnlyMessage;
-  const activeRoutedPr: RoutedPrInfo | undefined = viewingHistorical
-    ? {
-        /* v8 ignore start -- a historical stop always carries prId/title; the fallbacks are defensive */
-        prId: activeStop.prId ?? 0,
-        title: activeStop.title ?? `PR #${activeStop.prId}`,
-        /* v8 ignore stop */
-        status: "completed",
-        url: activeStop.url,
-      }
-    : effectiveRoutedPr;
-  // Chevron nav model for the rail. Present only when there's history to walk.
-  // Out-of-range index access yields `undefined` at either end (where the
-  // chevron is disabled), which the tooltip helper renders as the end-of-history
-  // message — so no extra bounds branches are needed here.
+  const activeRoutedPr: RoutedPrInfo | undefined =
+    viewingHistorical && !nativeIterationMode
+      ? {
+          /* v8 ignore start -- a historical stop always carries prId/title; the fallbacks are defensive */
+          prId: activeStop.prId ?? 0,
+          title: activeStop.title ?? `PR #${activeStop.prId}`,
+          /* v8 ignore stop */
+          status: "completed",
+          url: activeStop.url,
+        }
+      : effectiveRoutedPr;
   const historyNav =
-    stepperEnabled && historyStops.length > 1
+    completedPrHistoryEnabled && historyStops.length > 1
       ? {
           canNewer: clampedStopIndex > 0,
           canOlder: clampedStopIndex < historyStops.length - 1,
@@ -1968,14 +2069,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             historyStops[clampedStopIndex - 1],
           ),
           onNewer: () => {
-            setStopIndex(
+            setCompletedHistoryStopIndex(
               stepStopIndex(clampedStopIndex, -1, historyStops.length),
             );
             setActiveThreadId(null);
             dismissEmptyDraftRef.current();
           },
           onOlder: () => {
-            setStopIndex(
+            setCompletedHistoryStopIndex(
               stepStopIndex(clampedStopIndex, 1, historyStops.length),
             );
             setActiveThreadId(null);
@@ -1983,6 +2084,28 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           },
         }
       : undefined;
+  const iterationOptions = React.useMemo<ReaderIterationOption[]>(
+    () =>
+      nativeIterationMode
+        ? historyStops
+            .map((stop, newestFirstIndex) => ({
+              stopIndex: newestFirstIndex,
+              number: historyStops.length - newestFirstIndex,
+              title: stop.title!,
+              dateMs: stop.dateMs,
+            }))
+            .reverse()
+        : [],
+    [historyStops, nativeIterationMode],
+  );
+  const changeIterationRange = React.useCallback(
+    (range: ReviewIterationRange) => {
+      setIterationRange(range);
+      setActiveThreadId(null);
+      dismissEmptyDraftRef.current();
+    },
+    [],
+  );
 
   // ---- Comment search ----
   // A thread matches when any comment body or author displayName contains the
@@ -2012,6 +2135,34 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const filteredOrphanedFileThreads = React.useMemo(
     () => orphanedFileThreads.filter(matchesQuery),
     [orphanedFileThreads, matchesQuery],
+  );
+  const commentCycleThreadIds = React.useMemo(
+    () =>
+      buildRailModel({
+        currentThreads: filteredCurrentThreads,
+        generalThreads: filteredGeneralThreads,
+        orphanedFileThreads: filteredOrphanedFileThreads,
+        hiddenThreadIds: hiddenSet,
+        orphanedThreadIds: orphanedSet,
+        yByThreadId: anchorLayout.yByThreadId,
+        draftY:
+          !activeReadOnly && activeDraft?.anchor && draftY !== null
+            ? draftY
+            : null,
+        onlyThisFile,
+      }).cycleThreadIds,
+    [
+      filteredCurrentThreads,
+      filteredGeneralThreads,
+      filteredOrphanedFileThreads,
+      hiddenSet,
+      orphanedSet,
+      anchorLayout.yByThreadId,
+      activeReadOnly,
+      activeDraft?.anchor,
+      draftY,
+      onlyThisFile,
+    ],
   );
   // Counts for the search summary line.
   const totalCommentCount = React.useMemo(() => {
@@ -2222,7 +2373,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                 <DiffMinimap
                   scrollRef={bodyRef}
                   version={renderVersion}
-                  showDiff={!viewingHistorical && showDiff}
+                  showDiff={showDiff}
                 />
               </div>
               {/*
@@ -2248,6 +2399,18 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   </div>
                 ) : loading && !pristineHtml ? (
                   <ArticleSkeleton />
+                ) : historicalLoadError ? (
+                  <div className="emr-article-wrap">
+                    <div className="emr-error">
+                      <h2>Couldn&rsquo;t load this version</h2>
+                      <p>
+                        <code>{selectedPath}</code> couldn&rsquo;t be loaded at
+                        the selected revision. It may not exist at that commit,
+                        or you may not have access to it.
+                      </p>
+                      <pre>{historicalLoadError}</pre>
+                    </div>
+                  </div>
                 ) : historicalLoading ? (
                   <ArticleSkeleton />
                 ) : (
@@ -2263,14 +2426,10 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     onHighlightClick={onHighlightClick}
                     onSelection={onSelectionMade}
                     readOnly={activeReadOnly}
-                    diff={viewingHistorical ? undefined : currentFileDiff}
-                    originalSource={
-                      viewingHistorical ? undefined : currentOriginalSource
-                    }
-                    currentSource={
-                      viewingHistorical ? undefined : sourceByPath[selectedPath]
-                    }
-                    showDiff={!viewingHistorical && showDiff}
+                    diff={activeDiff}
+                    originalSource={activeOriginalSource}
+                    currentSource={activeSource}
+                    showDiff={showDiff}
                     onDocLink={handleDocLink}
                     resolveDocumentImage={activeDocumentImageResolver}
                   />
@@ -2303,7 +2462,6 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     activeThreadId={activeThreadId}
                     currentUser={currentUser}
                     onSelectThread={onSelectThread}
-                    onCycleThread={onCycleToThread}
                     onReply={onReply}
                     onResolve={onResolve}
                     onReopen={onReopen}
@@ -2333,9 +2491,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     onOnlyThisFileChange={handleOnlyThisFileChange}
                     readOnly={activeReadOnly}
                     readOnlyMessage={activeReadOnlyMessage}
+                    showReadOnlyBanner={
+                      !nativeIterationMode || !viewingHistorical
+                    }
                     routedPr={activeRoutedPr}
+                    hidePrPill={
+                      hidePrPill || (nativeIterationMode && viewingHistorical)
+                    }
                     historyNav={historyNav}
-                    hidePrPill={hidePrPill}
                   />
                 )}
               </div>
@@ -2428,9 +2591,22 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             navToggleable={navToggleable}
             showComments={readerPrefs.showComments}
             onToggleComments={toggleReaderComments}
+            commentThreadIds={commentCycleThreadIds}
+            activeCommentThreadId={activeThreadId}
+            onCycleComment={onCycleToThread}
             changesAvailable={diffAvailable}
             changesShown={!diffHidden}
             onToggleChanges={handleToggleDiff}
+            iterationOptions={
+              nativeIterationMode && iterationOptions.length > 1
+                ? iterationOptions
+                : undefined
+            }
+            iterationBaseCommit={
+              nativeIterationMode ? props.reviewIterationBaseCommit : undefined
+            }
+            iterationRange={iterationRange}
+            onIterationRangeChange={changeIterationRange}
             feedbackHref={feedbackHref}
             onRefresh={canRefreshComments ? handleRefresh : undefined}
             refreshing={threadSync.isRefreshing || fileRefreshInFlight}

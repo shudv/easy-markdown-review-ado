@@ -168,6 +168,10 @@ export const Default: Story = {
       },
       { timeout: 5000 },
     );
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    expect(getComputedStyle(nav).paddingLeft).toBe("24px");
+    expect(getComputedStyle(docNav).paddingRight).toBe("12px");
   },
 };
 

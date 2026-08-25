@@ -14,6 +14,16 @@ vi.mock("mermaid", () => {
 
 import { hydrateMermaid } from "../src/markdown/mermaidHydrate";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 describe("hydrateMermaid — library load failure", () => {
   it("flags every placeholder as load-failed without throwing", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -31,6 +41,16 @@ describe("hydrateMermaid — library load failure", () => {
       // Not hydrated — the fallback stays in place for a retry/readability.
       expect(el.getAttribute("data-hydrated")).toBeNull();
     }
+    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({
+        message: expect.stringContaining("error when mocking a module"),
+        cause: expect.objectContaining({ message: "chunk load failed" }),
+      }),
+      source: "Mermaid.hydrate",
+      operation: "diagram-library-load",
+      impact: "degraded",
+    });
     warn.mockRestore();
   });
 });

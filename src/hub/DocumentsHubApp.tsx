@@ -30,7 +30,11 @@ import type { RoutedPrInfo } from "../shell/PrShell";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { buildReposFileUrl } from "../markdown/docLinks";
 import type { DocPrRef } from "../shell/prShellHelpers";
-import { markAppReady, setTelemetryContext } from "../telemetry";
+import {
+  markAppReady,
+  setTelemetryContext,
+  trackUserFacingError,
+} from "../telemetry";
 import {
   buildPrUrl,
   fetchRepoById,
@@ -274,6 +278,12 @@ export function DocumentsHubApp(): React.ReactElement {
         log("ready");
       } catch (err: unknown) {
         console.error("[DocumentsHubApp] discovery failed", err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsHubApp.discovery",
+          operation: "repository-discovery",
+          impact: "blocking",
+        });
         setError(formatError(err));
       }
     })();
@@ -329,6 +339,12 @@ export function DocumentsHubApp(): React.ReactElement {
         });
       } catch (err) {
         console.warn(`[DocumentsHubApp] PR routing failed for ${repoId}:`, err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsHubApp.repository",
+          operation: "repository-details-load",
+          impact: "degraded",
+        });
         detailsStatusRef.current.set(repoId, "error");
         // Still mark `detailsLoaded: true` so the shell stops waiting — the
         // read-only banner then surfaces the no-PR state.
@@ -417,6 +433,12 @@ export function DocumentsHubApp(): React.ReactElement {
         });
       } catch (err) {
         console.warn(`[DocumentsHubApp] refresh failed for ${repoId}:`, err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsHubApp.repository",
+          operation: "repository-refresh",
+          impact: "action-failed",
+        });
         detailsStatusRef.current.set(repoId, "error");
         setState((curr) => {
           if (!curr) return curr;
@@ -481,6 +503,12 @@ export function DocumentsHubApp(): React.ReactElement {
       });
     } catch (err) {
       console.warn("[DocumentsHubApp] load more repos failed:", err);
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.picker",
+        operation: "repository-page-load",
+        impact: "action-failed",
+      });
       setPicker((p) => {
         // If the filter changed while this request was in flight, don't let
         // this older failure clobber the newer filtered view's pagination.
@@ -519,6 +547,12 @@ export function DocumentsHubApp(): React.ReactElement {
         if (seq !== filterSeqRef.current) return;
 
         console.warn("[DocumentsHubApp] filter repos failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsHubApp.picker",
+          operation: "repository-filter",
+          impact: "action-failed",
+        });
         setPicker((p) => ({ ...p, loading: false, hasMore: false }));
       }
     },

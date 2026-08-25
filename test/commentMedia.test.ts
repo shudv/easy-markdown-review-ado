@@ -5,6 +5,16 @@ import {
   isAdoPullRequestAttachmentUrl,
 } from "../src/comments/commentMedia";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 describe("isAdoPullRequestAttachmentUrl", () => {
   it("recognizes absolute and relative PR attachment URLs", () => {
     expect(
@@ -114,6 +124,7 @@ describe("decorateCommentMedia", () => {
     expect(
       root.querySelector(".emr-comment-media")?.classList.contains("is-error"),
     ).toBe(true);
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
   });
 
   it("decorates non-image ADO attachments without changing ordinary links", () => {
@@ -200,8 +211,44 @@ describe("decorateCommentMedia", () => {
     await vi.waitFor(() =>
       expect(frame.classList.contains("is-error")).toBe(true),
     );
+    image.dispatchEvent(new Event("error"));
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({
+        message: "Comment image failed to load",
+      }),
+      source: "CommentMedia.decorate",
+      operation: "comment-image-load",
+      impact: "degraded",
+    });
     expect(frame.classList.contains("is-loading")).toBe(false);
     expect(frame.getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("falls back to an unavailable state when the attachment resolver rejects", async () => {
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<img src="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/rejected.png" alt="Rejected">';
+    const image = root.querySelector<HTMLImageElement>("img")!;
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: 0 },
+    });
+
+    decorateCommentMedia(root, async () => {
+      throw new Error("attachment unavailable");
+    });
+
+    const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
+    await vi.waitFor(() =>
+      expect(frame.classList.contains("is-error")).toBe(true),
+    );
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: "attachment unavailable" }),
+      source: "CommentMedia.decorate",
+      operation: "comment-image-load",
+      impact: "degraded",
+    });
   });
 
   it("does not apply a resolved object URL after cleanup", async () => {

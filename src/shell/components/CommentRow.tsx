@@ -17,6 +17,7 @@ import { Composer } from "./Composer";
 import { useCommentLink } from "../../comments/commentLink";
 import { copyText } from "../../comments/clipboard";
 import { formatLikeTooltip } from "../../comments/likeTooltip";
+import { trackUserFacingError } from "../../telemetry";
 
 interface CommentRowProps {
   threadId: string;
@@ -26,6 +27,8 @@ interface CommentRowProps {
   isFirst: boolean;
   /** Current thread status — drives whether the menu shows Resolve or Reopen. */
   threadStatus: ThreadStatus;
+  /** True when every comment in the thread can be deleted by this user. */
+  canDeleteThread: boolean;
   /**
    * When false, edit / delete / react affordances are hidden. Used for
    * historical / orphan threads which are read-only.
@@ -54,6 +57,7 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
     currentUser,
     isFirst,
     threadStatus,
+    canDeleteThread,
     interactive,
     onEdit,
     onDelete,
@@ -140,6 +144,14 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
     // claim success when a copy is actually confirmed.
     void copyText(url).then((ok) => {
       setLinkState(ok ? "copied" : "failed");
+      if (!ok) {
+        trackUserFacingError({
+          error: new Error("Comment link copy failed"),
+          source: "CommentRow.copyLink",
+          operation: "comment-link-copy",
+          impact: "action-failed",
+        });
+      }
       window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
     });
   };
@@ -381,7 +393,7 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
                           <span>Close thread</span>
                         </button>
                       ) : null}
-                      {isFirst ? (
+                      {isFirst && canDeleteThread ? (
                         <button
                           type="button"
                           className="emr-popover-item is-danger"
@@ -393,7 +405,7 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
                           </span>
                           <span>Delete thread</span>
                         </button>
-                      ) : canDelete ? (
+                      ) : !isFirst && canDelete ? (
                         <button
                           type="button"
                           className="emr-popover-item is-danger"

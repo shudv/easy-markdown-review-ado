@@ -24,6 +24,7 @@ import {
   stepStopIndex,
   wordCountDelta,
 } from "../src/shell/prShellHelpers";
+import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 
 describe("bindRepositoryImageResolver", () => {
   it("binds document/version context and preserves an absent resolver", async () => {
@@ -73,6 +74,17 @@ describe("errorMessage", () => {
 });
 
 describe("friendlyWriteError", () => {
+  it("explains a preflighted session-refresh failure and preserved draft", () => {
+    expect(
+      friendlyWriteError(
+        "Create comment",
+        new SessionRefreshingError("refreshing", Date.now() + 60_000),
+      ),
+    ).toBe(
+      "Create comment didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.",
+    );
+  });
+
   it("frames a 401 as a transient session refresh", () => {
     expect(friendlyWriteError("Create comment", { status: 401 })).toBe(
       "Create comment didn't go through \u2014 your session refreshed. Please try again.",
@@ -379,6 +391,17 @@ describe("review iteration selection", () => {
       baselineStopIndex: 1,
     });
   });
+
+  it("does not call a partial interval All changes", () => {
+    expect(
+      resolveReviewIterationRange({ fromUpdate: 1, toUpdate: 7 }, 7),
+    ).toEqual({
+      range: { fromUpdate: 1, toUpdate: 7 },
+      isAllChanges: false,
+      activeStopIndex: 0,
+      baselineStopIndex: 6,
+    });
+  });
 });
 
 describe("sourceDiffRanges", () => {
@@ -441,6 +464,33 @@ describe("sourceDiffRanges", () => {
         deletedContent: "removed",
         linesAdded: 0,
         linesDeleted: 1,
+      },
+    ]);
+  });
+
+  it("tracks original and modified line counters across separate hunks", () => {
+    expect(
+      sourceDiffRanges(
+        "keep one\nold two\nstable three\nstable four\nstable five\nkeep six\n",
+        "keep one\nnew two\nstable three\nstable four\nstable five\nadded six\nkeep six\n",
+      ),
+    ).toEqual([
+      {
+        startLine: 2,
+        endLine: 2,
+        kind: "modified",
+        originalText: "old two",
+        originalStartLine: 2,
+        originalEndLine: 2,
+        linesAdded: 1,
+        linesDeleted: 1,
+      },
+      {
+        startLine: 6,
+        endLine: 6,
+        kind: "added",
+        linesAdded: 1,
+        linesDeleted: 0,
       },
     ]);
   });

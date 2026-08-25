@@ -22,8 +22,11 @@ import {
   initTelemetry,
   installGlobalErrorHandlers,
   installAuthFailureCapture,
+  markAppReady,
+  markBootPhase,
   markBootStart,
-  trackException,
+  setTelemetryContext,
+  trackUserFacingError,
 } from "../telemetry";
 
 // Start the boot-time clock as early as possible so the measurement spans the
@@ -45,6 +48,12 @@ function installedExtensionVersion(): string | undefined {
   }
 }
 
+// Start telemetry before the SDK handshake so init/ready failures count
+// against reliability instead of occurring before a session exists.
+initTelemetry({ appName: "pr-tab" });
+installGlobalErrorHandlers();
+installAuthFailureCapture();
+
 void orchestrateBoot({
   // loaded: false means the host frame keeps showing the loading spinner until
   // we call notifyLoadSucceeded() ourselves. This gives us a chance to render
@@ -56,19 +65,12 @@ void orchestrateBoot({
   // match. The MutationObserver inside syncHostTheme keeps us in sync if
   // the user toggles their ADO theme without reloading.
   init: () => SDK.init({ loaded: false, applyTheme: true }),
-  ready: () => SDK.ready(),
+  ready: async () => {
+    await SDK.ready();
+    markBootPhase("sdk-ready");
+    setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+  },
   run: async () => {
-    // Telemetry must come up before we render so early errors are captured.
-    // Thread the *installed* extension version (SDK-reported, e.g.
-    // 0.0.1.<timestamp>) into context so triage can tell a stale deployment
-    // apart from the current build.
-    initTelemetry({
-      appName: "pr-tab",
-      extensionVersion: installedExtensionVersion(),
-    });
-    installGlobalErrorHandlers();
-    installAuthFailureCapture();
-
     syncHostTheme();
 
     const rootEl = document.getElementById("root");
@@ -83,12 +85,14 @@ void orchestrateBoot({
   notifyFailed: (err) => SDK.notifyLoadFailed(err),
   onError: (err) => {
     console.error("Markdown Review tab failed to boot", err);
-    trackException({
+    trackUserFacingError({
       error: err,
-      severity: "critical",
       source: "pr-tab.boot",
-      handled: true,
+      operation: "boot",
+      impact: "blocking",
+      severity: "critical",
     });
+    markAppReady("error");
     const root = document.getElementById("root");
     if (root) renderBootErrorInto(root, bootErrorDetail(err));
   },

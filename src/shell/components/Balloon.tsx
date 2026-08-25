@@ -142,6 +142,9 @@ export function Balloon(props: BalloonProps): React.ReactElement {
   // Orphaned threads are still live conversations (only the in-doc highlight is
   // missing).
   const isInteractive = !readOnly;
+  const canDeleteThread =
+    isInteractive &&
+    thread.comments.every((comment) => comment.author.id === currentUser.id);
 
   return (
     <div
@@ -176,6 +179,7 @@ export function Balloon(props: BalloonProps): React.ReactElement {
           currentUser={currentUser}
           isFirst={i === 0}
           threadStatus={thread.status}
+          canDeleteThread={canDeleteThread}
           interactive={isInteractive}
           onEdit={onEditComment}
           onDelete={onDeleteComment}

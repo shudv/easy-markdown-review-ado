@@ -22,6 +22,7 @@ import {
 } from "azure-devops-extension-api/Git";
 
 import type { CommentThread, FileInfo } from "../types";
+import { trackUserFacingError } from "../telemetry";
 import { adoThreadToLocal } from "./adoCommentApi";
 import { withRetry } from "./retry";
 import type { DocPrRef } from "./prShellHelpers";
@@ -139,6 +140,12 @@ export async function fetchRepoById(
     return { repo: repoSkeleton(raw), raw };
   } catch (err) {
     console.warn(`[documents-hub] fetchRepoById failed for ${repoId}:`, err);
+    trackUserFacingError({
+      error: err,
+      source: "DocumentsHubApp.discovery",
+      operation: "linked-repository-load",
+      impact: "degraded",
+    });
     return null;
   }
 }
@@ -294,6 +301,12 @@ async function listMarkdownLevel(
       `[documents-hub] getItems(OneLevel) failed for ${repo.name} @ ${scopePath}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "DocumentsHubApp.repository",
+      operation: "folder-listing-load",
+      impact: "degraded",
+    });
     return { files: [], folders: [] };
   }
 
@@ -333,8 +346,14 @@ async function findMostRecentRoutingPr(
           ),
         { mode: "read", label: "findMostRecentRoutingPr.getPullRequests" },
       );
-    } catch {
+    } catch (err) {
       // Retries exhausted (or terminal) — degrade to "no routing PR".
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.repository",
+        operation: "repository-pr-routing",
+        impact: "degraded",
+      });
       completed = [];
     }
     return selectRoutingPr(completed);
@@ -343,6 +362,12 @@ async function findMostRecentRoutingPr(
       `[documents-hub] getPullRequests failed for ${repo.name}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "DocumentsHubApp.repository",
+      operation: "repository-pr-routing",
+      impact: "degraded",
+    });
     return null;
   }
 }
@@ -402,6 +427,12 @@ export async function findRoutingPrForDoc(
       `[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "DocumentsHubApp.comments",
+      operation: "document-routing-commit-load",
+      impact: "degraded",
+    });
   }
 
   // 2. The PR that merged that commit (its last-merge commit). When the file
@@ -432,6 +463,12 @@ export async function findRoutingPrForDoc(
         `[documents-hub] getPullRequestQuery failed for ${repo.name}:`,
         err,
       );
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.comments",
+        operation: "document-pr-routing",
+        impact: "degraded",
+      });
     }
   }
 
@@ -511,6 +548,12 @@ async function findDocPrHistory(
       `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "PrShell.history",
+      operation: "history-commit-load",
+      impact: "degraded",
+    });
     return empty;
   }
   // A short page means we've reached the start of the file's history.
@@ -546,6 +589,12 @@ async function findDocPrHistory(
       `[documents-hub] getPullRequestQuery (history) failed for ${repo.name}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "PrShell.history",
+      operation: "history-pr-load",
+      impact: "degraded",
+    });
     // Commits resolved but PR mapping failed — report no stops for this page
     // but let the caller keep paging in case older commits map cleanly.
     return { prs: [], nextCommitSkip, hasMore };
@@ -604,6 +653,12 @@ export async function loadThreadsForRoutedPr(
       `[documents-hub] getThreads failed for repo ${repoId}, PR ${pullRequestId}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "PrShell.comments",
+      operation: "routed-comments-load",
+      impact: "degraded",
+    });
     return [];
   }
 }
@@ -874,6 +929,12 @@ export async function loadThreadsForRepo(
       `[documents-hub] getThreads failed for repo ${repoId}, PR ${pr.pullRequestId}:`,
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "PrShell.comments",
+      operation: "repository-comments-load",
+      impact: "degraded",
+    });
     return [];
   }
 }

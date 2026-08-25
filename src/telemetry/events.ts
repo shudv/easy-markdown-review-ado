@@ -71,12 +71,46 @@ export type AppReadyReason = "content" | "empty" | "error";
 export const events = {
   appLoaded(p?: {
     bootTimeMs: number;
+    activeBootTimeMs?: number;
+    hiddenTimeMs?: number;
+    authRefreshWaitMs?: number;
+    sdkReadyMs?: number;
+    contextReadyMs?: number;
+    renderReadyMs?: number;
     readyReason?: AppReadyReason;
+    bootHadHiddenInterval?: boolean;
   }): TelemetryEvent {
     return {
       name: EVENT.AppLoaded,
-      properties: p?.readyReason ? { readyReason: p.readyReason } : undefined,
-      measurements: p ? { bootTimeMs: p.bootTimeMs } : undefined,
+      properties: p
+        ? {
+            ...(p.readyReason ? { readyReason: p.readyReason } : {}),
+            ...(p.bootHadHiddenInterval !== undefined
+              ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
+              : {}),
+          }
+        : undefined,
+      measurements: p
+        ? {
+            bootTimeMs: p.bootTimeMs,
+            ...(p.activeBootTimeMs !== undefined
+              ? { activeBootTimeMs: p.activeBootTimeMs }
+              : {}),
+            ...(p.hiddenTimeMs !== undefined
+              ? { hiddenTimeMs: p.hiddenTimeMs }
+              : {}),
+            ...(p.authRefreshWaitMs !== undefined
+              ? { authRefreshWaitMs: p.authRefreshWaitMs }
+              : {}),
+            ...(p.sdkReadyMs !== undefined ? { sdkReadyMs: p.sdkReadyMs } : {}),
+            ...(p.contextReadyMs !== undefined
+              ? { contextReadyMs: p.contextReadyMs }
+              : {}),
+            ...(p.renderReadyMs !== undefined
+              ? { renderReadyMs: p.renderReadyMs }
+              : {}),
+          }
+        : undefined,
     };
   },
 

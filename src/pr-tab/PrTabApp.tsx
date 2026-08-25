@@ -57,7 +57,14 @@ import {
   COMMENT_LINK_PARAM,
   type CommentLinkBuilder,
 } from "../comments/commentLink";
-import { setTelemetryContext, markAppReady } from "../telemetry";
+import {
+  markAppReady,
+  markBootAuthWaitEnd,
+  markBootAuthWaitStart,
+  markBootPhase,
+  setTelemetryContext,
+  trackUserFacingError,
+} from "../telemetry";
 import { withRetry } from "../shell/retry";
 import {
   detectSessionRefreshing,
@@ -142,6 +149,7 @@ export function PrTabApp(): React.ReactElement {
       try {
         log("resolving pr context");
         const context = await resolvePrContext(log);
+        markBootPhase("context-ready");
         log("pr context resolved", {
           projectId: context.projectId,
           repositoryId: context.repositoryId,
@@ -172,6 +180,13 @@ export function PrTabApp(): React.ReactElement {
         );
         if (refresh) {
           console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
+          trackUserFacingError({
+            error: refresh,
+            source: "PrTabApp.context",
+            operation: "session-refresh",
+            impact: "degraded",
+          });
+          markBootAuthWaitStart();
           setRefreshing({
             state: refresh.grantState,
             recoverAtMs: refresh.recoverAtMs,
@@ -179,6 +194,12 @@ export function PrTabApp(): React.ReactElement {
           return;
         }
         console.error("[PrTabApp] load failed", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrTabApp.context",
+          operation: "pr-context-load",
+          impact: "blocking",
+        });
         setError(formatError(err));
       }
     })();
@@ -203,6 +224,7 @@ export function PrTabApp(): React.ReactElement {
       return;
     }
     const id = window.setTimeout(() => {
+      markBootAuthWaitEnd();
       setRefreshAttempt((n) => n + 1);
       setRefreshing(null);
       setError(null);
@@ -741,7 +763,13 @@ async function openDocTarget(
     let ext: { publisherId: string; extensionId: string };
     try {
       ext = SDK.getExtensionContext();
-    } catch {
+    } catch (err) {
+      trackUserFacingError({
+        error: err,
+        source: "PrTabApp.navigation",
+        operation: "document-link-open",
+        impact: "action-failed",
+      });
       return;
     }
     url = buildHubDocUrl(
@@ -763,6 +791,12 @@ async function openDocTarget(
     // diagnostics (matching the console.warn pattern in the ADO data layer)
     // rather than swallowing it silently.
     console.warn("[pr-tab] opening doc link failed:", err);
+    trackUserFacingError({
+      error: err,
+      source: "PrTabApp.navigation",
+      operation: "document-link-open",
+      impact: "action-failed",
+    });
   }
 }
 

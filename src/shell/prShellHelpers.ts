@@ -3,6 +3,7 @@
 // render in the storybook/iframe harness). Keep these dependency-free.
 
 import { extractStatus } from "./retryClassify";
+import { isSessionRefreshingError } from "./adoAuthToken";
 import { diff_match_patch } from "diff-match-patch";
 
 import { diffWords } from "../markdown/wordDiff";
@@ -85,6 +86,9 @@ export function errorMessage(err: unknown): string {
  * so it stays actionable. Never surfaces a raw `TF` code or identity GUID.
  */
 export function friendlyWriteError(label: string, err: unknown): string {
+  if (isSessionRefreshingError(err)) {
+    return `${label} didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.`;
+  }
   const status = extractStatus(err);
   const raw = errorMessage(err);
   // Transient auth blip — token refresh race / SPS auth blip.

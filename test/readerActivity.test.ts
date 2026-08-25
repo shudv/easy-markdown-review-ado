@@ -74,6 +74,22 @@ describe("buildReaderActivities", () => {
       "file-refresh",
       "history",
     ]);
+    expect(activities).toEqual([
+      { id: "file-refresh", label: "Refreshing files…", priority: 60 },
+      { id: "history", label: "Loading document version…", priority: 100 },
+    ]);
+  });
+
+  it("uses the exact document-loading activity when no history is loading", () => {
+    expect(
+      buildReaderActivities({
+        navigationActivities: [],
+        commentSyncing: false,
+        fileRefreshing: false,
+        historicalLoading: false,
+        documentLoading: true,
+      }),
+    ).toEqual([{ id: "document", label: "Loading document…", priority: 100 }]);
   });
 
   it("reports background comment sync without elevating it to refresh", () => {

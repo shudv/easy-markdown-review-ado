@@ -27,7 +27,13 @@ import {
   type CommentLinkBuilder,
 } from "../comments/commentLink";
 import { refreshHostTheme } from "../theme/theme";
-import { events, markAppReady, setTelemetryContext, track } from "../telemetry";
+import {
+  events,
+  markAppReady,
+  setTelemetryContext,
+  track,
+  trackUserFacingError,
+} from "../telemetry";
 
 import type { DocRepo } from "../shell/types";
 import type { FileSearchOutcome } from "../shell/almSearch";
@@ -373,6 +379,12 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
         payload = await onExpandFolder(repoIdAtCall, path);
       } catch (err) {
         console.warn("[documents-hub] expand folder failed:", path, err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsApp.navigation",
+          operation: "folder-expand",
+          impact: "action-failed",
+        });
         return null;
       }
       setLazyTreeByRepo((curr) => {

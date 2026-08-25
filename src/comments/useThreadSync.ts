@@ -17,6 +17,7 @@
 import * as React from "react";
 
 import type { CommentThread } from "../types";
+import { trackUserFacingError } from "../telemetry";
 
 export interface UseThreadSyncOptions {
   /**
@@ -115,6 +116,12 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
           if (controller.signal.aborted) return;
           if (myGeneration !== generationRef.current) return;
           /* v8 ignore stop */
+          trackUserFacingError({
+            error: err,
+            source: "ThreadSync.poll",
+            operation: "comments-refresh",
+            impact: "degraded",
+          });
           (
             onErrorRef.current ??
             ((e: unknown) => console.warn("[useThreadSync] fetch failed", e))

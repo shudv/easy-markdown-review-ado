@@ -1,6 +1,12 @@
 import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 import type { Element, ElementContent, Root, RootContent } from "hast";
 import type { Plugin } from "unified";
+import {
+  DROP_HTML_SUBTREE_TAGS,
+  SAFE_HTML_CLASS,
+  SAFE_HTML_TAGS,
+  VOID_HTML_TAGS,
+} from "./safeHtmlPolicy";
 
 type ParseNode = DefaultTreeAdapterMap["childNode"];
 
@@ -9,51 +15,6 @@ interface RawNode {
   value: string;
   position?: RootContent["position"];
 }
-
-const SAFE_TAGS = new Set([
-  "a",
-  "br",
-  "caption",
-  "dd",
-  "details",
-  "div",
-  "dl",
-  "dt",
-  "figcaption",
-  "figure",
-  "i",
-  "img",
-  "kbd",
-  "li",
-  "mark",
-  "ol",
-  "p",
-  "small",
-  "span",
-  "sub",
-  "summary",
-  "sup",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "tr",
-  "ul",
-]);
-
-const DROP_SUBTREE_TAGS = new Set([
-  "iframe",
-  "object",
-  "script",
-  "style",
-  "template",
-]);
-
-const VOID_TAGS = new Set(["br", "img"]);
-const SAFE_CLASS =
-  /^(?:card|card-grid|docs-action|codicon(?:-[a-z0-9-]+)?|markdown-alert(?:-[a-z]+)?)$/;
 
 function safeProperties(
   tagName: string,
@@ -64,7 +25,7 @@ function safeProperties(
     if (name === "class") {
       const classes = value
         .split(/\s+/)
-        .filter((token) => SAFE_CLASS.test(token));
+        .filter((token) => SAFE_HTML_CLASS.test(token));
       if (classes.length > 0) properties.className = classes;
     } else if (name === "id" || name === "title") {
       properties[name] = value;
@@ -103,9 +64,9 @@ function convertNode(node: ParseNode): RootContent[] {
   }
   if (!("tagName" in node)) return [];
   const tagName = node.tagName.toLowerCase();
-  if (DROP_SUBTREE_TAGS.has(tagName)) return [];
+  if (DROP_HTML_SUBTREE_TAGS.has(tagName)) return [];
   const children = node.childNodes.flatMap(convertNode);
-  if (!SAFE_TAGS.has(tagName)) return children;
+  if (!SAFE_HTML_TAGS.has(tagName)) return children;
   return [
     {
       type: "element",
@@ -126,8 +87,8 @@ function openingContainer(value: string): string | null {
   const match = /^\s*<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.exec(value);
   const tagName = match?.[1]?.toLowerCase();
   return tagName &&
-    SAFE_TAGS.has(tagName) &&
-    !VOID_TAGS.has(tagName) &&
+    SAFE_HTML_TAGS.has(tagName) &&
+    !VOID_HTML_TAGS.has(tagName) &&
     !new RegExp(`<\\/${tagName}\\s*>`, "i").test(value)
     ? tagName
     : null;

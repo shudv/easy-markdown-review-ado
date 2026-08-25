@@ -6,6 +6,7 @@
 // its ~1 MB bundle is paid for only by articles that contain a diagram.
 
 import { isDarkTheme } from "../theme/theme.helpers";
+import { trackUserFacingError } from "../telemetry";
 
 type MermaidApi = {
   initialize: (config: Record<string, unknown>) => void;
@@ -94,6 +95,12 @@ export async function hydrateMermaid(
     }
 
     console.warn("[mermaid] failed to load library:", err);
+    trackUserFacingError({
+      error: err,
+      source: "Mermaid.hydrate",
+      operation: "diagram-library-load",
+      impact: "degraded",
+    });
     return;
   }
 
@@ -149,6 +156,12 @@ export async function hydrateMermaid(
         // Keep the fallback `<pre>` so the user can still read the source.
 
         console.warn("[mermaid] render failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "Mermaid.hydrate",
+          operation: "diagram-render",
+          impact: "degraded",
+        });
       }
     }),
   );

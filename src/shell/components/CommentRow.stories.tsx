@@ -66,6 +66,7 @@ const meta = {
     currentUser: shubhd,
     isFirst: true,
     threadStatus: "active",
+    canDeleteThread: true,
     interactive: true,
     onEdit: fn(),
     onDelete: fn(),
@@ -88,6 +89,20 @@ export const Default: Story = {
     const tools =
       canvasElement.querySelector<HTMLElement>(".emr-comment-tools")!;
     await userEvent.click(tools);
+  },
+};
+
+/** A mixed-author thread cannot be deleted because ADO rejects others' replies. */
+export const MixedAuthorThread: Story = {
+  args: {
+    canDeleteThread: false,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByLabelText("More options"));
+    await expect(
+      canvas.queryByRole("menuitem", { name: "Delete thread" }),
+    ).toBeNull();
   },
 };
 

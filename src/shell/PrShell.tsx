@@ -72,7 +72,12 @@ import {
   DEFAULT_COMMENT_WIDTH_PCT,
   type ReaderPrefs,
 } from "./readerPrefs";
-import { events, track, trackException, markAppReady } from "../telemetry";
+import {
+  events,
+  track,
+  trackUserFacingError,
+  markAppReady,
+} from "../telemetry";
 import { anchorKindOf } from "./anchorKind";
 import { withSourceLocation } from "../comments/anchor";
 import {
@@ -931,6 +936,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     void Promise.resolve(onRefreshFiles())
       .catch((err: unknown) => {
         console.warn("[PrShell] file refresh failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.refresh",
+          operation: "file-refresh",
+          impact: "action-failed",
+        });
       })
       .finally(() => setFileRefreshInFlight(false));
   }, [threadSync, onRefreshFiles]);
@@ -960,6 +971,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         loadedThreadPathsRef.current.delete(selectedPath);
 
         console.warn("[PrShell] loadThreadsForPath failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.comments",
+          operation: "comments-load",
+          impact: "degraded",
+        });
       });
     return () => {
       cancelled = true;
@@ -991,6 +1008,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         loadedHistoryPathsRef.current.delete(selectedPath);
 
         console.warn("[PrShell] loadDocHistory failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.history",
+          operation: "history-list-load",
+          impact: "degraded",
+        });
       });
     return () => {
       cancelled = true;
@@ -1054,6 +1077,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           /* v8 ignore next -- cleanup races ahead of a rejected request */
           if (cancelled) return;
           console.warn("[PrShell] loadFileSourceAt failed:", err);
+          trackUserFacingError({
+            error: err,
+            source: "PrShell.history",
+            operation: "history-content-load",
+            impact: "action-failed",
+          });
           setHistoricalErrorByKey((prev) => ({
             ...prev,
             [target.key]: errorMessage(err),
@@ -1091,6 +1120,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       })
       .catch((err: unknown) => {
         console.warn("[PrShell] loadThreadsForPr failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.history",
+          operation: "history-comments-load",
+          impact: "degraded",
+        });
       });
     return () => {
       cancelled = true;
@@ -1146,6 +1181,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       .catch((err: unknown) => {
         /* v8 ignore next -- bails if the selected file changed before the error surfaced */
         if (cancelled) return;
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.documentLoad",
+          operation: "document-load",
+          impact: "blocking",
+        });
         setError(errorMessage(err));
         setLoading(false);
       });
@@ -1625,11 +1666,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         setPersistError(friendlyWriteError(label, err));
 
         console.error(`[PrShell] ${label} failed:`, err);
-        trackException({
+        trackUserFacingError({
           error: err,
-          severity: "error",
           source: label,
-          handled: true,
+          operation: "comment-write",
+          impact: "action-failed",
         });
         return null;
       }
@@ -1843,7 +1884,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         // Delete every comment server-side, then drop the thread locally even
         // on error to avoid stranding ghost UI.
         const ok = await persistWith("Delete thread", async () => {
-          for (const c of thread.comments) {
+          // Replies first, root last: deleting the root may remove/invalidate
+          // the thread, which would make subsequent reply deletions fail.
+          for (const c of [...thread.comments].reverse()) {
             await commentApi.deleteComment(threadId, c.id);
           }
         });

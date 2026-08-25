@@ -91,6 +91,14 @@ describe("isHighContrastPrimary", () => {
     expect(isHighContrastPrimary("")).toBe(false);
     expect(isHighContrastPrimary("transparent")).toBe(false);
   });
+
+  it("accepts optional whitespace but requires comma separators", () => {
+    expect(isHighContrastPrimary("12,34,56")).toBe(false);
+    expect(isHighContrastPrimary("12,12,12")).toBe(true);
+    expect(isHighContrastPrimary(" 12 , 12 , 12 ")).toBe(true);
+    expect(isHighContrastPrimary("12x,12,12")).toBe(false);
+    expect(isHighContrastPrimary("12,12x,12")).toBe(false);
+  });
 });
 
 describe("isDarkLuminance", () => {

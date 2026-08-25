@@ -218,6 +218,239 @@ describe("renderMarkdown", () => {
     ]);
   });
 
+  it("scopes every safe raw attribute to its intended tag and value", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value:
+            '<details class="card evil" open="no"><a href="/docs" target="_blank" rel="  external   help  " aria-label="Docs"><img src="x.png" alt="X" width="12" height="34"><span aria-hidden="unexpected" data-show-in-doc="wrong">Text</span><div data-show-in-doc="yes" data-show-in-sidebar="no"></div></a></details>',
+        } as unknown as RootContent,
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children).toEqual([
+      {
+        type: "element",
+        tagName: "details",
+        properties: { className: ["card"], open: true },
+        children: [
+          {
+            type: "element",
+            tagName: "a",
+            properties: {
+              href: "/docs",
+              target: "_blank",
+              rel: ["external", "help"],
+              ariaLabel: "Docs",
+            },
+            children: [
+              {
+                type: "element",
+                tagName: "img",
+                properties: {
+                  src: "x.png",
+                  alt: "X",
+                  width: 12,
+                  height: 34,
+                },
+                children: [],
+              },
+              {
+                type: "element",
+                tagName: "span",
+                properties: { ariaHidden: "true" },
+                children: [{ type: "text", value: "Text" }],
+              },
+              {
+                type: "element",
+                tagName: "div",
+                properties: {
+                  dataShowInDoc: "yes",
+                  dataShowInSidebar: "no",
+                },
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("rejects safe attributes when they appear on the wrong element", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value:
+            '<span class="evil" open href="/wrong" target="_self" rel="help" src="wrong.png" alt="Wrong" width="12" height="34" data-show-in-doc="yes" data-show-in-sidebar="no">Text</span>',
+        } as unknown as RootContent,
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children).toEqual([
+      {
+        type: "element",
+        tagName: "span",
+        properties: {},
+        children: [{ type: "text", value: "Text" }],
+      },
+    ]);
+  });
+
+  it("accepts only fully numeric image dimensions", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value:
+            '<div><img src="a" width="12x"><img src="b" width="x12"><img src="c" width="12.5"><p width="12">Text</p></div>',
+        } as unknown as RootContent,
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    const container = tree.children[0];
+    expect(container).toMatchObject({ type: "element", tagName: "div" });
+    expect((container as { children: RootContent[] }).children).toEqual([
+      {
+        type: "element",
+        tagName: "img",
+        properties: { src: "a" },
+        children: [],
+      },
+      {
+        type: "element",
+        tagName: "img",
+        properties: { src: "b" },
+        children: [],
+      },
+      {
+        type: "element",
+        tagName: "img",
+        properties: { src: "c" },
+        children: [],
+      },
+      {
+        type: "element",
+        tagName: "p",
+        properties: {},
+        children: [{ type: "text", value: "Text" }],
+      },
+    ]);
+  });
+
+  it.each(["iframe", "object", "script", "style", "template"])(
+    "drops the complete %s subtree",
+    async (tagName) => {
+      const tree: Root = {
+        type: "root",
+        children: [
+          {
+            type: "raw",
+            value: `<div>Before<${tagName}><span>Hidden</span></${tagName}>After</div>`,
+          } as unknown as RootContent,
+        ],
+      };
+
+      await unified().use(rehypeSafeHtml).run(tree);
+
+      expect(JSON.stringify(tree)).not.toContain("Hidden");
+      expect(JSON.stringify(tree)).toContain("Before");
+      expect(JSON.stringify(tree)).toContain("After");
+    },
+  );
+
+  it("does not leave an inline-closed container active", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value: "<details>Inline</details>",
+        } as unknown as RootContent,
+        { type: "text", value: "After" },
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children).toHaveLength(2);
+    expect(tree.children[1]).toEqual({ type: "text", value: "After" });
+  });
+
+  it("updates a container end only when both source positions exist", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        { type: "raw", value: "<details>" } as unknown as RootContent,
+        { type: "text", value: "Inside" },
+        {
+          type: "raw",
+          value: "</details>",
+          position: {
+            start: { line: 2, column: 1, offset: 10 },
+            end: { line: 2, column: 11, offset: 20 },
+          },
+        } as unknown as RootContent,
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children[0]).toMatchObject({
+      type: "element",
+      tagName: "details",
+      position: undefined,
+    });
+  });
+
+  it("parses spaced mixed-case containers but never stacks content under void tags", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value: '  <DETAILS data-x="ignored">',
+        } as unknown as RootContent,
+        { type: "text", value: "Inside" },
+        { type: "raw", value: " </DETAILS> " } as unknown as RootContent,
+        { type: "raw", value: "<br>" } as unknown as RootContent,
+        { type: "text", value: "After" },
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children).toEqual([
+      { type: "text", value: "  ", position: undefined },
+      {
+        type: "element",
+        tagName: "details",
+        properties: {},
+        children: [{ type: "text", value: "Inside" }],
+        position: undefined,
+      },
+      {
+        type: "element",
+        tagName: "br",
+        properties: {},
+        children: [],
+        position: undefined,
+      },
+      { type: "text", value: "After" },
+    ]);
+  });
+
   it("flattens unknown MDX wrappers while keeping Markdown content", async () => {
     const html = await renderMarkdown(
       ["<Note>", "", "Keep **this text**.", "", "</Note>", ""].join("\n"),

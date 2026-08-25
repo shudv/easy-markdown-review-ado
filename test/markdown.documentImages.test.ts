@@ -6,13 +6,31 @@ import {
   resolveRepositoryImagePath,
 } from "../src/markdown/documentImages";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 describe("repositoryImageMimeType", () => {
   it("recognizes browser image formats and falls back safely", () => {
+    expect(repositoryImageMimeType("/assets/photo.avif")).toBe("image/avif");
+    expect(repositoryImageMimeType("/assets/legacy.bmp")).toBe("image/bmp");
     expect(repositoryImageMimeType("/assets/diagram.SVG")).toBe(
       "image/svg+xml",
     );
+    expect(repositoryImageMimeType("/assets/favicon.ico")).toBe("image/x-icon");
     expect(repositoryImageMimeType("/assets/photo.jpeg")).toBe("image/jpeg");
+    expect(repositoryImageMimeType("/assets/photo.jpg")).toBe("image/jpeg");
     expect(repositoryImageMimeType("/assets/tour.gif")).toBe("image/gif");
+    expect(repositoryImageMimeType("/assets/screenshot.png")).toBe("image/png");
+    expect(repositoryImageMimeType("/assets/screenshot.webp")).toBe(
+      "image/webp",
+    );
     expect(repositoryImageMimeType("/assets/no-extension")).toBe(
       "application/octet-stream",
     );
@@ -39,6 +57,9 @@ describe("resolveRepositoryImagePath", () => {
         "./my%20diagram.png?raw=1#x",
       ),
     ).toBe("/docs/my diagram.png");
+    expect(
+      resolveRepositoryImagePath("/docs/guide.md", "assets/name:variant.png"),
+    ).toBe("/docs/assets/name:variant.png");
   });
 
   it("rejects external, protocol-relative, fragment, empty, and malformed paths", () => {
@@ -68,6 +89,7 @@ describe("hydrateDocumentImages", () => {
     const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
 
     expect(images[0]!.hasAttribute("src")).toBe(false);
+    expect(images[0]!.getAttribute("aria-busy")).toBe("true");
     expect(frame.classList.contains("is-loading")).toBe(true);
     expect(images[0]!.classList.contains("is-loading")).toBe(true);
     await vi.waitFor(() =>
@@ -94,10 +116,20 @@ describe("hydrateDocumentImages", () => {
       expect(frame.classList.contains("is-error")).toBe(true),
     );
     expect(frame.dataset.imagePath).toBe("/docs/missing.png");
+    expect(image.getAttribute("aria-busy")).toBeNull();
 
     frame.classList.add("is-loading");
     image.dispatchEvent(new Event("error"));
     expect(frame.classList.contains("is-loading")).toBe(false);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({
+        message: "Repository image failed to load",
+      }),
+      source: "DocumentImage.hydrate",
+      operation: "repository-image-load",
+      impact: "degraded",
+    });
 
     let resolve!: (value: string) => void;
     const pending = new Promise<string>((done) => {
@@ -111,10 +143,35 @@ describe("hydrateDocumentImages", () => {
       () => pending,
     );
     cleanup();
+    frame.className = "emr-repo-image-frame is-loading";
+    image.className = "emr-repo-image is-loading";
+    image.dispatchEvent(new Event("load"));
+    image.dispatchEvent(new Event("error"));
+    expect(frame.className).toBe("emr-repo-image-frame is-loading");
+    expect(image.className).toBe("emr-repo-image is-loading");
     lateCleanup();
     resolve("blob:late");
     await pending;
     await Promise.resolve();
     expect(lateImage.hasAttribute("src")).toBe(false);
+  });
+
+  it("shows an unavailable state when the repository resolver rejects", async () => {
+    const root = document.createElement("div");
+    root.innerHTML = '<img src="./broken.png" alt="Broken">';
+    hydrateDocumentImages(root, "/docs/guide.md", async () => {
+      throw new Error("repository unavailable");
+    });
+
+    const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
+    await vi.waitFor(() =>
+      expect(frame.classList.contains("is-error")).toBe(true),
+    );
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: "repository unavailable" }),
+      source: "DocumentImage.hydrate",
+      operation: "repository-image-load",
+      impact: "degraded",
+    });
   });
 });

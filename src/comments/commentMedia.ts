@@ -1,3 +1,5 @@
+import { trackUserFacingError } from "../telemetry";
+
 export type ResolveCommentImage = (url: string) => Promise<string | undefined>;
 
 const ADO_PR_ATTACHMENT_PATH =
@@ -42,8 +44,11 @@ export function decorateCommentMedia(
       frame.append(image);
     }
 
-    let resolving =
+    const isNativeAttachment =
       resolveImage !== undefined && isAdoPullRequestAttachmentUrl(originalSrc);
+    let resolving = isNativeAttachment;
+    let errorReported = false;
+    let resolutionError: unknown;
 
     const onLoad = () => {
       frame.classList.remove("is-loading", "is-error");
@@ -56,6 +61,15 @@ export function decorateCommentMedia(
       frame.classList.add("is-error");
       image.classList.remove("is-loading");
       frame.removeAttribute("aria-disabled");
+      if (isNativeAttachment && !errorReported) {
+        errorReported = true;
+        trackUserFacingError({
+          error: resolutionError ?? new Error("Comment image failed to load"),
+          source: "CommentMedia.decorate",
+          operation: "comment-image-load",
+          impact: "degraded",
+        });
+      }
     };
     const settleIfComplete = () => {
       if (!image.complete) return;
@@ -70,13 +84,18 @@ export function decorateCommentMedia(
       frame.classList.add("is-loading");
       image.classList.add("is-loading");
       frame.setAttribute("aria-disabled", "true");
-      void resolveImage(originalSrc).then((objectUrl) => {
+      const settle = (objectUrl: string | undefined, error?: unknown) => {
         if (disposed) return;
         resolving = false;
+        resolutionError = error;
         if (objectUrl) {
           image.src = objectUrl;
         } else settleIfComplete();
-      });
+      };
+      void resolveImage(originalSrc).then(
+        (objectUrl) => settle(objectUrl),
+        (error: unknown) => settle(undefined, error),
+      );
     } else settleIfComplete();
 
     cleanups.push(() => {

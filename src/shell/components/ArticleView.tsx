@@ -45,7 +45,7 @@ interface ArticleViewProps {
   readerFontFamily?: string;
   threads: CommentThread[];
   activeThreadId: string | null;
-  /** When set, render a yellow "draft" highlight at this anchor. */
+  /** When set, render the selected comment-anchor treatment at this anchor. */
   draftAnchor: TextQuoteAnchor | null;
   /** Class to add to highlights when the thread is in resolved/historical state. */
   onAnchorsResolved: (layout: AnchorLayout, draftY: number | null) => void;
@@ -80,6 +80,91 @@ interface ArticleViewProps {
 }
 
 const DRAFT_THREAD_ID = "__draft__";
+
+function syncActiveHighlights(
+  article: HTMLElement,
+  activeThreadId: string | null,
+  land: boolean,
+): void {
+  const highlights = Array.from(
+    article.querySelectorAll<HTMLElement>(".emr-highlight"),
+  );
+  highlights.forEach((highlight) => {
+    const threadId = highlight.dataset.threadId;
+    highlight.classList.toggle(
+      "is-active",
+      threadId === DRAFT_THREAD_ID || threadId === activeThreadId,
+    );
+    highlight.classList.remove("is-landing");
+  });
+
+  if (!land || activeThreadId === null) return;
+  const activeHighlights = highlights.filter(
+    (highlight) => highlight.dataset.threadId === activeThreadId,
+  );
+  if (activeHighlights.length === 0) return;
+  void article.offsetWidth;
+  activeHighlights.forEach((highlight) =>
+    highlight.classList.add("is-landing"),
+  );
+}
+
+function syncHoveredHighlights(
+  article: HTMLElement,
+  hoveredThreadId: string | null,
+): void {
+  article
+    .querySelectorAll<HTMLElement>(".emr-highlight")
+    .forEach((highlight) =>
+      highlight.classList.toggle(
+        "is-hover",
+        highlight.dataset.threadId === hoveredThreadId,
+      ),
+    );
+}
+
+function containedThreadIds(root: HTMLElement): string[] {
+  const highlights = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
+    ),
+  ).reverse();
+  highlights.push(root);
+  return [
+    ...new Set(highlights.map((highlight) => highlight.dataset.threadId!)),
+  ];
+}
+
+function addHighlightKeyboardTargets(article: HTMLElement): void {
+  const highlights = Array.from(
+    article.querySelectorAll<HTMLElement>(".emr-highlight"),
+  ).filter((highlight) => highlight.dataset.threadId !== DRAFT_THREAD_ID);
+  const roots = highlights.filter(
+    (highlight) =>
+      !highlight.parentElement?.closest(
+        `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
+      ),
+  );
+  const represented = new Set<string>();
+  roots.forEach((root) => {
+    const threadIds = containedThreadIds(root);
+    if (
+      threadIds.length === 0 ||
+      threadIds.every((id) => represented.has(id))
+    ) {
+      return;
+    }
+    threadIds.forEach((id) => represented.add(id));
+    const anchorText = root.innerText.replace(/\s+/g, " ").trim();
+    root.tabIndex = 0;
+    root.setAttribute("role", "button");
+    let label = "Open comment thread";
+    if (threadIds.length > 1) {
+      label = `Open ${threadIds.length} overlapping comment threads`;
+    }
+    root.setAttribute("aria-label", `${label}: ${anchorText}`);
+  });
+}
 
 export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const {
@@ -140,6 +225,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const draftKey = draftAnchor
     ? `${draftAnchor.exact}|${draftAnchor.prefix}|${draftAnchor.suffix}|${draftAnchor.line ?? ""}|${draftAnchor.implicit === true}`
     : "";
+  const previousActiveThreadIdRef = React.useRef<string | null>(null);
 
   // Signature so the layout effect re-runs when the diff ranges (or the
   // show/hide toggle) change, without re-running on unrelated renders.
@@ -154,6 +240,14 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   React.useLayoutEffect(() => {
     const article = articleRef.current!;
     const wrap = wrapRef.current!;
+    const focusedThreadId = article.contains(
+      article.ownerDocument.activeElement,
+    )
+      ? (
+          article.ownerDocument.activeElement as HTMLElement
+        ).closest<HTMLElement>('.emr-highlight[role="button"]')?.dataset
+          .threadId
+      : undefined;
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
     article.innerHTML = pristineHtml;
@@ -184,6 +278,26 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       } else {
         s.removeAttribute("data-collapsed");
       }
+      const heading = s.querySelector<HTMLElement>(
+        ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
+      );
+      /* v8 ignore next -- rendered sections always begin with their heading */
+      if (!heading) return;
+      // The icon button lives inside the heading for stable gutter geometry;
+      // pin the heading's accessible name to its document text so the button's
+      // own "Collapse section" label is not folded into the heading name.
+      heading.setAttribute("aria-label", heading.textContent.trim());
+      const collapsed = s.getAttribute("data-collapsed") === "true";
+      const toggle = article.ownerDocument.createElement("button");
+      toggle.type = "button";
+      toggle.className = "emr-section-toggle";
+      toggle.setAttribute(
+        "aria-label",
+        collapsed ? "Expand section" : "Collapse section",
+      );
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      toggle.title = toggle.getAttribute("aria-label")!;
+      heading.prepend(toggle);
     });
 
     // Wrap each anchor with a highlight span; defer y measurement until all
@@ -228,6 +342,8 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       hasDraft = wrapOne(DRAFT_THREAD_ID, draftAnchor, "is-active");
     }
 
+    addHighlightKeyboardTargets(article);
+
     // ---------------------------------------------------------------------
     // Diff decorations: gutter bars on changed blocks + deletion markers.
     // Applied AFTER the anchor wrap (block source-line attrs intact) and
@@ -239,6 +355,17 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         originalSource,
         currentSource,
       });
+    }
+
+    // Rewraps create fresh spans, so restore selection without replaying the
+    // transient landing cue. The active-thread effect owns that animation.
+    syncActiveHighlights(article, activeThreadId, false);
+    if (focusedThreadId) {
+      article
+        .querySelector<HTMLElement>(
+          `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
+        )
+        ?.focus();
     }
 
     // ---------------------------------------------------------------------
@@ -350,38 +477,16 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   }, [readerFontFamily]);
 
   // -------------------------------------------------------------------------
-  // Active class toggle (no re-wrap).
-  // Layout effect (like the wrap pass above) so `is-active` is restored in the
-  // same pre-paint phase — otherwise a re-wrap could paint one frame with the
-  // active highlight missing before this ran.
+  // Active thread changes do not rewrap the article. Synchronize the persistent
+  // selection and play one landing cue on the newly active range.
   // -------------------------------------------------------------------------
   React.useLayoutEffect(() => {
-    const article = articleRef.current!;
-    const all = article.querySelectorAll<HTMLElement>(".emr-highlight");
-    all.forEach((el) => {
-      const tid = el.dataset.threadId!;
-      // Draft is always rendered with is-active; don't toggle it off here.
-      if (tid === DRAFT_THREAD_ID) return;
-      if (tid === activeThreadId) el.classList.add("is-active");
-      else el.classList.remove("is-active");
-    });
-    // Depends on the SAME signals as the wrap effect above (not just
-    // activeThreadId): any re-wrap recreates the highlight spans fresh without
-    // `is-active`, so this must re-run to re-apply it — otherwise a re-wrap
-    // triggered by late-settling async data (diffKey/mentionCtx/originalSource)
-    // silently drops the active highlight (the deep-link auto-activation race).
-    // This effect is declared after the wrap effect, so on a shared commit it
-    // runs second and re-applies the class onto the freshly wrapped spans.
-  }, [
-    activeThreadId,
-    pristineHtml,
-    threadsKey,
-    draftKey,
-    storageKey,
-    mentionCtx,
-    diffKey,
-    originalSource,
-  ]);
+    const activeChanged =
+      activeThreadId !== null &&
+      activeThreadId !== previousActiveThreadIdRef.current;
+    syncActiveHighlights(articleRef.current!, activeThreadId, activeChanged);
+    previousActiveThreadIdRef.current = activeThreadId;
+  }, [activeThreadId]);
 
   // -------------------------------------------------------------------------
   // Click delegation on highlights AND section headings (collapse toggle),
@@ -427,51 +532,117 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         return;
       }
 
-      // 1) Section-heading toggle. Skipped when a non-empty selection exists
-      //    (selection bubble wins) or the click hit an inline link / button.
-      const heading = target.closest<HTMLElement>(
-        ".emr-section > h1, .emr-section > h2, .emr-section > h3, .emr-section > h4, .emr-section > h5, .emr-section > h6",
+      // 1) Section toggle. Only the dedicated chevron button folds content;
+      // heading text remains ordinary selectable/commentable document text.
+      const sectionToggle = target.closest<HTMLButtonElement>(
+        ".emr-section-toggle",
       );
-      if (heading && !target.closest("a, button, input, label")) {
-        const sel = window.getSelection();
-        /* v8 ignore next -- selection-present branch defers to the bubble; headless clicks carry no selection */
-        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
-          // Defer to selection bubble; do not toggle.
-        } else {
-          const section = heading.parentElement as HTMLElement | null;
-          /* v8 ignore next -- heading is always inside an .emr-section; guard is defensive */
-          if (
-            section?.classList.contains("emr-section") &&
-            // The document-title section wraps the whole doc; folding it is
-            // meaningless, so it carries no chevron and ignores clicks.
-            !section.classList.contains("emr-section--doc-title")
-          ) {
-            /* v8 ignore next -- sectionId is always set by the renderer; "" fallback is defensive */
-            const sid = section.dataset.sectionId ?? "";
-            const wasCollapsed =
-              section.getAttribute("data-collapsed") === "true";
-            if (wasCollapsed) section.removeAttribute("data-collapsed");
-            else section.setAttribute("data-collapsed", "true");
-            /* v8 ignore next -- sid is always non-empty here; guard mirrors the defensive fallback above */
-            if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
-            // Re-measure anchors after the toggle.
-            wrapRef.current?.dispatchEvent(
-              new CustomEvent("emr-sections-changed", { bubbles: false }),
-            );
-            return;
-          }
-        }
+      if (sectionToggle) {
+        const section = sectionToggle.closest<HTMLElement>(".emr-section");
+        /* v8 ignore next -- toggle buttons are only hydrated inside sections */
+        if (!section) return;
+        /* v8 ignore next -- hydrated sections always carry a source-derived id */
+        const sid = section.dataset.sectionId ?? "";
+        const wasCollapsed = section.getAttribute("data-collapsed") === "true";
+        if (wasCollapsed) section.removeAttribute("data-collapsed");
+        else section.setAttribute("data-collapsed", "true");
+        sectionToggle.setAttribute(
+          "aria-label",
+          wasCollapsed ? "Collapse section" : "Expand section",
+        );
+        sectionToggle.setAttribute(
+          "aria-expanded",
+          wasCollapsed ? "true" : "false",
+        );
+        sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
+        /* v8 ignore next -- sid is always non-empty; guard remains defensive */
+        if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
+        wrapRef.current?.dispatchEvent(
+          new CustomEvent("emr-sections-changed", { bubbles: false }),
+        );
+        return;
       }
 
-      // 2) Highlight click — open the matching thread.
-      const hl = target.closest<HTMLElement>(".emr-highlight");
-      if (!hl) return;
-      const tid = hl.dataset.threadId;
-      if (!tid || tid === DRAFT_THREAD_ID) return;
-      callbacksRef.current.onHighlightClick(tid);
+      // 2) Highlight click — open the matching thread. Overlapping anchors are
+      // nested, so collect every thread under the click and cycle on repeated
+      // clicks; exact overlaps remain reachable without stacking visual layers.
+      const threadIds: string[] = [];
+      let highlight = target.closest<HTMLElement>(".emr-highlight");
+      while (highlight && articleRef.current?.contains(highlight)) {
+        const threadId = highlight.dataset.threadId;
+        if (
+          threadId &&
+          threadId !== DRAFT_THREAD_ID &&
+          !threadIds.includes(threadId)
+        ) {
+          threadIds.push(threadId);
+        }
+        highlight =
+          highlight.parentElement?.closest<HTMLElement>(".emr-highlight") ??
+          null;
+      }
+      if (threadIds.length === 0) return;
+      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+      const threadId = threadIds[(activeIndex + 1) % threadIds.length]!;
+      syncHoveredHighlights(articleRef.current!, null);
+      callbacksRef.current.onHighlightClick(threadId);
     },
-    [storageKey, onDocLink],
+    [storageKey, onDocLink, activeThreadId],
   );
+
+  const onKeyDown = React.useCallback(
+    (event: React.KeyboardEvent) => {
+      const target = (event.target as HTMLElement).closest<HTMLElement>(
+        '.emr-highlight[role="button"]',
+      );
+      if (!target) return;
+      if (event.key === " ") {
+        event.preventDefault();
+        return;
+      }
+      if (event.key !== "Enter" || event.repeat) return;
+      const threadIds = containedThreadIds(target);
+      event.preventDefault();
+      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+      callbacksRef.current.onHighlightClick(
+        threadIds[(activeIndex + 1) % threadIds.length]!,
+      );
+    },
+    [activeThreadId],
+  );
+
+  const onKeyUp = React.useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key !== " ") return;
+      const target = (event.target as HTMLElement).closest<HTMLElement>(
+        '.emr-highlight[role="button"]',
+      );
+      if (!target) return;
+      event.preventDefault();
+      const threadIds = containedThreadIds(target);
+      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+      callbacksRef.current.onHighlightClick(
+        threadIds[(activeIndex + 1) % threadIds.length]!,
+      );
+    },
+    [activeThreadId],
+  );
+
+  const onPointerOver = React.useCallback((event: React.PointerEvent) => {
+    const article = articleRef.current!;
+    const highlight = (event.target as HTMLElement).closest<HTMLElement>(
+      ".emr-highlight",
+    );
+    const threadId = highlight?.dataset.threadId;
+    syncHoveredHighlights(
+      article,
+      threadId && threadId !== DRAFT_THREAD_ID ? threadId : null,
+    );
+  }, []);
+
+  const onPointerLeave = React.useCallback(() => {
+    syncHoveredHighlights(articleRef.current!, null);
+  }, []);
 
   // -------------------------------------------------------------------------
   // Selection capture: on mouseup, show the floating bubble above a non-empty
@@ -536,7 +707,11 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         ref={articleRef}
         className="markdown-body emr-rendered"
         onClick={onClick}
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
         onMouseUp={onMouseUp}
+        onPointerLeave={onPointerLeave}
+        onPointerOver={onPointerOver}
       />
       {bubble ? (
         <SelectionBubble

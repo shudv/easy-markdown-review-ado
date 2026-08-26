@@ -1186,6 +1186,198 @@ describe("decorateDiffRanges — contiguous grouping", () => {
   });
 });
 
+describe("decorateDiffRanges — minimal line washes", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("wraps rich paragraph content in one inline wash", () => {
+    const root = makeRoot([
+      {
+        tag: "p",
+        start: 5,
+        end: 5,
+        html: "A short <strong>changed line</strong>.",
+      },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    const paragraph = root.querySelector<HTMLElement>("p")!;
+    const wash = paragraph.querySelector<HTMLElement>(".emr-diff-line-wash")!;
+    expect(paragraph.dataset.diffLineWash).toBe("true");
+    expect(wash.innerHTML).toBe("A short <strong>changed line</strong>.");
+    expect(paragraph.dataset.diffGroup).toBeUndefined();
+  });
+
+  it("keeps a section toggle outside a changed heading wash", () => {
+    const root = makeRoot([
+      {
+        tag: "h2",
+        start: 5,
+        end: 5,
+        html: '<button class="emr-section-toggle" type="button"></button>Changed heading',
+      },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    const heading = root.querySelector<HTMLElement>("h2")!;
+    expect(
+      heading.querySelector(":scope > .emr-section-toggle"),
+    ).not.toBeNull();
+    expect(
+      heading.querySelector(":scope > .emr-diff-line-wash")?.textContent,
+    ).toBe("Changed heading");
+    expect(
+      heading.querySelector(".emr-diff-line-wash .emr-section-toggle"),
+    ).toBeNull();
+  });
+
+  it("gives contiguous changed prose blocks independent line washes", () => {
+    const root = makeRoot([
+      { tag: "h2", start: 5, end: 5, html: "Quality gates" },
+      { tag: "p", start: 6, end: 6, html: "First changed line." },
+      { tag: "p", start: 7, end: 7, html: "Second changed line." },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 7, kind: "added" }]);
+
+    const blocks = Array.from(root.children) as HTMLElement[];
+    expect(
+      blocks.map((block) =>
+        block.querySelector(".emr-diff-line-wash")?.textContent?.trim(),
+      ),
+    ).toEqual(["Quality gates", "First changed line.", "Second changed line."]);
+    expect(blocks.map((block) => block.dataset.diffGroup)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("wraps loose-list prose without swallowing its nested list", () => {
+    const root = document.createElement("div");
+    root.className = "markdown-body emr-rendered";
+    root.innerHTML =
+      '<li data-source-line="5" data-source-end-line="8"><p>Parent item</p><ul data-source-line="7" data-source-end-line="8"><li data-source-line="8" data-source-end-line="8">Child</li></ul></li>';
+
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    const parent = root.querySelector<HTMLElement>(":scope > li")!;
+    expect(parent.querySelector("p > .emr-diff-line-wash")?.textContent).toBe(
+      "Parent item",
+    );
+    expect(parent.querySelector(".emr-diff-line-wash ul")).toBeNull();
+    expect(parent.querySelector(":scope > ul")).not.toBeNull();
+  });
+
+  it("keeps a tight nested ordered list outside its parent's wash", () => {
+    const root = document.createElement("div");
+    root.className = "markdown-body emr-rendered";
+    root.innerHTML =
+      '<li data-source-line="5" data-source-end-line="8">Parent item<ol data-source-line="7" data-source-end-line="8"><li data-source-line="8" data-source-end-line="8">Child</li></ol></li>';
+
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    const parent = root.querySelector<HTMLElement>(":scope > li")!;
+    expect(
+      parent.querySelector(":scope > .emr-diff-line-wash")?.textContent,
+    ).toBe("Parent item");
+    expect(parent.querySelector(".emr-diff-line-wash ol")).toBeNull();
+    expect(parent.querySelector(":scope > ol")).not.toBeNull();
+  });
+
+  it("keeps unsupported structural blocks broad", () => {
+    const root = makeRoot([
+      { tag: "dl", start: 5, end: 5, html: "<dt>Term</dt><dd>Meaning</dd>" },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
+    expect(root.querySelector("dl")?.dataset.diffGroup).toBe("single");
+  });
+
+  it("keeps mixed image prose broad", () => {
+    const root = makeRoot([
+      {
+        tag: "p",
+        start: 5,
+        end: 5,
+        html: 'Caption <img src="diagram.png" alt="Diagram">',
+      },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
+    expect(root.querySelector("p")?.dataset.diffGroup).toBe("single");
+  });
+
+  it("wraps real text even when another child is whitespace-only", () => {
+    const root = makeRoot([
+      { tag: "p", start: 5, end: 5, html: "  <strong>Changed</strong>" },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(root.querySelector(".emr-diff-line-wash")?.textContent).toBe(
+      "  Changed",
+    );
+  });
+
+  it("wraps wholesale code rewrites in a line-fitted wash", () => {
+    const root = makeRoot([
+      { tag: "pre", start: 5, end: 5, html: "<code>const x = 1;</code>" },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(
+      root.querySelector("pre > code > .emr-diff-line-wash")?.textContent,
+    ).toBe("const x = 1;");
+    expect(root.querySelector("pre")?.dataset.diffLineWash).toBe("true");
+    expect(root.querySelector("pre")?.dataset.diffGroup).toBeUndefined();
+  });
+
+  it("keeps a changed pre broad when it has no code child", () => {
+    const root = makeRoot([
+      { tag: "pre", start: 5, end: 5, html: "const x = 1;" },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
+    expect(root.querySelector("pre")?.dataset.diffLineWash).toBeUndefined();
+    expect(root.querySelector("pre")?.classList).toContain(
+      "emr-diff-block--added",
+    );
+  });
+
+  it("keeps content with no readable text broad", () => {
+    const root = makeRoot([
+      { tag: "p", start: 5, end: 5, html: "Changed content" },
+    ]);
+    const text = root.querySelector("p")!.firstChild!;
+    Object.defineProperty(text, "textContent", {
+      configurable: true,
+      get: () => null,
+    });
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
+    expect(root.querySelector("p")?.classList).toContain(
+      "emr-diff-block--added",
+    );
+  });
+
+  it("unwraps the line wash cleanly on re-decorate", () => {
+    const root = makeRoot([
+      { tag: "p", start: 5, end: 5, html: "Keep <em>this markup</em>." },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+    decorateDiffRanges(root, []);
+
+    const paragraph = root.querySelector<HTMLElement>("p")!;
+    expect(paragraph.querySelector(".emr-diff-line-wash")).toBeNull();
+    expect(paragraph.innerHTML).toBe("Keep <em>this markup</em>.");
+    expect(paragraph.dataset.diffLineWash).toBeUndefined();
+  });
+});
+
 describe("stripMermaidFence", () => {
   it("strips a triple-backtick mermaid fence", () => {
     expect(stripMermaidFence("```mermaid\nflowchart LR\n  a --> b\n```")).toBe(

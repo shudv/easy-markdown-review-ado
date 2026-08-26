@@ -47,6 +47,10 @@ not use red/green when source lines cannot be aligned with confidence.
 6. Never silently drop a changed source range. If rendering produces no DOM
    owner (for example a reference-link definition or unknown directive), show
    a safe source-only strip instead.
+7. Prose fallback washes follow rendered line boxes rather than the article
+   column: single lines, contiguous list items, and a wrapped paragraph's
+   incomplete final line all stop at their text edge. Structural rows, code,
+   media, and low-confidence table regions keep their specialized treatment.
 
 ## Documentation dialects
 

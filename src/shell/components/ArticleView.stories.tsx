@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { expect, fn, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
 import { renderMarkdownSync } from "../../markdown/render";
@@ -115,6 +115,488 @@ export const Default: Story = {
       expect(canvasElement.querySelector(".emr-highlight")).toBeTruthy(),
     );
     await expect(args.onAnchorsResolved).toHaveBeenCalled();
+  },
+};
+
+const OVERLAPPING_THREADS: CommentThread[] = [
+  {
+    id: "overlap-outer",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "rendered preview right here",
+      prefix: "comment on the ",
+      suffix: " in the page",
+    },
+    comments: [],
+  },
+  {
+    id: "overlap-inner",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "preview right",
+      prefix: "rendered ",
+      suffix: " here",
+    },
+    comments: [],
+  },
+];
+
+const PARTIAL_OVERLAPPING_THREADS: CommentThread[] = [
+  {
+    id: "partial-leading",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "rendered preview right",
+      prefix: "comment on the ",
+      suffix: " here",
+    },
+    comments: [],
+  },
+  {
+    id: "partial-trailing",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "preview right here",
+      prefix: "rendered ",
+      suffix: " in the page",
+    },
+    comments: [],
+  },
+];
+
+const EXACT_OVERLAPPING_THREADS: CommentThread[] = [
+  {
+    id: "exact-first",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "rendered preview",
+      prefix: "comment on the ",
+      suffix: " right here",
+    },
+    comments: [],
+  },
+  {
+    id: "exact-second",
+    filePath: "/doc.md",
+    status: "active",
+    anchor: {
+      exact: "rendered preview",
+      prefix: "comment on the ",
+      suffix: " right here",
+    },
+    comments: [],
+  },
+];
+
+function OverlappingAnchorArticle(
+  props: React.ComponentProps<typeof ArticleView>,
+): React.ReactElement {
+  const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
+    null,
+  );
+  const [currentSource, setCurrentSource] = React.useState<string>();
+  return (
+    <>
+      <button type="button" onClick={() => setCurrentSource(SOURCE)}>
+        Rewrap article
+      </button>
+      <button type="button" onClick={() => setActiveThreadId(null)}>
+        Clear active thread
+      </button>
+      <div style={{ width: 260 }}>
+        <ArticleView
+          {...props}
+          activeThreadId={activeThreadId}
+          currentSource={currentSource}
+          onHighlightClick={(threadId) => {
+            props.onHighlightClick(threadId);
+            setActiveThreadId(threadId);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+/** Overlapping comments share one underline and cycle on repeated clicks. */
+export const OverlappingAnchors: Story = {
+  args: {
+    threads: OVERLAPPING_THREADS,
+    activeThreadId: null,
+    draftAnchor: null,
+    diff: [],
+  },
+  render: (args) => <OverlappingAnchorArticle {...args} />,
+  play: async ({ args, canvasElement }) => {
+    const outer = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(
+        '[data-thread-id="overlap-outer"]',
+      );
+      if (!element) throw new Error("outer overlap anchor missing");
+      return element;
+    });
+    const inner = outer.querySelector<HTMLElement>(
+      '[data-thread-id="overlap-inner"]',
+    )!;
+    await expect(inner).toBeTruthy();
+    await expect(outer.getAttribute("role")).toBe("button");
+    await expect(outer.tabIndex).toBe(0);
+    await expect(inner.hasAttribute("role")).toBe(false);
+    await expect(inner.tabIndex).toBe(-1);
+    const innerTextRange = document.createRange();
+    innerTextRange.selectNodeContents(inner);
+    const innerTextRect = innerTextRange.getBoundingClientRect();
+    const underlineHit = document.elementFromPoint(
+      innerTextRect.left + innerTextRect.width / 2,
+      innerTextRect.bottom + 2,
+    );
+    await expect(
+      underlineHit?.closest<HTMLElement>(".emr-highlight")?.dataset.threadId,
+    ).toBe("overlap-inner");
+    await expect(getComputedStyle(outer).backgroundColor).toBe(
+      "rgba(0, 0, 0, 0)",
+    );
+    await expect(getComputedStyle(outer).textDecorationLine).toContain(
+      "underline",
+    );
+    await expect(getComputedStyle(outer).textDecorationStyle).toBe("dotted");
+    const decorationAtScale = (scale: number) => {
+      canvasElement.style.setProperty("--emr-reader-scale", String(scale));
+      const style = getComputedStyle(outer);
+      return {
+        thickness: Number.parseFloat(style.textDecorationThickness),
+        offset: Number.parseFloat(style.textUnderlineOffset),
+      };
+    };
+    await expect(decorationAtScale(0.5)).toEqual({ thickness: 2.5, offset: 3 });
+    await expect(decorationAtScale(1).thickness).toBeCloseTo(3.48, 3);
+    await expect(decorationAtScale(1).offset).toBeCloseTo(3.9875, 3);
+    await expect(decorationAtScale(1.5)).toEqual({ thickness: 5, offset: 5 });
+    canvasElement.style.setProperty("--emr-reader-scale", "1");
+    await expect(getComputedStyle(inner).backgroundColor).toBe(
+      "rgba(0, 0, 0, 0)",
+    );
+    await expect(getComputedStyle(inner).textDecorationLine).toBe("none");
+
+    inner.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    await expect(inner.classList.contains("is-hover")).toBe(true);
+    await expect(getComputedStyle(inner).textDecorationStyle).toBe("solid");
+    await expect(getComputedStyle(outer).textDecorationLine).toBe("none");
+
+    inner.click();
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "overlap-inner",
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(
+          '[data-thread-id="overlap-inner"].is-active',
+        ),
+      ).toBeTruthy(),
+    );
+    await expect(getComputedStyle(outer).textDecorationLine).toBe("none");
+    const selectedInner = canvasElement.querySelector<HTMLElement>(
+      '[data-thread-id="overlap-inner"]',
+    )!;
+    const selectedThicknessAtScale = (scale: number) => {
+      canvasElement.style.setProperty("--emr-reader-scale", String(scale));
+      return Number.parseFloat(
+        getComputedStyle(selectedInner).textDecorationThickness,
+      );
+    };
+    await expect(selectedThicknessAtScale(0.5)).toBe(3);
+    await expect(selectedThicknessAtScale(1)).toBeCloseTo(3.9875, 3);
+    await expect(selectedThicknessAtScale(1.5)).toBe(5);
+    canvasElement.style.setProperty("--emr-reader-scale", "1");
+    await expect(getComputedStyle(selectedInner).textDecorationStyle).toBe(
+      "solid",
+    );
+    const selectedStyle = getComputedStyle(selectedInner);
+    const selectedAnimation = selectedStyle.animationName;
+    await expect(selectedAnimation).toBe("emr-anchor-land");
+    await expect(selectedStyle.boxShadow).not.toBe("none");
+    await expect(selectedStyle.boxDecorationBreak).toBe("clone");
+    await expect(getComputedStyle(selectedInner, "::after").content).toBe(
+      "none",
+    );
+
+    outer.focus();
+    await expect(document.activeElement).toBe(outer);
+    within(canvasElement)
+      .getByRole("button", { name: "Rewrap article" })
+      .click();
+    const rewrappedInner = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(
+        '[data-thread-id="overlap-inner"].is-active',
+      );
+      if (!element || element === selectedInner) {
+        throw new Error("active overlap not replaced after rewrap");
+      }
+      return element;
+    });
+    await expect(rewrappedInner.classList.contains("is-landing")).toBe(false);
+    await expect(getComputedStyle(rewrappedInner).animationName).toBe("none");
+    const rewrappedOuter = rewrappedInner.closest<HTMLElement>(
+      '[data-thread-id="overlap-outer"]',
+    )!;
+    await expect(document.activeElement).toBe(rewrappedOuter);
+    const outerBeforeLanding = rewrappedOuter;
+    const outerRectBeforeLanding = outerBeforeLanding.getBoundingClientRect();
+
+    rewrappedInner.click();
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "overlap-outer",
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(
+          '[data-thread-id="overlap-outer"].is-landing',
+        ),
+      ).toBeTruthy(),
+    );
+    const selectedOuter = canvasElement.querySelector<HTMLElement>(
+      '[data-thread-id="overlap-outer"].is-active',
+    )!;
+    const outerTextRange = document.createRange();
+    outerTextRange.selectNodeContents(selectedOuter);
+    await expect(outerTextRange.getClientRects().length).toBeGreaterThan(1);
+    await expect(selectedOuter.getBoundingClientRect().width).toBeCloseTo(
+      outerRectBeforeLanding.width,
+      3,
+    );
+    await expect(selectedOuter.getBoundingClientRect().height).toBeCloseTo(
+      outerRectBeforeLanding.height,
+      3,
+    );
+    await expect(getComputedStyle(selectedOuter).textDecorationLine).toContain(
+      "underline",
+    );
+  },
+};
+
+/** Partially overlapping comments decorate split fragments as one active range. */
+export const PartialOverlappingAnchors: Story = {
+  args: {
+    threads: PARTIAL_OVERLAPPING_THREADS,
+    activeThreadId: null,
+    draftAnchor: null,
+    diff: [],
+  },
+  render: (args) => <OverlappingAnchorArticle {...args} />,
+  play: async ({ args, canvasElement }) => {
+    const leading = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(
+        '[data-thread-id="partial-leading"]',
+      );
+      if (!element) throw new Error("leading partial anchor missing");
+      return element;
+    });
+    const trailing = Array.from(
+      canvasElement.querySelectorAll<HTMLElement>(
+        '[data-thread-id="partial-trailing"]',
+      ),
+    );
+    await expect(trailing).toHaveLength(2);
+    const overlapFragment = trailing.find((element) =>
+      leading.contains(element),
+    )!;
+    const trailingOnlyFragment = trailing.find(
+      (element) => !leading.contains(element),
+    )!;
+    await expect(overlapFragment).toBeTruthy();
+    await expect(trailingOnlyFragment).toBeTruthy();
+    await expect(leading.getAttribute("role")).toBe("button");
+    await expect(overlapFragment.hasAttribute("role")).toBe(false);
+    await expect(trailingOnlyFragment.hasAttribute("role")).toBe(false);
+    await expect(
+      canvasElement.querySelectorAll('.emr-highlight[role="button"]'),
+    ).toHaveLength(1);
+
+    trailingOnlyFragment.dispatchEvent(
+      new PointerEvent("pointerover", { bubbles: true }),
+    );
+    await expect(
+      trailing.every((element) => element.classList.contains("is-hover")),
+    ).toBe(true);
+    await expect(getComputedStyle(overlapFragment).textDecorationStyle).toBe(
+      "solid",
+    );
+
+    overlapFragment.click();
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "partial-trailing",
+    );
+    await waitFor(() =>
+      expect(
+        trailing.every((element) => element.classList.contains("is-active")),
+      ).toBe(true),
+    );
+    await expect(getComputedStyle(leading).textDecorationLine).toBe("none");
+
+    trailingOnlyFragment.click();
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "partial-trailing",
+    );
+
+    overlapFragment.click();
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "partial-leading",
+    );
+    await waitFor(() =>
+      expect(leading.classList.contains("is-active")).toBe(true),
+    );
+    await expect(getComputedStyle(leading).textDecorationLine).toContain(
+      "underline",
+    );
+  },
+};
+
+/** Exact overlaps remain individually reachable without doubled decoration. */
+export const ExactOverlappingAnchors: Story = {
+  args: {
+    threads: EXACT_OVERLAPPING_THREADS,
+    activeThreadId: null,
+    draftAnchor: null,
+    diff: [],
+  },
+  render: (args) => <OverlappingAnchorArticle {...args} />,
+  play: async ({ args, canvasElement }) => {
+    const first = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(
+        '[data-thread-id="exact-first"]',
+      );
+      if (!element) throw new Error("first exact anchor missing");
+      return element;
+    });
+    const second = first.querySelector<HTMLElement>(
+      '[data-thread-id="exact-second"]',
+    )!;
+    await expect(second).toBeTruthy();
+    await expect(getComputedStyle(first).textDecorationLine).toContain(
+      "underline",
+    );
+    await expect(getComputedStyle(second).textDecorationLine).toBe("none");
+
+    await expect(first.getAttribute("role")).toBe("button");
+    await expect(first.tabIndex).toBe(0);
+    await expect(second.hasAttribute("role")).toBe(false);
+    const article = canvasElement.querySelector<HTMLElement>(".emr-rendered")!;
+    await expect(
+      article.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    ).toBe(true);
+    const sectionToggle = canvasElement.querySelector<HTMLButtonElement>(
+      ".emr-section-toggle",
+    )!;
+    await expect(
+      sectionToggle.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: " ",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    ).toBe(true);
+    await expect(
+      article.dispatchEvent(
+        new KeyboardEvent("keyup", {
+          key: " ",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    ).toBe(true);
+    first.focus();
+    await expect(document.activeElement).toBe(first);
+    await expect(getComputedStyle(first).outlineWidth).toBe("2px");
+    await expect(
+      Number.parseFloat(getComputedStyle(first).textDecorationThickness),
+    ).toBeCloseTo(3.9875, 3);
+    const initialSpace = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(initialSpace)).toBe(false);
+    const initialSpaceUp = new KeyboardEvent("keyup", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(initialSpaceUp)).toBe(false);
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "exact-second",
+    );
+    await waitFor(() =>
+      expect(second.classList.contains("is-active")).toBe(true),
+    );
+    within(canvasElement)
+      .getByRole("button", { name: "Clear active thread" })
+      .click();
+    await waitFor(() =>
+      expect(second.classList.contains("is-active")).toBe(false),
+    );
+    first.focus();
+    const initialEnter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(initialEnter)).toBe(false);
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "exact-second",
+    );
+    await waitFor(() =>
+      expect(second.classList.contains("is-active")).toBe(true),
+    );
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(enter)).toBe(false);
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith("exact-first");
+    await waitFor(() =>
+      expect(first.classList.contains("is-active")).toBe(true),
+    );
+    await expect(getComputedStyle(first).textDecorationLine).toContain(
+      "underline",
+    );
+
+    const space = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(space)).toBe(false);
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith("exact-first");
+    const spaceUp = new KeyboardEvent("keyup", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    await expect(first.dispatchEvent(spaceUp)).toBe(false);
+    await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
+      "exact-second",
+    );
+    await waitFor(() =>
+      expect(second.classList.contains("is-active")).toBe(true),
+    );
+    await expect(getComputedStyle(first).textDecorationLine).toBe("none");
+    fireEvent.pointerOut(article, { relatedTarget: document.body });
+    await expect(
+      canvasElement.querySelector(".emr-highlight.is-hover"),
+    ).toBeNull();
   },
 };
 
@@ -294,7 +776,7 @@ export const ClickHighlight: Story = {
   },
 };
 
-/** Clicking a section heading collapses it (and re-measures), then expands. */
+/** Only the section chevron collapses; heading text remains selectable. */
 export const CollapseSection: Story = {
   play: async ({ canvasElement }) => {
     await waitFor(() =>
@@ -302,16 +784,26 @@ export const CollapseSection: Story = {
     );
     const heading =
       canvasElement.querySelector<HTMLElement>(".emr-section > h2")!;
+    const toggle = heading.querySelector<HTMLButtonElement>(
+      ".emr-section-toggle",
+    )!;
     heading.click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(heading.parentElement?.getAttribute("data-collapsed")).toBeNull();
+    toggle.click();
     await waitFor(() =>
       expect(heading.parentElement?.getAttribute("data-collapsed")).toBe(
         "true",
       ),
     );
-    heading.click();
+    expect(toggle.getAttribute("aria-label")).toBe("Expand section");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    toggle.click();
     await waitFor(() =>
       expect(heading.parentElement?.getAttribute("data-collapsed")).toBeNull(),
     );
+    expect(toggle.getAttribute("aria-label")).toBe("Collapse section");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
   },
 };
 
@@ -332,6 +824,7 @@ export const TitleNotCollapsible: Story = {
     // It never gains a collapsed state.
     await new Promise((r) => setTimeout(r, 50));
     expect(title.parentElement?.getAttribute("data-collapsed")).toBeNull();
+    expect(title.querySelector(".emr-section-toggle")).toBeNull();
   },
 };
 

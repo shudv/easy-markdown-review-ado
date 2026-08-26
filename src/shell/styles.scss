@@ -50,12 +50,9 @@
   --emr-balloon-orphaned-bg: #fbfbfb;
   --emr-balloon-orphan-quote-bg: rgba(0, 0, 0, 0.03);
 
-  --emr-hl-active: #fff3a8;
-  --emr-hl-active-strong: #ffd966;
-  --emr-hl-active-fg: var(--emr-fg);
-  --emr-hl-border: rgba(0, 0, 0, 0.08);
-  --emr-hl-resolved: #f0f0f0;
-  --emr-hl-resolved-strong: #e0e0e0;
+  --emr-anchor-line: #005ea8;
+  --emr-anchor-active: #005ea8;
+  --emr-anchor-land-wash: 30%;
 
   --emr-diff-added: #2da44e;
   --emr-diff-modified: #bf8700;
@@ -182,15 +179,8 @@
   --emr-balloon-resolved-bg: #242424;
   --emr-balloon-orphaned-bg: #232323;
   --emr-balloon-orphan-quote-bg: rgba(255, 255, 255, 0.05);
-
-  --emr-hl-active: rgba(255, 217, 102, 0.62);
-  --emr-hl-active-strong: rgba(255, 217, 102, 0.85);
-  // Pin the highlighted text to a dark colour so the yellow background
-  // actually carries enough contrast (light-on-yellow was unreadable).
-  --emr-hl-active-fg: #1a1a1a;
-  --emr-hl-border: rgba(255, 255, 255, 0.08);
-  --emr-hl-resolved: rgba(255, 255, 255, 0.08);
-  --emr-hl-resolved-strong: rgba(255, 255, 255, 0.18);
+  --emr-anchor-line: #66ccff;
+  --emr-anchor-active: #66ccff;
 
   --emr-diff-added: #3fb950;
   --emr-diff-modified: #d29922;
@@ -209,6 +199,7 @@
   --emr-diff-cell-bg: 30%;
   // Native text selection must stay visibly distinct from the near-black paper.
   --emr-selection-bg: rgba(76, 194, 255, 0.42);
+  --emr-anchor-land-wash: 32%;
 }
 
 // High-contrast light: pure white background, pure black foreground,
@@ -240,12 +231,8 @@
   --emr-balloon-orphaned-bg: #ffffff;
   --emr-balloon-orphan-quote-bg: #f0f0f0;
 
-  --emr-hl-active: #ffff00;
-  --emr-hl-active-strong: #ffff00;
-  --emr-hl-active-fg: #000000;
-  --emr-hl-border: #000000;
-  --emr-hl-resolved: #ffffff;
-  --emr-hl-resolved-strong: #ffffff;
+  --emr-anchor-line: var(--emr-accent);
+  --emr-anchor-active: var(--emr-accent);
 
   --emr-diff-added: #007a00;
   --emr-diff-modified: #6a4500;
@@ -279,18 +266,15 @@
   --emr-balloon-orphaned-bg: #000000;
   --emr-balloon-orphan-quote-bg: #1a1a1a;
 
-  --emr-hl-active: #ffd80b;
-  --emr-hl-active-strong: #ffd80b;
-  --emr-hl-active-fg: #000000;
-  --emr-hl-border: #ffffff;
-  --emr-hl-resolved: #000000;
-  --emr-hl-resolved-strong: #000000;
+  --emr-anchor-line: var(--emr-accent);
+  --emr-anchor-active: var(--emr-accent);
 
   --emr-diff-added: #1aff1a;
   --emr-diff-modified: #ffd80b;
   --emr-diff-deleted: #ff5c5c;
   --emr-status-closed: #d8b6ff;
   --emr-selection-bg: Highlight;
+  --emr-anchor-land-wash: 38%;
 }
 
 html,
@@ -1091,55 +1075,125 @@ button {
 // ---------------------------------------------------------------------------
 
 .emr-highlight {
-  background-color: var(--emr-hl-active);
-  color: var(--emr-hl-active-fg);
-  border-bottom: 1px solid var(--emr-hl-border);
-  border-radius: 2px;
-  padding: 0 1px;
-  // Offset the horizontal padding with a matching negative margin: wrapping a
-  // selection in the highlight then costs ZERO layout width, so the surrounding
-  // prose never shifts sideways the moment the anchor is applied. The tint
-  // still bleeds 1px past the glyphs for a padded look.
-  margin: 0 -1px;
+  --emr-anchor-idle-thickness: clamp(2.5px, 0.24em, 5px);
+  --emr-anchor-selected-thickness: clamp(3px, 0.275em, 5px);
+  --emr-anchor-underline-offset: clamp(3px, 0.275em, 5px);
+  --emr-anchor-hit-target-end: clamp(1.5px, 0.18em, 4px);
+
+  background-color: transparent;
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--emr-anchor-line);
+  text-decoration-style: dotted;
+  text-decoration-thickness: var(--emr-anchor-idle-thickness);
+  text-underline-offset: var(--emr-anchor-underline-offset);
+  text-decoration-skip-ink: none;
+  padding-block-end: var(--emr-anchor-hit-target-end);
+  margin-block-end: calc(-1 * var(--emr-anchor-hit-target-end));
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease;
+    text-decoration-color 120ms ease-out,
+    text-decoration-thickness 140ms cubic-bezier(0.2, 0, 0, 1);
 
-  &:hover,
   &.is-hover {
-    background-color: var(--emr-hl-active-strong);
+    background-color: transparent;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 
   &.is-active {
-    background-color: var(--emr-hl-active-strong);
-    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
-    animation: emr-hl-pulse 600ms ease-out 1;
+    background-color: transparent;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 
-  &.is-resolved {
-    background-color: var(--emr-hl-resolved);
-    border-bottom-color: transparent;
-    // Resolved threads dim the text along with the bg — we want them
-    // to fade into the page so the reader's eye isn't drawn back.
-    color: inherit;
-
-    &:hover,
-    &.is-active {
-      background-color: var(--emr-hl-resolved-strong);
-    }
+  &[role="button"]:focus-visible {
+    outline: 2px solid var(--emr-anchor-active);
+    outline-offset: 2px;
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) 18%,
+      transparent
+    );
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 }
 
-@keyframes emr-hl-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(191, 135, 0, 0.55);
+// Sequential anchor wrapping makes overlapping comments nest. Keep that DOM
+// structure for hit-testing, but paint only one idle underline so lines never
+// compound. A selected nested anchor underlines only its exact subrange.
+.emr-highlight .emr-highlight {
+  background-color: transparent;
+  text-decoration-line: none;
+
+  &.is-hover {
+    background-color: transparent;
+    text-decoration-line: underline;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
+    text-underline-offset: var(--emr-anchor-underline-offset);
   }
-  60% {
-    box-shadow: 0 0 0 8px rgba(191, 135, 0, 0);
+
+  &.is-active {
+    background-color: transparent;
+    text-decoration-line: underline;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
+    text-underline-offset: var(--emr-anchor-underline-offset);
+  }
+}
+
+.emr-highlight:has(.emr-highlight:is(.is-active, .is-hover)) {
+  text-decoration-line: none;
+}
+
+.emr-highlight.is-landing {
+  animation: emr-anchor-land 2500ms cubic-bezier(0.2, 0, 0.2, 1) 1;
+}
+
+@keyframes emr-anchor-land {
+  0% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) 12%,
+      transparent
+    );
+    box-shadow: 0 0 0 7px
+      color-mix(in srgb, var(--emr-anchor-active) 22%, transparent);
+  }
+  45% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) var(--emr-anchor-land-wash),
+      transparent
+    );
+    box-shadow: 0 0 0 0 transparent;
+  }
+  66% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) var(--emr-anchor-land-wash),
+      transparent
+    );
   }
   100% {
-    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-highlight {
+    transition: none;
   }
 }
 
@@ -5020,52 +5074,68 @@ button {
   > h5,
   > h6 {
     position: relative;
-    cursor: pointer;
-    transition: color 120ms ease;
+    cursor: text;
 
-    &::before {
-      content: "";
+    > .emr-section-toggle {
       position: absolute;
-      // Size scales with the heading's font-size so the chevron reads as
-      // proportional next to both an h1 (~29px \u2192 ~23px chevron) and
-      // an h4 (~14px \u2192 ~12px chevron). 0.8em is the visual sweet
-      // spot \u2014 substantial enough to read as a clear affordance,
-      // small enough to stay inside the 28px `--emr-article-gutter`
-      // with a 4px right-edge gap (no leak into the DocNav column).
-      width: 0.8em;
-      height: 0.8em;
-      left: calc(-0.8em - 4px);
+      // Keep the control independent of native button font metrics: a 22px hit
+      // target fits the 28px gutter, while the centered 16px glyph stays
+      // consistent across heading levels and browser text scaling.
+      width: 22px;
+      height: 22px;
+      left: -26px;
       // Centered on the heading's first-line vertical middle. The site's
       // headings all use a 1.25 line-height ratio, so line-box center is
       // at 0.625em from the heading's content-top \u2014 stable across
       // every heading size and unaffected by margins/padding-bottom.
       top: 0.625em;
-      // Use mask-image so the chevron picks up the heading's currentColor
-      // (so it tints accent-blue when the user hovers the heading).
-      background-color: currentColor;
-      $emr-chevron-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,6 8,10 12,6'/></svg>");
-      mask-image: $emr-chevron-svg;
-      -webkit-mask-image: $emr-chevron-svg;
-      mask-size: contain;
-      -webkit-mask-size: contain;
-      mask-repeat: no-repeat;
-      -webkit-mask-repeat: no-repeat;
-      mask-position: center;
-      -webkit-mask-position: center;
-      color: var(--emr-muted);
+      min-width: 0;
+      font: inherit;
+      line-height: 1;
+      padding: 0;
+      border: 0;
+      border-radius: 2px;
+      color: currentColor;
+      background: transparent;
+      cursor: pointer;
       transform: translateY(-50%);
+      opacity: 0.4;
       transition:
-        transform 160ms ease,
-        opacity 140ms ease,
-        background-color 140ms ease;
-      opacity: 0.32;
-    }
+        color 120ms ease-out,
+        opacity 120ms ease-out;
 
-    &:hover {
-      color: var(--emr-accent);
-    }
-    &:hover::before {
-      opacity: 0.95;
+      &::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        left: 3px;
+        top: 3px;
+        // Use mask-image so the chevron picks up the button's currentColor.
+        background-color: currentColor;
+        $emr-chevron-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,6 8,10 12,6'/></svg>");
+        mask-image: $emr-chevron-svg;
+        -webkit-mask-image: $emr-chevron-svg;
+        mask-size: contain;
+        -webkit-mask-size: contain;
+        mask-repeat: no-repeat;
+        -webkit-mask-repeat: no-repeat;
+        mask-position: center;
+        -webkit-mask-position: center;
+        transform: rotate(0);
+        transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      &:hover,
+      &:focus-visible {
+        color: var(--emr-accent);
+        opacity: 1;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--emr-accent);
+        outline-offset: 2px;
+      }
     }
 
     // When a heading is also a diff-block, its wash card is pulled left by the
@@ -5073,21 +5143,22 @@ button {
     // shifted border edge, so it gets a matching +6px compensation to stay
     // aligned with every other chevron. (Inline word-diff headings carry no
     // card, so they need no compensation.)
-    &.emr-diff-block:not(.emr-diff-block--inline)::before {
-      left: calc(-0.8em - 4px + 6px);
+    &.emr-diff-block:not(.emr-diff-block--inline):not(
+        [data-diff-line-wash="true"]
+      )
+      > .emr-section-toggle {
+      left: -20px;
     }
   }
 
   // Collapsed: chevron points right, body content hidden.
   &[data-collapsed="true"] {
-    > h1::before,
-    > h2::before,
-    > h3::before,
-    > h4::before,
-    > h5::before,
-    > h6::before {
-      transform: translateY(-50%) rotate(-90deg);
+    > :is(h1, h2, h3, h4, h5, h6) > .emr-section-toggle {
       opacity: 0.95;
+
+      &::before {
+        transform: rotate(-90deg);
+      }
     }
 
     // Hide every child of the section except the heading itself.
@@ -5106,16 +5177,15 @@ button {
     > h4,
     > h5,
     > h6 {
-      cursor: default;
-
-      &::before {
-        content: none;
-      }
-
-      &:hover {
-        color: inherit;
-      }
+      cursor: text;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-section-toggle,
+  .emr-section-toggle::before {
+    transition: none !important;
   }
 }
 
@@ -5410,26 +5480,19 @@ button {
 // The whole layer is suppressed when the reader toggles changes off.
 .emr-rendered {
   .emr-diff-block {
-    // Give the wash a rounded card shape. Negative margins keep the prose
-    // column from shifting so anchors, headings and code blocks line up
-    // exactly as they do without a diff. The left inset (6px) is intentionally
-    // smaller than it once was so the wash starts a touch inward — and is
-    // shared by every diff-block (headings and prose alike) so all highlight
-    // left edges line up.
+    // Decoration must not alter document geometry. Paint directly on the
+    // existing box; never add padding/borders or rewrite authored margins.
     position: relative;
     border-radius: 6px;
-    margin-left: -6px;
-    margin-right: -8px;
-    padding-left: 6px;
-    padding-right: 8px;
-    // A soft, low-opacity tint of the change hue — the background alone
-    // signals the change; no accent bar or corner tag needed. The opacity is a
-    // theme token so dark mode can lift it (a 9% tint vanishes on dark).
-    background: color-mix(
+    --emr-diff-wash-color: color-mix(
       in srgb,
       var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash),
       transparent
     );
+    // A soft, low-opacity tint of the change hue — the background alone
+    // signals the change; no accent bar or corner tag needed. The opacity is a
+    // theme token so dark mode can lift it (a 9% tint vanishes on dark).
+    background: var(--emr-diff-wash-color);
     // Soft entrance so toggling changes on doesn't feel jarring.
     transition: background 140ms ease;
 
@@ -5440,26 +5503,27 @@ button {
       --emr-diff-bar: var(--emr-diff-modified);
     }
 
+    // Prose washes follow the rendered text instead of filling the article
+    // column. The inline wrapper below clones its box decoration per visual
+    // line, so a short line and a wrapped paragraph's incomplete final line
+    // both stop exactly where their text stops.
+    &[data-diff-line-wash="true"] {
+      background: none;
+      border-radius: 0;
+    }
+
     // --- Contiguous grouping (data-diff-group) -----------------------------
     // A run of adjacent same-kind blocks paints as ONE continuous card.
     // Continuation blocks square their touching corners and collapse the
     // inter-block gap so the tint is unbroken.
     &[data-diff-group="start"] {
       border-radius: 6px 6px 0 0;
-      margin-bottom: 0;
-      padding-bottom: 6px;
     }
     &[data-diff-group="mid"] {
       border-radius: 0;
-      margin-top: 0;
-      margin-bottom: 0;
-      padding-top: 6px;
-      padding-bottom: 6px;
     }
     &[data-diff-group="end"] {
       border-radius: 0 0 6px 6px;
-      margin-top: 0;
-      padding-top: 6px;
     }
 
     // --- Inline word-diff blocks -------------------------------------------
@@ -5470,10 +5534,6 @@ button {
     &--inline {
       background: none;
       border-radius: 0;
-      margin-left: 0;
-      margin-right: 0;
-      padding-left: 0;
-      padding-right: 0;
     }
 
     // --- Diagrams + image-only blocks --------------------------------------
@@ -5483,16 +5543,26 @@ button {
     &.emr-diff-image {
       background: none;
       border-radius: 0;
-      margin-left: 0;
-      margin-right: 0;
-      padding-left: 12px;
-      border-left: 3px solid
+      box-shadow: -3px 0
         color-mix(
           in srgb,
           var(--emr-diff-bar, var(--emr-rule)) 70%,
           transparent
         );
     }
+  }
+
+  .emr-diff-line-wash {
+    --emr-diff-line-wash-color: color-mix(
+      in srgb,
+      var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash),
+      transparent
+    );
+    border-radius: 4px;
+    background: var(--emr-diff-line-wash-color);
+    box-shadow: 0 0 0 1px var(--emr-diff-line-wash-color);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   // --- Granular list items + table rows ------------------------------------
@@ -5508,12 +5578,8 @@ button {
     // item — bullet included — out of alignment). Tint the item DIRECTLY, not
     // via a `z-index: -1` pseudo-element: a negative-z band paints behind
     // `.markdown-body`'s opaque white background and disappears entirely.
-    // The list marker lives in the `<ul>` padding OUTSIDE the item's content
-    // box, so a background on the item wraps only the text and the bullet
-    // stays put in the gutter, aligned with its siblings. Small asymmetric
-    // padding gives the text breathing room without shifting it.
-    margin: 0;
-    padding: 1px 6px 1px 4px;
+    // The list marker lives outside the item's content box, so direct paint
+    // keeps the bullet aligned without adding any layout-affecting padding.
     border-radius: 4px;
     background: color-mix(
       in srgb,
@@ -5529,7 +5595,10 @@ button {
     // the coloured words carry it.
     &.emr-diff-block--inline {
       background: none;
-      padding: 0;
+    }
+
+    &[data-diff-line-wash="true"] {
+      background: none;
     }
 
     &.emr-diff-list-marker-change::marker {
@@ -5675,6 +5744,7 @@ button {
 
   .emr-diff-before-control:hover .emr-diff-before-trigger,
   .emr-diff-before-control:focus-within .emr-diff-before-trigger,
+  .emr-diff-block:hover > .emr-diff-before-control .emr-diff-before-trigger,
   .emr-diff-before-control:has(+ .emr-diff-before-panel + :hover)
     .emr-diff-before-trigger,
   li:hover > .emr-diff-before-control .emr-diff-before-trigger {
@@ -5690,7 +5760,9 @@ button {
 
   .emr-diff-source-only {
     position: relative;
-    width: min(100%, 720px);
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: min(100%, 720px);
     margin: 4px 0;
     padding: 5px 48px 5px 8px;
     color: var(--emr-fg);
@@ -5887,7 +5959,6 @@ button {
   .emr-word-added {
     text-decoration: none;
     border-radius: 2px;
-    padding: 0 1px;
     background: color-mix(
       in srgb,
       var(--emr-diff-added) var(--emr-diff-word-added-bg),
@@ -5903,7 +5974,6 @@ button {
       transparent
     );
     border-radius: 2px;
-    padding: 0 1px;
     color: color-mix(
       in srgb,
       var(--emr-diff-deleted) var(--emr-diff-word-removed-fg),
@@ -6150,7 +6220,7 @@ button {
         .emr-section > :is(h1, h2, h3, h4, h5, h6) {
           cursor: default;
 
-          &::before {
+          > .emr-section-toggle {
             display: none;
           }
         }

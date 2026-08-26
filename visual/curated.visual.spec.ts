@@ -56,6 +56,30 @@ const SHOTS: Shot[] = [
   },
   {
     title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision Dark",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision High Contrast Light",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision High Contrast Dark",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
     name: "High Contrast Dark",
     settledSelector: ".emr-diff-block, .emr-diff-ruler",
   },
@@ -90,6 +114,16 @@ const SHOTS: Shot[] = [
     title: "Visual/ArticleDiff",
     name: "Dark",
     settledSelector: ".emr-word-added",
+  },
+  {
+    // Side-by-side audit of all broad-wash reductions: prose lines, wrapped
+    // final lines, contiguous items, code rewrites, and source-only strips.
+    // The ambiguous table remains broad in both panes by design.
+    title: "Visual/ArticleDiff",
+    name: "Minimal Diff Comparison Shot",
+    settledSelector:
+      ".minimal-diff-comparison .emr-diff-line-wash, .minimal-diff-comparison .emr-diff-source-only",
+    clip: ".minimal-diff-comparison",
   },
   {
     title: "Visual/ArticleDiff",

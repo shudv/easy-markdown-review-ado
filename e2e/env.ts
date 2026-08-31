@@ -61,6 +61,11 @@ export const E2E = {
     "AZDO_E2E_DOCLINKS_PR_TITLE",
     "Expand the installation and configuration guides",
   ),
+  /** Active PR that adds both a Markdown file and a Git LFS-backed image. */
+  docLinksLfsPrTitle: env(
+    "AZDO_E2E_DOCLINKS_LFS_PR_TITLE",
+    "Render an LFS image added in a pull request",
+  ),
   /** Origin the dev extension bundles are served from (`npm run dev:verify`). */
   devOrigin: env("AZDO_E2E_DEV_ORIGIN", "https://localhost:3000"),
   /**
@@ -96,6 +101,13 @@ export const E2E = {
    * authorize the `_apis` REST endpoint).
    */
   prTitle: env("AZDO_E2E_PR_TITLE", "Document PR thread endpoints"),
+  /** Repo containing one active PR with ten native source-push iterations. */
+  iterationRepo: env("AZDO_E2E_ITERATION_REPO", "iteration-history-showcase"),
+  /** Active multi-iteration PR used by the status-bar picker spec. */
+  iterationPrTitle: env(
+    "AZDO_E2E_ITERATION_PR_TITLE",
+    "Develop the document review workflow",
+  ),
   /** Repo whose PR the change-highlighting spec drives. */
   diffRepo: env("AZDO_E2E_DIFF_REPO", "diff-showcase"),
   /**

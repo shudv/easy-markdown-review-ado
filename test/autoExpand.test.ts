@@ -7,6 +7,10 @@ describe("autoExpandKey", () => {
     expect(autoExpandKey("repo-1", "/docs")).toBe(
       autoExpandKey("repo-1", "docs"),
     );
+    expect(autoExpandKey("repo-1", "///docs")).toBe("repo-1\u0000docs");
+    expect(autoExpandKey("repo-1", "docs//nested")).toBe(
+      "repo-1\u0000docs//nested",
+    );
   });
 
   it("scopes the key by repo id", () => {
@@ -85,7 +89,19 @@ describe("planRootAutoExpand", () => {
       max: 40,
     });
     expect(plan.folders).toEqual([]);
+    expect(plan.keys).toEqual([]);
     expect(plan.used).toBe(40);
+  });
+
+  it("plans nothing when usage has exceeded the budget", () => {
+    const plan = planRootAutoExpand({
+      ...base,
+      fileCount: 0,
+      unloadedFolders: ["/a"],
+      used: 41,
+      max: 40,
+    });
+    expect(plan).toEqual({ folders: [], keys: [], used: 41 });
   });
 
   it("plans nothing when there are no unloaded folders", () => {

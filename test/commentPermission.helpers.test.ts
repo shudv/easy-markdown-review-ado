@@ -18,6 +18,9 @@ describe("repoSecurityToken", () => {
 
 describe("hasPermissionsPath", () => {
   it("builds the has-permissions REST path with an encoded token", () => {
+    expect(GIT_REPOSITORIES_NAMESPACE_ID).toBe(
+      "2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87",
+    );
     expect(
       hasPermissionsPath(
         GIT_REPOSITORIES_NAMESPACE_ID,
@@ -106,6 +109,9 @@ describe("commentPermissionFromResponse", () => {
 
 describe("COMMENT_PERMISSION_DENIED_MESSAGE", () => {
   it("mentions the Contribute requirement", () => {
-    expect(COMMENT_PERMISSION_DENIED_MESSAGE).toMatch(/Contribute/);
+    expect(COMMENT_PERMISSION_DENIED_MESSAGE).toBe(
+      "You don't have permission to comment on this repository. Commenting " +
+        "requires Contribute access.",
+    );
   });
 });

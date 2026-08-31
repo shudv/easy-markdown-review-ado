@@ -2,6 +2,7 @@
 // React tree and component-level try/catch. Registered once per app load by
 // `initTelemetry` callers (the entry points).
 
+import { markAppReady } from "./bootTiming";
 import { trackException } from "./telemetry";
 
 let installed = false;
@@ -13,6 +14,7 @@ function onError(event: ErrorEvent): void {
     source: "window.onerror",
     handled: false,
   });
+  markAppReady("error");
 }
 
 function onUnhandledRejection(event: PromiseRejectionEvent): void {
@@ -23,6 +25,7 @@ function onUnhandledRejection(event: PromiseRejectionEvent): void {
     source: "unhandledrejection",
     handled: false,
   });
+  markAppReady("error");
 }
 
 /** Attach global listeners. Idempotent; safe to call from each entry point. */

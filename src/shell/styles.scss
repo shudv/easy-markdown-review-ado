@@ -15,6 +15,7 @@
   --emr-faint: #f3f3f3;
   --emr-rule: #e5e5e5;
   --emr-rule-strong: #cccccc;
+  --emr-statusbar-separator: color-mix(in srgb, var(--emr-fg) 52%, transparent);
   // Divider between the document and the side panes. Transparent by default —
   // the doc/pane background contrast carries the separation — but a strong line
   // in high-contrast themes, where the panes share the document's background.
@@ -49,12 +50,9 @@
   --emr-balloon-orphaned-bg: #fbfbfb;
   --emr-balloon-orphan-quote-bg: rgba(0, 0, 0, 0.03);
 
-  --emr-hl-active: #fff3a8;
-  --emr-hl-active-strong: #ffd966;
-  --emr-hl-active-fg: var(--emr-fg);
-  --emr-hl-border: rgba(0, 0, 0, 0.08);
-  --emr-hl-resolved: #f0f0f0;
-  --emr-hl-resolved-strong: #e0e0e0;
+  --emr-anchor-line: #005ea8;
+  --emr-anchor-active: #005ea8;
+  --emr-anchor-land-wash: 30%;
 
   --emr-diff-added: #2da44e;
   --emr-diff-modified: #bf8700;
@@ -141,6 +139,10 @@
   --emr-reader-font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
   --emr-reader-scale: 1;
+  --emr-reader-line-height: 1.6;
+  --emr-reader-letter-spacing: 0em;
+  --emr-reader-word-spacing: 0em;
+  --emr-reader-paragraph-spacing: 16px;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,15 +179,8 @@
   --emr-balloon-resolved-bg: #242424;
   --emr-balloon-orphaned-bg: #232323;
   --emr-balloon-orphan-quote-bg: rgba(255, 255, 255, 0.05);
-
-  --emr-hl-active: rgba(255, 217, 102, 0.62);
-  --emr-hl-active-strong: rgba(255, 217, 102, 0.85);
-  // Pin the highlighted text to a dark colour so the yellow background
-  // actually carries enough contrast (light-on-yellow was unreadable).
-  --emr-hl-active-fg: #1a1a1a;
-  --emr-hl-border: rgba(255, 255, 255, 0.08);
-  --emr-hl-resolved: rgba(255, 255, 255, 0.08);
-  --emr-hl-resolved-strong: rgba(255, 255, 255, 0.18);
+  --emr-anchor-line: #66ccff;
+  --emr-anchor-active: #66ccff;
 
   --emr-diff-added: #3fb950;
   --emr-diff-modified: #d29922;
@@ -204,6 +199,7 @@
   --emr-diff-cell-bg: 30%;
   // Native text selection must stay visibly distinct from the near-black paper.
   --emr-selection-bg: rgba(76, 194, 255, 0.42);
+  --emr-anchor-land-wash: 32%;
 }
 
 // High-contrast light: pure white background, pure black foreground,
@@ -220,6 +216,7 @@
   --emr-faint: #ffffff;
   --emr-rule: #000000;
   --emr-rule-strong: #000000;
+  --emr-statusbar-separator: #000000;
   --emr-pane-divider: var(--emr-rule);
   --emr-card-border: var(--emr-rule);
   --emr-card-shadow: none;
@@ -234,12 +231,8 @@
   --emr-balloon-orphaned-bg: #ffffff;
   --emr-balloon-orphan-quote-bg: #f0f0f0;
 
-  --emr-hl-active: #ffff00;
-  --emr-hl-active-strong: #ffff00;
-  --emr-hl-active-fg: #000000;
-  --emr-hl-border: #000000;
-  --emr-hl-resolved: #ffffff;
-  --emr-hl-resolved-strong: #ffffff;
+  --emr-anchor-line: var(--emr-accent);
+  --emr-anchor-active: var(--emr-accent);
 
   --emr-diff-added: #007a00;
   --emr-diff-modified: #6a4500;
@@ -258,6 +251,7 @@
   --emr-faint: #000000;
   --emr-rule: #ffffff;
   --emr-rule-strong: #ffffff;
+  --emr-statusbar-separator: #ffffff;
   --emr-pane-divider: var(--emr-rule);
   --emr-card-border: var(--emr-rule);
   --emr-card-shadow: none;
@@ -272,18 +266,15 @@
   --emr-balloon-orphaned-bg: #000000;
   --emr-balloon-orphan-quote-bg: #1a1a1a;
 
-  --emr-hl-active: #ffd80b;
-  --emr-hl-active-strong: #ffd80b;
-  --emr-hl-active-fg: #000000;
-  --emr-hl-border: #ffffff;
-  --emr-hl-resolved: #000000;
-  --emr-hl-resolved-strong: #000000;
+  --emr-anchor-line: var(--emr-accent);
+  --emr-anchor-active: var(--emr-accent);
 
   --emr-diff-added: #1aff1a;
   --emr-diff-modified: #ffd80b;
   --emr-diff-deleted: #ff5c5c;
   --emr-status-closed: #d8b6ff;
   --emr-selection-bg: Highlight;
+  --emr-anchor-land-wash: 38%;
 }
 
 html,
@@ -416,7 +407,7 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--emr-shell-top) 0 0 24px;
+  padding: var(--emr-shell-top) 0 0;
   border-right: 1px solid var(--emr-pane-divider);
   // Side panes (nav + comment rail) sit one tonal step off the document
   // (`--emr-bg`) so the reading column reads as the distinct centre surface.
@@ -602,6 +593,8 @@ button {
     Consolas,
     monospace
   );
+  letter-spacing: 0;
+  word-spacing: 0;
 }
 
 // github-markdown-css paints `.markdown-body` with its own canvas colour
@@ -618,7 +611,13 @@ button {
   // so only their SIZE scales (it's em-relative). Base 14.5px = standard reading.
   font-family: var(--emr-reader-font);
   font-size: calc(14.5px * var(--emr-reader-scale, 1));
-  line-height: 1.6;
+  line-height: var(--emr-reader-line-height, 1.6);
+  letter-spacing: var(--emr-reader-letter-spacing, 0em);
+  word-spacing: var(--emr-reader-word-spacing, 0em);
+
+  p {
+    margin-bottom: var(--emr-reader-paragraph-spacing, 16px);
+  }
 
   details {
     margin: 10px 0;
@@ -777,6 +776,21 @@ button {
   // already carry this tone, so the whole chrome reads as one surface with the
   // white document lifted off it).
   background: var(--emr-rail-bg);
+}
+
+// ---------------------------------------------------------------------------
+// Documents Hub-specific shell overrides
+// ---------------------------------------------------------------------------
+// The PR tab inherits side breathing room from its host chrome. Documents Hub
+// owns the viewport, so preserve a card gutter on each edge exposed by a
+// collapsed pane. The two rules compose when both panes are hidden and leave
+// the normal three-column layout untouched.
+.emr-app.is-documents-mode.is-nav-hidden .emr-body {
+  margin-left: var(--emr-card-gap);
+}
+
+.emr-app.is-documents-mode.is-comments-hidden .emr-body {
+  margin-right: var(--emr-card-gap);
 }
 
 // Graceful degradation: when the frame is narrower than the visible columns
@@ -1061,55 +1075,125 @@ button {
 // ---------------------------------------------------------------------------
 
 .emr-highlight {
-  background-color: var(--emr-hl-active);
-  color: var(--emr-hl-active-fg);
-  border-bottom: 1px solid var(--emr-hl-border);
-  border-radius: 2px;
-  padding: 0 1px;
-  // Offset the horizontal padding with a matching negative margin: wrapping a
-  // selection in the highlight then costs ZERO layout width, so the surrounding
-  // prose never shifts sideways the moment the anchor is applied. The tint
-  // still bleeds 1px past the glyphs for a padded look.
-  margin: 0 -1px;
+  --emr-anchor-idle-thickness: clamp(2.5px, 0.24em, 5px);
+  --emr-anchor-selected-thickness: clamp(3px, 0.275em, 5px);
+  --emr-anchor-underline-offset: clamp(3px, 0.275em, 5px);
+  --emr-anchor-hit-target-end: clamp(1.5px, 0.18em, 4px);
+
+  background-color: transparent;
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--emr-anchor-line);
+  text-decoration-style: dotted;
+  text-decoration-thickness: var(--emr-anchor-idle-thickness);
+  text-underline-offset: var(--emr-anchor-underline-offset);
+  text-decoration-skip-ink: none;
+  padding-block-end: var(--emr-anchor-hit-target-end);
+  margin-block-end: calc(-1 * var(--emr-anchor-hit-target-end));
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease;
+    text-decoration-color 120ms ease-out,
+    text-decoration-thickness 140ms cubic-bezier(0.2, 0, 0, 1);
 
-  &:hover,
   &.is-hover {
-    background-color: var(--emr-hl-active-strong);
+    background-color: transparent;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 
   &.is-active {
-    background-color: var(--emr-hl-active-strong);
-    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
-    animation: emr-hl-pulse 600ms ease-out 1;
+    background-color: transparent;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 
-  &.is-resolved {
-    background-color: var(--emr-hl-resolved);
-    border-bottom-color: transparent;
-    // Resolved threads dim the text along with the bg — we want them
-    // to fade into the page so the reader's eye isn't drawn back.
-    color: inherit;
-
-    &:hover,
-    &.is-active {
-      background-color: var(--emr-hl-resolved-strong);
-    }
+  &[role="button"]:focus-visible {
+    outline: 2px solid var(--emr-anchor-active);
+    outline-offset: 2px;
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) 18%,
+      transparent
+    );
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
   }
 }
 
-@keyframes emr-hl-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(191, 135, 0, 0.55);
+// Sequential anchor wrapping makes overlapping comments nest. Keep that DOM
+// structure for hit-testing, but paint only one idle underline so lines never
+// compound. A selected nested anchor underlines only its exact subrange.
+.emr-highlight .emr-highlight {
+  background-color: transparent;
+  text-decoration-line: none;
+
+  &.is-hover {
+    background-color: transparent;
+    text-decoration-line: underline;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
+    text-underline-offset: var(--emr-anchor-underline-offset);
   }
-  60% {
-    box-shadow: 0 0 0 8px rgba(191, 135, 0, 0);
+
+  &.is-active {
+    background-color: transparent;
+    text-decoration-line: underline;
+    text-decoration-color: var(--emr-anchor-active);
+    text-decoration-style: solid;
+    text-decoration-thickness: var(--emr-anchor-selected-thickness);
+    text-underline-offset: var(--emr-anchor-underline-offset);
+  }
+}
+
+.emr-highlight:has(.emr-highlight:is(.is-active, .is-hover)) {
+  text-decoration-line: none;
+}
+
+.emr-highlight.is-landing {
+  animation: emr-anchor-land 2500ms cubic-bezier(0.2, 0, 0.2, 1) 1;
+}
+
+@keyframes emr-anchor-land {
+  0% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) 12%,
+      transparent
+    );
+    box-shadow: 0 0 0 7px
+      color-mix(in srgb, var(--emr-anchor-active) 22%, transparent);
+  }
+  45% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) var(--emr-anchor-land-wash),
+      transparent
+    );
+    box-shadow: 0 0 0 0 transparent;
+  }
+  66% {
+    background-color: color-mix(
+      in srgb,
+      var(--emr-anchor-active) var(--emr-anchor-land-wash),
+      transparent
+    );
   }
   100% {
-    box-shadow: 0 0 0 1px rgba(191, 135, 0, 0.6);
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-highlight {
+    transition: none;
   }
 }
 
@@ -1244,7 +1328,8 @@ button {
 // right. Quiet neutral chrome; accent only on an active toggle or on hover.
 .emr-statusbar {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   height: 32px;
   padding: 0 10px 0 16px;
@@ -1254,6 +1339,17 @@ button {
   color: var(--emr-muted);
   white-space: nowrap;
 }
+.emr-statusbar-left {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  justify-self: start;
+}
+.emr-statusbar-center {
+  min-width: 0;
+  max-width: min(36vw, 420px);
+  justify-self: center;
+}
 .emr-app.is-too-narrow .emr-statusbar {
   display: none;
 }
@@ -1261,6 +1357,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding-inline-start: 4px;
   min-width: 0;
   overflow: hidden;
 }
@@ -1286,20 +1383,343 @@ button {
   color: var(--emr-diff-deleted);
   font-weight: 600;
 }
-.emr-statusbar-spacer {
-  flex: 1 1 auto;
+.emr-statusbar-resolved-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline-end: 6px;
+  color: var(--emr-muted);
+  text-decoration: none;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: currentColor;
+  }
+
+  &:is(a):hover,
+  &:is(a):focus-visible {
+    color: var(--emr-fg);
+    text-decoration: underline;
+  }
 }
-.emr-statusbar-controls {
+.emr-statusbar-iteration {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.emr-statusbar-iteration-stepper {
+  display: inline-grid;
+  grid-template-columns: 20px max-content 20px;
+  align-items: center;
+}
+.emr-statusbar-iteration-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--emr-muted);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+}
+.emr-statusbar-iteration-chevron {
+  width: 12px;
+  height: 12px;
+}
+.emr-statusbar-iteration-trigger-slot {
+  position: relative;
+  display: grid;
+  width: max-content;
+  min-width: 0;
+  max-width: 310px;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+.emr-statusbar-iteration-trigger,
+.emr-statusbar-iteration-trigger-sizer {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  font: inherit;
+}
+.emr-statusbar-iteration-trigger-sizer {
+  visibility: hidden;
+  gap: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.emr-statusbar-iteration-trigger {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  justify-content: center;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--emr-fg);
+  cursor: pointer;
+
+  &:hover,
+  .emr-statusbar-iteration.is-open & {
+    background: var(--emr-faint);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+}
+.emr-statusbar-iteration-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.emr-statusbar-iteration-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--emr-muted);
+  flex: 0 0 14px;
+}
+.emr-statusbar-iteration-base-dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--emr-accent);
+  transform: translateY(1px);
+}
+.emr-statusbar-iteration-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 20px;
+  z-index: 20;
+  width: 360px;
+  max-width: calc(100vw - 20px);
+  padding: 4px;
+  border: 1px solid var(--emr-rule);
+  border-radius: 8px;
+  background: var(--emr-bg);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 160ms ease;
+}
+.emr-statusbar-iteration.is-open .emr-statusbar-iteration-pop {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.emr-statusbar-iteration-list {
+  // All changes + ten numbered updates fit before the list needs to scroll.
+  max-height: 378px;
+  overflow-y: auto;
+}
+.emr-statusbar-iteration-option {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 34px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--emr-fg);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: var(--emr-faint);
+  }
+  &:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--emr-accent);
+    outline-offset: -2px;
+  }
+  &[aria-selected="true"] {
+    background: var(--emr-accent-soft);
+    border-radius: 0;
+  }
+  &.is-range-start {
+    border-radius: 5px 5px 0 0;
+  }
+  &.is-range-end {
+    border-radius: 0 0 5px 5px;
+  }
+  &.is-range-start.is-range-end {
+    border-radius: 5px;
+  }
+
+  &.is-all-changes {
+    margin-top: 4px;
+    border-top: 1px solid var(--emr-rule);
+    border-radius: 0 0 4px 4px;
+  }
+}
+.emr-statusbar-iteration-num {
+  color: var(--emr-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.emr-statusbar-iteration-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.emr-statusbar-iteration-date {
+  color: var(--emr-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.emr-statusbar-context-controls {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   flex: 0 0 auto;
 }
+.emr-statusbar-controls {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  justify-self: end;
+}
+.emr-statusbar-activity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--emr-fg);
+}
+.emr-statusbar-activity-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emr-statusbar-spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: emr-statusbar-spin 800ms linear infinite;
+}
+@keyframes emr-statusbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.emr-statusbar-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.emr-statusbar-comment-controls {
+  position: relative;
+}
+.emr-statusbar-comment-stepper {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 2px);
+  display: inline-grid;
+  grid-template-columns: 20px max-content 20px;
+  align-items: center;
+  height: 24px;
+  transform: translateY(-50%);
+}
+.emr-statusbar-comment-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--emr-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--emr-faint);
+    color: var(--emr-fg);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+}
+.emr-statusbar-comment-step .emr-statusbar-iteration-chevron {
+  width: 11px;
+  height: 11px;
+}
+.emr-statusbar-comment-count {
+  display: grid;
+  min-width: 0;
+  padding-inline: 2px;
+  color: var(--emr-fg);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+.emr-statusbar-comment-count-sizer {
+  visibility: hidden;
+  white-space: nowrap;
+}
+.emr-statusbar-comment-count-value {
+  white-space: nowrap;
+}
 .emr-statusbar-sep {
-  width: 1px;
+  width: 0;
   height: 16px;
   margin: 0 6px;
-  background: var(--emr-rule);
+  border-inline-start: 1px solid var(--emr-statusbar-separator);
   flex: 0 0 auto;
 }
 // Buttons: view toggles, the Aa trigger, refresh, feedback.
@@ -1344,6 +1764,9 @@ button {
 .emr-statusbar-btn.is-toggle[aria-pressed="true"] {
   color: var(--emr-accent);
 }
+.emr-statusbar-changes {
+  padding-inline: 4px;
+}
 .emr-statusbar-refresh,
 .emr-statusbar-feedback {
   padding: 0 6px;
@@ -1369,57 +1792,186 @@ button {
   opacity: 0.7;
 }
 
-// Text-size stepper — a bordered −/value/+ cluster.
-.emr-statusbar-size {
-  display: inline-flex;
+// Shared continuous percentage slider. Compact in the status bar; the popover
+// variant lets its track consume the available menu width.
+.emr-percent-slider {
+  --emr-percent-progress: 50%;
+  --emr-percent-axis: 50%;
+  display: grid;
+  grid-template-columns: 20px 82px 20px 36px;
   align-items: center;
-  border: 1px solid var(--emr-rule);
-  border-radius: 6px;
-  overflow: hidden;
-  margin-left: 2px;
-}
-.emr-statusbar-size-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
+  column-gap: 2px;
   height: 24px;
-  border: 0;
+  margin-left: 2px;
+
+  &.is-fluid {
+    width: 100%;
+    grid-template-columns: 20px minmax(0, 1fr) 20px 36px;
+    margin-left: 0;
+
+    .emr-percent-track,
+    input[type="range"] {
+      width: 100%;
+    }
+  }
+}
+
+.emr-percent-track {
+  position: relative;
+  width: 82px;
+  height: 16px;
+
+  &::before,
+  &::after {
+    position: absolute;
+    top: var(--emr-percent-axis);
+    left: 0;
+    height: 1px;
+    content: "";
+    transform: translateY(-0.5px);
+    pointer-events: none;
+  }
+
+  &::before {
+    width: 100%;
+    background: var(--emr-rule-strong);
+  }
+
+  &::after {
+    width: var(--emr-percent-progress);
+    background: var(--emr-accent);
+  }
+}
+
+.emr-percent-track input[type="range"] {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 82px;
+  height: 16px;
+  margin: 0;
   background: transparent;
-  color: var(--emr-muted);
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    background: var(--emr-faint);
-    color: var(--emr-fg);
+  &::-webkit-slider-runnable-track {
+    height: 1px;
+    background: transparent;
   }
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 6px;
+    height: 6px;
+    margin-top: -2.5px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--emr-accent);
+    transition:
+      width 100ms ease,
+      height 100ms ease,
+      margin-top 100ms ease;
+  }
+
+  &::-moz-range-track,
+  &::-moz-range-progress {
+    height: 1px;
+    background: transparent;
+  }
+
+  &::-moz-range-thumb {
+    width: 6px;
+    height: 6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--emr-accent);
+    transition:
+      width 100ms ease,
+      height 100ms ease;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.emr-percent-track:hover input[type="range"],
+.emr-percent-track input[type="range"]:focus-visible,
+.emr-percent-track input[type="range"]:active {
+  &::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    margin-top: -5.5px;
+  }
+
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.emr-percent-default-marker {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  bottom: 2px;
+  left: var(--emr-percent-default-position, 50%);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--emr-fg);
+  opacity: 0.5;
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+
+.emr-percent-adjust {
+  position: relative;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--emr-fg);
+  cursor: pointer;
+
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: default;
   }
 
-  svg {
-    width: 14px;
-    height: 14px;
+  &::before,
+  &.is-plus::after {
+    position: absolute;
+    content: "";
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  &::before {
+    top: var(--emr-percent-axis);
+    left: 4px;
+    width: 12px;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+
+  &.is-plus::after {
+    top: var(--emr-percent-axis);
+    left: 50%;
+    width: 2px;
+    height: 12px;
+    transform: translate(-50%, -50%);
   }
 }
-.emr-statusbar-size-val {
-  min-width: 48px;
-  height: 24px;
-  border: 0;
-  border-left: 1px solid var(--emr-rule);
-  border-right: 1px solid var(--emr-rule);
-  background: transparent;
-  text-align: center;
-  font: inherit;
-  font-size: 15px;
-  color: var(--emr-fg);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
 
-  &:hover {
-    background: var(--emr-faint);
-  }
+.emr-percent-output {
+  min-width: 36px;
+  color: var(--emr-fg);
+  font-size: 14px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
 // Reading-font popover — opens UPWARD from the Aa trigger (the bar sits at the
@@ -1440,7 +1992,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 208px;
+  min-width: 280px;
+  max-width: calc(100vw - 20px);
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
@@ -1460,6 +2013,17 @@ button {
   letter-spacing: 0.06em;
   color: var(--emr-muted);
   padding: 0 4px 2px;
+}
+.emr-statusbar-pop-section {
+  margin-top: 4px;
+  padding: 10px 4px 0;
+  border-top: 1px solid var(--emr-rule);
+
+  &.is-only {
+    margin-top: 0;
+    padding-top: 4px;
+    border-top: 0;
+  }
 }
 // Kindle-style font list — each row rendered in its own face.
 .emr-statusbar-fontlist {
@@ -1503,30 +2067,138 @@ button {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif;
 }
+.emr-font-atkinson {
+  font-family:
+    "Atkinson Hyperlegible", "Segoe UI", system-ui, Arial, sans-serif;
+}
 .emr-font-sitka {
   font-family: "Sitka Text", Sitka, Cambria, Georgia, serif;
 }
 .emr-font-georgia {
   font-family: Georgia, "Times New Roman", serif;
 }
-.emr-font-palatino {
-  font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-}
 .emr-font-verdana {
   font-family: Verdana, Geneva, Tahoma, sans-serif;
 }
 @media (prefers-reduced-motion: reduce) {
+  .emr-statusbar-iteration-pop {
+    transition: none;
+  }
   .emr-statusbar-pop {
     transition: none;
   }
 }
 
-@media (max-width: 720px) {
+:root[data-emr-theme="hc-light"],
+:root[data-emr-theme="hc-dark"] {
+  .emr-statusbar-iteration-pop {
+    box-shadow: none;
+  }
+
+  .emr-statusbar-iteration-option[aria-selected="true"] {
+    position: relative;
+
+    &::after {
+      position: absolute;
+      inset: 0;
+      border-inline: 2px solid var(--emr-accent);
+      content: "";
+      pointer-events: none;
+    }
+
+    &.is-range-start::after {
+      border-top: 2px solid var(--emr-accent);
+      border-radius: 5px 5px 0 0;
+    }
+
+    &.is-range-end::after {
+      border-bottom: 2px solid var(--emr-accent);
+      border-radius: 0 0 5px 5px;
+    }
+
+    &.is-range-start.is-range-end::after {
+      border-radius: 5px;
+    }
+
+    &.is-all-changes::after {
+      border: 2px solid var(--emr-accent);
+      border-radius: 0 0 4px 4px;
+    }
+  }
+}
+
+@media (max-width: 1100px) {
   .emr-statusbar-btn-label {
     display: none;
   }
 
   .emr-statusbar-btn {
+    padding-inline: 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .emr-statusbar-words,
+  .emr-statusbar-delta {
+    display: none;
+  }
+
+  .emr-statusbar > .emr-statusbar-sep {
+    display: none;
+  }
+
+  .emr-statusbar-control-group {
+    gap: 0;
+  }
+
+  .emr-statusbar-sep {
+    margin-inline: 2px;
+  }
+
+  .emr-statusbar-btn {
+    padding-inline: 4px;
+  }
+
+  .emr-percent-slider:not(.is-fluid) {
+    grid-template-columns: 18px 42px 18px 34px;
+    column-gap: 1px;
+
+    .emr-percent-track,
+    .emr-percent-track input[type="range"] {
+      width: 42px;
+    }
+
+    .emr-percent-adjust {
+      width: 18px;
+
+      &::before {
+        left: 3px;
+      }
+    }
+
+    .emr-percent-output {
+      min-width: 34px;
+      font-size: 13px;
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .emr-statusbar:has(.emr-statusbar-activity) {
+    .emr-statusbar-context-controls,
+    .emr-statusbar-left .emr-statusbar-sep,
+    .emr-statusbar-controls > :not(.emr-statusbar-comment-controls) {
+      display: none;
+    }
+
+    .emr-statusbar-status {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .emr-statusbar {
     padding-inline: 6px;
   }
 }
@@ -1583,6 +2255,10 @@ button {
   background: var(--emr-faint);
   border: 1px solid var(--emr-rule);
   min-width: 0;
+}
+
+.emr-rail-version.is-history-only {
+  justify-content: center;
 }
 
 // PR number + title, taking the space between the chevrons. The title
@@ -2442,6 +3118,11 @@ button {
   }
 }
 
+.emr-ui-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
 // Rich comment filter (rail toolbar) — a compact funnel + count trigger that
 // opens the filter-mode menu. Replaces the old binary show/hide-resolved eye
 // toggle. The trigger reuses `.emr-icon-btn` but widens to seat the count.
@@ -2557,103 +3238,6 @@ button {
   .emr-comment-filter-option.is-selected & {
     color: var(--emr-accent);
   }
-}
-
-// Tight grouping for the prev/next chevron pair in the DocNav and rail
-// toolbars. The two buttons sit flush against each other (gap: 0) so they
-// read as a single navigation control, with a slim `i/N` counter pinned
-// to their right edge. The surrounding flex gap preserves separation
-// from the title/search slots.
-.emr-cycler-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  flex: 0 0 auto;
-}
-
-// Chevron buttons sit slightly narrower than other icon buttons so the
-// pair reads as a tight nav control instead of two unrelated icons.
-.emr-cycler-btn {
-  width: 20px;
-}
-
-// Rail comment navigator: pinned to the RIGHT of the header lead, with the two
-// arrows stacked VERTICALLY (a compact spinner) beside a prominent
-// "current / total" readout. Scoped to the rail so the DocNav's horizontal
-// cycler is untouched.
-.emr-rail-toolbar-lead .emr-cycler-group {
-  margin-left: auto;
-  gap: 6px;
-}
-
-.emr-cycler-arrows {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0;
-  flex: 0 0 auto;
-  border: 1px solid var(--emr-rule);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.emr-cycler-arrows .emr-cycler-btn {
-  width: 18px;
-  height: 12px;
-  min-height: 0;
-  padding: 0;
-  border-radius: 0;
-  // Chevrons carry a stronger-than-muted colour so they stay legible at this
-  // small size in BOTH themes (mixing toward the foreground bumps contrast
-  // against the toolbar without going to a heavy full-black/white).
-  color: color-mix(in srgb, var(--emr-fg) 72%, var(--emr-muted));
-
-  svg {
-    width: 11px;
-    height: 11px;
-  }
-
-  &:hover:not(:disabled) {
-    color: var(--emr-fg);
-  }
-
-  // Hairline divider between the stacked arrows.
-  & + .emr-cycler-btn {
-    border-top: 1px solid var(--emr-rule);
-  }
-}
-
-// Compact "current / total" counter. Tabular numerals keep the width
-// stable as the index ticks past 9 → 10, the slash is dimmed so the
-// numbers carry the visual weight.
-.emr-cycler-count {
-  display: inline-flex;
-  align-items: baseline;
-  margin-left: 4px;
-  padding: 0 2px;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--emr-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  user-select: none;
-  flex: 0 0 auto;
-}
-
-// The rail navigator emphasises the selected index (bold, full-contrast) and
-// dims the total, so "which comment am I on" reads at a glance. Same size as
-// the rest of the readout — weight and colour carry the emphasis, not size.
-.emr-cycler-count-cur {
-  font-weight: 700;
-  color: var(--emr-fg);
-}
-
-.emr-cycler-count-total {
-  color: var(--emr-muted);
-}
-
-.emr-cycler-count-sep {
-  margin: 0 2px;
-  opacity: 0.55;
 }
 
 // Push the DocNav search-toggle button to the far right of its header so the
@@ -3207,6 +3791,20 @@ button {
   border-radius: 8px;
 }
 
+.emr-skel-header {
+  animation: emr-skel-fade-in 160ms ease-out both;
+}
+
+.emr-skel-header-label {
+  @include emr-skel-surface;
+  flex: 0 0 auto;
+}
+
+.emr-skel-header-label {
+  height: 12px;
+  margin-right: auto;
+}
+
 .emr-skel-w90 {
   width: 92%;
 }
@@ -3277,12 +3875,14 @@ button {
   }
   .emr-skel-line,
   .emr-skel-block,
+  .emr-skel-header-label,
   .emr-rail-skel-card {
     animation: none;
     background-image: none;
   }
   .emr-article-wrap.emr-skeleton,
-  .emr-rail-col.emr-skeleton {
+  .emr-rail-col.emr-skeleton,
+  .emr-skel-header {
     animation: none;
   }
 }
@@ -3609,7 +4209,7 @@ button {
 
 .emr-docnav {
   // Fills its own left rail (`.emr-body__nav`), the fixed full-height left
-  // column of the anchored layout that owns the divider + outer padding. The
+  // column of the anchored layout that owns the divider. The
   // heading list (`.emr-docnav-list`) scrolls internally; the header stays put.
   flex: 1 1 auto;
   min-height: 0;
@@ -3617,7 +4217,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 4px 12px 4px 0;
+  padding: 4px 0;
   user-select: none;
   font-size: 12.5px;
   color: var(--emr-fg);
@@ -3670,14 +4270,14 @@ button {
   gap: 5px;
   font: inherit;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 20px;
   line-height: 1.4;
-  color: var(--emr-muted);
+  color: var(--emr-fg);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 3px 5px;
-  margin: -3px -5px;
+  margin: -3px 0;
   cursor: pointer;
   transition:
     background-color 0.12s ease,
@@ -3708,7 +4308,7 @@ button {
   text-align: left;
   text-transform: none;
   letter-spacing: normal;
-  font-size: 12.5px;
+  font-size: 20px;
   // Enough line box to clear descenders (e.g. the "p" in "api-reference");
   // `line-height: 1` clips them under `overflow: hidden`.
   line-height: 1.4;
@@ -3723,10 +4323,33 @@ button {
   opacity: 0.6;
 }
 
+// Current repository context: stronger name + one restrained accent cue. Keep
+// dropdown option glyphs neutral so the list remains easy to scan.
+.emr-docnav-repo-btn > .emr-docnav-repo-glyph,
+.emr-docnav-title > .emr-docnav-repo-glyph {
+  width: 18px;
+  height: 18px;
+  color: var(--emr-accent);
+  opacity: 1;
+}
+
+.emr-docnav-title > .emr-docnav-repo-name {
+  color: var(--emr-fg);
+  font-size: 20px;
+  font-weight: 600;
+}
+
 .emr-docnav-repo-chevron {
   flex: 0 0 auto;
-  opacity: 0.65;
+  margin-left: auto;
+  opacity: 0;
   transition: transform 0.15s ease;
+
+  .emr-docnav-repo-btn:hover &,
+  .emr-docnav-repo-btn:focus-visible &,
+  .emr-docnav-repo-btn[aria-expanded="true"] & {
+    opacity: 0.75;
+  }
 
   .emr-docnav-repo-btn[aria-expanded="true"] & {
     transform: rotate(180deg);
@@ -3802,6 +4425,12 @@ button {
   padding: 8px 10px;
   font-size: 12px;
   color: var(--emr-muted);
+}
+
+.emr-docnav-repo-page-status {
+  flex: 0 0 32px;
+  min-height: 32px;
+  box-sizing: border-box;
 }
 
 .emr-docnav-repo-spinner {
@@ -4445,52 +5074,68 @@ button {
   > h5,
   > h6 {
     position: relative;
-    cursor: pointer;
-    transition: color 120ms ease;
+    cursor: text;
 
-    &::before {
-      content: "";
+    > .emr-section-toggle {
       position: absolute;
-      // Size scales with the heading's font-size so the chevron reads as
-      // proportional next to both an h1 (~29px \u2192 ~23px chevron) and
-      // an h4 (~14px \u2192 ~12px chevron). 0.8em is the visual sweet
-      // spot \u2014 substantial enough to read as a clear affordance,
-      // small enough to stay inside the 28px `--emr-article-gutter`
-      // with a 4px right-edge gap (no leak into the DocNav column).
-      width: 0.8em;
-      height: 0.8em;
-      left: calc(-0.8em - 4px);
+      // Keep the control independent of native button font metrics: a 22px hit
+      // target fits the 28px gutter, while the centered 16px glyph stays
+      // consistent across heading levels and browser text scaling.
+      width: 22px;
+      height: 22px;
+      left: -26px;
       // Centered on the heading's first-line vertical middle. The site's
       // headings all use a 1.25 line-height ratio, so line-box center is
       // at 0.625em from the heading's content-top \u2014 stable across
       // every heading size and unaffected by margins/padding-bottom.
       top: 0.625em;
-      // Use mask-image so the chevron picks up the heading's currentColor
-      // (so it tints accent-blue when the user hovers the heading).
-      background-color: currentColor;
-      $emr-chevron-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,6 8,10 12,6'/></svg>");
-      mask-image: $emr-chevron-svg;
-      -webkit-mask-image: $emr-chevron-svg;
-      mask-size: contain;
-      -webkit-mask-size: contain;
-      mask-repeat: no-repeat;
-      -webkit-mask-repeat: no-repeat;
-      mask-position: center;
-      -webkit-mask-position: center;
-      color: var(--emr-muted);
+      min-width: 0;
+      font: inherit;
+      line-height: 1;
+      padding: 0;
+      border: 0;
+      border-radius: 2px;
+      color: currentColor;
+      background: transparent;
+      cursor: pointer;
       transform: translateY(-50%);
+      opacity: 0.4;
       transition:
-        transform 160ms ease,
-        opacity 140ms ease,
-        background-color 140ms ease;
-      opacity: 0.32;
-    }
+        color 120ms ease-out,
+        opacity 120ms ease-out;
 
-    &:hover {
-      color: var(--emr-accent);
-    }
-    &:hover::before {
-      opacity: 0.95;
+      &::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        left: 3px;
+        top: 3px;
+        // Use mask-image so the chevron picks up the button's currentColor.
+        background-color: currentColor;
+        $emr-chevron-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,6 8,10 12,6'/></svg>");
+        mask-image: $emr-chevron-svg;
+        -webkit-mask-image: $emr-chevron-svg;
+        mask-size: contain;
+        -webkit-mask-size: contain;
+        mask-repeat: no-repeat;
+        -webkit-mask-repeat: no-repeat;
+        mask-position: center;
+        -webkit-mask-position: center;
+        transform: rotate(0);
+        transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      &:hover,
+      &:focus-visible {
+        color: var(--emr-accent);
+        opacity: 1;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--emr-accent);
+        outline-offset: 2px;
+      }
     }
 
     // When a heading is also a diff-block, its wash card is pulled left by the
@@ -4498,21 +5143,22 @@ button {
     // shifted border edge, so it gets a matching +6px compensation to stay
     // aligned with every other chevron. (Inline word-diff headings carry no
     // card, so they need no compensation.)
-    &.emr-diff-block:not(.emr-diff-block--inline)::before {
-      left: calc(-0.8em - 4px + 6px);
+    &.emr-diff-block:not(.emr-diff-block--inline):not(
+        [data-diff-line-wash="true"]
+      )
+      > .emr-section-toggle {
+      left: -20px;
     }
   }
 
   // Collapsed: chevron points right, body content hidden.
   &[data-collapsed="true"] {
-    > h1::before,
-    > h2::before,
-    > h3::before,
-    > h4::before,
-    > h5::before,
-    > h6::before {
-      transform: translateY(-50%) rotate(-90deg);
+    > :is(h1, h2, h3, h4, h5, h6) > .emr-section-toggle {
       opacity: 0.95;
+
+      &::before {
+        transform: rotate(-90deg);
+      }
     }
 
     // Hide every child of the section except the heading itself.
@@ -4531,16 +5177,15 @@ button {
     > h4,
     > h5,
     > h6 {
-      cursor: default;
-
-      &::before {
-        content: none;
-      }
-
-      &:hover {
-        color: inherit;
-      }
+      cursor: text;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-section-toggle,
+  .emr-section-toggle::before {
+    transition: none !important;
   }
 }
 
@@ -4594,9 +5239,24 @@ button {
 // which is a different tone than the reader's grey backdrop — so the card's
 // seamless flush top (which reads right only against matching chrome) butts
 // awkwardly against it. Restore a top gap on the document card here, matching
-// its bottom gap, so it floats clear of that header on the grey backdrop.
-.emr-docs-app .emr-body {
+// its bottom gap, so it floats clear of that header on the grey backdrop. Apply
+// the same inset to both side panes: their HC dividers must start and stop on
+// the document card's edges rather than leaving short vertical spurs.
+.emr-docs-app .emr-body,
+.emr-docs-app .emr-body__nav,
+.emr-docs-app .emr-rail-scroll {
   margin-top: var(--emr-card-gap);
+}
+
+// The PR tab's navigator intentionally reaches both rail edges to maximize its
+// horizontal working area. The full-page Documents hub has more room and needs
+// an inset from the host edge, so restore its former outer gutters only here.
+.emr-docs-app .emr-body__nav {
+  padding-left: 24px;
+}
+
+.emr-docs-app .emr-docnav {
+  padding-right: 12px;
 }
 
 // "No active PR" banner shown above the shell for repos with no PR to
@@ -4626,8 +5286,14 @@ button {
 .emr-loading-statusbar {
   flex: 0 0 28px;
   height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
   background: var(--emr-rail-bg);
   border-top: 1px solid var(--emr-rule);
+  color: var(--emr-fg);
+  font-size: 15px;
 }
 
 .emr-docnav-skel {
@@ -4814,26 +5480,19 @@ button {
 // The whole layer is suppressed when the reader toggles changes off.
 .emr-rendered {
   .emr-diff-block {
-    // Give the wash a rounded card shape. Negative margins keep the prose
-    // column from shifting so anchors, headings and code blocks line up
-    // exactly as they do without a diff. The left inset (6px) is intentionally
-    // smaller than it once was so the wash starts a touch inward — and is
-    // shared by every diff-block (headings and prose alike) so all highlight
-    // left edges line up.
+    // Decoration must not alter document geometry. Paint directly on the
+    // existing box; never add padding/borders or rewrite authored margins.
     position: relative;
     border-radius: 6px;
-    margin-left: -6px;
-    margin-right: -8px;
-    padding-left: 6px;
-    padding-right: 8px;
-    // A soft, low-opacity tint of the change hue — the background alone
-    // signals the change; no accent bar or corner tag needed. The opacity is a
-    // theme token so dark mode can lift it (a 9% tint vanishes on dark).
-    background: color-mix(
+    --emr-diff-wash-color: color-mix(
       in srgb,
       var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash),
       transparent
     );
+    // A soft, low-opacity tint of the change hue — the background alone
+    // signals the change; no accent bar or corner tag needed. The opacity is a
+    // theme token so dark mode can lift it (a 9% tint vanishes on dark).
+    background: var(--emr-diff-wash-color);
     // Soft entrance so toggling changes on doesn't feel jarring.
     transition: background 140ms ease;
 
@@ -4844,26 +5503,27 @@ button {
       --emr-diff-bar: var(--emr-diff-modified);
     }
 
+    // Prose washes follow the rendered text instead of filling the article
+    // column. The inline wrapper below clones its box decoration per visual
+    // line, so a short line and a wrapped paragraph's incomplete final line
+    // both stop exactly where their text stops.
+    &[data-diff-line-wash="true"] {
+      background: none;
+      border-radius: 0;
+    }
+
     // --- Contiguous grouping (data-diff-group) -----------------------------
     // A run of adjacent same-kind blocks paints as ONE continuous card.
     // Continuation blocks square their touching corners and collapse the
     // inter-block gap so the tint is unbroken.
     &[data-diff-group="start"] {
       border-radius: 6px 6px 0 0;
-      margin-bottom: 0;
-      padding-bottom: 6px;
     }
     &[data-diff-group="mid"] {
       border-radius: 0;
-      margin-top: 0;
-      margin-bottom: 0;
-      padding-top: 6px;
-      padding-bottom: 6px;
     }
     &[data-diff-group="end"] {
       border-radius: 0 0 6px 6px;
-      margin-top: 0;
-      padding-top: 6px;
     }
 
     // --- Inline word-diff blocks -------------------------------------------
@@ -4874,10 +5534,6 @@ button {
     &--inline {
       background: none;
       border-radius: 0;
-      margin-left: 0;
-      margin-right: 0;
-      padding-left: 0;
-      padding-right: 0;
     }
 
     // --- Diagrams + image-only blocks --------------------------------------
@@ -4887,16 +5543,26 @@ button {
     &.emr-diff-image {
       background: none;
       border-radius: 0;
-      margin-left: 0;
-      margin-right: 0;
-      padding-left: 12px;
-      border-left: 3px solid
+      box-shadow: -3px 0
         color-mix(
           in srgb,
           var(--emr-diff-bar, var(--emr-rule)) 70%,
           transparent
         );
     }
+  }
+
+  .emr-diff-line-wash {
+    --emr-diff-line-wash-color: color-mix(
+      in srgb,
+      var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash),
+      transparent
+    );
+    border-radius: 4px;
+    background: var(--emr-diff-line-wash-color);
+    box-shadow: 0 0 0 1px var(--emr-diff-line-wash-color);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   // --- Granular list items + table rows ------------------------------------
@@ -4912,12 +5578,8 @@ button {
     // item — bullet included — out of alignment). Tint the item DIRECTLY, not
     // via a `z-index: -1` pseudo-element: a negative-z band paints behind
     // `.markdown-body`'s opaque white background and disappears entirely.
-    // The list marker lives in the `<ul>` padding OUTSIDE the item's content
-    // box, so a background on the item wraps only the text and the bullet
-    // stays put in the gutter, aligned with its siblings. Small asymmetric
-    // padding gives the text breathing room without shifting it.
-    margin: 0;
-    padding: 1px 6px 1px 4px;
+    // The list marker lives outside the item's content box, so direct paint
+    // keeps the bullet aligned without adding any layout-affecting padding.
     border-radius: 4px;
     background: color-mix(
       in srgb,
@@ -4933,7 +5595,10 @@ button {
     // the coloured words carry it.
     &.emr-diff-block--inline {
       background: none;
-      padding: 0;
+    }
+
+    &[data-diff-line-wash="true"] {
+      background: none;
     }
 
     &.emr-diff-list-marker-change::marker {
@@ -5079,6 +5744,7 @@ button {
 
   .emr-diff-before-control:hover .emr-diff-before-trigger,
   .emr-diff-before-control:focus-within .emr-diff-before-trigger,
+  .emr-diff-block:hover > .emr-diff-before-control .emr-diff-before-trigger,
   .emr-diff-before-control:has(+ .emr-diff-before-panel + :hover)
     .emr-diff-before-trigger,
   li:hover > .emr-diff-before-control .emr-diff-before-trigger {
@@ -5094,7 +5760,9 @@ button {
 
   .emr-diff-source-only {
     position: relative;
-    width: min(100%, 720px);
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: min(100%, 720px);
     margin: 4px 0;
     padding: 5px 48px 5px 8px;
     color: var(--emr-fg);
@@ -5291,7 +5959,6 @@ button {
   .emr-word-added {
     text-decoration: none;
     border-radius: 2px;
-    padding: 0 1px;
     background: color-mix(
       in srgb,
       var(--emr-diff-added) var(--emr-diff-word-added-bg),
@@ -5307,7 +5974,6 @@ button {
       transparent
     );
     border-radius: 2px;
-    padding: 0 1px;
     color: color-mix(
       in srgb,
       var(--emr-diff-deleted) var(--emr-diff-word-removed-fg),
@@ -5554,7 +6220,7 @@ button {
         .emr-section > :is(h1, h2, h3, h4, h5, h6) {
           cursor: default;
 
-          &::before {
+          > .emr-section-toggle {
             display: none;
           }
         }

@@ -5,7 +5,13 @@ import React, {
 } from "react";
 
 import type { DraftScope } from "../draftStorage";
-import { readReaderPrefs, resolveReaderFont, widthScale } from "../readerPrefs";
+import { ReaderActivityIndicator } from "./readerActivity";
+import {
+  readReaderPrefs,
+  readerSpacingValues,
+  resolveReaderFont,
+  widthScale,
+} from "../readerPrefs";
 
 interface ReaderLoadingShellProps {
   scope: DraftScope;
@@ -25,9 +31,14 @@ export function ReaderLoadingShell({
 }: ReaderLoadingShellProps): ReactElement {
   const prefs = readReaderPrefs(scope);
   const readerFont = resolveReaderFont(prefs.fontId);
+  const readerSpacing = readerSpacingValues(prefs);
   const style = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(prefs.sizePct / 100),
+    "--emr-reader-line-height": String(readerSpacing.lineHeight),
+    "--emr-reader-letter-spacing": `${readerSpacing.letterSpacingEm}em`,
+    "--emr-reader-word-spacing": `${readerSpacing.wordSpacingEm}em`,
+    "--emr-reader-paragraph-spacing": `${readerSpacing.paragraphSpacingPx}px`,
     "--emr-nav-scale": String(widthScale(prefs.navWidthPct)),
     "--emr-rail-scale": String(widthScale(prefs.commentWidthPct)),
   } as CSSProperties;
@@ -38,7 +49,6 @@ export function ReaderLoadingShell({
         prefs.showNav && !hideDocNav ? "" : " is-nav-hidden"
       }${prefs.showComments ? "" : " is-comments-hidden"}`}
       style={style}
-      role="status"
       aria-label={ariaLabel}
       aria-busy="true"
     >
@@ -53,7 +63,14 @@ export function ReaderLoadingShell({
                   {titleSlot}
                   {headerActions}
                 </div>
-              ) : null}
+              ) : (
+                <div
+                  className="emr-docnav-header emr-skel-header"
+                  aria-hidden="true"
+                >
+                  <div className="emr-skel-header-label emr-skel-w60" />
+                </div>
+              )}
               <div className="emr-docnav-skel" aria-hidden="true">
                 <div className="emr-skel-line emr-skel-w80" />
                 <div className="emr-skel-line emr-skel-w60" />
@@ -82,13 +99,28 @@ export function ReaderLoadingShell({
         <div className="emr-rail">
           <div className="emr-rail-scroll">
             <aside className="emr-rail-col emr-skeleton" aria-hidden="true">
+              <RailHeaderSkeleton />
               <div className="emr-rail-skel-card" />
               <div className="emr-rail-skel-card" />
             </aside>
           </div>
         </div>
       </div>
-      <div className="emr-loading-statusbar" aria-hidden="true" />
+      <div className="emr-loading-statusbar">
+        <ReaderActivityIndicator
+          activity={{ id: "boot", label: ariaLabel, priority: 100 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RailHeaderSkeleton(): ReactElement {
+  return (
+    <div className="emr-rail-header emr-skel-header">
+      <div className="emr-rail-toolbar">
+        <div className="emr-skel-header-label emr-skel-w50" />
+      </div>
     </div>
   );
 }

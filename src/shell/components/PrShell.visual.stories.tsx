@@ -24,6 +24,75 @@ const jamie = FIXTURE_AUTHORS.jamie!;
 
 const GUIDE = "/widget-guide.md";
 
+type Rgba = [number, number, number, number];
+
+function parseRenderedColor(color: string): Rgba {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext("2d", { willReadFrequently: true })!;
+  context.fillStyle = color;
+  context.fillRect(0, 0, 1, 1);
+  const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
+  return [red, green, blue, alpha / 255];
+}
+
+function composite(foreground: Rgba, background: Rgba): Rgba {
+  const alpha = foreground[3] + background[3] * (1 - foreground[3]);
+  return [
+    (foreground[0] * foreground[3] +
+      background[0] * background[3] * (1 - foreground[3])) /
+      alpha,
+    (foreground[1] * foreground[3] +
+      background[1] * background[3] * (1 - foreground[3])) /
+      alpha,
+    (foreground[2] * foreground[3] +
+      background[2] * background[3] * (1 - foreground[3])) /
+      alpha,
+    alpha,
+  ];
+}
+
+function renderedBackground(
+  element: HTMLElement,
+  includeElement: boolean,
+): Rgba {
+  const ancestors: HTMLElement[] = [];
+  let current: HTMLElement | null = includeElement
+    ? element
+    : element.parentElement;
+  while (current) {
+    ancestors.unshift(current);
+    current = current.parentElement;
+  }
+  return ancestors.reduce<Rgba>(
+    (background, ancestor) => {
+      const color = parseRenderedColor(
+        getComputedStyle(ancestor).backgroundColor,
+      );
+      return color[3] > 0 ? composite(color, background) : background;
+    },
+    [255, 255, 255, 1],
+  );
+}
+
+function relativeLuminance(color: Rgba): number {
+  const linear = color.slice(0, 3).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+function contrastRatio(foreground: Rgba, background: Rgba): number {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
 // Line numbers matter: the diff ranges below reference these 1-based source
 // lines, so keep the layout stable if you edit the prose.
 const SOURCE = [
@@ -226,6 +295,258 @@ export const Default: Story = {
   },
 };
 
+const COLLISION_THREADS: CommentThread[] = [
+  {
+    id: "t-modified-anchor",
+    filePath: GUIDE,
+    status: "active",
+    anchor: {
+      exact: "declared permissions",
+      prefix: "manifest and its ",
+      suffix: " up front",
+    },
+    comments: [
+      {
+        id: "c-modified-anchor",
+        author: alex,
+        bodyMarkdown: "Should this name the minimum permission set?",
+        createdAt: "2026-01-03T10:00:00.000Z",
+      },
+    ],
+  },
+  {
+    id: "t-added-anchor",
+    filePath: GUIDE,
+    status: "active",
+    anchor: {
+      exact: "Americas",
+      prefix: "- ",
+      suffix: "\n  - us-east",
+    },
+    comments: [
+      {
+        id: "c-added-anchor",
+        author: jamie,
+        bodyMarkdown: "Can we confirm this list matches the rollout plan?",
+        createdAt: "2026-01-03T11:00:00.000Z",
+      },
+    ],
+  },
+  {
+    id: "t-plain-anchor",
+    filePath: GUIDE,
+    status: "active",
+    anchor: {
+      exact: "per-widget defaults",
+      prefix: "merged with ",
+      suffix: ".",
+    },
+    comments: [
+      {
+        id: "c-plain-anchor",
+        author: shubhd,
+        bodyMarkdown: "This resolved anchor remains legible without a wash.",
+        createdAt: "2026-01-03T12:00:00.000Z",
+      },
+    ],
+  },
+];
+
+const COLLISION_DIFF: DiffRange[] = DIFF.map((range) =>
+  range.startLine === 7 && range.kind === "modified"
+    ? {
+        ...range,
+        originalText:
+          "1. Validate the widget manifest and its permissions up front.",
+      }
+    : range,
+);
+
+/**
+ * Full reader + rail demonstration of comment anchors over amber and green
+ * change decoration. Diff colour owns every background; one underline carries
+ * comment state consistently across changed and unchanged text.
+ */
+export const CommentAnchorDiffCollision: Story = {
+  args: {
+    diffsByFile: { [GUIDE]: COLLISION_DIFF },
+    initialThreads: COLLISION_THREADS,
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (
+        canvasElement.querySelectorAll(".emr-highlight").length !== 3 ||
+        canvasElement.querySelectorAll(".emr-diff-block").length === 0
+      ) {
+        throw new Error("comment/diff collision fixture not settled");
+      }
+    });
+
+    const highlights = Array.from(
+      canvasElement.querySelectorAll<HTMLElement>(".emr-highlight"),
+    );
+    for (const highlight of highlights) {
+      await expect(getComputedStyle(highlight).backgroundColor).toBe(
+        "rgba(0, 0, 0, 0)",
+      );
+      await expect(highlight.getAttribute("role")).toBe("button");
+      await expect(highlight.tabIndex).toBe(0);
+      await expect(getComputedStyle(highlight).textDecorationLine).toContain(
+        "underline",
+      );
+      await expect(getComputedStyle(highlight).textDecorationStyle).toBe(
+        "dotted",
+      );
+      await expect(
+        Number.parseFloat(getComputedStyle(highlight).textDecorationThickness),
+      ).toBeCloseTo(3.48, 3);
+      await expect(
+        Number.parseFloat(getComputedStyle(highlight).textUnderlineOffset),
+      ).toBeCloseTo(3.9875, 3);
+    }
+    const inlineAnchor = canvasElement.querySelector<HTMLElement>(
+      '[data-thread-id="t-modified-anchor"]',
+    )!;
+    const addedWord =
+      inlineAnchor.querySelector<HTMLElement>(".emr-word-added")!;
+    await expect(addedWord).toBeTruthy();
+    await expect(getComputedStyle(addedWord).backgroundColor).not.toBe(
+      getComputedStyle(inlineAnchor).backgroundColor,
+    );
+    const inlineBackground = renderedBackground(addedWord, true);
+    const inlineUnderline = composite(
+      parseRenderedColor(getComputedStyle(inlineAnchor).textDecorationColor),
+      inlineBackground,
+    );
+    await expect(
+      contrastRatio(inlineUnderline, inlineBackground),
+    ).toBeGreaterThanOrEqual(3);
+
+    const resolvedAnchor = canvasElement.querySelector<HTMLElement>(
+      '[data-thread-id="t-plain-anchor"]',
+    )!;
+    resolvedAnchor.classList.add("is-resolved");
+    await expect(resolvedAnchor.classList.contains("is-resolved")).toBe(true);
+    await expect(getComputedStyle(resolvedAnchor).textDecorationStyle).toBe(
+      "dotted",
+    );
+    const resolvedBackground = renderedBackground(resolvedAnchor, false);
+    const resolvedUnderline = composite(
+      parseRenderedColor(getComputedStyle(resolvedAnchor).textDecorationColor),
+      resolvedBackground,
+    );
+    await expect(
+      contrastRatio(resolvedUnderline, resolvedBackground),
+    ).toBeGreaterThanOrEqual(3);
+
+    const added = canvasElement.querySelector<HTMLElement>(
+      '[data-thread-id="t-added-anchor"]',
+    )!;
+    const idleStyle = getComputedStyle(added);
+    const landingWash =
+      Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          "--emr-anchor-land-wash",
+        ),
+      ) / 100;
+    const landingAccent = parseRenderedColor(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--emr-anchor-active",
+      ),
+    );
+    const landingBackground = renderedBackground(added, false);
+    const peakLandingBackground = composite(
+      [landingAccent[0], landingAccent[1], landingAccent[2], landingWash],
+      landingBackground,
+    );
+    await expect(
+      contrastRatio(parseRenderedColor(idleStyle.color), peakLandingBackground),
+    ).toBeGreaterThanOrEqual(4.5);
+    const idleBackground = idleStyle.backgroundColor;
+    const idleUnderlineStyle = idleStyle.textDecorationStyle;
+    const idleRect = added.getBoundingClientRect();
+    added.click();
+    await waitFor(() =>
+      expect(added.classList.contains("is-active")).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        Number.parseFloat(getComputedStyle(added).textDecorationThickness),
+      ).toBeCloseTo(3.9875, 3),
+    );
+    await expect(getComputedStyle(added).textDecorationStyle).toBe("solid");
+    await expect(getComputedStyle(added).animationName).toBe("emr-anchor-land");
+    await expect(getComputedStyle(added).boxShadow).not.toBe("none");
+    await expect(getComputedStyle(added).boxDecorationBreak).toBe("clone");
+    await waitFor(
+      () =>
+        expect(getComputedStyle(added).backgroundColor).toBe(
+          "rgba(0, 0, 0, 0)",
+        ),
+      { timeout: 3000 },
+    );
+    const selectedStyle = getComputedStyle(added);
+    const selectedRect = added.getBoundingClientRect();
+    await expect(selectedStyle.backgroundColor).toBe(idleBackground);
+    await expect(selectedStyle.textDecorationStyle).not.toBe(
+      idleUnderlineStyle,
+    );
+    await expect(selectedRect.bottom).toBeCloseTo(idleRect.bottom, 3);
+    await expect(selectedRect.height).toBeCloseTo(idleRect.height, 3);
+    await expect(
+      canvasElement.querySelector(
+        '.emr-balloon.is-active[data-thread-id="t-added-anchor"]',
+      ),
+    ).toBeTruthy();
+
+    const measureIntroText = (): DOMRect => {
+      const intro = canvasElement.querySelector<HTMLElement>(
+        '.emr-rendered p[data-source-line="3"]',
+      )!;
+      const walker = document.createTreeWalker(intro, NodeFilter.SHOW_TEXT);
+      let text = walker.nextNode();
+      while (
+        text &&
+        !text.textContent?.includes("The widget boots the host iframe")
+      ) {
+        text = walker.nextNode();
+      }
+      if (!text) throw new Error("intro text node not found");
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      return range.getBoundingClientRect();
+    };
+    const withChanges = measureIntroText();
+    canvasElement
+      .querySelector<HTMLButtonElement>(".emr-statusbar-changes")!
+      .click();
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-diff-block")).toBeNull(),
+    );
+    const withoutChanges = measureIntroText();
+    await expect(withChanges.left).toBeCloseTo(withoutChanges.left, 3);
+    await expect(withChanges.top).toBeCloseTo(withoutChanges.top, 3);
+    await expect(withChanges.width).toBeCloseTo(withoutChanges.width, 3);
+    await expect(withChanges.height).toBeCloseTo(withoutChanges.height, 3);
+    canvasElement
+      .querySelector<HTMLButtonElement>(".emr-statusbar-changes")!
+      .click();
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-diff-block")).toBeTruthy(),
+    );
+    canvasElement
+      .querySelector<HTMLElement>('[data-thread-id="t-added-anchor"]')!
+      .click();
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(
+          '.emr-highlight.is-active[data-thread-id="t-added-anchor"]',
+        ),
+      ).toBeTruthy(),
+    );
+  },
+};
+
 /**
  * The same integrated picture under the dark theme, so a dark-mode regression
  * (which the light-only `Default` shot would miss) is caught. Sets
@@ -259,6 +580,11 @@ export const Dark: Story = {
       { timeout: 5000 },
     );
   },
+};
+
+export const CommentAnchorDiffCollisionDark: Story = {
+  ...CommentAnchorDiffCollision,
+  decorators: Dark.decorators,
 };
 
 /**
@@ -306,6 +632,32 @@ export const HighContrastDark: Story = {
       { timeout: 5000 },
     );
   },
+};
+
+export const CommentAnchorDiffCollisionHighContrastLight: Story = {
+  ...CommentAnchorDiffCollision,
+  decorators: [
+    (Story) => {
+      React.useLayoutEffect(() => {
+        const element = document.documentElement;
+        const previousTheme = element.getAttribute("data-emr-theme");
+        element.setAttribute("data-emr-theme", "hc-light");
+        return () => {
+          if (previousTheme) {
+            element.setAttribute("data-emr-theme", previousTheme);
+          } else {
+            element.removeAttribute("data-emr-theme");
+          }
+        };
+      }, []);
+      return <Story />;
+    },
+  ],
+};
+
+export const CommentAnchorDiffCollisionHighContrastDark: Story = {
+  ...CommentAnchorDiffCollision,
+  decorators: HighContrastDark.decorators,
 };
 
 /** High contrast with both side panes hidden: no pane divider may remain. */

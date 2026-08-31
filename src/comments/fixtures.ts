@@ -5,6 +5,7 @@
 // on load. If you change a fixture .md, you may need to re-pick excerpts.
 
 import type { CommentAuthor, CommentThread, Reaction } from "../types";
+import type { PullRequestSuggestion, WorkItemSuggestion } from "./mentions";
 
 export const FIXTURE_AUTHORS: Record<string, CommentAuthor> = {
   shubhd: {
@@ -58,6 +59,81 @@ export const FIXTURE_AUTHORS: Record<string, CommentAuthor> = {
     initials: "MB",
   },
 };
+
+export const FIXTURE_WORK_ITEMS: WorkItemSuggestion[] = [
+  {
+    kind: "workitem",
+    id: "11612051",
+    workItemType: "Scenario",
+    title: "App caching scenarios",
+    state: "In Progress",
+    stateColor: "#cc6d00",
+  },
+  {
+    kind: "workitem",
+    id: "11612042",
+    workItemType: "Bug",
+    title: "Comment rail jitters on resize",
+    state: "Active",
+    stateColor: "#cc293d",
+  },
+  {
+    kind: "workitem",
+    id: "11611998",
+    workItemType: "Task",
+    title: "Wire up identity picker SDK service",
+    state: "To Do",
+    stateColor: "#b2b2b2",
+  },
+  {
+    kind: "workitem",
+    id: "11611820",
+    workItemType: "User Story",
+    title: "Reviewer can @mention teammates in a comment",
+    state: "Resolved",
+    stateColor: "#339933",
+  },
+  {
+    kind: "workitem",
+    id: "11611702",
+    workItemType: "Feature",
+    title: "Inline image attachments on PR comments",
+    state: "In Progress",
+    stateColor: "#cc6d00",
+  },
+];
+
+export const FIXTURE_PULL_REQUESTS: PullRequestSuggestion[] = [
+  {
+    kind: "pullrequest",
+    id: "5058833",
+    title:
+      "[Grid] Implement add task in plan and myday, mytasks views using dom-based AddTaskRow instead of canvas",
+    status: "active",
+    repository: "OneTodo",
+  },
+  {
+    kind: "pullrequest",
+    id: "5058641",
+    title: "[Comments] Surface unresolved threads in the file tree",
+    status: "completed",
+    repository: "OneTodo",
+  },
+  {
+    kind: "pullrequest",
+    id: "5057914",
+    title: "Bump @azure/identity to 4.4.1",
+    status: "completed",
+    repository: "OneTodo",
+  },
+  {
+    kind: "pullrequest",
+    id: "5057120",
+    title: "Spike: replace markdown-it with unified pipeline",
+    status: "abandoned",
+    repository: "OneTodo",
+  },
+];
 
 /** Look up a fixture author by id (falls back to the id as the name). */
 const _authorById = new Map(

@@ -48,6 +48,7 @@ export const DIFF_METADATA_CLASS = "emr-diff-metadata";
 export const DIFF_FORMAT_CLASS = "emr-diff-format-change";
 /** Class on a localized amber change with an explanatory hover/focus tooltip. */
 export const DIFF_TOOLTIP_CLASS = "emr-diff-explained-change";
+const DIFF_LINE_WASH_CLASS = "emr-diff-line-wash";
 const DIFF_SUPPRESSED_TITLE_CLASS = "emr-diff-suppressed-native-title";
 const DIFF_TOOLTIP_RIGHT_CLASS = "emr-diff-explained-change--right";
 const DIFF_LIST_MARKER_CLASS = "emr-diff-list-marker-change";
@@ -108,6 +109,22 @@ const MERMAID_SELECTOR = ".emr-mermaid";
  */
 const PROSE_TAGS = new Set([
   "P",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "LI",
+  "BLOCKQUOTE",
+  "DD",
+  "DT",
+]);
+
+/** Prose blocks whose fallback wash can follow rendered line boxes. */
+const LINE_WASH_TAGS = new Set([
+  "P",
+  "PRE",
   "H1",
   "H2",
   "H3",
@@ -268,10 +285,63 @@ function classifyBlock(
 }
 
 /**
+ * Wrap a prose block's own inline content so its wash follows each rendered
+ * line box. CSS `box-decoration-break: clone` gives every visual line a
+ * separate rounded fragment whose right edge stops with that line's text.
+ * Structural descendants (for example a nested list) remain outside.
+ */
+function applyLineWash(block: HTMLElement): boolean {
+  if (!LINE_WASH_TAGS.has(block.tagName)) return false;
+  const target =
+    block.tagName === "PRE"
+      ? block.querySelector<HTMLElement>("code")
+      : inlineProseTarget(block);
+  if (!target) return false;
+  if (target.querySelector("img, .emr-mermaid")) return false;
+
+  const nodes: ChildNode[] = [];
+  for (const child of Array.from(target.childNodes)) {
+    if (
+      child instanceof HTMLElement &&
+      (child.classList.contains("emr-diff-before-control") ||
+        child.classList.contains("emr-diff-before-panel") ||
+        child.classList.contains("emr-section-toggle"))
+    ) {
+      continue;
+    }
+    if (
+      child instanceof HTMLElement &&
+      (child.tagName === "UL" || child.tagName === "OL")
+    ) {
+      break;
+    }
+    nodes.push(child);
+  }
+  if (
+    nodes.length === 0 ||
+    nodes.every((node) => (node.textContent ?? "").trim().length === 0)
+  ) {
+    return false;
+  }
+
+  const wrapper = target.ownerDocument.createElement("span");
+  wrapper.className = DIFF_LINE_WASH_CLASS;
+  target.insertBefore(wrapper, nodes[0]!);
+  wrapper.append(...nodes);
+  block.dataset.diffLineWash = "true";
+  return true;
+}
+
+/**
  * Remove any decorations a previous pass applied so the transform stays
  * idempotent across re-renders / section toggles.
  */
 function clearDecorations(root: HTMLElement): void {
+  root
+    .querySelectorAll<HTMLElement>(`.${DIFF_LINE_WASH_CLASS}`)
+    .forEach((wrapper) =>
+      wrapper.replaceWith(...Array.from(wrapper.childNodes)),
+    );
   root
     .querySelectorAll(".emr-diff-before-control, .emr-diff-before-panel")
     .forEach((el) => el.remove());
@@ -294,6 +364,7 @@ function clearDecorations(root: HTMLElement): void {
     delete el.dataset.diffOriginal;
     delete el.dataset.diffCells;
     delete el.dataset.diffAmberMode;
+    delete el.dataset.diffLineWash;
   });
   // Undo per-cell table highlights (wash + inline modifier).
   root
@@ -604,6 +675,14 @@ export function decorateDiffRanges(
         el,
         "Previous content unavailable; exact comparison cannot be shown",
       );
+    }
+
+    if (
+      !el.classList.contains(DIFF_IMAGE_CLASS) &&
+      !el.classList.contains(DIFF_INLINE_CLASS) &&
+      el.dataset.diffCells !== "true"
+    ) {
+      applyLineWash(el);
     }
   }
 
@@ -1196,8 +1275,8 @@ function attachBlockBeforeDisclosure(
     block.prepend(panel);
     block.prepend(control);
   } else {
-    block.parentElement!.insertBefore(control, block);
     block.parentElement!.insertBefore(panel, block);
+    block.prepend(control);
   }
 }
 
@@ -1982,8 +2061,9 @@ interface RenderedCodeMetadata {
   options: string;
 }
 
-function codeMetadata(pre: Element): RenderedCodeMetadata {
-  const code = pre.querySelector("code")!;
+function codeMetadata(pre: Element): RenderedCodeMetadata | null {
+  const code = pre.querySelector("code");
+  if (!code) return null;
   const languageClass = Array.from(code.classList)
     .find((name) => name.startsWith("language-"))
     ?.slice("language-".length);
@@ -2138,6 +2218,7 @@ function readCodeMetadataChange(
   if (!original) return null;
   const before = codeMetadata(original);
   const after = codeMetadata(block);
+  if (!before || !after) return null;
   /* v8 ignore next -- this path is entered only for a source-level code metadata change */
   if (before.language === after.language && before.options === after.options) {
     return null;
@@ -2306,11 +2387,16 @@ function markContiguousGroups(els: readonly HTMLElement[]): void {
     el instanceof HTMLElement &&
     el.classList.contains(DIFF_BLOCK_CLASS) &&
     !el.classList.contains(DIFF_INLINE_CLASS) &&
+    el.dataset.diffLineWash !== "true" &&
     !isGranularLeaf(el) &&
     el.dataset.diffKind === kind;
 
   for (const el of els) {
-    if (el.classList.contains(DIFF_INLINE_CLASS) || isGranularLeaf(el)) {
+    if (
+      el.classList.contains(DIFF_INLINE_CLASS) ||
+      el.dataset.diffLineWash === "true" ||
+      isGranularLeaf(el)
+    ) {
       delete el.dataset.diffGroup;
       continue;
     }
@@ -2379,8 +2465,10 @@ function inlineProseTarget(block: HTMLElement): HTMLElement {
     if (body) return body as HTMLElement;
   }
   if (block.tagName === "LI") {
-    const first = block.firstElementChild;
-    if (first?.tagName === "P") return first as HTMLElement;
+    const prose = Array.from(block.children).find(
+      (child) => child.tagName === "P",
+    );
+    if (prose) return prose as HTMLElement;
   }
   return block;
 }

@@ -132,20 +132,29 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const bubble = frame.locator(".emr-selection-bubble");
 
     // A triple-click ends at the next block's element boundary in Chromium.
-    // Retry because the real cross-origin iframe can swallow the first gesture
-    // while focus transfers from the ADO host into the contribution.
-    await expect
-      .poll(
-        async () => {
-          await paragraph.click({ clickCount: 3 }).catch(() => {});
-          return bubble.isVisible().catch(() => false);
-        },
-        {
-          timeout: 15_000,
-          message: "triple-click selection never surfaced Add comment",
-        },
-      )
-      .toBe(true);
+    // Focus the contribution first, then retry isolated triple-click gestures.
+    // Clear the previous Selection and leave enough time between attempts that
+    // Chromium cannot merge retries into a 4th/5th click sequence (which has
+    // different native selection semantics).
+    await paragraph.click();
+    let surfaced = false;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await paragraph.evaluate(() => window.getSelection()?.removeAllRanges());
+      if (attempt > 0) await page.waitForTimeout(750);
+      await paragraph.click({ clickCount: 3, delay: 90 });
+      surfaced = await bubble
+        .waitFor({ state: "visible", timeout: 4_000 })
+        .then(() => true)
+        .catch(() => false);
+      const selected = await frame
+        .locator("html")
+        .evaluate(() => window.getSelection()?.toString().trim() ?? "");
+      if (surfaced && selected.length > 0) break;
+      surfaced = false;
+    }
+    expect(surfaced, "triple-click selection never surfaced Add comment").toBe(
+      true,
+    );
 
     const selected = await frame
       .locator("html")
@@ -272,27 +281,9 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const frame = prTabFrame(page);
     await waitForFrameRoot(frame);
 
-    // Open a draft composer via a real selection (same path as the prior test).
-    const para = frame.locator(".emr-rendered p").first();
-    await para.waitFor({ state: "visible", timeout: 45_000 });
-    await para.evaluate((el: HTMLElement) => {
-      const textNode = Array.from(el.childNodes).find(
-        (n) =>
-          n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").length > 4,
-      ) as Text | undefined;
-      if (!textNode) return;
-      const range = document.createRange();
-      range.setStart(textNode, 0);
-      range.setEnd(textNode, Math.min(12, textNode.data.length));
-      const sel = window.getSelection()!;
-      sel.removeAllRanges();
-      sel.addRange(range);
-      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    });
-    await frame
-      .locator(".emr-selection-bubble")
-      .getByRole("button", { name: /add comment/i })
-      .click();
+    // Reuse the selection helper that retries until the real iframe has wired
+    // its mouseup handler and the draft is visibly mounted.
+    await openDraftComposerBySelection(frame, { minNodeLen: 4, selLen: 12 });
 
     const textarea = frame.locator(
       ".emr-balloon.is-draft textarea.emr-textarea",
@@ -310,30 +301,39 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const firstOption = picker
       .locator("button[role=option].emr-mention-picker-row")
       .first();
-    await textarea.click();
-    for (let attempt = 0; ; attempt++) {
-      await textarea.fill("");
-      await textarea.type("@", { delay: 30 });
-      await textarea.type(E2E.mentionQuery, { delay: 60 });
+    let displayName = "";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await textarea.fill(`@${E2E.mentionQuery}`);
       try {
-        await firstOption.waitFor({ state: "visible", timeout: 8_000 });
+        await firstOption.waitFor({ state: "visible", timeout: 10_000 });
+        displayName = (
+          await firstOption.locator(".emr-mention-picker-primary").innerText()
+        ).trim();
         break;
       } catch (err) {
-        if (attempt >= 2) throw err;
+        if (attempt >= 3) throw err;
+        // Re-entering the same value does not fire input; clear first so the
+        // next attempt issues a fresh, debounced identity request.
+        await textarea.fill("");
+        await page.waitForTimeout(500);
       }
     }
+    expect(displayName, "identity option had no display name").toBeTruthy();
 
-    // Commit the first suggestion. While typing, the composer shows the
+    // Commit the selected first suggestion from the still-focused textarea.
+    // Keyboard commit is stable even if the live picker row re-renders between
+    // the option wait and the action; clicking that transient row was flaky.
+    await textarea.press("Enter");
+    await expect(picker).toHaveCount(0, { timeout: 10_000 });
+
+    // While typing, the composer shows the
     // person's readable name (the ADO-native `@<GUID>` token is only encoded on
     // submit) — so the author never sees a raw GUID as they compose.
-    await firstOption.click();
-
     // The Write area shows a readable `@Name`, NOT the raw `@<GUID>` token.
     await expect
-      .poll(async () => textarea.inputValue(), { timeout: 10_000 })
-      .not.toContain("@<");
-    const written = await textarea.inputValue();
-    expect(written).toMatch(/@\S/);
+      .poll(() => textarea.inputValue(), { timeout: 10_000 })
+      .toContain(`@${displayName}`);
+    await expect(textarea).not.toHaveValue(/@</);
 
     // In the Preview tab the mention resolves to a display-name pill (identity
     // store seeded from the picker suggestion — no raw GUID shown).
@@ -345,6 +345,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       '.emr-balloon.is-draft .emr-preview .emr-mention[data-mention-kind="user"]',
     );
     await expect(pill).toBeVisible({ timeout: 10_000 });
+    await expect(pill).toContainText(displayName);
     await expect(pill).not.toContainText(/^@?<?[0-9a-fA-F-]{36}>?$/);
 
     // Cancel — never persist to the shared sandbox PR.

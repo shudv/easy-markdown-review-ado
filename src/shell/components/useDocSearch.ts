@@ -7,7 +7,7 @@ import * as React from "react";
 
 import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
-import { events, track } from "../../telemetry";
+import { events, track, trackUserFacingError } from "../../telemetry";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -92,13 +92,30 @@ export function useDocSearch(
                 failureReason: outcome.reason,
               }),
             );
+            if (
+              outcome.reason !== "extension-missing" &&
+              outcome.reason !== "no-config"
+            ) {
+              trackUserFacingError({
+                error: new Error("Code Search request failed"),
+                source: "DocNav.search",
+                operation: "code-search",
+                impact: "degraded",
+              });
+            }
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           /* v8 ignore next -- defensive: query changed before the fetch rejected */
           if (cancelled) return;
           setRemoteHits({ query: trimmedQuery, files: [] });
           setSearchUnavailable({ reason: "unknown" });
+          trackUserFacingError({
+            error: err,
+            source: "DocNav.search",
+            operation: "code-search",
+            impact: "degraded",
+          });
         })
         .finally(() => {
           /* v8 ignore next -- defensive: query changed before settle */

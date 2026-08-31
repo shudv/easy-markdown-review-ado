@@ -14,6 +14,7 @@ import type {
   TelemetryContext,
   TelemetryEvent,
   TelemetryExceptionInfo,
+  TelemetrySeverity,
   TelemetrySink,
 } from "./types";
 import { consoleSink } from "./sinks/consoleSink";
@@ -160,6 +161,33 @@ export function trackException(info: TelemetryExceptionInfo): void {
   } catch {
     /* swallow */
   }
+}
+
+export type UserFacingErrorImpact = "blocking" | "action-failed" | "degraded";
+
+/**
+ * Count a handled, user-visible failure against reliability with stable,
+ * privacy-safe dimensions. Call only where the UI surfaces the failure or a
+ * requested workflow visibly degrades; silent best-effort enrichment stays out.
+ */
+export function trackUserFacingError(input: {
+  error: unknown;
+  source: string;
+  operation: string;
+  impact: UserFacingErrorImpact;
+  severity?: TelemetrySeverity;
+}): void {
+  trackException({
+    error: input.error,
+    severity:
+      input.severity ?? (input.impact === "degraded" ? "warning" : "error"),
+    source: input.source,
+    handled: true,
+    properties: {
+      impact: input.impact,
+      operation: input.operation,
+    },
+  });
 }
 
 export function flushTelemetry(): void | Promise<void> {

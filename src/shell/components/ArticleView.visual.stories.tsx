@@ -9,7 +9,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { fn, waitFor } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
 import type { CommentThread, DiffRange } from "../../types";
 import { renderMarkdownSync } from "../../markdown/render";
@@ -216,10 +216,10 @@ function assertMicroBeforeTriggers(canvasElement: HTMLElement): void {
   )) {
     const control = trigger.closest<HTMLElement>(".emr-diff-before-control")!;
     const panel = control.nextElementSibling as HTMLElement | null;
-    const owner =
-      control.parentElement?.tagName === "LI"
-        ? control.parentElement
-        : (panel?.nextElementSibling as HTMLElement | null);
+    const controlParent = control.parentElement;
+    const owner = controlParent?.classList.contains("emr-diff-block")
+      ? controlParent
+      : (panel?.nextElementSibling as HTMLElement | null);
     const triggerRect = trigger.getBoundingClientRect();
     const ownerRect = owner?.getBoundingClientRect();
     if (
@@ -292,6 +292,266 @@ export const Dark: Story = {
   },
 };
 
+const MINIMAL_LINE_WASH_SOURCE = [
+  "# Minimal Diff Geometry",
+  "",
+  "## Quality gates",
+  "",
+  "This changed paragraph deliberately contains enough prose to wrap across several rendered lines inside the narrow review surface while preserving a visibly incomplete final line at the end. Final note.",
+  "",
+  "- Every blocking comment has an owner.",
+  "- Links and diagrams render correctly.",
+  "- The decision owner records approval.",
+].join("\n");
+
+/** Prose washes stop at each visual line's text edge, never the column edge. */
+export const MinimalLineWashes: Story = {
+  args: {
+    pristineHtml: renderMarkdownSync(MINIMAL_LINE_WASH_SOURCE),
+    documentPath: "/minimal-line-washes.md",
+    threads: [],
+    activeThreadId: null,
+    diff: [
+      { startLine: 3, endLine: 3, kind: "added" },
+      { startLine: 5, endLine: 5, kind: "added" },
+      { startLine: 7, endLine: 9, kind: "added" },
+    ],
+    storageKey: "minimal-line-washes.md",
+  },
+  decorators: [
+    (Story) => (
+      <ThemeFrame width={620}>
+        <Story />
+      </ThemeFrame>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const wrappers = canvasElement.querySelectorAll<HTMLElement>(
+        ".emr-diff-line-wash",
+      );
+      if (wrappers.length !== 5) throw new Error("line washes not settled");
+    });
+
+    const heading = canvasElement.querySelector<HTMLElement>(
+      "h2 .emr-diff-line-wash",
+    )!;
+    const paragraph = canvasElement.querySelector<HTMLElement>(
+      "p .emr-diff-line-wash",
+    )!;
+    const listWashes = Array.from(
+      canvasElement.querySelectorAll<HTMLElement>("li > .emr-diff-line-wash"),
+    );
+
+    const expectShortFinalRect = (wash: HTMLElement): DOMRect[] => {
+      const owner = wash.parentElement!;
+      const rects = Array.from(wash.getClientRects());
+      const finalRect = rects[rects.length - 1]!;
+      if (finalRect.right >= owner.getBoundingClientRect().right - 24) {
+        throw new Error("line wash still reaches the block edge");
+      }
+      return rects;
+    };
+
+    expect(expectShortFinalRect(heading)).toHaveLength(1);
+    expect(expectShortFinalRect(paragraph).length).toBeGreaterThan(1);
+    expect(listWashes).toHaveLength(3);
+    for (const wash of listWashes) {
+      expect(expectShortFinalRect(wash)).toHaveLength(1);
+    }
+  },
+};
+
+const MINIMAL_DIFF_COMPARISON_SOURCE = [
+  /*  1 */ "# Minimal Diff Comparison",
+  /*  2 */ "",
+  /*  3 */ "## Single line",
+  /*  4 */ "",
+  /*  5 */ "Every blocking comment has an owner and a recorded resolution.",
+  /*  6 */ "",
+  /*  7 */ "## Wrapped prose",
+  /*  8 */ "",
+  /*  9 */ "This changed paragraph deliberately wraps across several visual lines so the final incomplete line demonstrates exactly where a minimal rendered diff should stop. Final note.",
+  /* 10 */ "",
+  /* 11 */ "## Contiguous lines",
+  /* 12 */ "",
+  /* 13 */ "- Links and diagrams render correctly.",
+  /* 14 */ "- Telemetry claims link to a durable query.",
+  /* 15 */ "- The decision owner records approval.",
+  /* 16 */ "",
+  /* 17 */ "## Code rewrite",
+  /* 18 */ "",
+  /* 19 */ "```powershell",
+  /* 20 */ "Invoke-RestMethod $healthEndpoint",
+  /* 21 */ "Write-Output 'healthy'",
+  /* 22 */ "```",
+  /* 23 */ "",
+  /* 24 */ "[runbook]: docs/current-runbook.md",
+  /* 25 */ "",
+  /* 26 */ "## Ambiguous table (intentionally broad)",
+  /* 27 */ "",
+  /* 28 */ "| Yes | Inserted | Yes |",
+  /* 29 */ "| --- | --- | --- |",
+  /* 30 */ "| Yes | New | Yes |",
+].join("\n");
+
+const MINIMAL_DIFF_COMPARISON_ORIGINAL = [
+  "# Minimal Diff Comparison",
+  "",
+  "## Single line",
+  "",
+  "",
+  "",
+  "## Wrapped prose",
+  "",
+  "",
+  "",
+  "## Contiguous lines",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "## Code rewrite",
+  "",
+  "```powershell",
+  "Remove-Item legacy.cache -Force",
+  "```",
+  "",
+  "",
+  "[runbook]: docs/legacy-runbook.md",
+  "",
+  "## Ambiguous table (intentionally broad)",
+  "",
+  "| Yes | Yes |",
+  "| --- | --- |",
+  "| Yes | Yes |",
+].join("\n");
+
+const MINIMAL_DIFF_COMPARISON_RANGES: DiffRange[] = [
+  { startLine: 5, endLine: 5, kind: "added" },
+  { startLine: 9, endLine: 9, kind: "added" },
+  { startLine: 13, endLine: 15, kind: "added" },
+  {
+    startLine: 19,
+    endLine: 22,
+    kind: "modified",
+    originalStartLine: 19,
+    originalEndLine: 21,
+    originalText: [
+      "```powershell",
+      "Remove-Item legacy.cache -Force",
+      "```",
+    ].join("\n"),
+  },
+  {
+    startLine: 24,
+    endLine: 24,
+    kind: "modified",
+    originalStartLine: 24,
+    originalEndLine: 24,
+    originalText: "[runbook]: docs/legacy-runbook.md",
+  },
+  {
+    startLine: 28,
+    endLine: 30,
+    kind: "modified",
+    originalStartLine: 28,
+    originalEndLine: 30,
+    originalText: ["| Yes | Yes |", "| --- | --- |", "| Yes | Yes |"].join(
+      "\n",
+    ),
+  },
+];
+
+const LEGACY_DIFF_FIXTURE_CSS = `
+  .minimal-diff-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .minimal-diff-comparison-pane { min-width: 0; }
+  .minimal-diff-comparison-title { margin: 0 0 10px; font: 650 14px/1.3 "Segoe UI", sans-serif; color: var(--emr-fg); }
+  .minimal-diff-comparison-subtitle { margin: -6px 0 12px; font: 11px/1.35 "Segoe UI", sans-serif; color: var(--emr-muted); }
+  .minimal-diff-comparison .legacy-diff-washes .emr-rendered .emr-diff-line-wash { padding: 0; border-radius: 0; background: none; -webkit-box-decoration-break: slice; box-decoration-break: slice; }
+  .minimal-diff-comparison .legacy-diff-washes .emr-rendered :is(p, h1, h2, h3, h4, h5, h6, pre).emr-diff-block[data-diff-line-wash="true"] { margin-left: -6px; margin-right: -8px; padding-left: 6px; padding-right: 8px; border-radius: 6px; background: color-mix(in srgb, var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash), transparent); }
+  .minimal-diff-comparison .legacy-diff-washes .emr-rendered li.emr-diff-block[data-diff-line-wash="true"] { padding: 1px 6px 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--emr-diff-bar, var(--emr-rule)) var(--emr-diff-wash-granular), transparent); }
+  .minimal-diff-comparison .legacy-diff-washes .emr-rendered .emr-diff-source-only { width: min(100%, 720px); max-width: none; }
+`;
+
+function MinimalDiffComparison(): React.ReactElement {
+  const articleProps = {
+    pristineHtml: renderMarkdownSync(MINIMAL_DIFF_COMPARISON_SOURCE),
+    documentPath: "/minimal-diff-comparison.md",
+    threads: [],
+    activeThreadId: null,
+    draftAnchor: null,
+    storageKey: "minimal-diff-comparison.md",
+    diff: MINIMAL_DIFF_COMPARISON_RANGES,
+    originalSource: MINIMAL_DIFF_COMPARISON_ORIGINAL,
+    currentSource: MINIMAL_DIFF_COMPARISON_SOURCE,
+    showDiff: true,
+    onAnchorsResolved: fn(),
+    onHighlightClick: fn(),
+    onSelection: fn(),
+  } satisfies React.ComponentProps<typeof ArticleView>;
+
+  return (
+    <ThemeFrame width={1280}>
+      <style>{LEGACY_DIFF_FIXTURE_CSS}</style>
+      <div className="minimal-diff-comparison">
+        <section className="minimal-diff-comparison-pane legacy-diff-washes">
+          <h2 className="minimal-diff-comparison-title">Before</h2>
+          <p className="minimal-diff-comparison-subtitle">
+            Full-width block washes
+          </p>
+          <ArticleView {...articleProps} storageKey="minimal-diff-before.md" />
+        </section>
+        <section className="minimal-diff-comparison-pane">
+          <h2 className="minimal-diff-comparison-title">After</h2>
+          <p className="minimal-diff-comparison-subtitle">
+            Text-fitted lines and intrinsic fallbacks
+          </p>
+          <ArticleView {...articleProps} storageKey="minimal-diff-after.md" />
+        </section>
+      </div>
+    </ThemeFrame>
+  );
+}
+
+/** Persistent before/after snapshot of every broad-wash minimization case. */
+export const MinimalDiffComparisonShot: Story = {
+  render: () => <MinimalDiffComparison />,
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (
+        canvasElement.querySelectorAll(".emr-diff-line-wash").length < 10 ||
+        canvasElement.querySelectorAll(".emr-diff-source-only").length !== 2
+      ) {
+        throw new Error("comparison diff fixtures not settled");
+      }
+    });
+
+    const afterPane = canvasElement.querySelectorAll<HTMLElement>(
+      ".minimal-diff-comparison-pane",
+    )[1]!;
+    const codeWash = afterPane.querySelector<HTMLElement>(
+      "pre .emr-diff-line-wash",
+    )!;
+    const sourceOnly = afterPane.querySelector<HTMLElement>(
+      ".emr-diff-source-only",
+    )!;
+    const article = afterPane.querySelector<HTMLElement>(".emr-rendered")!;
+    expect(codeWash.getClientRects().length).toBeGreaterThan(1);
+    expect(sourceOnly.getBoundingClientRect().width).toBeLessThan(
+      article.getBoundingClientRect().width - 80,
+    );
+    // Repeated table values remain a broad comparison: minimizing this region
+    // would imply a column alignment the source does not prove.
+    expect(
+      afterPane.querySelectorAll(
+        'tr[data-diff-amber-mode="comparison"]:not([data-diff-cells])',
+      ).length,
+    ).toBe(2);
+  },
+};
+
 const MEDIA_IMAGE_URL = new URL("../../../static/logo.png", import.meta.url)
   .href;
 const MEDIA_SOURCE = [
@@ -324,7 +584,8 @@ async function waitForMinimalMediaDiff(canvasElement: HTMLElement) {
       const style = getComputedStyle(block);
       if (
         style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
-        style.borderLeftWidth !== "3px"
+        style.borderLeftWidth !== "0px" ||
+        style.boxShadow === "none"
       ) {
         throw new Error("media diff is not using the minimal left marker");
       }
@@ -1185,10 +1446,12 @@ async function prepareBlockDisclosureHover(
 ): Promise<void> {
   await waitForBlockConfidenceReady(canvasElement);
   const paragraph = Array.from(canvasElement.querySelectorAll("p")).find(
-    (candidate) => candidate.textContent?.startsWith("Production traffic"),
+    (candidate) => candidate.textContent?.includes("Production traffic"),
   )!;
   const panel = paragraph.previousElementSibling as HTMLElement;
-  const control = panel.previousElementSibling as HTMLElement;
+  const control = paragraph.querySelector<HTMLElement>(
+    ":scope > .emr-diff-before-control",
+  )!;
   const trigger = control.querySelector<HTMLButtonElement>(
     ".emr-diff-before-trigger",
   )!;

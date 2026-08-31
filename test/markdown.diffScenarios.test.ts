@@ -2752,6 +2752,13 @@ describe("splitTableRow", () => {
 });
 
 describe("alignTableCells", () => {
+  it("handles empty and single-cell rows at the loop boundaries", () => {
+    expect(alignTableCells([], [])).toEqual([]);
+    expect(alignTableCells([""], [""])).toEqual([
+      { kind: "equal", originalIndex: 0, currentIndex: 0 },
+    ]);
+  });
+
   it("keeps positional edits for equal-length rows", () => {
     expect(alignTableCells(["a", "old"], ["a", "new"])).toEqual([
       { kind: "equal", originalIndex: 0, currentIndex: 0 },
@@ -2771,6 +2778,25 @@ describe("alignTableCells", () => {
     ]);
   });
 
+  it("aligns structural edits at both row boundaries", () => {
+    expect(alignTableCells(["anchor"], ["new", "anchor"])).toEqual([
+      { kind: "added", currentIndex: 0 },
+      { kind: "equal", originalIndex: 0, currentIndex: 1 },
+    ]);
+    expect(alignTableCells(["old", "anchor"], ["anchor"])).toEqual([
+      { kind: "removed", originalIndex: 0, currentIndex: 0 },
+      { kind: "equal", originalIndex: 1, currentIndex: 0 },
+    ]);
+    expect(alignTableCells(["anchor"], ["anchor", "new"])).toEqual([
+      { kind: "equal", originalIndex: 0, currentIndex: 0 },
+      { kind: "added", currentIndex: 1 },
+    ]);
+    expect(alignTableCells(["anchor", "old"], ["anchor"])).toEqual([
+      { kind: "equal", originalIndex: 0, currentIndex: 0 },
+      { kind: "removed", originalIndex: 1, currentIndex: 1 },
+    ]);
+  });
+
   it("does not use repeated or empty values as structural anchors", () => {
     expect(alignTableCells(["yes", "yes"], ["yes", "new", "yes"])).toBeNull();
     expect(alignTableCells([""], ["", "new"])).toBeNull();
@@ -2778,6 +2804,18 @@ describe("alignTableCells", () => {
 });
 
 describe("alignTableColumns", () => {
+  it("handles empty and duplicate same-width schemas positionally", () => {
+    expect(alignTableColumns([], [])).toEqual([]);
+    expect(alignTableColumns(["Owner", "Owner"], ["Owner", "Owner"])).toEqual([
+      { kind: "equal", originalIndex: 0, currentIndex: 0 },
+      { kind: "equal", originalIndex: 1, currentIndex: 1 },
+    ]);
+    expect(alignTableColumns(["", "Owner"], ["", "Owner"])).toEqual([
+      { kind: "equal", originalIndex: 0, currentIndex: 0 },
+      { kind: "equal", originalIndex: 1, currentIndex: 1 },
+    ]);
+  });
+
   it("keeps same-width header renames positional", () => {
     expect(
       alignTableColumns(
@@ -2800,6 +2838,13 @@ describe("alignTableColumns", () => {
   });
 
   it("identifies added and removed columns around stable headers", () => {
+    expect(
+      alignTableColumns(["Legacy", "Service", "Owner"], ["Service", "Owner"]),
+    ).toEqual([
+      { kind: "removed", originalIndex: 0, currentIndex: 0 },
+      { kind: "equal", originalIndex: 1, currentIndex: 0 },
+      { kind: "equal", originalIndex: 2, currentIndex: 1 },
+    ]);
     expect(
       alignTableColumns(["Service", "Owner"], ["Service", "Cadence", "Owner"]),
     ).toEqual([

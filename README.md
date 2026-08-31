@@ -4,7 +4,7 @@ Review and edit Markdown like a Word doc, right inside Azure DevOps — while ke
 
 ![A guided tour: highlight a sentence in a pull request, leave a Word-style anchored comment, and see diffs and the outline on the rendered page](static/showcase.gif)
 
-> Prefer video? A higher-resolution [`assets/showcase.mp4`](assets/showcase.mp4) is generated alongside the GIF — run `npm run gif:showcase` to rebuild both.
+> Prefer video? A higher-fidelity [`assets/showcase.mp4`](assets/showcase.mp4) is generated alongside the GIF — run `npm run gif:showcase` to rebuild both.
 
 > Status: shipping in the Marketplace — rendered-prose PR comments, Mermaid diagrams, diff highlighting, cross-PR comment history, and a project-wide Documents hub are all live.
 

@@ -1,12 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+import {
+  expect,
+  fireEvent,
+  fn,
+  userEvent,
+  waitFor,
+  within,
+} from "storybook/test";
 
 import { LocalOnlyCommentApi, type CreatedThreadIds } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
 import { FIXTURE_AUTHORS } from "../../comments/fixtures";
 import type { CommentThread, PrInfo } from "../../types";
-import { PrShell } from "../PrShell";
+import { PrShell, type RoutedPrInfo } from "../PrShell";
 import { writeReaderPrefs, DEFAULT_READER_PREFS } from "../readerPrefs";
 const alex = FIXTURE_AUTHORS.alex!;
 const shubhd = FIXTURE_AUTHORS.shubhd!;
@@ -109,7 +116,7 @@ function threads(): CommentThread[] {
       comments: [
         {
           id: "c3",
-          author: jamie,
+          author: shubhd,
           bodyMarkdown: "A second positioned thread.",
           createdAt: "2026-01-01T12:00:00.000Z",
         },
@@ -313,16 +320,21 @@ export const ThreadEdit: Story = {
 export const ThreadCycle: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const railU = within(
-      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
     const nextBtn = await waitFor(() =>
-      railU.getByRole("button", { name: "Next comment" }),
+      status.getByRole("button", { name: "Next comment" }),
     );
     await userEvent.click(nextBtn);
     await userEvent.click(
-      railU.getByRole("button", { name: "Previous comment" }),
+      status.getByRole("button", { name: "Previous comment" }),
     );
+    expect(
+      within(
+        canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+      ).queryByRole("button", { name: "Next comment" }),
+    ).toBeNull();
   },
 };
 
@@ -337,6 +349,9 @@ export const CyclerExpandsCollapsedTray: Story = {
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
+    );
     const trayName = /General comments/;
     // The cross-file tray is present but collapsed, its comment not rendered.
     const tray = await waitFor(() =>
@@ -347,7 +362,7 @@ export const CyclerExpandsCollapsedTray: Story = {
     // Cycle Next until it lands on the general comment; the tray must expand.
     for (let i = 0; i < 12; i++) {
       await userEvent.click(
-        railU.getByRole("button", { name: "Next comment" }),
+        status.getByRole("button", { name: "Next comment" }),
       );
       if (
         railU
@@ -421,6 +436,32 @@ export const ThreadSearch: Story = {
     await userEvent.type(searchBox, "positioned");
     await waitFor(() =>
       expect(railU.getByText("A second positioned thread.")).toBeTruthy(),
+    );
+    await expect(
+      railU.queryByText("First thought about the design here."),
+    ).toBeNull();
+    await waitFor(() =>
+      expect(
+        [...canvasElement.querySelectorAll<HTMLElement>(".emr-highlight")].map(
+          (highlight) => highlight.dataset.threadId,
+        ),
+      ).toEqual(["t-active2"]),
+    );
+
+    // Search overrides the default Active filter so resolved matches remain
+    // discoverable across status sections.
+    await userEvent.clear(searchBox);
+    await userEvent.type(searchBox, "already addressed");
+    await waitFor(() =>
+      expect(railU.getByText("This was already addressed.")).toBeTruthy(),
+    );
+    await expect(railU.queryByText("A second positioned thread.")).toBeNull();
+    await waitFor(() =>
+      expect(
+        [...canvasElement.querySelectorAll<HTMLElement>(".emr-highlight")].map(
+          (highlight) => highlight.dataset.threadId,
+        ),
+      ).toEqual(["t-resolved"]),
     );
     await userEvent.clear(searchBox);
     await userEvent.click(railU.getByRole("button", { name: "Close search" }));
@@ -786,6 +827,24 @@ export const DraftComment: Story = {
     const draft2 = await waitFor(() => balloonFor(canvasElement, "__draft__"));
     await userEvent.click(
       within(draft2).getByRole("button", { name: "Cancel" }),
+    );
+  },
+};
+
+/** Rail-header plus opens a current-file draft without a visible text quote. */
+export const UnanchoredDraft: Story = {
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const rail = within(
+      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    );
+    await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+    const draft = await waitFor(() => balloonFor(canvasElement, "__draft__"));
+    await expect(within(draft).queryByText(/Anchored to:/)).toBeNull();
+    await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+    await expect(balloonFor(canvasElement, "__draft__")).toBe(draft);
+    await userEvent.click(
+      within(draft).getByRole("button", { name: "Cancel" }),
     );
   },
 };
@@ -1420,6 +1479,58 @@ export const SingleFile: Story = {
  * persist).
  */
 export const ReaderStatusBarControls: Story = {
+  args: {
+    routedPr: {
+      prId: 7,
+      title: "Current routing PR",
+      status: "active",
+      url: "https://example.test/pr/7",
+    },
+    reviewIterationStops: [
+      {
+        commitId: null,
+        prId: 7,
+        title: "Finalize review workflow",
+        dateMs: Date.parse("2026-08-23T10:14:00Z"),
+        isCurrent: true,
+        readOnly: false,
+      },
+      {
+        commitId: "update-2",
+        prId: 7,
+        title: "Document accessibility review",
+        dateMs: Date.parse("2026-08-18T11:07:00Z"),
+        isCurrent: false,
+        readOnly: true,
+      },
+      {
+        commitId: "update-1",
+        prId: 7,
+        title: "Define review goals",
+        dateMs: Date.parse("2026-08-11T17:06:00Z"),
+        isCurrent: false,
+        readOnly: true,
+      },
+    ],
+    reviewIterationBaseCommit: "base",
+    loadFileSourceAt: async (path: string, commitId: string) =>
+      `> ${commitId}.\n\n${SOURCES[path] ?? ""}`,
+  },
+  beforeEach: () => {
+    const NativeFontFace = window.FontFace;
+    class AvailableFontFace {
+      status = "unloaded";
+
+      async load(): Promise<FontFace> {
+        this.status = "loaded";
+        return this as unknown as FontFace;
+      }
+    }
+    window.FontFace = AvailableFontFace as unknown as typeof FontFace;
+    return () => {
+      window.FontFace = NativeFontFace;
+    };
+  },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
@@ -1430,6 +1541,44 @@ export const ReaderStatusBarControls: Story = {
       [...canvasElement.querySelectorAll<HTMLElement>(sel)].find((el) =>
         el.textContent?.includes(text),
       )!;
+    const paragraph = q<HTMLParagraphElement>(".emr-rendered.markdown-body p");
+    expect(getComputedStyle(paragraph).marginBottom).toBe("16px");
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy(),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    const selectedOptions = canvas.getAllByRole("option", { selected: true });
+    expect(selectedOptions).toHaveLength(1);
+    expect(selectedOptions[0]?.textContent).toContain("All updates");
+    await userEvent.click(
+      canvas.getByRole("option", { name: /2 Document accessibility review/ }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "Update 1 → 2" })).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-word-added")?.textContent).toBe(
+        "2",
+      ),
+    );
+    expect(canvasElement.querySelector(".emr-word-removed")?.textContent).toBe(
+      "1",
+    );
+    expect(
+      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
+    ).not.toBeNull();
+    await userEvent.click(
+      canvas.getByRole("option", { name: /1 Define review goals/ }),
+    );
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Base → Update 1" }),
+      ).toBeTruthy(),
+    );
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    expect(
+      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
+    ).not.toBeNull();
 
     // Focus mode: hide the nav, then the comments — the app root reflects it.
     await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
@@ -1437,23 +1586,166 @@ export const ReaderStatusBarControls: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Comments" }));
     await waitFor(() => expect(app.className).toContain("is-comments-hidden"));
 
-    // Reading type: open the font popover, pick a serif font, enlarge, reset.
+    // Reading type: pick a serif font, enlarge, and increase prose spacing.
     await userEvent.click(q(".emr-statusbar-type .emr-statusbar-btn"));
-    await userEvent.click(byText(".emr-statusbar-font", "Georgia"));
+    await userEvent.click(byText(".emr-statusbar-font", "Sitka"));
     await waitFor(() =>
       expect(app.style.getPropertyValue("--emr-reader-font")).toContain(
-        "Georgia",
+        "Sitka",
       ),
     );
-    await userEvent.click(canvas.getByRole("button", { name: "Larger text" }));
+    fireEvent.change(canvas.getByRole("slider", { name: "Text size" }), {
+      target: { value: "125" },
+    });
     await waitFor(() =>
-      expect(app.style.getPropertyValue("--emr-reader-scale")).not.toBe("1"),
+      expect(app.style.getPropertyValue("--emr-reader-scale")).toBe("1.25"),
     );
-    // Clicking the size value resets it to 100% (scale 1).
-    await userEvent.click(q(".emr-statusbar-size-val"));
+    fireEvent.change(canvas.getByRole("slider", { name: "Text spacing" }), {
+      target: { value: "125" },
+    });
     await waitFor(() =>
-      expect(app.style.getPropertyValue("--emr-reader-scale")).toBe("1"),
+      expect(app.style.getPropertyValue("--emr-reader-line-height")).toBe(
+        "1.675",
+      ),
     );
+    expect(app.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe(
+      "17.6px",
+    );
+  },
+};
+
+/** Documents keeps card gutters when both side panes are collapsed. */
+export const DocumentsCollapsedGutters: Story = {
+  args: {
+    draftScope: "hub",
+    documentsMode: true,
+    routedPr: {
+      prId: 42,
+      title: "Completed routing PR",
+      status: "completed",
+    },
+  },
+  beforeEach: () => {
+    writeReaderPrefs("hub", {
+      ...DEFAULT_READER_PREFS,
+      showNav: false,
+      showComments: false,
+    });
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
+    const body = canvasElement.querySelector<HTMLElement>(".emr-body")!;
+    await expect(app.classList).toContain("is-documents-mode");
+    await expect(app.classList).toContain("is-nav-hidden");
+    await expect(app.classList).toContain("is-comments-hidden");
+    await expect(getComputedStyle(body).marginLeft).toBe("6px");
+    await expect(getComputedStyle(body).marginRight).toBe("6px");
+    await expect(getComputedStyle(body).marginBottom).toBe("6px");
+  },
+};
+
+/** Pending routing reserves the comments layout; a resolved miss removes it. */
+export const DocumentsRoutingPending: Story = {
+  args: {
+    draftScope: "hub",
+    documentsMode: true,
+    commentApiForPath: () => undefined,
+  },
+  render: (args) => {
+    const [resolution, setResolution] = React.useState<
+      RoutedPrInfo | null | undefined
+    >(undefined);
+    return (
+      <>
+        <button type="button" onClick={() => setResolution(null)}>
+          Resolve without PR
+        </button>
+        <PrShell {...args} routedPrForPath={() => resolution} />
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
+    const rail = canvasElement.querySelector<HTMLElement>(".emr-rail")!;
+
+    await expect(app.classList).not.toContain("is-comments-hidden");
+    await expect(canvas.getByRole("button", { name: "Comments" })).toBeTruthy();
+    await expect(getComputedStyle(rail).display).not.toBe("none");
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Resolve without PR" }),
+    );
+    await waitFor(() => expect(app.classList).toContain("is-comments-hidden"));
+    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+    await expect(getComputedStyle(rail).display).toBe("none");
+
+    const paragraph =
+      canvasElement.querySelector<HTMLElement>(".emr-rendered p")!;
+    const text = paragraph.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, Math.min(8, text.length));
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    paragraph.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    await expect(
+      canvas.queryByRole("button", { name: /add comment/i }),
+    ).toBeNull();
+
+    const navResize =
+      canvasElement.querySelector<HTMLElement>(".emr-nav-resize")!;
+    navResize.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: 260,
+        pointerId: 19,
+        bubbles: true,
+      }),
+    );
+    navResize.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: 280,
+        pointerId: 19,
+        bubbles: true,
+      }),
+    );
+    navResize.dispatchEvent(
+      new PointerEvent("pointerup", { pointerId: 19, bubbles: true }),
+    );
+    await waitFor(() =>
+      expect(
+        Number.parseFloat(app.style.getPropertyValue("--emr-nav-scale")),
+      ).toBeGreaterThan(1),
+    );
+  },
+};
+
+/** A failed native-iteration baseline settles on an error instead of loading forever. */
+export const ReaderStatusBarIterationLoadError: Story = {
+  args: {
+    ...ReaderStatusBarControls.args,
+    loadFileSourceAt: async (_path: string, commitId: string) => {
+      if (commitId === "base") throw new Error("base snapshot failed");
+      return `> ${commitId}.\n`;
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    await userEvent.click(
+      canvas.getByRole("option", { name: /1 Define review goals/ }),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-error")?.textContent).toContain(
+        "base snapshot failed",
+      ),
+    );
+    expect(canvasElement.querySelector(".emr-skeleton")).toBeNull();
+    expect(canvasElement.querySelector(".emr-word-added")).toBeNull();
   },
 };
 
@@ -1468,6 +1760,25 @@ export const NavResize: Story = {
       expect(canvasElement.querySelector(".emr-nav-resize")).toBeTruthy(),
     );
     const handle = canvasElement.querySelector<HTMLElement>(".emr-nav-resize")!;
+    const navRail = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    const firstRow = canvasElement.querySelector<HTMLElement>(
+      ".emr-docnav-item.emr-docnav-file",
+    )!;
+    const badge = firstRow.querySelector<HTMLElement>(".emr-docnav-badge")!;
+    expect(getComputedStyle(navRail).paddingLeft).toBe("0px");
+    expect(getComputedStyle(docNav).paddingRight).toBe("0px");
+    expect(firstRow.getBoundingClientRect().left).toBeCloseTo(
+      navRail.getBoundingClientRect().left,
+      1,
+    );
+    expect(firstRow.getBoundingClientRect().right).toBeCloseTo(
+      docNav.getBoundingClientRect().right,
+      1,
+    );
+    expect(badge.getBoundingClientRect().right).toBeLessThan(
+      handle.getBoundingClientRect().left,
+    );
     // A move with no press in progress is ignored — the width stays put.
     handle.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -1934,6 +2245,8 @@ export const PerDocumentHousing: Story = {
     const apis = new Map<string, LocalOnlyCommentApi>();
     return {
       initialThreads: [],
+      draftScope: "hub" as const,
+      documentsMode: true,
       threadSyncIntervalMs: 999999,
       // Routed-PR pill resolves per selected file: A links to PR #42, other
       // files have no resolved routing PR yet so the pill stays hidden.
@@ -1945,7 +2258,7 @@ export const PerDocumentHousing: Story = {
               status: "completed" as const,
               url: "https://example.test/pr/42",
             }
-          : undefined,
+          : null,
       commentApiForPath: (path: string) => {
         // A path whose routing target isn't ready resolves to `undefined`; the
         // shell falls back to its session-local CommentApi so the doc still
@@ -1968,13 +2281,17 @@ export const PerDocumentHousing: Story = {
     // File A's threads arrive via loadThreadsForPath (not initialThreads).
     const hl = await waitForHighlight(canvasElement, "t-active");
 
-    // File A's routed-PR pill links to its routing PR (PR #42).
-    const pill = await waitFor(() =>
-      canvasElement.querySelector<HTMLAnchorElement>(".emr-rail-title-pr-link"),
+    // Documents Hub keeps the routing PR beside Comments in the status bar,
+    // not in the rail header.
+    await expect(
+      canvasElement.querySelector(".emr-rail-title-pr-link"),
+    ).toBeNull();
+    const statusPr = await waitFor(() =>
+      within(canvasElement).getByRole("link", {
+        name: "Latest completed PR for this file: #42 Routed PR",
+      }),
     );
-    expect(pill).toBeTruthy();
-    expect(pill!.textContent).toContain("PR #42");
-    expect(pill!.getAttribute("href")).toBe("https://example.test/pr/42");
+    expect(statusPr.getAttribute("href")).toBe("https://example.test/pr/42");
 
     await userEvent.click(hl);
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
@@ -2006,11 +2323,28 @@ export const PerDocumentHousing: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-rail-title-pr-link")).toBeNull(),
     );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-app")?.classList).toContain(
+        "is-comments-hidden",
+      ),
+    );
+    expect(
+      within(canvasElement).queryByRole("button", { name: "Comments" }),
+    ).toBeNull();
+    expect(
+      getComputedStyle(canvasElement.querySelector<HTMLElement>(".emr-rail")!)
+        .display,
+    ).toBe("none");
 
     // Back to A — served from the per-path API cache (cache hit) and the
     // already-loaded thread set (load is not repeated).
     await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
     await waitForHighlight(canvasElement, "t-active");
+    await waitFor(() =>
+      expect(
+        within(canvasElement).getByRole("button", { name: "Comments" }),
+      ).toBeTruthy(),
+    );
 
     // A doc whose thread loader rejects surfaces the inline error state.
     await userEvent.click(nav.getByRole("button", { name: /broken\.md/ }));
@@ -2076,12 +2410,7 @@ function stepLoaders() {
   };
 }
 
-/**
- * Comment-history stepper: the routed-PR pill gains ‹ › chevrons when a file
- * has earlier completed PRs. Stepping back swaps the document pane and rail to
- * the read-only snapshot at that PR; stepping forward returns to the live
- * (writable) current version.
- */
+/** Completed-PR document history remains on the comment rail. */
 export const CommentHistoryStepper: Story = {
   args: stepLoaders(),
   play: async ({ canvasElement }) => {
@@ -2089,20 +2418,9 @@ export const CommentHistoryStepper: Story = {
     const rail = () =>
       within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
 
-    // Chevrons appear once history resolves; Newer is disabled at the head.
     const older = await waitFor(() =>
       rail().getByRole("button", { name: "Older version" }),
     );
-    expect(
-      (
-        rail().getByRole("button", {
-          name: "Newer version",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-
-    // Step back to the most recent historical PR (#101): read-only banner +
-    // that PR's comments replace the live rail.
     await userEvent.click(older);
     await waitFor(() =>
       expect(
@@ -2119,22 +2437,13 @@ export const CommentHistoryStepper: Story = {
       ).toBeTruthy(),
     );
 
-    // Step to the oldest PR (#102); Older becomes disabled at the tail.
     await userEvent.click(
       rail().getByRole("button", { name: "Older version" }),
     );
     await waitFor(() =>
       expect(rail().getByText(/pull request #102/)).toBeTruthy(),
     );
-    expect(
-      (
-        rail().getByRole("button", {
-          name: "Older version",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
 
-    // Step forward twice to return to the live current version.
     await userEvent.click(
       rail().getByRole("button", { name: "Newer version" }),
     );
@@ -2164,9 +2473,9 @@ export const CommentHistoryStepper: Story = {
 };
 
 /**
- * Stepper resilience: history resolves, but the per-PR snapshot and thread
- * loaders reject. Stepping back still shows the read-only skeleton without
- * throwing — the failed loads are swallowed and logged.
+ * Picker resilience: history resolves, but the per-PR snapshot and thread
+ * loaders reject. Stepping back settles on an actionable error instead of an
+ * endless skeleton.
  */
 export const CommentHistoryStepperLoadErrors: Story = {
   args: {
@@ -2180,23 +2489,24 @@ export const CommentHistoryStepperLoadErrors: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const rail = () =>
-      within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
-
-    const older = await waitFor(() =>
-      rail().getByRole("button", { name: "Older version" }),
+    const rail = within(
+      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
-    // Stepping back triggers the failing snapshot loader -> skeleton stays.
+    const older = await waitFor(() =>
+      rail.getByRole("button", { name: "Older version" }),
+    );
     await userEvent.click(older);
     await waitFor(() =>
-      expect(canvasElement.querySelector(".emr-skeleton")).toBeTruthy(),
+      expect(canvasElement.querySelector(".emr-error")?.textContent).toContain(
+        "load this version",
+      ),
     );
+    expect(canvasElement.querySelector(".emr-skeleton")).toBeNull();
   },
 };
 
 /**
- * Stepper history-load failure: `loadDocHistory` rejects, so no chevrons are
- * ever shown and the document stays on its writable current version.
+ * History-load failure: no picker appears and the document stays current.
  */
 export const CommentHistoryStepperHistoryError: Story = {
   args: {
@@ -2207,12 +2517,11 @@ export const CommentHistoryStepperHistoryError: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
-    const rail = within(
-      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    const status = within(
+      canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
-    // The failed history load leaves the stepper chevrons absent.
     await waitFor(() =>
-      expect(rail.queryByRole("button", { name: "Older version" })).toBeNull(),
+      expect(status.queryByRole("button", { name: /Iteration/ })).toBeNull(),
     );
   },
 };
@@ -2250,7 +2559,6 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
     );
     await userEvent.click(older);
 
-    // Read-only banner for the historical PR appears...
     await waitFor(() =>
       expect(
         rail().getByText(
@@ -2258,7 +2566,7 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
         ),
       ).toBeTruthy(),
     );
-    // ...and the article shows the live-head content (there is no merge commit
+    // The article shows the live-head content (there is no merge commit
     // to snapshot), never a blank or perpetual skeleton.
     await waitFor(() =>
       expect(

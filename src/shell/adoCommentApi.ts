@@ -48,6 +48,7 @@ import type {
   ReactionKind,
   ThreadStatus,
 } from "../types";
+import { trackUserFacingError } from "../telemetry";
 import type {
   CommentApi,
   CreatedThreadIds,
@@ -59,6 +60,7 @@ import type {
   WorkItemSuggestion,
 } from "../comments/mentions";
 import { withRetry } from "./retry";
+import { detectSessionRefreshing, ensureAdoSessionLive } from "./adoAuthToken";
 import {
   adoThreadToLocal,
   buildReplyComment,
@@ -157,6 +159,28 @@ export class AdoCommentApi implements CommentApi {
     return getClient(GitRestClient);
   }
 
+  /**
+   * Guard every write attempt against the host token's ADO-grant dead window.
+   * Re-inspect a caught auth failure too, covering the narrow race where the
+   * grant lapses between preflight and the REST call.
+   */
+  private async write<T>(label: string, op: () => Promise<T>): Promise<T> {
+    try {
+      return await withRetry(
+        async () => {
+          await ensureAdoSessionLive(() => SDK.getAccessToken());
+          return op();
+        },
+        { mode: "write", label },
+      );
+    } catch (err) {
+      const refreshing = await detectSessionRefreshing(err, () =>
+        SDK.getAccessToken(),
+      );
+      throw refreshing ?? err;
+    }
+  }
+
   async createThread(input: NewThreadInput): Promise<CreatedThreadIds> {
     const { repositoryId, pullRequestId, project } = this.ctx;
     const threadInput: Partial<GitPullRequestCommentThread> = {
@@ -184,15 +208,13 @@ export class AdoCommentApi implements CommentApi {
           : {}),
       },
     };
-    const created = await withRetry(
-      () =>
-        this.client().createThread(
-          threadInput as GitPullRequestCommentThread,
-          repositoryId,
-          pullRequestId,
-          project,
-        ),
-      { mode: "write", label: "createThread" },
+    const created = await this.write("createThread", () =>
+      this.client().createThread(
+        threadInput as GitPullRequestCommentThread,
+        repositoryId,
+        pullRequestId,
+        project,
+      ),
     );
     const firstComment = created.comments?.[0];
     if (!firstComment) {
@@ -212,16 +234,14 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ commentId: string; createdAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    const created = await withRetry(
-      () =>
-        this.client().createComment(
-          buildReplyComment(bodyMarkdown) as AdoComment,
-          repositoryId,
-          pullRequestId,
-          Number(threadId),
-          project,
-        ),
-      { mode: "write", label: "addReply" },
+    const created = await this.write("addReply", () =>
+      this.client().createComment(
+        buildReplyComment(bodyMarkdown) as AdoComment,
+        repositoryId,
+        pullRequestId,
+        Number(threadId),
+        project,
+      ),
     );
     // A reply's `@<GUID>` mentions resolve on load via the identity resolver
     // (the token rides in the comment body). We intentionally do NOT persist
@@ -241,17 +261,15 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ updatedAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    const updated = await withRetry(
-      () =>
-        this.client().updateComment(
-          { content: bodyMarkdown } as AdoComment,
-          repositoryId,
-          pullRequestId,
-          Number(threadId),
-          Number(commentId),
-          project,
-        ),
-      { mode: "write", label: "editComment" },
+    const updated = await this.write("editComment", () =>
+      this.client().updateComment(
+        { content: bodyMarkdown } as AdoComment,
+        repositoryId,
+        pullRequestId,
+        Number(threadId),
+        Number(commentId),
+        project,
+      ),
     );
     return {
       updatedAt: new Date(
@@ -262,31 +280,27 @@ export class AdoCommentApi implements CommentApi {
 
   async deleteComment(threadId: string, commentId: string): Promise<void> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    await withRetry(
-      () =>
-        this.client().deleteComment(
-          repositoryId,
-          pullRequestId,
-          Number(threadId),
-          Number(commentId),
-          project,
-        ),
-      { mode: "write", label: "deleteComment" },
+    await this.write("deleteComment", () =>
+      this.client().deleteComment(
+        repositoryId,
+        pullRequestId,
+        Number(threadId),
+        Number(commentId),
+        project,
+      ),
     );
   }
 
   async setStatus(threadId: string, status: ThreadStatus): Promise<void> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    await withRetry(
-      () =>
-        this.client().updateThread(
-          { status: toAdoStatusValue(status) } as GitPullRequestCommentThread,
-          repositoryId,
-          pullRequestId,
-          Number(threadId),
-          project,
-        ),
-      { mode: "write", label: "setStatus" },
+    await this.write("setStatus", () =>
+      this.client().updateThread(
+        { status: toAdoStatusValue(status) } as GitPullRequestCommentThread,
+        repositoryId,
+        pullRequestId,
+        Number(threadId),
+        project,
+      ),
     );
   }
 
@@ -301,16 +315,14 @@ export class AdoCommentApi implements CommentApi {
     const { repositoryId, pullRequestId, project } = this.ctx;
     // add → createLike, remove → deleteLike (locked by `reactionClientMethod`).
     const method = reactionClientMethod(add);
-    await withRetry(
-      () =>
-        this.client()[method](
-          repositoryId,
-          pullRequestId,
-          Number(threadId),
-          Number(commentId),
-          project,
-        ),
-      { mode: "write", label: method },
+    await this.write(method, () =>
+      this.client()[method](
+        repositoryId,
+        pullRequestId,
+        Number(threadId),
+        Number(commentId),
+        project,
+      ),
     );
   }
 
@@ -323,8 +335,8 @@ export class AdoCommentApi implements CommentApi {
   //   - `!pullrequest`  → GitRestClient.getPullRequestsByProject
   //
   // Each method is best-effort: if the service throws (perms, transient
-  // failure) we surface an empty list so the picker shows "No matches"
-  // instead of disappearing.
+  // failure) we surface an empty list so the picker shows "No matches" and
+  // report the visible degradation to reliability telemetry.
   // -------------------------------------------------------------------------
 
   async searchUsers(query: string): Promise<UserSuggestion[]> {
@@ -342,6 +354,12 @@ export class AdoCommentApi implements CommentApi {
       return results.slice(0, 10).map((r) => toUserSuggestion(r, selfImageUrl));
     } catch (err) {
       console.warn("[adoCommentApi] searchUsers failed:", err);
+      trackUserFacingError({
+        error: err,
+        source: "Composer.mentions",
+        operation: "user-search",
+        impact: "degraded",
+      });
       return [];
     }
   }
@@ -439,6 +457,12 @@ export class AdoCommentApi implements CommentApi {
       return ordered.map(toWorkItemSuggestion);
     } catch (err) {
       console.warn("[adoCommentApi] searchWorkItems failed:", err);
+      trackUserFacingError({
+        error: err,
+        source: "Composer.mentions",
+        operation: "work-item-search",
+        impact: "degraded",
+      });
       return [];
     }
   }
@@ -486,6 +510,12 @@ export class AdoCommentApi implements CommentApi {
       );
     } catch (err) {
       console.warn("[adoCommentApi] searchPullRequests failed:", err);
+      trackUserFacingError({
+        error: err,
+        source: "Composer.mentions",
+        operation: "pull-request-search",
+        impact: "degraded",
+      });
       return [];
     }
   }
@@ -630,6 +660,12 @@ async function fetchOriginalLines(
       "[fetchFileDiffs] original content fetch failed; deletion bodies will be empty",
       err,
     );
+    trackUserFacingError({
+      error: err,
+      source: "PrTabApp.diff",
+      operation: "original-content-load",
+      impact: "degraded",
+    });
     return undefined;
   }
 }

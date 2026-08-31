@@ -33,8 +33,23 @@ describe("renderBootErrorInto", () => {
 
   it("renders the heading and the detail text", () => {
     renderBootErrorInto(root, "something broke");
-    expect(root.querySelector("h2")?.textContent).toBe(BOOT_ERROR_HEADING);
-    expect(root.querySelector("pre")?.textContent).toBe("something broke");
+    expect(BOOT_ERROR_HEADING).toBe("Markdown Review failed to load");
+    const container = root.firstElementChild as HTMLElement;
+    const heading = root.querySelector("h2") as HTMLElement;
+    const detail = root.querySelector("pre") as HTMLElement;
+    expect(container.style.padding).toBe("24px");
+    expect(container.style.fontFamily).toBe(
+      '"Segoe UI", system-ui, sans-serif',
+    );
+    expect(container.style.color).toBe("rgb(205, 48, 48)");
+    expect(heading.style.marginTop).toBe("0px");
+    expect(heading.textContent).toBe(BOOT_ERROR_HEADING);
+    expect(detail.style.whiteSpace).toBe("pre-wrap");
+    expect(detail.style.background).toBe("rgb(247, 247, 247)");
+    expect(detail.style.padding).toBe("12px");
+    expect(detail.style.borderRadius).toBe("4px");
+    expect(detail.style.color).toBe("rgb(51, 51, 51)");
+    expect(detail.textContent).toBe("something broke");
   });
 
   it("does not interpret HTML in the detail (no injection)", () => {

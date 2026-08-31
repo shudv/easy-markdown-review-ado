@@ -11,6 +11,7 @@ import {
   setTelemetryContext,
   track,
   trackException,
+  trackUserFacingError,
 } from "../src/telemetry/telemetry";
 import { events } from "../src/telemetry/events";
 import { hashId } from "../src/telemetry/sanitize";
@@ -98,6 +99,51 @@ describe("telemetry facade", () => {
     expect(i.properties).toEqual({ phase: "save" });
   });
 
+  it.each([
+    ["blocking", "error"],
+    ["action-failed", "error"],
+    ["degraded", "warning"],
+  ] as const)(
+    "reports a %s user-facing failure with reliability dimensions",
+    (impact, severity) => {
+      const sink = fakeSink();
+      __resetTelemetryForTests(sink);
+      const error = new Error("visible failure");
+
+      trackUserFacingError({
+        error,
+        source: "Reader.load",
+        operation: "document-load",
+        impact,
+      });
+
+      expect(sink.exceptionCalls).toHaveLength(1);
+      const { info } = sink.exceptionCalls[0]!;
+      expect(info).toMatchObject({
+        error,
+        source: "Reader.load",
+        handled: true,
+        severity,
+        properties: { impact, operation: "document-load" },
+      });
+    },
+  );
+
+  it("allows a critical severity override for boot failures", () => {
+    const sink = fakeSink();
+    __resetTelemetryForTests(sink);
+    trackUserFacingError({
+      error: new Error("boot failed"),
+      source: "pr-tab.boot",
+      operation: "boot",
+      impact: "blocking",
+      severity: "critical",
+    });
+
+    const { info } = sink.exceptionCalls[0]!;
+    expect(info).toMatchObject({ severity: "critical" });
+  });
+
   it("never throws when a sink misbehaves", () => {
     const angry = fakeSink();
     angry.trackEvent = vi.fn(() => {
@@ -142,7 +188,7 @@ describe("telemetry facade", () => {
       setTelemetryContext({ projectId: "p1" });
       track(events.appLoaded());
       trackException({ error: new Error("x"), source: "unit" });
-      flushTelemetry();
+      void flushTelemetry();
     }).not.toThrow();
   });
 

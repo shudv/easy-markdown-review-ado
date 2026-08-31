@@ -51,7 +51,14 @@ describe("ReaderLoadingShell", () => {
   it("restores the surface layout and typography before data loads", () => {
     localStorage.setItem(
       READER_TYPE_KEY,
-      JSON.stringify({ fontId: "georgia", sizePct: 115 }),
+      JSON.stringify({
+        fontId: "atkinson",
+        sizePct: 115,
+        lineSpacingPct: 125,
+        paragraphSpacingPct: 125,
+        letterSpacingPct: 125,
+        wordSpacingPct: 125,
+      }),
     );
     localStorage.setItem(
       layoutStorageKey("pr"),
@@ -68,14 +75,26 @@ describe("ReaderLoadingShell", () => {
     expect(shell.classList.contains("is-nav-hidden")).toBe(true);
     expect(shell.classList.contains("is-comments-hidden")).toBe(false);
     expect(shell.style.getPropertyValue("--emr-reader-font")).toContain(
-      "Georgia",
+      "Atkinson Hyperlegible",
     );
     expect(shell.style.getPropertyValue("--emr-reader-scale")).toBe("1.15");
+    expect(shell.style.getPropertyValue("--emr-reader-line-height")).toBe(
+      "1.675",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-letter-spacing")).toBe(
+      "0.02em",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-word-spacing")).toBe(
+      "0.04em",
+    );
+    expect(shell.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe(
+      "17.6px",
+    );
     expect(shell.style.getPropertyValue("--emr-nav-scale")).toBe("1.2");
     expect(shell.style.getPropertyValue("--emr-rail-scale")).toBe("0.85");
   });
 
-  it("uses the settled three-pane DOM and silent shimmer placeholders", () => {
+  it("uses the settled three-pane DOM with shimmer and status-bar progress", () => {
     const shell = mount("hub");
 
     expect(
@@ -84,9 +103,18 @@ describe("ReaderLoadingShell", () => {
     expect(shell.querySelector(".emr-body-frame > .emr-body")).toBeTruthy();
     expect(shell.querySelector(".emr-body-frame > .emr-rail")).toBeTruthy();
     expect(shell.querySelector(".emr-docnav-skel")).toBeTruthy();
+    expect(
+      shell.querySelector(".emr-docnav-header .emr-skel-header-label"),
+    ).toBeTruthy();
     expect(shell.querySelector(".emr-article-wrap.emr-skeleton")).toBeTruthy();
     expect(shell.querySelector(".emr-rail-col.emr-skeleton")).toBeTruthy();
-    expect(shell.textContent).toBe("");
+    expect(
+      shell.querySelector(".emr-rail-header .emr-skel-header-label"),
+    ).toBeTruthy();
+    expect(shell.querySelector(".emr-loading-statusbar")?.textContent).toBe(
+      "Loading reader",
+    );
+    expect(shell.querySelector(".emr-statusbar-spinner")).toBeTruthy();
   });
 
   it("matches the no-nav geometry used by direct document links", () => {
@@ -111,6 +139,9 @@ describe("ReaderLoadingShell", () => {
     expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe(
       "Repository",
     );
+    expect(
+      shell.querySelector(".emr-docnav-header.emr-skel-header"),
+    ).toBeNull();
 
     React.act(() => root!.unmount());
     root = null;

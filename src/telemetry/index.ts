@@ -7,8 +7,10 @@ export {
   getTelemetryContext,
   track,
   trackException,
+  trackUserFacingError,
   flushTelemetry,
 } from "./telemetry";
+export type { UserFacingErrorImpact } from "./telemetry";
 export { events, EVENT } from "./events";
 export type {
   AnchorKind,
@@ -16,7 +18,14 @@ export type {
   EventName,
   AppReadyReason,
 } from "./events";
-export { markBootStart, markAppReady } from "./bootTiming";
+export {
+  markBootStart,
+  markBootPhase,
+  markBootAuthWaitStart,
+  markBootAuthWaitEnd,
+  markAppReady,
+} from "./bootTiming";
+export type { BootPhase, BootTimingEnvironment } from "./bootTiming";
 export { installGlobalErrorHandlers } from "./errorHandlers";
 export { installAuthFailureCapture } from "./authFailureCapture";
 export { ErrorBoundary } from "./ErrorBoundary";

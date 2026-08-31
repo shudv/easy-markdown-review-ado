@@ -12,6 +12,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useThreadSync } from "../src/comments/useThreadSync";
 import type { CommentThread } from "../src/types";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 // React 18 sets this so `act` can run synchronously in jsdom.
 (
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -118,6 +128,7 @@ afterEach(() => {
   unmount();
   vi.useRealTimers();
   setVisibility("visible");
+  trackUserFacingErrorMock.mockClear();
 });
 
 describe("useThreadSync — gating", () => {
@@ -419,6 +430,12 @@ describe("useThreadSync — error handling", () => {
     await flush();
     expect(onThreads).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(boom);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: boom,
+      source: "ThreadSync.poll",
+      operation: "comments-refresh",
+      impact: "degraded",
+    });
   });
 
   it("falls back to console.warn when onError is not provided", async () => {

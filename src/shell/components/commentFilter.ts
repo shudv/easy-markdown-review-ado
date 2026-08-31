@@ -68,6 +68,35 @@ export function threadMatchesFilter(
   }
 }
 
+/** Match a thread by any comment body or author name, case-insensitively. */
+export function threadMatchesQuery(
+  thread: CommentThread,
+  query: string,
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return thread.comments.some(
+    (comment) =>
+      comment.bodyMarkdown.toLowerCase().includes(normalized) ||
+      comment.author.displayName.toLowerCase().includes(normalized),
+  );
+}
+
+/**
+ * Search is a whole-rail mode and therefore spans every status. Without a
+ * query, the selected status/author filter controls visibility as usual.
+ */
+export function threadVisibleForCommentView(
+  thread: CommentThread,
+  query: string,
+  mode: CommentFilterMode,
+  currentUserId: string,
+): boolean {
+  return query.trim()
+    ? threadMatchesQuery(thread, query)
+    : threadMatchesFilter(thread, mode, currentUserId);
+}
+
 /**
  * Tally each filter bucket across a thread population in a single pass. A
  * thread counts toward `mine` independently of its active/resolved bucket, so

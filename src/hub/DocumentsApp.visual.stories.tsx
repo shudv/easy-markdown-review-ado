@@ -10,7 +10,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
-import { waitFor } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { FIXTURE_AUTHORS } from "../comments/fixtures";
 import type { DocRepo } from "../shell/types";
@@ -80,6 +80,7 @@ const REPOS: DocRepo[] = [
       title: "Clarify the review checklist",
       author: shubhd.displayName,
       status: "completed",
+      url: "https://example.test/team-handbook/pullrequest/128",
     },
     detailsLoaded: true,
   },
@@ -168,5 +169,70 @@ export const Default: Story = {
       },
       { timeout: 5000 },
     );
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    expect(getComputedStyle(nav).paddingLeft).toBe("24px");
+    expect(getComputedStyle(docNav).paddingRight).toBe("12px");
+    expect(
+      within(canvasElement).getByRole("link", {
+        name: "Latest completed PR for this file: #128 Clarify the review checklist",
+      }),
+    ).toBeTruthy();
+  },
+};
+
+/** Without a completed PR, Documents Hub removes all unavailable comment UI. */
+export const NoCompletedPullRequest: Story = {
+  args: {
+    initialRepoId: "repo-api",
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (!canvasElement.querySelector(".markdown-body")) {
+        throw new Error("reader not rendered yet");
+      }
+    });
+    const canvas = within(canvasElement);
+    await expect(canvasElement.querySelector(".emr-app")?.classList).toContain(
+      "is-comments-hidden",
+    );
+    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+    await expect(
+      canvasElement.querySelector(".emr-statusbar-resolved-pr"),
+    ).toBeNull();
+    await expect(
+      getComputedStyle(canvasElement.querySelector<HTMLElement>(".emr-rail")!)
+        .display,
+    ).toBe("none");
+  },
+};
+
+/** High contrast: both pane dividers align to the document's inset card. */
+export const HighContrastDark: Story = {
+  decorators: [
+    (Story) => {
+      React.useLayoutEffect(() => {
+        const root = document.documentElement;
+        const previous = root.getAttribute("data-emr-theme");
+        root.setAttribute("data-emr-theme", "hc-dark");
+        return () => {
+          if (previous) root.setAttribute("data-emr-theme", previous);
+          else root.removeAttribute("data-emr-theme");
+        };
+      }, []);
+      return <Story />;
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    await Default.play!({ canvasElement } as never);
+    const body = canvasElement.querySelector<HTMLElement>(".emr-body")!;
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+    const rail = canvasElement.querySelector<HTMLElement>(".emr-rail-scroll")!;
+    const bodyRect = body.getBoundingClientRect();
+
+    expect(nav.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+    expect(rail.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+    expect(nav.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
+    expect(rail.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
   },
 };

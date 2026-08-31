@@ -24,6 +24,7 @@ import {
   type RoutedPrInfo,
   type DocLinkNavigation,
 } from "../shell/PrShell";
+import type { HistoryStop } from "../shell/prShellHelpers";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import { resolveAdoAvatarObjectUrl } from "../shell/adoGitData";
@@ -56,7 +57,14 @@ import {
   COMMENT_LINK_PARAM,
   type CommentLinkBuilder,
 } from "../comments/commentLink";
-import { setTelemetryContext, markAppReady } from "../telemetry";
+import {
+  markAppReady,
+  markBootAuthWaitEnd,
+  markBootAuthWaitStart,
+  markBootPhase,
+  setTelemetryContext,
+  trackUserFacingError,
+} from "../telemetry";
 import { withRetry } from "../shell/retry";
 import {
   detectSessionRefreshing,
@@ -70,6 +78,7 @@ import {
   diffableFilePaths,
   mapChangeType,
   pickPullRequestId,
+  reviewIterationStops as mapReviewIterationStops,
   selectDiffCommits,
   withTimeout,
 } from "./prTabApp.helpers";
@@ -88,6 +97,8 @@ interface PrContext {
   /** Commits to diff between for inline change highlights. */
   baseCommit?: string;
   targetCommit?: string;
+  /** Native source-branch pushes for the status-bar iteration picker. */
+  reviewIterationStops: HistoryStop[];
 }
 
 // Stable empty array: threads load after mount via PrShell's thread sync, so
@@ -138,6 +149,7 @@ export function PrTabApp(): React.ReactElement {
       try {
         log("resolving pr context");
         const context = await resolvePrContext(log);
+        markBootPhase("context-ready");
         log("pr context resolved", {
           projectId: context.projectId,
           repositoryId: context.repositoryId,
@@ -168,6 +180,13 @@ export function PrTabApp(): React.ReactElement {
         );
         if (refresh) {
           console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
+          trackUserFacingError({
+            error: refresh,
+            source: "PrTabApp.context",
+            operation: "session-refresh",
+            impact: "degraded",
+          });
+          markBootAuthWaitStart();
           setRefreshing({
             state: refresh.grantState,
             recoverAtMs: refresh.recoverAtMs,
@@ -175,6 +194,12 @@ export function PrTabApp(): React.ReactElement {
           return;
         }
         console.error("[PrTabApp] load failed", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrTabApp.context",
+          operation: "pr-context-load",
+          impact: "blocking",
+        });
         setError(formatError(err));
       }
     })();
@@ -199,6 +224,7 @@ export function PrTabApp(): React.ReactElement {
       return;
     }
     const id = window.setTimeout(() => {
+      markBootAuthWaitEnd();
       setRefreshAttempt((n) => n + 1);
       setRefreshing(null);
       setError(null);
@@ -265,6 +291,14 @@ export function PrTabApp(): React.ReactElement {
     async (path: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
       return fetchFileContent(ctx, path);
+    },
+    [ctx],
+  );
+
+  const loadFileSourceAt = React.useCallback(
+    async (path: string, commitId: string): Promise<string> => {
+      if (!ctx) throw new Error("PR context not loaded yet");
+      return fetchFileContentAtCommit(ctx, path, commitId);
     },
     [ctx],
   );
@@ -422,6 +456,9 @@ export function PrTabApp(): React.ReactElement {
             routedPr={routedPr}
             draftScope="pr"
             fetchRemoteThreads={fetchRemoteThreads}
+            reviewIterationStops={ctx.reviewIterationStops}
+            reviewIterationBaseCommit={ctx.baseCommit}
+            loadFileSourceAt={loadFileSourceAt}
             initialActiveThreadId={initialActiveThreadId}
             feedbackEmail="shubd3@gmail.com"
             onActiveThreadChange={(threadId) => {
@@ -506,10 +543,15 @@ async function resolvePrContext(
         repositoryId,
         pullRequestId,
         project.id,
+        true,
       ),
     { mode: "read", label: "getPullRequestIterations" },
   );
   const latest = iterations[iterations.length - 1];
+  const reviewIterationStops = mapReviewIterationStops(
+    iterations,
+    pullRequestId,
+  );
   if (!latest?.id) {
     log("no iterations; returning empty file list");
     return {
@@ -521,6 +563,7 @@ async function resolvePrContext(
       pullRequestId,
       pr,
       changedMdFiles: [],
+      reviewIterationStops,
     };
   }
   log("fetching iteration changes", latest.id);
@@ -576,11 +619,11 @@ async function resolvePrContext(
     changedMdFiles,
     baseCommit,
     targetCommit,
+    reviewIterationStops,
   };
 }
 
 async function fetchFileContent(ctx: PrContext, path: string): Promise<string> {
-  const gitClient = getClient(GitRestClient);
   const changeType = ctx.changedMdFiles.find(
     (file) => file.path === path,
   )?.changeType;
@@ -588,9 +631,18 @@ async function fetchFileContent(ctx: PrContext, path: string): Promise<string> {
     baseCommit: ctx.baseCommit ?? ctx.pr.lastMergeTargetCommit?.commitId,
     targetCommit: ctx.targetCommit ?? ctx.pr.lastMergeSourceCommit?.commitId,
   });
-  const versionDescriptor = sourceCommit
+  return fetchFileContentAtCommit(ctx, path, sourceCommit);
+}
+
+async function fetchFileContentAtCommit(
+  ctx: PrContext,
+  path: string,
+  commitId?: string,
+): Promise<string> {
+  const gitClient = getClient(GitRestClient);
+  const versionDescriptor = commitId
     ? {
-        version: sourceCommit,
+        version: commitId,
         versionType: GitVersionType.Commit,
         versionOptions: GitVersionOptions.None,
       }
@@ -711,7 +763,13 @@ async function openDocTarget(
     let ext: { publisherId: string; extensionId: string };
     try {
       ext = SDK.getExtensionContext();
-    } catch {
+    } catch (err) {
+      trackUserFacingError({
+        error: err,
+        source: "PrTabApp.navigation",
+        operation: "document-link-open",
+        impact: "action-failed",
+      });
       return;
     }
     url = buildHubDocUrl(
@@ -733,6 +791,12 @@ async function openDocTarget(
     // diagnostics (matching the console.warn pattern in the ADO data layer)
     // rather than swallowing it silently.
     console.warn("[pr-tab] opening doc link failed:", err);
+    trackUserFacingError({
+      error: err,
+      source: "PrTabApp.navigation",
+      operation: "document-link-open",
+      impact: "action-failed",
+    });
   }
 }
 

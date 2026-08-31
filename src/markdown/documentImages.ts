@@ -1,3 +1,5 @@
+import { trackUserFacingError } from "../telemetry";
+
 export type RepositoryImageResolver = (
   repositoryPath: string,
 ) => Promise<string | undefined>;
@@ -72,33 +74,49 @@ export function hydrateDocumentImages(
     image.removeAttribute("src");
     image.classList.add("emr-repo-image", "is-loading");
     image.setAttribute("aria-busy", "true");
+    let errorReported = false;
     const onLoad = () => {
       frame.classList.remove("is-loading", "is-error");
       image.classList.remove("is-loading", "is-error");
       image.removeAttribute("aria-busy");
     };
-    const onError = () => {
+    const showError = (error: unknown) => {
       frame.classList.remove("is-loading");
       frame.classList.add("is-error");
       frame.dataset.imagePath = repositoryPath;
       image.classList.remove("is-loading");
       image.classList.add("is-error");
       image.removeAttribute("aria-busy");
+      if (!errorReported) {
+        errorReported = true;
+        trackUserFacingError({
+          error,
+          source: "DocumentImage.hydrate",
+          operation: "repository-image-load",
+          impact: "degraded",
+        });
+      }
     };
+    const onError = () =>
+      showError(new Error("Repository image failed to load"));
     image.addEventListener("load", onLoad);
     image.addEventListener("error", onError);
     cleanups.push(() => {
       image.removeEventListener("load", onLoad);
       image.removeEventListener("error", onError);
     });
-    void resolveImage(repositoryPath).then((objectUrl) => {
+    const settle = (objectUrl: string | undefined, error?: unknown) => {
       if (disposed) return;
       if (objectUrl) {
         image.src = objectUrl;
       } else {
-        onError();
+        showError(error ?? new Error("Repository image failed to load"));
       }
-    });
+    };
+    void resolveImage(repositoryPath).then(
+      (objectUrl) => settle(objectUrl),
+      (error: unknown) => settle(undefined, error),
+    );
   }
 
   return () => {

@@ -4,6 +4,7 @@
 
 import * as React from "react";
 
+import { markAppReady } from "./bootTiming";
 import { trackException } from "./telemetry";
 
 interface ErrorBoundaryProps {
@@ -40,6 +41,7 @@ export class ErrorBoundary extends React.Component<
         hasComponentStack: Boolean(info.componentStack),
       },
     });
+    markAppReady("error");
   }
 
   override render(): React.ReactNode {

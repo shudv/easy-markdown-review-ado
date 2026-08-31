@@ -18,10 +18,21 @@ vi.mock("mermaid", () => {
 import mermaid from "mermaid";
 import { hydrateMermaid } from "../src/markdown/mermaidHydrate";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 describe("hydrateMermaid", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     document.documentElement.removeAttribute("data-emr-theme");
+    trackUserFacingErrorMock.mockClear();
   });
 
   it("returns immediately when no placeholders are present", async () => {
@@ -197,6 +208,12 @@ describe("hydrateMermaid", () => {
     expect(el.getAttribute("data-hydrated")).toBe("true");
     // The readable fallback is preserved for the user.
     expect(el.innerHTML).toContain("emr-mermaid-fallback");
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: expect.objectContaining({ message: "bad graph" }),
+      source: "Mermaid.hydrate",
+      operation: "diagram-render",
+      impact: "degraded",
+    });
     warn.mockRestore();
   });
 

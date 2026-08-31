@@ -33,7 +33,7 @@ import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import { parseVersionSpec } from "./markdownReader.helpers";
 import type { CommentApi } from "../comments/api";
 import type { CommentAuthor, CommentThread, PrInfo } from "../types";
-import { markAppReady } from "../telemetry";
+import { markAppReady, trackUserFacingError } from "../telemetry";
 
 /** Target descriptor handed to the reader by the launching surface. */
 export interface ReaderConfig {
@@ -193,6 +193,12 @@ export function MarkdownReader({
         });
       } catch (err: unknown) {
         console.error("[MarkdownReader] load failed", err);
+        trackUserFacingError({
+          error: err,
+          source: "MarkdownReader.load",
+          operation: "reader-context-load",
+          impact: "blocking",
+        });
         setError(err instanceof Error ? err.message : String(err));
       }
     })();

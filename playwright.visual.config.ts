@@ -28,6 +28,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./visual",
+  outputDir: "test-results-visual",
   testMatch: /.*\.visual\.spec\.ts/,
   // Screenshots must be stable frame-to-frame, so run serially and never retry
   // into a "flaky pass" — a diff is a real signal.

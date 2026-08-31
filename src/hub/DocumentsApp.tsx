@@ -11,6 +11,7 @@ import type { CommentAuthor, CommentThread, FileInfo, PrInfo } from "../types";
 import { PrShell } from "../shell/PrShell";
 import type { RoutedPrInfo, DocLinkNavigation } from "../shell/PrShell";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
+import { SearchIcon } from "../shell/components/icons";
 import {
   resolveInitialDocPath,
   shouldPublishDefaultPath,
@@ -26,7 +27,13 @@ import {
   type CommentLinkBuilder,
 } from "../comments/commentLink";
 import { refreshHostTheme } from "../theme/theme";
-import { events, markAppReady, setTelemetryContext, track } from "../telemetry";
+import {
+  events,
+  markAppReady,
+  setTelemetryContext,
+  track,
+  trackUserFacingError,
+} from "../telemetry";
 
 import type { DocRepo } from "../shell/types";
 import type { FileSearchOutcome } from "../shell/almSearch";
@@ -119,7 +126,10 @@ interface DocumentsAppProps {
    * PR summary for a document so the rail can show a "Comments (PR #N)" pill
    * linking to where the comments live. Undefined until routing resolves.
    */
-  routedPrForPath?: (repoId: string, path: string) => RoutedPrInfo | undefined;
+  routedPrForPath?: (
+    repoId: string,
+    path: string,
+  ) => RoutedPrInfo | null | undefined;
   /**
    * Comment-history stepper loaders (per-document mode). Supplied together, they
    * let the comment rail walk a document's review history PR-to-PR: list its
@@ -369,6 +379,12 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
         payload = await onExpandFolder(repoIdAtCall, path);
       } catch (err) {
         console.warn("[documents-hub] expand folder failed:", path, err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsApp.navigation",
+          operation: "folder-expand",
+          impact: "action-failed",
+        });
         return null;
       }
       setLazyTreeByRepo((curr) => {
@@ -577,7 +593,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // Per-document mode: curry the repo id so PrShell resolves the routed-PR
   // pill for its selected file.
   const routedPrForPathBound = React.useMemo<
-    ((path: string) => RoutedPrInfo | undefined) | undefined
+    ((path: string) => RoutedPrInfo | null | undefined) | undefined
   >(() => {
     const fn = props.routedPrForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
@@ -616,9 +632,9 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
 
   // Build the routed-PR pill payload for the rail (only when the repo has a
   // completed PR; the rail hides when undefined).
-  const routedPr = React.useMemo(() => {
+  const routedPr = React.useMemo<RoutedPrInfo | null>(() => {
     const rp = selectedRepo?.recentPr;
-    if (!rp) return undefined;
+    if (!rp) return null;
     return {
       prId: rp.id,
       title: rp.title,
@@ -828,6 +844,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
               initialThreads={EMPTY_THREADS}
               currentUser={currentUser}
               draftScope="hub"
+              documentsMode
               commentApi={perDocumentMode ? undefined : commentApi}
               commentApiForPath={commentApiForPathBound}
               loadThreadsForPath={loadThreadsForPathBound}
@@ -904,8 +921,8 @@ function SvgChevron(): React.ReactElement {
     <svg
       className="emr-docnav-repo-chevron"
       viewBox="0 0 16 16"
-      width="12"
-      height="12"
+      width="16"
+      height="16"
       aria-hidden="true"
     >
       <path
@@ -1008,7 +1025,7 @@ function DocsEmptyShell({
  * more repos as the user scrolls (`onLoadMore`), so it scales to projects with
  * thousands of repositories.
  */
-function RepoPicker({
+export function RepoPicker({
   repos,
   selectedId,
   selectedName,
@@ -1042,6 +1059,7 @@ function RepoPicker({
   const listRef = React.useRef<HTMLDivElement>(null);
   const filterInputRef = React.useRef<HTMLInputElement>(null);
   const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const loadMoreRequestedRef = React.useRef(false);
 
   const triggerName =
     selectedName ?? repos.find((r) => r.id === selectedId)?.name;
@@ -1145,13 +1163,26 @@ function RepoPicker({
     [onSelect, close],
   );
 
+  React.useEffect(() => {
+    if (!loading) loadMoreRequestedRef.current = false;
+  }, [loading]);
+
   // Infinite scroll: when the results list nears its bottom, ask for the next
-  // page. Guarded by `hasMore`/`loading` in the parent so it can't over-fetch.
+  // page. The ref closes the gap before the parent's loading prop re-renders,
+  // when several scroll events can otherwise start the same page repeatedly.
   const onListScroll = React.useCallback(() => {
-    if (!paginated || !hasMore || loading || !onLoadMore) return;
+    if (
+      !paginated ||
+      !hasMore ||
+      loading ||
+      loadMoreRequestedRef.current ||
+      !onLoadMore
+    )
+      return;
     const el = listRef.current;
     if (!el) return;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+      loadMoreRequestedRef.current = true;
       onLoadMore();
     }
   }, [paginated, hasMore, loading, onLoadMore]);
@@ -1219,7 +1250,7 @@ function RepoPicker({
         >
           {paginated ? (
             <div className="emr-docnav-repo-filter">
-              <SvgSearch />
+              <SearchIcon size={14} className="emr-docnav-repo-filter-glyph" />
               <input
                 ref={filterInputRef}
                 type="text"
@@ -1267,10 +1298,23 @@ function RepoPicker({
                 </button>
               );
             })}
-            {loading ? (
-              <div className="emr-docnav-repo-status" role="status">
-                <span className="emr-docnav-repo-spinner" aria-hidden="true" />
-                Loading repositories…
+            {paginated ? (
+              <div
+                className="emr-docnav-repo-status emr-docnav-repo-page-status"
+                role={loading ? "status" : undefined}
+                aria-hidden={!loading && repos.length > 0 ? "true" : undefined}
+              >
+                {loading ? (
+                  <>
+                    <span
+                      className="emr-docnav-repo-spinner"
+                      aria-hidden="true"
+                    />
+                    Loading repositories…
+                  </>
+                ) : repos.length === 0 ? (
+                  <>No repositories match “{filterText.trim()}”.</>
+                ) : null}
               </div>
             ) : repos.length === 0 ? (
               <div className="emr-docnav-repo-status">
@@ -1281,23 +1325,5 @@ function RepoPicker({
         </div>
       ) : null}
     </div>
-  );
-}
-
-/** Magnifier glyph for the repo-filter input. */
-function SvgSearch(): React.ReactElement {
-  return (
-    <svg
-      className="emr-docnav-repo-filter-glyph"
-      viewBox="0 0 16 16"
-      width="13"
-      height="13"
-      aria-hidden="true"
-    >
-      <path
-        fill="currentColor"
-        d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04ZM12 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"
-      />
-    </svg>
   );
 }

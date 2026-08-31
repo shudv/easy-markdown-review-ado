@@ -17,6 +17,7 @@ describe("lastVisited cache", () => {
   });
 
   it("stores everything under a single JSON key", () => {
+    expect(LAST_VISITED_KEY).toBe("emr.docs.lastVisited");
     writeLastRepo("proj", "repoA");
     writeLastPath("proj", "repoA", "/docs/x.md");
     expect(localStorage.length).toBe(1);
@@ -67,8 +68,18 @@ describe("lastVisited cache", () => {
   });
 
   it("ignores a non-object JSON payload", () => {
-    localStorage.setItem(LAST_VISITED_KEY, "42");
-    expect(readLastRepo("proj")).toBeUndefined();
+    for (const payload of ["42", "null", '"text"', "false"]) {
+      localStorage.setItem(LAST_VISITED_KEY, payload);
+      expect(readLastRepo("proj")).toBeUndefined();
+    }
+  });
+
+  it("returns no path when a stored project has no paths map", () => {
+    localStorage.setItem(
+      LAST_VISITED_KEY,
+      JSON.stringify({ proj: { repo: "repoA" } }),
+    );
+    expect(readLastPath("proj", "repoA")).toBeUndefined();
   });
 
   it("swallows read failures and degrades to no memory", () => {

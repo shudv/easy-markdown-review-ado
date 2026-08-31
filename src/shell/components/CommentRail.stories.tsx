@@ -73,7 +73,6 @@ const baseArgs = {
   activeThreadId: "t2",
   currentUser: shubhd,
   onSelectThread: fn(),
-  onCycleThread: fn(),
   onReply: fn(),
   onResolve: fn(),
   onReopen: fn(),
@@ -93,6 +92,7 @@ const baseArgs = {
   filterCounts: { all: 4, active: 3, resolved: 1, mine: 1 },
   filterMode: "all" as const,
   onFilterModeChange: fn(),
+  onAddComment: fn(),
   routedPr: {
     prId: 42,
     title: "Add docs",
@@ -183,6 +183,56 @@ export const OrphanedFileTray: Story = {
   },
 };
 
+/** Search reveals matching cross-file sections without changing collapse preferences. */
+export const SearchExpandsAllSections: Story = {
+  args: { orphanedFileThreads: ORPHANED_FILE },
+  render: (args) => {
+    const [query, setQuery] = React.useState("note");
+    return (
+      <CommentRail
+        {...args}
+        commentQuery={query}
+        onCommentQueryChange={setQuery}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const general = /General comments/;
+    const removed = /Comments on files no longer in this PR/;
+    await waitFor(() => {
+      expect(
+        canvas
+          .getByRole("button", { name: general })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+      expect(
+        canvas
+          .getByRole("button", { name: removed })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+    });
+    await expect(canvas.getByText("Comment on PR-level note")).toBeTruthy();
+    await expect(canvas.getByText("Comment on Removed-file note")).toBeTruthy();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Close search" }));
+    await waitFor(() => {
+      expect(
+        canvas
+          .getByRole("button", { name: general })
+          .getAttribute("aria-expanded"),
+      ).toBe("false");
+      expect(
+        canvas
+          .getByRole("button", { name: removed })
+          .getAttribute("aria-expanded"),
+      ).toBe("false");
+    });
+    await expect(canvas.queryByText("Comment on PR-level note")).toBeNull();
+    await expect(canvas.queryByText("Comment on Removed-file note")).toBeNull();
+  },
+};
+
 /**
  * "Only this file" scope drops the General + orphaned-file trays entirely, so
  * only comments anchored to the current file remain.
@@ -207,20 +257,23 @@ export const OnlyThisFileScope: Story = {
 };
 
 /**
- * Navigation spans every visible comment: clicking the cycler's Next until it
- * reaches the (collapsed) cross-file tray AUTO-EXPANDS it, so the selection is
- * on screen. Uses a stateful wrapper so the cycler actually moves the selection.
+ * Selecting a comment in a collapsed cross-file tray from an external surface
+ * auto-expands the tray so the selection is on screen.
  */
 export const CyclerAutoExpandsTray: Story = {
   render: (args) => {
     const [active, setActive] = React.useState<string | null>(null);
     return (
-      <CommentRail
-        {...args}
-        activeThreadId={active}
-        onCycleThread={setActive}
-        onSelectThread={setActive}
-      />
+      <>
+        <button type="button" onClick={() => setActive("g1")}>
+          Select general comment
+        </button>
+        <CommentRail
+          {...args}
+          activeThreadId={active}
+          onSelectThread={setActive}
+        />
+      </>
     );
   },
   play: async ({ canvasElement }) => {
@@ -232,19 +285,9 @@ export const CyclerAutoExpandsTray: Story = {
     // Starts collapsed and its comment is hidden.
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(canvas.queryByText("Comment on PR-level note")).toBeNull();
-    // Cycle Next until it lands on the general comment (last in the order); the
-    // tray then auto-expands without a manual click.
-    for (let i = 0; i < 8; i++) {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Next comment" }),
-      );
-      if (
-        canvas
-          .getByRole("button", { name: trayName })
-          .getAttribute("aria-expanded") === "true"
-      )
-        break;
-    }
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Select general comment" }),
+    );
     expect(
       canvas
         .getByRole("button", { name: trayName })
@@ -272,6 +315,31 @@ export const WithDraft: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".is-draft")).toBeTruthy(),
     );
+  },
+};
+
+/** Header plus starts a file-scoped comment without a visible quote label. */
+export const ImplicitDraft: Story = {
+  args: {
+    activeThreadId: null,
+    draftAnchor: {
+      exact: "",
+      prefix: "",
+      suffix: "",
+      line: 1,
+      endLine: 1,
+      column: 1,
+      endColumn: 1,
+      implicit: true,
+    },
+    draftY: 0,
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "New comment" }));
+    await expect(args.onAddComment).toHaveBeenCalledOnce();
+    await expect(canvas.queryByText(/Anchored to:/)).toBeNull();
+    await expect(canvasElement.querySelector(".is-draft")).toBeTruthy();
   },
 };
 
@@ -392,6 +460,31 @@ export const ReadOnlyEmpty: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("No comments on this file.")).toBeTruthy();
     await expect(canvas.getByRole("status")).toBeTruthy();
+  },
+};
+
+/** A routed PR keeps the read-only rail header visible even with no comments. */
+export const ReadOnlyRoutedPrOnly: Story = {
+  args: {
+    currentThreads: [],
+    generalThreads: [],
+    orphanedFileThreads: [],
+    orphanedThreadIds: new Set<string>(),
+    hiddenThreadIds: new Set<string>(),
+    yByThreadId: new Map(),
+    activeThreadId: null,
+    readOnly: true,
+    totalCommentCount: 0,
+    resolvedThreadCount: 0,
+    openThreadCount: 0,
+    filterCounts: { all: 0, active: 0, resolved: 0, mine: 0 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("PR #42")).toBeTruthy();
+    await expect(
+      canvas.queryByRole("button", { name: "New comment" }),
+    ).toBeNull();
   },
 };
 

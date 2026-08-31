@@ -11,7 +11,7 @@
  *      -> compose -> submit -> the note anchors as a PR comment), then spotlight
  *      the diff highlighting and the outline, one screenshot per frame.
  *   4. Encode with ffmpeg:
- *        static/showcase.gif  (kept < 5 MB)  — packaged Marketplace + README hero
+ *        static/showcase.gif  (native capture size) — packaged Marketplace + README hero
  *        assets/showcase.mp4                 — hackathon "video required" slot
  *
  * Run:  npm run gif:showcase
@@ -36,8 +36,10 @@ const BASE = `http://localhost:${PORT}`;
 
 const FPS = 15;
 const VW = 1600;
-const STORY_H = 900;
-const CHROME_H = 150;
+const ADO_RAIL_W = 60;
+const SHOWCASE_GUTTER = 12;
+const CHROME_H = 190;
+const STORY_H = 860;
 const VH = CHROME_H + STORY_H; // 1050
 
 const STORY_URL = "/iframe.html?id=visual-prtab--default&viewMode=story";
@@ -413,24 +415,9 @@ function encodeGifAttempt(gifFps, gifW) {
 function encode() {
   mkdirSync(OUT_DIR, { recursive: true });
   mkdirSync(STATIC_DIR, { recursive: true });
-  const ladder = [
-    [15, 1120],
-    [13, 1040],
-    [12, 980],
-    [11, 920],
-    [10, 860],
-    [9, 820],
-    [8, 780],
-    [7, 720],
-  ];
-  let gifSize = 0;
-  for (const [f, w] of ladder) {
-    console.log(`[showcase] gif @ ${f}fps ${w}px …`);
-    gifSize = encodeGifAttempt(f, w);
-    const mb = gifSize / 1048576;
-    console.log(`           -> ${mb.toFixed(2)} MB`);
-    if (mb < 4.9) break;
-  }
+  console.log(`[showcase] gif @ ${FPS}fps ${VW}px …`);
+  const gifSize = encodeGifAttempt(FPS, VW);
+  console.log(`           -> ${(gifSize / 1048576).toFixed(2)} MB`);
 
   console.log("[showcase] mp4 …");
   const mp4 = resolve(OUT_DIR, "showcase.mp4");
@@ -493,8 +480,8 @@ async function main() {
     await page.addStyleTag({
       content:
         css +
-        `\nhtml,body{margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;}` +
-        `\n#storybook-root{position:absolute!important;top:${CHROME_H}px!important;left:0!important;width:${VW}px!important;height:${STORY_H}px!important;overflow:hidden!important;}` +
+        `\nhtml,body{margin:0!important;padding:0!important;overflow:hidden!important;background:linear-gradient(to right,#f3f2f1 0 ${ADO_RAIL_W}px,#f8f8f8 ${ADO_RAIL_W}px ${ADO_RAIL_W + SHOWCASE_GUTTER}px,#fff ${ADO_RAIL_W + SHOWCASE_GUTTER}px calc(100% - ${SHOWCASE_GUTTER}px),#f8f8f8 calc(100% - ${SHOWCASE_GUTTER}px) 100%)!important;}` +
+        `\n#storybook-root{position:absolute!important;top:${CHROME_H}px!important;left:${ADO_RAIL_W + SHOWCASE_GUTTER}px!important;width:${VW - ADO_RAIL_W - SHOWCASE_GUTTER * 2}px!important;height:${STORY_H}px!important;overflow:hidden!important;}` +
         `\n#storybook-root>*{height:${STORY_H}px!important;}`,
     });
     await page.evaluate((h) => {

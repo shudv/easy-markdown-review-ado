@@ -36,17 +36,95 @@ describe("FixtureCommentApi", () => {
     const onlyOne = await api.resolveIdentities([someUser.id]);
     expect(Object.keys(onlyOne)).toEqual([someUser.id]);
 
-    const wis = await api.searchWorkItems("comment");
-    expect(wis.some((w) => w.title.toLowerCase().includes("comment"))).toBe(
-      true,
-    );
+    expect(await api.searchWorkItems("")).toEqual([
+      {
+        kind: "workitem",
+        id: "11612051",
+        workItemType: "Scenario",
+        title: "App caching scenarios",
+        state: "In Progress",
+        stateColor: "#cc6d00",
+      },
+      {
+        kind: "workitem",
+        id: "11612042",
+        workItemType: "Bug",
+        title: "Comment rail jitters on resize",
+        state: "Active",
+        stateColor: "#cc293d",
+      },
+      {
+        kind: "workitem",
+        id: "11611998",
+        workItemType: "Task",
+        title: "Wire up identity picker SDK service",
+        state: "To Do",
+        stateColor: "#b2b2b2",
+      },
+      {
+        kind: "workitem",
+        id: "11611820",
+        workItemType: "User Story",
+        title: "Reviewer can @mention teammates in a comment",
+        state: "Resolved",
+        stateColor: "#339933",
+      },
+      {
+        kind: "workitem",
+        id: "11611702",
+        workItemType: "Feature",
+        title: "Inline image attachments on PR comments",
+        state: "In Progress",
+        stateColor: "#cc6d00",
+      },
+    ]);
+    expect(await api.searchWorkItems("Scenario")).toEqual([
+      {
+        kind: "workitem",
+        id: "11612051",
+        workItemType: "Scenario",
+        title: "App caching scenarios",
+        state: "In Progress",
+        stateColor: "#cc6d00",
+      },
+    ]);
 
     // Fixture has no matching PR title; expect empty results.
     expect(await api.searchPullRequests("zzznotfound-xyz")).toEqual([]);
 
-    // A query that matches PR key fields returns results.
-    const prHits = await api.searchPullRequests("OneTodo");
-    expect(prHits.length).toBeGreaterThan(0);
+    const pullRequests = await api.searchPullRequests("OneTodo");
+    expect(pullRequests).toHaveLength(4);
+    expect([...pullRequests].sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      {
+        kind: "pullrequest",
+        id: "5057120",
+        title: "Spike: replace markdown-it with unified pipeline",
+        status: "abandoned",
+        repository: "OneTodo",
+      },
+      {
+        kind: "pullrequest",
+        id: "5057914",
+        title: "Bump @azure/identity to 4.4.1",
+        status: "completed",
+        repository: "OneTodo",
+      },
+      {
+        kind: "pullrequest",
+        id: "5058641",
+        title: "[Comments] Surface unresolved threads in the file tree",
+        status: "completed",
+        repository: "OneTodo",
+      },
+      {
+        kind: "pullrequest",
+        id: "5058833",
+        title:
+          "[Grid] Implement add task in plan and myday, mytasks views using dom-based AddTaskRow instead of canvas",
+        status: "active",
+        repository: "OneTodo",
+      },
+    ]);
   });
 
   it("still mints session-local write ids (inherited from LocalOnly)", async () => {

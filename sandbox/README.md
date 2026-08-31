@@ -29,6 +29,11 @@ sandbox/
   _final_ state of the touched files, not a diff.
 - A pull request may also list existing target-branch files in `deletePaths`.
   Those paths are deleted in the same feature-branch commit as the overlay.
+- A pull request may list overlay files in `lfsPaths`. The setup script uploads
+  their bytes through the Git LFS batch API and commits canonical LFS pointers
+  at those paths. It also generates a root `.gitattributes` file with exact
+  matching patterns; this fixture mode therefore requires a target branch that
+  does not already define one.
 
 ## `advanceTarget`: a target branch that moves after the fork
 
@@ -65,6 +70,7 @@ The `two-dot-diff-repro` repo uses this: `guide.md` is untouched by master
 | `pullRequests[].complete: true`  | The PR is merged (completed)    |
 | `pullRequests[].complete: false` | The PR is left active           |
 | `pullRequests[].deletePaths[]`   | Existing files deleted by PR    |
+| `pullRequests[].lfsPaths[]`      | Overlay files stored in Git LFS |
 | `pullRequests[].attachments[]`   | Files uploaded to the PR        |
 | `pullRequests[].threads[]`       | Comment threads on the PR       |
 | `threads[].status`               | `active`, `fixed`, or `closed`  |
@@ -86,6 +92,7 @@ creates the native comment thread.
 | `doc-links-showcase`           | Relative links plus repo SVG images in hub and active PR views        |
 | `ai-skills`                    | Skills + guidelines they automate; 1 **active** two-file rich PR      |
 | `table-diff-showcase`          | Active one-file PR covering granular and structural table diffs       |
+| `iteration-history-showcase`   | Active PR with 10 iterations and an anchor/orphan/reanchor lifecycle  |
 | `production-markdown-showcase` | Active dialect/deletion PR with native PNG, GIF, and file attachments |
 | `markdown-review-sandbox-v2`   | Files but **no PRs** — the "commenting disabled" empty state          |
 

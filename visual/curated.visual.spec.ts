@@ -56,6 +56,30 @@ const SHOTS: Shot[] = [
   },
   {
     title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision Dark",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision High Contrast Light",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
+    name: "Comment Anchor Diff Collision High Contrast Dark",
+    settledSelector:
+      ".emr-diff-block, .emr-highlight.is-active, .emr-section-toggle",
+  },
+  {
+    title: "Visual/PrTab",
     name: "High Contrast Dark",
     settledSelector: ".emr-diff-block, .emr-diff-ruler",
   },
@@ -70,6 +94,16 @@ const SHOTS: Shot[] = [
     settledSelector: ".markdown-body .emr-highlight",
   },
   {
+    title: "Visual/DocumentsHub",
+    name: "High Contrast Dark",
+    settledSelector: ".markdown-body .emr-highlight",
+  },
+  {
+    title: "Visual/DocumentsHub",
+    name: "No Completed Pull Request",
+    settledSelector: ".markdown-body, .emr-app.is-comments-hidden",
+  },
+  {
     // Diff-highlighting layer in isolation (light + dark): add wash, inline
     // word-diff, deleted-marker.
     title: "Visual/ArticleDiff",
@@ -80,6 +114,16 @@ const SHOTS: Shot[] = [
     title: "Visual/ArticleDiff",
     name: "Dark",
     settledSelector: ".emr-word-added",
+  },
+  {
+    // Side-by-side audit of all broad-wash reductions: prose lines, wrapped
+    // final lines, contiguous items, code rewrites, and source-only strips.
+    // The ambiguous table remains broad in both panes by design.
+    title: "Visual/ArticleDiff",
+    name: "Minimal Diff Comparison Shot",
+    settledSelector:
+      ".minimal-diff-comparison .emr-diff-line-wash, .minimal-diff-comparison .emr-diff-source-only",
+    clip: ".minimal-diff-comparison",
   },
   {
     title: "Visual/ArticleDiff",
@@ -338,6 +382,14 @@ const SHOTS: Shot[] = [
     title: "Visual/PrTab",
     name: "Collapsed",
     settledSelector: ".emr-statusbar",
+    clip: ".emr-statusbar",
+  },
+  {
+    // Multi-comment stepping — catches alignment and count regressions around
+    // the Comments toggle without paying the tolerance cost of a full reader.
+    title: "Components/ReaderStatusBar",
+    name: "Comment Stepping",
+    settledSelector: ".emr-statusbar-comment-stepper",
     clip: ".emr-statusbar",
   },
   {

@@ -12,6 +12,7 @@
 // Authentication: AZDO_BEARER_TOKEN (short-lived) or AZDO_PAT.
 
 import { writeFile, readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -372,21 +373,168 @@ async function walkFiles(dir) {
   return out;
 }
 
+function normalizeAdoPath(path) {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function lfsAttributesChange(paths, existingPaths, changedPaths) {
+  if (!paths?.length) return null;
+  const attributesPath = "/.gitattributes";
+  if (existingPaths.has(attributesPath) || changedPaths.has(attributesPath)) {
+    throw new Error(
+      "Sandbox lfsPaths cannot update a repository that already defines /.gitattributes",
+    );
+  }
+  const patterns = paths.map((path) => {
+    const pattern = normalizeAdoPath(path).slice(1);
+    if (!pattern || /[\r\n]/.test(pattern)) {
+      throw new Error(`Invalid Git LFS sandbox path: ${path}`);
+    }
+    return `${pattern.replace(/([\\ \t#])/g, "\\$1")} filter=lfs diff=lfs merge=lfs -text`;
+  });
+  return {
+    changeType: "add",
+    item: { path: attributesPath },
+    newContent: { content: `${patterns.join("\n")}\n`, contentType: "rawtext" },
+  };
+}
+
+const FETCH_MANAGED_HEADERS = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+async function sendLfsAction(action, method, body, contentType) {
+  const url = new URL(action.href);
+  const isAdoHost =
+    url.hostname === new URL(ORG_URL).hostname ||
+    url.hostname.endsWith(".visualstudio.com");
+  url.username = "";
+  url.password = "";
+  const actionHeaders = Object.fromEntries(
+    Object.entries(action.header ?? {}).filter(
+      ([name]) => !FETCH_MANAGED_HEADERS.has(name.toLowerCase()),
+    ),
+  );
+  const headers = {
+    ...(isAdoHost ? { Authorization: AUTH_HEADER } : {}),
+    ...actionHeaders,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+  };
+  let response;
+  try {
+    response = await fetch(url, { method, headers, body });
+  } catch (err) {
+    const cause = err instanceof Error ? err.cause : undefined;
+    const detail =
+      cause && typeof cause === "object"
+        ? `${cause.code ?? "network"}: ${cause.message ?? String(cause)}`
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    throw new Error(
+      `Git LFS ${method} ${url.hostname}${url.pathname} failed (${detail})`,
+    );
+  }
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `Git LFS ${method} ${shortUrl(url.href)} → ${response.status} ${response.statusText}\n  ${detail}`,
+    );
+  }
+}
+
+async function ensureLfsObject(repo, refName, content) {
+  const oid = createHash("sha256").update(content).digest("hex");
+  const size = content.byteLength;
+  const endpoint = `${repo.webUrl.replace(/\/+$/, "")}/info/lfs/objects/batch`;
+  const { body } = await ado("POST", endpoint, {
+    body: {
+      operation: "upload",
+      transfers: ["basic"],
+      ref: { name: refName },
+      objects: [{ oid, size }],
+    },
+    headers: {
+      Accept: "application/vnd.git-lfs+json",
+      "Content-Type": "application/vnd.git-lfs+json",
+    },
+  });
+  const object = body?.objects?.[0];
+  if (!object || object.error) {
+    throw new Error(
+      `Git LFS batch rejected ${oid}: ${JSON.stringify(object?.error ?? body)}`,
+    );
+  }
+  if (object.actions?.upload) {
+    await sendLfsAction(
+      object.actions.upload,
+      "PUT",
+      content,
+      "application/octet-stream",
+    );
+  }
+  if (object.actions?.verify) {
+    await sendLfsAction(
+      object.actions.verify,
+      "POST",
+      JSON.stringify({ oid, size }),
+      "application/vnd.git-lfs+json",
+    );
+  }
+  return [
+    "version https://git-lfs.github.com/spec/v1",
+    `oid sha256:${oid}`,
+    `size ${size}`,
+    "",
+  ].join("\n");
+}
+
 /**
  * Read every file under `dir` into an ADO `changes[]` array. A path that
  * already exists on the target branch becomes an `edit`; a new path an `add`.
  */
-async function readDirAsChanges(dir, existingPaths) {
+async function readDirAsChanges(dir, existingPaths, options = {}) {
   const files = (await walkFiles(dir)).sort();
+  const lfsPaths = new Set(
+    (options.lfsPaths ?? []).map((path) => normalizeAdoPath(path)),
+  );
+  const foundLfsPaths = new Set();
   const changes = [];
   for (const full of files) {
     const adoPath = "/" + relative(dir, full).split(sep).join("/");
-    const content = await readFile(full, "utf8");
+    let content;
+    if (lfsPaths.has(adoPath)) {
+      if (!options.repo || !options.refName) {
+        throw new Error(`Git LFS context missing for ${adoPath}`);
+      }
+      content = await ensureLfsObject(
+        options.repo,
+        options.refName,
+        await readFile(full),
+      );
+      foundLfsPaths.add(adoPath);
+    } else {
+      content = await readFile(full, "utf8");
+    }
     changes.push({
       changeType: existingPaths.has(adoPath) ? "edit" : "add",
       item: { path: adoPath },
       newContent: { content, contentType: "rawtext" },
     });
+  }
+  for (const path of lfsPaths) {
+    if (!foundLfsPaths.has(path)) {
+      throw new Error(`Git LFS sandbox file not found: ${path}`);
+    }
   }
   return changes;
 }
@@ -455,6 +603,76 @@ async function getPr(repoId, prId) {
   return body;
 }
 
+async function getPrIterations(repoId, prId) {
+  const { body } = await ado(
+    "GET",
+    `${ORG_URL}/${encodeURIComponent(
+      PROJECT_NAME,
+    )}/_apis/git/repositories/${repoId}/pullrequests/${prId}/iterations?api-version=7.1`,
+  );
+  return body?.value ?? [];
+}
+
+async function waitForPrIterationCount(
+  repoId,
+  prId,
+  expected,
+  timeoutMs = 45_000,
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const iterations = await getPrIterations(repoId, prId);
+    if (iterations.length >= expected) return iterations;
+    await sleep(1000);
+  }
+  throw new Error(
+    `PR #${prId} did not reach ${expected} iteration(s) within ${timeoutMs}ms`,
+  );
+}
+
+/** Push missing cumulative overlays to an open PR branch, one ADO iteration each. */
+async function ensurePrIterations(repo, repoDir, prSpec, pr) {
+  const specs = prSpec.iterations ?? [];
+  if (specs.length === 0) return;
+
+  const prId = pr.pullRequestId;
+  const existing = await getPrIterations(repo.id, prId);
+  // Creating the PR records iteration 1 from `overlay`; every declared entry
+  // below is one additional source-branch push / ADO PR iteration.
+  const alreadyApplied = Math.max(0, existing.length - 1);
+  if (alreadyApplied >= specs.length) {
+    log.ok(`PR #${prId} already has ${existing.length} iteration(s)`);
+    return;
+  }
+  if (pr.status !== "active") {
+    throw new Error(
+      `PR #${prId} is ${pr.status}; cannot add missing iterations to a non-active PR`,
+    );
+  }
+
+  for (let index = alreadyApplied; index < specs.length; index++) {
+    const spec = specs[index];
+    const branch = prSpec.branch;
+    const head = await getBranchHead(repo.id, branch);
+    if (!head) throw new Error(`Source branch ${branch} disappeared`);
+    const overlayDir = join(repoDir, "prs", spec.overlay);
+    const existingPaths = await getExistingFilePaths(repo.id, branch);
+    const changes = await readDirAsChanges(overlayDir, existingPaths);
+    if (changes.length === 0) {
+      throw new Error(`No overlay files under ${overlayDir}`);
+    }
+    const nextHead = await pushCommit(repo.id, `refs/heads/${branch}`, head, {
+      comment: spec.title,
+      changes,
+    });
+    const expected = index + 2;
+    await waitForPrIterationCount(repo.id, prId, expected);
+    log.ok(
+      `PR #${prId} iteration ${expected}: ${spec.title} (head=${short(nextHead)})`,
+    );
+  }
+}
+
 const THREAD_STATUS = new Set([
   "active",
   "fixed",
@@ -512,7 +730,27 @@ function expandAttachmentUrls(content, attachmentUrls) {
   });
 }
 
-/** Seed comment threads on a PR, idempotently (skips if non-system threads exist). */
+function propertyValue(properties, key) {
+  const property = properties?.[key];
+  return property && typeof property === "object" && "$value" in property
+    ? property.$value
+    : property;
+}
+
+function assertDeclaredProperties(existingThread, declaredProperties) {
+  for (const [key, expected] of Object.entries(declaredProperties ?? {})) {
+    if (
+      propertyValue(existingThread.properties, key) !==
+      propertyValue({ [key]: expected }, key)
+    ) {
+      throw new Error(
+        `PR thread ${existingThread.id} has incompatible ${key} metadata`,
+      );
+    }
+  }
+}
+
+/** Seed comment threads on a PR, idempotently by root-comment content. */
 async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
   if (!threads || threads.length === 0) return 0;
   const { body } = await ado(
@@ -526,21 +764,52 @@ async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
       !t.isDeleted &&
       (t.comments ?? []).some((c) => c.commentType !== "system"),
   );
-  if (existing.length > 0) {
-    log.ok(`PR #${prId} already has ${existing.length} thread(s)`);
-    return existing.length;
-  }
+  const existingByRootBody = new Map(
+    existing
+      .map((thread) => [thread.comments?.[0]?.content, thread])
+      .filter(([content]) => !!content),
+  );
   let created = 0;
+  let repliesCreated = 0;
   for (const t of threads) {
+    const rootContent = expandAttachmentUrls(t.comments[0], attachmentUrls);
+    const existingThread = existingByRootBody.get(rootContent);
+    if (existingThread) {
+      assertDeclaredProperties(existingThread, t.properties);
+      const existingBodies = new Set(
+        existingThread.comments.map((comment) => comment.content),
+      );
+      const rootId = existingThread.comments[0]?.id ?? 1;
+      for (let i = 1; i < t.comments.length; i++) {
+        const content = expandAttachmentUrls(t.comments[i], attachmentUrls);
+        if (existingBodies.has(content)) continue;
+        await ado(
+          "POST",
+          `${ORG_URL}/${encodeURIComponent(
+            PROJECT_NAME,
+          )}/_apis/git/repositories/${repoId}/pullrequests/${prId}/threads/${existingThread.id}/comments?api-version=7.1`,
+          {
+            body: {
+              parentCommentId: rootId,
+              content,
+              commentType: "text",
+            },
+          },
+        );
+        repliesCreated++;
+      }
+      continue;
+    }
     const threadBody = {
       comments: [
         {
           parentCommentId: 0,
-          content: expandAttachmentUrls(t.comments[0], attachmentUrls),
+          content: rootContent,
           commentType: "text",
         },
       ],
       status: THREAD_STATUS.has(t.status) ? t.status : "active",
+      ...(t.properties ? { properties: t.properties } : {}),
     };
     if (t.filePath) {
       threadBody.threadContext = {
@@ -576,10 +845,17 @@ async function seedThreads(repoId, prId, threads, attachmentUrls = new Map()) {
         },
       );
     }
+    existingByRootBody.set(rootContent, thread);
     created++;
   }
-  log.ok(`Seeded ${created} thread(s) on PR #${prId}`);
-  return created;
+  if (created > 0) log.ok(`Seeded ${created} thread(s) on PR #${prId}`);
+  if (repliesCreated > 0)
+    log.ok(
+      `Seeded ${repliesCreated} missing repl${repliesCreated === 1 ? "y" : "ies"} on PR #${prId}`,
+    );
+  if (created === 0 && repliesCreated === 0)
+    log.ok(`PR #${prId} already has all declared thread fixtures`);
+  return existing.length + created;
 }
 
 /** Wait for ADO to compute a mergeable state, then complete (merge) the PR. */
@@ -659,20 +935,30 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
   // 1) Branch + overlay commit.
   let head = await getBranchHead(repo.id, branch);
   if (!head) {
-    await createBranchAt(repo.id, branch, mainHead);
     const overlayDir = join(repoDir, "prs", prSpec.overlay);
     const existingPaths = await getExistingFilePaths(repo.id, target);
-    const changes = await readDirAsChanges(overlayDir, existingPaths);
+    const changes = await readDirAsChanges(overlayDir, existingPaths, {
+      lfsPaths: prSpec.lfsPaths,
+      repo,
+      refName: `refs/heads/${target}`,
+    });
+    const changedPaths = new Set(changes.map((change) => change.item.path));
+    const attributesChange = lfsAttributesChange(
+      prSpec.lfsPaths,
+      existingPaths,
+      changedPaths,
+    );
+    if (attributesChange) {
+      changes.push(attributesChange);
+      changedPaths.add(attributesChange.item.path);
+    }
     changes.push(
-      ...readDeleteChanges(
-        prSpec.deletePaths,
-        existingPaths,
-        new Set(changes.map((change) => change.item.path)),
-      ),
+      ...readDeleteChanges(prSpec.deletePaths, existingPaths, changedPaths),
     );
     if (changes.length === 0) {
       throw new Error(`No overlay files or deletePaths for ${prSpec.branch}`);
     }
+    await createBranchAt(repo.id, branch, mainHead);
     head = await pushCommit(repo.id, `refs/heads/${branch}`, mainHead, {
       comment: prSpec.title,
       changes,
@@ -732,6 +1018,11 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
     log.ok(`PR exists (#${pr.pullRequestId}, status=${pr.status})`);
   }
 
+  // Each cumulative overlay pushed after PR creation becomes one native ADO
+  // pull-request iteration. Keep this before thread seeding so line anchors
+  // target the final source snapshot declared by the fixture.
+  await ensurePrIterations(repo, repoDir, prSpec, pr);
+
   // 3) Attachments + threads — seed while the PR is still active so they
   // attach cleanly. Comment bodies can reference uploaded files with
   // `{{attachment:fileName}}` placeholders.
@@ -761,10 +1052,14 @@ async function ensurePr(repo, repoDir, prSpec, mainHead) {
 async function ensureRepoFromSpec(project, repoSpec) {
   const repo = await ensureNamedRepo(project.id, repoSpec.name);
   const repoDir = join(SANDBOX_DIR, "repos", repoSpec.name);
-  const mainHead = await ensureMain(repo, join(repoDir, "main"));
+  let mainHead = await ensureMain(repo, join(repoDir, "main"));
   const prs = [];
   for (const prSpec of repoSpec.pullRequests ?? []) {
     prs.push(await ensurePr(repo, repoDir, prSpec, mainHead));
+    // Completed PRs (and advanceTarget fixtures) can move main. Fork the next
+    // declared PR from that new tip so manifest order models real sequential
+    // document revisions instead of parallel branches from the initial seed.
+    mainHead = (await getBranchHead(repo.id, "main")) ?? mainHead;
   }
   return {
     name: repo.name,

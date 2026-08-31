@@ -16,6 +16,7 @@ import {
 } from "../../comments/mentions";
 import { renderMarkdownSync } from "../../markdown/render";
 import { useMentionLinkHydration } from "../../comments/mentionLinks";
+import { trackUserFacingError } from "../../telemetry";
 import {
   useIdentityStore,
   useUserMentionHydration,
@@ -195,6 +196,12 @@ export function Composer(props: ComposerProps): React.ReactElement {
         });
       } catch (err) {
         console.error("[mention search]", err);
+        trackUserFacingError({
+          error: err,
+          source: "Composer.mentions",
+          operation: "suggestion-search",
+          impact: "degraded",
+        });
         /* v8 ignore next -- a failing request is never superseded mid-flight here */
         if (requestId !== requestSeq.current) return;
         setMention(null);

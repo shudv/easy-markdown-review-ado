@@ -40,8 +40,11 @@ import {
   initTelemetry,
   installGlobalErrorHandlers,
   installAuthFailureCapture,
+  markAppReady,
+  markBootPhase,
   markBootStart,
-  trackException,
+  setTelemetryContext,
+  trackUserFacingError,
 } from "../telemetry";
 
 function basename(path: string): string {
@@ -129,20 +132,17 @@ async function boot(): Promise<void> {
   // `markAppReady()` fires later — from PrShell when the first document renders,
   // or from HubApp for the empty landing state.
   markBootStart();
+  initTelemetry({ appName: "documents-hub" });
+  installGlobalErrorHandlers();
+  installAuthFailureCapture();
   await orchestrateBoot({
     init: () => SDK.init({ loaded: false, applyTheme: true }),
-    ready: () => SDK.ready(),
+    ready: async () => {
+      await SDK.ready();
+      markBootPhase("sdk-ready");
+      setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+    },
     run: async () => {
-      // Telemetry must come up before we render so early errors are captured.
-      // Thread the *installed* extension version (SDK-reported) into context so
-      // triage can tell a stale deployment apart from the current build.
-      initTelemetry({
-        appName: "documents-hub",
-        extensionVersion: installedExtensionVersion(),
-      });
-      installGlobalErrorHandlers();
-      installAuthFailureCapture();
-
       syncHostTheme();
 
       const navService = await SDK.getService<IHostNavigationService>(
@@ -150,6 +150,7 @@ async function boot(): Promise<void> {
       );
       const params = await navService.getQueryParams();
       const config = parseHubQuery(params);
+      markBootPhase("context-ready");
 
       // Only collapse the nav for the actual reader; the empty/landing state is
       // a normal hub page so the user can still navigate away.
@@ -176,12 +177,14 @@ async function boot(): Promise<void> {
     notifyFailed: (err) => SDK.notifyLoadFailed(err),
     onError: (err) => {
       console.error("[MarkdownReviewHub] startup failed", err);
-      trackException({
+      trackUserFacingError({
         error: err,
-        severity: "critical",
         source: "documents-hub.boot",
-        handled: true,
+        operation: "boot",
+        impact: "blocking",
+        severity: "critical",
       });
+      markAppReady("error");
     },
   });
 }

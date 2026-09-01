@@ -23,6 +23,7 @@ const shubhd = FIXTURE_AUTHORS.shubhd!;
 const jamie = FIXTURE_AUTHORS.jamie!;
 
 const GUIDE = "/widget-guide.md";
+const SHOWCASE_GUIDE = "/production-rollout.md";
 
 type Rgba = [number, number, number, number];
 
@@ -150,12 +151,77 @@ function makeLoad(): (path: string) => Promise<string> {
   };
 }
 
+const SHOWCASE_SOURCE = [
+  /*  1 */ "# Production Rollout",
+  /*  2 */ "",
+  /*  3 */ "Review the [deployment runbook](https://example.com/runbooks/deploy-v2) before using the resolved configuration.",
+  /*  4 */ "",
+  /*  5 */ "## Service Plan",
+  /*  6 */ "",
+  /*  7 */ "| Service | Owner    | Window    |",
+  /*  8 */ "| ------- | -------- | --------- |",
+  /*  9 */ "| API     | Platform | 02:00 UTC |",
+  /* 10 */ "| Web     | Frontend | 04:00 UTC |",
+  /* 11 */ "",
+  /* 12 */ "## Release Checks",
+  /* 13 */ "",
+  /* 14 */ "1. Confirm health checks in every active region.",
+  /* 15 */ "2. Publish the release summary after rollout.",
+  /* 16 */ "",
+  /* 17 */ "## Recovery",
+  /* 18 */ "",
+  /* 19 */ "Roll back to the previous artifact if regional health checks fail.",
+  /* 20 */ "",
+].join("\n");
+
+const SHOWCASE_DIFF: DiffRange[] = [
+  {
+    startLine: 3,
+    endLine: 3,
+    kind: "modified",
+    originalText:
+      "Review the [deployment runbook](https://example.com/runbooks/deploy-v1) before using the resolved configuration.",
+    linesAdded: 1,
+    linesDeleted: 1,
+  },
+  { startLine: 10, endLine: 10, kind: "added", linesAdded: 1 },
+  {
+    startLine: 10,
+    endLine: 10,
+    kind: "deleted-marker",
+    linesDeleted: 1,
+    deletedContent: "| Notifications | Messaging | 05:00 UTC |",
+  },
+];
+
+function makeShowcaseLoad(): (path: string) => Promise<string> {
+  return async (path: string) => {
+    if (path !== SHOWCASE_GUIDE) {
+      throw new Error(`No showcase source for ${path}`);
+    }
+    return SHOWCASE_SOURCE;
+  };
+}
+
 const PR: PrInfo = {
   prId: 42,
   title: "Rework the widget guide",
   authorName: shubhd.displayName,
   files: [
     { path: GUIDE, changeType: "modified", linesAdded: 9, linesDeleted: 2 },
+  ],
+};
+
+const SHOWCASE_PR: PrInfo = {
+  ...PR,
+  title: "Refresh the production rollout",
+  files: [
+    {
+      path: SHOWCASE_GUIDE,
+      changeType: "modified",
+      linesAdded: 2,
+      linesDeleted: 2,
+    },
   ],
 };
 
@@ -288,6 +354,39 @@ export const Default: Story = {
         }
         if (!canvasElement.querySelector(".emr-highlight")) {
           throw new Error("highlight not wrapped yet");
+        }
+      },
+      { timeout: 5000 },
+    );
+  },
+};
+
+/** Focused README tour: one changed link, one added row, one deleted row. */
+export const Showcase: Story = {
+  args: {
+    pr: SHOWCASE_PR,
+    loadFileSource: makeShowcaseLoad(),
+    diffsByFile: { [SHOWCASE_GUIDE]: SHOWCASE_DIFF },
+    initialThreads: [],
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () => {
+        if (
+          !canvasElement.querySelector(
+            '.emr-diff-metadata-trigger[aria-label="Show link target change"]',
+          )
+        ) {
+          throw new Error("link target diff not decorated yet");
+        }
+        if (!canvasElement.querySelector("tr.emr-diff-block--added")) {
+          throw new Error("added table row not decorated yet");
+        }
+        const deletedRow = canvasElement.querySelector<HTMLTableRowElement>(
+          "tr.emr-diff-deleted-table-row",
+        );
+        if (!deletedRow || deletedRow.hidden) {
+          throw new Error("deleted table row not rendered yet");
         }
       },
       { timeout: 5000 },

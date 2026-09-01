@@ -1,6 +1,6 @@
 {
   "name": "easy-markdown-review",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Azure DevOps extension adding a Word-doc-style review experience to Markdown — PR comments on rendered prose plus a project-wide Documents hub.",
   "type": "module",

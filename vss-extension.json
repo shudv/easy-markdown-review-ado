@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "emr",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "REPLACE_ME",
   "public": true,
   "name": "Easy Markdown Review",

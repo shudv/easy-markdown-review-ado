@@ -130,7 +130,7 @@ export function adoChromeMarkup({ width, chromeHeight }) {
   const html = `
     <div class="ado-global">
       <div class="ado-logo"><svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor" aria-hidden="true"><path d="M3 6.5 9.5 2v3.2l8-1.2L21 7.1v10.2l-4 3.2-7.5-1.1V22L3 17.5Zm6.5 1.2v9.2l7.5 1V6.6Zm-4 0v8.6l2 1.3V6.4Z"/></svg></div>
-      <div class="ado-crumbs"><span>Contoso</span><span class="ado-crumb-sep">/</span><span>Web Platform</span><span class="ado-crumb-sep">/</span><span>Repos</span><span class="ado-crumb-sep">/</span><span>Pull requests</span><span class="ado-crumb-sep">/</span><span class="ado-repo-crumb"><span class="ado-repo-mark">◆</span>widget-guide&nbsp;⌄</span></div>
+      <div class="ado-crumbs"><span>Contoso</span><span class="ado-crumb-sep">/</span><span>Web Platform</span><span class="ado-crumb-sep">/</span><span>Repos</span><span class="ado-crumb-sep">/</span><span>Pull requests</span><span class="ado-crumb-sep">/</span><span class="ado-repo-crumb"><span class="ado-repo-mark">◆</span>deployment-docs&nbsp;⌄</span></div>
       <div class="ado-global-spacer"></div>
       <div class="ado-search">${SEARCH_ICON}<span>Search</span></div>
       <div class="ado-global-actions"><span class="ado-global-icon">☷</span><span class="ado-global-icon">♧</span><span class="ado-global-icon">?</span><span class="ado-global-icon">⚙</span><span class="ado-account">SD</span></div>
@@ -139,7 +139,7 @@ export function adoChromeMarkup({ width, chromeHeight }) {
     <div class="ado-prmain">
       <div class="ado-prhead">
         <div class="ado-toprow">
-          <div class="ado-prtitle">Rework the widget guide</div>
+          <div class="ado-prtitle">Refresh the production rollout</div>
           <div class="ado-actions">
             <div class="btn btn-approve"><span class="lbl">Approve</span><span class="caret">&#9662;</span></div>
             <div class="btn btn-complete"><span class="lbl">${BRANCH_ICON} Complete</span><span class="caret">&#9662;</span></div>
@@ -152,7 +152,7 @@ export function adoChromeMarkup({ width, chromeHeight }) {
           <span class="ado-avatar">SD</span>
           <span class="who">Shubham Dwivedi</span>
           <span>proposes to merge</span>
-          <a>users/shubhd/widget-guide</a>
+          <a>users/shubhd/production-rollout</a>
           <span class="ado-copy">${COPY_ICON}</span>
           <span>into</span>
           <a>main</a>

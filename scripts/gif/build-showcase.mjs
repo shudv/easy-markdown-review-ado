@@ -202,6 +202,27 @@ async function revealLinkChange(page) {
   );
 }
 
+async function hideLinkChange(page) {
+  const selector =
+    '.emr-diff-metadata-trigger[aria-label="Show link target change"]';
+  await page.click(selector);
+  await page.waitForFunction(
+    (triggerSelector) =>
+      document.querySelector(triggerSelector)?.getAttribute("aria-expanded") ===
+      "false",
+    selector,
+  );
+}
+
+async function strengthenAddedRow(page) {
+  // Keep the product green legible after the spotlight and GIF quantization.
+  await page.locator("tr.emr-diff-block--added").evaluate((row) => {
+    for (const cell of row.querySelectorAll("th, td")) {
+      cell.style.background = "#2da44e";
+    }
+  });
+}
+
 /* ------------------------------------------------------------- timeline -- */
 async function capture(page) {
   const rail = await measure(page, ".emr-rail-col", { pad: 8 });
@@ -327,6 +348,7 @@ async function capture(page) {
   }));
 
   // --- Feature 2: diffs on the rendered Markdown. --------------------------
+  await strengthenAddedRow(page);
   await revealLinkChange(page);
   await captureRange(page, 4.4, (t) => {
     const p = badgePos(diffs, "top");
@@ -343,8 +365,8 @@ async function capture(page) {
         appear: envelope(t, 4.4, 0.45, 0.35),
       },
       caption: {
-        title: "Review meaning, not line noise",
-        sub: "One changed link, one new row and one removed row.",
+        title: "See exactly what changed",
+        sub: "Changed link. Added row. Deleted row.",
         appear: envelope(t, 4.4, 0.45, 0.35),
       },
       progress: { index: 1, total: PROG, appear: 1 },
@@ -352,6 +374,7 @@ async function capture(page) {
   });
 
   // --- Feature 3: outline & navigation. ------------------------------------
+  await hideLinkChange(page);
   await captureRange(page, 4.2, (t) => {
     const p = badgePos(nav, "right");
     return {
@@ -374,18 +397,6 @@ async function capture(page) {
       progress: { index: 2, total: PROG, appear: 1 },
     };
   });
-
-  // --- Outro (2.8s). -------------------------------------------------------
-  await captureRange(page, 2.8, (t) => ({
-    dim: 0.8 * easeInOut(clamp01(t / 0.5)),
-    spot: null,
-    brandAppear: 0,
-    card: {
-      title: "Easy Markdown Review",
-      sub: "A Word-doc review experience, right in Azure DevOps.",
-      appear: envelope(t, 2.8, 0.5, 0),
-    },
-  }));
 }
 
 /* --------------------------------------------------------------- encode -- */

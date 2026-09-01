@@ -23,6 +23,7 @@ const shubhd = FIXTURE_AUTHORS.shubhd!;
 const jamie = FIXTURE_AUTHORS.jamie!;
 
 const GUIDE = "/widget-guide.md";
+const SHOWCASE_GUIDE = "/production-rollout.md";
 
 type Rgba = [number, number, number, number];
 
@@ -161,17 +162,16 @@ const SHOWCASE_SOURCE = [
   /*  8 */ "| ------- | -------- | --------- |",
   /*  9 */ "| API     | Platform | 02:00 UTC |",
   /* 10 */ "| Web     | Frontend | 04:00 UTC |",
-  /* 11 */ "| Worker  | Runtime  | 06:00 UTC |",
-  /* 12 */ "",
-  /* 13 */ "## Release Checks",
-  /* 14 */ "",
-  /* 15 */ "1. Confirm health checks in every active region.",
-  /* 16 */ "2. Publish the release summary after rollout.",
-  /* 17 */ "",
-  /* 18 */ "## Recovery",
-  /* 19 */ "",
-  /* 20 */ "Roll back to the previous artifact if regional health checks fail.",
-  /* 21 */ "",
+  /* 11 */ "",
+  /* 12 */ "## Release Checks",
+  /* 13 */ "",
+  /* 14 */ "1. Confirm health checks in every active region.",
+  /* 15 */ "2. Publish the release summary after rollout.",
+  /* 16 */ "",
+  /* 17 */ "## Recovery",
+  /* 18 */ "",
+  /* 19 */ "Roll back to the previous artifact if regional health checks fail.",
+  /* 20 */ "",
 ].join("\n");
 
 const SHOWCASE_DIFF: DiffRange[] = [
@@ -186,8 +186,8 @@ const SHOWCASE_DIFF: DiffRange[] = [
   },
   { startLine: 10, endLine: 10, kind: "added", linesAdded: 1 },
   {
-    startLine: 11,
-    endLine: 11,
+    startLine: 10,
+    endLine: 10,
     kind: "deleted-marker",
     linesDeleted: 1,
     deletedContent: "| Notifications | Messaging | 05:00 UTC |",
@@ -196,7 +196,9 @@ const SHOWCASE_DIFF: DiffRange[] = [
 
 function makeShowcaseLoad(): (path: string) => Promise<string> {
   return async (path: string) => {
-    if (path !== GUIDE) throw new Error(`No showcase source for ${path}`);
+    if (path !== SHOWCASE_GUIDE) {
+      throw new Error(`No showcase source for ${path}`);
+    }
     return SHOWCASE_SOURCE;
   };
 }
@@ -214,7 +216,12 @@ const SHOWCASE_PR: PrInfo = {
   ...PR,
   title: "Refresh the production rollout",
   files: [
-    { path: GUIDE, changeType: "modified", linesAdded: 2, linesDeleted: 2 },
+    {
+      path: SHOWCASE_GUIDE,
+      changeType: "modified",
+      linesAdded: 2,
+      linesDeleted: 2,
+    },
   ],
 };
 
@@ -359,7 +366,7 @@ export const Showcase: Story = {
   args: {
     pr: SHOWCASE_PR,
     loadFileSource: makeShowcaseLoad(),
-    diffsByFile: { [GUIDE]: SHOWCASE_DIFF },
+    diffsByFile: { [SHOWCASE_GUIDE]: SHOWCASE_DIFF },
     initialThreads: [],
   },
   play: async ({ canvasElement }) => {

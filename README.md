@@ -5,20 +5,16 @@
 [![License: MIT](https://img.shields.io/github/license/shudv/easy-markdown-review-ado)](LICENSE)
 
 Review Markdown like a document, directly in Azure DevOps. Comment on rendered
-content, understand structural changes at a glance, and keep Git as the source of
-truth.
+documents and see exactly what changed.
 
 ![A guided tour showing an anchored pull-request comment and semantic diffs for an updated link, an added table row, and a deleted table row](static/showcase.gif)
 
 ## Features
 
-- **Comment where you read.** Review rendered Markdown and leave anchored
-  pull-request comments directly on the words that need attention.
-- **See meaningful changes.** Semantic diffs surface structural edits—including
-  added or deleted table columns and changed links—without raw line noise.
-- **Give documents a proper home.** The Documents hub brings repository docs
-  together with a more polished commenting experience than the native Azure
-  DevOps wiki.
+- **Pull-Request Tab:** Comment on rendered Markdown and see exactly what changed in a PR.
+- **Document Hub:** Central place for all your Markdown documents with all the same reading and commenting capabilities.
+
+> Requires only read scope for the repository and write scope for pull-request threads.
 
 ## Get started
 
@@ -30,35 +26,17 @@ truth.
 
 ## A note on code quality
 
-I built this because I needed it—and because I wanted to see how far agentic
-coding could take a real problem. Most of the codebase is agent-generated, so
-some slop is expected.
+I built this because I needed it—and because I wanted to see how far I could push agentic coding to solve a real problem. Most of the codebase is agent-generated, so there is some slop in here.
 
-The guardrails are intentionally strict: CI enforces 100% statement and branch
-coverage; tests exercise behavior through public surfaces rather than reaching
-into private members; mutation testing must stay at or above 85%; 26 curated
-end-to-end tests cover the Azure DevOps integration boundary; and multiple
-visual regression tests protect the UI. The extension is also used daily by
-1,000+ Microsoft engineers. That is meaningful evidence, but it is not enough.
-Quality and stability will keep improving as time allows, and contributions are
-welcome.
+To offset that, I have tried to enforce strict deterministic guardrails:
+
+1. 100% statement and branch coverage.
+2. Mutation testing must stay at or above 85%.
+3. End-to-end tests covering the Azure DevOps integration boundary.
+4. Visual regression tests to protect the UI.
+
+But of course that is not enough. I will continue to improve the code quality, stability, and security over time as my schedule allows. Contributions are welcome.
 
 ## Contributing
 
-Requires Node.js 24+:
-
-```powershell
-npm install
-npm run typecheck
-npm test
-```
-
-See the [sandbox setup](sandbox/README.md), [end-to-end test
-guide](e2e/README.md), and [visual regression guide](visual/README.md) for the
-relevant development workflows. Pull requests are welcome.
-
-## Security
-
-Please report vulnerabilities privately through the [security
-policy](SECURITY.md). The [threat model](docs/threat-model.md) documents the
-extension's trust boundaries.
+See the [sandbox setup](sandbox/README.md), [end-to-end test guide](e2e/README.md), and [visual regression guide](visual/README.md) for the relevant development workflows.

@@ -8,7 +8,7 @@ Review Markdown like a document, directly in Azure DevOps. Comment on rendered
 content, understand structural changes at a glance, and keep Git as the source of
 truth.
 
-![Semantic diffs showing added and removed table columns, rich cell edits, changed links, and added or removed rows](visual/__screenshots__/curated.visual.spec.ts/visual-articlediff-table-gallery-light-chromium.png)
+![A guided tour showing an anchored pull-request comment and semantic diffs for an updated link, an added table row, and a deleted table row](static/showcase.gif)
 
 ## Features
 

@@ -42,7 +42,7 @@ const CHROME_H = 190;
 const STORY_H = 860;
 const VH = CHROME_H + STORY_H; // 1050
 
-const STORY_URL = "/iframe.html?id=visual-prtab--default&viewMode=story";
+const STORY_URL = "/iframe.html?id=visual-prtab--showcase&viewMode=story";
 const PHRASE = "resolved configuration";
 const COMMENT = "Can we document how this gets resolved?";
 
@@ -81,7 +81,7 @@ function badgePos(rect, side) {
 }
 
 /* -------------------------------------------------------------- plumbing -- */
-function waitForServer(url, timeoutMs = 20000) {
+function waitForServer(url, timeoutMs = 180000) {
   const started = Date.now();
   return new Promise((res, rej) => {
     const tick = () => {
@@ -190,13 +190,29 @@ async function submitComment(page) {
   await page.waitForTimeout(400);
 }
 
+async function revealLinkChange(page) {
+  const selector =
+    '.emr-diff-metadata-trigger[aria-label="Show link target change"]';
+  await page.click(selector);
+  await page.waitForFunction(
+    (triggerSelector) =>
+      document.querySelector(triggerSelector)?.getAttribute("aria-expanded") ===
+      "true",
+    selector,
+  );
+}
+
 /* ------------------------------------------------------------- timeline -- */
 async function capture(page) {
   const rail = await measure(page, ".emr-rail-col", { pad: 8 });
-  const diffs = await measure(page, ".emr-diff-block", {
-    pad: 12,
-    maxHeight: 470,
-  });
+  const diffs = await measure(
+    page,
+    ".emr-diff-block, .emr-diff-deleted-table-row",
+    {
+      pad: 12,
+      maxHeight: 470,
+    },
+  );
   const nav = await measure(page, ".emr-docnav", { pad: 8 });
   const tab = await measure(page, "#emr-ado-chrome .ado-tab.active", {
     pad: 6,
@@ -311,6 +327,7 @@ async function capture(page) {
   }));
 
   // --- Feature 2: diffs on the rendered Markdown. --------------------------
+  await revealLinkChange(page);
   await captureRange(page, 4.4, (t) => {
     const p = badgePos(diffs, "top");
     return {
@@ -320,14 +337,14 @@ async function capture(page) {
       ...brandOn,
       badge: {
         num: 2,
-        label: "See what changed",
+        label: "Semantic diffs",
         x: p.x,
         y: p.y,
         appear: envelope(t, 4.4, 0.45, 0.35),
       },
       caption: {
-        title: "See every change in place",
-        sub: "Added, edited and removed \u2014 right on the page.",
+        title: "Review meaning, not line noise",
+        sub: "One changed link, one new row and one removed row.",
         appear: envelope(t, 4.4, 0.45, 0.35),
       },
       progress: { index: 1, total: PROG, appear: 1 },
@@ -452,7 +469,7 @@ async function main() {
 
   const server = spawn(
     process.execPath,
-    [resolve(ROOT, "scripts", "serve-storybook.mjs")],
+    [resolve(ROOT, "scripts", "serve-storybook.mjs"), "--build"],
     {
       cwd: ROOT,
       env: { ...process.env, EMR_VISUAL_PORT: String(PORT) },

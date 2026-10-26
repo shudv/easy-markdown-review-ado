@@ -98,4 +98,13 @@ describe("describeError", () => {
   it("passes a string through", () => {
     expect(describeError("boom").message).toBe("boom");
   });
+
+  it("describes values with no primitive conversion without throwing", () => {
+    const nullProto = Object.create(null) as Record<string, unknown>;
+    nullProto.code = 7;
+    expect(describeError(nullProto).message).toBe('{"code":7}');
+    expect(describeError(Object.create(null)).message).toBe("[object Object]");
+    const hostile = { toString: () => ({}), valueOf: () => ({}) };
+    expect(() => describeError(hostile)).not.toThrow();
+  });
 });

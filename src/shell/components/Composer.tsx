@@ -15,6 +15,7 @@ import {
   type MentionSuggestion,
 } from "../../comments/mentions";
 import { renderMarkdownSync } from "../../markdown/render";
+import { hydrateMath } from "../../markdown/mathHydrate";
 import { useMentionLinkHydration } from "../../comments/mentionLinks";
 import { trackUserFacingError } from "../../telemetry";
 import {
@@ -22,6 +23,7 @@ import {
   useUserMentionHydration,
 } from "../../comments/identityStore";
 import { MentionPicker } from "./MentionPicker";
+import { ComposerBusyContext } from "./composerBusy";
 import { patchIfSet } from "../prShellHelpers";
 
 /**
@@ -53,6 +55,7 @@ interface MentionState {
 }
 
 export function Composer(props: ComposerProps): React.ReactElement {
+  const busy = React.useContext(ComposerBusyContext);
   const {
     initial = "",
     placeholder = "Write a comment… Markdown supported.",
@@ -159,8 +162,13 @@ export function Composer(props: ComposerProps): React.ReactElement {
   useMentionLinkHydration(previewRef, [previewHtml, tab]);
   // Resolve `@<GUID>` user mentions in the preview to display names too.
   useUserMentionHydration(previewRef, [previewHtml, tab]);
+  React.useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (!preview || tab !== "preview") return;
+    void hydrateMath(preview);
+  }, [previewHtml, tab]);
 
-  const canSubmit = value.trim().length > 0;
+  const canSubmit = value.trim().length > 0 && !busy;
 
   const fetchSuggestions = React.useCallback(
     async (trigger: ActiveTrigger, requestId: number) => {
@@ -470,9 +478,10 @@ export function Composer(props: ComposerProps): React.ReactElement {
           className="emr-btn primary"
           type="button"
           disabled={!canSubmit}
+          aria-busy={busy || undefined}
           onClick={() => onSubmit(encodedValue.trim())}
         >
-          {submitLabel}
+          {busy ? "Sending…" : submitLabel}
         </button>
       </div>
 

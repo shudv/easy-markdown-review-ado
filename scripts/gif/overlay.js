@@ -26,7 +26,8 @@
   }
 
   let root, scrim, spot, badge, badgeNum, badgeLabel, caption, capTitle, capSub;
-  let brand, card, cardTitle, cardSub, progress;
+  let brand, card, cardKicker, cardTitle, cardSub, cardFoot, progress, stats;
+  let cursor, ripple;
 
   function setup() {
     if (root) return;
@@ -182,7 +183,7 @@
     brand.appendChild(wm);
     root.appendChild(brand);
 
-    // Centered intro/outro card.
+    // Centered statement / intro / outro card.
     card = el("div", {
       position: "absolute",
       left: "50%",
@@ -190,24 +191,115 @@
       transform: "translate(-50%,-50%)",
       textAlign: "center",
       opacity: "0",
-      maxWidth: "80%",
+      maxWidth: "78%",
+    });
+    cardKicker = el("div", {
+      fontSize: "14px",
+      fontWeight: "700",
+      letterSpacing: "2.6px",
+      textTransform: "uppercase",
+      color: "#7cb6ff",
+      marginBottom: "16px",
+      textShadow: "0 2px 12px rgba(0,0,0,0.6)",
     });
     cardTitle = el("div", {
-      fontSize: "40px",
+      fontSize: "44px",
       fontWeight: "800",
-      letterSpacing: "-0.5px",
+      lineHeight: "1.16",
+      letterSpacing: "-0.6px",
       textShadow: "0 4px 24px rgba(0,0,0,0.55)",
     });
     cardSub = el("div", {
-      fontSize: "20px",
+      fontSize: "21px",
       fontWeight: "500",
-      marginTop: "12px",
+      marginTop: "14px",
       color: "rgba(255,255,255,0.9)",
       textShadow: "0 2px 14px rgba(0,0,0,0.5)",
     });
+    cardFoot = el("div", {
+      fontSize: "16px",
+      fontWeight: "600",
+      marginTop: "22px",
+      letterSpacing: "0.4px",
+      color: "rgba(255,255,255,0.62)",
+      textShadow: "0 2px 12px rgba(0,0,0,0.5)",
+    });
+    card.appendChild(cardKicker);
     card.appendChild(cardTitle);
     card.appendChild(cardSub);
+    card.appendChild(cardFoot);
     root.appendChild(card);
+
+    // Proof-point tiles (sit below the card on the closing scenes).
+    stats = el("div", {
+      position: "absolute",
+      left: "50%",
+      top: "60%",
+      transform: "translateX(-50%)",
+      display: "flex",
+      alignItems: "stretch",
+      gap: "18px",
+      opacity: "0",
+    });
+    root.appendChild(stats);
+
+    // Click ripple, drawn under the cursor so a scripted click reads as one.
+    ripple = el("div", {
+      position: "absolute",
+      width: "46px",
+      height: "46px",
+      marginLeft: "-23px",
+      marginTop: "-23px",
+      borderRadius: "999px",
+      border: "2.5px solid rgba(11,108,255,0.9)",
+      background: "rgba(11,108,255,0.16)",
+      opacity: "0",
+    });
+    root.appendChild(ripple);
+
+    cursor = el("div", {
+      position: "absolute",
+      width: "17px",
+      height: "17px",
+      marginLeft: "-8px",
+      marginTop: "-8px",
+      borderRadius: "999px",
+      background: "#fff",
+      border: "2px solid rgba(10,12,16,0.7)",
+      boxShadow: "0 3px 12px rgba(0,0,0,0.5)",
+      opacity: "0",
+    });
+    root.appendChild(cursor);
+  }
+
+  function statTile() {
+    const tile = el("div", {
+      minWidth: "250px",
+      padding: "22px 26px",
+      borderRadius: "16px",
+      background: "rgba(255,255,255,0.07)",
+      border: "1px solid rgba(255,255,255,0.16)",
+      boxShadow: "0 18px 48px rgba(0,0,0,0.42)",
+      textAlign: "center",
+    });
+    tile.__value = el("div", {
+      fontSize: "46px",
+      fontWeight: "800",
+      letterSpacing: "-1px",
+      lineHeight: "1",
+      color: "#9ecbff",
+      textShadow: "0 3px 18px rgba(0,0,0,0.5)",
+    });
+    tile.__label = el("div", {
+      fontSize: "15px",
+      fontWeight: "600",
+      marginTop: "12px",
+      lineHeight: "1.35",
+      color: "rgba(255,255,255,0.86)",
+    });
+    tile.appendChild(tile.__value);
+    tile.appendChild(tile.__label);
+    return tile;
   }
 
   function clamp01(n) {
@@ -310,17 +402,68 @@
     if (s.card) {
       const a = clamp01(s.card.appear);
       card.style.opacity = String(a);
+      card.style.top = s.card.anchor === "high" ? "36%" : "50%";
       card.style.transform =
         "translate(-50%,-50%) translateY(" +
         (1 - a) * 16 +
         "px) scale(" +
         (0.98 + a * 0.02) +
         ")";
+      cardKicker.textContent = s.card.kicker || "";
+      cardKicker.style.display = s.card.kicker ? "block" : "none";
       cardTitle.textContent = s.card.title || "";
       cardSub.textContent = s.card.sub || "";
       cardSub.style.display = s.card.sub ? "block" : "none";
+      cardFoot.textContent = s.card.foot || "";
+      cardFoot.style.display = s.card.foot ? "block" : "none";
     } else {
       card.style.opacity = "0";
+    }
+
+    if (s.stats) {
+      const items = s.stats.items || [];
+      while (stats.children.length < items.length)
+        stats.appendChild(statTile());
+      stats.style.opacity = "1";
+      for (let i = 0; i < stats.children.length; i++) {
+        const tile = stats.children[i];
+        const item = items[i];
+        if (!item) {
+          tile.style.display = "none";
+          continue;
+        }
+        const a = clamp01(item.appear);
+        tile.style.display = "block";
+        tile.style.opacity = String(a);
+        tile.style.transform = "translateY(" + (1 - a) * 18 + "px)";
+        tile.__value.textContent = item.value;
+        tile.__label.textContent = item.label;
+      }
+    } else {
+      stats.style.opacity = "0";
+    }
+
+    if (s.pointer) {
+      const a = clamp01(s.pointer.appear ?? 1);
+      cursor.style.opacity = String(a);
+      cursor.style.left = s.pointer.x + "px";
+      cursor.style.top = s.pointer.y + "px";
+      // `click` runs 0 -> 1 across one press; the ring grows out and fades.
+      const c = s.pointer.click;
+      if (c > 0 && c < 1) {
+        ripple.style.opacity = String(a * (1 - c));
+        ripple.style.left = s.pointer.x + "px";
+        ripple.style.top = s.pointer.y + "px";
+        ripple.style.transform = "scale(" + (0.35 + c * 1.35) + ")";
+        cursor.style.transform =
+          "scale(" + (1 - Math.sin(c * Math.PI) * 0.22) + ")";
+      } else {
+        ripple.style.opacity = "0";
+        cursor.style.transform = "scale(1)";
+      }
+    } else {
+      cursor.style.opacity = "0";
+      ripple.style.opacity = "0";
     }
   }
 

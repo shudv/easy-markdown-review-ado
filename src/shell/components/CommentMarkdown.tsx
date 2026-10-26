@@ -6,6 +6,7 @@
 
 import * as React from "react";
 import { decorateCommentMedia } from "../../comments/commentMedia";
+import { hydrateMath } from "../../markdown/mathHydrate";
 import { renderMarkdownSync } from "../../markdown/render";
 import { useMentionLinkHydration } from "../../comments/mentionLinks";
 import { useUserMentionHydration } from "../../comments/identityStore";
@@ -29,6 +30,7 @@ export function CommentMarkdown({ body }: Props): React.ReactElement {
     const root = ref.current;
     /* v8 ignore next -- the div ref is attached whenever this effect runs */
     if (!root) return;
+    void hydrateMath(root);
     return decorateCommentMedia(root, resolveAdoAttachmentObjectUrl);
   }, [html]);
   return (

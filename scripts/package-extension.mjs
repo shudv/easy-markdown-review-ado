@@ -64,6 +64,20 @@ if (webpackResult.status !== 0) {
   process.exit(webpackResult.status ?? 1);
 }
 
+// The dev-only fault injector (src/dev/faults.ts) must never ship: fail before
+// packaging if any of it survived the production build.
+if (mode !== "dev") {
+  const guard = spawnSync(
+    process.execPath,
+    [join(REPO_ROOT, "scripts", "check-no-dev-faults.mjs")],
+    { stdio: "inherit", cwd: REPO_ROOT },
+  );
+  if (guard.status !== 0) {
+    console.error("✘ dev-only fault injection found in the production build");
+    process.exit(guard.status ?? 1);
+  }
+}
+
 // ---------- 2. overrides ----------
 
 const buildDir = join(REPO_ROOT, "build");
@@ -182,21 +196,24 @@ if (mode === "dev") {
   console.log("");
   console.log("Next steps for dev install:");
   console.log(
-    "  1. Run `npm run dev` in another terminal (HTTPS dev server on :3000).",
+    "  1. Run `npm run setup:cert` once so browsers trust https://localhost:3000.",
   );
-  console.log(
-    "  2. Visit https://localhost:3000 once and accept the self-signed cert.",
-  );
-  console.log("  3. Upload the .vsix to your Marketplace publisher at");
+  console.log("  2. Upload the .vsix to your Marketplace publisher at");
   console.log("       https://marketplace.visualstudio.com/manage");
   console.log(
     "     and share the extension with your ADO org (only your org).",
   );
-  console.log("  4. Install it into your org from the same Manage page.");
+  console.log("  3. Install it into your org from the same Manage page.");
   console.log(
-    "  5. Open your test PR; the 'Markdown Review (dev)' tab will load from localhost.",
+    "  4. Run `npm run dev:ado` — it serves the bundles and opens ADO in a dev",
   );
   console.log(
-    "  6. Code changes hot-reload via webpack-dev-server; no re-package needed.",
+    "     browser allowed to load them (Chromium blocks localhost iframes in",
+  );
+  console.log(
+    "     public sites by default; see e2e/README.md). Open your test PR there.",
+  );
+  console.log(
+    "  5. Code changes hot-reload via webpack-dev-server; no re-package needed.",
   );
 }

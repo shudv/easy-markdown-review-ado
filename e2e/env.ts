@@ -108,6 +108,16 @@ export const E2E = {
     "AZDO_E2E_ITERATION_PR_TITLE",
     "Develop the document review workflow",
   ),
+  /**
+   * Repo whose active PR adds one file and deletes another across native
+   * updates, for comparing a chosen update across all of a PR's files.
+   */
+  updateScopeRepo: env("AZDO_E2E_UPDATE_SCOPE_REPO", "update-scope-showcase"),
+  /** Title of the active update-scope sandbox PR. */
+  updateScopePrTitle: env(
+    "AZDO_E2E_UPDATE_SCOPE_PR_TITLE",
+    "Replace the legacy review checklist",
+  ),
   /** Repo whose PR the change-highlighting spec drives. */
   diffRepo: env("AZDO_E2E_DIFF_REPO", "diff-showcase"),
   /**
@@ -119,6 +129,23 @@ export const E2E = {
   diffPrTitle: env(
     "AZDO_E2E_DIFF_PR_TITLE",
     "Showcase block-level diff confidence",
+  ),
+  /**
+   * Repo whose active PR rewrites sections the way ADO reports as coarse
+   * hunks (`rewrite-diff-showcase`); the block re-alignment spec drives it.
+   */
+  rewriteDiffRepo: env("AZDO_E2E_REWRITE_DIFF_REPO", "rewrite-diff-showcase"),
+  /** Title of the active rewrite-diff sandbox PR. */
+  rewriteDiffPrTitle: env(
+    "AZDO_E2E_REWRITE_DIFF_PR_TITLE",
+    "Restructure the design review (rewrite diff showcase)",
+  ),
+  /** Active PR dedicated to edited/added KaTeX equation behavior. */
+  equationRepo: env("AZDO_E2E_EQUATION_REPO", "equation-showcase"),
+  /** Title of the active equation sandbox PR. */
+  equationPrTitle: env(
+    "AZDO_E2E_EQUATION_PR_TITLE",
+    "Revise RMS aggregation and add throughput equations",
   ),
   /** Active PR carrying native ADO PNG, animated GIF, and file attachments. */
   commentMediaRepo: env(

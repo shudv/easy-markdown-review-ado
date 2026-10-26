@@ -17,6 +17,7 @@ import {
 } from "../../markdown/diffDecorations";
 import { renderMarkdownSync } from "../../markdown/render";
 import { hydrateMermaid } from "../../markdown/mermaidHydrate";
+import { hydrateMath } from "../../markdown/mathHydrate";
 import {
   hydrateDocumentImages,
   type RepositoryImageResolver,
@@ -26,7 +27,8 @@ import {
   MentionLinkContext,
 } from "../../comments/mentionLinks";
 import { SelectionBubble } from "./SelectionBubble";
-import { MermaidSourceModal } from "./MermaidSourceModal";
+import { buildTextFragment, serializeTextFragment } from "../textFragment";
+import { GeneratedSourceModal } from "./GeneratedSourceModal";
 import { persistSectionState, readSectionState } from "./navStorage";
 import { events, track } from "../../telemetry";
 
@@ -77,9 +79,100 @@ interface ArticleViewProps {
   onDocLink?: (href: string) => boolean;
   /** Resolve an in-repository image path to a browser-renderable object URL. */
   resolveDocumentImage?: RepositoryImageResolver;
+  /**
+   * Copy a shareable link to the heading with this id. When provided, every
+   * section heading gets a hover/focus "Copy link to section" button; it
+   * resolves to whether the copy succeeded so the button can confirm. Omitted
+   * on surfaces with no shareable URL (the button is then not rendered).
+   */
+  onCopyHeadingLink?: (headingId: string) => Promise<boolean>;
+  /**
+   * Copy a shareable link to selected text: the serialized text fragment
+   * (`?text=`) plus the enclosing heading's id as a fallback. When provided the
+   * selection bubble gets a "Copy link to selection" action — also on
+   * read-only surfaces, where it is the bubble's only action. Resolves to
+   * whether the copy succeeded.
+   */
+  onCopySelectionLink?: (target: SelectionLinkTarget) => Promise<boolean>;
+  /**
+   * Checked when text is selected: return a reason (with a way forward) when
+   * a comment can't be attached to the selection — e.g. comparing an earlier
+   * PR update where the text no longer exists in the latest version. The
+   * selection bubble then explains instead of offering "Add comment".
+   */
+  commentBlocker?: (anchor: TextQuoteAnchor) => CommentBlock | null;
+}
+
+/** Why a selection can't be commented on, and what to do instead. */
+export interface CommentBlock {
+  message: string;
+  actionLabel: string;
+  onAction: () => void;
+}
+
+/** What "Copy link to selection" links to. */
+export interface SelectionLinkTarget {
+  /** Serialized text fragment (see `serializeTextFragment`). */
+  text: string;
+  /** Id of the heading whose section holds the selection, if any. */
+  anchor?: string;
+}
+
+/** The link target for `range`, or null when it holds no live text. */
+function selectionLinkTarget(
+  article: HTMLElement,
+  range: Range,
+): SelectionLinkTarget | null {
+  const fragment = buildTextFragment(article, range);
+  /* v8 ignore next -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text */
+  if (!fragment) return null;
+  const start =
+    range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  const heading = start
+    ?.closest(".emr-section")
+    ?.querySelector<HTMLElement>(":scope > :is(h1, h2, h3, h4, h5, h6)[id]");
+  return {
+    text: serializeTextFragment(fragment),
+    ...(heading ? { anchor: heading.id } : {}),
+  };
 }
 
 const DRAFT_THREAD_ID = "__draft__";
+
+const HEADING_LINK_CLASS = "emr-heading-link";
+const HEADING_LINK_LABEL = "Copy link to section";
+
+function createHeadingLinkButton(
+  doc: Document,
+  headingId: string,
+): HTMLElement {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = HEADING_LINK_CLASS;
+  button.dataset.headingId = headingId;
+  button.setAttribute("aria-label", HEADING_LINK_LABEL);
+  button.title = HEADING_LINK_LABEL;
+  return button;
+}
+
+/** Reflect a copy outcome on the heading link button, then reset it. */
+function showHeadingLinkResult(button: HTMLElement, ok: boolean): void {
+  const label = ok ? "Link copied" : "Couldn't copy link";
+  button.classList.toggle("is-copied", ok);
+  button.classList.toggle("is-failed", !ok);
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  window.setTimeout(
+    () => {
+      button.classList.remove("is-copied", "is-failed");
+      button.setAttribute("aria-label", HEADING_LINK_LABEL);
+      button.title = HEADING_LINK_LABEL;
+    },
+    ok ? 1200 : 2400,
+  );
+}
 
 function syncActiveHighlights(
   article: HTMLElement,
@@ -185,20 +278,37 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     showDiff = true,
     onDocLink,
     resolveDocumentImage,
+    onCopyHeadingLink,
+    onCopySelectionLink,
+    commentBlocker,
   } = props;
+  const hasHeadingLinks = onCopyHeadingLink !== undefined;
+  const hasSelectionLinks = onCopySelectionLink !== undefined;
 
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const articleRef = React.useRef<HTMLDivElement>(null);
   const mentionCtx = React.useContext(MentionLinkContext);
+  // Polite announcement for the heading link button's copy outcome (the
+  // button's own label change is not reliably announced).
+  const [linkAnnouncement, setLinkAnnouncementText] = React.useState("");
+  const setLinkAnnouncement = React.useCallback((text: string) => {
+    // Clear first so repeating the same outcome is announced again.
+    setLinkAnnouncementText("");
+    window.requestAnimationFrame(() => setLinkAnnouncementText(text));
+  }, []);
   const [bubble, setBubble] = React.useState<{
     top: number;
     left: number;
     anchor: TextQuoteAnchor;
+    /** Set when a comment can't be attached to this selection. */
+    block: CommentBlock | null;
+    /** Set when the selection can be linked to. */
+    link: SelectionLinkTarget | null;
   } | null>(null);
-  // Diagram whose "view source" was clicked; non-null = modal open. Carries an
-  // optional `original` (the pre-PR diagram source) so the modal can show a
-  // source-level diff when the diagram changed.
-  const [mermaidSource, setMermaidSource] = React.useState<{
+  // Generated block whose Source action was clicked. `original` carries the
+  // pre-PR source so the modal can show an internal source-level diff.
+  const [generatedSource, setGeneratedSource] = React.useState<{
+    kind: "mermaid" | "math";
     source: string;
     original: string | null;
   } | null>(null);
@@ -208,8 +318,14 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     onAnchorsResolved,
     onHighlightClick,
     onSelection,
+    commentBlocker,
   });
-  callbacksRef.current = { onAnchorsResolved, onHighlightClick, onSelection };
+  callbacksRef.current = {
+    onAnchorsResolved,
+    onHighlightClick,
+    onSelection,
+    commentBlocker,
+  };
 
   // Build a stable signature so the wrap effect only re-runs when anchors change.
   const threadsKey = React.useMemo(
@@ -248,6 +364,15 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         ).closest<HTMLElement>('.emr-highlight[role="button"]')?.dataset
           .threadId
       : undefined;
+    // A keyboard user on a heading link button keeps their place when a
+    // thread poll / diff / image load re-wraps the article.
+    const focusedHeadingLinkId = article.contains(
+      article.ownerDocument.activeElement,
+    )
+      ? (
+          article.ownerDocument.activeElement as HTMLElement
+        ).closest<HTMLElement>(`.${HEADING_LINK_CLASS}`)?.dataset.headingId
+      : undefined;
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
     article.innerHTML = pristineHtml;
@@ -266,6 +391,19 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     // measure step can detect hidden anchors and fall back to their heading y.
     const sections = article.querySelectorAll<HTMLElement>(".emr-section");
     sections.forEach((s) => {
+      const heading = s.querySelector<HTMLElement>(
+        ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
+      );
+      // A shareable link to the section, appended after the heading text so it
+      // sits where ADO's native preview shows its anchor glyph. Icon-only (no
+      // text node), so it never leaks into anchoring, outline labels, or the
+      // heading's accessible name below.
+      if (heading?.id && hasHeadingLinks) {
+        heading.setAttribute("aria-label", heading.textContent.trim());
+        heading.append(
+          createHeadingLinkButton(article.ownerDocument, heading.id),
+        );
+      }
       // The document-title section is never collapsible (it has no chevron),
       // so ignore any persisted state and keep it open.
       if (s.classList.contains("emr-section--doc-title")) {
@@ -278,9 +416,6 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       } else {
         s.removeAttribute("data-collapsed");
       }
-      const heading = s.querySelector<HTMLElement>(
-        ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
-      );
       /* v8 ignore next -- rendered sections always begin with their heading */
       if (!heading) return;
       // The icon button lives inside the heading for stable gutter geometry;
@@ -367,6 +502,13 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         )
         ?.focus();
     }
+    if (focusedHeadingLinkId) {
+      article
+        .querySelector<HTMLElement>(
+          `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
+        )
+        ?.focus({ preventScroll: true });
+    }
 
     // ---------------------------------------------------------------------
     // Measure y of every wrapped highlight relative to the article-wrap.
@@ -410,11 +552,14 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
 
     measureAll();
 
-    // Hydrate mermaid placeholders, then re-measure so balloons settle on the
-    // rendered diagram's final height rather than the placeholder's.
-    void hydrateMermaid(article, readerFontFamily).then(() => {
+    // Hydrate generated media, then re-measure so balloons settle on the final
+    // rendered height rather than the readable source fallbacks.
+    void Promise.all([
+      hydrateMermaid(article, readerFontFamily),
+      hydrateMath(article),
+    ]).then(() => {
       if (!wrapRef.current) return;
-      addMermaidSourceButtons(article);
+      addGeneratedSourceButtons(article);
       wrapRef.current.dispatchEvent(
         new CustomEvent("emr-sections-changed", { bubbles: false }),
       );
@@ -448,6 +593,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     originalSource,
     currentSource,
     resolveDocumentImage,
+    hasHeadingLinks,
   ]);
 
   // -------------------------------------------------------------------------
@@ -463,7 +609,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       void hydrateMermaid(article, readerFontFamily).then(() => {
         /* v8 ignore next -- unmounted between hydrate start and resolve */
         if (!wrapRef.current) return;
-        addMermaidSourceButtons(article);
+        addGeneratedSourceButtons(article);
         wrapRef.current.dispatchEvent(
           new CustomEvent("emr-sections-changed", { bubbles: false }),
         );
@@ -509,30 +655,52 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         }
       }
 
-      // 0) Mermaid "view source" affordance — open the source modal.
-      const mermaidBtn = target.closest<HTMLElement>(".emr-mermaid-source-btn");
-      if (mermaidBtn) {
+      // 0) Generated-content Source affordance — open diagram/equation source.
+      const sourceBtn = target.closest<HTMLElement>(
+        GENERATED_SOURCE_BUTTON_SELECTOR,
+      );
+      if (sourceBtn) {
         e.preventDefault();
-        const block = mermaidBtn.closest<HTMLElement>(".emr-mermaid");
-        const enc = block?.getAttribute("data-mermaid-src");
-        // A changed diagram stashes its pre-PR source here (see diffDecorations).
+        const spec = GENERATED_SOURCE_KINDS.find((candidate) =>
+          sourceBtn.classList.contains(candidate.buttonClass),
+        )!;
+        const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
+        const enc = block?.getAttribute(spec.sourceAttribute);
         const original = block?.dataset.diffOriginal ?? null;
-        /* v8 ignore next -- enc is always present on a mermaid block; guard is defensive */
+        /* v8 ignore next -- source buttons are added only to encoded blocks */
         if (enc) {
-          let source = enc;
+          let source: string;
           try {
             source = decodeURIComponent(enc);
           } catch {
             /* v8 ignore next -- decode only throws on malformed input */
             source = enc;
           }
-          setMermaidSource({ source, original });
-          track(events.mermaidSourceViewed({ changed: original !== null }));
+          setGeneratedSource({ kind: spec.kind, source, original });
+          track(
+            spec.kind === "math"
+              ? events.mathSourceViewed({ changed: original !== null })
+              : events.mermaidSourceViewed({ changed: original !== null }),
+          );
         }
         return;
       }
 
-      // 1) Section toggle. Only the dedicated chevron button folds content;
+      // 1) Heading link — copy a shareable link to this section.
+      const headingLink = target.closest<HTMLElement>(`.${HEADING_LINK_CLASS}`);
+      if (headingLink) {
+        e.preventDefault();
+        const headingId = headingLink.dataset.headingId!;
+        /* v8 ignore next -- buttons are only rendered when the callback exists */
+        if (!onCopyHeadingLink) return;
+        void onCopyHeadingLink(headingId).then((ok) => {
+          showHeadingLinkResult(headingLink, ok);
+          setLinkAnnouncement(ok ? "Link copied" : "Couldn't copy link");
+        });
+        return;
+      }
+
+      // 2) Section toggle. Only the dedicated chevron button folds content;
       // heading text remains ordinary selectable/commentable document text.
       const sectionToggle = target.closest<HTMLButtonElement>(
         ".emr-section-toggle",
@@ -563,7 +731,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         return;
       }
 
-      // 2) Highlight click — open the matching thread. Overlapping anchors are
+      // 3) Highlight click — open the matching thread. Overlapping anchors are
       // nested, so collect every thread under the click and cycle on repeated
       // clicks; exact overlaps remain reachable without stacking visual layers.
       const threadIds: string[] = [];
@@ -587,7 +755,13 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       syncHoveredHighlights(articleRef.current!, null);
       callbacksRef.current.onHighlightClick(threadId);
     },
-    [storageKey, onDocLink, activeThreadId],
+    [
+      storageKey,
+      onDocLink,
+      activeThreadId,
+      onCopyHeadingLink,
+      setLinkAnnouncement,
+    ],
   );
 
   const onKeyDown = React.useCallback(
@@ -646,10 +820,11 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
 
   // -------------------------------------------------------------------------
   // Selection capture: on mouseup, show the floating bubble above a non-empty
-  // selection inside the article.
+  // selection inside the article. Read-only surfaces still get the bubble
+  // when the selection can be linked to (its only action is then the link).
   // -------------------------------------------------------------------------
   const onMouseUp = React.useCallback(() => {
-    if (readOnly) return;
+    if (readOnly && !hasSelectionLinks) return;
     // Wait for the selection to settle (click can clear it).
     window.requestAnimationFrame(() => {
       const article = articleRef.current!;
@@ -672,13 +847,28 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
+      const block = readOnly
+        ? null
+        : (callbacksRef.current.commentBlocker?.(anchor) ?? null);
+      const link =
+        hasSelectionLinks && !block
+          ? selectionLinkTarget(article, range)
+          : null;
+      /* v8 ignore next 4 -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text; read-only stories don't render those panels */
+      if (readOnly && !link) {
+        setBubble(null);
+        return;
+      }
       // Approx bubble width (button label + chrome). Used to clamp horizontal.
-      const BUBBLE_W = 132;
+      // The explained (blocked) variant carries a sentence and an action.
+      const BUBBLE_W = block ? 320 : readOnly ? 104 : link ? 170 : 132;
       const desiredTop = rect.top - wrapRect.top - 36;
       const desiredLeft =
         rect.left + rect.width / 2 - wrapRect.left - BUBBLE_W / 2;
       setBubble({
         anchor,
+        block,
+        link,
         // Don't render above the article. If selection is at the very top,
         // tuck the bubble just below it instead of off-screen.
         /* v8 ignore next -- top-of-article clamp; headless getBoundingClientRect yields zeros */
@@ -687,7 +877,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         left: Math.max(4, Math.min(desiredLeft, wrapRect.width - BUBBLE_W - 4)),
       });
     });
-  }, [readOnly]);
+  }, [readOnly, hasSelectionLinks]);
 
   // Clear bubble if user clicks elsewhere or selection collapses.
   React.useEffect(() => {
@@ -715,46 +905,104 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       />
       {bubble ? (
         <SelectionBubble
+          key={`${bubble.top}:${bubble.left}:${bubble.anchor.exact}`}
           top={bubble.top}
           left={bubble.left}
-          onAddComment={() => {
-            const a = bubble.anchor;
-            setBubble(null);
-            // Collapse selection so the highlight is visible.
-            window.getSelection()?.removeAllRanges();
-            callbacksRef.current.onSelection(a);
-          }}
+          block={
+            bubble.block
+              ? {
+                  ...bubble.block,
+                  onAction: () => {
+                    const action = bubble.block!.onAction;
+                    setBubble(null);
+                    window.getSelection()?.removeAllRanges();
+                    action();
+                  },
+                }
+              : null
+          }
+          onAddComment={
+            readOnly
+              ? undefined
+              : () => {
+                  const a = bubble.anchor;
+                  setBubble(null);
+                  // Collapse selection so the highlight is visible.
+                  window.getSelection()?.removeAllRanges();
+                  callbacksRef.current.onSelection(a);
+                }
+          }
+          onCopyLink={
+            bubble.link && onCopySelectionLink
+              ? () => onCopySelectionLink(bubble.link!)
+              : undefined
+          }
+          onCopyLinkSettled={() => setBubble(null)}
         />
       ) : null}
-      <MermaidSourceModal
-        source={mermaidSource?.source ?? null}
-        originalSource={mermaidSource?.original ?? null}
-        onClose={() => setMermaidSource(null)}
+      <GeneratedSourceModal
+        kind={generatedSource?.kind}
+        source={generatedSource?.source ?? null}
+        originalSource={generatedSource?.original ?? null}
+        onClose={() => setGeneratedSource(null)}
       />
+      {hasHeadingLinks ? (
+        <span className="emr-sr-only" role="status" aria-live="polite">
+          {linkAnnouncement}
+        </span>
+      ) : null}
     </div>
   );
 }
 
 /**
- * Inject a "</> Source" button into every hydrated Mermaid block that
- * doesn't already have one. Called after `hydrateMermaid` resolves so the
- * SVG is in place. The button reads the diagram source back from the
- * placeholder's `data-mermaid-src` attribute (which hydration leaves
- * intact), so no extra state plumbing is needed.
+ * Both generated block kinds share one Source affordance and one callout, so
+ * the per-kind selectors/labels live here rather than in duplicated branches.
  */
-function addMermaidSourceButtons(root: HTMLElement): void {
-  const blocks = root.querySelectorAll<HTMLElement>(
-    ".emr-mermaid[data-mermaid-src]",
-  );
-  blocks.forEach((block) => {
-    /* v8 ignore next -- innerHTML reset removes prior buttons before each pass */
-    if (block.querySelector(":scope > .emr-mermaid-source-btn")) return;
-    if (block.getAttribute("data-mermaid-error")) return;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "emr-mermaid-source-btn";
-    btn.title = "View diagram source";
-    btn.textContent = "</> Source";
-    block.appendChild(btn);
-  });
+const GENERATED_SOURCE_KINDS = [
+  {
+    kind: "mermaid",
+    hostSelector: ".emr-mermaid",
+    hydratedSelector: ".emr-mermaid[data-mermaid-src]",
+    buttonClass: "emr-mermaid-source-btn",
+    sourceAttribute: "data-mermaid-src",
+    errorAttribute: "data-mermaid-error",
+    buttonTitle: "View diagram source",
+  },
+  {
+    kind: "math",
+    hostSelector: ".emr-math",
+    hydratedSelector: '.emr-math[data-math-src][data-hydrated="true"]',
+    buttonClass: "emr-math-source-btn",
+    sourceAttribute: "data-math-src",
+    errorAttribute: "data-math-error",
+    buttonTitle: "View equation source",
+  },
+] as const;
+
+const GENERATED_SOURCE_BUTTON_SELECTOR = GENERATED_SOURCE_KINDS.map(
+  (spec) => `.${spec.buttonClass}`,
+).join(", ");
+
+/**
+ * Inject the "</> Source" affordance into every hydrated diagram/equation.
+ * Runs after hydration so each block still carries its encoded source
+ * attribute, which the callout reads back without extra state plumbing.
+ */
+function addGeneratedSourceButtons(root: HTMLElement): void {
+  for (const spec of GENERATED_SOURCE_KINDS) {
+    root
+      .querySelectorAll<HTMLElement>(spec.hydratedSelector)
+      .forEach((block) => {
+        /* v8 ignore next -- hydration rebuilds block markup before each pass */
+        if (block.querySelector(`:scope > .${spec.buttonClass}`)) return;
+        if (block.getAttribute(spec.errorAttribute)) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = spec.buttonClass;
+        button.title = spec.buttonTitle;
+        button.textContent = "</> Source";
+        block.appendChild(button);
+      });
+  }
 }

@@ -44,7 +44,8 @@ export default async function globalSetup(): Promise<void> {
       `e2e: could not reach the dev server at ${E2E.devOrigin} (${
         (err as Error).message
       }).\n` +
-        "Start the STRICT verification server first, in a separate terminal:\n" +
+        "`npm run e2e` starts the STRICT verification server automatically; if it\n" +
+        "failed to start, run it yourself to see why:\n" +
         "  npm run dev:verify\n" +
         "(e2e enforces the strict server so it runs under the same CSP the ADO host imposes.)",
     );

@@ -15,7 +15,8 @@
 // (sandbox/repos/doc-links-showcase), whose nested docs link to each other and
 // to a non-Markdown asset, plus its active "expand guides" PR.
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { E2E } from "./env";
 import {
   discoverPullRequestId,

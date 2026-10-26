@@ -951,7 +951,11 @@ button {
 // state center-aligns the SVG inside the article's reading column.
 // ---------------------------------------------------------------------------
 
-.emr-rendered .emr-mermaid {
+// The source callout renders its preview outside `.emr-rendered`, so it opts
+// into the same diagram styling here — without it the hydrated SVG (whose
+// width/height attributes hydration strips) collapses to nothing.
+.emr-rendered .emr-mermaid,
+.emr-generated-source-preview .emr-mermaid {
   margin: 16px 0;
   padding: 12px;
   background: var(--emr-faint);
@@ -1001,6 +1005,24 @@ button {
     overflow-x: auto;
     border: 0;
   }
+}
+
+// Keep wide equations inside the reading column. KaTeX itself inherits the
+// reader foreground color, including dark and high-contrast themes.
+.emr-rendered .katex-display,
+.emr-preview .katex-display,
+.emr-generated-source-preview .katex-display {
+  margin: 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.emr-rendered .emr-math,
+.emr-preview .emr-math,
+.emr-generated-source-preview .emr-math {
+  margin: 16px 0;
+  overflow-x: auto;
 }
 
 // ---------------------------------------------------------------------------
@@ -1578,20 +1600,24 @@ button {
     background: var(--emr-accent-soft);
     border-radius: 0;
   }
-  &.is-range-start {
+  // The list is newest-first, so a selected range's newest update
+  // (`is-range-end`) is the band's top and its oldest (`is-range-start`) the
+  // bottom.
+  &.is-range-end {
     border-radius: 5px 5px 0 0;
   }
-  &.is-range-end {
+  &.is-range-start {
     border-radius: 0 0 5px 5px;
   }
   &.is-range-start.is-range-end {
     border-radius: 5px;
   }
 
+  // "All updates" heads the list, set off from the numbered updates below.
   &.is-all-changes {
-    margin-top: 4px;
-    border-top: 1px solid var(--emr-rule);
-    border-radius: 0 0 4px 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--emr-rule);
+    border-radius: 4px 4px 0 0;
   }
 }
 .emr-statusbar-iteration-num {
@@ -2106,12 +2132,12 @@ button {
       pointer-events: none;
     }
 
-    &.is-range-start::after {
+    &.is-range-end::after {
       border-top: 2px solid var(--emr-accent);
       border-radius: 5px 5px 0 0;
     }
 
-    &.is-range-end::after {
+    &.is-range-start::after {
       border-bottom: 2px solid var(--emr-accent);
       border-radius: 0 0 5px 5px;
     }
@@ -2122,7 +2148,7 @@ button {
 
     &.is-all-changes::after {
       border: 2px solid var(--emr-accent);
-      border-radius: 0 0 4px 4px;
+      border-radius: 4px 4px 0 0;
     }
   }
 }
@@ -3560,6 +3586,11 @@ button {
   }
 }
 
+// Icon masks shared by the selection bubble's link action and the heading
+// link button.
+$emr-link-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.7.7'/><path d='M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.7-.7'/></svg>");
+$emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polyline points='3.5,8.5 6.5,11.5 12.5,4.5'/></svg>");
+
 // ---------------------------------------------------------------------------
 // Floating "Add comment" bubble
 // ---------------------------------------------------------------------------
@@ -3589,6 +3620,74 @@ button {
 
     &:hover {
       background: rgba(255, 255, 255, 0.1);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+  }
+
+  // Hairline between "Add comment" and the quieter link action.
+  .emr-selection-bubble-divider {
+    width: 1px;
+    align-self: stretch;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .emr-selection-bubble-link {
+    color: rgba(255, 255, 255, 0.82);
+
+    &:hover,
+    &:focus-visible {
+      color: #fff;
+    }
+
+    &.is-failed {
+      color: #ffb4a8;
+    }
+  }
+
+  .emr-selection-bubble-link-icon {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    background-color: currentColor;
+    mask: $emr-link-svg center / contain no-repeat;
+    -webkit-mask: $emr-link-svg center / contain no-repeat;
+  }
+
+  .is-copied .emr-selection-bubble-link-icon {
+    mask-image: $emr-check-svg;
+    -webkit-mask-image: $emr-check-svg;
+  }
+
+  @media (forced-colors: active) {
+    .emr-selection-bubble-link-icon {
+      forced-color-adjust: none;
+      background-color: ButtonText;
+    }
+  }
+
+  // Explained variant: a short reason plus the way forward, stacked.
+  &.is-blocked {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    max-width: 320px;
+    padding: 8px 10px;
+
+    .emr-selection-bubble-note {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    button {
+      padding: 4px 8px;
+      margin-left: -8px;
+      font-weight: 600;
+      text-decoration: underline;
     }
   }
 }
@@ -3922,6 +4021,44 @@ button {
   }
 }
 
+// Comparing PR updates on a file that doesn't exist at the newer update (the
+// PR adds it later, or has deleted it): an expected state, not a failure, so it
+// reads as a calm notice with a way back to "All updates".
+.emr-update-absent {
+  padding: 24px 32px;
+  color: var(--emr-fg);
+
+  h2 {
+    margin-top: 0;
+    font-size: 18px;
+  }
+
+  p {
+    color: var(--emr-muted);
+  }
+
+  .emr-update-absent-action {
+    margin-top: 4px;
+    padding: 6px 16px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--emr-accent);
+    background: transparent;
+    border: 1px solid var(--emr-accent);
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--emr-accent-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 2px;
+    }
+  }
+}
+
 // Inline toast used for transient persistence errors (e.g. ADO API failed).
 // Sits below the header so it never overlaps the article scroll.
 .emr-toast {
@@ -3936,6 +4073,29 @@ button {
     background: #fbeaea;
     color: #8a1f1f;
     border-bottom-color: #ecc2c2;
+  }
+
+  // Calm, theme-aware notice (e.g. the ADO session is refreshing).
+  &--info {
+    background: var(--emr-accent-soft);
+    color: var(--emr-fg);
+  }
+
+  // A quiet, secondary action inside a toast (e.g. "Reload page").
+  .emr-toast-link {
+    flex: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--emr-accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 2px;
+    }
   }
 
   .emr-toast-icon {
@@ -5020,6 +5180,18 @@ button {
   }
 }
 
+// Comparing specific PR updates: files those updates don't touch recede to
+// the theme's muted text colour, so the ones that changed stand out. Muted
+// text still meets 4.5:1 in every theme (and is full strength in high
+// contrast), so these clickable rows stay readable; the open file keeps its
+// full colour. The reason is in the row's tooltip and screen-reader text.
+.emr-docnav-item.emr-docnav-file.is-unchanged-in-range:not(.is-active) {
+  color: var(--emr-muted);
+}
+.emr-docnav-item.is-unchanged-in-range .emr-docnav-file-icon {
+  color: var(--emr-muted);
+}
+
 .emr-docnav-file-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -5186,6 +5358,152 @@ button {
   .emr-section-toggle,
   .emr-section-toggle::before {
     transition: none !important;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Heading link ("Copy link to section")
+//
+// ArticleView appends an icon-only button after each heading's text — where
+// ADO's native Markdown preview shows its anchor glyph. Hidden until the
+// heading is hovered or the button is focused, so reading stays calm; on touch
+// devices (no hover) it stays faintly visible so it can be found.
+// ---------------------------------------------------------------------------
+
+.emr-rendered :is(h1, h2, h3, h4, h5, h6) {
+  // Deep-link / in-page anchor jumps land the heading with breathing room
+  // instead of flush against the scroller's top edge.
+  scroll-margin-top: 24px;
+
+  > .emr-heading-link {
+    --emr-heading-link-size: max(20px, 0.8em);
+    position: relative;
+    display: inline-block;
+    // Sized off the heading's font so the glyph scales with H1…H6, but
+    // clamped so tiny headings still get a usable hit target.
+    width: var(--emr-heading-link-size);
+    height: var(--emr-heading-link-size);
+    margin-left: 0.3em;
+    // Zero net advance: the (usually invisible) button hangs into the gutter
+    // instead of pushing a nearly full-width heading onto an extra line, so
+    // headings break exactly as they would without it.
+    margin-right: calc(-1 * (var(--emr-heading-link-size) + 0.3em));
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    vertical-align: middle;
+    color: var(--emr-muted);
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      color 120ms ease-out,
+      opacity 120ms ease-out;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      background-color: currentColor;
+      mask-image: $emr-link-svg;
+      -webkit-mask-image: $emr-link-svg;
+      mask-size: contain;
+      -webkit-mask-size: contain;
+      mask-repeat: no-repeat;
+      -webkit-mask-repeat: no-repeat;
+      mask-position: center;
+      -webkit-mask-position: center;
+    }
+
+    &:hover {
+      color: var(--emr-accent);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      color: var(--emr-accent);
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 1px;
+    }
+
+    &.is-copied,
+    &.is-failed {
+      opacity: 1;
+    }
+
+    &.is-copied {
+      color: var(--emr-accent);
+
+      &::before {
+        mask-image: $emr-check-svg;
+        -webkit-mask-image: $emr-check-svg;
+      }
+    }
+
+    &.is-failed {
+      color: var(--emr-diff-deleted);
+    }
+  }
+
+  &:hover > .emr-heading-link {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    > .emr-heading-link {
+      opacity: 0.45;
+    }
+  }
+}
+
+// Removed-content previews are static references, never link targets.
+.emr-diff-deleted-body,
+.emr-diff-before-panel {
+  .emr-heading-link {
+    display: none;
+  }
+}
+
+// Brief wash on the element an anchor jump landed on. Reuses the comment
+// highlight's landing cue (`emr-anchor-land`) as-is — including under reduced
+// motion, where the comment cue also plays: it is a colour fade, not movement —
+// so both kinds of deep link look identical. On a heading the cue sits on an
+// inline span around the heading's text (`flashAnchorTarget` inserts it), so
+// like a comment highlight it hugs the words, line by line, rather than
+// filling the heading's full width; it survives article re-wraps.
+.emr-rendered .emr-anchor-target {
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: emr-anchor-land 2500ms cubic-bezier(0.2, 0, 0.2, 1) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emr-rendered :is(h1, h2, h3, h4, h5, h6) > .emr-heading-link {
+    transition: none;
+  }
+}
+
+// Windows forced colours (OS high contrast) replace backgrounds with Canvas,
+// which would paint the masked glyphs Canvas-on-Canvas and drop the wash-only
+// landing cue. Repaint the glyphs in system colours and use an outline cue.
+@media (forced-colors: active) {
+  .emr-rendered
+    :is(h1, h2, h3, h4, h5, h6)
+    > :is(.emr-heading-link, .emr-section-toggle)::before {
+    forced-color-adjust: none;
+    background-color: ButtonText;
+  }
+
+  .emr-rendered
+    :is(h1, h2, h3, h4, h5, h6)
+    > .emr-heading-link:is(:hover, :focus-visible, .is-copied)::before {
+    background-color: Highlight;
+  }
+
+  .emr-rendered .emr-anchor-target {
+    outline: 2px solid Highlight;
+    outline-offset: 4px;
   }
 }
 
@@ -5476,7 +5794,7 @@ button {
 // `.emr-diff-deleted-marker` where lines were removed. The visual language
 // highlights the changed content itself — a soft colour wash (green = added,
 // amber = edited) or, for a reworded prose block, an inline word-level diff.
-// Changed Mermaid diagrams and image-only blocks get a quiet left accent bar.
+// Changed Mermaid diagrams, equations, and image-only blocks get a quiet left accent bar.
 // The whole layer is suppressed when the reader toggles changes off.
 .emr-rendered {
   .emr-diff-block {
@@ -5540,6 +5858,7 @@ button {
     // Large visual media can't usefully carry a full-width wash. Keep only a
     // quiet left marker (hue by kind), matching the Mermaid treatment.
     &.emr-diff-mermaid,
+    &.emr-diff-math,
     &.emr-diff-image {
       background: none;
       border-radius: 0;
@@ -6241,13 +6560,15 @@ button {
   }
 }
 
-// --- Mermaid "view source" affordance ------------------------------------
+// --- Generated-content "view source" affordance ---------------------------
 
-.emr-mermaid {
+.emr-mermaid,
+.emr-math {
   position: relative;
 }
 
-.emr-mermaid-source-btn {
+.emr-mermaid-source-btn,
+.emr-math-source-btn {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -6264,7 +6585,8 @@ button {
   opacity: 0;
   transition: opacity 0.12s ease;
 
-  .emr-mermaid:hover & {
+  .emr-mermaid:hover &,
+  .emr-math:hover & {
     opacity: 1;
   }
 
@@ -6274,7 +6596,7 @@ button {
   }
 }
 
-.emr-mermaid-modal-overlay {
+.emr-generated-source-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -6342,7 +6664,7 @@ button {
   gap: 8px;
 }
 
-.emr-mermaid-modal {
+.emr-generated-source-modal {
   display: flex;
   flex-direction: column;
   width: min(960px, 100%);
@@ -6354,36 +6676,220 @@ button {
   overflow: hidden;
 }
 
-.emr-mermaid-modal-header {
+.emr-generated-source-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  min-height: 50px;
+  padding: 0 9px 0 14px;
   border-bottom: 1px solid var(--emr-rule);
   background: var(--emr-faint);
 }
 
-.emr-mermaid-modal-title {
-  flex: 1 1 auto;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--emr-fg);
+.emr-generated-source-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
-.emr-mermaid-modal-actions {
+.emr-generated-source-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  color: var(--emr-muted);
+  background: var(--emr-bg);
+  border: 1px solid var(--emr-rule);
+  border-radius: 5px;
+  font-family: var(--emr-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  font-weight: 700;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.emr-generated-source-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--emr-fg);
+  white-space: nowrap;
+}
+
+.emr-generated-source-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
   flex: 0 0 auto;
 }
 
-.emr-mermaid-modal-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  min-height: 0;
-  overflow: hidden;
+.emr-generated-source-view-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 108px;
+  gap: 3px;
 }
 
-.emr-mermaid-modal-source {
+.emr-generated-source-toggle,
+.emr-generated-source-command {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 7px;
+  color: var(--emr-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 80ms ease,
+    color 80ms ease,
+    box-shadow 80ms ease;
+
+  &:hover {
+    color: var(--emr-fg);
+    background: color-mix(in srgb, var(--emr-rule) 45%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--emr-accent);
+    outline-offset: 1px;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.emr-generated-source-changes {
+  min-width: 30px;
+  padding-inline: 6px;
+
+  svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 2.2;
+  }
+
+  &[aria-pressed="true"] {
+    color: var(--emr-accent);
+    background: color-mix(in srgb, var(--emr-accent) 8%, transparent);
+  }
+}
+
+.emr-generated-source-before[aria-pressed="true"] {
+  color: color-mix(in srgb, var(--emr-diff-modified) 82%, var(--emr-fg));
+  background: color-mix(in srgb, var(--emr-diff-modified) 13%, var(--emr-bg));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--emr-diff-modified) 32%, transparent);
+}
+
+:root[data-emr-theme="hc-light"]
+  .emr-generated-source-before[aria-pressed="true"] {
+  color: var(--emr-fg);
+  background: color-mix(in srgb, var(--emr-diff-modified) 24%, var(--emr-bg));
+  box-shadow: inset 0 0 0 2px var(--emr-diff-modified);
+}
+
+:root[data-emr-theme="hc-dark"]
+  .emr-generated-source-before[aria-pressed="true"] {
+  color: var(--emr-bg);
+  background: var(--emr-diff-modified);
+  box-shadow: inset 0 0 0 2px var(--emr-diff-modified);
+}
+
+.emr-generated-source-action-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--emr-rule);
+}
+
+.emr-generated-source-command {
+  color: var(--emr-fg);
+  font-weight: 600;
+}
+
+.emr-generated-source-copy {
+  min-width: 95px;
+  padding-inline: 8px;
+}
+
+.emr-generated-source-close {
+  width: 30px;
+  padding: 0;
+}
+
+@media (max-width: 620px) {
+  .emr-generated-source-header {
+    padding-inline: 8px;
+  }
+
+  .emr-generated-source-kind {
+    display: none;
+  }
+
+  .emr-generated-source-copy {
+    width: 30px;
+    min-width: 30px;
+    padding: 0;
+
+    span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  }
+}
+
+// The overlay centres the modal, so any content-driven height change would
+// shift it under the pointer when a header toggle is clicked. Both panes
+// scroll, so pin the body and let the content move instead of the frame. The
+// height is per KIND (which cannot change while the callout is open, so each
+// stays stable): diagrams are tall, equations are a line or two.
+.emr-generated-source-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: clamp(200px, 34vh, 300px);
+  min-height: 0;
+  overflow: hidden;
+
+  &[data-kind="mermaid"] {
+    height: clamp(300px, 56vh, 480px);
+  }
+}
+
+.emr-generated-source-code {
   margin: 0;
   padding: 16px;
   overflow: auto;
@@ -6393,15 +6899,14 @@ button {
   line-height: 1.55;
   color: var(--emr-fg);
   background: var(--emr-bg);
-  white-space: pre;
+  // Matches the diff view below so toggling Changes never re-wraps the source.
+  white-space: pre-wrap;
 }
 
 // Word-level diff of the diagram definition (shown when the diagram changed
 // in the PR). Mirrors the article's inline marks, scoped here since the modal
 // renders outside `.emr-rendered`.
-.emr-mermaid-modal-source-diff {
-  white-space: pre-wrap;
-
+.emr-generated-source-code-diff {
   .emr-word-added {
     border-radius: 2px;
     background: color-mix(in srgb, var(--emr-diff-added) 18%, transparent);
@@ -6428,11 +6933,21 @@ button {
   }
 }
 
-.emr-mermaid-modal-preview {
+.emr-generated-source-preview {
   overflow: auto;
   padding: 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  // `safe` keeps the top of an oversized diagram reachable; plain centring
+  // would push it past the scroll origin.
+  align-items: safe center;
+  justify-content: safe center;
   background: var(--emr-bg);
+
+  // Without this the flex container shrink-wraps each block to its own content
+  // width, turning it into a scroll container that shows a scrollbar for any
+  // sub-pixel overhang (a `\sqrt` tail) even with room to spare.
+  > .emr-math,
+  > .emr-mermaid {
+    width: 100%;
+  }
 }

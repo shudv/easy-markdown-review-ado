@@ -191,7 +191,7 @@ module.exports = (env, argv) => {
             // CSS is not carried as (poorly compressible) JS string literals
             // inside the entry bundles.
             isDev ? "style-loader" : MiniCssExtractPlugin.loader,
-            { loader: "css-loader", options: { url: false } },
+            { loader: "css-loader", options: { url: true } },
             { loader: "sass-loader", options: { api: "modern" } },
           ],
         },
@@ -206,6 +206,10 @@ module.exports = (env, argv) => {
         // Vendor-neutral telemetry config; absent values resolve to a no-op
         // sink at runtime. Stringified so the object literal is inlined.
         __EMR_TELEMETRY_CONFIG__: JSON.stringify(telemetryDefineConfig(isDev)),
+        // Dev-only fault injection (src/dev/faults.ts) for reproducing the ADO
+        // token dead window, slow hosts, etc. `false` in production, where the
+        // guarded code is dropped; scripts/check-no-dev-faults.mjs verifies.
+        __EMR_DEV_FAULTS__: JSON.stringify(isDev),
       }),
       new HtmlWebpackPlugin({
         template: "./src/pr-tab/pr-tab.html",

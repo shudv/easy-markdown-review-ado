@@ -14,10 +14,11 @@ import { isResolvedLike } from "../../types";
 import { Avatar } from "./Avatar";
 import { CommentMarkdown } from "./CommentMarkdown";
 import { Composer } from "./Composer";
-import { useCommentLink } from "../../comments/commentLink";
+import { RegisterEditorContext } from "./editorRegistry";
+import { useDeepLink } from "../deepLink";
 import { copyText } from "../../comments/clipboard";
 import { formatLikeTooltip } from "../../comments/likeTooltip";
-import { trackUserFacingError } from "../../telemetry";
+import { events, track, trackUserFacingError } from "../../telemetry";
 
 interface CommentRowProps {
   threadId: string;
@@ -34,7 +35,15 @@ interface CommentRowProps {
    * historical / orphan threads which are read-only.
    */
   interactive: boolean;
-  onEdit: (threadId: string, commentId: string, newBody: string) => void;
+  /**
+   * Save an edit. May resolve to `false` when the save failed, in which case
+   * the editor stays open with the user's text.
+   */
+  onEdit: (
+    threadId: string,
+    commentId: string,
+    newBody: string,
+  ) => void | Promise<boolean>;
   onDelete: (threadId: string, commentId: string) => void;
   onResolveThread: (threadId: string) => void;
   onReopenThread: (threadId: string) => void;
@@ -70,14 +79,25 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
   } = props;
 
   const [editing, setEditing] = React.useState(false);
+  // Each open of the editor is a new session; a save that lands later (e.g.
+  // held through an Azure DevOps reconnect) may only close the session it
+  // came from, and only while that editor still shows exactly what was saved.
+  const editSessionRef = React.useRef(0);
+  const editTextRef = React.useRef("");
+  const registerEditor = React.useContext(RegisterEditorContext);
+  React.useEffect(
+    () => (editing ? registerEditor() : undefined),
+    [editing, registerEditor],
+  );
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirm, setConfirm] = React.useState<ConfirmMode>(null);
   const [linkState, setLinkState] = React.useState<
     "idle" | "copied" | "failed"
   >("idle");
-  // Host-supplied builder for a shareable deep link to this thread. Absent in
-  // dev / standalone, where we fall back to an in-iframe hash.
-  const buildCommentLink = useCommentLink();
+  // Host-supplied builder for a shareable deep link to this thread. Absent on
+  // surfaces with no shareable URL, where the "Link to comment" item is hidden
+  // (the iframe's own URL is a CDN asset that opens a blank page).
+  const buildDeepLink = useDeepLink();
 
   const menuRef = React.useRef<HTMLDivElement>(null);
   const menuBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -120,6 +140,11 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
   const canEdit = interactive && isOwn;
   const canDelete = interactive && isOwn;
   const canReact = interactive;
+  const canLink = buildDeepLink !== null;
+  // Thread actions always exist on the first comment; a later reply may have
+  // nothing to offer (someone else's reply on a surface with no shareable URL),
+  // in which case the ⋯ button is hidden rather than opening an empty menu.
+  const hasMenuItems = canLink || canEdit || canDelete || isFirst;
   const reactions = comment.reactions ?? [];
   const likeReaction = reactions.find((r) => r.kind === "like");
   const likeUsers = likeReaction?.users ?? [];
@@ -133,20 +158,23 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
   };
 
   const handleLink = () => {
-    // Prefer the host's real, shareable surface URL (Documents hub / PR tab);
-    // fall back to the in-iframe hash when no builder is wired (dev/standalone).
-    const url =
-      buildCommentLink?.(threadId) ??
-      `${window.location.origin}${window.location.pathname}#comment-${comment.id}`;
+    /* v8 ignore next -- the item only renders when a builder exists */
+    if (!buildDeepLink) return;
+    const url = buildDeepLink({ kind: "comment", threadId });
     // Keep the menu open so the inline label confirms the result. `copyText`
     // resolves to a boolean (never rejects), so a host iframe blocking the
     // async Clipboard API can't surface as an unhandled rejection — and we only
     // claim success when a copy is actually confirmed.
-    void copyText(url).then((ok) => {
+    const copied = url ? copyText(url) : Promise.resolve(false);
+    void copied.then((ok) => {
       setLinkState(ok ? "copied" : "failed");
-      if (!ok) {
+      if (ok) {
+        track(events.linkCopied({ target: "comment" }));
+      } else {
         trackUserFacingError({
-          error: new Error("Comment link copy failed"),
+          error: new Error(
+            url ? "Comment link copy failed" : "Comment link unavailable",
+          ),
           source: "CommentRow.copyLink",
           operation: "comment-link-copy",
           impact: "action-failed",
@@ -157,6 +185,7 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
   };
 
   const handleEdit = () => {
+    editSessionRef.current += 1;
     setEditing(true);
     closeMenu();
   };
@@ -229,22 +258,24 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="emr-comment-tools-hover">
-                <button
-                  ref={menuBtnRef}
-                  type="button"
-                  className={`emr-icon-btn${menuOpen ? " is-open" : ""}`}
-                  aria-label="More options"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  title="More options"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen((o) => !o);
-                    setConfirm(null);
-                  }}
-                >
-                  <SvgMore />
-                </button>
+                {hasMenuItems ? (
+                  <button
+                    ref={menuBtnRef}
+                    type="button"
+                    className={`emr-icon-btn${menuOpen ? " is-open" : ""}`}
+                    aria-label="More options"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    title="More options"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen((o) => !o);
+                      setConfirm(null);
+                    }}
+                  >
+                    <SvgMore />
+                  </button>
+                ) : null}
                 {canReact && likeCount === 0 ? (
                   <button
                     type="button"
@@ -297,23 +328,25 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
                 >
                   {confirm === null ? (
                     <>
-                      <button
-                        type="button"
-                        className="emr-popover-item"
-                        role="menuitem"
-                        onClick={handleLink}
-                      >
-                        <span className="emr-popover-icon">
-                          <SvgLink />
-                        </span>
-                        <span>
-                          {linkState === "copied"
-                            ? "Link copied"
-                            : linkState === "failed"
-                              ? "Couldn't copy link"
-                              : "Link to comment"}
-                        </span>
-                      </button>
+                      {canLink ? (
+                        <button
+                          type="button"
+                          className="emr-popover-item"
+                          role="menuitem"
+                          onClick={handleLink}
+                        >
+                          <span className="emr-popover-icon">
+                            <SvgLink />
+                          </span>
+                          <span>
+                            {linkState === "copied"
+                              ? "Link copied"
+                              : linkState === "failed"
+                                ? "Couldn't copy link"
+                                : "Link to comment"}
+                          </span>
+                        </button>
+                      ) : null}
                       {canEdit ? (
                         <button
                           type="button"
@@ -460,11 +493,28 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
               initial={comment.bodyMarkdown}
               submitLabel="Save"
               autoFocus
+              onChange={(text) => {
+                editTextRef.current = text;
+              }}
               onSubmit={(body) => {
-                onEdit(threadId, comment.id, body);
+                // Close only once the save went through, and only the editor
+                // session that sent it, still holding exactly that text. A
+                // failed save, newer typing, or a cancel-and-reopen keeps the
+                // user's current text on screen.
+                const session = editSessionRef.current;
+                void Promise.resolve(onEdit(threadId, comment.id, body)).then(
+                  (saved) => {
+                    if (saved === false) return;
+                    if (editSessionRef.current !== session) return;
+                    if (editTextRef.current.trim() !== body) return;
+                    setEditing(false);
+                  },
+                );
+              }}
+              onCancel={() => {
+                editSessionRef.current += 1;
                 setEditing(false);
               }}
-              onCancel={() => setEditing(false)}
             />
           </div>
         ) : (

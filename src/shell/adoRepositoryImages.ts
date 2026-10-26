@@ -1,12 +1,9 @@
-import { getClient } from "azure-devops-extension-api";
-import {
-  GitRestClient,
-  type GitVersionDescriptor,
-} from "azure-devops-extension-api/Git";
+import type { GitVersionDescriptor } from "azure-devops-extension-api/Git";
 
 import { repositoryImageMimeType } from "../markdown/documentImages";
 import { fetchRepositoryImageContent } from "./adoRepositoryImages.helpers";
 import { withRetry } from "./retry";
+import { sharedGitClient } from "./adoClients";
 
 const objectUrls = new Map<string, Promise<string | undefined>>();
 
@@ -28,27 +25,27 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
   if (cached) return cached;
 
   const pending = (async () => {
-    try {
-      const content = await withRetry(
-        () =>
-          fetchRepositoryImageContent(getClient(GitRestClient), {
-            repositoryId,
-            project,
-            path,
-            versionDescriptor,
-          }),
-        {
-          mode: "read",
-          attempts: 2,
-          label: "resolveAdoRepositoryImageObjectUrl.getItemContent",
-        },
-      );
-      const blob = new Blob([content], { type: repositoryImageMimeType(path) });
-      return URL.createObjectURL(blob);
-    } catch {
-      return undefined;
-    }
+    const content = await withRetry(
+      () =>
+        fetchRepositoryImageContent(sharedGitClient(), {
+          repositoryId,
+          project,
+          path,
+          versionDescriptor,
+        }),
+      {
+        mode: "read",
+        attempts: 2,
+        label: "resolveAdoRepositoryImageObjectUrl.getItemContent",
+      },
+    );
+    const blob = new Blob([content], { type: repositoryImageMimeType(path) });
+    return URL.createObjectURL(blob);
   })();
+  // Surface the real failure (status + ADO code) to the reader's telemetry
+  // instead of a bare "failed to load", and don't cache it — a transient
+  // failure must not keep the image broken for the rest of the session.
+  pending.catch(() => objectUrls.delete(key));
   objectUrls.set(key, pending);
   return pending;
 }

@@ -23,9 +23,10 @@ import {
   type MentionLinkResolution,
 } from "../comments/mentionLinks";
 import {
-  CommentLinkContext,
-  type CommentLinkBuilder,
-} from "../comments/commentLink";
+  DeepLinkContext,
+  type DeepLinkBuilder,
+  type DeepLinkTarget,
+} from "../shell/deepLink";
 import { refreshHostTheme } from "../theme/theme";
 import {
   events,
@@ -169,14 +170,37 @@ interface DocumentsAppProps {
    */
   initialActiveThreadId?: string;
   /**
-   * Builds a shareable deep link to a thread in the given repo/document, used
-   * by the "Link to comment" action. Undefined in standalone (no host URL).
+   * Deep-link seed (`?anchor=`): the heading to scroll to on first mount of
+   * the initial repo. Forwarded to PrShell alongside `initialSelectedPath`.
    */
-  buildCommentLink?: (
+  initialAnchor?: string;
+  /**
+   * Deep-link seed (`?text=`): the text to flash on first mount of the
+   * initial repo. Forwarded to PrShell alongside `initialSelectedPath`.
+   */
+  initialTextFragment?: string;
+  /**
+   * Builds a shareable deep link to a thread, heading, or text in the given
+   * repo/document, used by "Link to comment" and the heading / selection link
+   * buttons.
+   * Undefined in standalone (no host URL) — the link affordances are hidden.
+   */
+  buildDeepLink?: (
     repoId: string,
     path: string,
-    threadId: string,
+    target: DeepLinkTarget,
   ) => string | undefined;
+  /**
+   * Called after the user copies a heading link, so the host can mirror the
+   * slug into the route's `?anchor=` param. Receives the active repo id.
+   */
+  onHeadingLinkCopied?: (repoId: string, anchor: string) => void;
+  /** Called after a link to selected text is copied (see PrShell). */
+  onTextLinkCopied?: (
+    repoId: string,
+    text: string,
+    anchor: string | undefined,
+  ) => void;
   /**
    * Called when the active comment thread changes, so the host can mirror it
    * into the route's `?comment=` param (the inverse of `initialActiveThreadId`).
@@ -674,6 +698,20 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     return async (_signal: AbortSignal) => loadThreadsFor(repoIdAtBind);
   }, [selectedRepo, readOnly, loadThreadsFor]);
 
+  // Shareable-link builder for the active document. Closes over the current
+  // repo + path so callers only pass the target (thread or heading). Null when
+  // the host can't build a shareable URL (standalone). Declared before the
+  // early return below so the hook order is stable across renders.
+  const buildDeepLinkFor = props.buildDeepLink;
+  const deepLinkBuilder = React.useMemo<DeepLinkBuilder | null>(
+    () =>
+      buildDeepLinkFor
+        ? (target: DeepLinkTarget) =>
+            buildDeepLinkFor(selectedRepoId, activeDocPath, target)
+        : null,
+    [buildDeepLinkFor, selectedRepoId, activeDocPath],
+  );
+
   if (!selectedRepo || !syntheticPr) {
     return (
       <div className="emr-error">
@@ -766,19 +804,6 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
         }
       : null;
 
-  // "Link to comment" builder for the active document. Closes over the current
-  // repo + path so CommentRow only needs to pass the thread id. Null when the
-  // host can't build a shareable URL (standalone).
-  const buildCommentLink = props.buildCommentLink;
-  const commentLinkBuilder = React.useMemo<CommentLinkBuilder | null>(
-    () =>
-      buildCommentLink
-        ? (threadId: string) =>
-            buildCommentLink(selectedRepoId, activeDocPath, threadId)
-        : null,
-    [buildCommentLink, selectedRepoId, activeDocPath],
-  );
-
   // A repo whose content has loaded but holds no markdown at all (no root
   // files and no subfolders to expand). Drives the friendly "No documents"
   // empty state instead of mounting PrShell on an empty file list.
@@ -808,7 +833,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
 
   return (
     <MentionLinkContext.Provider value={mentionLinks}>
-      <CommentLinkContext.Provider value={commentLinkBuilder}>
+      <DeepLinkContext.Provider value={deepLinkBuilder}>
         <div className="emr-docs-app">
           {/*
             PrShell mounts as soon as the repo's routing is known — it does NOT
@@ -877,6 +902,18 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
                   ? props.initialActiveThreadId
                   : undefined
               }
+              initialAnchor={
+                !initialPathConsumedRef.current &&
+                selectedRepoId === initialRepoId
+                  ? props.initialAnchor
+                  : undefined
+              }
+              initialTextFragment={
+                !initialPathConsumedRef.current &&
+                selectedRepoId === initialRepoId
+                  ? props.initialTextFragment
+                  : undefined
+              }
               onSelectPath={(path) => {
                 setActiveDocPath(path);
                 onSelectPath?.(selectedRepoId, path);
@@ -884,13 +921,19 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
               onActiveThreadChange={(threadId) =>
                 props.onActiveThreadChange?.(selectedRepoId, threadId)
               }
+              onHeadingLinkCopied={(anchor) =>
+                props.onHeadingLinkCopied?.(selectedRepoId, anchor)
+              }
+              onTextLinkCopied={(text, anchor) =>
+                props.onTextLinkCopied?.(selectedRepoId, text, anchor)
+              }
               onDocNavigate={(target) =>
                 props.onDocNavigate?.(selectedRepoId, target)
               }
             />
           )}
         </div>
-      </CommentLinkContext.Provider>
+      </DeepLinkContext.Provider>
     </MentionLinkContext.Provider>
   );
 }

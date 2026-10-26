@@ -124,7 +124,7 @@ describe("hydrateDocumentImages", () => {
     expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
     expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
       error: expect.objectContaining({
-        message: "Repository image failed to load",
+        message: "Repository image not available",
       }),
       source: "DocumentImage.hydrate",
       operation: "repository-image-load",
@@ -174,4 +174,49 @@ describe("hydrateDocumentImages", () => {
       impact: "degraded",
     });
   });
+
+  it("reports an image that fetched but can't be displayed", async () => {
+    trackUserFacingErrorMock.mockClear();
+    const root = document.createElement("div");
+    root.innerHTML = '<img src="./not-an-image.png" alt="Pointer">';
+    hydrateDocumentImages(root, "/docs/guide.md", async () => "blob:x");
+    const image = root.querySelector<HTMLImageElement>("img")!;
+    await vi.waitFor(() => expect(image.src).toBe("blob:x"));
+
+    image.dispatchEvent(new Event("error"));
+
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "Repository image couldn't be displayed",
+        }),
+      }),
+    );
+  });
+
+  // A broken image link in the author's Markdown is content health.
+  it.each([
+    [
+      "TF401174",
+      new Error("TF401174: The item '/docs/gone.png' could not be found."),
+    ],
+    ["a 404", Object.assign(new Error("Not Found"), { status: 404 })],
+  ])(
+    "shows a missing repository image (%s) as unavailable without reporting it",
+    async (_label, failure) => {
+      trackUserFacingErrorMock.mockClear();
+      const root = document.createElement("div");
+      root.innerHTML = '<img src="./gone.png" alt="Gone">';
+      hydrateDocumentImages(root, "/docs/guide.md", async () => {
+        throw failure;
+      });
+
+      const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
+      await vi.waitFor(() =>
+        expect(frame.classList.contains("is-error")).toBe(true),
+      );
+      expect(frame.dataset.imagePath).toBe("/docs/gone.png");
+      expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    },
+  );
 });

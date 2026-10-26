@@ -8,12 +8,12 @@ import { ArticleView } from "./ArticleView";
 
 const ORIGINAL_LINE =
   "The authoritative directory layout and file conventions are documented in " +
-  "[`docs/TelemetryAnalytics/README.md`](../docs/TelemetryAnalytics/README.md).";
+  "[`docs/ReviewGuide/README.md`](../docs/ReviewGuide/README.md).";
 const CURRENT_LINE =
   "The authoritative directory layout and file conventions are documented in " +
-  "[`docs/TelemetryAnalytics/README.md`](https://o365exchange.visualstudio.com/O365%20Core/_git/BlackstoneRA?path=/docs/TelemetryAnalytics/README.md)" +
+  "[`docs/ReviewGuide/README.md`](https://example.visualstudio.com/Example%20Project/_git/SharedDocs?path=/docs/ReviewGuide/README.md)" +
   " — now hosted in the shared repository.";
-const SOURCE = ["# Telemetry Analytics", "", CURRENT_LINE, ""].join("\n");
+const SOURCE = ["# Review Guide", "", CURRENT_LINE, ""].join("\n");
 const DIFF: DiffRange[] = [
   {
     startLine: 3,
@@ -38,9 +38,9 @@ const meta = {
   ],
   args: {
     pristineHtml: renderMarkdownSync(SOURCE),
-    documentPath: "/docs/TelemetryAnalytics/README.md",
+    documentPath: "/docs/ReviewGuide/README.md",
     currentSource: SOURCE,
-    originalSource: ["# Telemetry Analytics", "", ORIGINAL_LINE, ""].join("\n"),
+    originalSource: ["# Review Guide", "", ORIGINAL_LINE, ""].join("\n"),
     threads: [],
     activeThreadId: null,
     draftAnchor: null,
@@ -89,9 +89,9 @@ export const TargetCalloutOpen: Story = {
       "..",
     );
     expect(targetDiff.querySelector(".emr-word-added")?.textContent).toContain(
-      "o365exchange.visualstudio.com",
+      "example.visualstudio.com",
     );
-    expect(targetDiff.textContent).toContain("/docs/TelemetryAnalytics");
-    expect(targetDiff.textContent).toContain("o365exchange.visualstudio.com");
+    expect(targetDiff.textContent).toContain("/docs/ReviewGuide");
+    expect(targetDiff.textContent).toContain("example.visualstudio.com");
   },
 };

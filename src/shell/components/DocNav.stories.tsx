@@ -4,7 +4,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
-import { DocNav } from "./DocNav";
+import { DocNav, type RangeChanges } from "./DocNav";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -94,6 +94,7 @@ interface HarnessProps {
   onSelectPath: (path: string) => void;
   initialSelected?: string;
   showChangeIndicators?: boolean;
+  rangeChanges?: RangeChanges;
 }
 
 function Harness(props: HarnessProps): React.ReactElement {
@@ -129,6 +130,7 @@ function Harness(props: HarnessProps): React.ReactElement {
         onExpandFolder={props.onExpandFolder}
         onSearchFiles={props.onSearchFiles}
         showChangeIndicators={props.showChangeIndicators}
+        rangeChanges={props.rangeChanges}
       />
       <main
         ref={scrollRef as React.Ref<HTMLElement>}
@@ -440,6 +442,85 @@ export const NoChangeIndicators: Story = {
     await userEvent.type(input, "internal");
     await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
     expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
+  },
+};
+
+/**
+ * Comparing specific PR updates ("Update 4 → 5"): rows show each file's change
+ * WITHIN those updates (internal.md was added earlier in the PR but only
+ * edited in this update → M, not A), and files the updates don't touch are
+ * dimmed with the reason in their tooltip and screen-reader text — in the
+ * tree and in search results.
+ */
+export const RangeChangesMarkTouchedFiles: Story = {
+  args: {
+    rangeChanges: {
+      label: "Update 4 → 5",
+      byPath: {
+        "docs/api/guide.md": "modified",
+        "docs/api/internal.md": "modified",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const nav = within(
+      canvasElement.querySelector(".emr-docnav") as HTMLElement,
+    );
+    const rowOf = (name: RegExp) =>
+      nav
+        .getByRole("button", { name })
+        .closest<HTMLElement>(".emr-docnav-item")!;
+    await waitFor(() => expect(nav.getByText(/internal\.md/)).toBeTruthy());
+
+    // Touched in the selection: normal row, the change WITHIN the updates.
+    const internal = rowOf(/internal\.md/);
+    await expect(internal.classList.contains("is-unchanged-in-range")).toBe(
+      false,
+    );
+    await expect(internal.dataset.changeType).toBe("modified");
+    await expect(
+      internal.querySelector(".emr-docnav-file-icon")!.textContent,
+    ).toBe("M");
+
+    // Untouched: dimmed, and says why (tooltip + accessible name).
+    const readme = rowOf(/README\.md/);
+    await expect(readme.classList.contains("is-unchanged-in-range")).toBe(true);
+    const readmeButton = readme.querySelector<HTMLElement>("button")!;
+    await expect(readmeButton.title).toContain("No changes in Update 4 → 5");
+    await expect(readmeButton).toHaveAccessibleName(
+      /README\.md \(No changes in Update 4 → 5\)/,
+    );
+    // Recedes by colour, never by fading: the filename stays readable text.
+    await expect(getComputedStyle(readmeButton).color).not.toBe(
+      getComputedStyle(internal.querySelector("button")!).color,
+    );
+    await expect(getComputedStyle(readmeButton).opacity).toBe("1");
+
+    // Search results follow the same rules.
+    await userEvent.click(
+      nav.getByRole("button", { name: "Search documents" }),
+    );
+    await userEvent.type(nav.getByRole("searchbox"), "readme");
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-docnav-search-result")?.classList,
+      ).toContain("is-unchanged-in-range"),
+    );
+    await expect(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav-search-label")!
+        .title,
+    ).toContain("No changes in Update 4 → 5");
+    await userEvent.clear(nav.getByRole("searchbox"));
+    await userEvent.type(nav.getByRole("searchbox"), "internal");
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector<HTMLElement>(".emr-docnav-search-result")!
+          .dataset.changeType,
+      ).toBe("modified"),
+    );
+    await expect(
+      canvasElement.querySelector(".emr-docnav-search-result")!.classList,
+    ).not.toContain("is-unchanged-in-range");
   },
 };
 

@@ -39,8 +39,27 @@ export const EVENT = {
   MermaidSourceViewed: "mermaid.sourceViewed",
   /** User copied a Mermaid diagram's source from that modal. */
   MermaidSourceCopied: "mermaid.sourceCopied",
+  /** User opened the source modal for a rendered equation. */
+  MathSourceViewed: "math.sourceViewed",
+  /** User copied an equation's TeX source from that modal. */
+  MathSourceCopied: "math.sourceCopied",
+  /** User copied a shareable link to a comment thread, a heading, or text. */
+  LinkCopied: "link.copied",
+  /** A shared `?comment=` / `?anchor=` / `?text=` link was opened and resolved (or not). */
+  LinkOpened: "link.opened",
   /** An ADO API call was rejected with an auth status (401/403). */
   AuthFailure: "auth.failure",
+  /**
+   * An author's Mermaid diagram didn't parse as written — content health, not
+   * an extension failure: either it was auto-repaired and rendered, or it has
+   * a genuine syntax error and stays readable as source.
+   */
+  DiagramRenderIssue: "diagram.renderIssue",
+  /**
+   * A confirmed ADO token dead-window spell started or ended. Carries the
+   * token timing needed to see how long the host takes to re-mint.
+   */
+  AuthSessionRefresh: "auth.sessionRefresh",
   /**
    * A handled or uncaught exception. Not user-triggered and not emitted via an
    * `events.*` builder — it is produced by `trackException` (see
@@ -57,6 +76,16 @@ export type AnchorKind = "text-quote" | "file-level" | "line";
 
 /** How a file came to be opened. */
 export type FileOpenSource = "nav-click" | "search-result" | "deep-link";
+
+/** What a shareable deep link points at — never the thread id or heading text. */
+export type LinkTarget = "comment" | "heading" | "text";
+
+/**
+ * How a diagram that didn't parse as written ended up: `repaired` (rendered
+ * after an automatic fix, e.g. `;` in sequence-diagram text) or `syntax-error`
+ * (left as readable source).
+ */
+export type DiagramRenderOutcome = "repaired" | "syntax-error";
 
 /**
  * What marked the app "ready" for the boot-time measurement:
@@ -79,6 +108,8 @@ export const events = {
     renderReadyMs?: number;
     readyReason?: AppReadyReason;
     bootHadHiddenInterval?: boolean;
+    /** This load followed an automatic host reload (dead-window recovery). */
+    afterAutoReload?: boolean;
   }): TelemetryEvent {
     return {
       name: EVENT.AppLoaded,
@@ -88,6 +119,7 @@ export const events = {
             ...(p.bootHadHiddenInterval !== undefined
               ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
               : {}),
+            ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
           }
         : undefined,
       measurements: p
@@ -225,6 +257,57 @@ export const events = {
     };
   },
 
+  /**
+   * One ADO token dead-window spell, emitted at `start` (a request was
+   * rejected with a lapsed embedded grant) and at `end`. Timing only — seconds
+   * relative to the token's `ado_exp` / AAD `exp` claims, never the token.
+   *
+   * `outcome` on `end`:
+   *   - `remint`      — the host handed out a fresh token (seen by polling);
+   *   - `success`     — an ADO call succeeded again;
+   *   - `reload-auto` / `reload-user` — we / the user reloaded the host page;
+   *   - `left`        — the page was closed while still refreshing.
+   */
+  authSessionRefresh(p: {
+    phase: "start" | "end";
+    /** What first hit the dead window: "boot" | "poll" | "write". */
+    trigger: string;
+    grantState?: string;
+    outcome?: "remint" | "success" | "reload-auto" | "reload-user" | "left";
+    /** Seconds from the start of the spell until the AAD `exp`. */
+    secsUntilExpAtStart?: number;
+    /** Seconds the embedded `ado_exp` had already passed at the start. */
+    secsSinceAdoExpAtStart?: number;
+    /** Spell duration (end only). */
+    durationSec?: number;
+    /** Seconds before the AAD `exp` the spell ended (negative = after). */
+    secsBeforeExpAtEnd?: number;
+    /** Comment writes held for the session at the end. */
+    heldWrites?: number;
+  }): TelemetryEvent {
+    const measurements: Record<string, number> = {};
+    for (const key of [
+      "secsUntilExpAtStart",
+      "secsSinceAdoExpAtStart",
+      "durationSec",
+      "secsBeforeExpAtEnd",
+      "heldWrites",
+    ] as const) {
+      const value = p[key];
+      if (value !== undefined) measurements[key] = Math.round(value);
+    }
+    return {
+      name: EVENT.AuthSessionRefresh,
+      properties: {
+        phase: p.phase,
+        trigger: p.trigger,
+        ...(p.grantState ? { grantState: p.grantState } : {}),
+        ...(p.outcome ? { outcome: p.outcome } : {}),
+      },
+      measurements,
+    };
+  },
+
   commentReacted(p: { active: boolean; kind: string }): TelemetryEvent {
     return {
       name: EVENT.CommentReacted,
@@ -275,5 +358,38 @@ export const events = {
 
   mermaidSourceCopied(): TelemetryEvent {
     return { name: EVENT.MermaidSourceCopied };
+  },
+
+  mathSourceViewed(p: { changed: boolean }): TelemetryEvent {
+    return {
+      name: EVENT.MathSourceViewed,
+      properties: { changed: p.changed },
+    };
+  },
+
+  mathSourceCopied(): TelemetryEvent {
+    return { name: EVENT.MathSourceCopied };
+  },
+
+  linkCopied(p: { target: LinkTarget }): TelemetryEvent {
+    return { name: EVENT.LinkCopied, properties: { target: p.target } };
+  },
+
+  /**
+   * @param found Whether the linked thread/heading was located in the opened
+   *              document (a renamed heading or deleted thread can't be).
+   */
+  linkOpened(p: { target: LinkTarget; found: boolean }): TelemetryEvent {
+    return {
+      name: EVENT.LinkOpened,
+      properties: { target: p.target, found: p.found },
+    };
+  },
+
+  diagramRenderIssue(p: { outcome: DiagramRenderOutcome }): TelemetryEvent {
+    return {
+      name: EVENT.DiagramRenderIssue,
+      properties: { outcome: p.outcome },
+    };
   },
 } as const;

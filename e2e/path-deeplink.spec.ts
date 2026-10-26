@@ -21,7 +21,7 @@
 // first learns each repo's GUID the only black-box way available: selecting it
 // in the in-hub picker, which pins `?repo=<guid>` onto the host URL.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { E2E } from "./env";
 import {

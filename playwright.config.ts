@@ -8,11 +8,11 @@
 // How it fits together:
 //   1. `npm run dev:verify` serves the extension bundles from
 //      https://localhost:3000 (the dev extension's `baseUri`) under a strict,
-//      production-representative CSP. e2e enforces this strict server so the
-//      real-iframe run exercises the shipped security posture (see
-//      e2e/global-setup.ts).
+//      production-representative CSP. The `webServer` block below starts it
+//      automatically (or reuses one already running), and e2e enforces that it
+//      is the strict server (see e2e/global-setup.ts).
 //   2. The dev extension (id = `<manifest.id>-<AZDO_DEV_ID_SUFFIX>`, e.g.
-//      `easy-markdown-review-devlocal`) is installed/shared into the sandbox
+//      `emr-devlocal`) is installed/shared into the sandbox
 //      org, so ADO loads those local bundles inside real iframes.
 //   3. Playwright drives a real browser through ADO and asserts on the live
 //      contribution iframes.
@@ -52,9 +52,30 @@ const ORG_URL = (
   process.env.AZDO_ORG_URL ?? "https://dev.azure.com/your-org"
 ).replace(/\/$/, "");
 export const AUTH_STATE = resolve(__dirname, "e2e/.auth/state.json");
+const DEV_ORIGIN = (
+  process.env.AZDO_E2E_DEV_ORIGIN ?? "https://localhost:3000"
+).replace(/\/$/, "");
 
 export default defineConfig({
   testDir: "./e2e",
+  // Starts the STRICT verification dev server (`npm run dev:verify`) when
+  // nothing is answering on the dev origin, and stops it after the run. An
+  // already-running server is reused, so a long-lived `dev:verify` terminal
+  // still works. Playwright starts this before `globalSetup`, which then
+  // rejects a reused non-strict server (e.g. `dev:https`).
+  webServer: {
+    command: "npm run dev:verify",
+    url: `${DEV_ORIGIN}/pr-tab/pr-tab.html`,
+    reuseExistingServer: true,
+    ignoreHTTPSErrors: true,
+    timeout: 180_000,
+    stdout: "ignore",
+    stderr: "pipe",
+    // Log telemetry through the console sink so specs can assert on events
+    // (e.g. e2e/reconnect.spec.ts). A reused server started without it simply
+    // skips those assertions.
+    env: { TELEMETRY_DEBUG: "1" },
+  },
   // Fail fast unless the STRICT verification dev server (`npm run dev:verify`)
   // is serving the bundles: e2e runs the real app inside a real ADO iframe, so
   // we exercise it under the same production-representative CSP the host
@@ -73,18 +94,11 @@ export default defineConfig({
     // ADO uses a self-signed cert for nothing, but our dev server does — and
     // the contribution iframes are served from https://localhost:3000.
     ignoreHTTPSErrors: true,
-    // Newer Chromium enforces "Local Network Access" checks: a public origin
-    // (dev.azure.com) loading a subresource/iframe from a local address
-    // (localhost:3000) is blocked with ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS,
-    // so our dev contribution iframes never load. The faithful loop deliberately
-    // serves real bundles from localhost, so we disable that check (and the older
-    // Private Network Access preflight variants for good measure) in the test
-    // browser only. This is a browser security policy, not anything our code does.
-    launchOptions: {
-      args: [
-        "--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests",
-      ],
-    },
+    // Chromium's "Local Network Access" check blocks a public origin
+    // (dev.azure.com) from loading our localhost:3000 iframes. Rather than
+    // disable that check for every site, specs import `test` from
+    // e2e/fixtures.ts, which grants the permission to the ADO org origin only
+    // — the same scoped grant `npm run dev:ado` gives a developer's browser.
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
     trace: "retain-on-failure",

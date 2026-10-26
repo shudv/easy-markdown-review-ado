@@ -5,7 +5,7 @@
 // own (light AND dark) pins those pixels without the noise of the full shell.
 //
 // Screenshotted by visual/curated.visual.spec.ts. Deterministic: no time,
-// no animation, no Mermaid.
+// no animation, and no Mermaid (KaTeX is deterministic and covered here).
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
@@ -1908,6 +1908,108 @@ export const InlineParityDark: Story = {
   },
 };
 
+const NESTED_LIST_SOURCE = [
+  /*  1 */ "# Nested List Changes",
+  /*  2 */ "",
+  /*  3 */ "1. Keep this item.",
+  /*  4 */ "",
+  /*  5 */ "2. Benchmark each HVA-",
+  /*  6 */ "",
+  /*  7 */ "   1. Locally against the dev app perf plan.",
+  /*  8 */ "   2. Capture latency numbers from an e2e plan.",
+  /*  9 */ "",
+  /* 10 */ "   You can use the **Perf Insights** panel to capture these numbers.",
+  /* 11 */ "",
+  /* 12 */ "## Tight list",
+  /* 13 */ "",
+  /* 14 */ "- Existing parent item",
+  /* 15 */ "  - New child under an unchanged parent",
+  /* 16 */ "- New parent item",
+  /* 17 */ "  - New child under a new parent",
+  /* 18 */ "    - New grandchild under a new child",
+].join("\n");
+
+const NESTED_LIST_DIFF: DiffRange[] = [
+  { startLine: 5, endLine: 10, kind: "added" },
+  { startLine: 15, endLine: 18, kind: "added" },
+];
+
+/**
+ * Every new nested item — and the continuation paragraph after a nested list —
+ * is highlighted, and no washed item sits inside an ancestor item that also
+ * paints a tint (stacked translucent washes would read as a darker, different
+ * change).
+ */
+async function prepareNestedList(canvasElement: HTMLElement): Promise<void> {
+  await waitFor(() => {
+    const nested = canvasElement.querySelectorAll(
+      "li li.emr-diff-block--added",
+    );
+    if (nested.length < 4) {
+      throw new Error(`nested items not decorated yet (${nested.length})`);
+    }
+  });
+  const continuation = Array.from(
+    canvasElement.querySelectorAll("li > p"),
+  ).find((p) => p.textContent?.startsWith("You can use"));
+  if (!continuation?.querySelector(".emr-diff-line-wash")) {
+    throw new Error(
+      "the continuation paragraph after a nested list is unpainted",
+    );
+  }
+  for (const item of canvasElement.querySelectorAll<HTMLElement>(
+    "li.emr-diff-block",
+  )) {
+    for (
+      let ancestor = item.parentElement?.closest<HTMLElement>("li");
+      ancestor;
+      ancestor = ancestor.parentElement?.closest<HTMLElement>("li")
+    ) {
+      const paint = getComputedStyle(ancestor).backgroundColor;
+      if (paint !== "rgba(0, 0, 0, 0)" && paint !== "transparent") {
+        throw new Error(
+          `"${item.textContent?.trim().slice(0, 40)}" is washed inside a tinted ancestor item (${paint})`,
+        );
+      }
+    }
+  }
+}
+
+const NESTED_LIST_ARGS = {
+  pristineHtml: renderMarkdownSync(NESTED_LIST_SOURCE),
+  threads: [],
+  activeThreadId: null,
+  diff: NESTED_LIST_DIFF,
+};
+
+export const NestedListChangesLight: Story = {
+  decorators: [
+    (Story) => (
+      <ThemeFrame>
+        <Story />
+      </ThemeFrame>
+    ),
+  ],
+  args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list.md" },
+  play: async ({ canvasElement }) => {
+    await prepareNestedList(canvasElement);
+  },
+};
+
+export const NestedListChangesDark: Story = {
+  decorators: [
+    (Story) => (
+      <ThemeFrame theme="dark">
+        <Story />
+      </ThemeFrame>
+    ),
+  ],
+  args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list-dark.md" },
+  play: async ({ canvasElement }) => {
+    await prepareNestedList(canvasElement);
+  },
+};
+
 const PRODUCTION_SYNTAX_SOURCE = [
   /*  1 */ "# Production Documentation Syntax",
   /*  2 */ "",
@@ -2067,6 +2169,244 @@ export const ProductionSyntaxDark: Story = {
   play: async ({ canvasElement }) => {
     await prepareProductionSyntax(canvasElement);
   },
+};
+
+const EQUATION_GALLERY_SOURCE = [
+  /*  1 */ "# Equation Rendering",
+  /*  2 */ "",
+  /*  3 */ String.raw`Inline notation keeps $E = mc^2$ aligned with surrounding prose.`,
+  /*  4 */ "",
+  /*  5 */ "## RMS aggregation",
+  /*  6 */ "",
+  /*  7 */ "$$",
+  /*  8 */ String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i^2}`,
+  /*  9 */ "$$",
+  /* 10 */ "",
+  /* 11 */ "## Throughput",
+  /* 12 */ "",
+  /* 13 */ "```math",
+  /* 14 */ String.raw`F_{\mathrm{scro}\parallel} = \frac{1000n}{d}`,
+  /* 15 */ "```",
+  /* 16 */ "",
+  /* 17 */ "## Wide matrix",
+  /* 18 */ "",
+  /* 19 */ "$$",
+  /* 20 */ String.raw`\begin{bmatrix} a_{11} & a_{12} & a_{13} & a_{14} & a_{15} & a_{16} & a_{17} & a_{18} & a_{19} & a_{1,10} & a_{1,11} & a_{1,12} & a_{1,13} & a_{1,14} & a_{1,15} & a_{1,16} & a_{1,17} & a_{1,18} \end{bmatrix}`,
+  /* 21 */ "$$",
+  /* 22 */ "",
+  /* 23 */ "## Invalid source remains readable",
+  /* 24 */ "",
+  /* 25 */ String.raw`$$\frac{1000n}d}$$`,
+].join("\n");
+
+const EQUATION_GALLERY_DIFF: DiffRange[] = [
+  {
+    startLine: 8,
+    endLine: 8,
+    kind: "modified",
+    originalStartLine: 8,
+    originalEndLine: 8,
+    originalText: String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`,
+    linesAdded: 1,
+    linesDeleted: 1,
+  },
+];
+
+const EQUATION_GALLERY_ORIGINAL = EQUATION_GALLERY_SOURCE.replace(
+  String.raw`\sum_{i=1}^{n} g_i^2`,
+  String.raw`\sum_{i=1}^{n} g_i`,
+);
+
+async function prepareEquationGallery(
+  canvasElement: HTMLElement,
+): Promise<void> {
+  await waitFor(
+    () => {
+      const equations = canvasElement.querySelectorAll<HTMLElement>(
+        ".equation-gallery-frame .emr-math",
+      );
+      const rendered = canvasElement.querySelectorAll<HTMLElement>(
+        '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex',
+      );
+      const failed = canvasElement.querySelector<HTMLElement>(
+        '.equation-gallery-frame .emr-math[data-math-error="render-failed"]',
+      );
+      if (equations.length !== 5 || rendered.length !== 4 || !failed) {
+        throw new Error("equation gallery has not finished hydrating");
+      }
+    },
+    { timeout: 10_000 },
+  );
+
+  const frame = canvasElement.querySelector<HTMLElement>(
+    ".equation-gallery-frame",
+  )!;
+  const wideEquation = frame.querySelector<HTMLElement>(
+    '.emr-math--display[data-source-line="19"]',
+  )!;
+  const wideDisplay =
+    wideEquation.querySelector<HTMLElement>(".katex-display")!;
+  const changedEquation = frame.querySelector<HTMLElement>(
+    ".emr-math.emr-diff-block",
+  )!;
+  const fallback = frame.querySelector<HTMLElement>(
+    '[data-math-error="render-failed"] .emr-math-fallback',
+  );
+  if (wideDisplay.scrollWidth <= wideDisplay.clientWidth) {
+    throw new Error("wide equation does not exercise horizontal overflow");
+  }
+  if (frame.scrollWidth > frame.clientWidth) {
+    throw new Error("wide equation leaks overflow outside its owner");
+  }
+  if (!changedEquation) {
+    throw new Error("modified equation lacks atomic diff decoration");
+  }
+  if (changedEquation.querySelector(".emr-word-added, .emr-word-removed")) {
+    throw new Error("modified equation received internal word-diff markup");
+  }
+  if (fallback?.textContent !== String.raw`\frac{1000n}d}`) {
+    throw new Error("malformed equation source fallback is not readable");
+  }
+
+  const sourceButton = changedEquation.querySelector<HTMLElement>(
+    ":scope > .emr-math-source-btn",
+  );
+  if (!sourceButton) {
+    throw new Error("modified equation lacks a Source affordance");
+  }
+  if (changedEquation.querySelector(".emr-diff-before-trigger")) {
+    throw new Error("equation exposes a redundant standalone Before control");
+  }
+}
+
+function equationGalleryDecorator(
+  theme?: "dark" | "hc-light" | "hc-dark",
+): (Story: React.ComponentType) => React.ReactElement {
+  return (Story) => (
+    <ThemeFrame theme={theme} width={760}>
+      <div className="equation-gallery-frame">
+        <Story />
+      </div>
+    </ThemeFrame>
+  );
+}
+
+const EQUATION_GALLERY_ARGS = {
+  pristineHtml: renderMarkdownSync(EQUATION_GALLERY_SOURCE),
+  currentSource: EQUATION_GALLERY_SOURCE,
+  originalSource: EQUATION_GALLERY_ORIGINAL,
+  threads: [],
+  activeThreadId: null,
+  diff: EQUATION_GALLERY_DIFF,
+  storageKey: "visual-equation-gallery.md",
+};
+
+export const EquationGalleryLight: Story = {
+  decorators: [equationGalleryDecorator()],
+  args: EQUATION_GALLERY_ARGS,
+  play: async ({ canvasElement }) => {
+    await prepareEquationGallery(canvasElement);
+  },
+};
+
+export const EquationGalleryDark: Story = {
+  decorators: [equationGalleryDecorator("dark")],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-gallery-dark.md",
+  },
+  play: async ({ canvasElement }) => {
+    await prepareEquationGallery(canvasElement);
+  },
+};
+
+export const EquationSourceDiff: Story = {
+  decorators: [equationGalleryDecorator()],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-source-diff.md",
+  },
+  play: async ({ canvasElement }) => {
+    await prepareEquationGallery(canvasElement);
+    const equation = canvasElement.querySelector<HTMLElement>(
+      '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
+    )!;
+    equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
+    await waitFor(() => {
+      const modal = canvasElement.querySelector<HTMLElement>(
+        ".emr-generated-source-modal",
+      );
+      if (!modal) throw new Error("equation source modal did not open");
+      if (
+        modal.querySelector(".emr-word-added")?.textContent !== "^2" ||
+        !modal.querySelector(".emr-generated-source-preview .katex")
+      ) {
+        throw new Error("equation source diff or preview is incomplete");
+      }
+    });
+  },
+};
+
+export const EquationSourceBefore: Story = {
+  decorators: [equationGalleryDecorator()],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-source-before.md",
+  },
+  play: async ({ canvasElement }) => {
+    await prepareEquationGallery(canvasElement);
+    const equation = canvasElement.querySelector<HTMLElement>(
+      '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
+    )!;
+    equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
+    await waitFor(() => {
+      const before = canvasElement.querySelector<HTMLButtonElement>(
+        '.emr-generated-source-before[aria-pressed="false"]',
+      );
+      if (!before) throw new Error("Before source view is unavailable");
+      before.click();
+    });
+    await waitFor(() => {
+      const modal = canvasElement.querySelector<HTMLElement>(
+        ".emr-generated-source-modal",
+      );
+      const source = modal?.querySelector(
+        ".emr-generated-source-code code",
+      )?.textContent;
+      const preview = modal?.querySelector("annotation")?.textContent;
+      const expected = String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`;
+      if (source !== expected || preview !== expected) {
+        throw new Error("Before source or rendered preview is incorrect");
+      }
+    });
+  },
+};
+
+export const EquationSourceBeforeDark: Story = {
+  decorators: [equationGalleryDecorator("dark")],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-source-before-dark.md",
+  },
+  play: EquationSourceBefore.play,
+};
+
+export const EquationSourceBeforeHighContrastLight: Story = {
+  decorators: [equationGalleryDecorator("hc-light")],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-source-before-hc-light.md",
+  },
+  play: EquationSourceBefore.play,
+};
+
+export const EquationSourceBeforeHighContrastDark: Story = {
+  decorators: [equationGalleryDecorator("hc-dark")],
+  args: {
+    ...EQUATION_GALLERY_ARGS,
+    storageKey: "visual-equation-source-before-hc-dark.md",
+  },
+  play: EquationSourceBefore.play,
 };
 
 const EDGE_DESTINATION =

@@ -44,6 +44,8 @@ export type TelemetryTable =
 const DIAGNOSTIC_EVENTS: ReadonlySet<string> = new Set([
   EVENT.AppLoaded,
   EVENT.AuthFailure,
+  EVENT.AuthSessionRefresh,
+  EVENT.DiagramRenderIssue,
   EVENT.AppException,
 ]);
 

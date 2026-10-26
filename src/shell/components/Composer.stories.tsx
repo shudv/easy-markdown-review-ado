@@ -9,6 +9,7 @@ import {
 } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
 import { Composer } from "./Composer";
+import { ComposerBusyContext } from "./composerBusy";
 
 const localApi = new FixtureCommentApi();
 
@@ -223,5 +224,33 @@ export const SearchFailure: Story = {
     await waitFor(() => expect(canvas.queryByRole("listbox")).toBeNull(), {
       timeout: 3000,
     });
+  },
+};
+
+/**
+ * While a write is in flight (including one held through the ADO session
+ * refresh), submit is disabled — by click and by Ctrl+Enter — so the comment
+ * can't be posted twice.
+ */
+export const BusyWhileSending: Story = {
+  decorators: [
+    (Story: React.ComponentType) => (
+      <ComposerBusyContext.Provider value={true}>
+        <Story />
+      </ComposerBusyContext.Provider>
+    ),
+  ],
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
+    await userEvent.click(ta);
+    await userEvent.type(ta, "Second click");
+    const submit = canvas.getByRole("button", {
+      name: "Sending…",
+    }) as HTMLButtonElement;
+    await expect(submit.disabled).toBe(true);
+    await expect(submit.getAttribute("aria-busy")).toBe("true");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await expect(args.onSubmit).not.toHaveBeenCalled();
   },
 };

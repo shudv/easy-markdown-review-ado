@@ -23,6 +23,7 @@ export {
   markBootPhase,
   markBootAuthWaitStart,
   markBootAuthWaitEnd,
+  markBootAfterAutoReload,
   markAppReady,
 } from "./bootTiming";
 export type { BootPhase, BootTimingEnvironment } from "./bootTiming";

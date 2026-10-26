@@ -20,7 +20,6 @@
 // which have no file/line context, land in the rail's general tray. ADO
 // system threads (votes, reviewer/status changes) are filtered out.
 
-import { getClient } from "azure-devops-extension-api";
 import * as SDK from "azure-devops-extension-sdk";
 import {
   GitRestClient,
@@ -32,10 +31,7 @@ import {
   type GitPullRequestSearchCriteria,
   type Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
-import {
-  WorkItemTrackingRestClient,
-  type WorkItem,
-} from "azure-devops-extension-api/WorkItemTracking";
+import type { WorkItem } from "azure-devops-extension-api/WorkItemTracking";
 import {
   IdentityServiceIds,
   type IIdentity,
@@ -60,7 +56,9 @@ import type {
   WorkItemSuggestion,
 } from "../comments/mentions";
 import { withRetry } from "./retry";
-import { detectSessionRefreshing, ensureAdoSessionLive } from "./adoAuthToken";
+import { withAdoSessionRefreshDetection } from "./adoAuthToken";
+import { adoSession } from "./adoSession";
+import { readHostToken } from "./adoSessionSdk";
 import {
   adoThreadToLocal,
   buildReplyComment,
@@ -85,6 +83,7 @@ import {
   PROP_SCHEMA,
   SCHEMA_VERSION,
 } from "./adoCommentApi.helpers";
+import { sharedGitClient, sharedWorkItemClient } from "./adoClients";
 
 // Re-export `adoThreadToLocal` (used by adoGitData's thread mapping) from the
 // same place as the SDK-touching API surface.
@@ -129,11 +128,27 @@ export async function loadAdoThreads(
   pullRequestId: number,
   project: string,
 ): Promise<CommentThread[]> {
-  const gitClient = getClient(GitRestClient);
-  const raw = await withRetry(
-    () => gitClient.getThreads(repositoryId, pullRequestId, project),
-    { mode: "read", label: "loadAdoThreads.getThreads" },
-  );
+  const gitClient = sharedGitClient();
+  // Classify the token dead window inside the retry so it isn't spent on
+  // futile 401s (`SessionRefreshingError` is non-retryable), and so the poller
+  // can pause until its `recoverAtMs` instead of re-polling every 30s. The
+  // shared session monitor learns about the spell (and its end) from here.
+  let raw: GitPullRequestCommentThread[];
+  const startedAt = Date.now();
+  try {
+    raw = await withRetry(
+      () =>
+        withAdoSessionRefreshDetection(
+          () => gitClient.getThreads(repositoryId, pullRequestId, project),
+          readHostToken,
+        ),
+      { mode: "read", label: "loadAdoThreads.getThreads" },
+    );
+  } catch (err) {
+    adoSession.report(err, "poll");
+    throw err;
+  }
+  adoSession.noteSuccess(startedAt);
   const out: CommentThread[] = [];
   for (const t of raw) {
     const local = adoThreadToLocal(t);
@@ -156,29 +171,23 @@ export class AdoCommentApi implements CommentApi {
   constructor(private readonly ctx: AdoCommentApiContext) {}
 
   private client(): GitRestClient {
-    return getClient(GitRestClient);
+    return sharedGitClient();
   }
 
   /**
-   * Guard every write attempt against the host token's ADO-grant dead window.
-   * Re-inspect a caught auth failure too, covering the narrow race where the
-   * grant lapses between preflight and the REST call.
+   * Re-inspect caught auth failures for the host token's ADO-grant dead window.
+   * The operation must reject first: JWT timestamps alone are not authoritative
+   * enough to block a write that Azure DevOps may still accept. A write the
+   * dead window rejects is held until the session is live again and retried
+   * once (see `adoSession.holdWrite`), instead of failing outright.
    */
   private async write<T>(label: string, op: () => Promise<T>): Promise<T> {
-    try {
-      return await withRetry(
-        async () => {
-          await ensureAdoSessionLive(() => SDK.getAccessToken());
-          return op();
-        },
-        { mode: "write", label },
-      );
-    } catch (err) {
-      const refreshing = await detectSessionRefreshing(err, () =>
-        SDK.getAccessToken(),
-      );
-      throw refreshing ?? err;
-    }
+    return adoSession.holdWrite(() =>
+      withRetry(() => withAdoSessionRefreshDetection(op, readHostToken), {
+        mode: "write",
+        label,
+      }),
+    );
   }
 
   async createThread(input: NewThreadInput): Promise<CreatedThreadIds> {
@@ -381,8 +390,7 @@ export class AdoCommentApi implements CommentApi {
           // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
           // host round-trip, but the host CACHES the token it mints, so a retry
           // only heals a true transient auth race — not the `ado_exp` dead window
-          // (detected + recovered at app boot, see shell/adoAuthToken.ts), where
-          // the host keeps replaying the same lapsed token.
+          // where the host keeps replaying the same lapsed token.
           const token = await SDK.getAccessToken();
           const r = await fetch(url, {
             headers: {
@@ -416,7 +424,7 @@ export class AdoCommentApi implements CommentApi {
     if (trimmed.length === 0) return [];
     const { project } = this.ctx;
     try {
-      const client = getClient(WorkItemTrackingRestClient);
+      const client = sharedWorkItemClient();
       const wiql = buildWorkItemWiql(trimmed);
       const result = await withRetry(
         () =>
@@ -560,7 +568,7 @@ export async function fetchFileDiffs(
   if (cached) {
     const pathsToHydrate = pathsRequiringOriginalSource(cached);
     if (pathsToHydrate.length === 0) return cached;
-    const gitClient = getClient(GitRestClient);
+    const gitClient = sharedGitClient();
     await Promise.all(
       pathsToHydrate.map(async (path) => {
         const originalLines = await fetchOriginalLines(
@@ -577,7 +585,7 @@ export async function fetchFileDiffs(
     return cached;
   }
 
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const diffs = await withRetry(
     () =>
       gitClient.getFileDiffs(

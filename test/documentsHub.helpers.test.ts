@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  assembleHubCommentUrl,
+  assembleHubDeepLinkUrl,
   buildHubDocUrl,
   formatError,
   initialsOf,
   orgUrlFromReferrer,
+  routeUpdatesForPath,
 } from "../src/hub/documentsHub.helpers";
 
 describe("initialsOf", () => {
@@ -41,39 +42,40 @@ describe("formatError", () => {
   });
 });
 
-describe("assembleHubCommentUrl", () => {
+describe("assembleHubDeepLinkUrl", () => {
   const EXT = { publisherId: "pub", extensionId: "ext" };
+  const T = { kind: "comment" as const, threadId: "t" };
 
   it("returns undefined without an org or project", () => {
     expect(
-      assembleHubCommentUrl("", "Proj", EXT, "r", "/x.md", "t"),
+      assembleHubDeepLinkUrl("", "Proj", EXT, "r", "/x.md", T),
     ).toBeUndefined();
     expect(
-      assembleHubCommentUrl(
+      assembleHubDeepLinkUrl(
         "https://dev.azure.com/org",
         "",
         EXT,
         "r",
         "/x.md",
-        "t",
+        T,
       ),
     ).toBeUndefined();
   });
 
   it("returns undefined when the base URL is malformed", () => {
     expect(
-      assembleHubCommentUrl("not a url", "Proj", EXT, "r", "/x.md", "t"),
+      assembleHubDeepLinkUrl("not a url", "Proj", EXT, "r", "/x.md", T),
     ).toBeUndefined();
   });
 
   it("assembles a hub URL with repo, path and comment params", () => {
-    const url = assembleHubCommentUrl(
+    const url = assembleHubDeepLinkUrl(
       "https://dev.azure.com/org/",
       "My Proj",
       EXT,
       "repo1",
       "/docs/a.md",
-      "42",
+      { kind: "comment", threadId: "42" },
     );
     expect(url).toBeDefined();
     const parsed = new URL(url!);
@@ -85,17 +87,130 @@ describe("assembleHubCommentUrl", () => {
     expect(parsed.searchParams.get("comment")).toBe("42");
   });
 
-  it("omits empty repo/path and returns undefined for a blank thread", () => {
+  it("assembles a hub URL with a heading anchor", () => {
+    const parsed = new URL(
+      assembleHubDeepLinkUrl(
+        "https://dev.azure.com/org",
+        "Proj",
+        EXT,
+        "repo1",
+        "/docs/a.md",
+        { kind: "heading", anchor: "goals" },
+      )!,
+    );
+    expect(parsed.searchParams.get("path")).toBe("docs/a.md");
+    expect(parsed.searchParams.get("anchor")).toBe("goals");
+    expect(parsed.searchParams.has("comment")).toBe(false);
+  });
+
+  it("returns undefined for a blank thread", () => {
     expect(
-      assembleHubCommentUrl(
+      assembleHubDeepLinkUrl(
         "https://dev.azure.com/org",
         "Proj",
         EXT,
         "",
         "/",
-        "",
+        { kind: "comment", threadId: "" },
       ),
     ).toBeUndefined();
+  });
+
+  it("omits an empty repo and a root path on a valid target", () => {
+    const url = new URL(
+      assembleHubDeepLinkUrl(
+        "https://dev.azure.com/org",
+        "Proj",
+        EXT,
+        "",
+        "/",
+        {
+          kind: "heading",
+          anchor: "goals",
+        },
+      )!,
+    );
+    expect(url.searchParams.has("repo")).toBe(false);
+    expect(url.searchParams.has("path")).toBe(false);
+    expect(url.searchParams.get("anchor")).toBe("goals");
+  });
+});
+
+describe("routeUpdatesForPath", () => {
+  it("pins the repo and the slash-free path", () => {
+    expect(routeUpdatesForPath({}, "r1", "/docs/a.md")).toEqual({
+      repo: "r1",
+      path: "docs/a.md",
+      anchor: "",
+      comment: "",
+      text: "",
+    });
+    // Already slash-free: only leading slashes are ever stripped.
+    expect(routeUpdatesForPath({}, "r1", "docs/a.md").path).toBe("docs/a.md");
+  });
+
+  it("keeps a deep link when re-publishing the same document", () => {
+    // The hub publishes the deep-linked document on load; that must not wipe
+    // the `?anchor=` / `?comment=` the recipient arrived with.
+    expect(
+      routeUpdatesForPath(
+        { repo: "r1", path: "docs/a.md", anchor: "goals", comment: "42" },
+        "r1",
+        "/docs/a.md",
+      ),
+    ).toEqual({ repo: "r1", path: "docs/a.md" });
+    // Leading slashes on either side don't make it a different document.
+    expect(
+      routeUpdatesForPath(
+        { repo: "r1", path: "//docs/a.md", anchor: "goals" },
+        "r1",
+        "//docs/a.md",
+      ),
+    ).toEqual({ repo: "r1", path: "docs/a.md" });
+  });
+
+  it("drops the heading, text and comment when moving to a different document", () => {
+    // A linked comment that never activated (deleted, or still loading) must
+    // not ride along with the new path.
+    expect(
+      routeUpdatesForPath(
+        { path: "docs/a.md", anchor: "goals", comment: "42" },
+        "r1",
+        "/docs/b.md",
+      ),
+    ).toEqual({
+      repo: "r1",
+      path: "docs/b.md",
+      anchor: "",
+      comment: "",
+      text: "",
+    });
+  });
+
+  it("drops the heading, text and comment when the same path opens in a different repo", () => {
+    expect(
+      routeUpdatesForPath(
+        { repo: "r1", path: "README.md", anchor: "goals", comment: "42" },
+        "r2",
+        "/README.md",
+      ),
+    ).toEqual({
+      repo: "r2",
+      path: "README.md",
+      anchor: "",
+      comment: "",
+      text: "",
+    });
+  });
+
+  it("treats a link without ?repo= as naming the opened repo", () => {
+    expect(
+      routeUpdatesForPath(
+        { path: "README.md", anchor: "goals" },
+        "r2",
+        "/README.md",
+      ),
+    ).toEqual({ repo: "r2", path: "README.md" });
   });
 });
 

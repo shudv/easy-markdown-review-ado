@@ -107,6 +107,16 @@ export function isRetryable(err: unknown, mode: RetryMode): boolean {
   // Caller cancelled — never retry.
   if (isAbortError(err)) return false;
 
+  // Domain-specific classifiers may know that retrying is futile even when
+  // the original transport failure looked transient.
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { retryable?: unknown }).retryable === false
+  ) {
+    return false;
+  }
+
   const status = extractStatus(err);
 
   if (mode === "write") {

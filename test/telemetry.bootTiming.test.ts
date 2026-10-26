@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetTelemetryForTests } from "../src/telemetry/telemetry";
 import {
   type BootTimingEnvironment,
+  markBootAfterAutoReload,
   markBootAuthWaitEnd,
   markBootAuthWaitStart,
   markBootPhase,
@@ -223,5 +224,28 @@ describe("bootTiming", () => {
       readyReason: "empty",
       bootHadHiddenInterval: false,
     });
+  });
+
+  it("tags a boot that follows our automatic reload, until the next boot", () => {
+    markBootAfterAutoReload(); // before any boot: ignored
+    markBootStart();
+    markBootAfterAutoReload();
+    markAppReady("content");
+    markBootAfterAutoReload(); // after it fired: ignored
+    markBootStart();
+    markAppReady("content");
+
+    const props = sink.eventCalls.map(
+      ({ event }) =>
+        (event as { properties?: Record<string, unknown> }).properties,
+    );
+    expect(props).toEqual([
+      {
+        readyReason: "content",
+        bootHadHiddenInterval: false,
+        afterAutoReload: true,
+      },
+      { readyReason: "content", bootHadHiddenInterval: false },
+    ]);
   });
 });

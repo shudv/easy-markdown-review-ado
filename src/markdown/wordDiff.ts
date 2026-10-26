@@ -112,6 +112,29 @@ export function diffWords(original: string, modified: string): WordDiffOp[] {
   return ops;
 }
 
+/** Compute a character-level diff for source formats where every token matters. */
+export function diffCharacters(
+  original: string,
+  modified: string,
+): WordDiffOp[] {
+  if (original === modified) {
+    return modified.length > 0 ? [{ kind: "equal", value: modified }] : [];
+  }
+
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(original, modified, false);
+  dmp.diff_cleanupSemantic(diffs);
+  return diffs.map(([op, value]) => ({
+    kind:
+      op === DIFF_INSERT
+        ? ("added" as const)
+        : op === DIFF_DELETE
+          ? ("removed" as const)
+          : ("equal" as const),
+    value,
+  }));
+}
+
 /**
  * Fraction of the MODIFIED (post-edit) text that is unchanged (0–1). A block
  * whose new text is mostly brand-new reads better as a plain block-level

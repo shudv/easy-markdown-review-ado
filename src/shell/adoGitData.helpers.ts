@@ -477,3 +477,19 @@ export function repoSkeleton(repo: GitRepository): DocRepo {
 export function normalizeRepoFilter(filter?: string): string | undefined {
   return filter?.trim() || undefined;
 }
+
+/**
+ * The current project from the SDK's web context (available synchronously once
+ * the SDK is ready), saving the ProjectPageService round-trips through the
+ * host. `null` when the context doesn't carry one.
+ */
+export function webContextProject(
+  webContext: { project?: { id?: unknown; name?: unknown } | null } | undefined,
+): { id: string; name: string } | null {
+  const project = webContext?.project;
+  if (typeof project?.id !== "string" || project.id.length === 0) return null;
+  return {
+    id: project.id,
+    name: typeof project.name === "string" ? project.name : "",
+  };
+}

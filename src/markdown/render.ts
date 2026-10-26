@@ -8,6 +8,7 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import { visit } from "unist-util-visit";
@@ -17,6 +18,7 @@ import type { Root, Element, ElementContent } from "hast";
 import { parseMentionUrl, preprocessUserMentions } from "../comments/mentions";
 import { rehypeSanitizeUrls } from "./sanitize-urls";
 import { extractHastText } from "./hast-text";
+import { rehypeMathPlaceholder } from "./math";
 import { preprocessMermaidBlocks, rehypeMermaidPlaceholder } from "./mermaid";
 import { remarkEmoji } from "./emoji";
 import { extractFrontmatter, renderFrontmatterHtml } from "./frontmatter";
@@ -194,9 +196,11 @@ export function sanitizeCssColor(raw: string): string | null {
 
 /**
  * Slug a heading's text content for use as an anchor / DOM id. Strips
- * HTML, lowercases, collapses non-alphanumerics to single dashes.
+ * HTML, lowercases, collapses non-alphanumerics to single dashes. Exported so
+ * deep-link consumers can normalise foreign slugs (ADO / GitHub keep `&` and
+ * double dashes) onto ours — reslugging one of ours is a no-op.
  */
-function slugify(text: string): string {
+export function slugifyHeading(text: string): string {
   return (
     text
       .toLowerCase()
@@ -222,7 +226,7 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => {
     const seen = new Map<string, number>();
 
     function mintId(text: string): string {
-      const baseSlug = slugify(text);
+      const baseSlug = slugifyHeading(text);
       const n = (seen.get(baseSlug) ?? 0) + 1;
       seen.set(baseSlug, n);
       return n === 1 ? baseSlug : `${baseSlug}-${n}`;
@@ -310,11 +314,13 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => {
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkMath, { singleDollarTextMath: true })
   .use(remarkCodeMetadata)
   .use(remarkEmoji)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeSafeHtml)
   .use(rehypeSourcePositions)
+  .use(rehypeMathPlaceholder)
   .use(rehypeMermaidPlaceholder)
   .use(rehypeMentions)
   .use(rehypeAlerts)

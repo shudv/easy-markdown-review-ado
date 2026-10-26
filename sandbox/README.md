@@ -10,6 +10,19 @@ Because the content lives in Git, the sandbox is reproducible: anyone with a PAT
 can recreate the same project from scratch, and changes to the sandbox are
 reviewed like any other code change.
 
+## Usage
+
+Requires a `.env` with `AZDO_ORG_URL` and `AZDO_PAT` (see
+[e2e/README.md](../e2e/README.md#one-time-setup), step 1).
+
+```pwsh
+npm run verify:ado      # check the PAT; changes nothing
+npm run setup:sandbox   # create whatever is missing (safe to re-run)
+```
+
+The project name comes from `AZDO_TEST_PROJECT`. Created IDs are written to
+`.ado-sandbox.json` (gitignored).
+
 ## Layout
 
 ```
@@ -70,6 +83,8 @@ The `two-dot-diff-repro` repo uses this: `guide.md` is untouched by master
 | `pullRequests[].complete: true`  | The PR is merged (completed)    |
 | `pullRequests[].complete: false` | The PR is left active           |
 | `pullRequests[].deletePaths[]`   | Existing files deleted by PR    |
+| `pullRequests[].iterations[]`    | Later pushes (PR updates)       |
+| `iterations[].deletePaths[]`     | Files deleted by that push      |
 | `pullRequests[].lfsPaths[]`      | Overlay files stored in Git LFS |
 | `pullRequests[].attachments[]`   | Files uploaded to the PR        |
 | `pullRequests[].threads[]`       | Comment threads on the PR       |
@@ -92,7 +107,10 @@ creates the native comment thread.
 | `doc-links-showcase`           | Relative links plus repo SVG images in hub and active PR views        |
 | `ai-skills`                    | Skills + guidelines they automate; 1 **active** two-file rich PR      |
 | `table-diff-showcase`          | Active one-file PR covering granular and structural table diffs       |
+| `rewrite-diff-showcase`        | Active PR whose rewrites ADO reports as coarse hunks (block re-align) |
 | `iteration-history-showcase`   | Active PR with 10 iterations and an anchor/orphan/reanchor lifecycle  |
+| `update-scope-showcase`        | Active PR whose updates add one file and delete another               |
+| `equation-showcase`            | Active equation PR with atomic edits and unified source comparison    |
 | `production-markdown-showcase` | Active dialect/deletion PR with native PNG, GIF, and file attachments |
 | `markdown-review-sandbox-v2`   | Files but **no PRs** — the "commenting disabled" empty state          |
 

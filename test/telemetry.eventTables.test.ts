@@ -31,6 +31,10 @@ const ENGAGEMENT_EVENTS = [
   EVENT.CommentsRefreshed,
   EVENT.MermaidSourceViewed,
   EVENT.MermaidSourceCopied,
+  EVENT.MathSourceViewed,
+  EVENT.MathSourceCopied,
+  EVENT.LinkCopied,
+  EVENT.LinkOpened,
 ];
 
 // Events added *after* the thematic migration — thematic-only, no legacy table.
@@ -44,11 +48,17 @@ const POST_MIGRATION_EVENTS = [
   EVENT.CommentsRefreshed,
   EVENT.MermaidSourceViewed,
   EVENT.MermaidSourceCopied,
+  EVENT.MathSourceViewed,
+  EVENT.MathSourceCopied,
+  EVENT.LinkCopied,
+  EVENT.LinkOpened,
 ];
 
 const DIAGNOSTIC_EVENTS = [
   EVENT.AppLoaded,
   EVENT.AuthFailure,
+  EVENT.AuthSessionRefresh,
+  EVENT.DiagramRenderIssue,
   EVENT.AppException,
 ];
 

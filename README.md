@@ -13,6 +13,8 @@ documents and see exactly what changed.
 
 - **Pull-Request Tab:** Comment on rendered Markdown and see exactly what changed in a PR.
 - **Document Hub:** Central place for all your Markdown documents with all the same reading and commenting capabilities.
+- **Equations and diagrams:** Render KaTeX math and Mermaid diagrams with source inspection.
+- **Shareable review links:** Link to comments, headings, selected text, and a chosen PR update comparison.
 
 > Requires only read scope for the repository and write scope for pull-request threads.
 
@@ -37,6 +39,40 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 But of course that is not enough. I will continue to improve the code quality, stability, and security over time as my schedule allows. Contributions are welcome.
 
-## Contributing
+## Development
 
-See the [sandbox setup](sandbox/README.md), [end-to-end test guide](e2e/README.md), and [visual regression guide](visual/README.md) for the relevant development workflows.
+Use Node.js 24+ and Git. No Azure DevOps account is needed to run the unit and
+Storybook tests:
+
+```pwsh
+npm ci
+npx playwright install chromium
+npm run setup:hooks
+npm test
+```
+
+Dependencies restore from public npm. The repository disables install scripts in
+[`.npmrc`](.npmrc), so install the pre-commit hook explicitly with `setup:hooks`.
+
+| Command             | What it does                                                       |
+| ------------------- | ------------------------------------------------------------------ |
+| `npm run storybook` | Browse the UI with fake data at http://localhost:6006              |
+| `npm run dev:ado`   | Open the dev extension in a browser with scoped localhost access   |
+| `npm run build`     | Production build, bundle-size check, and dev-fault exclusion check |
+| `npm run e2e`       | Run the Chromium integration suite once                            |
+| `npm run e2e:soak`  | Repeat the Chromium integration suite twice                        |
+
+Before opening a PR, run:
+
+```pwsh
+npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
+npm run depcruise; npm run test:coverage; npm run build
+npm run test:visual:docker
+```
+
+The visual suite requires Docker. Azure DevOps integration tests require your
+own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),
+[end-to-end test guide](e2e/README.md), and [visual regression guide](visual/README.md).
+
+The [OSS sync ledger](docs/oss-sync.md) records the mirrored product boundary and
+the configuration intentionally kept public-specific.

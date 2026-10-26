@@ -259,9 +259,14 @@ export const Default: Story = {
     }
 
     await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    // Newest first, like ADO's own update list: All updates, then 3 → 1.
     const options = canvas.getAllByRole("option");
-    expect(options[0]?.textContent).toContain("1Initial draft");
-    expect(options[options.length - 1]?.textContent).toContain("All updates");
+    expect(options.map((option) => option.textContent)).toEqual([
+      expect.stringContaining("All updates"),
+      expect.stringContaining("3Improve review workflow"),
+      expect.stringContaining("2Refine review workflow"),
+      expect.stringContaining("1Initial draft"),
+    ]);
     const selectedOptions = canvas.getAllByRole("option", { selected: true });
     expect(selectedOptions).toHaveLength(1);
     expect(selectedOptions[0]?.textContent).toContain("All updates");
@@ -273,6 +278,15 @@ export const Default: Story = {
     expect(
       canvas.getByRole("option", { name: /3 Improve review workflow/ }),
     ).toHaveAttribute("aria-selected", "false");
+    // The selected row must actually be painted. `aria-selected` alone passes
+    // even when the stylesheet drifts to a different attribute and the
+    // highlight silently disappears.
+    const unselected = canvas.getByRole("option", {
+      name: /3 Improve review workflow/,
+    });
+    const selectedBg = getComputedStyle(selectedOptions[0]!).backgroundColor;
+    expect(selectedBg).not.toBe(getComputedStyle(unselected).backgroundColor);
+    expect(selectedBg).not.toBe("rgba(0, 0, 0, 0)");
   },
 };
 
@@ -533,6 +547,22 @@ export const IterationMultiDigitStepping: Story = {
       initialGeometry.nextLeft,
       1,
     );
+
+    // Opening a long list scrolls the current selection into view instead of
+    // leaving the reviewer at the top (the newest update).
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Update 99 → 100" }),
+    );
+    const list = canvas.getByRole("listbox", { name: "Review iterations" });
+    await expect(list.scrollTop).toBeGreaterThan(0);
+    const selected = canvas.getByRole("option", {
+      name: /^100 Update 100/,
+      selected: true,
+    });
+    const listRect = list.getBoundingClientRect();
+    const rowRect = selected.getBoundingClientRect();
+    await expect(rowRect.top).toBeGreaterThanOrEqual(listRect.top);
+    await expect(rowRect.bottom).toBeLessThanOrEqual(listRect.bottom);
   },
 };
 
@@ -694,8 +724,8 @@ export const IterationRange: Story = {
     const selectedOptions = canvas.getAllByRole("option", { selected: true });
     expect(selectedOptions).toHaveLength(2);
     expect(selectedOptions.map((option) => option.textContent)).toEqual([
-      expect.stringContaining("2Refine review workflow"),
       expect.stringContaining("3Improve review workflow"),
+      expect.stringContaining("2Refine review workflow"),
     ]);
     fireEvent.click(
       canvas.getByRole("option", { name: /2 Refine review workflow/ }),
@@ -734,13 +764,15 @@ export const IterationRangeHighContrast: Story = {
     const selectedOptions = canvas.getAllByRole("option", { selected: true });
     expect(selectedOptions).toHaveLength(2);
 
-    const rangeStart = getComputedStyle(selectedOptions[0]!, "::after");
-    const rangeEnd = getComputedStyle(selectedOptions[1]!, "::after");
-    expect(rangeStart.borderLeftColor).toBe("rgb(0, 51, 204)");
-    expect(parseFloat(rangeStart.borderTopWidth)).toBeGreaterThan(0);
-    expect(rangeStart.borderBottomWidth).toBe("0px");
-    expect(rangeEnd.borderTopWidth).toBe("0px");
-    expect(parseFloat(rangeEnd.borderBottomWidth)).toBeGreaterThan(0);
+    // Newest first: the band's top row is the range's newest update (3) and
+    // its bottom row the oldest (2), so the caps follow that order.
+    const bandTop = getComputedStyle(selectedOptions[0]!, "::after");
+    const bandBottom = getComputedStyle(selectedOptions[1]!, "::after");
+    expect(bandTop.borderLeftColor).toBe("rgb(0, 51, 204)");
+    expect(parseFloat(bandTop.borderTopWidth)).toBeGreaterThan(0);
+    expect(bandTop.borderBottomWidth).toBe("0px");
+    expect(bandBottom.borderTopWidth).toBe("0px");
+    expect(parseFloat(bandBottom.borderBottomWidth)).toBeGreaterThan(0);
     expect(
       canvas
         .getByRole("listbox", { name: "Review iterations" })

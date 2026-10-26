@@ -12,7 +12,9 @@
 // any of those shows up as a pixel diff.
 //
 // To add a shot: author a deterministic `*.visual.stories.tsx` story (no time,
-// no animation, no Mermaid) and add a `{ title, name }` entry below.
+// no animation) and add a `{ title, name }` entry below. Mermaid is hidden
+// inside article renders because integration shots don't wait for it; a story
+// that blocks on the diagram (see `Visual/GeneratedSource`) may capture it.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -38,8 +40,11 @@ interface Shot {
   clip?: string;
   /** Optional element to hover with Playwright's real pointer before capture. */
   hover?: string;
-  /** What must become visible after hovering. Defaults to the Before control. */
-  hoverEffect?: "before" | "tooltip";
+  /**
+   * What must become visible after hovering. Defaults to the Before control;
+   * `heading-link` waits for the hovered heading's link button to reveal.
+   */
+  hoverEffect?: "before" | "tooltip" | "heading-link";
 }
 
 const SHOTS: Shot[] = [
@@ -240,15 +245,6 @@ const SHOTS: Shot[] = [
   },
   {
     title: "Visual/ArticleDiff",
-    name: "Checklist State Tooltip Dark",
-    settledSelector:
-      '.emr-diff-task-tooltip-anchor[data-diff-tooltip^="Checklist item changed from"]',
-    hover:
-      '.emr-diff-task-tooltip-anchor[data-diff-tooltip^="Checklist item changed from"]',
-    hoverEffect: "tooltip",
-  },
-  {
-    title: "Visual/ArticleDiff",
     name: "Inline Parity Light",
     settledSelector:
       'li[data-diff-tooltip^="List item changed:"], td .emr-diff-format-change, td .emr-diff-metadata',
@@ -264,6 +260,18 @@ const SHOTS: Shot[] = [
     hoverEffect: "tooltip",
   },
   {
+    // New items nested inside new (and unchanged) parent items: each changed
+    // item carries its own wash, and no tint stacks onto a washed child.
+    title: "Visual/ArticleDiff",
+    name: "Nested List Changes Light",
+    settledSelector: "li li li.emr-diff-block--added",
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Nested List Changes Dark",
+    settledSelector: "li li li.emr-diff-block--added",
+  },
+  {
     title: "Visual/ArticleDiff",
     name: "Production Syntax Light",
     settledSelector:
@@ -277,25 +285,65 @@ const SHOTS: Shot[] = [
   },
   {
     title: "Visual/ArticleDiff",
+    name: "Equation Gallery Light",
+    settledSelector:
+      '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex, .equation-gallery-frame .emr-math[data-math-error="render-failed"], .equation-gallery-frame .emr-math.emr-diff-block',
+    clip: ".equation-gallery-frame",
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Equation Gallery Dark",
+    settledSelector:
+      '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex, .equation-gallery-frame .emr-math[data-math-error="render-failed"], .equation-gallery-frame .emr-math.emr-diff-block',
+    clip: ".equation-gallery-frame",
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Equation Source Diff",
+    settledSelector:
+      ".emr-generated-source-code-diff .emr-word-added, .emr-generated-source-preview .katex",
+    clip: ".emr-generated-source-modal",
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Equation Source Before",
+    settledSelector:
+      '.emr-generated-source-before[aria-pressed="true"], .emr-generated-source-preview .katex',
+    clip: ".emr-generated-source-modal",
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Equation Source Before High Contrast Dark",
+    settledSelector:
+      '.emr-generated-source-before[aria-pressed="true"], .emr-generated-source-preview .katex',
+    clip: ".emr-generated-source-modal",
+  },
+  // The Mermaid half of the shared callout: same header, toggles and preview
+  // pane as the equation shots above, so a regression in either kind is caught.
+  {
+    title: "Visual/GeneratedSource",
+    name: "Diagram Source Diff",
+    settledSelector:
+      '.emr-generated-source-code-diff .emr-word-added, .emr-generated-source-preview .emr-mermaid[data-hydrated="true"] > svg',
+    clip: ".emr-generated-source-modal",
+  },
+  {
+    title: "Visual/GeneratedSource",
+    name: "Diagram Source Diff Dark",
+    settledSelector:
+      '.emr-generated-source-code-diff .emr-word-added, .emr-generated-source-preview .emr-mermaid[data-hydrated="true"] > svg',
+    clip: ".emr-generated-source-modal",
+  },
+  {
+    title: "Visual/GeneratedSource",
+    name: "Diagram Source Before",
+    settledSelector:
+      '.emr-generated-source-before[aria-pressed="true"], .emr-generated-source-preview .emr-mermaid[data-hydrated="true"] > svg',
+    clip: ".emr-generated-source-modal",
+  },
+  {
+    title: "Visual/ArticleDiff",
     name: "Tooltip Edges Light",
-    settledSelector:
-      '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-    hover:
-      'p:nth-of-type(2) .emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-    hoverEffect: "tooltip",
-  },
-  {
-    title: "Visual/ArticleDiff",
-    name: "Tooltip Edges Dark",
-    settledSelector:
-      '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-    hover:
-      'p:nth-of-type(2) .emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-    hoverEffect: "tooltip",
-  },
-  {
-    title: "Visual/ArticleDiff",
-    name: "Tooltip Edges High Contrast Light",
     settledSelector:
       '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
     hover:
@@ -403,6 +451,56 @@ const SHOTS: Shot[] = [
     settledSelector: ".emr-docnav-file-label",
     clip: ".emr-docnav-list",
   },
+  {
+    // "Copy link to section" — the hover-revealed link glyph after a heading's
+    // text. Cropped to the hovered heading so the small glyph is a large share
+    // of the frame (a whole-article shot would never notice it change).
+    title: "Visual/HeadingLink",
+    name: "Light",
+    settledSelector: "#classifiers-hashing > .emr-heading-link",
+    clip: "#classifiers-hashing",
+    hover: "#classifiers-hashing",
+    hoverEffect: "heading-link",
+  },
+  {
+    title: "Visual/HeadingLink",
+    name: "Dark",
+    settledSelector: "#classifiers-hashing > .emr-heading-link",
+    clip: "#classifiers-hashing",
+    hover: "#classifiers-hashing",
+    hoverEffect: "heading-link",
+  },
+  {
+    // An added (diff-washed) heading: the link must sit outside the wash,
+    // right after the text, with the gutter chevron still in place.
+    title: "Visual/HeadingLink",
+    name: "Light",
+    settledSelector: "#retention.emr-diff-block > .emr-heading-link",
+    clip: "#retention",
+    hover: "#retention",
+    hoverEffect: "heading-link",
+  },
+  {
+    // Comparing specific PR updates: files the comparison doesn't touch are
+    // dimmed — a per-row opacity change only a tight crop can catch.
+    title: "Visual/UpdateComparison",
+    name: "File List Light",
+    settledSelector: ".emr-docnav-item.is-unchanged-in-range",
+    clip: ".emr-docnav-list",
+  },
+  {
+    title: "Visual/UpdateComparison",
+    name: "File List Dark",
+    settledSelector: ".emr-docnav-item.is-unchanged-in-range",
+    clip: ".emr-docnav-list",
+  },
+  {
+    // The selection bubble's explained variant (no "Add comment").
+    title: "Visual/UpdateComparison",
+    name: "Blocked Comment",
+    settledSelector: ".emr-selection-bubble.is-blocked",
+    clip: ".emr-selection-bubble",
+  },
 ];
 
 // Storybook builds a story index we can query to resolve a (title, name) pair
@@ -444,11 +542,14 @@ async function resolveStoryId(page: Page, shot: Shot): Promise<string> {
 
 /** Neutralise the few sources of frame-to-frame noise before shooting. */
 async function stabilize(page: Page): Promise<void> {
-  // Hide anything non-deterministic: async-rendered Mermaid SVGs and any
-  // remote avatar images (fixtures fall back to initials when hidden).
+  // Hide anything non-deterministic: async-rendered Mermaid SVGs inside an
+  // ARTICLE (integration shots don't wait for them) and any remote avatar
+  // images (fixtures fall back to initials when hidden). The source-callout
+  // preview is exempt: those shots exist to pin the diagram and block on it
+  // rendering first via `settledSelector`.
   await page.addStyleTag({
     content: `
-      .emr-mermaid { visibility: hidden !important; }
+      .emr-rendered .emr-mermaid { visibility: hidden !important; }
       .emr-avatar img { visibility: hidden !important; }
       *, *::before, *::after {
         transition: none !important;
@@ -508,6 +609,11 @@ for (const shot of SHOTS) {
             ),
           )
           .toBe("1");
+      } else if (shot.hoverEffect === "heading-link") {
+        await expect(hovered.locator(":scope > .emr-heading-link")).toHaveCSS(
+          "opacity",
+          "1",
+        );
       } else {
         await expect(
           page.locator(".emr-diff-before-trigger").first(),

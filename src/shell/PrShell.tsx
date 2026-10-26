@@ -8,6 +8,7 @@ import type { ReaderActivity } from "./components/readerActivity";
 import * as React from "react";
 
 import type {
+  ChangeType,
   CommentAuthor,
   CommentThread,
   DiffRange,
@@ -36,10 +37,31 @@ import {
   type IdentityResolver,
 } from "../comments/identityStore";
 import { useThreadSync } from "../comments/useThreadSync";
+import { adoSession } from "./adoSession";
+import { SessionNotice } from "./components/SessionNotice";
+import { ComposerBusyContext } from "./components/composerBusy";
+import { RegisterEditorContext } from "./components/editorRegistry";
+import { refineDiffRanges } from "../markdown/diffRefine";
 import { renderMarkdown } from "../markdown/render";
 import { resolveDocLink, routeDocLink, samePath } from "../markdown/docLinks";
 
-import { ArticleView, type AnchorLayout } from "./components/ArticleView";
+import {
+  ArticleView,
+  type AnchorLayout,
+  type SelectionLinkTarget,
+} from "./components/ArticleView";
+import { useDeepLink } from "./deepLink";
+import {
+  ANCHOR_TARGET_CUE_MS,
+  currentTextCue,
+  findAnchorTarget,
+  flashAnchorTarget,
+  flashTextTarget,
+  holdScrollOnTarget,
+  revealAnchorTarget,
+} from "./headingAnchors";
+import { findTextFragment, parseTextFragment } from "./textFragment";
+import { copyText } from "../comments/clipboard";
 import { DiffMinimap } from "./components/DiffMinimap";
 import { CommentRail } from "./components/CommentRail";
 import { buildRailModel } from "./components/CommentRail.helpers";
@@ -79,13 +101,15 @@ import {
   markAppReady,
 } from "../telemetry";
 import { anchorKindOf } from "./anchorKind";
-import { withSourceLocation } from "../comments/anchor";
+import { relocateAnchor, withSourceLocation } from "../comments/anchor";
 import {
   collectMentionIdentities,
   collectUserMentionIds,
 } from "../comments/mentions";
 import {
   errorMessage,
+  absentAtUpdateMessage,
+  isItemNotFoundError,
   friendlyWriteError,
   clearIfSet,
   clearIfEquals,
@@ -94,6 +118,7 @@ import {
   historyChevronTooltip,
   allReviewIterations,
   resolveReviewIterationRange,
+  reviewRangeLabel,
   sourceDiffRanges,
   isCommentUiClickTarget,
   countWords,
@@ -213,6 +238,24 @@ interface PrShellProps {
   /** Merge base used for Update 1 and the dedicated All updates comparison. */
   reviewIterationBaseCommit?: string;
   /**
+   * Comparison of PR updates to open with (from a shared link's
+   * `iteration`/`base`). Defaults to "All updates".
+   */
+  initialIterationRange?: ReviewIterationRange;
+  /**
+   * Called when the compared PR updates change, so the host can mirror them
+   * into the route and shared links. `null` means "All updates".
+   */
+  onIterationRangeChange?: (range: ReviewIterationRange | null) => void;
+  /**
+   * Which Markdown files a comparison of PR updates touches, by change type
+   * (keyed by repo path). Lets the file list mark the files the selected
+   * updates changed and dim the rest.
+   */
+  loadRangeChanges?: (
+    range: ReviewIterationRange,
+  ) => Promise<Readonly<Record<string, ChangeType>>>;
+  /**
    * Seeds the initially-selected document (deep-link routing, `?path=`). When
    * omitted the shell selects `pr.files[0]`. Read once at mount — a path that
    * isn't in `pr.files` still renders, since `loadFileSource` loads any path.
@@ -249,6 +292,33 @@ interface PrShellProps {
    * action would. `null` means no thread is active (param should be removed).
    */
   onActiveThreadChange?: (threadId: string | null) => void;
+  /**
+   * Deep-link target (`?anchor=`): a heading slug to scroll to once the
+   * initially selected document renders. Collapsed sections hiding it are
+   * expanded and the heading is held in view while late content settles.
+   * Ignored when `initialActiveThreadId` is also set (the comment wins).
+   * ADO/GitHub-style slugs (`a-&-b`) are matched onto ours (`a-b`).
+   */
+  initialAnchor?: string;
+  /**
+   * Called after the user copies a heading link, with the heading's slug, so
+   * the host can mirror it into the route's `?anchor=` param (the address bar
+   * then holds the same shareable link, as in ADO's own Markdown preview).
+   * The copy affordance itself needs a `DeepLinkContext` builder from the host.
+   */
+  onHeadingLinkCopied?: (anchor: string) => void;
+  /**
+   * Deep-link target (`?text=`): a serialized text fragment to scroll to and
+   * flash once the initially selected document renders. When the text can't
+   * be found (edited since the link was made), `initialAnchor` — the section
+   * it was in — is used instead. A `?comment=` link wins over both.
+   */
+  initialTextFragment?: string;
+  /**
+   * Called after the user copies a link to selected text, so the host can
+   * mirror it into the route's `?text=` (and fallback `?anchor=`) params.
+   */
+  onTextLinkCopied?: (text: string, anchor: string | undefined) => void;
   /**
    * Which review experience this shell renders, used to (a) namespace the
    * locally-persisted comment draft (one per experience) and (b) drop the
@@ -795,8 +865,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     props.reviewIterationStops?.length ?? 1,
   );
   const [iterationRange, setIterationRange] =
-    React.useState<ReviewIterationRange>(() =>
-      allReviewIterations(nativeUpdateCount),
+    React.useState<ReviewIterationRange>(
+      () =>
+        props.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
     );
   const [historicalHtmlByKey, setHistoricalHtmlByKey] = React.useState<
     Record<string, string>
@@ -806,6 +877,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   >({});
   const [historicalErrorByKey, setHistoricalErrorByKey] = React.useState<
     Record<string, string>
+  >({});
+  // PR-update endpoints where the file doesn't exist (added later / already
+  // deleted). Native-iteration mode only: a normal state, not an error.
+  const [historicalAbsentByKey, setHistoricalAbsentByKey] = React.useState<
+    Record<string, true>
   >({});
   // Keyed by `path\u0000prId` (not PR id alone): one PR can change several
   // documents and `loadThreadsForPr` returns threads filtered to a path, so a
@@ -843,6 +919,73 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const baselineStop =
     baselineStopIndex == null ? undefined : historyStops[baselineStopIndex];
   const viewingHistorical = !activeStop.isCurrent;
+
+  // Report the compared PR updates up so the host can mirror them into the
+  // route and shared links (`null` = All updates). Keyed on the comparison's
+  // value; the callback is read through a ref so an inline host callback
+  // doesn't re-fire it on every render.
+  const onIterationRangeChangeRef = React.useRef(props.onIterationRangeChange);
+  onIterationRangeChangeRef.current = props.onIterationRangeChange;
+  const reportedRangeKey = nativeIterationMode
+    ? resolvedIterationRange.isAllChanges
+      ? "all"
+      : `${resolvedIterationRange.range.fromUpdate}-${resolvedIterationRange.range.toUpdate}`
+    : null;
+  React.useEffect(() => {
+    if (reportedRangeKey === null) return;
+    onIterationRangeChangeRef.current?.(
+      resolvedIterationRange.isAllChanges ? null : resolvedIterationRange.range,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value, not its object identity
+  }, [reportedRangeKey]);
+
+  // Which files the compared updates touch, so the file list can mark them and
+  // dim the rest. Cached per comparison; a failed load just leaves the
+  // PR-wide indicators in place.
+  const loadRangeChanges = props.loadRangeChanges;
+  const [rangeChangesByKey, setRangeChangesByKey] = React.useState<
+    Record<string, Readonly<Record<string, ChangeType>>>
+  >({});
+  const rangeChangesKey =
+    nativeIterationMode && !resolvedIterationRange.isAllChanges
+      ? reportedRangeKey
+      : null;
+  React.useEffect(() => {
+    if (
+      !loadRangeChanges ||
+      rangeChangesKey === null ||
+      rangeChangesByKey[rangeChangesKey]
+    ) {
+      return;
+    }
+    loadRangeChanges(resolvedIterationRange.range)
+      .then((byPath) =>
+        setRangeChangesByKey((prev) => ({
+          ...prev,
+          [rangeChangesKey]: byPath,
+        })),
+      )
+      .catch((err: unknown) => {
+        console.warn("[PrShell] loadRangeChanges failed:", err);
+        trackUserFacingError({
+          error: err,
+          source: "PrShell.updates",
+          operation: "range-changes-load",
+          impact: "degraded",
+        });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value
+  }, [loadRangeChanges, rangeChangesKey, rangeChangesByKey]);
+  const docNavRangeChanges =
+    rangeChangesKey !== null && rangeChangesByKey[rangeChangesKey]
+      ? {
+          label: reviewRangeLabel(
+            resolvedIterationRange.range,
+            historyStops.length,
+          ),
+          byPath: rangeChangesByKey[rangeChangesKey],
+        }
+      : undefined;
 
   const [threadState, dispatch] = React.useReducer(
     threadReducer,
@@ -886,6 +1029,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const onRemoteThreads = React.useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
   }, []);
+  // A PR-wide snapshot (`fetchRemoteThreads`) holds every thread, so it lets a
+  // `?comment=` deep link tell "not loaded yet" from "doesn't exist". A
+  // per-document snapshot can't: it only covers whichever file was open.
+  const [prThreadSnapshots, setPrThreadSnapshots] = React.useState(0);
+  const onPrThreads = React.useCallback((threads: CommentThread[]) => {
+    dispatch({ type: "MERGE_REMOTE_THREADS", threads });
+    setPrThreadSnapshots((n) => n + 1);
+  }, []);
   const noopFetch = React.useCallback(
     /* v8 ignore next -- fallback fetch, only wired up when fetchRemoteThreads is absent */
     (_signal: AbortSignal): Promise<CommentThread[]> => Promise.resolve([]),
@@ -909,8 +1060,10 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const threadSync = useThreadSync({
     enabled: !!effectiveFetch,
     fetchThreads: effectiveFetch ?? noopFetch,
-    onThreads: onRemoteThreads,
+    onThreads: props.fetchRemoteThreads ? onPrThreads : onRemoteThreads,
     intervalMs: props.threadSyncIntervalMs,
+    // Resume polling the moment the ADO session is re-minted.
+    subscribeRecovered: adoSession.onRecovered,
   });
 
   // Unified data refresh surfaced on the reading toolbar: pull a fresh comment
@@ -984,11 +1137,21 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   }, [loadThreadsForPath, selectedPath]);
 
   // ---- comment-history stepper effects ----
-  // Always start a freshly-opened document at its live "Current" head.
+  // Always start a freshly-opened document at its live "Current" head: a
+  // Documents-hub history is per document.
   React.useEffect(() => {
     setCompletedHistoryStopIndex(0);
+  }, [selectedPath]);
+  // A PR's updates are PR-wide, so the chosen comparison (e.g. "Update 4 → 5")
+  // carries across files — reviewers step through a PR's files at one update.
+  // It only resets if the set of updates itself changes (not on mount, which
+  // would discard a comparison opened from a shared link).
+  const updateCountRef = React.useRef(nativeUpdateCount);
+  React.useEffect(() => {
+    if (updateCountRef.current === nativeUpdateCount) return;
+    updateCountRef.current = nativeUpdateCount;
     setIterationRange(allReviewIterations(nativeUpdateCount));
-  }, [selectedPath, nativeUpdateCount]);
+  }, [nativeUpdateCount]);
 
   // Load the selected document's review history the first time it's opened.
   const loadedHistoryPathsRef = React.useRef<Set<string>>(new Set());
@@ -1052,6 +1215,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     for (const target of historicalLoadTargets) {
       if (
         historicalErrorByKey[target.key] !== undefined ||
+        historicalAbsentByKey[target.key] ||
         (historicalHtmlByKey[target.key] !== undefined &&
           historicalSourceByKey[target.key] !== undefined)
       ) {
@@ -1076,6 +1240,15 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         .catch((err: unknown) => {
           /* v8 ignore next -- cleanup races ahead of a rejected request */
           if (cancelled) return;
+          // Comparing PR updates: the file legitimately may not exist at an
+          // endpoint (the PR adds it later, or deleted it already).
+          if (nativeIterationMode && isItemNotFoundError(err)) {
+            setHistoricalAbsentByKey((prev) => ({
+              ...prev,
+              [target.key]: true,
+            }));
+            return;
+          }
           console.warn("[PrShell] loadFileSourceAt failed:", err);
           trackUserFacingError({
             error: err,
@@ -1097,8 +1270,10 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     selectedPath,
     historicalLoadTargets,
     historicalErrorByKey,
+    historicalAbsentByKey,
     historicalHtmlByKey,
     historicalSourceByKey,
+    nativeIterationMode,
   ]);
 
   // Load the active historical stop PR's threads (read-only).
@@ -1148,6 +1323,18 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   >({});
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Documents hub: a remembered or linked document that's no longer in the
+  // repo (renamed / deleted) was swapped for another one; tell the reader.
+  const [missingDoc, setMissingDoc] = React.useState<{
+    missing: string;
+    shown: string;
+  } | null>(null);
+  // Decides what a "not found" document load means — assigned every render
+  // below (after the deep-link refs it resets), so the load effect can call it
+  // without depending on the file list.
+  const handleMissingDocRef = React.useRef<
+    (missing: string) => "replaced" | "expected" | "unexpected"
+  >(null!);
   const [renderVersion, setRenderVersion] = React.useState(0);
   const [navigationActivities, setNavigationActivities] = React.useState<
     readonly ReaderActivity[]
@@ -1181,12 +1368,18 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       .catch((err: unknown) => {
         /* v8 ignore next -- bails if the selected file changed before the error surfaced */
         if (cancelled) return;
-        trackUserFacingError({
-          error: err,
-          source: "PrShell.documentLoad",
-          operation: "document-load",
-          impact: "blocking",
-        });
+        const missing = isItemNotFoundError(err)
+          ? handleMissingDocRef.current(selectedPath)
+          : "unexpected";
+        if (missing === "replaced") return;
+        if (missing === "unexpected") {
+          trackUserFacingError({
+            error: err,
+            source: "PrShell.documentLoad",
+            operation: "document-load",
+            impact: "blocking",
+          });
+        }
         setError(errorMessage(err));
         setLoading(false);
       });
@@ -1440,10 +1633,19 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       }
       // Not mounted yet — leave the seed pending; a later threads/path change
       // or anchor re-resolution re-runs this effect once the linked document's
-      // highlight has been wrapped into the DOM.
-      if (!target) return;
+      // highlight has been wrapped into the DOM. But once a PR-wide thread
+      // snapshot has arrived without it, the thread doesn't exist (deleted,
+      // or a bad link): record that once and stop waiting.
+      if (!target) {
+        if (prThreadSnapshots > 0 && !threadState.threadsById[tid]) {
+          pendingActiveThreadIdRef.current = undefined;
+          track(events.linkOpened({ target: "comment", found: false }));
+        }
+        return;
+      }
       pendingActiveThreadIdRef.current = undefined;
       setActiveThreadId(tid);
+      track(events.linkOpened({ target: "comment", found: true }));
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     return () => {
@@ -1459,6 +1661,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   }, [
     selectedPath,
     threadState,
+    prThreadSnapshots,
     renderVersion,
     anchorLayout,
     props.initialActiveThreadId,
@@ -1494,12 +1697,33 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     });
   }, []);
 
+  // Heading to scroll to once the selected document renders: a cross-document
+  // `#anchor` link, or the `?anchor=` deep link seeded at mount (a `?comment=`
+  // link wins when both are present — the thread's own scroll would fight the
+  // heading's).
+  const pendingScrollHashRef = React.useRef<string | null>(
+    props.initialActiveThreadId ? null : (props.initialAnchor ?? null),
+  );
+  const pendingHashIsDeepLinkRef = React.useRef(
+    pendingScrollHashRef.current !== null,
+  );
+  // Text to flash once the selected document renders (the `?text=` deep link
+  // seeded at mount); the heading above is its fallback.
+  const pendingTextRef = React.useRef<string | null>(
+    props.initialActiveThreadId ? null : (props.initialTextFragment ?? null),
+  );
+
   // Open a document in THIS reader (shared by the nav and in-document link
   // clicks): select it, drop the active thread, tear down an empty draft, and
-  // report the change up so the host can reflect it in the route.
+  // report the change up so the host can reflect it in the route. A deep-link
+  // heading still waiting on the previous document no longer applies.
   const onSelectPath = props.onSelectPath;
   const selectDocPath = React.useCallback(
     (path: string) => {
+      pendingScrollHashRef.current = null;
+      pendingHashIsDeepLinkRef.current = false;
+      pendingTextRef.current = null;
+      setMissingDoc(null);
       setSelectedPath(path);
       setActiveThreadId(null);
       dismissEmptyDraftRef.current();
@@ -1509,23 +1733,138 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     [onSelectPath],
   );
 
-  // Scroll the document to a heading by its slug id (a `#anchor` link target).
-  const scrollDocToHash = React.useCallback((hash: string) => {
-    if (!hash) return;
-    window.requestAnimationFrame(() => {
-      /* v8 ignore next 2 -- scrollIntoView is inert in headless tests */
-      document
-        .querySelector(`.markdown-body #${CSS.escape(hash)}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
+  // A document that no longer exists (a stale `?path=` link or the hub's
+  // remembered last document after a rename/delete). In the Documents hub this
+  // is an expected state, not a failure: open the repo's first other document
+  // instead — reporting it up so the route and the remembered path move on —
+  // and say what happened. Elsewhere (the PR tab) it stays an error.
+  handleMissingDocRef.current = (missing) => {
+    if (!props.documentsMode) return "unexpected";
+    // Fall back once: if the replacement is missing too, stop there rather
+    // than bouncing between missing documents.
+    if (missingDoc?.shown === missing) return "expected";
+    const next = pr.files.find((f) => f.path !== missing)?.path;
+    if (!next) return "expected";
+    // A deep-link heading/text targeted the missing document; drop it.
+    pendingScrollHashRef.current = null;
+    pendingHashIsDeepLinkRef.current = false;
+    pendingTextRef.current = null;
+    setMissingDoc({ missing, shown: next });
+    setLoading(false);
+    setSelectedPath(next);
+    onSelectPath?.(next);
+    return "replaced";
+  };
+
+  // Scroll the document to an anchor target (a heading slug from an `#anchor`
+  // link or an `?anchor=` deep link). Resolves foreign slug styles, unfolds
+  // any collapsed section hiding the target, and replays the landing cue.
+  // `hold` keeps the target aligned while late content (diff decorations,
+  // highlights, diagrams, images) settles — used whenever the document was
+  // just opened, where that async layout would otherwise push it off-screen.
+  // Returns via rAF so the just-committed article is queryable.
+  const activeStorageKeyRef = React.useRef(selectedPath);
+  const releaseScrollHoldRef = React.useRef<(() => void) | null>(null);
+  const stopLandingCueRef = React.useRef<(() => void) | null>(null);
+  React.useEffect(
+    () => () => {
+      releaseScrollHoldRef.current?.();
+      stopLandingCueRef.current?.();
+    },
+    [],
+  );
+  const scrollDocToHash = React.useCallback(
+    (
+      hash: string,
+      opts?: {
+        hold?: boolean;
+        focus?: boolean;
+        onResolved?: (found: boolean) => void;
+      },
+    ) => {
+      if (!hash) return;
+      window.requestAnimationFrame(() => {
+        const article = document.querySelector<HTMLElement>(
+          ".emr-article-wrap > .emr-rendered",
+        );
+        /* v8 ignore next -- the article is mounted whenever a document has rendered */
+        if (!article) return;
+        const target = findAnchorTarget(article, hash);
+        opts?.onResolved?.(target !== null);
+        if (!target) return;
+        revealAnchorTarget(target, activeStorageKeyRef.current);
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        // The article element persists across re-wraps (only its children are
+        // replaced), so the landing cue and the scroll hold re-resolve the
+        // target inside it each time.
+        const resolveTarget = () => findAnchorTarget(article, hash);
+        stopLandingCueRef.current?.();
+        stopLandingCueRef.current = flashAnchorTarget(article, resolveTarget);
+        // A link the user followed moves focus to its target, as native
+        // fragment navigation does, so the next Tab and screen readers continue
+        // from there. (Not for a mount-time deep link: that would steal focus
+        // from the host page.)
+        if (opts?.focus) {
+          if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
+          target.focus({ preventScroll: true });
+        }
+        releaseScrollHoldRef.current?.();
+        releaseScrollHoldRef.current = opts?.hold
+          ? holdScrollOnTarget(article, resolveTarget)
+          : null;
+      });
+    },
+    [],
+  );
+
+  // Scroll to and flash the text a `?text=` deep link quotes: unfold any
+  // collapsed section hiding it, centre it, play the heading's landing cue on
+  // the words themselves, and hold it in view while late content settles.
+  // `onResolved` reports whether the text was found (the caller then falls
+  // back to the section heading).
+  const scrollDocToText = React.useCallback(
+    (serialized: string, onResolved: (found: boolean) => void) => {
+      window.requestAnimationFrame(() => {
+        const article = document.querySelector<HTMLElement>(
+          ".emr-article-wrap > .emr-rendered",
+        );
+        /* v8 ignore next -- the article is mounted whenever a document has rendered */
+        if (!article) return;
+        const fragment = parseTextFragment(serialized);
+        const range = fragment ? findTextFragment(article, fragment) : null;
+        onResolved(range !== null);
+        if (!fragment || !range) return;
+        revealAnchorTarget(
+          range.startContainer.parentElement!,
+          activeStorageKeyRef.current,
+        );
+        const resolveRange = () => findTextFragment(article, fragment);
+        stopLandingCueRef.current?.();
+        stopLandingCueRef.current = flashTextTarget(article, resolveRange);
+        // The cue's first span is the scroll target; the hold lasts as long
+        // as the cue (it re-finds the span after each re-wrap).
+        const resolveTarget = () => currentTextCue(article);
+        resolveTarget()?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        releaseScrollHoldRef.current?.();
+        releaseScrollHoldRef.current = holdScrollOnTarget(
+          article,
+          resolveTarget,
+          ANCHOR_TARGET_CUE_MS,
+          "center",
+        );
+      });
+    },
+    [],
+  );
 
   // A relative in-document link was clicked. Resolve it against the open file
   // and route it (see `routeDocLink`): scroll (in-page / self), select in place
   // (a PR file, or anywhere in the hub), open the Documents hub (Markdown
   // outside the PR), or hand a non-Markdown file to ADO's native Files view.
   // Returns true when consumed; external links return false and fall through.
-  const pendingScrollHashRef = React.useRef<string | null>(null);
   const onDocNavigate = props.onDocNavigate;
   const handleDocLink = React.useCallback(
     (href: string): boolean => {
@@ -1536,11 +1875,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       });
       if (action.type === "external") return false;
       if (action.type === "scroll") {
-        scrollDocToHash(action.hash);
+        scrollDocToHash(action.hash, { focus: true });
       } else if (action.type === "select") {
+        selectDocPath(action.path);
         // Scroll to the linked heading once the new document has rendered.
         pendingScrollHashRef.current = action.hash || null;
-        selectDocPath(action.path);
+        pendingHashIsDeepLinkRef.current = false;
       } else if (action.type === "open-file") {
         /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
         onDocNavigate?.({ kind: "repo-file", path: action.path });
@@ -1564,21 +1904,66 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     ],
   );
 
-  // Cross-document `#anchor`: once the newly selected doc has rendered, scroll
-  // to its heading (a same-doc anchor scrolls immediately in handleDocLink).
-  React.useEffect(() => {
-    const hash = pendingScrollHashRef.current;
-    if (!hash) return;
-    if (!htmlByPath[selectedPath]) return;
-    pendingScrollHashRef.current = null;
-    scrollDocToHash(hash);
-  }, [selectedPath, htmlByPath, scrollDocToHash]);
+  // Cross-document `#anchor` and the `?anchor=` deep link: see the effect
+  // placed after the active article's render state (`articleReady`).
 
   const onHighlightClick = React.useCallback((tid: string) => {
     // The clicked highlight is already in view, so only select — the rail-follow
     // effect brings its balloon into view in the rail's own scroll.
     setActiveThreadId(tid);
   }, []);
+
+  // "Copy link to section" (the heading link button). Only offered when the
+  // host can build a shareable surface URL. On success the host is told so it
+  // can mirror the anchor into the page URL, as ADO's own preview does.
+  const buildDeepLink = useDeepLink();
+  const onHeadingLinkCopied = props.onHeadingLinkCopied;
+  const onCopyHeadingLink = React.useMemo(() => {
+    if (!buildDeepLink) return undefined;
+    return async (anchor: string): Promise<boolean> => {
+      const url = buildDeepLink({ kind: "heading", anchor });
+      const ok = url ? await copyText(url) : false;
+      if (ok) {
+        track(events.linkCopied({ target: "heading" }));
+        onHeadingLinkCopied?.(anchor);
+      } else {
+        trackUserFacingError({
+          error: new Error(
+            url ? "Heading link copy failed" : "Heading link unavailable",
+          ),
+          source: "PrShell.copyHeadingLink",
+          operation: "heading-link-copy",
+          impact: "action-failed",
+        });
+      }
+      return ok;
+    };
+  }, [buildDeepLink, onHeadingLinkCopied]);
+
+  // "Copy link to selection" (the selection bubble's link action): links the
+  // quoted text, with its section heading as a fallback.
+  const onTextLinkCopied = props.onTextLinkCopied;
+  const onCopySelectionLink = React.useMemo(() => {
+    if (!buildDeepLink) return undefined;
+    return async ({ text, anchor }: SelectionLinkTarget): Promise<boolean> => {
+      const url = buildDeepLink({ kind: "text", text, anchor });
+      const ok = url ? await copyText(url) : false;
+      if (ok) {
+        track(events.linkCopied({ target: "text" }));
+        onTextLinkCopied?.(text, anchor);
+      } else {
+        trackUserFacingError({
+          error: new Error(
+            url ? "Text link copy failed" : "Text link unavailable",
+          ),
+          source: "PrShell.copySelectionLink",
+          operation: "text-link-copy",
+          impact: "action-failed",
+        });
+      }
+      return ok;
+    };
+  }, [buildDeepLink, onTextLinkCopied]);
 
   const onSelectThread = React.useCallback(
     (tid: string) => {
@@ -1602,16 +1987,27 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   );
 
   // A text selection requests a *new-comment* composer at that anchor, subject
-  // to the one-active-draft guard.
+  // to the one-active-draft guard. Comments attach to the latest version, so a
+  // selection made while comparing an earlier update — which carries THAT
+  // version's source lines — is positioned against the latest rendering right
+  // away: the draft then stays correct however the comparison changes before
+  // it's posted (the bubble only offers "Add comment" for text the latest
+  // version still has; see `commentBlocker`).
   const onSelectionMade = React.useCallback(
     (anchor: TextQuoteAnchor) => {
+      const path = selectedPathRef.current;
       requestDraft({
-        path: selectedPathRef.current,
+        path,
         threadId: NEW_DRAFT_THREAD_ID,
-        anchor,
+        anchor:
+          nativeIterationMode && viewingHistorical
+            ? /* v8 ignore start -- the bubble only opens a composer for text found in the latest version */
+              (relocateAnchor(anchor, htmlByPath[path] ?? "") ?? anchor)
+            : /* v8 ignore stop */
+              anchor,
       });
     },
-    [requestDraft],
+    [requestDraft, nativeIterationMode, viewingHistorical, htmlByPath],
   );
 
   const onAddImplicitComment = React.useCallback(() => {
@@ -1655,9 +2051,21 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   }, [draft, draftGuard, revealComments]);
   const onKeepExistingDraft = React.useCallback(() => setDraftGuard(null), []);
 
-  // Wrap an async persistence call so errors surface in the rail banner.
+  // Wrap an async persistence call so errors surface in the rail banner. While
+  // any write is in flight every composer's submit is disabled (see
+  // ComposerBusyContext) — a write can be held for minutes through the ADO
+  // token dead window, and a second click must not post a duplicate.
+  const [writesInFlight, setWritesInFlight] = React.useState(0);
+  // Open inline comment editors (see editorRegistry.ts): their text isn't kept
+  // as a draft, so the reconnect notice hides "Reload page" while any is open.
+  const [openEditors, setOpenEditors] = React.useState(0);
+  const registerEditor = React.useCallback(() => {
+    setOpenEditors((n) => n + 1);
+    return () => setOpenEditors((n) => n - 1);
+  }, []);
   const persistWith = React.useCallback(
     async <T,>(label: string, op: () => Promise<T>): Promise<T | null> => {
+      setWritesInFlight((n) => n + 1);
       try {
         const result = await op();
         setPersistError(null);
@@ -1673,9 +2081,22 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           impact: "action-failed",
         });
         return null;
+      } finally {
+        setWritesInFlight((n) => n - 1);
       }
     },
     [],
+  );
+
+  // A write can be held for minutes through the ADO session refresh. By the
+  // time it lands the user may have cancelled this composer or started another
+  // draft — only close and clear the composer still showing exactly what was
+  // posted, never a newer draft.
+  const isStillPostedDraft = React.useCallback(
+    (postedTarget: DraftTarget | null, body: string): boolean =>
+      activeDraftRef.current === postedTarget &&
+      draft.getSnapshot().trim() === body,
+    [draft],
   );
 
   const onSubmitDraft = React.useCallback(
@@ -1691,6 +2112,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       const mentions = collectMentionIdentities(body, (mid) =>
         identityStore.get(mid),
       );
+      const postedTarget = activeDraftRef.current;
       void (async () => {
         const created = await persistWith("Create comment", () =>
           commentApi.createThread({
@@ -1724,6 +2146,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             bodyLength: body.length,
           }),
         );
+        if (!isStillPostedDraft(postedTarget, body)) return;
         setActiveDraft(null);
         setDraftY(null);
         setActiveThreadId(thread.id);
@@ -1739,6 +2162,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
       persistWith,
       identityStore,
       draft,
+      isStillPostedDraft,
     ],
   );
 
@@ -1750,6 +2174,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
 
   const onReply = React.useCallback(
     (threadId: string, body: string) => {
+      const postedTarget = activeDraftRef.current;
       void (async () => {
         const created = await persistWith("Add reply", () =>
           commentApi.addReply(threadId, body),
@@ -1766,13 +2191,12 @@ export function PrShell(props: PrShellProps): React.ReactElement {
           },
         });
         track(events.commentReplied({ bodyLength: body.length }));
-        // The reply composer is only open when this thread *is* the active
-        // draft, so posting always clears it.
+        if (!isStillPostedDraft(postedTarget, body)) return;
         draft.clear();
         setActiveDraft(null);
       })();
     },
-    [currentUser, commentApi, persistWith, draft],
+    [currentUser, commentApi, persistWith, draft, isStillPostedDraft],
   );
 
   const onResolve = React.useCallback(
@@ -1840,22 +2264,25 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   );
 
   const onEditComment = React.useCallback(
-    (threadId: string, commentId: string, newBodyMarkdown: string) => {
-      void (async () => {
-        const result = await persistWith("Edit comment", () =>
-          commentApi.editComment(threadId, commentId, newBodyMarkdown),
-        );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
-        if (!result) return;
-        dispatch({
-          type: "EDIT_COMMENT",
-          threadId,
-          commentId,
-          newBodyMarkdown,
-          updatedAt: result.updatedAt,
-        });
-        track(events.commentEdited());
-      })();
+    async (
+      threadId: string,
+      commentId: string,
+      newBodyMarkdown: string,
+    ): Promise<boolean> => {
+      const result = await persistWith("Edit comment", () =>
+        commentApi.editComment(threadId, commentId, newBodyMarkdown),
+      );
+      // A failed save leaves the editor open with the user's text (CommentRow).
+      if (!result) return false;
+      dispatch({
+        type: "EDIT_COMMENT",
+        threadId,
+        commentId,
+        newBodyMarkdown,
+        updatedAt: result.updatedAt,
+      });
+      track(events.commentEdited());
+      return true;
     },
     [commentApi, persistWith],
   );
@@ -2030,10 +2457,33 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     (found, target) => found ?? historicalErrorByKey[target.key],
     undefined,
   );
+  // Comparing PR updates, the file may not exist at an endpoint. Absent at the
+  // NEWER end: nothing to show (the PR adds it later / deleted it) — a notice
+  // with a way back to "All updates". Absent at the OLDER end only: the file is
+  // new within the selection, so it renders as wholly added (like "All
+  // updates" shows a file the PR adds) rather than as a load error. A file the
+  // PR deletes is absent at the latest update too, even though the live view
+  // (which "All updates" uses) shows its pre-deletion content.
+  const activeAbsent =
+    (historicalContentKey != null &&
+      !!historicalAbsentByKey[historicalContentKey]) ||
+    (comparingIterations &&
+      historicalContentKey == null &&
+      currentFileChangeType === "deleted");
+  const absentNotice = activeAbsent
+    ? absentAtUpdateMessage(
+        currentFileChangeType,
+        resolvedIterationRange.range.toUpdate,
+      )
+    : null;
+  const baselineAbsent =
+    baselineContentKey != null && !!historicalAbsentByKey[baselineContentKey];
   const historicalLoading =
     historicalLoadError === undefined &&
+    !activeAbsent &&
     ((usingHistoricalContent && historicalHtml === undefined) ||
       (baselineContentKey != null &&
+        !baselineAbsent &&
         historicalSourceByKey[baselineContentKey] === undefined));
   const readerActivities = React.useMemo(
     () =>
@@ -2059,6 +2509,48 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     viewingHistorical && historicalContentKey
       ? historicalContentKey
       : selectedPath;
+  activeStorageKeyRef.current = activeStorageKey;
+
+  // Cross-document `#anchor`: once the newly selected doc has rendered, scroll
+  // to its heading (a same-doc anchor scrolls immediately in handleDocLink).
+  // Also consumes the `?anchor=` deep link seeded at mount. "Rendered" means
+  // the article actually shown — when a link opens an earlier PR update, that
+  // is the earlier version, which loads after the latest one.
+  const articleReady =
+    !!activePristineHtml && !historicalLoading && !absentNotice;
+  React.useEffect(() => {
+    if (!articleReady) return;
+    const text = pendingTextRef.current;
+    if (text) {
+      pendingTextRef.current = null;
+      const fallback = pendingScrollHashRef.current;
+      pendingScrollHashRef.current = null;
+      pendingHashIsDeepLinkRef.current = false;
+      scrollDocToText(text, (found) => {
+        track(events.linkOpened({ target: "text", found }));
+        if (!found && fallback) scrollDocToHash(fallback, { hold: true });
+      });
+      return;
+    }
+    const hash = pendingScrollHashRef.current;
+    if (!hash) return;
+    pendingScrollHashRef.current = null;
+    const fromDeepLink = pendingHashIsDeepLinkRef.current;
+    pendingHashIsDeepLinkRef.current = false;
+    scrollDocToHash(hash, {
+      hold: true,
+      focus: !fromDeepLink,
+      onResolved: fromDeepLink
+        ? (found) => track(events.linkOpened({ target: "heading", found }))
+        : undefined,
+    });
+  }, [
+    selectedPath,
+    articleReady,
+    activePristineHtml,
+    scrollDocToHash,
+    scrollDocToText,
+  ]);
   const activeDocumentImageResolver = React.useMemo(
     () =>
       bindRepositoryImageResolver(
@@ -2077,7 +2569,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     ? historicalSourceByKey[historicalContentKey!]
     : sourceByPath[selectedPath];
   const baselineSource = comparingIterations
-    ? historicalSourceByKey[baselineContentKey!]
+    ? baselineAbsent
+      ? ""
+      : historicalSourceByKey[baselineContentKey!]
     : undefined;
   const iterationDiff = React.useMemo(
     () =>
@@ -2088,12 +2582,24 @@ export function PrShell(props: PrShellProps): React.ReactElement {
         : undefined,
     [comparingIterations, baselineSource, activeSource],
   );
-  const activeDiff = comparingIterations ? iterationDiff : currentFileDiff;
   const activeOriginalSource = comparingIterations
     ? baselineSource
     : currentOriginalSource;
+  const activeDiffTarget = comparingIterations
+    ? activeSource
+    : sourceByPath[selectedPath];
+  const rawActiveDiff = comparingIterations ? iterationDiff : currentFileDiff;
+  // Both line diffs (ADO's and the update comparison's) report a rewrite as
+  // coarse hunks; re-align them per Markdown block so new blocks read as
+  // added and only genuine edits read as edited.
+  const activeDiff = React.useMemo(
+    () =>
+      rawActiveDiff &&
+      refineDiffRanges(rawActiveDiff, activeOriginalSource, activeDiffTarget),
+    [rawActiveDiff, activeOriginalSource, activeDiffTarget],
+  );
   const diffAvailable = comparingIterations
-    ? !!iterationDiff && iterationDiff.length > 0
+    ? !baselineAbsent && !!iterationDiff && iterationDiff.length > 0
     : !viewingHistorical &&
       !isWholeFileChange &&
       !!currentFileDiff &&
@@ -2132,15 +2638,19 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     routedPrResolution === undefined ||
     activeRoutedPr?.status === "completed";
   commentsAvailableRef.current = commentsAvailable;
+  // Comparing earlier updates of THIS PR stays writable: threads belong to
+  // the PR, so replies/resolve/likes work anywhere, and a new comment is
+  // checked against the latest version before its composer opens (see
+  // `commentBlocker`). Only the Documents hub's history stops — earlier,
+  // completed PRs — are read-only.
+  const viewingPastPr = viewingHistorical && !nativeIterationMode;
   const activeReadOnly =
     effectiveReadOnly ||
-    viewingHistorical ||
+    viewingPastPr ||
     viewingDeletedFile ||
     !commentsAvailable;
-  const activeReadOnlyMessage = viewingHistorical
-    ? nativeIterationMode
-      ? "Comments are read-only while viewing a previous update."
-      : `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
+  const activeReadOnlyMessage = viewingPastPr
+    ? `Viewing this document as it was at pull request #${activeStop.prId}. Comments here are read-only — open the pull request to reply.`
     : viewingDeletedFile
       ? "This document was deleted in this pull request. Its previous version is read-only."
       : !commentsAvailable
@@ -2227,6 +2737,38 @@ export function PrShell(props: PrShellProps): React.ReactElement {
     },
     [],
   );
+
+  // Comparing up to an EARLIER update: comments still attach to the latest
+  // version, so a selection can only be commented on if its text is still in
+  // the latest version. Otherwise the selection bubble explains why and
+  // offers to extend the comparison to the latest update (same start point).
+  const latestHtml = htmlByPath[selectedPath];
+  const comparisonStart = resolvedIterationRange.range.fromUpdate;
+  const commentBlocker = React.useMemo(() => {
+    if (!nativeIterationMode || !viewingHistorical || !latestHtml) {
+      return undefined;
+    }
+    return (anchor: TextQuoteAnchor) =>
+      relocateAnchor(anchor, latestHtml)
+        ? null
+        : {
+            message:
+              "This text changed in a later update, so a comment can't be attached to it.",
+            actionLabel: `Compare up to Update ${nativeUpdateCount}`,
+            onAction: () =>
+              changeIterationRange({
+                fromUpdate: comparisonStart,
+                toUpdate: nativeUpdateCount,
+              }),
+          };
+  }, [
+    nativeIterationMode,
+    viewingHistorical,
+    latestHtml,
+    nativeUpdateCount,
+    comparisonStart,
+    changeIterationRange,
+  ]);
 
   // ---- Comment search ----
   // Search spans every rail section and status. Article highlights use the
@@ -2389,7 +2931,11 @@ export function PrShell(props: PrShellProps): React.ReactElement {
 
   return (
     <IdentityStoreContext.Provider value={identityStore}>
-      <CommentApiProvider value={commentApi}>
+      <CommentApiScope
+        api={commentApi}
+        busy={writesInFlight > 0}
+        registerEditor={registerEditor}
+      >
         <div
           className={`emr-app${navHidden ? " is-nav-hidden" : ""}${
             commentsHidden ? " is-comments-hidden" : ""
@@ -2408,6 +2954,24 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                 type="button"
                 className="emr-toast-dismiss"
                 onClick={() => setPersistError(null)}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          <SessionNotice reloadAllowed={openEditors === 0} />
+          {missingDoc ? (
+            <div className="emr-toast emr-toast--info" role="status">
+              <span className="emr-toast-msg">
+                <code>{missingDoc.missing}</code> is no longer in this
+                repository &mdash; it may have been moved or deleted. Showing{" "}
+                <code>{missingDoc.shown}</code> instead.
+              </span>
+              <button
+                type="button"
+                className="emr-toast-dismiss"
+                onClick={() => setMissingDoc(null)}
                 aria-label="Dismiss"
               >
                 ×
@@ -2456,6 +3020,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   // baseline — every file is just "present"), so it suppresses
                   // them.
                   showChangeIndicators={props.draftScope !== "hub"}
+                  rangeChanges={docNavRangeChanges}
                   onActivitiesChange={setNavigationActivities}
                 />
                 {/* Resize affordance on the rail's right border: drag to set
@@ -2513,6 +3078,26 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   </div>
                 ) : loading && !pristineHtml ? (
                   <ArticleSkeleton />
+                ) : absentNotice ? (
+                  <div className="emr-article-wrap">
+                    <div className="emr-update-absent" role="status">
+                      <h2>{absentNotice.title}</h2>
+                      <p>
+                        <code>{selectedPath}</code>: {absentNotice.body}
+                      </p>
+                      <button
+                        type="button"
+                        className="emr-update-absent-action"
+                        onClick={() =>
+                          changeIterationRange(
+                            allReviewIterations(nativeUpdateCount),
+                          )
+                        }
+                      >
+                        Show all updates
+                      </button>
+                    </div>
+                  </div>
                 ) : historicalLoadError ? (
                   <div className="emr-article-wrap">
                     <div className="emr-error">
@@ -2546,6 +3131,13 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                     showDiff={showDiff}
                     onDocLink={handleDocLink}
                     resolveDocumentImage={activeDocumentImageResolver}
+                    onCopyHeadingLink={
+                      viewingPastPr ? undefined : onCopyHeadingLink
+                    }
+                    onCopySelectionLink={
+                      viewingPastPr ? undefined : onCopySelectionLink
+                    }
+                    commentBlocker={commentBlocker}
                   />
                 )}
               </div>
@@ -2737,7 +3329,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             activities={readerActivities}
           />
         </div>
-      </CommentApiProvider>
+      </CommentApiScope>
     </IdentityStoreContext.Provider>
   );
 }
@@ -2774,5 +3366,31 @@ function RailSkeleton(): React.ReactElement {
       <div className="emr-rail-skel-card" />
       <div className="emr-rail-skel-card" />
     </aside>
+  );
+}
+
+/**
+ * The comment API plus the "a write is in flight" flag every Composer reads
+ * (see ComposerBusyContext), provided together at one tree level.
+ */
+function CommentApiScope({
+  api,
+  busy,
+  registerEditor,
+  children,
+}: {
+  api: CommentApi;
+  busy: boolean;
+  registerEditor: () => () => void;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <CommentApiProvider value={api}>
+      <ComposerBusyContext.Provider value={busy}>
+        <RegisterEditorContext.Provider value={registerEditor}>
+          {children}
+        </RegisterEditorContext.Provider>
+      </ComposerBusyContext.Provider>
+    </CommentApiProvider>
   );
 }

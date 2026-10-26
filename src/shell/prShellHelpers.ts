@@ -7,7 +7,7 @@ import { isSessionRefreshingError } from "./adoAuthToken";
 import { diff_match_patch } from "diff-match-patch";
 
 import { diffWords } from "../markdown/wordDiff";
-import type { DiffRange } from "../types";
+import type { ChangeType, DiffRange } from "../types";
 import type {
   DocumentImageResolver,
   RepositoryImageResolver,
@@ -74,6 +74,43 @@ export function bindRepositoryImageResolver(
 /** Human-readable message from an unknown thrown value. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * True when fetching a file at a commit failed because the file doesn't exist
+ * there (HTTP 404 / ADO's `TF401174` "item could not be found"), as opposed to
+ * an auth, network, or server failure. Lets a PR-update comparison treat "not
+ * there yet / any more" as a normal state rather than an error.
+ */
+export function isItemNotFoundError(err: unknown): boolean {
+  return extractStatus(err) === 404 || /\bTF401174\b/.test(errorMessage(err));
+}
+
+/**
+ * Explains why a PR file isn't shown at the newer end of the selected update
+ * comparison, using the file's PR-level change type: a file the PR adds
+ * doesn't exist yet at an earlier update; a file it deletes is already gone.
+ */
+export function absentAtUpdateMessage(
+  changeType: ChangeType | undefined,
+  update: number,
+): { title: string; body: string } {
+  if (changeType === "deleted") {
+    return {
+      title: `Deleted by Update ${update}`,
+      body: `This file was deleted in this pull request by Update ${update}, so there's nothing to show for the selected updates.`,
+    };
+  }
+  if (changeType === "added") {
+    return {
+      title: `Not added yet at Update ${update}`,
+      body: `This pull request adds this file in a later update, so it doesn't exist yet at Update ${update}.`,
+    };
+  }
+  return {
+    title: `Not present at Update ${update}`,
+    body: `This file doesn't exist at Update ${update} of this pull request (it may have been moved or renamed).`,
+  };
 }
 
 /**
@@ -267,6 +304,8 @@ export interface HistoryStop {
   commitId: string | null;
   /** PR backing this stop, if any (Current may have none yet). */
   prId: number | null;
+  /** ADO pull-request iteration id, for native PR updates. */
+  iterationId?: number;
   title?: string;
   url?: string;
   dateMs?: number;
@@ -336,6 +375,22 @@ export function resolveReviewIterationRange(
     activeStopIndex: max - toUpdate,
     baselineStopIndex: fromUpdate === 0 ? null : max - fromUpdate,
   };
+}
+
+/**
+ * Human label for a comparison of PR updates — "All updates", "Base → Update
+ * 3", or "Update 4 → 5" — shared by the update picker and the file list.
+ */
+export function reviewRangeLabel(
+  range: ReviewIterationRange,
+  updateCount: number,
+): string {
+  const resolved = resolveReviewIterationRange(range, updateCount);
+  if (resolved.isAllChanges) return "All updates";
+  if (resolved.range.fromUpdate === 0) {
+    return `Base → Update ${resolved.range.toUpdate}`;
+  }
+  return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
 }
 
 /**

@@ -9,7 +9,13 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useThreadSync } from "../src/comments/useThreadSync";
+import {
+  MAX_RECOVER_WAIT_MS,
+  RECOVER_BUFFER_MS,
+  nextPollDelayMs,
+  useThreadSync,
+} from "../src/comments/useThreadSync";
+import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 import type { CommentThread } from "../src/types";
 
 const trackUserFacingErrorMock = vi.fn();
@@ -33,6 +39,8 @@ interface HarnessOpts {
   onThreads: (threads: CommentThread[]) => void;
   onError?: (err: unknown) => void;
   intervalMs?: number;
+  maxBackoffMs?: number;
+  subscribeRecovered?: (listener: () => void) => () => void;
 }
 
 // Exposed via the harness so tests can inspect / call `refreshNow`.
@@ -48,6 +56,8 @@ function Harness(props: HarnessOpts & { handle: HarnessHandle }): null {
     onThreads: props.onThreads,
     onError: props.onError,
     intervalMs: props.intervalMs,
+    maxBackoffMs: props.maxBackoffMs,
+    subscribeRecovered: props.subscribeRecovered,
   });
   props.handle.controls = controls;
   props.handle.rerenderCount += 1;
@@ -448,6 +458,409 @@ describe("useThreadSync — error handling", () => {
     await flush();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("useThreadSync — failure backoff", () => {
+  // Advance fake time and let the resulting fetch settle.
+  async function tick(ms: number): Promise<void> {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+    await flush();
+  }
+
+  const authError = () =>
+    Object.assign(new Error("TF400813: not authorized"), { status: 401 });
+
+  // Production regression: a 401 every 30s for hours (one tab: 88h), each
+  // poll reported to telemetry. Failures must back off and report once.
+  it("doubles the delay on consecutive failures and reports once per streak", async () => {
+    vi.useFakeTimers();
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      throw authError();
+    });
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 1_000,
+      maxBackoffMs: 4_000,
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    // Streak 1 → wait 1s, streak 2 → 2s, streak 3 → 4s, then capped at 4s.
+    await tick(999);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+    await tick(1);
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+    await tick(1_999);
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+    await tick(1);
+    expect(fetchThreads).toHaveBeenCalledTimes(3);
+    await tick(4_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(4);
+    await tick(4_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(5);
+
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to the normal cadence after a success and reports a new streak again", async () => {
+    vi.useFakeTimers();
+    let fail = true;
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      if (fail) throw authError();
+      return [];
+    });
+    const onThreads = vi.fn();
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads,
+      onError: vi.fn(),
+      intervalMs: 1_000,
+    });
+    await flush();
+    await tick(1_000); // 2nd failure → next wait 2s
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+
+    fail = false;
+    await tick(2_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(3);
+    expect(onThreads).toHaveBeenCalledTimes(1);
+
+    // Healthy again → plain interval.
+    await tick(1_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(4);
+
+    fail = true;
+    await tick(1_000);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("pauses until recoverAtMs for a session-refreshing error, then resumes", async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    let refreshing = true;
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      if (refreshing) {
+        // The real error the PR tab's loader throws in the dead window.
+        throw new SessionRefreshingError("refreshing", now + 4 * 60_000);
+      }
+      return [];
+    });
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 30_000,
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    // No futile polls through the dead window…
+    await tick(4 * 60_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+    // …then one poll just after the host re-mints.
+    refreshing = false;
+    await tick(2_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+    await tick(30_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not let focus or reveal cut a backoff short", async () => {
+    vi.useFakeTimers();
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      throw authError();
+    });
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 10_000,
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    // Hide for 4s, then reveal: the remaining 6s of backoff still applies.
+    setVisibility("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await tick(4_000);
+    setVisibility("visible");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+    await tick(5_999);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+    await tick(1);
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("polls immediately on reveal once a backoff has elapsed while hidden", async () => {
+    vi.useFakeTimers();
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      throw authError();
+    });
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 1_000,
+    });
+    await flush();
+    setVisibility("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await tick(60_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    setVisibility("visible");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a manual refreshNow bypass the backoff", async () => {
+    vi.useFakeTimers();
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      throw authError();
+    });
+    const handle = mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 60_000,
+    });
+    await flush();
+    await act(async () => {
+      handle.controls!.refreshNow();
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("arms the first poll only after the tab becomes visible when a hidden mount fails", async () => {
+    vi.useFakeTimers();
+    setVisibility("hidden");
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      throw authError();
+    });
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 1_000,
+    });
+    await flush();
+    await tick(10_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("nextPollDelayMs", () => {
+  const base = { nowMs: 1_000_000, intervalMs: 30_000 };
+
+  it("uses the interval while healthy", () => {
+    expect(nextPollDelayMs({ ...base, failureStreak: 0 })).toBe(30_000);
+  });
+
+  it("backs off exponentially and caps at maxBackoffMs", () => {
+    const delays = [1, 2, 3, 4, 5, 6, 20].map((failureStreak) =>
+      nextPollDelayMs({ ...base, failureStreak }),
+    );
+    expect(delays).toEqual([
+      30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000,
+    ]);
+  });
+
+  it("never caps below the interval", () => {
+    expect(
+      nextPollDelayMs({ ...base, failureStreak: 3, maxBackoffMs: 1_000 }),
+    ).toBe(30_000);
+  });
+
+  it("waits until just after recoverAtMs, clamped to [interval, 11 min]", () => {
+    const at = (offsetMs: number) =>
+      nextPollDelayMs({
+        ...base,
+        failureStreak: 1,
+        error: { recoverAtMs: base.nowMs + offsetMs },
+      });
+    expect(at(4 * 60_000)).toBe(4 * 60_000 + RECOVER_BUFFER_MS);
+    expect(at(-60_000)).toBe(30_000);
+    expect(at(60 * 60_000)).toBe(MAX_RECOVER_WAIT_MS);
+  });
+
+  // Review finding: when the host never re-mints, the token is past its AAD
+  // `exp` and `recoverAtMs` lies in the past on every failure. The streak must
+  // keep backing off instead of pinning the delay to the 30s interval.
+  it("keeps backing off when recoverAtMs has already passed", () => {
+    const delays = [1, 2, 3, 4, 5, 6].map((failureStreak) =>
+      nextPollDelayMs({
+        ...base,
+        failureStreak,
+        error: { recoverAtMs: base.nowMs - 10_000 },
+      }),
+    );
+    expect(delays).toEqual([
+      30_000, 60_000, 120_000, 240_000, 300_000, 300_000,
+    ]);
+  });
+
+  it("waits for a later recoverAtMs even deep into a streak", () => {
+    expect(
+      nextPollDelayMs({
+        ...base,
+        failureStreak: 2,
+        error: { recoverAtMs: base.nowMs + 8 * 60_000 },
+      }),
+    ).toBe(8 * 60_000 + RECOVER_BUFFER_MS);
+  });
+
+  it("ignores a recoverAtMs hint that isn't a finite number", () => {
+    for (const error of [
+      { recoverAtMs: "soon" },
+      { recoverAtMs: NaN },
+      null,
+      "x",
+    ]) {
+      expect(nextPollDelayMs({ ...base, failureStreak: 2, error })).toBe(
+        60_000,
+      );
+    }
+  });
+});
+
+describe("useThreadSync — early resume on recovery", () => {
+  async function tick(ms: number): Promise<void> {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+    await flush();
+  }
+
+  function recoverySignal() {
+    const listeners = new Set<() => void>();
+    return {
+      listeners,
+      subscribe: (l: () => void) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+      fire: () => {
+        for (const l of [...listeners]) l();
+      },
+    };
+  }
+
+  const failing = () =>
+    vi.fn(async (): Promise<CommentThread[]> => {
+      throw new SessionRefreshingError("refreshing", Date.now() + 9 * 60_000);
+    });
+
+  // The host usually re-mints minutes before the AAD `exp` the backoff waits
+  // for; the recovery signal lets polling resume the moment it does.
+  it("polls immediately when the host signals recovery mid-backoff", async () => {
+    vi.useFakeTimers();
+    const signal = recoverySignal();
+    const fetchThreads = failing();
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 30_000,
+      subscribeRecovered: signal.subscribe,
+    });
+    await flush();
+    await tick(60_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    act(() => signal.fire());
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a recovery signal while healthy", async () => {
+    vi.useFakeTimers();
+    const signal = recoverySignal();
+    const fetchThreads = vi.fn(async () => [] as CommentThread[]);
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      intervalMs: 30_000,
+      subscribeRecovered: signal.subscribe,
+    });
+    await flush();
+    act(() => signal.fire());
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers a recovery seen while hidden to an immediate poll on reveal", async () => {
+    vi.useFakeTimers();
+    const signal = recoverySignal();
+    const fetchThreads = failing();
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 30_000,
+      subscribeRecovered: signal.subscribe,
+    });
+    await flush();
+    setVisibility("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => signal.fire());
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+
+    setVisibility("visible");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flush();
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("unsubscribes on unmount", async () => {
+    const signal = recoverySignal();
+    mount({
+      enabled: true,
+      fetchThreads: vi.fn(async () => [] as CommentThread[]),
+      onThreads: vi.fn(),
+      subscribeRecovered: signal.subscribe,
+    });
+    await flush();
+    expect(signal.listeners.size).toBe(1);
+    unmount();
+    expect(signal.listeners.size).toBe(0);
   });
 });
 

@@ -6,7 +6,10 @@
 // its ~1 MB bundle is paid for only by articles that contain a diagram.
 
 import { isDarkTheme } from "../theme/theme.helpers";
-import { trackUserFacingError } from "../telemetry";
+import { events, track, trackUserFacingError } from "../telemetry";
+import type { DiagramRenderOutcome } from "../telemetry/events";
+import { withChunkRetry } from "./chunkRetry";
+import { repairSequenceSemicolons } from "./mermaidRepair";
 
 type MermaidApi = {
   initialize: (config: Record<string, unknown>) => void;
@@ -35,17 +38,28 @@ const DEFAULT_FONT_FAMILY =
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
 
+function importWithChunkRetry(): Promise<typeof import("mermaid")> {
+  return withChunkRetry(
+    () => import(/* webpackChunkName: "mermaid" */ "mermaid"),
+  );
+}
+
 function getMermaid(): Promise<MermaidApi> {
   if (mermaidPromise) return mermaidPromise;
   mermaidPromise = (async () => {
-    const mod = await import(/* webpackChunkName: "mermaid" */ "mermaid");
+    const mod = await importWithChunkRetry();
     /* v8 ignore start -- ESM/CJS interop fallback; the bundler always provides `default` */
     const api: MermaidApi =
       (mod as { default: MermaidApi }).default ??
       (mod as unknown as MermaidApi);
     /* v8 ignore stop */
     return api;
-  })();
+  })().catch((error: unknown) => {
+    // Drop the rejected promise so a later pass (a theme redraw, a re-render)
+    // can retry instead of being stuck with the first chunk-load failure.
+    mermaidPromise = null;
+    throw error;
+  });
   return mermaidPromise;
 }
 
@@ -61,6 +75,90 @@ function currentMermaidTheme(): "dark" | "default" {
 // Counter for unique render ids — mermaid requires a unique DOM id per
 // diagram during render.
 let renderSeq = 0;
+
+// Mermaid lazy-loads a code chunk per diagram type inside `render()`, on top of
+// the library chunk itself; both go through `withChunkRetry`.
+function renderWithChunkRetry(
+  api: MermaidApi,
+  src: string,
+): ReturnType<MermaidApi["render"]> {
+  // A fresh id per attempt: mermaid needs a unique DOM id for each render.
+  return withChunkRetry(() => api.render(`emr-mermaid-${++renderSeq}`, src));
+}
+
+// One report per failure per page load. The same broken diagram is re-rendered
+// on every theme/font change and every revisit of its file, which used to send
+// the identical error again each time (65 events from 9 sessions).
+const reportedFailures = new Set<string>();
+
+function reportOnce(key: string, operation: string, error: unknown): void {
+  if (reportedFailures.has(key)) return;
+  reportedFailures.add(key);
+  trackUserFacingError({
+    error,
+    source: "Mermaid.hydrate",
+    operation,
+    impact: "degraded",
+  });
+}
+
+/**
+ * True for Mermaid's parser rejecting the author's source ("Parse error on
+ * line N", "Lexical error …", an unknown diagram type). That's content health —
+ * the diagram is wrong everywhere it's rendered — not an extension failure.
+ */
+export function isDiagramSyntaxError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { name, message } = err as { name?: unknown; message?: unknown };
+  return (
+    name === "UnknownDiagramError" ||
+    (typeof message === "string" &&
+      /^(?:Parse error|Lexical error)\b|No diagram type detected/.test(message))
+  );
+}
+
+/** Note a diagram that didn't parse as written, once per diagram per page load. */
+function noteRenderIssueOnce(src: string, outcome: DiagramRenderOutcome): void {
+  const key = `issue:${outcome}:${src}`;
+  if (reportedFailures.has(key)) return;
+  reportedFailures.add(key);
+  track(events.diagramRenderIssue({ outcome }));
+}
+
+/** Swap a placeholder's fallback for the rendered SVG, sized by the reader. */
+function paint(
+  el: HTMLElement,
+  svg: string,
+  theme: string,
+  fontFamily: string,
+): void {
+  // A theme/font redraw can recover from an earlier render failure. Clear its
+  // marker before replacing the fallback so error styling and downstream
+  // guards (for example the source button) no longer apply.
+  el.removeAttribute("data-mermaid-error");
+  // Record the baked-in preferences before swapping innerHTML so a re-entrant
+  // observer that fires during the swap doesn't double-render.
+  el.setAttribute("data-hydrated", "true");
+  el.setAttribute("data-mermaid-theme", theme);
+  el.setAttribute("data-mermaid-font", fontFamily);
+  el.innerHTML = svg;
+  // Let the reader's text-size control scale the whole diagram. Capture the
+  // diagram's natural width (the viewBox's 3rd value) into a custom prop the
+  // stylesheet multiplies by `--emr-reader-scale`, and strip Mermaid's own
+  // inline width caps so that rule governs the size. The viewBox scales nodes
+  // AND their text uniformly, so both track the reading size.
+  const svgEl = el.querySelector<SVGSVGElement>("svg")!;
+  const viewBox = svgEl.getAttribute("viewBox");
+  if (viewBox) {
+    el.style.setProperty(
+      "--emr-diagram-natural-w",
+      `${viewBox.split(" ")[2]}px`,
+    );
+    svgEl.style.removeProperty("max-width");
+    svgEl.removeAttribute("width");
+    svgEl.removeAttribute("height");
+  }
+}
 
 /**
  * Hydrate every `.emr-mermaid[data-mermaid-src]` placeholder under `root`
@@ -95,12 +193,7 @@ export async function hydrateMermaid(
     }
 
     console.warn("[mermaid] failed to load library:", err);
-    trackUserFacingError({
-      error: err,
-      source: "Mermaid.hydrate",
-      operation: "diagram-library-load",
-      impact: "degraded",
-    });
+    reportOnce("library-load", "diagram-library-load", err);
     return;
   }
 
@@ -118,50 +211,40 @@ export async function hydrateMermaid(
       } catch {
         return;
       }
-      const id = `emr-mermaid-${++renderSeq}`;
       try {
-        const { svg } = await api.render(id, src);
-        // A theme/font redraw can recover from an earlier render failure. Clear
-        // its marker before replacing the fallback so error styling and
-        // downstream guards (for example the source button) no longer apply.
-        el.removeAttribute("data-mermaid-error");
-        // Record the baked-in preferences before swapping innerHTML so a
-        // re-entrant observer that fires during the swap doesn't double-render.
-        el.setAttribute("data-hydrated", "true");
-        el.setAttribute("data-mermaid-theme", theme);
-        el.setAttribute("data-mermaid-font", fontFamily);
-        el.innerHTML = svg;
-        // Let the reader's text-size control scale the whole diagram. Capture
-        // the diagram's natural width (the viewBox's 3rd value) into a custom
-        // prop the stylesheet multiplies by `--emr-reader-scale`, and strip
-        // Mermaid's own inline width caps so that rule governs the size. The
-        // viewBox scales nodes AND their text uniformly, so both track the
-        // reading size.
-        const svgEl = el.querySelector<SVGSVGElement>("svg")!;
-        const viewBox = svgEl.getAttribute("viewBox");
-        if (viewBox) {
-          el.style.setProperty(
-            "--emr-diagram-natural-w",
-            `${viewBox.split(" ")[2]}px`,
-          );
-          svgEl.style.removeProperty("max-width");
-          svgEl.removeAttribute("width");
-          svgEl.removeAttribute("height");
-        }
+        const { svg } = await renderWithChunkRetry(api, src);
+        paint(el, svg, theme, fontFamily);
       } catch (err) {
+        let error = err;
+        // `;` in sequence-diagram text reads as a statement break to Mermaid
+        // (the most common diagram failure in production). Retry once with
+        // those escaped — only after a failure, so a diagram that renders as
+        // written is never rewritten.
+        const repaired = isDiagramSyntaxError(err)
+          ? repairSequenceSemicolons(src)
+          : null;
+        if (repaired) {
+          try {
+            const { svg } = await renderWithChunkRetry(api, repaired);
+            paint(el, svg, theme, fontFamily);
+            noteRenderIssueOnce(src, "repaired");
+            return;
+          } catch (repairErr) {
+            // Still a syntax error: keep the author's original one. Anything
+            // else (a chunk load, a runtime fault) is the real failure.
+            if (!isDiagramSyntaxError(repairErr)) error = repairErr;
+          }
+        }
         el.setAttribute("data-hydrated", "true");
         el.setAttribute("data-mermaid-theme", theme);
         el.setAttribute("data-mermaid-font", fontFamily);
         el.setAttribute("data-mermaid-error", "render-failed");
         // Keep the fallback `<pre>` so the user can still read the source.
 
-        console.warn("[mermaid] render failed:", err);
-        trackUserFacingError({
-          error: err,
-          source: "Mermaid.hydrate",
-          operation: "diagram-render",
-          impact: "degraded",
-        });
+        console.warn("[mermaid] render failed:", error);
+        if (isDiagramSyntaxError(error))
+          noteRenderIssueOnce(src, "syntax-error");
+        else reportOnce(`render:${src}`, "diagram-render", error);
       }
     }),
   );

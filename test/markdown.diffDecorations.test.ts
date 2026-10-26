@@ -8,6 +8,7 @@ import {
   DIFF_BLOCK_CLASS,
   DIFF_DELETED_MARKER_CLASS,
   DIFF_INLINE_CLASS,
+  DIFF_MATH_CLASS,
   DIFF_MERMAID_CLASS,
   DIFF_IMAGE_CLASS,
 } from "../src/markdown/diffDecorations";
@@ -16,6 +17,7 @@ import {
   WORD_REMOVED_CLASS,
 } from "../src/markdown/wordDiffDom";
 import type { DiffRange } from "../src/types";
+import { renderMarkdownSync } from "../src/markdown/render";
 
 /** A minimal stand-in for `renderMarkdownSync`: wraps text in a paragraph. */
 const stubRender = (md: string): string => `<p>${md}</p>`;
@@ -1070,8 +1072,9 @@ describe("decorateDiffRanges — inline word diff", () => {
     expect(res.inlined).toBe(0);
   });
 
-  it("skips inline when rendered original equals rendered modified", () => {
-    // A pure formatting change: same text, so no word delta → wash only.
+  it("drops the change when the original renders identically (source-only edit)", () => {
+    // Re-wrapped lines, `*a*` → `_a_`, a renumbered item: nothing a reader can
+    // see changed, so the block is not shown as edited.
     const root = makeRoot([{ tag: "p", start: 5, end: 5, html: "same text" }]);
     const res = decorateDiffRanges(
       root,
@@ -1085,8 +1088,30 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
-    expect(res.decorated).toBe(1);
+    expect(res.decorated).toBe(0);
     expect(res.inlined).toBe(0);
+    expect(root.querySelector(`.${DIFF_BLOCK_CLASS}`)).toBeNull();
+  });
+
+  it("keeps the change when the same text renders with different formatting", () => {
+    const root = document.createElement("div");
+    root.innerHTML = renderMarkdownSync("same **text**");
+    const res = decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 1,
+          kind: "modified",
+          originalText: "same text",
+          originalStartLine: 1,
+          originalEndLine: 1,
+        },
+      ],
+      { renderInline: renderMarkdownSync, originalSource: "same text" },
+    );
+    expect(res.decorated).toBe(1);
+    expect(root.querySelector(`.${DIFF_BLOCK_CLASS}`)).not.toBeNull();
   });
 });
 
@@ -1230,6 +1255,63 @@ describe("decorateDiffRanges — minimal line washes", () => {
     expect(
       heading.querySelector(".emr-diff-line-wash .emr-section-toggle"),
     ).toBeNull();
+  });
+
+  it("keeps the heading link button outside a changed heading wash", () => {
+    // The wash must not swallow the "Copy link to section" button: its CSS
+    // (hover reveal, `> .emr-heading-link`) targets it as a direct child.
+    const root = makeRoot([
+      {
+        tag: "h2",
+        start: 5,
+        end: 5,
+        html: 'Changed heading<button class="emr-heading-link" type="button"></button>',
+      },
+    ]);
+    decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
+
+    const heading = root.querySelector<HTMLElement>("h2")!;
+    expect(heading.lastElementChild?.className).toBe("emr-heading-link");
+    expect(
+      heading.querySelector(":scope > .emr-diff-line-wash")?.textContent,
+    ).toBe("Changed heading");
+    expect(
+      heading.querySelector(".emr-diff-line-wash .emr-heading-link"),
+    ).toBeNull();
+  });
+
+  it("keeps the heading link after words removed from the end of a renamed heading", () => {
+    // "Goals and non-goals" → "Goals": the struck-out tail must stay with the
+    // heading text, not land after the link button.
+    const root = makeRoot([
+      {
+        tag: "h2",
+        start: 5,
+        end: 5,
+        html: 'Goals<button class="emr-heading-link" type="button"></button>',
+      },
+    ]);
+    decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 5,
+          endLine: 5,
+          kind: "modified",
+          originalText: "## Goals and non-goals",
+        },
+      ],
+      { renderInline: renderMarkdownSync },
+    );
+
+    const heading = root.querySelector<HTMLElement>("h2")!;
+    const removed = heading.querySelector(`.${WORD_REMOVED_CLASS}`);
+    expect(removed?.textContent).toContain("non-goals");
+    expect(heading.lastElementChild?.className).toBe("emr-heading-link");
+    expect(
+      removed!.compareDocumentPosition(heading.lastElementChild!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("gives contiguous changed prose blocks independent line washes", () => {
@@ -1483,6 +1565,39 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
     expect(el.classList.contains(DIFF_MERMAID_CLASS)).toBe(true);
   });
 
+  it("reconstructs complete previous source for a one-line diagram edit", () => {
+    const root = mermaidRoot(5, 8);
+    decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 6,
+          endLine: 6,
+          kind: "modified",
+          originalStartLine: 6,
+          originalEndLine: 6,
+          originalText: "  A --> B",
+        },
+      ],
+      {
+        originalSource: [
+          "# Diagram",
+          "",
+          "Intro",
+          "",
+          "```mermaid",
+          "  A --> B",
+          "  B --> C",
+          "```",
+        ].join("\n"),
+      },
+    );
+
+    expect(
+      root.querySelector<HTMLElement>(".emr-mermaid")!.dataset.diffOriginal,
+    ).toBe("A --> B\n  B --> C");
+  });
+
   it("leaves an unchanged diagram untouched", () => {
     const root = mermaidRoot(5, 8);
     const res = decorateDiffRanges(root, [
@@ -1575,6 +1690,97 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
     expect(el.classList.contains(DIFF_MERMAID_CLASS)).toBe(false);
     expect(el.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
     expect(el.dataset.diffOriginal).toBeUndefined();
+  });
+});
+
+describe("decorateDiffRanges — equations", () => {
+  it("decorates a changed display equation atomically without word markup", () => {
+    const root = makeRoot([
+      {
+        tag: "div",
+        start: 4,
+        end: 6,
+        html: '<span class="katex"><span class="katex-html">x²</span></span>',
+      },
+    ]);
+    root.firstElementChild!.classList.add("emr-math");
+
+    const result = decorateDiffRanges(root, [
+      {
+        startLine: 5,
+        endLine: 5,
+        kind: "modified",
+        originalText: "x^3",
+      },
+    ]);
+
+    const equation = root.querySelector<HTMLElement>(
+      ".emr-math.emr-diff-block",
+    )!;
+    expect(result.decorated).toBe(1);
+    expect(equation.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
+    expect(equation.classList.contains(DIFF_MATH_CLASS)).toBe(true);
+    expect(equation.classList.contains("emr-diff-block--modified")).toBe(true);
+    expect(equation.dataset.diffLineWash).toBeUndefined();
+    expect(equation.dataset.diffGroup).toBeUndefined();
+    expect(equation.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
+    expect(equation.querySelector(`.${WORD_REMOVED_CLASS}`)).toBeNull();
+  });
+
+  it("stores previous TeX for Source comparison without a Before disclosure", () => {
+    const originalSource = ["$$", "x = g_i", "$$"].join("\n");
+    const currentSource = ["$$", "x = g_i^2", "$$"].join("\n");
+    const root = document.createElement("div");
+    root.className = "markdown-body emr-rendered";
+    root.innerHTML = renderMarkdownSync(currentSource);
+
+    decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 2,
+          endLine: 2,
+          kind: "modified",
+          originalStartLine: 2,
+          originalEndLine: 2,
+          originalText: "x = g_i",
+        },
+      ],
+      { renderInline: renderMarkdownSync, originalSource },
+    );
+
+    const equation = root.querySelector<HTMLElement>(
+      ".emr-math.emr-diff-block",
+    )!;
+    expect(equation.dataset.diffOriginal).toBe("x = g_i");
+    expect(equation.querySelector(".emr-diff-before-trigger")).toBeNull();
+    expect(root.querySelector(".emr-diff-before-panel")).toBeNull();
+  });
+
+  it("omits previous TeX when prose changes into an equation", () => {
+    const currentSource = ["$$", "x^2", "$$"].join("\n");
+    const root = document.createElement("div");
+    root.className = "markdown-body emr-rendered";
+    root.innerHTML = renderMarkdownSync(currentSource);
+
+    decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 3,
+          kind: "modified",
+          originalStartLine: 1,
+          originalEndLine: 1,
+          originalText: "plain prose",
+        },
+      ],
+      { renderInline: renderMarkdownSync, originalSource: "plain prose" },
+    );
+
+    expect(
+      root.querySelector<HTMLElement>(".emr-math")!.dataset.diffOriginal,
+    ).toBeUndefined();
   });
 });
 

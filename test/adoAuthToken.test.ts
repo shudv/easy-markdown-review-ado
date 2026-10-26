@@ -9,7 +9,6 @@ import {
   DEFAULT_GRANT_SKEW_MS,
   classifyAdoGrant,
   detectSessionRefreshing,
-  ensureAdoSessionLive,
   isAdoAuthError,
   isAdoGrantLapsed,
   isSessionRefreshingError,
@@ -17,7 +16,9 @@ import {
   planSessionRefreshRetry,
   readAdoTokenExpiry,
   SessionRefreshingError,
+  withAdoSessionRefreshDetection,
 } from "../src/shell/adoAuthToken";
+import { withRetry } from "../src/shell/retry";
 
 /** base64url-encode a UTF-8 string (no padding), the JWT segment encoding. */
 function b64url(input: string): string {
@@ -304,56 +305,6 @@ describe("planSessionRefreshRetry", () => {
   });
 });
 
-// The glue the PR-tab boot uses. Injected `getToken` / `nowMs` keep these
-// SDK-free, so the dead-window wiring is validated without a live host — the
-// same injected-provider seam the repo uses elsewhere (e.g. almSearch).
-describe("ensureAdoSessionLive", () => {
-  const iat = 1_785_819_054;
-  const token = makeJwt(incidentPayload(iat));
-  const adoExpMs = (iat + 65 * 60) * 1000;
-  const expMs = (iat + 75 * 60) * 1000;
-
-  it("resolves without throwing for a live token", async () => {
-    const getToken = vi.fn().mockResolvedValue(token);
-    await expect(
-      ensureAdoSessionLive(getToken, adoExpMs - 5 * 60_000),
-    ).resolves.toBeUndefined();
-    expect(getToken).toHaveBeenCalledOnce();
-  });
-
-  it("throws SessionRefreshingError inside the dead window (recover at exp)", async () => {
-    const getToken = vi.fn().mockResolvedValue(token);
-    await expect(
-      ensureAdoSessionLive(getToken, adoExpMs + 2 * 60_000),
-    ).rejects.toMatchObject({
-      name: "SessionRefreshingError",
-      grantState: "refreshing",
-      recoverAtMs: expMs,
-    });
-  });
-
-  it("throws (expired) once the AAD token itself has lapsed", async () => {
-    const getToken = vi.fn().mockResolvedValue(token);
-    await expect(
-      ensureAdoSessionLive(getToken, expMs + 1_000),
-    ).rejects.toMatchObject({ grantState: "expired" });
-  });
-
-  it("resolves (defers to the real call) when getToken rejects", async () => {
-    const getToken = vi.fn().mockRejectedValue(new Error("no token"));
-    await expect(
-      ensureAdoSessionLive(getToken, expMs + 1_000),
-    ).resolves.toBeUndefined();
-  });
-
-  it("resolves for an undecodable token (never blocks on a parse miss)", async () => {
-    const getToken = vi.fn().mockResolvedValue("garbage");
-    await expect(
-      ensureAdoSessionLive(getToken, Date.now()),
-    ).resolves.toBeUndefined();
-  });
-});
-
 describe("detectSessionRefreshing", () => {
   const iat = 1_785_819_054;
   const deadToken = makeJwt(incidentPayload(iat));
@@ -411,5 +362,83 @@ describe("detectSessionRefreshing", () => {
     await expect(
       detectSessionRefreshing(auth401, getToken, deadNow),
     ).resolves.toBeNull();
+  });
+});
+
+describe("withAdoSessionRefreshDetection", () => {
+  const iat = 1_785_819_054;
+  const token = makeJwt(incidentPayload(iat));
+  const adoExpMs = (iat + 65 * 60) * 1000;
+  const deadNow = adoExpMs + 2 * 60_000;
+  const liveNow = adoExpMs - 5 * 60_000;
+  const auth401 = Object.assign(new Error("Unauthorized"), { status: 401 });
+
+  it("does not inspect a dead-looking token before a successful operation", async () => {
+    const op = vi.fn().mockResolvedValue("ok");
+    const getToken = vi.fn().mockResolvedValue(token);
+    await expect(withAdoSessionRefreshDetection(op, getToken)).resolves.toBe(
+      "ok",
+    );
+    expect(op).toHaveBeenCalledOnce();
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it("stops write retries after one confirmed dead-window rejection", async () => {
+    const op = vi.fn().mockRejectedValue(auth401);
+    const getToken = vi.fn().mockResolvedValue(token);
+    await expect(
+      withRetry(
+        () => withAdoSessionRefreshDetection(op, getToken, () => deadNow),
+        { mode: "write", sleep: vi.fn() },
+      ),
+    ).rejects.toBeInstanceOf(SessionRefreshingError);
+    expect(op).toHaveBeenCalledOnce();
+    expect(getToken).toHaveBeenCalledOnce();
+  });
+
+  it("stops read retries after one confirmed dead-window rejection", async () => {
+    const op = vi.fn().mockRejectedValue(auth401);
+    const getToken = vi.fn().mockResolvedValue(token);
+    await expect(
+      withRetry(
+        () => withAdoSessionRefreshDetection(op, getToken, () => deadNow),
+        { mode: "read", sleep: vi.fn() },
+      ),
+    ).rejects.toBeInstanceOf(SessionRefreshingError);
+    expect(op).toHaveBeenCalledOnce();
+    expect(getToken).toHaveBeenCalledOnce();
+  });
+
+  it("preserves a live-token 401 so write retry can recover", async () => {
+    const op = vi.fn().mockRejectedValueOnce(auth401).mockResolvedValue("ok");
+    const getToken = vi.fn().mockResolvedValue(token);
+    await expect(
+      withRetry(
+        () => withAdoSessionRefreshDetection(op, getToken, () => liveNow),
+        { mode: "write", sleep: vi.fn(), random: () => 0 },
+      ),
+    ).resolves.toBe("ok");
+    expect(op).toHaveBeenCalledTimes(2);
+    expect(getToken).toHaveBeenCalledOnce();
+  }, 10_000);
+
+  it("samples the clock after the operation rejects and the token resolves", async () => {
+    const order: string[] = [];
+    const op = vi.fn().mockImplementation(async () => {
+      order.push("operation");
+      throw auth401;
+    });
+    const getToken = vi.fn().mockImplementation(async () => {
+      order.push("token");
+      return token;
+    });
+    const nowMs = vi.fn().mockImplementation(() => {
+      order.push("clock");
+      return deadNow;
+    });
+    await expect(
+      withAdoSessionRefreshDetection(op, getToken, nowMs),
+    ).rejects.toBeInstanceOf(SessionRefreshingError);
+    expect(order).toEqual(["operation", "token", "clock"]);
   });
 });

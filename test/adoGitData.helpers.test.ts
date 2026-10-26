@@ -25,6 +25,7 @@ import {
   selectRoutingPrFromQuery,
   selectRoutingPrsFromQuery,
   stripRefsHeads,
+  webContextProject,
 } from "../src/shell/adoGitData.helpers";
 
 describe("filterReposByName", () => {
@@ -772,5 +773,27 @@ describe("prsTouchingPath", () => {
 
   it("returns [] when no PR touches the path", () => {
     expect(prsTouchingPath(prs, "/nope.md")).toEqual([]);
+  });
+});
+
+describe("webContextProject", () => {
+  it("returns the web context's project", () => {
+    expect(
+      webContextProject({ project: { id: "p-guid", name: "Sandbox" } }),
+    ).toEqual({ id: "p-guid", name: "Sandbox" });
+  });
+
+  it("tolerates a missing name", () => {
+    expect(webContextProject({ project: { id: "p-guid" } })).toEqual({
+      id: "p-guid",
+      name: "",
+    });
+  });
+
+  it("returns null without a usable project id", () => {
+    expect(webContextProject(undefined)).toBeNull();
+    expect(webContextProject({ project: null })).toBeNull();
+    expect(webContextProject({ project: { id: "" } })).toBeNull();
+    expect(webContextProject({ project: { name: "x" } })).toBeNull();
   });
 });

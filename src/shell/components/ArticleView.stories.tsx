@@ -828,6 +828,117 @@ export const TitleNotCollapsible: Story = {
   },
 };
 
+async function liveHeadings(
+  canvasElement: HTMLElement,
+): Promise<HTMLElement[]> {
+  return waitFor(() => {
+    const hs = Array.from(
+      canvasElement.querySelectorAll<HTMLElement>(
+        ".emr-rendered > .emr-section h1, .emr-rendered > .emr-section h2",
+      ),
+    ).filter((h) => !h.closest(".emr-diff-before-panel"));
+    if (hs.length < 2) throw new Error("headings not rendered yet");
+    return hs;
+  });
+}
+
+/**
+ * With a host link builder wired, every heading (the doc title included) gets
+ * an icon-only "Copy link to section" button after its text. Clicking copies
+ * the heading's slug link, confirms on the button, and announces the result.
+ * The button contributes no text, so headings keep their accessible name and
+ * the text comment anchoring / outline labels read.
+ */
+export const HeadingLinkCopies: Story = {
+  args: {
+    onCopyHeadingLink: fn(() => Promise.resolve(true)),
+  },
+  play: async ({ args, canvasElement }) => {
+    const [title, approach] = await liveHeadings(canvasElement);
+    for (const heading of [title!, approach!]) {
+      const button = heading.querySelector<HTMLButtonElement>(
+        ":scope > .emr-heading-link",
+      )!;
+      await expect(button).toBeTruthy();
+      await expect(button.getAttribute("aria-label")).toBe(
+        "Copy link to section",
+      );
+      await expect(button.textContent).toBe("");
+      // The link button sits after the heading text (the chevron, if any,
+      // stays first), and the heading's name is still just its text.
+      await expect(heading.lastElementChild).toBe(button);
+      await expect(heading.getAttribute("aria-label")).toBe(
+        heading.textContent.trim(),
+      );
+    }
+
+    const button =
+      approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+    button.click();
+    await expect(args.onCopyHeadingLink).toHaveBeenCalledWith("approach");
+    await waitFor(() =>
+      expect(button.classList.contains("is-copied")).toBe(true),
+    );
+    await expect(button.getAttribute("aria-label")).toBe("Link copied");
+    await expect(button.title).toBe("Link copied");
+    await waitFor(() =>
+      expect(within(canvasElement).getByRole("status").textContent).toBe(
+        "Link copied",
+      ),
+    );
+    // Copying never folds the section or opens a thread.
+    await expect(
+      approach!.parentElement?.getAttribute("data-collapsed"),
+    ).toBeNull();
+    await expect(args.onHighlightClick).not.toHaveBeenCalled();
+    // The confirmation resets so the link can be copied again.
+    await waitFor(
+      () =>
+        expect(button.getAttribute("aria-label")).toBe("Copy link to section"),
+      { timeout: 2000 },
+    );
+    await expect(button.classList.contains("is-copied")).toBe(false);
+  },
+};
+
+/** A failed copy is reported honestly on the button and to assistive tech. */
+export const HeadingLinkCopyFails: Story = {
+  args: {
+    onCopyHeadingLink: fn(() => Promise.resolve(false)),
+  },
+  play: async ({ canvasElement }) => {
+    const [title] = await liveHeadings(canvasElement);
+    const button =
+      title!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+    button.click();
+    await waitFor(() =>
+      expect(button.classList.contains("is-failed")).toBe(true),
+    );
+    await expect(button.getAttribute("aria-label")).toBe("Couldn't copy link");
+    await waitFor(() =>
+      expect(within(canvasElement).getByRole("status").textContent).toBe(
+        "Couldn't copy link",
+      ),
+    );
+    await waitFor(
+      () => expect(button.classList.contains("is-failed")).toBe(false),
+      { timeout: 3000 },
+    );
+  },
+};
+
+/**
+ * Without a host link builder (no shareable URL) no heading link buttons or
+ * live region render — the reader looks exactly as before.
+ */
+export const NoHeadingLinksWithoutHost: Story = {
+  play: async ({ canvasElement }) => {
+    await liveHeadings(canvasElement);
+    await expect(canvasElement.querySelector(".emr-heading-link")).toBeNull();
+    await expect(within(canvasElement).queryByRole("status")).toBeNull();
+  },
+};
+
 /** The mermaid "view source" button opens the source modal. */
 export const MermaidSource: Story = {
   play: async ({ canvasElement }) => {
@@ -844,7 +955,7 @@ export const MermaidSource: Story = {
     btn.click();
     await waitFor(() =>
       expect(
-        canvasElement.querySelector(".emr-mermaid-modal-overlay"),
+        canvasElement.querySelector(".emr-generated-source-overlay"),
       ).toBeTruthy(),
     );
     // Closing the modal clears the source state.
@@ -853,7 +964,7 @@ export const MermaidSource: Story = {
     );
     await waitFor(() =>
       expect(
-        canvasElement.querySelector(".emr-mermaid-modal-overlay"),
+        canvasElement.querySelector(".emr-generated-source-overlay"),
       ).toBeNull(),
     );
   },
@@ -1012,5 +1123,162 @@ export const ReadOnly: Story = {
     await expect(
       canvasElement.querySelector(".emr-selection-bubble"),
     ).toBeNull();
+  },
+};
+
+/** Select `[start, end)` of `node` and fire the mouseup the article listens on. */
+function selectAndRelease(
+  canvasElement: HTMLElement,
+  node: Node,
+  start: number,
+  end: number,
+): void {
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  const sel = window.getSelection()!;
+  sel.removeAllRanges();
+  sel.addRange(range);
+  canvasElement
+    .querySelector<HTMLElement>(".emr-rendered")!
+    .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+}
+
+/**
+ * With a shareable URL the bubble adds "Copy link to selection": it reports the
+ * quoted text plus the enclosing section's heading (the link's fallback), and
+ * the bubble closes once the copy is confirmed.
+ */
+export const SelectionLinkCopies: Story = {
+  args: { onCopySelectionLink: fn(() => Promise.resolve(true)) },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const para = await waitFor(() => {
+      const p = Array.from(
+        canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
+      ).find((el) => el.textContent?.startsWith("Reviewers comment"));
+      if (!p) throw new Error("no paragraph");
+      return p;
+    });
+    selectAndRelease(canvasElement, para.firstChild!, 0, 9);
+    await waitFor(() => canvas.getByRole("button", { name: /add comment/i }));
+    canvas.getByRole("button", { name: "Copy link to selection" }).click();
+    await waitFor(() =>
+      expect(args.onCopySelectionLink).toHaveBeenCalledWith({
+        text: "Reviewers",
+        anchor: "approach",
+      }),
+    );
+    await waitFor(
+      () =>
+        expect(canvasElement.querySelector(".emr-selection-bubble")).toBeNull(),
+      { timeout: 3000 },
+    );
+  },
+};
+
+/**
+ * Read-only surfaces still offer the link (alone, labelled). Text outside any
+ * section links without a heading fallback; a selection made of element
+ * boundaries (e.g. triple-click) links the same text.
+ */
+export const SelectionLinkReadOnly: Story = {
+  args: {
+    readOnly: true,
+    draftAnchor: null,
+    diff: undefined,
+    threads: [],
+    pristineHtml: renderMarkdownSync("Intro line before any heading.\n"),
+    onCopySelectionLink: fn(() => Promise.resolve(true)),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const para = await waitFor(() => {
+      const p = canvasElement.querySelector<HTMLElement>(".emr-rendered p");
+      if (!p) throw new Error("no paragraph");
+      return p;
+    });
+    selectAndRelease(canvasElement, para, 0, para.childNodes.length);
+    const link = await waitFor(() =>
+      canvas.getByRole("button", { name: "Copy link to selection" }),
+    );
+    await expect(canvas.queryByRole("button", { name: /add comment/i })).toBe(
+      null,
+    );
+    link.click();
+    await waitFor(() =>
+      expect(args.onCopySelectionLink).toHaveBeenCalledWith({
+        text: "Intro line before any heading.",
+      }),
+    );
+  },
+};
+
+/** A selection that can't take a comment explains why, and offers no link. */
+export const SelectionLinkBlocked: Story = {
+  args: {
+    onCopySelectionLink: fn(() => Promise.resolve(true)),
+    commentBlocker: () => ({
+      message: "This text changed in a later update.",
+      actionLabel: "Compare up to Update 2",
+      onAction: fn(),
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const para = await waitFor(() => {
+      const p = Array.from(
+        canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
+      ).find((el) => el.textContent?.startsWith("Reviewers comment"));
+      if (!p) throw new Error("no paragraph");
+      return p;
+    });
+    selectAndRelease(canvasElement, para.firstChild!, 0, 9);
+    await waitFor(() =>
+      canvas.getByText("This text changed in a later update."),
+    );
+    await expect(
+      canvas.queryByRole("button", { name: "Copy link to selection" }),
+    ).toBeNull();
+  },
+};
+
+/** Re-renders its ArticleView with a changed thread set on `emr-story-rewrap`. */
+function RewrapHarness(
+  props: React.ComponentProps<typeof ArticleView>,
+): React.ReactElement {
+  const [threads, setThreads] = React.useState(props.threads);
+  React.useEffect(() => {
+    const onRewrap = () => setThreads((current) => current.slice(1));
+    window.addEventListener("emr-story-rewrap", onRewrap);
+    return () => window.removeEventListener("emr-story-rewrap", onRewrap);
+  }, []);
+  return <ArticleView {...props} threads={threads} />;
+}
+
+/**
+ * A keyboard user on a heading link button keeps focus when the article is
+ * re-wrapped (a thread poll, diff, or image load rebuilds every heading and
+ * its button) instead of being dropped to <body>.
+ */
+export const HeadingLinkKeepsFocusOnRewrap: Story = {
+  args: {
+    onCopyHeadingLink: fn(() => Promise.resolve(true)),
+  },
+  render: (args) => <RewrapHarness {...args} />,
+  play: async ({ canvasElement }) => {
+    const [, approach] = await liveHeadings(canvasElement);
+    const before =
+      approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+    before.focus();
+    await expect(document.activeElement).toBe(before);
+
+    window.dispatchEvent(new Event("emr-story-rewrap"));
+    // The re-wrap replaces the button element…
+    await waitFor(() => expect(before.isConnected).toBe(false));
+    // …and focus follows to its replacement.
+    const active = document.activeElement as HTMLElement;
+    await expect(active.classList.contains("emr-heading-link")).toBe(true);
+    await expect(active.dataset.headingId).toBe("approach");
   },
 };

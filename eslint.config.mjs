@@ -140,4 +140,27 @@ export default tseslint.config(
       "@typescript-eslint/only-throw-error": "off",
     },
   },
+
+  {
+    // e2e specs must use the shared fixtures, which grant the ADO origin the
+    // scoped "local network access" permission the localhost dev iframes need.
+    // A spec importing `test` straight from Playwright would silently lose it.
+    files: ["e2e/**/*.spec.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test", "expect"],
+              allowTypeImports: true,
+              message:
+                'Import `test`/`expect` from "./fixtures" so the spec gets the scoped local-network-access grant.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

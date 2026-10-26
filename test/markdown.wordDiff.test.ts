@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  diffCharacters,
   diffWords,
   tokenizeWords,
   unchangedRatio,
@@ -135,6 +136,31 @@ describe("diffWords", () => {
     // No equal op contains a bare partial word "here" carved out of a word.
     expect(join(ops, ["equal", "added"])).toBe("review of files everywhere.");
     expect(join(ops, ["equal", "removed"])).toBe("review of files here.");
+  });
+});
+
+describe("diffCharacters", () => {
+  it("isolates a TeX exponent edit at character granularity", () => {
+    const original = String.raw`g_i`;
+    const modified = String.raw`g_i^2`;
+    const ops = diffCharacters(original, modified);
+
+    expect(join(ops, ["equal", "removed"])).toBe(original);
+    expect(join(ops, ["equal", "added"])).toBe(modified);
+    expect(ops).toContainEqual({ kind: "added", value: "^2" });
+    expect(ops).not.toContainEqual({ kind: "removed", value: "g_i" });
+  });
+
+  it("isolates a TeX character removal", () => {
+    expect(diffCharacters(String.raw`g_i^2`, String.raw`g_i`)).toContainEqual({
+      kind: "removed",
+      value: "^2",
+    });
+  });
+
+  it("handles identical and empty source", () => {
+    expect(diffCharacters("", "")).toEqual([]);
+    expect(diffCharacters("x", "x")).toEqual([{ kind: "equal", value: "x" }]);
   });
 });
 

@@ -10,7 +10,9 @@
 // exercises range-computation → render → decorate end to end, plus the toggle
 // wired through the shared <PrShell/>.
 
-import { test, expect } from "@playwright/test";
+import type { Locator } from "@playwright/test";
+
+import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
 import {
@@ -101,5 +103,185 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     await expect
       .poll(async () => changedBlocks.count(), { timeout: 10_000 })
       .toBeGreaterThan(0);
+  });
+
+  test("re-aligns coarse ADO hunks so new blocks read as added, not edited", async ({
+    page,
+  }) => {
+    const prId = await discoverPullRequestId(
+      page,
+      E2E.rewriteDiffRepo,
+      E2E.rewriteDiffPrTitle,
+      "active",
+    );
+    await gotoPrTab(page, E2E.rewriteDiffRepo, prId);
+
+    const frame = prTabFrame(page);
+    await waitForFrameRoot(frame);
+    const article = frame.locator(".emr-rendered").first();
+    await article.waitFor({ timeout: 45_000 });
+    await expect(article.locator(".emr-diff-block").first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // `hasText` also matches ancestors, so take the innermost (last) match:
+    // a nested list item, not the top-level item that contains it.
+    const block = (selector: string, text: string) =>
+      article.locator(selector).filter({ hasText: text }).last();
+    const row = (firstCell: string) =>
+      article.locator("tr").filter({
+        has: frame
+          .locator("td:first-child")
+          .getByText(firstCell, { exact: true }),
+      });
+    const removedTexts = () =>
+      article
+        .locator(".emr-diff-deleted-marker")
+        .evaluateAll((markers) => markers.map((m) => m.textContent ?? ""));
+    const marks = (scope: Locator, kind: "added" | "removed") =>
+      scope.locator(`.emr-word-${kind}`).evaluateAll((els) =>
+        els
+          .map((el) => el.textContent ?? "")
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+
+    // ADO reports each rewrite as one coarse hunk; none of its new blocks may
+    // fall back to the misleading "previous content unavailable" amber.
+    await expect(
+      article.locator('[data-diff-tooltip^="Previous content unavailable"]'),
+    ).toHaveCount(0);
+
+    // Performance: a one-line placeholder became a table and a nested list.
+    // Every new block is added — including items nested under an added item —
+    // and the placeholder and TODO show up as removed.
+    await expect(block("p", "We have 3 topline metrics")).toHaveAttribute(
+      "data-diff-kind",
+      "added",
+    );
+    await expect(row("EUPL")).toHaveAttribute("data-diff-kind", "added");
+    for (const nested of ["Locally against", "Capture latency numbers"]) {
+      await expect(block("li", nested)).toHaveAttribute(
+        "data-diff-kind",
+        "added",
+      );
+    }
+    expect((await removedTexts()).join("\n")).toContain(
+      "Can this impact our topline perf metrics",
+    );
+
+    // An edited paragraph keeps its precise word diff next to a new one.
+    expect(await marks(block("p", "Reviewers lose comments"), "added")).toBe(
+      "in the middle of a",
+    );
+    await expect(block("p", "Field telemetry shows")).toHaveAttribute(
+      "data-diff-kind",
+      "added",
+    );
+
+    // List: an edited item next to inserted items.
+    expect(await marks(block("li", "Drafts sync exactly once"), "added")).toBe(
+      "exactly once,",
+    );
+    await expect(block("li", "Drafts expire after seven days")).toHaveAttribute(
+      "data-diff-kind",
+      "added",
+    );
+
+    // Table: an edited cell next to an inserted row.
+    await expect(row("Telemetry")).toHaveAttribute("data-diff-kind", "added");
+    await expect(row("Sync")).toHaveAttribute("data-diff-cells", "true");
+
+    // Ordered list: the first step was removed. A later renumbered step reads
+    // the same and is not marked; the new first step changed the number the
+    // list starts at, so only its number is marked.
+    await expect(block("li", "Build the extension.")).toHaveAttribute(
+      "data-diff-tooltip",
+      "List numbering changed from 2 to 1",
+    );
+    await expect(block("li", "Run the end-to-end suite.")).not.toHaveAttribute(
+      "data-diff-kind",
+      /.+/,
+    );
+    expect((await removedTexts()).join("\n")).toContain(
+      "Clone the feature branch.",
+    );
+
+    // An edited paragraph that moved past a new section still pairs with its
+    // original across ADO's blank-line-anchored hunks.
+    expect(
+      await marks(block("p", "covers engineering design notes"), "removed"),
+    ).toBe("first release");
+
+    // A same-shape rewrite stays an edit with its previous version on demand.
+    const risk = block("p", "Session storage is cleared");
+    await expect(risk).toHaveAttribute("data-diff-kind", "modified");
+    await expect(
+      risk.getByRole("button", { name: "Show previous version" }),
+    ).toBeVisible();
+  });
+
+  test("compares edited equation source and rendering in one callout", async ({
+    page,
+  }) => {
+    const prId = await discoverPullRequestId(
+      page,
+      E2E.equationRepo,
+      E2E.equationPrTitle,
+      "active",
+    );
+    await gotoPrTab(page, E2E.equationRepo, prId);
+
+    const frame = prTabFrame(page);
+    await waitForFrameRoot(frame);
+    await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
+    await frame
+      .locator("button.emr-docnav-file-label")
+      .filter({ hasText: "equations.md" })
+      .click();
+
+    const equation = frame
+      .locator(".emr-math.emr-diff-block")
+      .filter({
+        has: frame.locator("annotation").filter({ hasText: "g_i^2" }),
+      })
+      .first();
+    await expect(equation.locator(".katex")).toBeVisible({ timeout: 30_000 });
+    await expect(equation).toHaveAttribute("data-diff-kind", "modified");
+    await expect(
+      equation.locator(".emr-word-added, .emr-word-removed"),
+    ).toHaveCount(0);
+
+    const added = frame
+      .locator(".emr-math annotation")
+      .filter({ hasText: String.raw`F_{\mathrm{scro}\parallel}` });
+    await expect(added).toHaveCount(1);
+
+    await equation.getByTitle("View equation source").click();
+    const sourceModal = frame.getByRole("dialog", { name: "Equation source" });
+    await expect(sourceModal).toBeVisible();
+    await expect(sourceModal.locator(".emr-word-added")).toHaveText("^2");
+    await expect(
+      sourceModal.locator(".emr-generated-source-preview .katex"),
+    ).toBeVisible();
+    await sourceModal.getByRole("button", { name: "Before" }).click();
+    await expect(
+      sourceModal.getByRole("button", { name: /source changes/i }),
+    ).toHaveCount(0);
+    await expect(
+      sourceModal.locator(".emr-generated-source-code code"),
+    ).toHaveText(
+      String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`,
+    );
+    await expect(
+      sourceModal.locator(".emr-generated-source-preview .katex"),
+    ).toBeVisible();
+    await expect(sourceModal.locator("annotation")).toHaveText(
+      String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`,
+    );
+    await expect(
+      equation.getByRole("button", { name: "Show previous version" }),
+    ).toHaveCount(0);
   });
 });

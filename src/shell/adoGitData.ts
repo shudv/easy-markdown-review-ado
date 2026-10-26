@@ -6,7 +6,6 @@
 // fails to enumerate is logged and dropped rather than killing the caller.
 
 import * as SDK from "azure-devops-extension-sdk";
-import { getClient } from "azure-devops-extension-api";
 import {
   GitRestClient,
   GitPullRequestQueryType,
@@ -25,7 +24,7 @@ import type { CommentThread, FileInfo } from "../types";
 import { trackUserFacingError } from "../telemetry";
 import { adoThreadToLocal } from "./adoCommentApi";
 import { withRetry } from "./retry";
-import type { DocPrRef } from "./prShellHelpers";
+import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import {
   createAlmSearchClient,
@@ -49,6 +48,7 @@ import {
   selectRoutingPrsFromQuery,
   stripRefsHeads,
 } from "./adoGitData.helpers";
+import { sharedGitClient } from "./adoClients";
 
 // Re-export `buildPrUrl` (the one helper external callers reach for through
 // this module's SDK-touching API surface).
@@ -88,7 +88,7 @@ export async function fetchRepoPage(
     top?: number;
   } = {},
 ): Promise<RepoPage> {
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const filter = normalizeRepoFilter(opts.filter);
   const batch = await withRetry(
     () =>
@@ -130,7 +130,7 @@ export async function fetchRepoById(
   projectId: string,
   repoId: string,
 ): Promise<{ repo: DocRepo; raw: GitRepository } | null> {
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   try {
     const raw = await withRetry(
       () => gitClient.getRepository(repoId, projectId),
@@ -251,24 +251,22 @@ export async function listFolderMarkdown(
   path: string,
 ): Promise<FolderListing> {
   if (!repo.defaultBranch) return { files: [], folders: [] };
-  const gitClient = getClient(GitRestClient);
   // Synthesise the minimum shape `listMarkdownLevel` needs from the DocRepo.
   const stub = {
     id: repo.id,
     name: repo.name,
     defaultBranch: `refs/heads/${repo.defaultBranch}`,
   } as Pick<GitRepository, "id" | "name" | "defaultBranch">;
-  return listMarkdownLevel(stub, projectId, path, gitClient);
+  return listMarkdownLevel(stub, projectId, path);
 }
 
 async function listMarkdownLevel(
   repo: Pick<GitRepository, "id" | "name" | "defaultBranch">,
   projectId: string,
   scopePath: string,
-  client?: GitRestClient,
 ): Promise<FolderListing> {
   if (!repo.defaultBranch) return { files: [], folders: [] };
-  const gitClient = client ?? getClient(GitRestClient);
+  const gitClient = sharedGitClient();
 
   // Pin reads to the default branch's tip so repos with no default
   // branch ref selection still return a coherent listing.
@@ -321,7 +319,7 @@ async function findMostRecentRoutingPr(
   projectId: string,
 ): Promise<GitPullRequest | null> {
   if (!repo.defaultBranch) return null;
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   // Fetch the most recent COMPLETED PRs targeting the default branch and let
   // the pure `selectRoutingPr` helper make the routing decision (most recent
   // completed; active PRs ignored). We over-fetch a small page rather than
@@ -396,7 +394,7 @@ export async function findRoutingPrForDoc(
   docPath: string,
 ): Promise<GitPullRequest | null> {
   if (!repo.defaultBranch) return null;
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const branch = stripRefsHeads(repo.defaultBranch);
   const wanted = normalizePath(docPath);
 
@@ -427,12 +425,16 @@ export async function findRoutingPrForDoc(
       `[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`,
       err,
     );
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.comments",
-      operation: "document-routing-commit-load",
-      impact: "degraded",
-    });
+    // A path that's no longer on the branch can't be routed — expected, not a
+    // failure; fall through to the repo's most recent completed PR below.
+    if (!isItemNotFoundError(err)) {
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.comments",
+        operation: "document-routing-commit-load",
+        impact: "degraded",
+      });
+    }
   }
 
   // 2. The PR that merged that commit (its last-merge commit). When the file
@@ -516,7 +518,7 @@ async function findDocPrHistory(
     hasMore: false,
   };
   if (!repo.defaultBranch) return empty;
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const branch = stripRefsHeads(repo.defaultBranch);
   const wanted = normalizePath(docPath);
 
@@ -548,12 +550,16 @@ async function findDocPrHistory(
       `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
       err,
     );
-    trackUserFacingError({
-      error: err,
-      source: "PrShell.history",
-      operation: "history-commit-load",
-      impact: "degraded",
-    });
+    // A path that's no longer on the branch has no history — expected, not a
+    // failure (the reader falls back to another document).
+    if (!isItemNotFoundError(err)) {
+      trackUserFacingError({
+        error: err,
+        source: "PrShell.history",
+        operation: "history-commit-load",
+        impact: "degraded",
+      });
+    }
     return empty;
   }
   // A short page means we've reached the start of the file's history.
@@ -633,7 +639,7 @@ export async function loadThreadsForRoutedPr(
   pullRequestId: number,
   docPath: string,
 ): Promise<CommentThread[]> {
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const wanted = normalizePath(docPath).toLowerCase();
   try {
     const raw = await withRetry(
@@ -677,7 +683,7 @@ export async function fetchRepoFileContent(
   path: string,
   atCommitId?: string,
 ): Promise<string> {
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   // Default: the live tip of the default branch (today's document). When a
   // commit id is supplied (the comment-history stepper viewing the document as
   // it was at a PR's merge commit), pin the read to that immutable commit.
@@ -868,8 +874,7 @@ export function resolveAdoAvatarObjectUrl(
         async () => {
           // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
           // host round-trip, but the host caches the minted token, so a retry
-          // heals only a true transient auth race — not the `ado_exp` dead window
-          // (detected + recovered at app boot, see shell/adoAuthToken.ts).
+          // heals only a true transient auth race — not the `ado_exp` dead window.
           // Avatars just degrade when auth can't complete.
           const token = await SDK.getAccessToken();
           const r = await fetch(url, {
@@ -912,7 +917,7 @@ export async function loadThreadsForRepo(
 ): Promise<CommentThread[]> {
   const pr = prByRepo[repoId];
   if (!pr || typeof pr.pullRequestId !== "number") return [];
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   try {
     const raw = await withRetry(
       () => gitClient.getThreads(repoId, pr.pullRequestId, projectId),

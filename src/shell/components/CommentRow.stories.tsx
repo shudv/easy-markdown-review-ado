@@ -6,7 +6,13 @@ import { CommentApiProvider } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
 import type { Comment, CommentAuthor } from "../../types";
 import { CommentRow } from "./CommentRow";
-import { CommentLinkContext } from "../../comments/commentLink";
+import { DeepLinkContext, type DeepLinkBuilder } from "../deepLink";
+
+/** A host-shaped builder, as the PR tab / Documents hub provide. */
+const HOST_LINK: DeepLinkBuilder = (target) =>
+  target.kind === "comment"
+    ? `https://dev.azure.com/org/proj/_git/repo/pullrequest/4?_a=pub.ext.markdown-review-pr-tab&path=%2Fdocs%2Fa.md&comment=${target.threadId}`
+    : undefined;
 
 const shubhd: CommentAuthor = {
   id: "u-shubhd",
@@ -54,9 +60,11 @@ const meta = {
   decorators: [
     (Story) => (
       <CommentApiProvider value={api}>
-        <div style={{ width: 360 }}>
-          <Story />
-        </div>
+        <DeepLinkContext.Provider value={HOST_LINK}>
+          <div style={{ width: 360 }}>
+            <Story />
+          </div>
+        </DeepLinkContext.Provider>
       </CommentApiProvider>
     ),
   ],
@@ -247,7 +255,11 @@ export const LikedByOneOther: Story = {
   },
 };
 
-/** Opening the ⋯ menu and copying a link (clipboard succeeds). */
+/**
+ * Opening the ⋯ menu and copying a link (clipboard succeeds). The copied URL
+ * is the host's real, shareable surface link — never the iframe's own
+ * Marketplace-CDN URL, which opens a blank page.
+ */
 export const CopyLinkSucceeds: Story = {
   play: async ({ canvasElement }) => {
     const writeText = fn(() => Promise.resolve());
@@ -260,9 +272,11 @@ export const CopyLinkSucceeds: Story = {
       await userEvent.click(
         canvas.getByRole("menuitem", { name: "Link to comment" }),
       );
+      // Thread id "t1" comes from the default `threadId` arg.
       await expect(writeText).toHaveBeenCalledWith(
-        expect.stringContaining("#comment-c1"),
+        "https://dev.azure.com/org/proj/_git/repo/pullrequest/4?_a=pub.ext.markdown-review-pr-tab&path=%2Fdocs%2Fa.md&comment=t1",
       );
+      await expect(writeText).toHaveBeenCalledTimes(1);
       // The menu stays open and confirms the copy inline.
       await waitFor(() =>
         expect(
@@ -283,19 +297,15 @@ export const CopyLinkSucceeds: Story = {
 };
 
 /**
- * With a host-supplied `CommentLinkContext`, the copied URL is the real
- * shareable surface link (not the in-iframe hash).
+ * The host builder can't produce a URL for this thread (e.g. a blank id): the
+ * item reports an honest failure instead of copying a broken link.
  */
-export const CopyLinkUsesHostBuilder: Story = {
+export const CopyLinkUnavailable: Story = {
   decorators: [
     (Story) => (
-      <CommentLinkContext.Provider
-        value={(threadId) =>
-          `https://dev.azure.com/org/proj/_apps/hub/pub.ext.documents-hub?path=docs%2Fa.md&comment=${threadId}`
-        }
-      >
+      <DeepLinkContext.Provider value={() => undefined}>
         <Story />
-      </CommentLinkContext.Provider>
+      </DeepLinkContext.Provider>
     ),
   ],
   play: async ({ canvasElement }) => {
@@ -309,19 +319,68 @@ export const CopyLinkUsesHostBuilder: Story = {
       await userEvent.click(
         canvas.getByRole("menuitem", { name: "Link to comment" }),
       );
-      // Thread id "t1" comes from the default `threadId` arg.
-      await expect(writeText).toHaveBeenCalledWith(
-        "https://dev.azure.com/org/proj/_apps/hub/pub.ext.documents-hub?path=docs%2Fa.md&comment=t1",
-      );
       await waitFor(() =>
         expect(
-          canvas.getByRole("menuitem", { name: "Link copied" }),
+          canvas.getByRole("menuitem", { name: "Couldn't copy link" }),
         ).toBeTruthy(),
       );
-      await new Promise((r) => setTimeout(r, 1300));
+      await expect(writeText).not.toHaveBeenCalled();
     } finally {
       restore();
     }
+  },
+};
+
+/**
+ * A surface with no shareable URL (no `DeepLinkContext` builder) hides "Link
+ * to comment" entirely rather than offering a link that can't work.
+ */
+export const NoShareableUrlHidesLink: Story = {
+  decorators: [
+    (Story) => (
+      <DeepLinkContext.Provider value={null}>
+        <Story />
+      </DeepLinkContext.Provider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "More options" }));
+    await expect(
+      canvas.queryByRole("menuitem", { name: "Link to comment" }),
+    ).toBeNull();
+    // Thread actions are still offered on the first comment.
+    await expect(
+      canvas.getByRole("menuitem", { name: "Resolve thread" }),
+    ).toBeTruthy();
+  },
+};
+
+/**
+ * Someone else's reply on a surface with no shareable URL has no menu actions
+ * at all, so the ⋯ button is hidden instead of opening an empty menu.
+ */
+export const NoShareableUrlOtherUsersReply: Story = {
+  args: {
+    isFirst: false,
+    comment: { ...ownComment, id: "c4", author: alex },
+  },
+  decorators: [
+    (Story) => (
+      <DeepLinkContext.Provider value={null}>
+        <Story />
+      </DeepLinkContext.Provider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.queryByRole("button", { name: "More options" }),
+    ).toBeNull();
+    // Reacting still works without the menu.
+    await expect(
+      canvas.getByRole("button", { name: "Like this comment" }),
+    ).toBeTruthy();
   },
 };
 
@@ -413,6 +472,88 @@ export const EditComment: Story = {
     await waitFor(() =>
       expect(canvas.queryByRole("button", { name: "Save" })).toBeNull(),
     );
+  },
+};
+
+/** A save the host can hold, then finish with `true` (saved) or `false`. */
+function heldSave() {
+  let finish: ((saved: boolean) => void) | null = null;
+  const onEdit = fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  return { onEdit, finish: (saved: boolean) => finish?.(saved) };
+}
+
+async function openEditorAndSave(
+  canvasElement: HTMLElement,
+  text: string,
+): Promise<HTMLTextAreaElement> {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole("button", { name: "More options" }));
+  await userEvent.click(canvas.getByRole("menuitem", { name: "Edit comment" }));
+  const textarea = (await waitFor(() =>
+    canvas.getByRole("textbox"),
+  )) as HTMLTextAreaElement;
+  await userEvent.clear(textarea);
+  await userEvent.type(textarea, text);
+  await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+  return textarea;
+}
+
+const keepTyping = heldSave();
+/**
+ * A save that lands late (e.g. held through an Azure DevOps reconnect) must
+ * not close an editor the user kept typing in — their newer text stays.
+ */
+export const EditHeldSaveKeepsNewerText: Story = {
+  args: { onEdit: keepTyping.onEdit },
+  play: async ({ canvasElement }) => {
+    const textarea = await openEditorAndSave(canvasElement, "First version");
+    await userEvent.type(textarea, " plus more");
+    keepTyping.finish(true);
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(
+      (within(canvasElement).getByRole("textbox") as HTMLTextAreaElement).value,
+    ).toBe("First version plus more");
+  },
+};
+
+const reopen = heldSave();
+/** …nor close an editor the user cancelled and opened again meanwhile. */
+export const EditHeldSaveKeepsReopenedEditor: Story = {
+  args: { onEdit: reopen.onEdit },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openEditorAndSave(canvasElement, "Sent text");
+    await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(canvas.getByRole("button", { name: "More options" }));
+    await userEvent.click(
+      canvas.getByRole("menuitem", { name: "Edit comment" }),
+    );
+    const again = (await waitFor(() =>
+      canvas.getByRole("textbox"),
+    )) as HTMLTextAreaElement;
+    await userEvent.type(again, " — second try");
+    reopen.finish(true);
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(canvas.getByRole("textbox")).toBe(again);
+  },
+};
+
+const failing = heldSave();
+/** A failed save keeps the editor open with the text. */
+export const EditFailedSaveKeepsEditor: Story = {
+  args: { onEdit: failing.onEdit },
+  play: async ({ canvasElement }) => {
+    await openEditorAndSave(canvasElement, "Not saved yet");
+    failing.finish(false);
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(
+      (within(canvasElement).getByRole("textbox") as HTMLTextAreaElement).value,
+    ).toBe("Not saved yet");
   },
 };
 

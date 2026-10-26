@@ -11,6 +11,7 @@ import {
   type FrameLocator,
   type Locator,
   type Page,
+  type Request,
 } from "@playwright/test";
 
 import { DEV_ORIGIN_HOST, E2E, hubUrl, prTabUrl } from "./env";
@@ -59,6 +60,38 @@ export async function waitForFrameRoot(frame: FrameLocator): Promise<void> {
   await expect(frame.locator("#root")).toBeVisible();
 }
 
+/**
+ * Wait until the shell's throttled draft write has landed in the iframe's
+ * localStorage (`emr:comment-draft:<scope>`) with `body` — the observable
+ * replacement for sleeping past the throttle before a reload.
+ */
+export async function waitForPersistedDraft(
+  frame: FrameLocator,
+  body: string,
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        frame.locator("html").evaluate((_, expected) => {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key?.startsWith("emr:comment-draft:")) continue;
+            try {
+              const draft = JSON.parse(localStorage.getItem(key) ?? "") as {
+                body?: unknown;
+              };
+              if (draft.body === expected) return true;
+            } catch {
+              // Malformed entry — keep scanning.
+            }
+          }
+          return false;
+        }, body),
+      { timeout: 10_000, message: "draft was never persisted" },
+    )
+    .toBe(true);
+}
+
 /** Read the `?repo=` (repo GUID) param from the top (host) page URL. */
 export function repoParam(page: Page): string | null {
   return new URL(page.url()).searchParams.get("repo");
@@ -96,6 +129,12 @@ export async function selectRepoInPicker(
     .locator("button[role=option].emr-docnav-repo-option")
     .filter({ hasText: repoName })
     .first();
+  // When this call SWITCHES repos, the previous repo's GUID may still be in
+  // `?repo=` for a tick after the label updates; returning it would hand the
+  // caller the wrong repo. Remember it so we can wait for the switch to land.
+  const switching =
+    (await triggerName.innerText().catch(() => "")).trim() !== repoName;
+  const previousRepo = repoParam(page);
 
   // Drive open -> (filter) -> click as idempotent steps, retrying the whole
   // sequence until the picker trigger shows `repoName`. Each action is
@@ -129,11 +168,17 @@ export async function selectRepoInPicker(
   // The hub pins `?repo=<guid>` on selection and back-fills it when restoring
   // from cache; wait for it in case the param lands a tick after the label.
   await expect
-    .poll(() => repoParam(page), {
-      timeout: 10_000,
-      message: `?repo= missing after selecting "${repoName}"`,
-    })
-    .toBeTruthy();
+    .poll(
+      () => {
+        const repo = repoParam(page);
+        return Boolean(repo && (!switching || repo !== previousRepo));
+      },
+      {
+        timeout: 10_000,
+        message: `?repo= missing or stale after selecting "${repoName}"`,
+      },
+    )
+    .toBe(true);
 
   return repoParam(page)!;
 }
@@ -194,6 +239,39 @@ export function prTabFrame(page: Page): FrameLocator {
   return page.frameLocator(
     `iframe[src*="${DEV_ORIGIN_HOST}"][src*="pr-tab.html"]`,
   );
+}
+
+/** An ADO REST request made by OUR contribution iframe, as it started/ended. */
+export interface AdoRequestEvent {
+  phase: "start" | "end";
+  url: string;
+}
+
+/**
+ * Record the ADO REST requests our dev-origin iframe makes, in the order they
+ * start and finish. Enough to assert which boot calls overlap (e.g. "the PR's
+ * updates load in parallel with the PR") without timing thresholds, which a
+ * shared real host would make flaky. Register before navigating.
+ */
+export function recordAdoRequests(page: Page): AdoRequestEvent[] {
+  const events: AdoRequestEvent[] = [];
+  const fromOurFrame = (request: Request): boolean => {
+    try {
+      return (
+        request.frame().url().includes(DEV_ORIGIN_HOST) &&
+        request.url().includes("/_apis/")
+      );
+    } catch {
+      return false; // e.g. a service-worker request with no frame
+    }
+  };
+  page.on("request", (r) => {
+    if (fromOurFrame(r)) events.push({ phase: "start", url: r.url() });
+  });
+  page.on("requestfinished", (r) => {
+    if (fromOurFrame(r)) events.push({ phase: "end", url: r.url() });
+  });
+  return events;
 }
 
 /**

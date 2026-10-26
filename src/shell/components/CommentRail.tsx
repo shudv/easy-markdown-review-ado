@@ -47,7 +47,11 @@ interface RailProps {
   onReopen: (id: string) => void;
   onMarkPending: (id: string) => void;
   onClose: (id: string) => void;
-  onEditComment: (threadId: string, commentId: string, newBody: string) => void;
+  onEditComment: (
+    threadId: string,
+    commentId: string,
+    newBody: string,
+  ) => void | Promise<boolean>;
   onDeleteComment: (threadId: string, commentId: string) => void;
   onDeleteThread: (threadId: string) => void;
   onToggleReaction: (

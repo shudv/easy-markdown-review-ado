@@ -11,9 +11,7 @@
 
 import * as React from "react";
 import * as SDK from "azure-devops-extension-sdk";
-import { getClient } from "azure-devops-extension-api";
 import {
-  GitRestClient,
   GitVersionOptions,
   GitVersionType,
   type GitPullRequest,
@@ -34,6 +32,7 @@ import { parseVersionSpec } from "./markdownReader.helpers";
 import type { CommentApi } from "../comments/api";
 import type { CommentAuthor, CommentThread, PrInfo } from "../types";
 import { markAppReady, trackUserFacingError } from "../telemetry";
+import { sharedGitClient } from "../shell/adoClients";
 
 /** Target descriptor handed to the reader by the launching surface. */
 export interface ReaderConfig {
@@ -96,7 +95,7 @@ async function fetchReaderFileContent(
   resolved: ResolvedReader,
 ): Promise<string> {
   const { config, rawRepo } = resolved;
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const descriptor = versionDescriptorFor(config.version, rawRepo);
   const ab = await gitClient.getItemContent(
     config.repositoryId,
@@ -142,7 +141,7 @@ export function MarkdownReader({
   React.useEffect(() => {
     void (async () => {
       try {
-        const gitClient = getClient(GitRestClient);
+        const gitClient = sharedGitClient();
         const rawRepo = await gitClient.getRepository(
           config.repositoryId,
           config.project,

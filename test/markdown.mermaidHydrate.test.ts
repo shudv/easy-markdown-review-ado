@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock the `mermaid` module BEFORE importing the SUT so the dynamic
 // `import("mermaid")` inside `hydrateMermaid` resolves to our stub.
@@ -16,15 +16,21 @@ vi.mock("mermaid", () => {
 });
 
 import mermaid from "mermaid";
-import { hydrateMermaid } from "../src/markdown/mermaidHydrate";
+import { isChunkLoadError } from "../src/markdown/chunkRetry";
+import {
+  hydrateMermaid,
+  isDiagramSyntaxError,
+} from "../src/markdown/mermaidHydrate";
 
 const trackUserFacingErrorMock = vi.fn();
+const trackMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
       trackUserFacingErrorMock(...args),
+    track: (...args: unknown[]) => trackMock(...args),
   };
 });
 
@@ -239,5 +245,298 @@ describe("hydrateMermaid", () => {
     expect(el.innerHTML).toContain("<svg");
     expect(el.innerHTML).not.toContain("emr-mermaid-fallback");
     warn.mockRestore();
+  });
+});
+
+function chunkError(): Error {
+  return Object.assign(new Error("Loading chunk 812 failed.\n(error: x)"), {
+    name: "ChunkLoadError",
+  });
+}
+
+function mountDiagram(source: string): HTMLElement {
+  const root = document.createElement("div");
+  root.innerHTML =
+    `<div class="emr-mermaid" data-mermaid-src="${encodeURIComponent(source)}">` +
+    `<pre class="emr-mermaid-fallback">${source}</pre></div>`;
+  document.body.appendChild(root);
+  return root;
+}
+
+describe("hydrateMermaid — transient chunk failures", () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    trackUserFacingErrorMock.mockClear();
+    vi.mocked(mermaid.render).mockClear();
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    warn.mockRestore();
+  });
+
+  // Production: 20 ChunkLoadErrors in 15 sessions left diagrams as raw source.
+  it("retries a ChunkLoadError and renders once the chunk loads", async () => {
+    vi.mocked(mermaid.render)
+      .mockRejectedValueOnce(chunkError())
+      .mockRejectedValueOnce(chunkError());
+    const root = mountDiagram("sequenceDiagram\nA->>B: chunk-retry-ok");
+
+    const pass = hydrateMermaid(root);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mermaid.render).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(3_000);
+    await pass;
+
+    const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
+    expect(mermaid.render).toHaveBeenCalledTimes(3);
+    expect(el.getAttribute("data-mermaid-error")).toBeNull();
+    expect(el.innerHTML).toContain("<svg");
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    // Every attempt gets a fresh DOM id.
+    const ids = vi.mocked(mermaid.render).mock.calls.map(([id]) => id);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it("gives up after the retries and keeps the readable fallback", async () => {
+    vi.mocked(mermaid.render)
+      .mockRejectedValueOnce(chunkError())
+      .mockRejectedValueOnce(chunkError())
+      .mockRejectedValueOnce(chunkError());
+    const root = mountDiagram("sequenceDiagram\nA->>B: chunk-retry-exhausted");
+
+    const pass = hydrateMermaid(root);
+    await vi.advanceTimersByTimeAsync(4_000);
+    await pass;
+
+    const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
+    expect(mermaid.render).toHaveBeenCalledTimes(3);
+    expect(el.getAttribute("data-mermaid-error")).toBe("render-failed");
+    expect(el.innerHTML).toContain("emr-mermaid-fallback");
+    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ name: "ChunkLoadError" }),
+        operation: "diagram-render",
+      }),
+    );
+  });
+
+  it("does not retry a syntax error", async () => {
+    vi.mocked(mermaid.render).mockRejectedValueOnce(
+      new Error("Parse error on line 2"),
+    );
+    const root = mountDiagram("sequenceDiagram\nA->>B broken arrow");
+
+    await hydrateMermaid(root);
+
+    expect(mermaid.render).toHaveBeenCalledOnce();
+    expect(
+      root.querySelector(".emr-mermaid")!.getAttribute("data-mermaid-error"),
+    ).toBe("render-failed");
+  });
+});
+
+describe("hydrateMermaid — author syntax errors", () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+  const defaultRender = vi.mocked(mermaid.render).getMockImplementation()!;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    trackUserFacingErrorMock.mockClear();
+    trackMock.mockClear();
+    vi.mocked(mermaid.render).mockClear();
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.mocked(mermaid.render).mockReset();
+    vi.mocked(mermaid.render).mockImplementation(defaultRender);
+    warn.mockRestore();
+  });
+
+  /** Mermaid rejects any source that still has a raw `;` in message text. */
+  function rejectRawSemicolons(): void {
+    vi.mocked(mermaid.render).mockImplementation(async (id, src) => {
+      if (/:[^\n]*[^#\d]; \w/.test(src)) {
+        throw new Error("Parse error on line 2:\nExpecting 'SOLID_ARROW'");
+      }
+      return { svg: `<svg data-id="${id}"></svg>` };
+    });
+  }
+
+  // Production: ";" in sequence text was the most common diagram failure.
+  it("renders a sequence diagram whose text has ';' by escaping it, without reporting an error", async () => {
+    rejectRawSemicolons();
+    const source = "sequenceDiagram\nA->>B: Admit; require SAW-repair";
+    const root = mountDiagram(source);
+
+    await hydrateMermaid(root);
+
+    const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
+    expect(el.getAttribute("data-mermaid-error")).toBeNull();
+    expect(el.innerHTML).toContain("<svg");
+    expect(mermaid.render).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(mermaid.render).mock.calls[1]![1]).toContain(
+      "Admit#59; require",
+    );
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    expect(trackMock).toHaveBeenCalledWith({
+      name: "diagram.renderIssue",
+      properties: { outcome: "repaired" },
+    });
+  });
+
+  it("keeps a genuinely broken diagram as source, noted as content — not an extension error", async () => {
+    vi.mocked(mermaid.render).mockRejectedValue(
+      new Error("Parse error on line 2:\nExpecting 'NODE_STRING'"),
+    );
+    const root = mountDiagram("sequenceDiagram\nA->>B: still; broken-twice");
+
+    await hydrateMermaid(root);
+
+    const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
+    // The repair was tried once, then the author's original error stands.
+    expect(mermaid.render).toHaveBeenCalledTimes(2);
+    expect(el.getAttribute("data-mermaid-error")).toBe("render-failed");
+    expect(el.innerHTML).toContain("emr-mermaid-fallback");
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    expect(trackMock).toHaveBeenCalledWith({
+      name: "diagram.renderIssue",
+      properties: { outcome: "syntax-error" },
+    });
+
+    // A redraw doesn't note it again.
+    await hydrateMermaid(root, "Verdana, sans-serif");
+    expect(trackMock).toHaveBeenCalledOnce();
+  });
+
+  it("reports a runtime failure in the repaired render as an extension error", async () => {
+    const runtime = new Error(
+      "Cannot read properties of undefined (reading 'x')",
+    );
+    vi.mocked(mermaid.render)
+      .mockRejectedValueOnce(new Error("Parse error on line 2"))
+      .mockRejectedValueOnce(runtime);
+    const root = mountDiagram("sequenceDiagram\nA->>B: repair; then-crash");
+
+    await hydrateMermaid(root);
+
+    expect(mermaid.render).toHaveBeenCalledTimes(2);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: runtime, operation: "diagram-render" }),
+    );
+    expect(trackMock).not.toHaveBeenCalled();
+  });
+
+  it("doesn't rewrite a broken diagram that has nothing to repair", async () => {
+    vi.mocked(mermaid.render).mockRejectedValue(
+      new Error("Parse error on line 2"),
+    );
+    const root = mountDiagram("flowchart LR\n  audit --> graph-no-repair");
+
+    await hydrateMermaid(root);
+
+    expect(mermaid.render).toHaveBeenCalledOnce();
+    expect(trackMock).toHaveBeenCalledWith({
+      name: "diagram.renderIssue",
+      properties: { outcome: "syntax-error" },
+    });
+  });
+});
+
+describe("isDiagramSyntaxError", () => {
+  it.each<[string, unknown, boolean]>([
+    ["a parse error", new Error("Parse error on line 3:\n…"), true],
+    ["a lexical error", new Error("Lexical error on line 1."), true],
+    [
+      "no diagram type",
+      new Error(
+        "No diagram type detected matching given configuration for text: x",
+      ),
+      true,
+    ],
+    [
+      "an unknown diagram",
+      Object.assign(new Error("x"), { name: "UnknownDiagramError" }),
+      true,
+    ],
+    [
+      "a runtime failure",
+      new Error("Cannot read properties of undefined"),
+      false,
+    ],
+    ["a chunk failure", chunkError(), false],
+    ["a non-object", "Parse error", false],
+    ["null", null, false],
+  ])("%s → %s", (_label, err, expected) => {
+    expect(isDiagramSyntaxError(err)).toBe(expected);
+  });
+});
+
+describe("hydrateMermaid — telemetry dedupe", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.documentElement.removeAttribute("data-emr-theme");
+    trackUserFacingErrorMock.mockClear();
+    vi.mocked(mermaid.render).mockClear();
+  });
+
+  // Production: one broken diagram re-reported on every redraw / revisit.
+  it("reports a broken diagram once, however often it is redrawn or revisited", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const source = "sequenceDiagram\nA->>B: dedupe broken";
+    const defaultRender = vi.mocked(mermaid.render).getMockImplementation()!;
+    // A runtime failure (not an author syntax error, which is content health).
+    vi.mocked(mermaid.render).mockRejectedValue(
+      new Error("Cannot read properties of undefined (reading 'x')"),
+    );
+    try {
+      const root = mountDiagram(source);
+      await hydrateMermaid(root, "Georgia, serif");
+      await hydrateMermaid(root, "Verdana, sans-serif");
+      document.documentElement.setAttribute("data-emr-theme", "dark");
+      await hydrateMermaid(root, "Verdana, sans-serif");
+      // A revisit renders the same source into a brand-new placeholder.
+      await hydrateMermaid(mountDiagram(source));
+      expect(mermaid.render).toHaveBeenCalledTimes(4);
+      expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+
+      // A different broken diagram is still reported.
+      await hydrateMermaid(
+        mountDiagram("sequenceDiagram\nA->>B: other broken"),
+      );
+      expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.mocked(mermaid.render).mockReset();
+      vi.mocked(mermaid.render).mockImplementation(defaultRender);
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("isChunkLoadError", () => {
+  it.each<[string, unknown, boolean]>([
+    ["a webpack ChunkLoadError", chunkError(), true],
+    [
+      "a CSS chunk failure by message",
+      new Error("Loading CSS chunk 3 failed."),
+      true,
+    ],
+    [
+      "a plain chunk failure by message",
+      new Error("Loading chunk 9 failed."),
+      true,
+    ],
+    ["a syntax error", new Error("Parse error on line 10"), false],
+    ["a non-string message", { message: 42 }, false],
+    ["null", null, false],
+    ["a string", "Loading chunk 1 failed", false],
+  ])("classifies %s", (_label, err, expected) => {
+    expect(isChunkLoadError(err)).toBe(expected);
   });
 });

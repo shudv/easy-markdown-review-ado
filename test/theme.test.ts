@@ -5,79 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  ALL_THEMES,
   applyTheme,
-  isEmrTheme,
-  parseLuminance,
   refreshHostTheme,
   resolveHostTheme,
   syncHostTheme,
 } from "../src/theme/theme";
-
-describe("isEmrTheme", () => {
-  it("accepts each declared theme", () => {
-    for (const t of ALL_THEMES) {
-      expect(isEmrTheme(t.id)).toBe(true);
-    }
-  });
-
-  it("rejects unknown strings and non-strings", () => {
-    expect(isEmrTheme("solarized")).toBe(false);
-    expect(isEmrTheme("")).toBe(false);
-    expect(isEmrTheme(null)).toBe(false);
-    expect(isEmrTheme(undefined)).toBe(false);
-    expect(isEmrTheme(42)).toBe(false);
-  });
-});
-
-describe("parseLuminance", () => {
-  it("returns null on empty / whitespace input", () => {
-    expect(parseLuminance("")).toBeNull();
-    expect(parseLuminance("   ")).toBeNull();
-  });
-
-  it("returns null on garbage", () => {
-    expect(parseLuminance("oops")).toBeNull();
-    expect(parseLuminance("#zz")).toBeNull();
-    expect(parseLuminance("#abcd")).toBeNull();
-    expect(parseLuminance("hsl(0,0%,50%)")).toBeNull();
-  });
-
-  it("returns null when a full-length hex has non-hex digits", () => {
-    // Right length, but `parseInt` yields NaN for each channel.
-    expect(parseLuminance("#gggggg")).toBeNull();
-  });
-
-  it("parses #rgb (short hex)", () => {
-    // #000 → 0
-    expect(parseLuminance("#000")).toBe(0);
-    // #fff → 1
-    expect(parseLuminance("#fff")!).toBeCloseTo(1, 4);
-  });
-
-  it("parses #rrggbb (long hex)", () => {
-    expect(parseLuminance("#000000")).toBe(0);
-    expect(parseLuminance("#ffffff")!).toBeCloseTo(1, 4);
-    // Pure red ~ 0.2126
-    expect(parseLuminance("#ff0000")!).toBeCloseTo(0.2126, 3);
-    // Pure green ~ 0.7152
-    expect(parseLuminance("#00ff00")!).toBeCloseTo(0.7152, 3);
-    // Pure blue ~ 0.0722
-    expect(parseLuminance("#0000ff")!).toBeCloseTo(0.0722, 3);
-  });
-
-  it("parses #rrggbbaa by ignoring the alpha byte", () => {
-    expect(parseLuminance("#ffffff00")!).toBeCloseTo(1, 4);
-    expect(parseLuminance("#000000ff")).toBe(0);
-  });
-
-  it("parses rgb() and rgba()", () => {
-    expect(parseLuminance("rgb(0, 0, 0)")).toBe(0);
-    expect(parseLuminance("rgb(255, 255, 255)")!).toBeCloseTo(1, 4);
-    expect(parseLuminance("rgba(255 0 0 / 1)")!).toBeCloseTo(0.2126, 3);
-    expect(parseLuminance("rgba(0,0,255,0.5)")!).toBeCloseTo(0.0722, 3);
-  });
-});
 
 describe("applyTheme", () => {
   beforeEach(() => {

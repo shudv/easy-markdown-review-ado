@@ -13,7 +13,7 @@
 // `prefers-color-scheme`. Before the fix, a dark high-contrast desktop resolved
 // to `hc-light` (a white extension inside a black HC environment).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
 import {

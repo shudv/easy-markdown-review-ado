@@ -60,7 +60,9 @@ export default defineConfig({
         // the residue is glue that loads `azure-devops-extension-api`
         // (AMD-only, can't be evaluated by node).
         "src/shell/adoGitData.ts",
+        "src/shell/adoClients.ts",
         "src/shell/adoCommentApi.ts",
+        "src/shell/adoSessionSdk.ts",
         "src/shell/adoAttachmentMedia.ts",
         "src/shell/adoRepositoryImages.ts",
         "src/shell/commentHousing.ts",

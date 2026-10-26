@@ -7,16 +7,14 @@ import * as React from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import {
   CommonServiceIds,
-  getClient,
-  IProjectPageService,
   type IHostNavigationService,
 } from "azure-devops-extension-api";
 import {
-  GitRestClient,
   GitVersionOptions,
   GitVersionType,
   PullRequestStatus,
   type GitPullRequest,
+  type GitPullRequestChange,
 } from "azure-devops-extension-api/Git";
 
 import {
@@ -24,7 +22,10 @@ import {
   type RoutedPrInfo,
   type DocLinkNavigation,
 } from "../shell/PrShell";
-import type { HistoryStop } from "../shell/prShellHelpers";
+import type {
+  HistoryStop,
+  ReviewIterationRange,
+} from "../shell/prShellHelpers";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import { resolveAdoAvatarObjectUrl } from "../shell/adoGitData";
@@ -51,12 +52,14 @@ import {
   type MentionLinkResolution,
 } from "../comments/mentionLinks";
 import {
-  CommentLinkContext,
-  withCommentParam,
-  readCommentParam,
+  ANCHOR_LINK_PARAM,
   COMMENT_LINK_PARAM,
-  type CommentLinkBuilder,
-} from "../comments/commentLink";
+  TEXT_LINK_PARAM,
+  DeepLinkContext,
+  PATH_LINK_PARAM,
+  withDeepLinkTarget,
+  type DeepLinkBuilder,
+} from "../shell/deepLink";
 import {
   markAppReady,
   markBootAuthWaitEnd,
@@ -68,20 +71,42 @@ import {
 import { withRetry } from "../shell/retry";
 import {
   detectSessionRefreshing,
-  ensureAdoSessionLive,
   planSessionRefreshRetry,
   type AdoGrantState,
+  withAdoSessionRefreshDetection,
 } from "../shell/adoAuthToken";
 import {
+  AUTO_RELOAD_STALL_MS,
+  BOOT_AUTO_RELOAD_AFTER_MS,
+  adoSession,
+  autoReloadAllowed,
+  claimAutoReload,
+  sessionStorageOrUndefined,
+} from "../shell/adoSession";
+import { readHostToken } from "../shell/adoSessionSdk";
+import {
+  BASE_LINK_PARAM,
+  ITERATION_LINK_PARAM,
+  buildPrTabDocUrl,
   buildPrWebUrl,
+  iterationParamsForRange,
+  rangeChangeTypes,
   contentCommitForChange,
   diffableFilePaths,
   mapChangeType,
+  markdownChangePath,
   pickPullRequestId,
+  configuredRepositoryId,
+  loadWithRepositoryHint,
+  prTabRoutePath,
+  resolvePrTabRouteSeed,
   reviewIterationStops as mapReviewIterationStops,
   selectDiffCommits,
   withTimeout,
+  type IterationParams,
+  type PrTabRouteSeed,
 } from "./prTabApp.helpers";
+import { resolveCurrentProject, sharedGitClient } from "../shell/adoClients";
 
 interface PrContext {
   projectId: string;
@@ -106,6 +131,9 @@ interface PrContext {
 // thread fetch. Module-scoped so its identity never changes across renders.
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
 
+/** Page size when listing the files a comparison of PR updates changes. */
+const RANGE_CHANGES_PAGE = 500;
+
 export function PrTabApp(): React.ReactElement {
   const [ctx, setCtx] = React.useState<PrContext | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -121,13 +149,22 @@ export function PrTabApp(): React.ReactElement {
   const [refreshing, setRefreshing] = React.useState<{
     state: AdoGrantState;
     recoverAtMs?: number;
+    /** An automatic host reload is allowed (see `claimAutoReload`). */
+    autoReload: boolean;
   } | null>(null);
   // How many auto-retries we've scheduled for the current refreshing spell, so
   // `planSessionRefreshRetry` can bound them before falling back to manual.
   const [refreshAttempt, setRefreshAttempt] = React.useState(0);
-  // Deep-link target from the `?comment=` route param (read once at startup).
-  const [initialActiveThreadId, setInitialActiveThreadId] = React.useState<
-    string | undefined
+  // Deep-link targets from the route (`?path=`, `?comment=`, `?anchor=`), read
+  // once at startup. `null` until read, so the shell mounts on the right file.
+  const [routeSeed, setRouteSeed] = React.useState<PrTabRouteSeed | null>(null);
+  // The document on screen — encoded into shared links so they open the same
+  // file. Seeded from the route (or the first changed file) once known.
+  const [activeDocPath, setActiveDocPath] = React.useState("");
+  // The compared PR updates as ADO iteration ids, for shared links and the
+  // address bar. `undefined` = "All updates" (left out of links).
+  const [activeIterationParams, setActiveIterationParams] = React.useState<
+    IterationParams | undefined
   >(undefined);
   // Per-file diff data, fetched OFF the critical path (see the effect below).
   // Starts empty so the shell renders Markdown immediately; diff decorations
@@ -148,7 +185,9 @@ export function PrTabApp(): React.ReactElement {
       };
       try {
         log("resolving pr context");
+        const bootStartedAt = Date.now();
         const context = await resolvePrContext(log);
+        adoSession.noteSuccess(bootStartedAt);
         markBootPhase("context-ready");
         log("pr context resolved", {
           projectId: context.projectId,
@@ -172,12 +211,18 @@ export function PrTabApp(): React.ReactElement {
           initials: initialsOf(u.displayName),
           avatarUrl: identityAvatarUrl(u),
         });
-        setInitialActiveThreadId(await readCommentRouteParam());
+        const seed = await readRouteSeed(
+          context.changedMdFiles,
+          context.reviewIterationStops,
+        );
+        setActiveDocPath(
+          seed.selectedPath ?? context.changedMdFiles[0]?.path ?? "",
+        );
+        setRouteSeed(seed);
+        setRefreshAttempt(0);
         log("ready");
       } catch (err: unknown) {
-        const refresh = await detectSessionRefreshing(err, () =>
-          SDK.getAccessToken(),
-        );
+        const refresh = await detectSessionRefreshing(err, readHostToken);
         if (refresh) {
           console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
           trackUserFacingError({
@@ -186,10 +231,15 @@ export function PrTabApp(): React.ReactElement {
             operation: "session-refresh",
             impact: "degraded",
           });
+          adoSession.report(refresh, "boot");
           markBootAuthWaitStart();
           setRefreshing({
             state: refresh.grantState,
             recoverAtMs: refresh.recoverAtMs,
+            autoReload: autoReloadAllowed(
+              sessionStorageOrUndefined(),
+              Date.now(),
+            ),
           });
           return;
         }
@@ -205,12 +255,42 @@ export function PrTabApp(): React.ReactElement {
     })();
   }, [bootAttempt]);
 
-  // Auto-recover from the token dead-window: wait until the host is expected to
-  // have minted a fresh token (the AAD `exp`, per `recoverAtMs`), then re-run
-  // boot. Bounded by `planSessionRefreshRetry`; once exhausted the user falls
-  // back to the manual "Reload page" action.
+  // Auto-recover from the token dead-window, whichever comes first:
+  //   - the shared session monitor sees the host hand out a fresh token (it
+  //     re-reads the token every few seconds — usually minutes before the AAD
+  //     `exp`), and boot re-runs at once;
+  //   - after a short grace, one automatic HOST reload (guarded against loops),
+  //     which escapes the dead window about 3 times in 4 in production;
+  //   - the AAD-`exp` timer from `planSessionRefreshRetry`, as a backstop.
+  // Bounded; once exhausted the user falls back to the manual "Reload page".
   React.useEffect(() => {
     if (!refreshing) return;
+    const retryBoot = (): void => {
+      markBootAuthWaitEnd();
+      setRefreshAttempt((n) => n + 1);
+      setRefreshing(null);
+      setError(null);
+      setBootAttempt((n) => n + 1);
+    };
+    const offRecovered = adoSession.onRecovered(retryBoot);
+    // If the automatic reload can't happen (the loop guard can't be recorded,
+    // or the host refuses), or it was requested but the page is still here a
+    // while later, swap "This only takes a moment" for the manual action.
+    const offerManualReload = (): void =>
+      setRefreshing((r) => (r?.autoReload ? { ...r, autoReload: false } : r));
+    let manualId: number | undefined;
+    const reloadId = refreshing.autoReload
+      ? window.setTimeout(() => {
+          if (!claimAutoReload(sessionStorageOrUndefined(), Date.now())) {
+            offerManualReload();
+            return;
+          }
+          void adoSession.reloadHost("auto").then((requested) => {
+            if (!requested) offerManualReload();
+          });
+          manualId = window.setTimeout(offerManualReload, AUTO_RELOAD_STALL_MS);
+        }, BOOT_AUTO_RELOAD_AFTER_MS)
+      : undefined;
     const { delayMs, giveUp } = planSessionRefreshRetry({
       recoverAtMs: refreshing.recoverAtMs,
       nowMs: Date.now(),
@@ -221,16 +301,14 @@ export function PrTabApp(): React.ReactElement {
       // the (idempotent) boot event so this terminal state is still measured
       // rather than looking like an infinite hang.
       markAppReady("error");
-      return;
     }
-    const id = window.setTimeout(() => {
-      markBootAuthWaitEnd();
-      setRefreshAttempt((n) => n + 1);
-      setRefreshing(null);
-      setError(null);
-      setBootAttempt((n) => n + 1);
-    }, delayMs);
-    return () => window.clearTimeout(id);
+    const id = giveUp ? undefined : window.setTimeout(retryBoot, delayMs);
+    return () => {
+      offRecovered();
+      window.clearTimeout(reloadId);
+      window.clearTimeout(manualId);
+      window.clearTimeout(id);
+    };
   }, [refreshing, refreshAttempt]);
 
   // Non-blocking diff fetch: once the file list is known, pull diff ranges and
@@ -291,6 +369,68 @@ export function PrTabApp(): React.ReactElement {
     async (path: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
       return fetchFileContent(ctx, path);
+    },
+    [ctx],
+  );
+
+  // The PR's web URL. ADO's PR REST payload carries no `_links.web`, so it is
+  // assembled from the PR's org/project/repo/id (see `buildPrWebUrl`).
+  const prWebUrl = React.useMemo(
+    () =>
+      ctx
+        ? buildPrWebUrl(ctx.pr, {
+            orgUrl: ctx.orgUrl,
+            projectName: ctx.projectName,
+            repositoryName: ctx.repositoryName,
+            pullRequestId: ctx.pullRequestId,
+          })
+        : undefined,
+    [ctx],
+  );
+
+  // Shareable-link builder ("Link to comment", heading links): the PR page with
+  // our tab selected (`_a`), the open document (`path`), the compared updates
+  // (`iteration` / `base`, unless All updates), and the target. Null when the
+  // PR URL or extension identity can't be resolved — the link affordances are
+  // then hidden rather than copying a dead iframe URL.
+  const buildDeepLink = React.useMemo<DeepLinkBuilder | null>(() => {
+    const ext = readExtensionIdentity();
+    const base = ext
+      ? buildPrTabDocUrl(prWebUrl, ext, activeDocPath, activeIterationParams)
+      : undefined;
+    return base ? (target) => withDeepLinkTarget(base, target) : null;
+  }, [prWebUrl, activeDocPath, activeIterationParams]);
+
+  // Which Markdown files a comparison of PR updates touches, so the file list
+  // can mark them: ADO's iteration changes for the newer update compared to
+  // the older one (0 = the PR base), paged.
+  const loadRangeChanges = React.useCallback(
+    async (range: ReviewIterationRange) => {
+      if (!ctx) throw new Error("PR context not loaded yet");
+      const params = iterationParamsForRange(range, ctx.reviewIterationStops);
+      if (!params) return {};
+      const gitClient = sharedGitClient();
+      const entries: GitPullRequestChange[] = [];
+      let skip = 0;
+      for (;;) {
+        const page = await withRetry(
+          () =>
+            gitClient.getPullRequestIterationChanges(
+              ctx.repositoryId,
+              ctx.pullRequestId,
+              params.iteration,
+              ctx.projectId,
+              RANGE_CHANGES_PAGE,
+              skip,
+              params.base,
+            ),
+          { mode: "read", label: "getPullRequestIterationChanges.range" },
+        );
+        entries.push(...(page.changeEntries ?? []));
+        if (!page.nextSkip) break;
+        skip = page.nextSkip;
+      }
+      return rangeChangeTypes(entries);
     },
     [ctx],
   );
@@ -358,20 +498,24 @@ export function PrTabApp(): React.ReactElement {
 
   if (refreshing) {
     return (
-      <div className="emr-error">
-        <h2>Refreshing your Azure DevOps session…</h2>
-        <p style={{ color: "var(--emr-muted)" }}>
-          Your access token just expired and Azure DevOps is issuing a new one.
-          This tab retries on its own in a moment. If it doesn’t clear, reload
-          the page to refresh your session now.
-        </p>
-        <button
-          type="button"
-          className="emr-error-retry"
-          onClick={() => void reloadHostPage()}
-        >
-          Reload page
-        </button>
+      <div className="emr-error" role="status">
+        <h2>Reconnecting to Azure DevOps…</h2>
+        {refreshing.autoReload ? (
+          <p style={{ color: "var(--emr-muted)" }}>This only takes a moment.</p>
+        ) : (
+          <>
+            <p style={{ color: "var(--emr-muted)" }}>
+              This usually fixes itself within a few minutes.
+            </p>
+            <button
+              type="button"
+              className="emr-error-retry"
+              onClick={() => void adoSession.reloadHost("user")}
+            >
+              Reload page
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -392,7 +536,7 @@ export function PrTabApp(): React.ReactElement {
     );
   }
 
-  if (!ctx || !user) {
+  if (!ctx || !user || !routeSeed) {
     return <ReaderLoadingShell scope="pr" ariaLabel="Loading pull request" />;
   }
 
@@ -411,7 +555,7 @@ export function PrTabApp(): React.ReactElement {
     title: ctx.pr.title ?? "(untitled PR)",
     status:
       ctx.pr.status === PullRequestStatus.Completed ? "completed" : "active",
-    url: buildPrWebUrl(ctx.pr),
+    url: prWebUrl,
   };
 
   if (pr.files.length === 0) {
@@ -433,17 +577,12 @@ export function PrTabApp(): React.ReactElement {
     defaultRepoName: ctx.repositoryName || undefined,
   };
 
-  // "Link to comment" builder: the PR page URL with our tab selected (`_a`)
-  // plus the thread id. Null when the PR web URL / tab id can't be resolved.
-  const prTabBaseUrl = buildPrTabUrl(ctx);
-  const buildCommentLink: CommentLinkBuilder | null = prTabBaseUrl
-    ? (threadId: string) => withCommentParam(prTabBaseUrl, threadId)
-    : null;
+  const routePath = prTabRoutePath(activeDocPath);
 
   return (
     <MentionLinkContext.Provider value={mentionLinks}>
       <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
-        <CommentLinkContext.Provider value={buildCommentLink}>
+        <DeepLinkContext.Provider value={buildDeepLink}>
           <PrShell
             pr={pr}
             loadFileSource={loadFileSource}
@@ -459,16 +598,70 @@ export function PrTabApp(): React.ReactElement {
             reviewIterationStops={ctx.reviewIterationStops}
             reviewIterationBaseCommit={ctx.baseCommit}
             loadFileSourceAt={loadFileSourceAt}
-            initialActiveThreadId={initialActiveThreadId}
+            initialSelectedPath={routeSeed.selectedPath}
+            initialActiveThreadId={routeSeed.threadId}
+            initialAnchor={routeSeed.anchor}
+            initialTextFragment={routeSeed.text}
+            initialIterationRange={routeSeed.iterationRange}
+            // Mirror the compared updates into the address bar and shared
+            // links as ADO's own `iteration` / `base` (removed for All updates).
+            onIterationRangeChange={(range) => {
+              const params = range
+                ? iterationParamsForRange(range, ctx.reviewIterationStops)
+                : undefined;
+              setActiveIterationParams(params);
+              void writeRouteParams({
+                [ITERATION_LINK_PARAM]: params ? String(params.iteration) : "",
+                [BASE_LINK_PARAM]: params ? String(params.base) : "",
+              });
+            }}
+            loadRangeChanges={loadRangeChanges}
+            // TODO: replace placeholder with the real feedback alias.
             feedbackEmail="shubd3@gmail.com"
+            // Keep the page URL a working share link: it always names the open
+            // file, plus the active comment or the last copied heading.
+            onSelectPath={(path) => {
+              setActiveDocPath(path);
+              void writeRouteParams({
+                [PATH_LINK_PARAM]: prTabRoutePath(path),
+                [ANCHOR_LINK_PARAM]: "",
+                [COMMENT_LINK_PARAM]: "",
+                [TEXT_LINK_PARAM]: "",
+              });
+            }}
             onActiveThreadChange={(threadId) => {
-              void writeCommentRouteParam(threadId);
+              void writeRouteParams(
+                threadId
+                  ? {
+                      [PATH_LINK_PARAM]: routePath,
+                      [COMMENT_LINK_PARAM]: threadId,
+                      [ANCHOR_LINK_PARAM]: "",
+                      [TEXT_LINK_PARAM]: "",
+                    }
+                  : { [COMMENT_LINK_PARAM]: "" },
+              );
+            }}
+            onHeadingLinkCopied={(anchor) => {
+              void writeRouteParams({
+                [PATH_LINK_PARAM]: routePath,
+                [ANCHOR_LINK_PARAM]: anchor,
+                [COMMENT_LINK_PARAM]: "",
+                [TEXT_LINK_PARAM]: "",
+              });
+            }}
+            onTextLinkCopied={(text, anchor) => {
+              void writeRouteParams({
+                [PATH_LINK_PARAM]: routePath,
+                [TEXT_LINK_PARAM]: text,
+                [ANCHOR_LINK_PARAM]: anchor ?? "",
+                [COMMENT_LINK_PARAM]: "",
+              });
             }}
             onDocNavigate={(target) => {
               void openDocTarget(ctx, target);
             }}
           />
-        </CommentLinkContext.Provider>
+        </DeepLinkContext.Provider>
       </AvatarImageContext.Provider>
     </MentionLinkContext.Provider>
   );
@@ -495,26 +688,11 @@ async function resolvePrContext(
   }
   log("resolved pullRequestId", pullRequestId);
 
-  log("getting project page service");
-  const projectService = await SDK.getService<IProjectPageService>(
-    CommonServiceIds.ProjectPageService,
-  );
-  log("got project page service; loading project");
-  const project = await projectService.getProject();
-  if (!project) throw new Error("No active project on the page.");
-  log("got project", { id: project.id, name: project.name });
+  const project = await resolveCurrentProject();
+  log("got project", project);
 
-  log("creating git client");
-  const gitClient = getClient(GitRestClient);
-
-  // Pre-flight the host token BEFORE the first REST call. During the ~10 min
-  // "dead window" (the token's embedded ADO grant `ado_exp` has lapsed but its
-  // AAD `exp` has not) the host keeps serving a token ADO rejects as anonymous
-  // (TF400813). A tight retry can't heal that — it just replays the same cached
-  // token — so we surface a SessionRefreshingError instead and let the UI wait
-  // for the guaranteed re-mint (or offer a host reload) rather than burning the
-  // retry budget on a doomed request.
-  await ensureAdoSessionLive(() => SDK.getAccessToken());
+  const gitClient = sharedGitClient();
+  const projectId = project.id;
 
   log("fetching pull request by id");
   // Timeout wraps the WHOLE retry sequence (not each attempt). `withTimeout`
@@ -523,39 +701,82 @@ async function resolvePrContext(
   // the entire `withRetry` instead means retries only fire on SETTLED
   // rejections (a real 4xx/5xx — no dangling request), while a genuinely hung
   // call still fails once after 15s rather than spinning forever.
-  const pr = await withTimeout(
-    withRetry(() => gitClient.getPullRequestById(pullRequestId, project.id), {
-      mode: "read",
-      label: "getPullRequestById",
-    }),
+  const prRequest = withTimeout(
+    withRetry(
+      () =>
+        withAdoSessionRefreshDetection(
+          () => gitClient.getPullRequestById(pullRequestId, projectId),
+          readHostToken,
+        ),
+      {
+        mode: "read",
+        label: "getPullRequestById",
+      },
+    ),
     15_000,
-    `getPullRequestById(${pullRequestId}, ${project.id})`,
+    `getPullRequestById(${pullRequestId}, ${projectId})`,
+  );
+
+  // The PR's updates, then the latest update's changed files. Iteration
+  // descriptions already carry the push's title, so commits aren't requested.
+  const loadFileChanges = async (repositoryId: string) => {
+    log("fetching pull request iterations", repositoryId);
+    const iterations = await withRetry(
+      () =>
+        withAdoSessionRefreshDetection(
+          () =>
+            gitClient.getPullRequestIterations(
+              repositoryId,
+              pullRequestId,
+              projectId,
+              false,
+            ),
+          readHostToken,
+        ),
+      { mode: "read", label: "getPullRequestIterations" },
+    );
+    const latest = iterations[iterations.length - 1];
+    if (!latest?.id) return { iterations, latest, changes: undefined };
+    log("fetching iteration changes", latest.id);
+    const latestId = latest.id;
+    const changes = await withRetry(
+      () =>
+        withAdoSessionRefreshDetection(
+          () =>
+            gitClient.getPullRequestIterationChanges(
+              repositoryId,
+              pullRequestId,
+              latestId,
+              projectId,
+            ),
+          readHostToken,
+        ),
+      { mode: "read", label: "getPullRequestIterationChanges" },
+    );
+    return { iterations, latest, changes };
+  };
+
+  // The host passes the PR's repository with the tab's configuration, so the
+  // updates load in parallel with the PR instead of after it.
+  const { pr, changes: fileChanges } = await loadWithRepositoryHint(
+    prRequest,
+    configuredRepositoryId(config, pullRequestId),
+    loadFileChanges,
   );
   const repositoryId = pr.repository.id;
   const repositoryName = pr.repository.name ?? "";
   const orgUrl = resolveOrgUrl();
   log("got pull request", { repositoryId, title: pr.title });
 
-  log("fetching pull request iterations");
-  const iterations = await withRetry(
-    () =>
-      gitClient.getPullRequestIterations(
-        repositoryId,
-        pullRequestId,
-        project.id,
-        true,
-      ),
-    { mode: "read", label: "getPullRequestIterations" },
-  );
-  const latest = iterations[iterations.length - 1];
+  const { iterations, latest, changes } = fileChanges;
   const reviewIterationStops = mapReviewIterationStops(
     iterations,
     pullRequestId,
   );
-  if (!latest?.id) {
+  if (!latest?.id || !changes) {
     log("no iterations; returning empty file list");
     return {
-      projectId: project.id,
+      projectId,
       projectName: project.name,
       repositoryId,
       repositoryName,
@@ -566,22 +787,11 @@ async function resolvePrContext(
       reviewIterationStops,
     };
   }
-  log("fetching iteration changes", latest.id);
-  const changes = await withRetry(
-    () =>
-      gitClient.getPullRequestIterationChanges(
-        repositoryId,
-        pullRequestId,
-        latest.id,
-        project.id,
-      ),
-    { mode: "read", label: "getPullRequestIterationChanges" },
-  );
 
   const mdEntries: { path: string; changeType: ChangeType }[] = [];
   for (const e of changes.changeEntries ?? []) {
-    const path = e.item?.path ?? "";
-    if (!path || !path.toLowerCase().endsWith(".md")) continue;
+    const path = markdownChangePath(e);
+    if (!path) continue;
     mdEntries.push({ path, changeType: mapChangeType(e.changeType) });
   }
 
@@ -639,7 +849,7 @@ async function fetchFileContentAtCommit(
   path: string,
   commitId?: string,
 ): Promise<string> {
-  const gitClient = getClient(GitRestClient);
+  const gitClient = sharedGitClient();
   const versionDescriptor = commitId
     ? {
         version: commitId,
@@ -681,49 +891,17 @@ function formatError(err: unknown): string {
 }
 
 /**
- * Reload the HOST page (not our iframe) so the host re-initializes its token
- * manager and mints a fresh token immediately. Reloading the iframe alone would
- * leave the host's cached (dead) token in place, so this must go through the
- * navigation service. Best-effort.
+ * The extension's publisher/extension ids (for the `_a` tab selector), or
+ * `undefined` when the SDK context isn't available.
  */
-async function reloadHostPage(): Promise<void> {
+function readExtensionIdentity():
+  | { publisherId: string; extensionId: string }
+  | undefined {
   try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    nav.reload();
-  } catch {
-    /* navigation service unavailable — nothing else we can safely do */
-  }
-}
-
-/**
- * Absolute base URL for a deep link into this tab: the PR's web URL with the
- * `_a` tab-selector set to our PR-tab contribution
- * (`<publisher>.<extension>.markdown-review-pr-tab`). Returns `undefined` when
- * the PR web URL or extension context can't be resolved, so callers fall back
- * to the in-iframe hash link.
- */
-function buildPrTabUrl(ctx: PrContext): string | undefined {
-  const web = buildPrWebUrl(ctx.pr);
-  if (!web) return undefined;
-  let ext: { publisherId: string; extensionId: string };
-  try {
-    ext = SDK.getExtensionContext();
+    return SDK.getExtensionContext();
   } catch {
     return undefined;
   }
-  let url: URL;
-  try {
-    url = new URL(web);
-  } catch {
-    return undefined;
-  }
-  url.searchParams.set(
-    "_a",
-    `${ext.publisherId}.${ext.extensionId}.markdown-review-pr-tab`,
-  );
-  return url.toString();
 }
 
 /**
@@ -779,6 +957,12 @@ async function openDocTarget(
       ctx.repositoryId,
       target.path,
     );
+    // Carry a `#heading` from the link so the hub opens scrolled to it.
+    if (url && target.hash) {
+      url =
+        withDeepLinkTarget(url, { kind: "heading", anchor: target.hash }) ??
+        url;
+    }
   }
   if (!url) return;
   try {
@@ -801,33 +985,40 @@ async function openDocTarget(
 }
 
 /**
- * Read the `?comment=` deep-link target from the host's query params.
- * Best-effort: returns `undefined` when the navigation service is unavailable.
+ * Read the PR tab's deep-link targets (`?path=`, `?comment=`, `?anchor=`) from
+ * the host's query params. Best-effort: an unavailable navigation service
+ * yields no targets (the tab opens normally).
  */
-async function readCommentRouteParam(): Promise<string | undefined> {
+async function readRouteSeed(
+  files: readonly FileInfo[],
+  stops: readonly HistoryStop[],
+): Promise<PrTabRouteSeed> {
+  let params: Record<string, string> = {};
   try {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
-    return readCommentParam((await nav.getQueryParams()) ?? {});
+    params = (await nav.getQueryParams()) ?? {};
   } catch {
-    return undefined;
+    /* navigation service unavailable — open without deep-link targets */
   }
+  return resolvePrTabRouteSeed(params, files, stops);
 }
 
 /**
- * Mirror the active thread into the host's `?comment=` query param (the
- * inverse of {@link readCommentRouteParam}) so selecting a comment yields the
- * same shareable deep link the "Link to comment" action produces. Passing
- * `null` clears the param (empty value removes it). Best-effort: a missing
- * navigation service is silently ignored.
+ * Merge `updates` into the host page's query string (an empty value removes a
+ * param), so the address bar mirrors the open file + active comment or heading
+ * and is itself a shareable link. Best-effort: a missing navigation service is
+ * silently ignored.
  */
-async function writeCommentRouteParam(threadId: string | null): Promise<void> {
+async function writeRouteParams(
+  updates: Record<string, string>,
+): Promise<void> {
   try {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
-    nav.setQueryParams({ [COMMENT_LINK_PARAM]: threadId ?? "" });
+    nav.setQueryParams(updates);
   } catch {
     /* navigation service unavailable — route syncing is best-effort */
   }

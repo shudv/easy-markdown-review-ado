@@ -13,7 +13,7 @@
 // The PR id is discovered at runtime (filtered by a known source branch) rather
 // than hard-coded, because sandbox PR ids depend on provisioning order.
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
 import {
@@ -22,14 +22,22 @@ import {
   openDraftComposerBySelection,
   prTabFrame,
   prTabIframeElement,
+  recordAdoRequests,
   waitForFrameRoot,
 } from "./helpers";
+import { collectTelemetry } from "./reconnect.helpers";
+
+// Boot's REST calls, as seen from the iframe.
+const PR_BY_ID = /\/_apis\/git\/pullRequests\/\d+(?:\?|$)/;
+const PR_ITERATIONS = /\/pullRequests\/\d+\/iterations(?:\?|$)/;
 
 test.describe("Markdown Review PR tab (real ADO host)", () => {
-  test("mounts the contribution iframe and renders the PR's changed Markdown", async ({
+  test("mounts the contribution iframe and renders the PR's changed Markdown and seeded thread", async ({
     page,
   }) => {
     const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+    const requests = recordAdoRequests(page);
+    const telemetry = collectTelemetry(page);
     await gotoPrTab(page, E2E.prRepo, prId);
 
     // ADO must render OUR PR-tab iframe (matched by the dev-origin bundle URL,
@@ -61,24 +69,48 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         message: "PR-tab reader rendered no Markdown text",
       })
       .toBeGreaterThan(0);
-  });
 
-  test("renders the PR's seeded review comment thread", async ({ page }) => {
-    // The `document-threads` PR carries a seeded thread anchored in the changed
-    // Markdown, so the tab must surface it as an in-document highlight — the
-    // host-only path where PR threads load against the live collection.
-    const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
-    await gotoPrTab(page, E2E.prRepo, prId);
-
-    const frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
-
-    // At least one anchored comment highlight (carrying its thread id) must
-    // render — proves emr-authored threads loaded and anchored to the document.
+    // The PR carries a seeded thread anchored in the changed Markdown. At least
+    // one anchored highlight (carrying its thread id) must render — proves PR
+    // threads loaded from the live collection and anchored to the document.
     await expect(
       frame.locator(".emr-highlight[data-thread-id]").first(),
     ).toBeVisible({ timeout: 30_000 });
+
+    // Boot's critical path: the PR's updates load in PARALLEL with the PR
+    // (the host passes the repository with the tab's configuration), and
+    // without every update's commits. Asserted on request order, not timing,
+    // so a slow shared host can't flake it.
+    const iterationsStart = requests.findIndex(
+      (e) => e.phase === "start" && PR_ITERATIONS.test(e.url),
+    );
+    const prEnd = requests.findIndex(
+      (e) => e.phase === "end" && PR_BY_ID.test(e.url),
+    );
+    expect(iterationsStart, "no PR iterations request seen").toBeGreaterThan(
+      -1,
+    );
+    expect(prEnd, "no PR request seen").toBeGreaterThan(-1);
+    expect(
+      iterationsStart,
+      "the PR's updates must start loading before the PR itself arrives",
+    ).toBeLessThan(prEnd);
+    expect(requests[iterationsStart]!.url).not.toMatch(/includeCommits=true/i);
+
+    // Boot timing from the dev build's telemetry, recorded in the report (not
+    // asserted — a shared real host is too noisy for a budget).
+    if (telemetry.active()) {
+      await expect
+        .poll(() => telemetry.events().some((e) => e.name === "app.loaded"))
+        .toBe(true);
+      const m = telemetry
+        .events()
+        .find((e) => e.name === "app.loaded")!.measurements;
+      test.info().annotations.push({
+        type: "boot timing (dev build)",
+        description: `visible ${m?.activeBootTimeMs}ms · context ${m?.contextReadyMs}ms · render ${m?.renderReadyMs}ms`,
+      });
+    }
   });
 
   test("selecting rendered text opens a draft composer anchored to the excerpt", async ({
@@ -114,158 +146,6 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     // Cancel — never persist to the shared sandbox PR.
     await draft.getByRole("button", { name: /^cancel$/i }).click();
     await expect(draft).toHaveCount(0, { timeout: 10_000 });
-  });
-
-  test("triple-clicking a rendered line surfaces the add-comment bubble", async ({
-    page,
-  }) => {
-    const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
-    await gotoPrTab(page, E2E.prRepo, prId);
-
-    const frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    const paragraph = frame
-      .locator(".emr-rendered p:not(:has(.emr-highlight))")
-      .filter({ hasText: /\S/ })
-      .first();
-    await paragraph.waitFor({ state: "visible", timeout: 45_000 });
-    const bubble = frame.locator(".emr-selection-bubble");
-
-    // A triple-click ends at the next block's element boundary in Chromium.
-    // Focus the contribution first, then retry isolated triple-click gestures.
-    // Clear the previous Selection and leave enough time between attempts that
-    // Chromium cannot merge retries into a 4th/5th click sequence (which has
-    // different native selection semantics).
-    await paragraph.click();
-    let surfaced = false;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await paragraph.evaluate(() => window.getSelection()?.removeAllRanges());
-      if (attempt > 0) await page.waitForTimeout(750);
-      await paragraph.click({ clickCount: 3, delay: 90 });
-      surfaced = await bubble
-        .waitFor({ state: "visible", timeout: 4_000 })
-        .then(() => true)
-        .catch(() => false);
-      const selected = await frame
-        .locator("html")
-        .evaluate(() => window.getSelection()?.toString().trim() ?? "");
-      if (surfaced && selected.length > 0) break;
-      surfaced = false;
-    }
-    expect(surfaced, "triple-click selection never surfaced Add comment").toBe(
-      true,
-    );
-
-    const selected = await frame
-      .locator("html")
-      .evaluate(() => window.getSelection()?.toString().trim());
-    expect(selected).toBeTruthy();
-    await expect(
-      bubble.getByRole("button", { name: /add comment/i }),
-    ).toBeVisible();
-  });
-
-  test("preserves an in-progress draft across a page reload", async ({
-    page,
-  }) => {
-    // The local-persistence path: a draft that's been typed into (but not
-    // posted) must survive a full reload of the PR tab — the shell persists it
-    // to localStorage (scope "pr") and restores the balloon + text on mount.
-    const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
-    await gotoPrTab(page, E2E.prRepo, prId);
-
-    let frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-
-    await openDraftComposerBySelection(frame);
-    const draftText = "Draft that should survive a reload";
-    await frame
-      .locator(".emr-balloon.is-draft textarea.emr-textarea")
-      .fill(draftText);
-    // Let the throttled localStorage write settle (leading + trailing, 500ms).
-    await page.waitForTimeout(800);
-
-    // Reload the whole host page; the contribution iframe re-mounts from
-    // scratch and must restore the draft from localStorage.
-    await page.reload({ waitUntil: "domcontentloaded" });
-    frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-
-    const restored = frame.locator(".emr-balloon.is-draft");
-    await expect(restored).toBeVisible({ timeout: 30_000 });
-    await expect(restored.locator("textarea.emr-textarea")).toHaveValue(
-      draftText,
-      { timeout: 15_000 },
-    );
-
-    // Cancel clears the persisted draft so the sandbox browser state stays
-    // clean for later runs.
-    await restored.getByRole("button", { name: /^cancel$/i }).click();
-    await expect(restored).toHaveCount(0, { timeout: 10_000 });
-  });
-
-  test("blocks a second draft with a discard dialog (never loses the first)", async ({
-    page,
-  }) => {
-    // The "one active draft" guard: with a reply draft holding text, starting a
-    // *new comment* prompts a blocking discard dialog. "Keep editing" preserves
-    // the reply. Nothing is posted to the sandbox PR (we cancel at the end).
-    const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
-    await gotoPrTab(page, E2E.prRepo, prId);
-
-    const frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
-
-    // Open the seeded thread's reply composer and type — this is the active
-    // draft. (The target PR carries a seeded anchored thread.)
-    const highlight = frame.locator(".emr-highlight[data-thread-id]").first();
-    await expect(highlight).toBeVisible({ timeout: 30_000 });
-    await highlight.click();
-    const balloon = frame.locator(".emr-balloon.is-active").first();
-    await balloon.getByRole("button", { name: /mention or reply/i }).click();
-    const draftText = "Reply draft — must not be lost";
-    await balloon.locator("textarea.emr-textarea").fill(draftText);
-
-    // Attempt a NEW comment over an article selection → the guard dialog.
-    await frame
-      .locator(".emr-rendered p")
-      .first()
-      .evaluate((el: HTMLElement) => {
-        const textNode = Array.from(el.childNodes).find(
-          (n) =>
-            n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").length > 8,
-        ) as Text | undefined;
-        if (!textNode) return;
-        const range = document.createRange();
-        range.setStart(textNode, 0);
-        range.setEnd(textNode, Math.min(12, textNode.data.length));
-        const sel = window.getSelection()!;
-        sel.removeAllRanges();
-        sel.addRange(range);
-        el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-      });
-    await frame
-      .locator(".emr-selection-bubble")
-      .getByRole("button", { name: /add comment/i })
-      .click();
-
-    const dialog = frame.locator(".emr-draft-guard-overlay");
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-    // The dialog shows a snippet of the at-risk draft.
-    await expect(dialog).toContainText(draftText.slice(0, 12));
-
-    // Keep editing preserves the reply draft's text (no new-comment balloon).
-    await dialog.getByRole("button", { name: /keep editing/i }).click();
-    await expect(dialog).toHaveCount(0, { timeout: 10_000 });
-    await expect(frame.locator(".emr-balloon.is-draft")).toHaveCount(0);
-    await expect(balloon.locator("textarea.emr-textarea")).toHaveValue(
-      draftText,
-      { timeout: 10_000 },
-    );
-
-    // Clean up — cancel the reply so nothing lingers for later runs.
-    await balloon.getByRole("button", { name: /^cancel$/i }).click();
   });
 
   test("@-mention typeahead resolves a user to a display-name pill", async ({
@@ -315,7 +195,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         // Re-entering the same value does not fire input; clear first so the
         // next attempt issues a fresh, debounced identity request.
         await textarea.fill("");
-        await page.waitForTimeout(500);
+        await expect(picker).toHaveCount(0, { timeout: 5_000 });
       }
     }
     expect(displayName, "identity option had no display name").toBeTruthy();

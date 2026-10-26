@@ -15,6 +15,8 @@ declare module "*.css?raw" {
   export default content;
 }
 
+declare module "*.css";
+
 // Build-time telemetry config, injected by webpack DefinePlugin (see
 // webpack.config.cjs). Absent in tests / Storybook / standalone dev — code
 // that reads it must guard with `typeof __EMR_TELEMETRY_CONFIG__ !== "undefined"`.
@@ -22,3 +24,8 @@ declare module "*.css?raw" {
 declare const __EMR_TELEMETRY_CONFIG__:
   | Partial<import("./telemetry/buildConfig").TelemetryBuildConfig>
   | undefined;
+
+// Build flag enabling the dev-only fault injector (src/dev/faults.ts). `true`
+// in development builds, `false` in production; absent in tests / Storybook,
+// so read it as `typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__`.
+declare const __EMR_DEV_FAULTS__: boolean | undefined;

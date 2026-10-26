@@ -30,6 +30,8 @@ export const DIFF_DELETED_MARKER_CLASS = "emr-diff-deleted-marker";
 export const DIFF_INLINE_CLASS = "emr-diff-block--inline";
 /** Class added to a changed Mermaid diagram (left-bar only, no wash). */
 export const DIFF_MERMAID_CLASS = "emr-diff-mermaid";
+/** Class added to a changed equation (left-bar only, no wash). */
+export const DIFF_MATH_CLASS = "emr-diff-math";
 /** Class added to an image-only block (left-bar only, no wash). */
 export const DIFF_IMAGE_CLASS = "emr-diff-image";
 /** Class added to an individual changed table cell (td/th). */
@@ -72,7 +74,7 @@ export const FRONTMATTER_ROW_CLASS = "emr-frontmatter-row";
  * intentionally NOT selected.)
  */
 const BLOCK_SELECTOR =
-  "p, pre, blockquote, dl, h1, h2, h3, h4, h5, h6, hr, img, li, tr, .emr-frontmatter-row";
+  "p, pre, blockquote, dl, h1, h2, h3, h4, h5, h6, hr, img, li, tr, .emr-frontmatter-row, .emr-math";
 
 /** Tags decorated at the row/item level (inside a list or table container). */
 const GRANULAR_TAGS = new Set(["LI", "TR"]);
@@ -136,6 +138,37 @@ const LINE_WASH_TAGS = new Set([
   "DD",
   "DT",
 ]);
+
+/**
+ * Block-level children that own their source lines inside a list item or
+ * blockquote: a second paragraph, nested list, code block, table, quote,
+ * definition list, heading, rule, or a rendered diagram/equation host.
+ */
+const CHILD_BLOCK_TAGS = new Set([
+  "P",
+  "UL",
+  "OL",
+  "PRE",
+  "TABLE",
+  "BLOCKQUOTE",
+  "DL",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HR",
+  "DIV",
+]);
+
+/** A child block of a container (a source-mapped `div` only, never chrome). */
+function isChildBlock(el: Element): boolean {
+  return (
+    CHILD_BLOCK_TAGS.has(el.tagName) &&
+    (el.tagName !== "DIV" || el.hasAttribute("data-source-line"))
+  );
+}
 
 /**
  * Minimum fraction of a modified block that must stay unchanged for the inline
@@ -240,20 +273,61 @@ function numAttr(el: Element, name: string): number | null {
 }
 
 /**
- * The last source line a block "owns" for change-classification. A list item
- * that contains a nested list only owns the lines up to where that nested list
- * begins — its nested children are their own `<li>` blocks and classify
- * themselves — so a change confined to a child doesn't light up the parent.
- * Falls back to `end` for everything else.
+ * The last source line a block "owns" for change-classification. Ownership is
+ * the contract that keeps every changed line visible exactly once: a list item
+ * or blockquote owns only its LEAD content — the lines before its first child
+ * block — and every child block (a second paragraph, nested list, code block,
+ * table, quote, diagram) owns and decorates its own lines. Returns a value
+ * below `start` when the container opens with a child block and so owns no
+ * lines itself. Everything else owns its whole span.
  */
 function ownSpanEnd(el: HTMLElement, start: number, end: number): number {
-  const nested = el.querySelector<HTMLElement>(":scope > ul, :scope > ol");
-  if (nested) {
-    const nestedStart = numAttr(nested, "data-source-line");
-    /* v8 ignore next -- a nested list always carries a source line greater than its parent item's */
-    if (nestedStart != null && nestedStart > start) return nestedStart - 1;
+  if (el.tagName !== "LI" && el.tagName !== "BLOCKQUOTE") return end;
+  const lead = inlineProseTarget(el);
+  for (const child of Array.from(el.children)) {
+    if (!isChildBlock(child)) continue;
+    const childStart = numAttr(child, "data-source-line");
+    if (childStart == null) continue;
+    if (child === lead && childStart === start) continue;
+    return childStart - 1;
   }
   return end;
+}
+
+/**
+ * True when a decorated ancestor's PAINT already covers `el`. Paint is
+ * explicit, not assumed: a line wash covers only the ancestor's lead prose, an
+ * inline word diff covers only its prose target (the whole item when it's a
+ * tight item), and a plain box wash covers everything inside it — except a
+ * nested list item, which decorates itself. Anything outside an ancestor's
+ * paint must decorate itself, or its change would silently disappear.
+ */
+function coveredByDecoratedAncestor(el: HTMLElement): boolean {
+  for (
+    let ancestor = el.parentElement!.closest<HTMLElement>(
+      `.${DIFF_BLOCK_CLASS}`,
+    );
+    ancestor;
+    ancestor =
+      ancestor.parentElement?.closest<HTMLElement>(`.${DIFF_BLOCK_CLASS}`) ??
+      null
+  ) {
+    if (ancestorPaintCovers(ancestor, el)) return true;
+  }
+  return false;
+}
+
+function ancestorPaintCovers(ancestor: HTMLElement, el: HTMLElement): boolean {
+  const target = inlineProseTarget(ancestor);
+  if (ancestor.dataset.diffInline === "true") {
+    return target === ancestor || target.contains(el);
+  }
+  if (ancestor.dataset.diffLineWash === "true") {
+    return target === ancestor
+      ? el.closest(`.${DIFF_LINE_WASH_CLASS}`) !== null
+      : target.contains(el);
+  }
+  return el.tagName !== "LI" || ancestor.tagName !== "LI";
 }
 
 /** True when [aStart,aEnd] and [bStart,bEnd] share at least one line. */
@@ -297,7 +371,6 @@ function applyLineWash(block: HTMLElement): boolean {
       ? block.querySelector<HTMLElement>("code")
       : inlineProseTarget(block);
   if (!target) return false;
-  if (target.querySelector("img, .emr-mermaid")) return false;
 
   const nodes: ChildNode[] = [];
   for (const child of Array.from(target.childNodes)) {
@@ -305,17 +378,24 @@ function applyLineWash(block: HTMLElement): boolean {
       child instanceof HTMLElement &&
       (child.classList.contains("emr-diff-before-control") ||
         child.classList.contains("emr-diff-before-panel") ||
-        child.classList.contains("emr-section-toggle"))
+        child.classList.contains("emr-section-toggle") ||
+        child.classList.contains("emr-heading-link"))
     ) {
       continue;
     }
-    if (
-      child instanceof HTMLElement &&
-      (child.tagName === "UL" || child.tagName === "OL")
-    ) {
-      break;
-    }
+    if (child instanceof HTMLElement && isChildBlock(child)) break;
     nodes.push(child);
+  }
+  // Media in the lead can't follow line boxes (child blocks paint themselves).
+  const media = "img, .emr-mermaid, .katex";
+  if (
+    nodes.some(
+      (node) =>
+        node instanceof Element &&
+        (node.matches(media) || node.querySelector(media)),
+    )
+  ) {
+    return false;
   }
   if (
     nodes.length === 0 ||
@@ -355,6 +435,7 @@ function clearDecorations(root: HTMLElement): void {
       "emr-diff-block--modified",
       DIFF_INLINE_CLASS,
       DIFF_MERMAID_CLASS,
+      DIFF_MATH_CLASS,
       DIFF_IMAGE_CLASS,
     );
     delete el.dataset.diffKind;
@@ -496,14 +577,13 @@ export function decorateDiffRanges(
     const start = numAttr(el, "data-source-line");
     const end = numAttr(el, "data-source-end-line");
     if (start == null || end == null) continue;
-    // Avoid stacking bars: if an ancestor block is already decorated
-    // (e.g. a <li> inside a marked <ul>), let the outer bar stand alone.
-    if (el.parentElement!.closest(`.${DIFF_BLOCK_CLASS}`)) continue;
-    // A list item that contains a nested list "owns" only the lines up to
-    // where that nested list starts — the nested items are their own <li>
-    // blocks and decorate themselves. Without this, changing a nested child
-    // would light up the whole parent item.
+    // Avoid stacking paint: skip a block only when a decorated ancestor's
+    // paint actually covers it (e.g. the lead <p> of a washed <li>).
+    if (coveredByDecoratedAncestor(el)) continue;
+    // A list item or quote owns only its lead content; its child blocks
+    // decorate themselves (see ownSpanEnd).
     const ownEnd = ownSpanEnd(el, start, end);
+    if (ownEnd < start) continue;
     const kind = classifyBlock(start, ownEnd, changeRanges);
     if (!kind) continue;
     el.classList.add(
@@ -513,6 +593,7 @@ export function decorateDiffRanges(
     el.dataset.diffKind = kind;
     el.dataset.diffLabel = KIND_LABEL[kind];
     if (isImageOnlyBlock(el)) el.classList.add(DIFF_IMAGE_CLASS);
+    if (el.classList.contains("emr-math")) el.classList.add(DIFF_MATH_CLASS);
     decorated++;
     decoratedEls.push(el);
 
@@ -543,7 +624,36 @@ export function decorateDiffRanges(
       if (originalMarkdown == null && coversBlock) {
         originalMarkdown = range!.originalText ?? null;
       }
-      if (
+      const rendering =
+        originalMarkdown != null
+          ? compareRendering(el, originalMarkdown, options.renderInline)
+          : null;
+      if (rendering?.kind === "identical") {
+        // A source-only edit — a renumbered list item, re-wrapped lines,
+        // `*a*` → `_a_` — changes nothing a reader can see, so it isn't shown
+        // as an edit.
+        el.classList.remove(
+          DIFF_BLOCK_CLASS,
+          "emr-diff-block--modified",
+          DIFF_IMAGE_CLASS,
+          DIFF_MATH_CLASS,
+        );
+        delete el.dataset.diffKind;
+        delete el.dataset.diffLabel;
+        decorated--;
+        decoratedEls.pop();
+        continue;
+      }
+      if (rendering?.kind === "numbering") {
+        // Only the list's start number changed: mark just the number.
+        el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
+        applyDiffTooltip(
+          el,
+          `List numbering changed from ${rendering.before} to ${rendering.after}`,
+        );
+        el.dataset.diffInline = "true";
+        inlined++;
+      } else if (
         originalMarkdown != null &&
         tryInlineWordDiff(el, originalMarkdown, options.renderInline)
       ) {
@@ -657,7 +767,18 @@ export function decorateDiffRanges(
         originalLines,
       );
       if (originalBlock) {
-        attachBlockBeforeDisclosure(el, originalBlock, options.renderInline);
+        if (el.classList.contains(DIFF_MATH_CLASS)) {
+          const scratch = document.createElement("div");
+          scratch.innerHTML = options.renderInline(originalBlock);
+          const encoded = scratch
+            .querySelector<HTMLElement>(".emr-math[data-math-src]")
+            ?.getAttribute("data-math-src");
+          if (encoded) {
+            el.dataset.diffOriginal = decodeURIComponent(encoded);
+          }
+        } else {
+          attachBlockBeforeDisclosure(el, originalBlock, options.renderInline);
+        }
       }
     }
 
@@ -679,6 +800,7 @@ export function decorateDiffRanges(
 
     if (
       !el.classList.contains(DIFF_IMAGE_CLASS) &&
+      !el.classList.contains(DIFF_MATH_CLASS) &&
       !el.classList.contains(DIFF_INLINE_CLASS) &&
       el.dataset.diffCells !== "true"
     ) {
@@ -697,7 +819,7 @@ export function decorateDiffRanges(
     const start = numAttr(el, "data-source-line");
     const end = numAttr(el, "data-source-end-line");
     if (start == null || end == null) continue;
-    if (el.parentElement?.closest(`.${DIFF_BLOCK_CLASS}`)) continue;
+    if (coveredByDecoratedAncestor(el)) continue;
     const kind = classifyBlock(start, end, changeRanges);
     if (!kind) continue;
     el.classList.add(
@@ -706,20 +828,19 @@ export function decorateDiffRanges(
       DIFF_MERMAID_CLASS,
     );
     el.dataset.diffKind = kind;
-    // Stash the original diagram source (fence stripped) for the Source modal,
-    // but only when the change spans essentially the WHOLE diagram body — a
-    // narrow single-line edit would leave `originalText` a fragment, making the
-    // modal diff misleading. The ±1 tolerance covers the common case where the
-    // fenced markers are unchanged but every inner line changed.
-    const range = soleModifiedRange(start, end, changeRanges);
-    if (
-      range?.originalText != null &&
-      range.start <= start + 1 &&
-      range.end >= end - 1
-    ) {
-      const originalSource = stripMermaidFence(range.originalText);
-      if (originalSource) el.dataset.diffOriginal = originalSource;
-    }
+    // Prefer reconstructing the complete pre-edit fence from the original
+    // document so even a one-line edit gets a useful Source > Before view.
+    const originalBlock = reconstructOriginalBlock(
+      start,
+      end,
+      changeRanges,
+      options?.originalSource,
+      originalLines,
+    );
+    const originalSource = originalBlock
+      ? stripMermaidFence(originalBlock)
+      : "";
+    if (originalSource) el.dataset.diffOriginal = originalSource;
     decorated++;
   }
 
@@ -1245,7 +1366,7 @@ function attachBlockBeforeDisclosure(
   const content = document.createElement("div");
   content.className = "emr-diff-before-content";
   const scratch = document.createElement("div");
-  scratch.innerHTML = renderInline(originalMarkdown);
+  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
   const originalBlock = scratch.querySelector<HTMLElement>(block.tagName);
   if (originalBlock) {
     if (block.tagName === "LI") {
@@ -2387,6 +2508,7 @@ function markContiguousGroups(els: readonly HTMLElement[]): void {
     el instanceof HTMLElement &&
     el.classList.contains(DIFF_BLOCK_CLASS) &&
     !el.classList.contains(DIFF_INLINE_CLASS) &&
+    !el.classList.contains(DIFF_MATH_CLASS) &&
     el.dataset.diffLineWash !== "true" &&
     !isGranularLeaf(el) &&
     el.dataset.diffKind === kind;
@@ -2394,6 +2516,7 @@ function markContiguousGroups(els: readonly HTMLElement[]): void {
   for (const el of els) {
     if (
       el.classList.contains(DIFF_INLINE_CLASS) ||
+      el.classList.contains(DIFF_MATH_CLASS) ||
       el.dataset.diffLineWash === "true" ||
       isGranularLeaf(el)
     ) {
@@ -2473,6 +2596,117 @@ function inlineProseTarget(block: HTMLElement): HTMLElement {
   return block;
 }
 
+/**
+ * Prose blocks a source-only edit can leave visually untouched. Headings are
+ * excluded because the app injects anchor/section controls into them.
+ */
+const IDENTITY_TAGS = new Set(["P", "LI"]);
+
+/**
+ * Rendered text plus semantic structure (tags and the attributes that change
+ * meaning), ignoring source-position metadata, whitespace runs and comment
+ * highlight wrappers. List numbering is deliberately not part of it: an
+ * ordered list numbers itself, so a renumbered item reads the same.
+ */
+function semanticSignature(root: Element): string {
+  const parts: string[] = [];
+  const visit = (node: Node): void => {
+    if (!(node instanceof Element)) {
+      parts.push(node.textContent!);
+      return;
+    }
+    const transparent = node.classList.contains("emr-highlight");
+    const tag = node.tagName.toLowerCase();
+    if (!transparent) {
+      const attributes = [
+        "href",
+        "src",
+        "alt",
+        "title",
+        "type",
+        "checked",
+        "width",
+        "height",
+        "class",
+        "open",
+      ]
+        .filter((name) => node.hasAttribute(name))
+        .map((name) => ` ${name}="${node.getAttribute(name)}"`)
+        .join("");
+      parts.push(`<${tag}${attributes}>`);
+    }
+    node.childNodes.forEach(visit);
+    if (!transparent) parts.push(`</${tag}>`);
+  };
+  root.childNodes.forEach(visit);
+  return parts.join("").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * How the current block's rendering compares to its original source:
+ * `identical` when a reader sees no difference; `numbering` when the only
+ * difference is the start number of the ordered list this first item heads.
+ */
+type RenderComparison =
+  | { kind: "different" }
+  | { kind: "identical" }
+  | { kind: "numbering"; before: number; after: number };
+
+function compareRendering(
+  block: HTMLElement,
+  originalMarkdown: string,
+  renderInline: (md: string) => string,
+): RenderComparison {
+  const different: RenderComparison = { kind: "different" };
+  if (!IDENTITY_TAGS.has(block.tagName)) return different;
+  const scratch = block.ownerDocument.createElement("div");
+  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
+  const original = scratch.querySelector(block.tagName);
+  if (original == null) return different;
+  // The block's structural context must match too: a quote that became a
+  // paragraph, or a bulleted item that became numbered, reads differently.
+  if (
+    block.tagName === "LI"
+      ? original.parentElement!.tagName !== block.parentElement?.tagName
+      : original.parentElement !== scratch
+  ) {
+    return different;
+  }
+  if (semanticSignature(original) !== semanticSignature(block)) {
+    return different;
+  }
+  // The first item of an ordered list sets the numbering every item shows.
+  if (
+    block.parentElement instanceof HTMLOListElement &&
+    block.parentElement.firstElementChild === block &&
+    original.parentElement instanceof HTMLOListElement &&
+    original.parentElement.start !== block.parentElement.start
+  ) {
+    return {
+      kind: "numbering",
+      before: original.parentElement.start,
+      after: block.parentElement.start,
+    };
+  }
+  return { kind: "identical" };
+}
+
+/**
+ * The source to render on its own for comparison with `block`. A nested list
+ * item keeps its source indentation, which — at four or more spaces — would
+ * render standalone as an indented code block, so list items are dedented.
+ */
+function standaloneSource(block: HTMLElement, markdown: string): string {
+  if (block.tagName !== "LI") return markdown;
+  const lines = markdown.split("\n");
+  const indent = Math.min(
+    ...lines
+      .filter((line) => line.trim() !== "")
+      .map((line) => /^[ \t]*/.exec(line)![0].length),
+  );
+  return lines.map((line) => line.slice(indent)).join("\n");
+}
+
 function tryInlineWordDiff(
   block: HTMLElement,
   originalMarkdown: string,
@@ -2480,7 +2714,7 @@ function tryInlineWordDiff(
 ): boolean {
   const doc = block.ownerDocument;
   const scratch = doc.createElement("div");
-  scratch.innerHTML = renderInline(originalMarkdown);
+  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
   // Compare the ORIGINAL's matching element, not the whole scratch wrapper.
   // Rendering a list-item source (`- foo`) standalone wraps it in a `<ul>`,
   // whose inter-tag whitespace pollutes `scratch.textContent` ("\nfoo\n") and

@@ -1,4 +1,5 @@
 import { trackUserFacingError } from "../telemetry";
+import { adoErrorCodeOf, httpStatusOf } from "../telemetry/errorShape";
 
 export type RepositoryImageResolver = (
   repositoryPath: string,
@@ -89,16 +90,25 @@ export function hydrateDocumentImages(
       image.removeAttribute("aria-busy");
       if (!errorReported) {
         errorReported = true;
-        trackUserFacingError({
-          error,
-          source: "DocumentImage.hydrate",
-          operation: "repository-image-load",
-          impact: "degraded",
-        });
+        // An image path the document links to but the repo doesn't have is a
+        // broken link in the author's Markdown — content health, not an
+        // extension failure (the frame still shows it as unavailable).
+        const missingFromRepo =
+          httpStatusOf(error) === 404 || adoErrorCodeOf(error) === "TF401174";
+        if (!missingFromRepo) {
+          trackUserFacingError({
+            error,
+            source: "DocumentImage.hydrate",
+            operation: "repository-image-load",
+            impact: "degraded",
+          });
+        }
       }
     };
+    // Distinct messages so triage can tell "fetched but not displayable"
+    // (e.g. not really an image) from "nothing came back".
     const onError = () =>
-      showError(new Error("Repository image failed to load"));
+      showError(new Error("Repository image couldn't be displayed"));
     image.addEventListener("load", onLoad);
     image.addEventListener("error", onError);
     cleanups.push(() => {
@@ -110,7 +120,7 @@ export function hydrateDocumentImages(
       if (objectUrl) {
         image.src = objectUrl;
       } else {
-        showError(error ?? new Error("Repository image failed to load"));
+        showError(error ?? new Error("Repository image not available"));
       }
     };
     void resolveImage(repositoryPath).then(

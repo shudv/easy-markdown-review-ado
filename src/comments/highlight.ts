@@ -23,15 +23,33 @@ export function wrapRangeWithHighlight(
   range: Range,
   opts: HighlightOptions,
 ): HTMLSpanElement[] {
-  // Snapshot the text nodes covered by the range BEFORE we mutate, otherwise
-  // our splits invalidate the iterator.
-  const fragments = collectTextFragments(range);
-  const spans: HTMLSpanElement[] = [];
-  for (const frag of fragments) {
+  return wrapRangeTextNodes(range, () => {
     const span = document.createElement("span");
     span.className = opts.className;
     span.dataset.threadId = opts.threadId;
     if (opts.background) span.style.backgroundColor = opts.background;
+    return span;
+  });
+}
+
+/**
+ * Wrap each non-whitespace text fragment covered by `range` in a fresh
+ * element from `createWrapper`. `include` can skip text nodes (e.g. removed
+ * diff content) that should stay unwrapped. Returns the wrappers created.
+ */
+export function wrapRangeTextNodes<T extends HTMLElement>(
+  range: Range,
+  createWrapper: () => T,
+  include: (node: Text) => boolean = () => true,
+): T[] {
+  // Snapshot the text nodes covered by the range BEFORE we mutate, otherwise
+  // our splits invalidate the iterator.
+  const fragments = collectTextFragments(range).filter((frag) =>
+    include(frag.node),
+  );
+  const spans: T[] = [];
+  for (const frag of fragments) {
+    const span = createWrapper();
     // Wrap this fragment: split the text node so [start, end] is its own node,
     // then replace.
     let node = frag.node;

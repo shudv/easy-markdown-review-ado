@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  absentAtUpdateMessage,
   bindRepositoryImageResolver,
   buildHistoryStops,
   clearIfEquals,
@@ -15,11 +16,13 @@ import {
   historyChevronTooltip,
   type HistoryStop,
   isCommentUiClickTarget,
+  isItemNotFoundError,
   patchIfSet,
   allReviewIterations,
   betweenReviewUpdates,
   oneReviewUpdate,
   resolveReviewIterationRange,
+  reviewRangeLabel,
   sourceDiffRanges,
   stepStopIndex,
   wordCountDelta,
@@ -60,6 +63,68 @@ describe("bindRepositoryImageResolver", () => {
   });
 });
 
+describe("reviewRangeLabel", () => {
+  it("names a comparison of PR updates the way the picker does", () => {
+    expect(reviewRangeLabel({ fromUpdate: 0, toUpdate: 5 }, 5)).toBe(
+      "All updates",
+    );
+    expect(reviewRangeLabel({ fromUpdate: 0, toUpdate: 3 }, 5)).toBe(
+      "Base → Update 3",
+    );
+    expect(reviewRangeLabel({ fromUpdate: 4, toUpdate: 5 }, 5)).toBe(
+      "Update 4 → 5",
+    );
+  });
+});
+
+describe("isItemNotFoundError", () => {
+  it("recognises a missing file by HTTP 404, however the SDK shapes it", () => {
+    expect(isItemNotFoundError({ status: 404 })).toBe(true);
+    expect(isItemNotFoundError({ statusCode: 404 })).toBe(true);
+    expect(isItemNotFoundError({ serverError: { status: 404 } })).toBe(true);
+  });
+
+  it("recognises ADO's TF401174 'item could not be found' message", () => {
+    expect(
+      isItemNotFoundError(
+        new Error(
+          "TF401174: The item '/notes.md' could not be found in the repository at the specified version.",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat auth, server, or network failures as 'not found'", () => {
+    expect(isItemNotFoundError({ status: 401 })).toBe(false);
+    expect(isItemNotFoundError({ status: 500 })).toBe(false);
+    expect(isItemNotFoundError(new Error("Failed to fetch"))).toBe(false);
+    expect(isItemNotFoundError(undefined)).toBe(false);
+  });
+});
+
+describe("absentAtUpdateMessage", () => {
+  it("explains a file the PR adds in a later update", () => {
+    const message = absentAtUpdateMessage("added", 2);
+    expect(message.title).toBe("Not added yet at Update 2");
+    expect(message.body).toContain("adds this file in a later update");
+  });
+
+  it("explains a file the PR has deleted", () => {
+    const message = absentAtUpdateMessage("deleted", 3);
+    expect(message.title).toBe("Deleted by Update 3");
+    expect(message.body).toContain("deleted in this pull request by Update 3");
+  });
+
+  it("falls back to a neutral explanation (e.g. a moved file)", () => {
+    expect(absentAtUpdateMessage("modified", 1).title).toBe(
+      "Not present at Update 1",
+    );
+    expect(absentAtUpdateMessage(undefined, 1).body).toContain(
+      "moved or renamed",
+    );
+  });
+});
+
 describe("errorMessage", () => {
   it("uses the message of an Error instance", () => {
     expect(errorMessage(new Error("boom"))).toBe("boom");
@@ -74,7 +139,7 @@ describe("errorMessage", () => {
 });
 
 describe("friendlyWriteError", () => {
-  it("explains a preflighted session-refresh failure and preserved draft", () => {
+  it("explains a detected session-refresh failure and preserved draft", () => {
     expect(
       friendlyWriteError(
         "Create comment",
@@ -407,6 +472,24 @@ describe("review iteration selection", () => {
 describe("sourceDiffRanges", () => {
   it("returns no ranges for identical sources", () => {
     expect(sourceDiffRanges("# Same\n", "# Same\n")).toEqual([]);
+  });
+
+  it("reports a rewrite as one coarse line hunk (the view refines it per block)", () => {
+    const original = "# Doc\n\n_Placeholder question?_\n\n## Next\n";
+    const current =
+      "# Doc\n\nNew intro sentence for the section.\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n## Next\n";
+    expect(sourceDiffRanges(original, current)).toEqual([
+      {
+        startLine: 3,
+        endLine: 7,
+        kind: "modified",
+        originalText: "_Placeholder question?_",
+        originalStartLine: 3,
+        originalEndLine: 3,
+        linesAdded: 5,
+        linesDeleted: 1,
+      },
+    ]);
   });
 
   it("maps added lines into modified-source coordinates", () => {

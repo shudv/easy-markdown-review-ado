@@ -10,7 +10,7 @@
 // selecting a theme in ADO's own menu actually flips our `data-emr-theme`
 // (and therefore the `--emr-*` chrome + GitHub-Markdown light/dark stylesheet).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
 import {

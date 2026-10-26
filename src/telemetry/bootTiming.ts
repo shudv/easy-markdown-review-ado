@@ -55,6 +55,7 @@ let authWaitStartMs: number | null = null;
 let authRefreshWaitMs = 0;
 let sdkReadyAtMs: number | null = null;
 let contextReadyAtMs: number | null = null;
+let afterAutoReload = false;
 let unsubscribeVisibility: (() => void) | null = null;
 
 function elapsed(from: number, to: number): number {
@@ -102,6 +103,7 @@ export function markBootStart(
   authWaitStartMs = null;
   sdkReadyAtMs = null;
   contextReadyAtMs = null;
+  afterAutoReload = false;
   wasHiddenDuringBoot = !environment.isVisible();
   activeStartMs = wasHiddenDuringBoot ? null : startMs;
   hiddenStartMs = wasHiddenDuringBoot ? startMs : null;
@@ -129,6 +131,16 @@ export function markBootAuthWaitEnd(): void {
   if (authWaitStartMs === null) return;
   authRefreshWaitMs += elapsed(authWaitStartMs, environment.now());
   authWaitStartMs = null;
+}
+
+/**
+ * Flag this boot as the reload we triggered to escape the token dead window,
+ * so `app.loaded` can show whether the reload actually got the user in
+ * (`authRefreshWaitMs == 0`) or landed back in the window.
+ */
+export function markBootAfterAutoReload(): void {
+  if (fired || startMs === null) return;
+  afterAutoReload = true;
 }
 
 /**
@@ -172,6 +184,7 @@ export function markAppReady(reason: AppReadyReason = "content"): void {
       renderReadyMs: Math.round(elapsed(lastPhaseAtMs, now)),
       readyReason: reason,
       bootHadHiddenInterval: wasHiddenDuringBoot,
+      afterAutoReload,
     }),
   );
 }
@@ -191,4 +204,5 @@ export function __resetBootTimingForTests(): void {
   authRefreshWaitMs = 0;
   sdkReadyAtMs = null;
   contextReadyAtMs = null;
+  afterAutoReload = false;
 }

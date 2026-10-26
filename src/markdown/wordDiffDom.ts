@@ -260,11 +260,15 @@ export function applyInlineWordDiff(
   }
 
   // A removal sitting at the very end of the block has no containing node;
-  // append it after the last content.
+  // place it after the last content — but before a trailing heading link
+  // button, so struck-out words stay with their heading text and the button
+  // keeps its place after it.
+  const trailingControl = block.querySelector(":scope > .emr-heading-link");
   for (const r of removals) {
     if (r.at === totalEnd) {
-      block.appendChild(
+      block.insertBefore(
         makeMark(block.ownerDocument, "del", removedRunClass(r.text), r.text),
+        trailingControl,
       );
       removedCount++;
     }

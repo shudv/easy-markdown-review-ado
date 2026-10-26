@@ -25,7 +25,12 @@ interface TextRun {
 function flattenText(root: Element): { text: string; runs: TextRun[] } {
   const runs: TextRun[] = [];
   let acc = "";
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  // The root's own document, so an inert (DOMParser) document works too.
+  const walker = root.ownerDocument.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT,
+    null,
+  );
   let n: Node | null = walker.nextNode();
   while (n) {
     const text = (n as Text).data;
@@ -84,6 +89,21 @@ function resolveTextQuote(
   root: Element,
   anchor: TextQuoteAnchor,
 ): Range | null {
+  const match = matchTextQuote(root, anchor);
+  if (!match) return null;
+  const start = locateOffset(match.runs, match.start)!;
+  const end = locateOffset(match.runs, match.end)!;
+  const range = document.createRange();
+  range.setStart(start.run.node, start.nodeOffset);
+  range.setEnd(end.run.node, end.nodeOffset);
+  return range;
+}
+
+/** Where a text quote sits in `root`'s flattened text (`end` exclusive). */
+function matchTextQuote(
+  root: Element,
+  anchor: TextQuoteAnchor,
+): { start: number; end: number; runs: TextRun[] } | null {
   const { text, runs } = flattenText(root);
   if (runs.length === 0) return null;
 
@@ -130,35 +150,72 @@ function resolveTextQuote(
     exactStart = best;
   }
 
-  const exactEnd = exactStart + anchor.exact.length;
-  const startLoc = locateOffset(runs, exactStart)!;
-  const endLoc = locateOffset(runs, exactEnd)!;
-
-  const range = document.createRange();
-  range.setStart(startLoc.run.node, startLoc.nodeOffset);
-  range.setEnd(endLoc.run.node, endLoc.nodeOffset);
-  return range;
+  return {
+    start: exactStart,
+    end: exactStart + anchor.exact.length,
+    runs,
+  };
 }
 
 /**
- * True when `node` sits inside a rendered Mermaid diagram (`.emr-mermaid`).
- *
- * A diagram's internals are transient: before hydration the `.emr-mermaid`
- * placeholder holds a `<pre>` source fallback, and after hydration it holds the
- * rendered SVG whose `<text>` labels are regenerated on every render and are
- * absent from the pristine HTML anchors resolve against. A comment anchored
- * inside a diagram could therefore never durably resolve, so callers withhold
- * the "add comment" affordance there.
+ * Source lines of the text between two flattened-text offsets, from the
+ * renderer's `data-source-line` stamps on the runs that actually overlap it
+ * (a boundary offset also touches the end of the previous run, whose line may
+ * belong to an earlier block). Empty when the HTML carries no source lines.
  */
-export function isWithinMermaid(node: Node): boolean {
+function sourceLinesOf(
+  runs: readonly TextRun[],
+  start: number,
+  end: number,
+): Pick<TextQuoteAnchor, "line" | "endLine"> {
+  const overlapping = runs.filter((run) => run.end > start && run.start < end);
+  const line = sourceLineFromNode(overlapping[0]!.node);
+  if (typeof line !== "number") return {};
+  const endLine = sourceLineFromNode(overlapping[overlapping.length - 1]!.node);
+  return {
+    line,
+    endLine: typeof endLine === "number" ? Math.max(line, endLine) : line,
+  };
+}
+
+/**
+ * Re-locate a text-quote anchor in another rendering of the same document —
+ * HTML from the same renderer, e.g. the LATEST version of a file while the
+ * selection was made in an older PR update. Returns the anchor with source
+ * lines taken from that rendering (so a comment is positioned against it), or
+ * `null` when the quoted text doesn't occur there. Parses into an inert
+ * document, so nothing in the HTML (images, media) loads.
+ */
+export function relocateAnchor(
+  anchor: TextQuoteAnchor,
+  html: string,
+): TextQuoteAnchor | null {
+  if (!anchor.exact) return null;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const match = matchTextQuote(doc.body, anchor);
+  if (!match) return null;
+  return {
+    exact: anchor.exact,
+    prefix: anchor.prefix,
+    suffix: anchor.suffix,
+    ...sourceLinesOf(match.runs, match.start, match.end),
+  };
+}
+
+/** True when generated diagram/equation internals cannot hold durable anchors. */
+export function isWithinGeneratedContent(node: Node): boolean {
   const el = node instanceof Element ? node : node.parentElement;
-  return el?.closest(".emr-mermaid") != null;
+  // `.emr-math` covers the pre-hydration and load-failure source fallback, not
+  // just KaTeX output — that text is replaced once hydration succeeds, so an
+  // anchor placed on it would orphan. Mirrors `.emr-mermaid`, which wraps its
+  // own fallback.
+  return el?.closest(".emr-mermaid, .emr-math, .katex") != null;
 }
 
 /**
  * Convert the current window selection to a TextQuoteAnchor.
- * Returns null if the selection is empty, not inside `root`, or inside a
- * rendered Mermaid diagram (whose transient labels can't be anchored).
+ * Returns null if the selection is empty, not inside `root`, or inside
+ * generated diagram/equation markup whose text cannot be durably anchored.
  */
 export function captureAnchorFromSelection(
   root: Element,
@@ -167,10 +224,8 @@ export function captureAnchorFromSelection(
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
   const range = sel.getRangeAt(0);
   if (!root.contains(range.commonAncestorContainer)) return null;
-  // A rendered Mermaid diagram's labels can't carry a durable anchor (see
-  // `isWithinMermaid`), so withhold the comment affordance when the selection
-  // sits inside one.
-  if (isWithinMermaid(range.commonAncestorContainer)) return null;
+  // Generated labels/glyphs do not map durably back to Markdown source text.
+  if (isWithinGeneratedContent(range.commonAncestorContainer)) return null;
 
   const raw = range.toString();
   if (!raw.trim()) return null;
@@ -214,30 +269,21 @@ export function captureAnchorFromSelection(
     Math.min(text.length, endOffset + CONTEXT_LEN),
   );
 
-  const result: TextQuoteAnchor = { exact, prefix, suffix };
-
-  // Robust source-line capture straight from the DOM. The renderer stamps
-  // `data-source-line` on every block AND inline element, so the nearest
-  // ancestor of each selection boundary tells us the source line directly —
-  // no fragile text-matching of the rendered string against the raw Markdown
-  // (which breaks when the selection crosses inline syntax like ** or ``).
-  // `withSourceLocation` later refines this to a precise line+column when the
-  // quote resolves verbatim; when it can't, this block-level line survives so
-  // the comment still anchors to the right line in native ADO views.
-  const selectedRuns = runs.filter(
-    (run) => run.end > startOffset && run.start < endOffset,
-  );
-  const startLine = sourceLineFromNode(selectedRuns[0]!.node);
-  if (typeof startLine === "number") {
-    const endLine = sourceLineFromNode(
-      selectedRuns[selectedRuns.length - 1]!.node,
-    );
-    result.line = startLine;
-    result.endLine =
-      typeof endLine === "number" ? Math.max(startLine, endLine) : startLine;
-  }
-
-  return result;
+  return {
+    exact,
+    prefix,
+    suffix,
+    // Robust source-line capture straight from the DOM. The renderer stamps
+    // `data-source-line` on every block AND inline element, so the nearest
+    // stamped ancestor of the selected text gives its source line directly —
+    // no fragile text-matching of the rendered string against the raw
+    // Markdown (which breaks when the selection crosses inline syntax like **
+    // or ``). `withSourceLocation` later refines this to a precise line+column
+    // when the quote resolves verbatim; when it can't, this block-level line
+    // survives so the comment still anchors to the right line in native ADO
+    // views.
+    ...sourceLinesOf(runs, startOffset, endOffset),
+  };
 }
 
 /**

@@ -32,7 +32,11 @@ interface BalloonProps {
   onReopen: (threadId: string) => void;
   onMarkPending: (threadId: string) => void;
   onClose: (threadId: string) => void;
-  onEditComment: (threadId: string, commentId: string, newBody: string) => void;
+  onEditComment: (
+    threadId: string,
+    commentId: string,
+    newBody: string,
+  ) => void | Promise<boolean>;
   onDeleteComment: (threadId: string, commentId: string) => void;
   onDeleteThread: (threadId: string) => void;
   onToggleReaction: (

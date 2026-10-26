@@ -34,6 +34,9 @@ import { MarkdownReader, type ReaderConfig } from "./markdownReader";
 import { DocumentsHubApp } from "./DocumentsHubApp";
 import { parseHubQuery } from "../shell/hubQuery";
 import { orchestrateBoot } from "../shell/boot";
+import { configureAdoSession } from "../shell/adoSessionSdk";
+import { warmAdoClients } from "../shell/adoClients";
+import { installDevFaults } from "../dev/faults";
 import { syncHostTheme } from "../theme/theme";
 import {
   ErrorBoundary,
@@ -127,6 +130,11 @@ function installedExtensionVersion(): string | undefined {
 }
 
 async function boot(): Promise<void> {
+  // Dev builds only: reproduce failure conditions on demand (see
+  // src/dev/faults.ts). Must run before anything fetches.
+  if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
+    installDevFaults();
+  }
   // Start the boot-time clock before the SDK handshake so the measurement spans
   // the whole path to first rendered Markdown, not just React startup.
   // `markAppReady()` fires later — from PrShell when the first document renders,
@@ -141,6 +149,10 @@ async function boot(): Promise<void> {
       await SDK.ready();
       markBootPhase("sdk-ready");
       setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+      configureAdoSession();
+      // Resolve the Git client's location and fetch a token now, overlapping
+      // the rest of boot, instead of stalling the first REST call.
+      warmAdoClients();
     },
     run: async () => {
       syncHostTheme();

@@ -207,6 +207,7 @@ export function isAdoAuthError(err: unknown): boolean {
  * burning a futile tight-retry budget.
  */
 export class SessionRefreshingError extends Error {
+  readonly retryable = false;
   readonly grantState: AdoGrantState;
   readonly recoverAtMs?: number;
 
@@ -230,31 +231,6 @@ export function isSessionRefreshingError(
 }
 
 /**
- * Pre-flight a host access token. Throws a {@link SessionRefreshingError} when
- * its ADO grant has lapsed (the dead window) so callers can skip a doomed REST
- * call and schedule recovery instead of burning a futile retry budget. A token
- * that can't be decoded classifies as `unknown` → treated as live, so a parse
- * miss never blocks a normal request. `getToken` rejecting is swallowed (we let
- * the real REST call surface that failure). Injected `getToken` / `nowMs` keep
- * this SDK-free and unit-testable.
- */
-export async function ensureAdoSessionLive(
-  getToken: () => Promise<string>,
-  nowMs: number = Date.now(),
-): Promise<void> {
-  let token: string;
-  try {
-    token = await getToken();
-  } catch {
-    return;
-  }
-  const { state, recoverAtMs } = classifyAdoGrant(token, nowMs);
-  if (isAdoGrantLapsed(state)) {
-    throw new SessionRefreshingError(state, recoverAtMs);
-  }
-}
-
-/**
  * Map a caught failure to a {@link SessionRefreshingError} when it is (or looks
  * like) the dead-window rejection: a `SessionRefreshingError` passes through; an
  * auth-shaped failure (401 / 403 / TF400813) re-inspects the CURRENT token and
@@ -265,7 +241,7 @@ export async function ensureAdoSessionLive(
 export async function detectSessionRefreshing(
   err: unknown,
   getToken: () => Promise<string>,
-  nowMs: number = Date.now(),
+  nowMs: number | (() => number) = Date.now,
 ): Promise<SessionRefreshingError | null> {
   if (isSessionRefreshingError(err)) return err;
   if (!isAdoAuthError(err)) return null;
@@ -275,10 +251,29 @@ export async function detectSessionRefreshing(
   } catch {
     /* empty token → classifies as "unknown" (not lapsed) */
   }
-  const { state, recoverAtMs } = classifyAdoGrant(token, nowMs);
+  const currentTimeMs = typeof nowMs === "function" ? nowMs() : nowMs;
+  const { state, recoverAtMs } = classifyAdoGrant(token, currentTimeMs);
   return isAdoGrantLapsed(state)
     ? new SessionRefreshingError(state, recoverAtMs)
     : null;
+}
+
+/**
+ * Run an ADO operation before inspecting token metadata. If ADO rejects the
+ * operation for auth, convert only a confirmed lapsed grant into the distinct
+ * recovery error; otherwise preserve the original failure for retry policy.
+ */
+export async function withAdoSessionRefreshDetection<T>(
+  op: () => Promise<T>,
+  getToken: () => Promise<string>,
+  nowMs: () => number = Date.now,
+): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    const refreshing = await detectSessionRefreshing(err, getToken, nowMs);
+    throw refreshing ?? err;
+  }
 }
 
 export interface SessionRetryPlan {

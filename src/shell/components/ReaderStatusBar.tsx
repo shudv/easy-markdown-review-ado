@@ -30,6 +30,7 @@ import {
   formatWordDelta,
   oneReviewUpdate,
   resolveReviewIterationRange,
+  reviewRangeLabel,
   type ReviewIterationRange,
   type WordCountDelta,
 } from "../prShellHelpers";
@@ -94,7 +95,10 @@ export interface ReaderStatusBarProps {
   /** Toggle the change highlights. */
   onToggleChanges: () => void;
 
-  /** Chronological pull-request updates, oldest first. */
+  /**
+   * Chronological pull-request updates, oldest first. (The picker lists them
+   * newest first, under "All updates", like ADO's own update list.)
+   */
   iterationOptions?: readonly ReaderIterationOption[];
   /** Pull-request base commit shown by the base-comparison glyph tooltip. */
   iterationBaseCommit?: string;
@@ -434,18 +438,6 @@ function handlePopoverEscape(
   close();
 }
 
-function iterationSelectionLabel(
-  range: ReviewIterationRange,
-  updateCount: number,
-): string {
-  const resolved = resolveReviewIterationRange(range, updateCount);
-  if (resolved.isAllChanges) return "All updates";
-  if (resolved.range.fromUpdate === 0) {
-    return `Base → Update ${resolved.range.toUpdate}`;
-  }
-  return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
-}
-
 function adjacentIterationRange(
   resolved: ReturnType<typeof resolveReviewIterationRange>,
   updateCount: number,
@@ -476,6 +468,7 @@ function IterationPicker({
   onChange,
 }: IterationPickerProps): React.ReactElement {
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
   const anchorUpdateRef = React.useRef<number | null>(null);
   const [open, setOpen] = React.useState(false);
   const { triggerRef, popoverRef, restoreFocusAfterClose } =
@@ -487,13 +480,13 @@ function IterationPicker({
     ? `Base commit ${baseCommit.slice(0, 7)}`
     : "Base commit";
   const firstSelectedUpdate = resolved.range.fromUpdate + 1;
-  const selectionLabel = iterationSelectionLabel(range, options.length);
+  const selectionLabel = reviewRangeLabel(range, options.length);
   const stableLabels = [
     "All updates",
     ...options
       .filter((option) => option.number > 1)
       .map((option) =>
-        iterationSelectionLabel(
+        reviewRangeLabel(
           oneReviewUpdate(option.number, options.length),
           options.length,
         ),
@@ -502,10 +495,10 @@ function IterationPicker({
   const previousRange = adjacentIterationRange(resolved, options.length, -1);
   const nextRange = adjacentIterationRange(resolved, options.length, 1);
   const previousLabel = previousRange
-    ? iterationSelectionLabel(previousRange, options.length)
+    ? reviewRangeLabel(previousRange, options.length)
     : null;
   const nextLabel = nextRange
-    ? iterationSelectionLabel(nextRange, options.length)
+    ? reviewRangeLabel(nextRange, options.length)
     : null;
   const fromTitle =
     resolved.range.fromUpdate === 0
@@ -531,6 +524,20 @@ function IterationPicker({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open, restoreFocusAfterClose]);
+
+  // On open, bring the current selection into view: the list is newest-first,
+  // so the first selected row is the comparison's newest update. A long PR
+  // would otherwise open scrolled away from where the reviewer is.
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const list = listRef.current!;
+    const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
+    /* v8 ignore next -- some option (All updates at least) is always selected */
+    if (!selected) return;
+    const offset =
+      selected.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    list.scrollTop += offset - (list.clientHeight - selected.offsetHeight) / 2;
+  }, [open]);
 
   const stepTo = (nextRange: ReviewIterationRange) => {
     const nextResolved = resolveReviewIterationRange(nextRange, options.length);
@@ -656,12 +663,29 @@ function IterationPicker({
         aria-hidden={!open}
       >
         <div
+          ref={listRef}
           className="emr-statusbar-iteration-list"
           role="listbox"
           aria-label="Review iterations"
           aria-multiselectable="true"
         >
-          {options.map((option) => {
+          {/* Newest first, like ADO's own update list: "All updates" on top,
+              then the latest update down to the first. */}
+          <button
+            type="button"
+            role="option"
+            aria-selected={allChangesSelected}
+            className="emr-statusbar-iteration-option is-all-changes"
+            onClick={() => {
+              anchorUpdateRef.current = null;
+              onChange(allReviewIterations(options.length));
+            }}
+          >
+            <span className="emr-statusbar-iteration-num" />
+            <span className="emr-statusbar-iteration-title">All updates</span>
+            <span />
+          </button>
+          {[...options].reverse().map((option) => {
             const isSelected =
               !allChangesSelected &&
               option.number >= firstSelectedUpdate &&
@@ -716,20 +740,6 @@ function IterationPicker({
               </button>
             );
           })}
-          <button
-            type="button"
-            role="option"
-            aria-selected={allChangesSelected}
-            className="emr-statusbar-iteration-option is-all-changes"
-            onClick={() => {
-              anchorUpdateRef.current = null;
-              onChange(allReviewIterations(options.length));
-            }}
-          >
-            <span className="emr-statusbar-iteration-num" />
-            <span className="emr-statusbar-iteration-title">All updates</span>
-            <span />
-          </button>
         </div>
       </div>
     </div>

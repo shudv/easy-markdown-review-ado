@@ -3,7 +3,11 @@
 // container resolves the host-specific inputs (extension context, host name)
 // and delegates the actual formatting / URL assembly to these functions.
 
-import { withCommentParam } from "../comments/commentLink";
+import {
+  TARGET_LINK_PARAMS,
+  withDeepLinkTarget,
+  type DeepLinkTarget,
+} from "../shell/deepLink";
 
 /** Compute up-to-two-letter initials for an avatar fallback. */
 export function initialsOf(name: string): string {
@@ -62,21 +66,49 @@ export function buildHubDocUrl(
 }
 
 /**
- * The {@link buildHubDocUrl} target with a `?comment=<threadId>` param added,
- * for the "Link to comment" shareable deep link. Returns `undefined` (→ the
- * caller falls back to the in-iframe hash link) when the base URL can't build.
+ * The {@link buildHubDocUrl} target with a `?comment=<threadId>` or
+ * `?anchor=<slug>` param added — the shareable deep link behind "Link to
+ * comment" and the heading link button. Returns `undefined` (→ the link
+ * reports a copy failure) when the base URL can't build.
  */
-export function assembleHubCommentUrl(
+export function assembleHubDeepLinkUrl(
   orgUrl: string,
   projectName: string,
   ext: ExtensionIdentity,
   repoId: string,
   path: string,
-  threadId: string,
+  target: DeepLinkTarget,
 ): string | undefined {
   const url = buildHubDocUrl(orgUrl, projectName, ext, repoId, path);
   if (!url) return undefined;
-  return withCommentParam(url, threadId);
+  return withDeepLinkTarget(url, target);
+}
+
+/**
+ * Route-param updates for opening `path` in `repoId`: pins the repo and the
+ * slash-free path (`?path=docs/x.md`, matching ADO's native Files URLs — the
+ * host encodes `/` as %2F). Moving to a *different* document (another path,
+ * or the same path in another repo) also drops the `?anchor=` heading,
+ * `?text=` quote and `?comment=` thread, which belonged to the previous one — a linked comment
+ * that never activated (deleted, or still loading) would otherwise ride along
+ * with the new path. Re-publishing the same document (the hub does so on
+ * load) keeps a deep link intact.
+ */
+export function routeUpdatesForPath(
+  current: Record<string, string | undefined>,
+  repoId: string,
+  path: string,
+): Record<string, string> {
+  const bare = path.replace(/^\/+/, "");
+  const updates: Record<string, string> = { repo: repoId, path: bare };
+  const currentPath = (current.path ?? "").replace(/^\/+/, "");
+  // A link without `?repo=` names the hub's default repo, so only a different
+  // explicit repo counts as a move.
+  const otherRepo = !!current.repo && current.repo !== repoId;
+  if (otherRepo || currentPath !== bare) {
+    for (const param of TARGET_LINK_PARAMS) updates[param] = "";
+  }
+  return updates;
 }
 
 /**

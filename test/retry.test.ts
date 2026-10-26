@@ -9,6 +9,7 @@ import {
   parseRetryAfterMs,
   withRetry,
 } from "../src/shell/retry";
+import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 
 /** A sleep spy that resolves immediately but records the requested delays. */
 function fakeSleep() {
@@ -152,6 +153,20 @@ describe("withRetry", () => {
     );
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["read", "write"] as const)(
+    "%s mode does not retry an explicitly non-retryable failure",
+    async (mode) => {
+      const { sleep } = fakeSleep();
+      const error = new SessionRefreshingError(
+        "refreshing",
+        Date.now() + 60_000,
+      );
+      const fn = vi.fn().mockRejectedValue(error);
+      await expect(withRetry(fn, { mode, sleep })).rejects.toBe(error);
+      expect(fn).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("read mode DOES retry a connection failure (idempotent)", async () => {
     const { sleep } = fakeSleep();

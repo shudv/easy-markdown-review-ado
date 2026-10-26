@@ -9,8 +9,7 @@
 // and the Git REST data load — none of which the unit tests or the same-origin
 // standalone preview can reproduce.
 
-import { test, expect } from "@playwright/test";
-import { E2E } from "./env";
+import { test, expect } from "./fixtures";
 import {
   gotoDocumentsHub,
   hubFrame,
@@ -18,10 +17,11 @@ import {
   openCommentableDoc,
   openDraftComposerBySelection,
   waitForFrameRoot,
+  waitForPersistedDraft,
 } from "./helpers";
 
 test.describe("Documents hub (real ADO host)", () => {
-  test("loads the dev contribution iframe and mounts the app", async ({
+  test("loads the dev contribution iframe and renders live Markdown", async ({
     page,
   }) => {
     await gotoDocumentsHub(page);
@@ -37,29 +37,14 @@ test.describe("Documents hub (real ADO host)", () => {
     const frame = hubFrame(page);
     await waitForFrameRoot(frame);
 
-    // The app must leave its transient "Loading Documents…" state and settle
-    // into a terminal one: the documents reader, the empty state, or the error
-    // state. Any of those proves the SDK handshake + first data turn completed.
-    const settled = frame.locator(
-      ".markdown-body, .emr-docnav, h2:has-text('No Markdown documents found'), h2:has-text(\"Couldn't load Documents\")",
-    );
-    await expect(settled.first()).toBeVisible({ timeout: 45_000 });
-
+    // The sandbox project contains real Markdown, so the hub must discover a
+    // repo over the live Git REST API and render a document — proving the SDK
+    // handshake, repo discovery and first data turn all completed.
+    const article = frame.locator(".markdown-body").first();
+    await expect(article).toBeVisible({ timeout: 45_000 });
     await expect(
       frame.getByRole("status", { name: "Loading Documents" }),
     ).toHaveCount(0);
-  });
-
-  test("renders markdown from the live project repos", async ({ page }) => {
-    await gotoDocumentsHub(page);
-
-    const frame = hubFrame(page);
-    await waitForFrameRoot(frame);
-
-    // The sandbox repo (default `api-reference`) contains real Markdown, so the
-    // hub should discover it and render a document in the reader surface.
-    const article = frame.locator(".markdown-body").first();
-    await expect(article).toBeVisible({ timeout: 45_000 });
 
     // Sanity: the rendered article isn't an empty shell.
     await expect
@@ -68,10 +53,6 @@ test.describe("Documents hub (real ADO host)", () => {
         message: "markdown reader rendered no text",
       })
       .toBeGreaterThan(0);
-
-    // The in-hub repo selector (or a static repo label) should reflect a repo
-    // from the live project — proves discovery ran against real ADO data.
-    expect(E2E.repoA.length).toBeGreaterThan(0);
   });
 
   test("preserves an in-progress draft across a page reload", async ({
@@ -92,8 +73,7 @@ test.describe("Documents hub (real ADO host)", () => {
     await frame
       .locator(".emr-balloon.is-draft textarea.emr-textarea")
       .fill(draftText);
-    // Let the throttled localStorage write settle (leading + trailing, 500ms).
-    await page.waitForTimeout(800);
+    await waitForPersistedDraft(frame, draftText);
 
     // Reload the host page; the hub re-mounts and restores the last-visited
     // document, at which point the persisted draft re-opens against it.

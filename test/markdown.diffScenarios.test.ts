@@ -518,10 +518,10 @@ describe("paragraphs", () => {
   });
 
   it("combines a cross-host link target change with added trailing prose", () => {
-    const linkLabel = "`docs/TelemetryAnalytics/README.md`";
+    const linkLabel = "`docs/ReviewGuide/README.md`";
     const current =
       `The authoritative directory layout and file conventions are documented in [${linkLabel}]` +
-      "(https://o365exchange.visualstudio.com/O365%20Core/_git/BlackstoneRA?path=/docs/TelemetryAnalytics/README.md)" +
+      "(https://example.visualstudio.com/Example%20Project/_git/SharedDocs?path=/docs/ReviewGuide/README.md)" +
       " — now hosted in the shared repository.";
     const root = render(current);
     const result = decorate(root, [
@@ -531,7 +531,7 @@ describe("paragraphs", () => {
         kind: "modified",
         originalText:
           `The authoritative directory layout and file conventions are documented in [${linkLabel}]` +
-          "(../docs/TelemetryAnalytics/README.md).",
+          "(../docs/ReviewGuide/README.md).",
       },
     ]);
 
@@ -545,16 +545,16 @@ describe("paragraphs", () => {
     )!;
     expect(indicator.classList.contains("is-warning")).toBe(true);
     expect(indicator.previousElementSibling?.textContent).toContain(
-      "docs/TelemetryAnalytics/README.md",
+      "docs/ReviewGuide/README.md",
     );
     expect(indicator.querySelector("button")?.getAttribute("aria-label")).toBe(
       "Show link hostname change",
     );
     expect(
       indicator.querySelector(".emr-diff-metadata-target-diff")?.textContent,
-    ).toContain("TelemetryAnalytics/README.md");
+    ).toContain("ReviewGuide/README.md");
     expect(words(indicator).removed).toContain("..");
-    expect(words(indicator).added).toContain("o365exchange.visualstudio.com");
+    expect(words(indicator).added).toContain("example.visualstudio.com");
     expect(paragraph.querySelector(".emr-diff-before-trigger")).toBeNull();
   });
 
@@ -1039,6 +1039,150 @@ describe("ordered lists", () => {
     expect(words(li2).added).toContain("v4");
     expect(words(li2).removed).toContain("private");
   });
+
+  // An ordered list numbers itself, so an item whose only change is its
+  // number (because an earlier item was removed) reads exactly the same and
+  // is not shown as edited.
+  const renumbered = {
+    original: ["1. Clone the repo.", "2. Install tools.", "3. Build it."].join(
+      "\n",
+    ),
+    current: ["1. Install tools.", "2. Build it."].join("\n"),
+    range: {
+      startLine: 2,
+      endLine: 2,
+      kind: "modified" as const,
+      originalText: "3. Build it.",
+      originalStartLine: 3,
+      originalEndLine: 3,
+    },
+  };
+
+  it("does not mark a renumbered item as edited", () => {
+    const root = render(renumbered.current);
+    const res = decorate(root, [renumbered.range], renumbered.original);
+    expect(res.decorated).toBe(0);
+    expect(root.querySelector(`.${DIFF_BLOCK_CLASS}`)).toBeNull();
+  });
+
+  it("still reads a renumbered item as unchanged when it carries a comment highlight", () => {
+    const root = render(renumbered.current);
+    const item = root.querySelector('li[data-source-line="2"]')!;
+    const highlight = document.createElement("span");
+    highlight.className = "emr-highlight";
+    highlight.append(...Array.from(item.childNodes));
+    item.append(highlight);
+    const res = decorate(root, [renumbered.range], renumbered.original);
+    expect(res.decorated).toBe(0);
+  });
+
+  // The first item's number sets the numbering the whole list shows, so a
+  // changed start is a visible change even when the item text is the same.
+  it("still marks a first item whose number changes the list's start", () => {
+    const original = ["1. Install", "2. Configure"].join("\n");
+    const root = render(["3. Install", "4. Configure"].join("\n"));
+    const res = decorate(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 1,
+          kind: "modified",
+          originalText: "1. Install",
+          originalStartLine: 1,
+          originalEndLine: 1,
+        },
+      ],
+      original,
+    );
+    expect(res.decorated).toBe(1);
+    const item = root.querySelector<HTMLElement>("li")!;
+    expectPreciseAmber(item, "List numbering changed from 1 to 3");
+    expect(item.classList.contains("emr-diff-list-marker-change")).toBe(true);
+  });
+
+  it("does not mark a renumbered deeply nested item as edited", () => {
+    const original = [
+      "1. Parent",
+      "   1. Child",
+      "      1. Drop this step.",
+      "      2. Middle step.",
+      "      3. Keep this step.",
+    ].join("\n");
+    const current = [
+      "1. Parent",
+      "   1. Child",
+      "      1. Middle step.",
+      "      2. Keep this step.",
+    ].join("\n");
+    const root = render(current);
+    const res = decorate(
+      root,
+      [
+        {
+          startLine: 4,
+          endLine: 4,
+          kind: "modified",
+          originalText: "      3. Keep this step.",
+          originalStartLine: 5,
+          originalEndLine: 5,
+        },
+      ],
+      original,
+    );
+    expect(res.decorated).toBe(0);
+  });
+
+  it("word-diffs a deeply nested item against its item text, not a code block", () => {
+    const original = [
+      "1. Parent",
+      "   1. Child",
+      "      1. Run the old step.",
+    ].join("\n");
+    const current = [
+      "1. Parent",
+      "   1. Child",
+      "      1. Run the new step.",
+    ].join("\n");
+    const root = render(current);
+    decorate(
+      root,
+      [
+        {
+          startLine: 3,
+          endLine: 3,
+          kind: "modified",
+          originalText: "      1. Run the old step.",
+          originalStartLine: 3,
+          originalEndLine: 3,
+        },
+      ],
+      original,
+    );
+    const item = root.querySelector<HTMLElement>('li[data-source-line="3"]')!;
+    expect(words(item)).toEqual({ added: "new", removed: "old" });
+  });
+
+  it("still marks an item whose number is unchanged but checkbox flipped", () => {
+    const original = "1. [ ] Ship it";
+    const current = "1. [x] Ship it";
+    const root = render(current);
+    const res = decorate(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 1,
+          kind: "modified",
+          originalText: original,
+          originalStartLine: 1,
+          originalEndLine: 1,
+        },
+      ],
+      original,
+    );
+    expect(res.decorated).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1111,6 +1255,64 @@ describe("nested and mixed lists", () => {
     ).toBe(false);
     const nested = root.querySelector<HTMLElement>('li[data-source-line="3"]')!;
     expect(nested.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
+  });
+
+  // Regression (field report): when a parent item AND its nested items are
+  // all new, the parent washes only its own prose, so the nested items must
+  // decorate themselves — they used to be skipped as "already covered" and
+  // showed no highlight at all.
+  it("decorates nested items under a decorated parent item", () => {
+    const root = render(
+      [
+        "1. Keep this item.",
+        "",
+        "2. Benchmark each HVA-",
+        "",
+        "   1. Locally against the dev app perf plan.",
+        "   2. Capture latency numbers from an e2e plan.",
+      ].join("\n"),
+    );
+    const res = decorate(root, [{ startLine: 3, endLine: 6, kind: "added" }]);
+    expect(res.decorated).toBe(3);
+    for (const line of [3, 5, 6]) {
+      expect(
+        root
+          .querySelector(`li[data-source-line="${line}"]`)!
+          .classList.contains("emr-diff-block--added"),
+      ).toBe(true);
+    }
+    // The parent's own prose <p> is still covered by the parent alone.
+    expect(
+      root
+        .querySelector('li[data-source-line="3"] > p')!
+        .classList.contains(DIFF_BLOCK_CLASS),
+    ).toBe(false);
+  });
+
+  it("leaves nested items to a tight parent whose word diff already covers them", () => {
+    const original = ["- parent item old", "  - child item old"].join("\n");
+    const current = ["- parent item new", "  - child item new"].join("\n");
+    const root = render(current);
+    decorate(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 2,
+          kind: "modified",
+          originalText: original,
+          originalStartLine: 1,
+          originalEndLine: 2,
+        },
+      ],
+      original,
+    );
+    const parent = root.querySelector<HTMLElement>('li[data-source-line="1"]')!;
+    const child = root.querySelector<HTMLElement>('li[data-source-line="2"]')!;
+    expect(parent.dataset.diffInline).toBe("true");
+    expect(child.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
+    // One word diff, not two stacked on the child's text.
+    expect(child.querySelectorAll(`.${WORD_ADDED_CLASS}`).length).toBe(1);
   });
 });
 
@@ -3584,5 +3786,111 @@ describe("blockquotes", () => {
         .querySelector("h2[data-source-line='7']")
         ?.classList.contains("emr-diff-block--added"),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Source-only edits: a change that renders identically is not shown; a change
+// to anything a reader can see (attributes, block type) still is.
+// ---------------------------------------------------------------------------
+describe("identically rendered edits", () => {
+  const edit = (original: string, current: string) => {
+    const root = render(current);
+    const lines = current.split("\n").length;
+    const originalLines = original.split("\n").length;
+    const res = decorate(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: lines,
+          kind: "modified",
+          originalText: original,
+          originalStartLine: 1,
+          originalEndLine: originalLines,
+        },
+      ],
+      original,
+    );
+    return { root, res };
+  };
+
+  it("hides an emphasis-marker swap that renders the same", () => {
+    expect(
+      edit("Ship *today* please.", "Ship _today_ please.").res.decorated,
+    ).toBe(0);
+  });
+
+  it("hides re-wrapped paragraph lines", () => {
+    const { res } = edit(
+      ["One two three", "four five six."].join("\n"),
+      ["One two", "three four five six."].join("\n"),
+    );
+    expect(res.decorated).toBe(0);
+  });
+
+  it("keeps a heading that renders the same (headings carry app controls)", () => {
+    expect(edit("## Title", "Title\n-----").res.decorated).toBe(1);
+  });
+
+  it("keeps a link whose only change is its title", () => {
+    expect(
+      edit(
+        'See [docs](https://a.example "Old")',
+        'See [docs](https://a.example "New")',
+      ).res.decorated,
+    ).toBe(1);
+  });
+
+  it("keeps an image whose only change is its width", () => {
+    expect(
+      edit(
+        'Logo <img src="https://a.example/l.png" width="120"> here',
+        'Logo <img src="https://a.example/l.png" width="240"> here',
+      ).res.decorated,
+    ).toBe(1);
+  });
+});
+
+describe("nested items under a word-diffed loose parent", () => {
+  it("decorates a changed nested item next to its parent's inline word diff", () => {
+    const original = [
+      "1. Parent item says old words.",
+      "",
+      "   - Child item one.",
+    ].join("\n");
+    const current = [
+      "1. Parent item says new words.",
+      "",
+      "   - Child item uno.",
+    ].join("\n");
+    const root = render(current);
+    decorate(
+      root,
+      [
+        {
+          startLine: 1,
+          endLine: 1,
+          kind: "modified",
+          originalText: "1. Parent item says old words.",
+          originalStartLine: 1,
+          originalEndLine: 1,
+        },
+        {
+          startLine: 3,
+          endLine: 3,
+          kind: "modified",
+          originalText: "   - Child item one.",
+          originalStartLine: 3,
+          originalEndLine: 3,
+        },
+      ],
+      original,
+    );
+    const parent = root.querySelector<HTMLElement>('li[data-source-line="1"]')!;
+    const child = root.querySelector<HTMLElement>('li[data-source-line="3"]')!;
+    expect(parent.dataset.diffInline).toBe("true");
+    expect(child.dataset.diffKind).toBe("modified");
+    expect(words(child)).toEqual({ added: "uno", removed: "one" });
   });
 });

@@ -15,7 +15,8 @@
 // data-driven: it discovers a real thread id from the rendered document rather
 // than hard-coding one.
 
-import { expect, test, type FrameLocator, type Page } from "@playwright/test";
+import type { FrameLocator, Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import {
   gotoDocumentsHub,
   hubFrame,
@@ -41,14 +42,14 @@ function commentParam(page: Page): string | null {
 }
 
 test.describe("Comment deep-linking (real ADO host)", () => {
-  test("selecting a comment reflects it in the host route", async ({
+  test("selecting a comment reflects it in the host route, and that link auto-activates the thread on load", async ({
     page,
   }) => {
-    const { frame } = await openCommentableDoc(page);
+    const { repo, path, frame } = await openCommentableDoc(page);
 
     const tid = await firstRenderedThreadId(frame);
 
-    // The route starts clean — nothing is active yet.
+    // Outbound. The route starts clean — nothing is active yet.
     expect(commentParam(page)).toBeNull();
 
     // Activating the thread (clicking its highlight) must both select it in the
@@ -77,29 +78,21 @@ test.describe("Comment deep-linking (real ADO host)", () => {
         message: "active thread was not mirrored into ?comment=",
       })
       .toBe(tid);
-  });
 
-  test("a ?comment= deep link auto-activates the thread on load", async ({
-    page,
-  }) => {
-    // Discover a real thread id from a clean load of the commentable doc…
-    const { repo, path, frame: discoverFrame } = await openCommentableDoc(page);
-    const tid = await firstRenderedThreadId(discoverFrame);
-
-    // …then open the SAME document fresh with that thread deep-linked. No
+    // Inbound. Open the SAME document fresh with that thread deep-linked. No
     // clicks: the thread must activate on its own once its anchor mounts. This
     // is the regression guard for the seed-wipe bug (the deep-link seed used to
     // be cleared before the async document render finished).
     await gotoDocumentsHub(page, { repo, path, [COMMENT_PARAM]: tid });
-    const frame = hubFrame(page);
-    await waitForFrameRoot(frame);
-    await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
+    const linked = hubFrame(page);
+    await waitForFrameRoot(linked);
+    await linked.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
 
     await expect(
-      frame.locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`),
+      linked.locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`),
     ).toHaveCount(1, { timeout: 30_000 });
     await expect(
-      frame.locator(`.emr-balloon.is-active[data-thread-id="${tid}"]`),
+      linked.locator(`.emr-balloon.is-active[data-thread-id="${tid}"]`),
     ).toBeVisible({ timeout: 30_000 });
   });
 });

@@ -655,11 +655,23 @@ async function ensurePrIterations(repo, repoDir, prSpec, pr) {
     const branch = prSpec.branch;
     const head = await getBranchHead(repo.id, branch);
     if (!head) throw new Error(`Source branch ${branch} disappeared`);
-    const overlayDir = join(repoDir, "prs", spec.overlay);
     const existingPaths = await getExistingFilePaths(repo.id, branch);
-    const changes = await readDirAsChanges(overlayDir, existingPaths);
+    // An iteration may edit/add files (`overlay`), delete files
+    // (`deletePaths`), or both — e.g. a later push that removes a document.
+    const changes = spec.overlay
+      ? await readDirAsChanges(
+          join(repoDir, "prs", spec.overlay),
+          existingPaths,
+        )
+      : [];
+    const changedPaths = new Set(changes.map((change) => change.item.path));
+    changes.push(
+      ...readDeleteChanges(spec.deletePaths, existingPaths, changedPaths),
+    );
     if (changes.length === 0) {
-      throw new Error(`No overlay files under ${overlayDir}`);
+      throw new Error(
+        `No overlay files or deletePaths for iteration "${spec.title}"`,
+      );
     }
     const nextHead = await pushCommit(repo.id, `refs/heads/${branch}`, head, {
       comment: spec.title,

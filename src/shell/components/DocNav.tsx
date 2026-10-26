@@ -91,6 +91,13 @@ interface DocNavProps {
    * indicators. Defaults to `true` (PR-like) when omitted.
    */
   showChangeIndicators?: boolean;
+  /**
+   * When comparing specific PR updates: which files those updates touch (by
+   * change type) and the comparison's label. File rows then show the change
+   * within the selection, and files it doesn't touch are dimmed. Omitted for
+   * "All updates" (rows show the PR-wide change).
+   */
+  rangeChanges?: RangeChanges;
   /** Reports long-running navigation work to the reader status bar. */
   onActivitiesChange?: (activities: readonly ReaderActivity[]) => void;
 }
@@ -102,6 +109,38 @@ interface DocNavProps {
  * to `true` so any renderer used outside a Provider keeps the PR-tab behaviour.
  */
 const ChangeIndicatorContext = React.createContext<boolean>(true);
+
+/** Files a comparison of PR updates touches; see `DocNavProps.rangeChanges`. */
+export interface RangeChanges {
+  /** e.g. "Update 4 → 5". */
+  label: string;
+  /** Change type within the comparison, keyed by repo path. */
+  byPath: Readonly<Record<string, ChangeType>>;
+}
+
+/** The active `RangeChanges`, read by the nested file-row renderers. */
+const RangeChangesContext = React.createContext<RangeChanges | undefined>(
+  undefined,
+);
+
+/**
+ * How a file row presents its change: within the selected updates when a
+ * comparison is active (dimmed when untouched), else its PR-wide change.
+ */
+function fileChangeView(
+  file: FileInfo,
+  rangeChanges: RangeChanges | undefined,
+): { changeType: ChangeType; unchanged: boolean; note?: string } {
+  if (!rangeChanges) return { changeType: file.changeType, unchanged: false };
+  const inRange = rangeChanges.byPath[file.path];
+  return inRange
+    ? { changeType: inRange, unchanged: false }
+    : {
+        changeType: file.changeType,
+        unchanged: true,
+        note: `No changes in ${rangeChanges.label}`,
+      };
+}
 
 interface NavHeading {
   id: string;
@@ -151,6 +190,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     titleSlot,
     headerActions,
     showChangeIndicators = true,
+    rangeChanges,
     onActivitiesChange,
   } = props;
 
@@ -621,88 +661,90 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
 
   return (
     <ChangeIndicatorContext.Provider value={showChangeIndicators}>
-      <aside className="emr-docnav" aria-label="Document navigation">
-        <div className="emr-docnav-header">
-          {searchOpen ? (
-            <input
-              ref={searchInputRef}
-              type="search"
-              className="emr-docnav-search-inline"
-              placeholder="Find a document or folder..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  // Let the user clear with Esc without also dismissing
-                  // any global selection state.
-                  e.stopPropagation();
-                  if (searchQuery) setSearchQuery("");
-                  else setSearchOpen(false);
-                }
-              }}
-              onBlur={() => {
-                // Collapse only if the user hasn't typed anything.
-                if (!searchQuery) setSearchOpen(false);
-              }}
-              aria-label="Search documents"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          ) : (
-            (titleSlot ?? <span className="emr-docnav-title">Documents</span>)
-          )}
-          {headerActions}
-          {files.length >= 5 ||
-          (unloadedFolders?.length ?? 0) > 0 ||
-          isSearching ? (
-            <button
-              type="button"
-              className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
-              title={searchOpen ? "Close search (Esc)" : "Search documents"}
-              aria-label={searchOpen ? "Close search" : "Search documents"}
-              aria-pressed={searchOpen}
-              onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
-            >
-              {searchOpen ? <SvgX /> : <SearchIcon />}
-            </button>
-          ) : null}
-        </div>
-
-        <nav
-          className="emr-docnav-list"
-          ref={listRef as React.Ref<HTMLElement>}
-        >
-          {isSearching ? (
-            <SearchResultsList
-              results={searchResults}
-              loading={remoteLoading}
-              query={trimmedQuery}
-              unavailable={onSearchFiles ? searchUnavailable : null}
-              selectedPath={selectedPath}
-              threadCountsByPath={threadCountsByPath}
-              onSelectFile={onSelectFile}
-            />
-          ) : (
-            tree.map((node) => (
-              <NavTreeItem
-                key={navNodeKey(node)}
-                node={node}
-                depth={0}
-                activeId={activeId}
-                collapsedIds={collapsedIds}
-                collapsedDirs={collapsedDirs}
-                loadingDirs={loadingDirs}
-                selectedPath={selectedPath}
-                onSelectHeading={scrollTo}
-                onToggleHeading={toggleSection}
-                onSelectFile={onSelectFile}
-                onToggleDir={toggleDir}
-                onExpandLazyDir={expandLazyDir}
+      <RangeChangesContext.Provider value={rangeChanges}>
+        <aside className="emr-docnav" aria-label="Document navigation">
+          <div className="emr-docnav-header">
+            {searchOpen ? (
+              <input
+                ref={searchInputRef}
+                type="search"
+                className="emr-docnav-search-inline"
+                placeholder="Find a document or folder..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    // Let the user clear with Esc without also dismissing
+                    // any global selection state.
+                    e.stopPropagation();
+                    if (searchQuery) setSearchQuery("");
+                    else setSearchOpen(false);
+                  }
+                }}
+                onBlur={() => {
+                  // Collapse only if the user hasn't typed anything.
+                  if (!searchQuery) setSearchOpen(false);
+                }}
+                aria-label="Search documents"
+                autoComplete="off"
+                spellCheck={false}
               />
-            ))
-          )}
-        </nav>
-      </aside>
+            ) : (
+              (titleSlot ?? <span className="emr-docnav-title">Documents</span>)
+            )}
+            {headerActions}
+            {files.length >= 5 ||
+            (unloadedFolders?.length ?? 0) > 0 ||
+            isSearching ? (
+              <button
+                type="button"
+                className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
+                title={searchOpen ? "Close search (Esc)" : "Search documents"}
+                aria-label={searchOpen ? "Close search" : "Search documents"}
+                aria-pressed={searchOpen}
+                onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
+              >
+                {searchOpen ? <SvgX /> : <SearchIcon />}
+              </button>
+            ) : null}
+          </div>
+
+          <nav
+            className="emr-docnav-list"
+            ref={listRef as React.Ref<HTMLElement>}
+          >
+            {isSearching ? (
+              <SearchResultsList
+                results={searchResults}
+                loading={remoteLoading}
+                query={trimmedQuery}
+                unavailable={onSearchFiles ? searchUnavailable : null}
+                selectedPath={selectedPath}
+                threadCountsByPath={threadCountsByPath}
+                onSelectFile={onSelectFile}
+              />
+            ) : (
+              tree.map((node) => (
+                <NavTreeItem
+                  key={navNodeKey(node)}
+                  node={node}
+                  depth={0}
+                  activeId={activeId}
+                  collapsedIds={collapsedIds}
+                  collapsedDirs={collapsedDirs}
+                  loadingDirs={loadingDirs}
+                  selectedPath={selectedPath}
+                  onSelectHeading={scrollTo}
+                  onToggleHeading={toggleSection}
+                  onSelectFile={onSelectFile}
+                  onToggleDir={toggleDir}
+                  onExpandLazyDir={expandLazyDir}
+                />
+              ))
+            )}
+          </nav>
+        </aside>
+      </RangeChangesContext.Provider>
     </ChangeIndicatorContext.Provider>
   );
 }
@@ -1005,6 +1047,7 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
     onExpandLazyDir,
   } = props;
   const showChangeIndicators = React.useContext(ChangeIndicatorContext);
+  const change = fileChangeView(file, React.useContext(RangeChangesContext));
   // Single selection: the file row lights up only when no heading is
   // active (user is at the top of the current file). Everything else \u2014
   // "this file is loaded" \u2014 is implicit from which row carries its
@@ -1013,16 +1056,18 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
   const fileName = basename(file.path);
   const renamedFromName = file.renamedFrom ? basename(file.renamedFrom) : null;
   const titleText =
-    file.changeType === "renamed" && renamedFromName
+    (file.changeType === "renamed" && renamedFromName
       ? `${renamedFromName} \u2192 ${fileName}`
-      : file.path;
+      : file.path) + (change.note ? ` \u2014 ${change.note}` : "");
   return (
     <div className="emr-docnav-branch emr-docnav-file-branch">
       <div
         className={
-          "emr-docnav-item emr-docnav-file" + (isActive ? " is-active" : "")
+          "emr-docnav-item emr-docnav-file" +
+          (isActive ? " is-active" : "") +
+          (change.unchanged ? " is-unchanged-in-range" : "")
         }
-        data-change-type={file.changeType}
+        data-change-type={change.changeType}
         style={
           {
             ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
@@ -1039,13 +1084,16 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
         >
           {showChangeIndicators ? (
             <span
-              className={"emr-docnav-file-icon is-" + file.changeType}
+              className={"emr-docnav-file-icon is-" + change.changeType}
               aria-hidden
             >
-              {changeTypeGlyph(file.changeType)}
+              {changeTypeGlyph(change.changeType)}
             </span>
           ) : null}
           <span className="emr-docnav-file-name">{fileName}</span>
+          {change.note ? (
+            <span className="emr-sr-only">{` (${change.note})`}</span>
+          ) : null}
           {openComments > 0 ? (
             <span
               className="emr-docnav-badge is-open"
@@ -1313,6 +1361,7 @@ function SearchResultsList(props: SearchResultsListProps): React.ReactElement {
     onSelectFile,
   } = props;
   const showChangeIndicators = React.useContext(ChangeIndicatorContext);
+  const rangeChanges = React.useContext(RangeChangesContext);
   const banner = unavailable ? (
     <div
       className="emr-docnav-search-unavailable"
@@ -1355,30 +1404,35 @@ function SearchResultsList(props: SearchResultsListProps): React.ReactElement {
           .replace(/^\/+/, "")
           .replace(/\/[^/]*$/, "");
         const openComments = threadCountsByPath[file.path] ?? 0;
+        const change = fileChangeView(file, rangeChanges);
         return (
           <div
             key={`search:${file.path}`}
             className={
               "emr-docnav-item emr-docnav-search-result" +
-              (isActive ? " is-active" : "")
+              (isActive ? " is-active" : "") +
+              (change.unchanged ? " is-unchanged-in-range" : "")
             }
-            data-change-type={file.changeType}
+            data-change-type={change.changeType}
           >
             <button
               type="button"
               className="emr-docnav-label emr-docnav-search-label"
               onClick={() => onSelectFile(file.path)}
-              title={file.path}
+              title={file.path + (change.note ? ` \u2014 ${change.note}` : "")}
             >
               {showChangeIndicators ? (
                 <span
-                  className={"emr-docnav-file-icon is-" + file.changeType}
+                  className={"emr-docnav-file-icon is-" + change.changeType}
                   aria-hidden
                 >
-                  {changeTypeGlyph(file.changeType)}
+                  {changeTypeGlyph(change.changeType)}
                 </span>
               ) : null}
               <span className="emr-docnav-search-name">{fileName}</span>
+              {change.note ? (
+                <span className="emr-sr-only">{` (${change.note})`}</span>
+              ) : null}
               {/* v8 ignore start -- parent-path label only renders for nested search results */}
               {parentPath ? (
                 <span className="emr-docnav-search-path" title={parentPath}>

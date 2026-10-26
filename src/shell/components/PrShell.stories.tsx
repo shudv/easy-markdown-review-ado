@@ -14,7 +14,12 @@ import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
 import { FIXTURE_AUTHORS } from "../../comments/fixtures";
 import type { CommentThread, PrInfo } from "../../types";
 import { PrShell, type RoutedPrInfo } from "../PrShell";
+import { adoSession } from "../adoSession";
+import { SessionRefreshingError } from "../adoAuthToken";
+import { DeepLinkContext, type DeepLinkBuilder } from "../deepLink";
 import { writeReaderPrefs, DEFAULT_READER_PREFS } from "../readerPrefs";
+import { EVENT } from "../../telemetry/events";
+import { __resetTelemetryForTests } from "../../telemetry/telemetry";
 const alex = FIXTURE_AUTHORS.alex!;
 const shubhd = FIXTURE_AUTHORS.shubhd!;
 const jamie = FIXTURE_AUTHORS.jamie!;
@@ -312,6 +317,46 @@ export const ThreadEdit: Story = {
     await userEvent.click(c2u.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(within(balloon).getByText("Edited reply body")).toBeTruthy(),
+    );
+  },
+};
+
+/**
+ * A failed edit keeps the editor open with the user's text (and shows the
+ * error), instead of closing it and silently discarding the edit.
+ */
+export const ThreadEditFailureKeepsText: Story = {
+  args: { commentApi: new FailingCommentApi() },
+  play: async ({ canvasElement }) => {
+    const hl = await waitForHighlight(canvasElement, "t-active");
+    await userEvent.click(hl);
+    const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+    const c2u = within(
+      balloon.querySelector<HTMLElement>('[data-comment-id="c2"]')!,
+    );
+    await userEvent.click(c2u.getByRole("button", { name: "More options" }));
+    await userEvent.click(c2u.getByText("Edit comment"));
+    const editTa = await waitFor(
+      () => c2u.getByRole("textbox") as HTMLTextAreaElement,
+    );
+    await userEvent.clear(editTa);
+    await userEvent.type(editTa, "An edit that must survive");
+    await userEvent.click(c2u.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(within(canvasElement).getByRole("alert").textContent).toContain(
+        "didn't go through",
+      ),
+    );
+    // Still editing, with the text intact and Save available again.
+    await expect((c2u.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+      "An edit that must survive",
+    );
+    await waitFor(() =>
+      expect(
+        (c2u.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
     );
   },
 };
@@ -1309,6 +1354,7 @@ export const DeepLinkComment: Story = {
   args: {
     initialActiveThreadId: "t-active2",
   },
+  beforeEach: recordLinksOpened,
   play: async ({ canvasElement }) => {
     // The linked thread becomes active on its own (highlight + balloon).
     await waitFor(
@@ -1327,17 +1373,55 @@ export const DeepLinkComment: Story = {
         ),
       ).not.toBeNull(),
     );
+    // Recorded once, as found.
+    await expect(linksOpened).toEqual([{ target: "comment", found: true }]);
+  },
+};
+
+/**
+ * Per-document threads (the Documents hub) only cover the open file, so a
+ * snapshot without the linked thread proves nothing: the link keeps waiting,
+ * and activates when a later snapshot brings the thread.
+ */
+let perDocLoads = 0;
+export const DeepLinkCommentPerDocumentThreads: Story = {
+  args: {
+    initialThreads: [],
+    initialActiveThreadId: "t-active2",
+    threadSyncIntervalMs: 200,
+    // The initial per-file load and first poll both miss it; a later poll
+    // brings it.
+    loadThreadsForPath: async () => (++perDocLoads <= 2 ? [] : threads()),
+  },
+  beforeEach: () => {
+    perDocLoads = 0;
+    return recordLinksOpened();
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '.emr-highlight.is-active[data-thread-id="t-active2"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5000 },
+    );
+    await expect(linksOpened).toEqual([{ target: "comment", found: true }]);
   },
 };
 
 /**
  * Comment deep-link to a thread that isn't present (stale link): the shell
- * renders normally and nothing is activated — the seed simply never resolves.
+ * renders normally and nothing is activated. Once the host's threads have
+ * arrived without it, the link is recorded as not found — once.
  */
 export const DeepLinkCommentMissing: Story = {
   args: {
     initialActiveThreadId: "t-does-not-exist",
+    fetchRemoteThreads: async () => threads(),
   },
+  beforeEach: recordLinksOpened,
   play: async ({ canvasElement }) => {
     // The document still renders its real threads.
     await waitForHighlight(canvasElement, "t-active");
@@ -1345,6 +1429,42 @@ export const DeepLinkCommentMissing: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-balloon.is-active")).toBeNull(),
     );
+    await waitFor(() =>
+      expect(linksOpened).toEqual([{ target: "comment", found: false }]),
+    );
+    // Later re-renders don't report it again.
+    await userEvent.click(await waitForHighlight(canvasElement, "t-active"));
+    await settleFrames();
+    await expect(linksOpened).toHaveLength(1);
+  },
+};
+
+/**
+ * The host's threads load after the document: a linked thread that's merely
+ * not loaded YET isn't reported missing — it activates once it arrives, and
+ * is recorded once, as found.
+ */
+export const DeepLinkCommentWaitsForThreads: Story = {
+  args: {
+    initialThreads: [],
+    initialActiveThreadId: "t-active2",
+    fetchRemoteThreads: async () => {
+      await new Promise((r) => setTimeout(r, 300));
+      return threads();
+    },
+  },
+  beforeEach: recordLinksOpened,
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '.emr-highlight.is-active[data-thread-id="t-active2"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5000 },
+    );
+    await expect(linksOpened).toEqual([{ target: "comment", found: true }]);
   },
 };
 
@@ -1403,6 +1523,358 @@ export const FailingApi: Story = {
     expect(toast.textContent).toContain("didn't go through");
     await userEvent.click(canvas.getByRole("button", { name: "Dismiss" }));
     await waitFor(() => expect(canvas.queryByRole("alert")).toBeNull());
+  },
+};
+
+/**
+ * New comments and replies whose writes are held (e.g. through the ADO session
+ * refresh) until the test releases them. Other mutations behave locally.
+ */
+class HeldReplyCommentApi extends LocalOnlyCommentApi {
+  release: (() => void) | null = null;
+  override createThread(
+    input: Parameters<LocalOnlyCommentApi["createThread"]>[0],
+  ): Promise<CreatedThreadIds> {
+    return new Promise((resolve, reject) => {
+      this.release = () => {
+        super.createThread(input).then(resolve, reject);
+      };
+    });
+  }
+  override addReply(
+    threadId: string,
+    body: string,
+  ): Promise<{ commentId: string; createdAt: string }> {
+    return new Promise((resolve, reject) => {
+      this.release = () => {
+        super.addReply(threadId, body).then(resolve, reject);
+      };
+    });
+  }
+}
+const heldReplyApi = new HeldReplyCommentApi();
+
+/**
+ * While a reply is being sent, every composer's submit is disabled (no double
+ * post). If the user abandons that composer and starts a new draft, the held
+ * reply landing later must not close or wipe the new draft.
+ */
+export const HeldReplyKeepsNewerDraft: Story = {
+  args: { commentApi: heldReplyApi },
+  beforeEach: () => {
+    heldReplyApi.release = null;
+  },
+  play: async ({ canvasElement }) => {
+    const hl = await waitForHighlight(canvasElement, "t-active");
+    await userEvent.click(hl);
+    const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+    const bal = within(balloon);
+    await userEvent.click(bal.getByText("@mention or reply"));
+    await userEvent.type(
+      await waitFor(() => bal.getByRole("textbox")),
+      "Held reply",
+    );
+    await userEvent.click(bal.getByRole("button", { name: "Reply" }));
+
+    // In flight: submit is disabled so the reply can't be posted twice.
+    const sending = await waitFor(
+      () => bal.getByRole("button", { name: "Sending…" }) as HTMLButtonElement,
+    );
+    await expect(sending.disabled).toBe(true);
+
+    // The user gives up on it and starts a fresh reply.
+    await userEvent.click(bal.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(
+      await waitFor(() => bal.getByText("@mention or reply")),
+    );
+    const fresh = await waitFor(
+      () => bal.getByRole("textbox") as HTMLTextAreaElement,
+    );
+    await userEvent.type(fresh, "My next thought");
+
+    // The held reply finally lands: it shows up in the thread…
+    await waitFor(() => expect(heldReplyApi.release).not.toBeNull());
+    heldReplyApi.release!();
+    await waitFor(() =>
+      expect(
+        within(balloonFor(canvasElement, "t-active")).getByText("Held reply"),
+      ).toBeTruthy(),
+    );
+    // …and the newer draft is untouched, with submit enabled again.
+    const after = within(balloonFor(canvasElement, "t-active"));
+    await expect(
+      (after.getByRole("textbox") as HTMLTextAreaElement).value,
+    ).toBe("My next thought");
+    await waitFor(() =>
+      expect(
+        (after.getByRole("button", { name: "Reply" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+  },
+};
+
+/** The same guard for a new comment: a held post never wipes a newer draft. */
+export const HeldCommentKeepsNewerDraft: Story = {
+  args: { commentApi: heldReplyApi },
+  beforeEach: () => {
+    heldReplyApi.release = null;
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const rail = within(
+      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    );
+    await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+    const first = within(
+      await waitFor(() => balloonFor(canvasElement, "__draft__")),
+    );
+    await userEvent.type(first.getByRole("textbox"), "Held comment");
+    await userEvent.click(first.getByRole("button", { name: "Comment" }));
+    await waitFor(() =>
+      expect(first.getByRole("button", { name: "Sending…" })).toBeTruthy(),
+    );
+
+    // Abandon it and start another comment.
+    await userEvent.click(first.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+    const second = within(
+      await waitFor(() => balloonFor(canvasElement, "__draft__")),
+    );
+    await userEvent.type(second.getByRole("textbox"), "Second thought");
+
+    await waitFor(() => expect(heldReplyApi.release).not.toBeNull());
+    heldReplyApi.release!();
+    await waitFor(() =>
+      expect(within(canvasElement).getByText("Held comment")).toBeTruthy(),
+    );
+    const draftNow = within(balloonFor(canvasElement, "__draft__"));
+    await expect(
+      (draftNow.getByRole("textbox") as HTMLTextAreaElement).value,
+    ).toBe("Second thought");
+  },
+};
+
+/**
+ * Simulates the Azure DevOps reconnect window for comment writes: while
+ * `reconnecting` is set, every write is rejected exactly like the dead window
+ * and held by the real session monitor; flipping it off and signalling
+ * recovery lets the held writes go through.
+ */
+class ReconnectingCommentApi extends LocalOnlyCommentApi {
+  reconnecting = true;
+  replies: string[] = [];
+  edits: string[] = [];
+  private gate<T>(write: () => Promise<T>): Promise<T> {
+    return adoSession.holdWrite(() =>
+      this.reconnecting
+        ? Promise.reject(
+            new SessionRefreshingError("refreshing", Date.now() + 60_000),
+          )
+        : write(),
+    );
+  }
+  override addReply(
+    threadId: string,
+    body: string,
+  ): Promise<{ commentId: string; createdAt: string }> {
+    return this.gate(() => {
+      this.replies.push(body);
+      return super.addReply(threadId, body);
+    });
+  }
+  override editComment(
+    threadId: string,
+    commentId: string,
+    body: string,
+  ): Promise<{ updatedAt: string }> {
+    return this.gate(() => {
+      this.edits.push(body);
+      return super.editComment(threadId, commentId, body);
+    });
+  }
+}
+const reconnectingApi = new ReconnectingCommentApi();
+
+/**
+ * End to end through the real session monitor: a reply and an edit made while
+ * reconnecting are held (with a reassuring banner and no reload link that
+ * would drop them), then each is saved exactly once when the session returns —
+ * nothing lost, nothing duplicated.
+ */
+export const ReconnectHoldsChangesAndSavesOnce: Story = {
+  args: { commentApi: reconnectingApi },
+  beforeEach: () => {
+    reconnectingApi.reconnecting = true;
+    reconnectingApi.replies = [];
+    reconnectingApi.edits = [];
+    return () => {
+      reconnectingApi.reconnecting = false;
+      adoSession.noteSuccess(Date.now());
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const hl = await waitForHighlight(canvasElement, "t-active");
+    await userEvent.click(hl);
+    const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+    const bal = within(balloon);
+
+    // Edit an existing comment while reconnecting.
+    const c2u = within(
+      balloon.querySelector<HTMLElement>('[data-comment-id="c2"]')!,
+    );
+    await userEvent.click(c2u.getByRole("button", { name: "More options" }));
+    await userEvent.click(c2u.getByText("Edit comment"));
+    const editTa = await waitFor(
+      () => c2u.getByRole("textbox") as HTMLTextAreaElement,
+    );
+    await userEvent.clear(editTa);
+    await userEvent.type(editTa, "Edit made while reconnecting");
+    await userEvent.click(c2u.getByRole("button", { name: "Save" }));
+
+    // The banner reassures, and offers no reload that would drop the change.
+    const notice = await waitFor(() => {
+      const el = canvasElement.querySelector<HTMLElement>(".emr-toast--info");
+      if (!el) throw new Error("no reconnect notice yet");
+      return el;
+    });
+    await waitFor(() =>
+      expect(notice.textContent).toBe(
+        "Reconnecting to Azure DevOps — your changes will be saved automatically.",
+      ),
+    );
+    await expect(within(notice).queryByRole("button")).toBeNull();
+    // The editor stays open with the text while the save is held.
+    await expect((c2u.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+      "Edit made while reconnecting",
+    );
+
+    // The session comes back: the held edit is saved exactly once.
+    reconnectingApi.reconnecting = false;
+    adoSession.noteSuccess(Date.now());
+    await waitFor(() =>
+      expect(
+        within(balloon).getByText("Edit made while reconnecting"),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-toast--info")).toBeNull(),
+    );
+    await expect(reconnectingApi.edits).toEqual([
+      "Edit made while reconnecting",
+    ]);
+
+    // A reply in a second reconnect window: held, then posted exactly once.
+    reconnectingApi.reconnecting = true;
+    await userEvent.click(bal.getByText("@mention or reply"));
+    await userEvent.type(
+      await waitFor(() => bal.getByRole("textbox")),
+      "Reply made while reconnecting",
+    );
+    await userEvent.click(bal.getByRole("button", { name: "Reply" }));
+    await waitFor(() =>
+      expect(bal.getByRole("button", { name: "Sending…" })).toBeTruthy(),
+    );
+    // A second click can't post it twice.
+    await userEvent.click(bal.getByRole("button", { name: "Sending…" }));
+
+    reconnectingApi.reconnecting = false;
+    adoSession.noteSuccess(Date.now());
+    await waitFor(() =>
+      expect(bal.getAllByText("Reply made while reconnecting")).toHaveLength(1),
+    );
+    await expect(reconnectingApi.replies).toEqual([
+      "Reply made while reconnecting",
+    ]);
+    // The posted reply's composer closed; nothing is left behind.
+    await waitFor(() => expect(bal.queryByRole("textbox")).toBeNull());
+  },
+};
+
+/**
+ * A 401 while the host token is fine (what ADO returns for a genuinely
+ * unauthorized call) goes through the real session monitor, which must NOT
+ * treat it as the reconnect window: the next create attempt rejects once with
+ * the raw REST error, then succeeds.
+ */
+class PlainUnauthorizedCommentApi extends LocalOnlyCommentApi {
+  failNext = true;
+  attempts = 0;
+  saved = 0;
+  override createThread(
+    input: Parameters<LocalOnlyCommentApi["createThread"]>[0],
+  ): Promise<CreatedThreadIds> {
+    return adoSession.holdWrite(() => {
+      this.attempts += 1;
+      if (this.failNext) {
+        this.failNext = false;
+        return Promise.reject(
+          Object.assign(
+            new Error(
+              "TF400813: The user is not authorized to access this resource.",
+            ),
+            { status: 401 },
+          ),
+        );
+      }
+      return super.createThread(input).then((ids) => {
+        this.saved += 1;
+        return ids;
+      });
+    });
+  }
+}
+const plainUnauthorizedApi = new PlainUnauthorizedCommentApi();
+
+/**
+ * A plain 401 is a normal failure, never the reconnect window: an error toast
+ * (no "Reconnecting" banner, nothing held), the typed text stays, and once the
+ * call succeeds the same text is saved exactly once.
+ */
+export const PlainUnauthorizedIsNotReconnecting: Story = {
+  args: { commentApi: plainUnauthorizedApi },
+  beforeEach: () => {
+    plainUnauthorizedApi.failNext = true;
+    plainUnauthorizedApi.attempts = 0;
+    plainUnauthorizedApi.saved = 0;
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const rail = within(
+      canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
+    );
+    await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+    const draft = within(
+      await waitFor(() => balloonFor(canvasElement, "__draft__")),
+    );
+    const textarea = draft.getByRole("textbox") as HTMLTextAreaElement;
+    await userEvent.type(textarea, "Posted through a plain 401");
+    await userEvent.click(draft.getByRole("button", { name: "Comment" }));
+
+    const canvas = within(canvasElement);
+    const toast = await waitFor(() => canvas.getByRole("alert"));
+    await expect(toast.textContent).toContain("didn't go through");
+    await expect(canvasElement.querySelector(".emr-toast--info")).toBeNull();
+    await expect(adoSession.getSnapshot()).toMatchObject({
+      state: "live",
+      heldWrites: 0,
+    });
+    await expect(textarea.value).toBe("Posted through a plain 401");
+    await expect(plainUnauthorizedApi.saved).toBe(0);
+
+    // The call succeeds now: the same text is saved exactly once.
+    await userEvent.click(draft.getByRole("button", { name: "Comment" }));
+    await waitFor(() =>
+      expect(
+        canvas.getAllByText("Posted through a plain 401").length,
+      ).toBeGreaterThan(0),
+    );
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-balloon.is-draft")).toBeNull(),
+    );
+    await expect(plainUnauthorizedApi.attempts).toBe(2);
+    await expect(plainUnauthorizedApi.saved).toBe(1);
+    await expect(canvasElement.querySelector(".emr-toast--info")).toBeNull();
   },
 };
 
@@ -1614,6 +2086,607 @@ export const ReaderStatusBarControls: Story = {
   },
 };
 
+/**
+ * A PR's updates are PR-wide, so the chosen comparison carries across files:
+ * pick "Update 1 → 2", open another file, and it renders at that same update
+ * instead of snapping back to "All updates" (user feedback: reviewing a
+ * multi-file PR one update at a time meant re-picking it on every file).
+ */
+export const IterationSelectionPersistsAcrossFiles: Story = {
+  args: {
+    routedPr: ReaderStatusBarControls.args!.routedPr,
+    reviewIterationStops: ReaderStatusBarControls.args!.reviewIterationStops,
+    reviewIterationBaseCommit: "base",
+    loadFileSourceAt: async (path: string, commitId: string) =>
+      `> Snapshot ${commitId}.\n\n${SOURCES[path] ?? ""}`,
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await waitFor(() => canvas.getByRole("button", { name: "All updates" })),
+    );
+    await userEvent.click(
+      canvas.getByRole("option", { name: /2 Document accessibility review/ }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "Update 1 → 2" })).toBeTruthy(),
+    );
+
+    // Open the other file: the comparison is kept and the file renders at it.
+    const nav = within(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+    );
+    await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(".emr-rendered")?.textContent,
+        ).toContain("another document"),
+      { timeout: 5000 },
+    );
+    await expect(
+      canvas.getByRole("button", { name: "Update 1 → 2" }),
+    ).toBeTruthy();
+    // Rendered as the Update 1 → 2 comparison: update-1 → update-2.
+    await waitFor(() => {
+      expect(canvasElement.querySelector(".emr-word-added")?.textContent).toBe(
+        "2",
+      );
+      expect(
+        canvasElement.querySelector(".emr-word-removed")?.textContent,
+      ).toBe("1");
+    });
+
+    // …and back again.
+    await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
+    await waitForHighlight(canvasElement, "t-active");
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-word-added")?.textContent).toBe(
+        "2",
+      ),
+    );
+    await expect(
+      canvas.getByRole("button", { name: "Update 1 → 2" }),
+    ).toBeTruthy();
+  },
+};
+const ADDED_DOC = "/added.md";
+const DELETED_DOC = "/old.md";
+
+/** Which commits each file exists at in the update-comparison fixture. */
+const UPDATE_PRESENCE: Record<string, readonly string[]> = {
+  [A]: ["base", "update-1", "update-2"],
+  // The PR adds this file in Update 2…
+  [ADDED_DOC]: ["update-2"],
+  // …and deletes this one by Update 2.
+  [DELETED_DOC]: ["base", "update-1"],
+};
+const UPDATE_SOURCES: Record<string, string> = {
+  [A]: SOURCE_A,
+  [ADDED_DOC]: "# Added doc\n\nBrand new content.\n",
+  [DELETED_DOC]: "# Old doc\n\nRetired content.\n",
+};
+
+/**
+ * Comparing PR updates across files, a file may not exist at a selected
+ * update. Missing versions fail like ADO does (404 / TF401174), and the reader
+ * explains instead of erroring:
+ *   • newer end missing → "Not added yet at Update 1" / "Deleted by Update 2",
+ *     with "Show all updates";
+ *   • only the older end missing → the file is new in the selection, so it
+ *     renders as wholly added (no error, no word diff);
+ *   • a file the PR deletes is gone at the latest update too, even though the
+ *     live view shows its pre-deletion content.
+ */
+export const IterationFileMissingAtAnUpdate: Story = {
+  args: {
+    pr: {
+      ...PR,
+      files: [
+        { path: A, changeType: "modified", linesAdded: 3, linesDeleted: 1 },
+        {
+          path: ADDED_DOC,
+          changeType: "added",
+          linesAdded: 3,
+          linesDeleted: 0,
+        },
+        {
+          path: DELETED_DOC,
+          changeType: "deleted",
+          linesAdded: 0,
+          linesDeleted: 3,
+        },
+      ],
+    },
+    loadFileSource: async (path: string) => UPDATE_SOURCES[path]!,
+    routedPr: ReaderStatusBarControls.args!.routedPr,
+    reviewIterationStops: ReaderStatusBarControls.args!.reviewIterationStops,
+    reviewIterationBaseCommit: "base",
+    loadFileSourceAt: async (path: string, commitId: string) => {
+      if (!UPDATE_PRESENCE[path]!.includes(commitId)) {
+        throw Object.assign(
+          new Error(
+            `TF401174: The item '${path}' could not be found at ${commitId}.`,
+          ),
+          { status: 404 },
+        );
+      }
+      return UPDATE_SOURCES[path]!;
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    const nav = within(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+    );
+    const pickUpdate = async (current: string, option: RegExp) => {
+      // Choosing an update leaves the picker open; only open it if closed.
+      if (!canvasElement.querySelector(".emr-statusbar-iteration.is-open")) {
+        await userEvent.click(canvas.getByRole("button", { name: current }));
+      }
+      await userEvent.click(canvas.getByRole("option", { name: option }));
+    };
+    const notice = () =>
+      canvasElement.querySelector<HTMLElement>(".emr-update-absent");
+
+    // Update 1 → 2 on the file the PR adds in Update 2: it doesn't exist at
+    // the older end, so it's new in this selection — renders, no error.
+    await pickUpdate("All updates", /^2 Document accessibility review/);
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "Update 1 → 2" })).toBeTruthy(),
+    );
+    await userEvent.click(nav.getByRole("button", { name: /added\.md/ }));
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).toContain("Brand new content."),
+    );
+    await expect(notice()).toBeNull();
+    await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+    await expect(canvasElement.querySelector(".emr-word-added")).toBeNull();
+
+    // Base → Update 1: it doesn't exist yet at the newer end either.
+    await pickUpdate("Update 1 → 2", /^1 Define review goals/);
+    await waitFor(() =>
+      expect(notice()?.textContent).toContain("Not added yet at Update 1"),
+    );
+    await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+
+    // The file the PR deletes by Update 2 is still there at Update 1…
+    await userEvent.click(nav.getByRole("button", { name: /old\.md/ }));
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).toContain("Retired content."),
+    );
+    // …but not at Update 2…
+    await pickUpdate("Base → Update 1", /^2 Document accessibility review/);
+    await waitFor(() =>
+      expect(notice()?.textContent).toContain("Deleted by Update 2"),
+    );
+    // …nor at the latest update (the live view's pre-deletion copy is not it).
+    await pickUpdate("Update 1 → 2", /^3 Finalize review workflow/);
+    await waitFor(() =>
+      expect(notice()?.textContent).toContain("Deleted by Update 3"),
+    );
+    // "Show all updates" returns to the PR-wide view, which shows the file.
+    await userEvent.click(
+      within(notice()!).getByRole("button", { name: "Show all updates" }),
+    );
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).toContain("Retired content."),
+    );
+    await expect(notice()).toBeNull();
+  },
+};
+// ---------------- comparing earlier PR updates: links, file list, comments ----
+
+/** The latest a.md with inline formatting mid-sentence: a selection across it
+ *  ("the rendered preview") never occurs verbatim in the raw Markdown, so only
+ *  re-locating in the RENDERED latest version can find its line. */
+const FORMATTED_A = SOURCE_A.replace(
+  "on the rendered preview",
+  "on the **rendered** preview",
+);
+
+/** Update 1's version of a.md: an extra section (removed by the latest update)
+ *  pushes every later line down. */
+const EARLIER_A = `## Early draft\n\n> Draft note removed later.\n\n${FORMATTED_A}`;
+
+/** The 3-update PR used by these stories (Update 1 = "update-1"). */
+const COMPARISON_ARGS = {
+  routedPr: ReaderStatusBarControls.args!.routedPr,
+  reviewIterationStops: ReaderStatusBarControls.args!.reviewIterationStops,
+  reviewIterationBaseCommit: "base",
+  loadFileSource: async (path: string) =>
+    path === A ? FORMATTED_A : makeLoad()(path),
+  loadFileSourceAt: async (path: string, commitId: string) =>
+    path === A
+      ? commitId === "update-1"
+        ? EARLIER_A
+        : FORMATTED_A
+      : (SOURCES[path] ?? ""),
+};
+
+/**
+ * Select `phrase` in the rendered article (across inline elements; never in
+ * reference panels) and fire the mouseup the reader listens for.
+ */
+async function selectPhrase(canvasElement: HTMLElement, phrase: string) {
+  const { runs, start } = await waitFor(() => {
+    const article = canvasElement.querySelector<HTMLElement>(
+      ".emr-article-wrap > .emr-rendered",
+    )!;
+    const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
+    const found: { node: Text; from: number }[] = [];
+    let text = "";
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      found.push({ node: n as Text, from: text.length });
+      text += (n as Text).data;
+    }
+    const at = text.indexOf(phrase);
+    if (at < 0) throw new Error(`"${phrase}" not rendered yet`);
+    return { runs: found, start: at };
+  });
+  const locate = (offset: number) => {
+    const run = [...runs]
+      .reverse()
+      .find((r) => r.from <= offset && offset <= r.from + r.node.data.length)!;
+    return { node: run.node, offset: offset - run.from };
+  };
+  const from = locate(start);
+  const to = locate(start + phrase.length);
+  const range = document.createRange();
+  range.setStart(from.node, from.offset);
+  range.setEnd(to.node, to.offset);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  from.node.parentElement!.dispatchEvent(
+    new MouseEvent("mouseup", { bubbles: true }),
+  );
+}
+/** Records every new thread so a story can check where it was anchored. */
+class RecordingCommentApi extends LocalOnlyCommentApi {
+  created: Parameters<LocalOnlyCommentApi["createThread"]>[0][] = [];
+  override async createThread(
+    input: Parameters<LocalOnlyCommentApi["createThread"]>[0],
+  ): Promise<CreatedThreadIds> {
+    this.created.push(input);
+    return super.createThread(input);
+  }
+}
+const recordingApi = new RecordingCommentApi();
+
+/**
+ * Comparing up to an EARLIER update is no longer read-only. Text that still
+ * exists in the latest version can be commented on, and the comment is
+ * anchored against the LATEST version (its line, not the earlier one's), so
+ * ADO places it correctly. Text that changed later can't host a comment: the
+ * selection bubble explains why and offers to compare up to the latest update.
+ */
+export const CommentOnEarlierUpdate: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    commentApi: recordingApi,
+    initialIterationRange: { fromUpdate: 0, toUpdate: 1 },
+  },
+  beforeEach: () => {
+    recordingApi.created = [];
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Opened at Base → Update 1 (the earlier version is shown)…
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Base → Update 1" }),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).toContain("Draft note removed later."),
+    );
+    // …and it isn't read-only any more.
+    await expect(
+      canvasElement.querySelector(".emr-rail-readonly-banner"),
+    ).toBeNull();
+
+    // Text that's still in the latest version: comment as usual.
+    await selectPhrase(canvasElement, "the rendered preview");
+    const add = await waitFor(() =>
+      canvas.getByRole("button", { name: /add comment/i }),
+    );
+    add.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    add.click();
+    const draft = within(
+      await waitFor(() => balloonFor(canvasElement, "__draft__")),
+    );
+    await userEvent.type(draft.getByRole("textbox"), "Still true later.");
+    await userEvent.click(draft.getByRole("button", { name: "Comment" }));
+    await waitFor(() => expect(recordingApi.created).toHaveLength(1));
+    // Line 5 in the latest version (it's line 9 in Update 1).
+    await expect(recordingApi.created[0]!.anchor).toMatchObject({
+      exact: "the rendered preview",
+      line: 5,
+    });
+
+    // Text the latest update removed: explained, no composer.
+    await selectPhrase(canvasElement, "Draft note removed");
+    const bubble = await waitFor(() => {
+      const el = canvasElement.querySelector<HTMLElement>(
+        ".emr-selection-bubble.is-blocked",
+      );
+      if (!el) throw new Error("no explained bubble yet");
+      return el;
+    });
+    await expect(bubble.textContent).toContain(
+      "This text changed in a later update",
+    );
+    await expect(
+      within(bubble).queryByRole("button", { name: /add comment/i }),
+    ).toBeNull();
+    // The way forward: compare up to the latest update (same start point).
+    const compare = within(bubble).getByRole("button", {
+      name: "Compare up to Update 3",
+    });
+    compare.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    compare.click();
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy(),
+    );
+    await expect(
+      canvasElement.querySelector(".emr-selection-bubble"),
+    ).toBeNull();
+    await expect(recordingApi.created).toHaveLength(1);
+  },
+};
+
+/**
+ * A comment started while comparing an earlier update and posted after
+ * switching to "All updates" still lands on its line in the LATEST version —
+ * the draft carries latest-version coordinates from the moment it's opened,
+ * not whatever comparison happens to be shown when it's posted.
+ */
+export const CommentDraftSurvivesComparisonSwitch: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    commentApi: recordingApi,
+    initialIterationRange: { fromUpdate: 0, toUpdate: 1 },
+  },
+  beforeEach: () => {
+    recordingApi.created = [];
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).toContain("Draft note removed later."),
+    );
+    await selectPhrase(canvasElement, "the rendered preview");
+    const add = await waitFor(() =>
+      canvas.getByRole("button", { name: /add comment/i }),
+    );
+    add.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    add.click();
+    await userEvent.type(
+      within(
+        await waitFor(() => balloonFor(canvasElement, "__draft__")),
+      ).getByRole("textbox"),
+      "Still true later.",
+    );
+
+    // Switch to All updates with the draft still open, then post it.
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Base → Update 1" }),
+    );
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered")?.textContent,
+      ).not.toContain("Draft note removed later."),
+    );
+    await userEvent.click(
+      within(balloonFor(canvasElement, "__draft__")!).getByRole("button", {
+        name: "Comment",
+      }),
+    );
+    await waitFor(() => expect(recordingApi.created).toHaveLength(1));
+    await expect(recordingApi.created[0]!.anchor).toMatchObject({
+      exact: "the rendered preview",
+      line: 5,
+    });
+  },
+};
+
+/**
+ * Links carry the compared updates: a comparison passed in (from a link's
+ * `iteration`/`base`) opens the picker there instead of "All updates", and
+ * every change is reported up so the host can mirror it into the address bar
+ * and copied links (`null` = All updates). A heading in the link is scrolled
+ * to once the EARLIER version (which loads after the latest) has rendered —
+ * here a heading only that version has.
+ */
+export const IterationLinkRoundTrip: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    // As on the real host, the earlier versions arrive after the latest — the
+    // comparison's baseline last of all.
+    loadFileSourceAt: async (path: string, commitId: string) => {
+      await new Promise((r) => setTimeout(r, commitId === "base" ? 300 : 150));
+      return COMPARISON_ARGS.loadFileSourceAt(path, commitId);
+    },
+    initialIterationRange: { fromUpdate: 0, toUpdate: 1 },
+    initialAnchor: "early-draft",
+    onIterationRangeChange: fn(),
+  },
+  beforeEach: recordAnchorCue,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Base → Update 1" }),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+        fromUpdate: 0,
+        toUpdate: 1,
+      }),
+    );
+    // The linked heading (only Update 1 has it) landed in the version shown.
+    await waitFor(() => expect(anchorCueSeen).toBe(true), { timeout: 5000 });
+
+    // Back to All updates → reported as null (links leave it out).
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Base → Update 1" }),
+    );
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    await waitFor(() =>
+      expect(args.onIterationRangeChange).toHaveBeenLastCalledWith(null),
+    );
+    // Selecting the same comparison again doesn't re-report it.
+    const calls = (args.onIterationRangeChange as ReturnType<typeof fn>).mock
+      .calls.length;
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    await new Promise((r) => setTimeout(r, 100));
+    await expect(
+      (args.onIterationRangeChange as ReturnType<typeof fn>).mock.calls.length,
+    ).toBe(calls);
+  },
+};
+
+/**
+ * Comparing specific updates, the file list marks the files those updates
+ * touch and dims the rest (loaded via `loadRangeChanges`, cached per
+ * comparison). "All updates" shows the PR-wide indicators again.
+ */
+export const RangeChangesDimUntouchedFiles: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    loadRangeChanges: fn(async () => ({ [A]: "modified" as const })),
+  },
+  play: async ({ args, canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    const nav = within(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+    );
+    const rowOf = (name: RegExp) =>
+      nav
+        .getByRole("button", { name })
+        .closest<HTMLElement>(".emr-docnav-item")!;
+    // All updates: nothing dimmed, no range lookup.
+    await expect(rowOf(/notes\.md/).classList).not.toContain(
+      "is-unchanged-in-range",
+    );
+    await expect(args.loadRangeChanges).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    await userEvent.click(
+      canvas.getByRole("option", { name: /^2 Document accessibility review/ }),
+    );
+    await waitFor(() =>
+      expect(rowOf(/notes\.md/).classList).toContain("is-unchanged-in-range"),
+    );
+    await expect(rowOf(/a\.md/).classList).not.toContain(
+      "is-unchanged-in-range",
+    );
+    await expect(args.loadRangeChanges).toHaveBeenCalledWith({
+      fromUpdate: 1,
+      toUpdate: 2,
+    });
+    await expect(rowOf(/notes\.md/).querySelector("button")!.title).toContain(
+      "No changes in Update 1 → 2",
+    );
+
+    // Cached: re-selecting the same comparison doesn't fetch again.
+    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+    await waitFor(() =>
+      expect(rowOf(/notes\.md/).classList).not.toContain(
+        "is-unchanged-in-range",
+      ),
+    );
+    await userEvent.click(
+      canvas.getByRole("option", { name: /^2 Document accessibility review/ }),
+    );
+    await waitFor(() =>
+      expect(rowOf(/notes\.md/).classList).toContain("is-unchanged-in-range"),
+    );
+    await expect(args.loadRangeChanges).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** A failed range lookup keeps the PR-wide indicators (nothing dimmed). */
+export const RangeChangesLoadFailure: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    loadRangeChanges: fn(async () => {
+      throw new Error("iteration changes unavailable");
+    }),
+  },
+  play: async ({ args, canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+    await userEvent.click(
+      canvas.getByRole("option", { name: /^2 Document accessibility review/ }),
+    );
+    await waitFor(() => expect(args.loadRangeChanges).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 100));
+    await expect(
+      canvasElement.querySelector(".is-unchanged-in-range"),
+    ).toBeNull();
+  },
+};
+
+/** Re-renders PrShell with one more PR update on `emr-story-push`. */
+function NewPushHarness(
+  props: React.ComponentProps<typeof PrShell>,
+): React.ReactElement {
+  const [stops, setStops] = React.useState<
+    NonNullable<typeof props.reviewIterationStops>
+  >(props.reviewIterationStops!.slice(1));
+  React.useEffect(() => {
+    const onPush = () => setStops(props.reviewIterationStops!);
+    window.addEventListener("emr-story-push", onPush);
+    return () => window.removeEventListener("emr-story-push", onPush);
+  }, [props.reviewIterationStops]);
+  return <PrShell {...props} reviewIterationStops={stops} />;
+}
+
+/**
+ * The chosen comparison survives file switches, but a new push (the set of
+ * updates changes) resets it to All updates — update numbers have shifted.
+ */
+export const NewPushResetsComparison: Story = {
+  args: { ...COMPARISON_ARGS },
+  render: (args) => <NewPushHarness {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await waitFor(() => canvas.getByRole("button", { name: "All updates" })),
+    );
+    await userEvent.click(canvas.getByRole("option", { name: /^1 / }));
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("button", { name: "Base → Update 1" }),
+      ).toBeTruthy(),
+    );
+    window.dispatchEvent(new Event("emr-story-push"));
+    await waitFor(() =>
+      expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy(),
+    );
+  },
+};
 /** Documents keeps card gutters when both side panes are collapsed. */
 export const DocumentsCollapsedGutters: Story = {
   args: {
@@ -2977,10 +4050,25 @@ export const DocLinksRouted: Story = {
 
     // External link: not intercepted (handleDocLink returns false).
     await userEvent.click(body.getByRole("link", { name: "external" }));
-    // In-page anchor: scroll to the heading (non-empty hash).
+    // In-page anchor: scroll to the heading (non-empty hash) and move focus to
+    // it, as native fragment navigation does.
     await userEvent.click(
       body.getByRole("link", { name: "jump to notes heading" }),
     );
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement | null)?.id).toBe("notes"),
+    );
+    // Following it again reuses the heading's (now focusable) tabindex.
+    await userEvent.click(
+      body.getByRole("link", { name: "jump to notes heading" }),
+    );
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement | null)?.id).toBe("notes"),
+    );
+    await expect(
+      canvasElement.querySelector<HTMLElement>(".emr-rendered #notes")!
+        .tabIndex,
+    ).toBe(-1);
     // Same-doc link, no fragment: scroll with an empty hash.
     await userEvent.click(body.getByRole("link", { name: "self" }));
     // Non-Markdown file: routed to ADO's native Files view.
@@ -3029,11 +4117,898 @@ export const DocLinksSelectInPlace: Story = {
     );
     await articleBody(canvasElement, "Sibling body text");
     expect(args.onSelectPath).toHaveBeenCalledWith(SIBLING_DOC);
+    // Once the sibling renders, focus moves to the linked heading.
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement | null)?.id).toBe("notes"),
+    );
 
     // Plain link back (no fragment) → select with a null pending hash.
     body = within(canvasElement.querySelector<HTMLElement>(".markdown-body")!);
     await userEvent.click(body.getByRole("link", { name: "back to links" }));
     await articleBody(canvasElement, "Anchor target heading text");
     expect(args.onSelectPath).toHaveBeenCalledWith(LINKS_DOC);
+  },
+};
+
+// ---------------- shareable heading links + `?anchor=` deep links ----------------
+
+const GLOSSARY = "/docs/glossary.md";
+
+// Long enough that the linked heading starts well below the fold, with the
+// target nested inside a (pre-collapsed) parent section — the case a deep link
+// must unfold before it can land.
+const SOURCE_GLOSSARY = [
+  "# Glossary",
+  "",
+  "Shared vocabulary for the data-semantics instructions.",
+  "",
+  "## Overview",
+  "",
+  ...Array.from({ length: 24 }, (_, i) => [
+    `Overview paragraph ${i + 1} sets context before the terms section.`,
+    "",
+  ]).flat(),
+  "## Terms",
+  "",
+  "### Classifiers & Hashing",
+  "",
+  "Classifier body text that the deep link should reveal.",
+  "",
+  "### Retention",
+  "",
+  "Retention body text.",
+  "",
+  // Trailing content so the reader can scroll the target to the very top.
+  "## Appendix",
+  "",
+  ...Array.from({ length: 24 }, (_, i) => [
+    `Appendix paragraph ${i + 1} keeps the document scrollable.`,
+    "",
+  ]).flat(),
+].join("\n");
+
+const PR_GLOSSARY: PrInfo = {
+  prId: 5807430,
+  title: "Data semantics instructions",
+  authorName: shubhd.displayName,
+  files: [
+    { path: A, changeType: "modified", linesAdded: 2, linesDeleted: 0 },
+    { path: GLOSSARY, changeType: "modified", linesAdded: 30, linesDeleted: 0 },
+  ],
+};
+
+function makeGlossaryLoad(): (path: string) => Promise<string> {
+  const map: Record<string, string> = {
+    [A]: SOURCE_A,
+    [GLOSSARY]: SOURCE_GLOSSARY,
+  };
+  return async (path: string) => {
+    const src = map[path];
+    if (src == null) throw new Error(`No source for ${path}`);
+    return src;
+  };
+}
+
+/** Collapse the glossary's "Terms" section, as a reader's saved state would. */
+function collapseTermsSection(): () => void {
+  const key = `emr.section.${GLOSSARY}.terms`;
+  sessionStorage.setItem(key, "1");
+  return () => sessionStorage.removeItem(key);
+}
+
+/** The reader's scroll container (`.emr-body`) for `canvasElement`. */
+function readerScroller(canvasElement: HTMLElement): HTMLElement {
+  return canvasElement.querySelector<HTMLElement>(".emr-body")!;
+}
+
+/** Distance from the scroller's top edge to `el`'s top edge, in px. */
+function offsetInScroller(scroller: HTMLElement, el: HTMLElement): number {
+  return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+}
+
+/**
+ * `?anchor=` deep link, as the PR tab passes it: the seeded document opens,
+ * the collapsed parent section unfolds, and the heading is scrolled to the top
+ * of the reader with a brief landing cue. The anchor uses ADO's own preview
+ * slug style (`classifiers-&-hashing`), which must resolve onto ours
+ * (`classifiers-hashing`) so links copied from ADO's preview also work.
+ */
+export const DeepLinkHeading: Story = {
+  args: {
+    pr: PR_GLOSSARY,
+    loadFileSource: makeGlossaryLoad(),
+    initialThreads: [],
+    initialSelectedPath: GLOSSARY,
+    initialAnchor: "classifiers-&-hashing",
+  },
+  beforeEach: collapseTermsSection,
+  play: async ({ canvasElement }) => {
+    const heading = await waitFor(
+      () => {
+        const h = canvasElement.querySelector<HTMLElement>(
+          ".emr-rendered #classifiers-hashing",
+        );
+        if (!h) throw new Error("heading not rendered");
+        return h;
+      },
+      { timeout: 5000 },
+    );
+    // The collapsed parent is unfolded (and its chevron agrees).
+    const terms = canvasElement.querySelector<HTMLElement>(
+      '.emr-section[data-section-id="terms"]',
+    )!;
+    await waitFor(() =>
+      expect(terms.hasAttribute("data-collapsed")).toBe(false),
+    );
+    await expect(
+      terms
+        .querySelector(":scope > h2 > .emr-section-toggle")!
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    await expect(
+      within(canvasElement).getByText(
+        "Classifier body text that the deep link should reveal.",
+      ),
+    ).toBeVisible();
+    // The landing cue plays on the heading's TEXT…
+    const cueOf = (h: HTMLElement) =>
+      h.querySelector<HTMLElement>(":scope > .emr-anchor-target");
+    const cue = await waitFor(() => {
+      const el = cueOf(heading);
+      if (!el) throw new Error("no landing cue yet");
+      return el;
+    });
+    const landedAt = performance.now();
+    // …hugging the words like a comment highlight (an inline box around the
+    // text), not the heading's full block width…
+    await expect(cue.textContent).toBe("Classifiers & Hashing");
+    await expect(getComputedStyle(cue).display).toBe("inline");
+    await expect(cue.getBoundingClientRect().width).toBeLessThan(
+      heading.getBoundingClientRect().width,
+    );
+    // …using the very same animation as a comment link's landing cue…
+    await expect(getComputedStyle(cue).animationName).toBe("emr-anchor-land");
+    // …without stealing keyboard focus from the host page.
+    await expect(document.activeElement).not.toBe(heading);
+    // …and the heading is scrolled to the top of the reader.
+    const scroller = readerScroller(canvasElement);
+    await waitFor(
+      () => {
+        expect(scroller.scrollTop).toBeGreaterThan(0);
+        const offset = offsetInScroller(scroller, heading);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThan(120);
+      },
+      { timeout: 2500 },
+    );
+
+    // Late content landing above the heading must not push it off-screen. A
+    // re-wrap (threads/diffs arriving) replaces the article's DOM wholesale
+    // from pristine HTML, which defeats the browser's own scroll anchoring and
+    // drops the cue — the hold re-aligns, and the cue carries on.
+    // The hold lasts 5s and the cue 2.5s from landing; fail loudly rather
+    // than misleadingly if a slow runner has already spent that budget.
+    if (performance.now() - landedAt > 2000) {
+      throw new Error("setup exceeded the 2.5s landing-cue budget");
+    }
+    const before = scroller.scrollTop;
+    const article = canvasElement.querySelector<HTMLElement>(".emr-rendered")!;
+    const pristine = article.cloneNode(true) as HTMLElement;
+    pristine
+      .querySelectorAll("[data-emr-anchor-cue]")
+      .forEach((el) => el.replaceWith(...el.childNodes));
+    article.innerHTML = `<div style="height: 400px"></div>${pristine.innerHTML}`;
+    const relaid = article.querySelector<HTMLElement>("#classifiers-hashing")!;
+    // The landing cue survives the rebuild, continuing its fade.
+    const relaidCue = await waitFor(() => {
+      const el = cueOf(relaid);
+      if (!el) throw new Error("cue not carried over to the rebuilt heading");
+      return el;
+    });
+    await expect(relaidCue.style.animationDelay).toMatch(/^-\d+ms$/);
+    await waitFor(
+      () => {
+        expect(scroller.scrollTop).toBeGreaterThan(before + 300);
+        const offset = offsetInScroller(scroller, relaid);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThan(120);
+      },
+      { timeout: 2000 },
+    );
+    // …and then fades out completely, leaving the heading as it was.
+    await waitFor(() => expect(cueOf(relaid)).toBeNull(), { timeout: 3000 });
+    await expect(relaid.querySelector("[data-emr-anchor-cue]")).toBeNull();
+  },
+};
+
+// Records whether the anchor landing cue is EVER applied while a story runs.
+// Installed in `beforeEach` (before render), so a negative check can't pass
+// just because the cue came and went outside a fixed observation window.
+let anchorCueSeen = false;
+function recordAnchorCue(): () => void {
+  anchorCueSeen = false;
+  const observer = new MutationObserver(() => {
+    if (document.querySelector(".emr-anchor-target")) anchorCueSeen = true;
+  });
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  return () => observer.disconnect();
+}
+/** Let pending effects + their requestAnimationFrame callbacks run. */
+async function settleFrames(): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+}
+
+// The `link.opened` telemetry a story emits (installed in `beforeEach`).
+let linksOpened: Array<Record<string, unknown> | undefined> = [];
+function recordLinksOpened(): () => void {
+  linksOpened = [];
+  __resetTelemetryForTests({
+    name: "story",
+    init: () => undefined,
+    setContext: () => undefined,
+    trackEvent: (event) => {
+      if (event.name === EVENT.LinkOpened) linksOpened.push(event.properties);
+    },
+    trackException: () => undefined,
+    flush: () => undefined,
+  });
+  return () => __resetTelemetryForTests();
+}
+
+/**
+ * A stale `?anchor=` (the heading was renamed in a later push) still opens the
+ * document — at the top, with nothing flagged — rather than failing.
+ */
+export const DeepLinkHeadingMissing: Story = {
+  args: {
+    pr: PR_GLOSSARY,
+    loadFileSource: makeGlossaryLoad(),
+    initialThreads: [],
+    initialSelectedPath: GLOSSARY,
+    initialAnchor: "renamed-heading",
+  },
+  beforeEach: recordAnchorCue,
+  play: async ({ canvasElement }) => {
+    await articleBody(canvasElement, "Retention body text");
+    await settleFrames();
+    await expect(anchorCueSeen).toBe(false);
+    await expect(readerScroller(canvasElement).scrollTop).toBe(0);
+  },
+};
+
+/**
+ * A link carrying both `?comment=` and `?anchor=` lands on the comment: the
+ * thread activates and the heading is never separately scrolled to/flagged
+ * (its scroll would fight the thread's centring scroll).
+ */
+export const DeepLinkCommentBeatsHeading: Story = {
+  args: {
+    initialActiveThreadId: "t-active2",
+    initialAnchor: "notes",
+  },
+  beforeEach: recordAnchorCue,
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            '.emr-highlight.is-active[data-thread-id="t-active2"]',
+          ),
+        ).not.toBeNull(),
+      { timeout: 5000 },
+    );
+    await settleFrames();
+    await expect(anchorCueSeen).toBe(false);
+  },
+};
+
+// Gate for the linked document's load, so the file switch below is
+// deterministically ordered BEFORE that document renders.
+let releaseLinkedDoc: () => void = () => {};
+
+/**
+ * Opening another file before a deep-linked heading resolves drops the
+ * pending anchor — it named a heading in the *original* document, so it must
+ * not land on a same-named heading in the one the reader switched to, nor
+ * fire when the original document's load finally settles.
+ */
+export const DeepLinkHeadingDroppedOnFileSwitch: Story = {
+  args: {
+    initialSelectedPath: B,
+    initialAnchor: "notes",
+    loadFileSource: async (path: string) => {
+      if (path === B) {
+        await new Promise<void>((r) => (releaseLinkedDoc = r));
+      }
+      return makeLoad()(path);
+    },
+  },
+  beforeEach: recordAnchorCue,
+  play: async ({ canvasElement }) => {
+    const nav = within(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+    );
+    await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
+    await waitForHighlight(canvasElement, "t-active");
+    // a.md also has a "Notes" heading; the stale anchor must not land on it…
+    await settleFrames();
+    // …nor on notes.md's own heading once its load settles after the switch.
+    releaseLinkedDoc();
+    await settleFrames();
+    await expect(anchorCueSeen).toBe(false);
+  },
+};
+
+// --- Missing documents ------------------------------------------------------
+// A remembered or linked path that was renamed/deleted since. ADO answers the
+// load with TF401174 (HTTP 404).
+const GONE = "/renamed-away.md";
+function itemNotFound(path: string): Error {
+  return Object.assign(
+    new Error(
+      `TF401174: The item '${path}' could not be found in the repository 'docs' at the version specified by '<Branch: main >' (resolved to commit 'abc').`,
+    ),
+    { status: 404 },
+  );
+}
+function loadWithGone(): (path: string) => Promise<string> {
+  const load = makeLoad();
+  return async (path) => {
+    if (path === GONE) throw itemNotFound(path);
+    return load(path);
+  };
+}
+
+// The `app.exception` operations a story reports (installed in `beforeEach`).
+let reportedOperations: unknown[] = [];
+function recordExceptions(): () => void {
+  reportedOperations = [];
+  __resetTelemetryForTests({
+    name: "story",
+    init: () => undefined,
+    setContext: () => undefined,
+    trackEvent: () => undefined,
+    trackException: (info) => {
+      reportedOperations.push(info.properties?.operation);
+    },
+    flush: () => undefined,
+  });
+  return () => __resetTelemetryForTests();
+}
+
+const MISSING_DOC_HUB_ARGS = {
+  draftScope: "hub" as const,
+  documentsMode: true,
+  initialThreads: [],
+  initialSelectedPath: GONE,
+  loadFileSource: loadWithGone(),
+};
+
+/**
+ * Documents hub: the remembered/linked document no longer exists. The reader
+ * opens the repo's first document instead (reporting it up so the route and
+ * the remembered path move on), says what happened, and doesn't count it as a
+ * failure. The notice can be dismissed.
+ */
+export const DocumentsMissingDocFallsBack: Story = {
+  args: { ...MISSING_DOC_HUB_ARGS, onSelectPath: fn() },
+  beforeEach: recordExceptions,
+  play: async ({ args, canvasElement }) => {
+    await articleBody(canvasElement, "Word-doc-style review");
+    const canvas = within(canvasElement);
+    const notice = await waitFor(() =>
+      canvas.getByText(/is no longer in this repository/),
+    );
+    await expect(notice.textContent).toContain(GONE);
+    await expect(notice.textContent).toContain(`Showing ${A} instead.`);
+    await expect(args.onSelectPath).toHaveBeenCalledWith(A);
+    await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+    await expect(reportedOperations).not.toContain("document-load");
+
+    await userEvent.click(canvas.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() =>
+      expect(canvas.queryByText(/is no longer in this repository/)).toBeNull(),
+    );
+  },
+};
+
+/** Opening another document clears the "no longer in this repository" notice. */
+export const DocumentsMissingDocNoticeClearsOnNavigate: Story = {
+  args: MISSING_DOC_HUB_ARGS,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => canvas.getByText(/is no longer in this repository/));
+    const nav = within(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+    );
+    await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
+    await articleBody(canvasElement, "Just another document");
+    await expect(
+      canvas.queryByText(/is no longer in this repository/),
+    ).toBeNull();
+  },
+};
+
+/**
+ * Documents hub with nothing else to show: the missing document keeps the
+ * "couldn't open" page, but it's still an expected state — not reported.
+ */
+export const DocumentsMissingOnlyDoc: Story = {
+  args: {
+    ...MISSING_DOC_HUB_ARGS,
+    pr: {
+      ...PR,
+      files: [
+        { path: GONE, changeType: "modified", linesAdded: 1, linesDeleted: 1 },
+      ],
+    },
+  },
+  beforeEach: recordExceptions,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => canvas.getByText(/Couldn.t open this document/));
+    await expect(reportedOperations).not.toContain("document-load");
+  },
+};
+
+/**
+ * Documents hub whose fallback document is missing too: the reader falls back
+ * once and then stops on the "couldn't open" page instead of bouncing between
+ * the two missing documents.
+ */
+export const DocumentsMissingFallbackAlsoMissing: Story = {
+  args: {
+    ...MISSING_DOC_HUB_ARGS,
+    pr: {
+      ...PR,
+      files: [
+        { path: GONE, changeType: "modified", linesAdded: 1, linesDeleted: 1 },
+        { path: A, changeType: "modified", linesAdded: 1, linesDeleted: 1 },
+      ],
+    },
+    loadFileSource: fn(async (path: string): Promise<string> => {
+      throw itemNotFound(path);
+    }),
+  },
+  beforeEach: recordExceptions,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => canvas.getByText(/Couldn.t open this document/));
+    await expect(
+      canvas.getByText(/is no longer in this repository/),
+    ).toBeTruthy();
+    await expect(args.loadFileSource).toHaveBeenCalledTimes(2);
+    await expect(reportedOperations).not.toContain("document-load");
+  },
+};
+
+/** In a PR, a file that can't be found is a real failure: error + report. */
+export const PrFileNotFoundIsReported: Story = {
+  args: {
+    pr: {
+      ...PR,
+      files: [
+        ...PR.files,
+        { path: GONE, changeType: "added", linesAdded: 3, linesDeleted: 0 },
+      ],
+    },
+    initialThreads: [],
+    initialSelectedPath: GONE,
+    loadFileSource: loadWithGone(),
+  },
+  beforeEach: recordExceptions,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => canvas.getByText(/Couldn.t open this document/));
+    await expect(
+      canvas.queryByText(/is no longer in this repository/),
+    ).toBeNull();
+    await waitFor(() => expect(reportedOperations).toContain("document-load"));
+  },
+};
+function stubClipboard(writeText: (text: string) => Promise<void>): () => void {
+  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const originalExec = document.execCommand;
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+  // Pin the legacy fallback to "fails" so only the stub decides the outcome.
+  document.execCommand = (() => false) as typeof document.execCommand;
+  return () => {
+    // `clipboard` is normally inherited from Navigator.prototype: drop the
+    // own-property shadow rather than leave the stub installed.
+    if (original) Object.defineProperty(navigator, "clipboard", original);
+    else Reflect.deleteProperty(navigator, "clipboard");
+    document.execCommand = originalExec;
+  };
+}
+
+/** Host-shaped builder; `design` stands in for a heading it can't link. */
+const PR_TAB_LINK: DeepLinkBuilder = (target) =>
+  target.kind === "heading" && target.anchor !== "design"
+    ? `https://dev.azure.com/org/proj/_git/repo/pullrequest/7?_a=pub.ext.markdown-review-pr-tab&path=%2Fa.md&anchor=${target.anchor}`
+    : undefined;
+
+function withHostLinks(builder: DeepLinkBuilder) {
+  return (Story: React.ComponentType) => (
+    <DeepLinkContext.Provider value={builder}>
+      <Story />
+    </DeepLinkContext.Provider>
+  );
+}
+
+/**
+ * "Copy link to section": with a host link builder, clicking a heading's link
+ * button copies the host's shareable URL for that heading and reports the slug
+ * so the host can mirror `?anchor=` into the address bar. A heading the host
+ * can't build a URL for reports a failure and is not mirrored.
+ */
+export const HeadingLinkCopy: Story = {
+  args: {
+    onHeadingLinkCopied: fn(),
+    initialThreads: [],
+  },
+  decorators: [withHostLinks(PR_TAB_LINK)],
+  play: async ({ args, canvasElement }) => {
+    const writeText = fn(() => Promise.resolve());
+    const restore = stubClipboard(writeText);
+    try {
+      const notes = await waitFor(
+        () => {
+          const b = canvasElement.querySelector<HTMLButtonElement>(
+            ".emr-rendered #notes > .emr-heading-link",
+          );
+          if (!b) throw new Error("no heading link yet");
+          return b;
+        },
+        { timeout: 5000 },
+      );
+      await userEvent.click(notes);
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(
+          "https://dev.azure.com/org/proj/_git/repo/pullrequest/7?_a=pub.ext.markdown-review-pr-tab&path=%2Fa.md&anchor=notes",
+        ),
+      );
+      await waitFor(() =>
+        expect(args.onHeadingLinkCopied).toHaveBeenCalledWith("notes"),
+      );
+      await waitFor(() =>
+        expect(notes.getAttribute("aria-label")).toBe("Link copied"),
+      );
+
+      // No shareable URL for this heading → honest failure, nothing mirrored.
+      const design = canvasElement.querySelector<HTMLButtonElement>(
+        ".emr-rendered #design > .emr-heading-link",
+      )!;
+      await userEvent.click(design);
+      await waitFor(() =>
+        expect(design.getAttribute("aria-label")).toBe("Couldn't copy link"),
+      );
+      await expect(args.onHeadingLinkCopied).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
+  },
+};
+
+/** A blocked clipboard is reported on the button; the route is not touched. */
+export const HeadingLinkCopyBlocked: Story = {
+  args: {
+    onHeadingLinkCopied: fn(),
+    initialThreads: [],
+  },
+  decorators: [withHostLinks(PR_TAB_LINK)],
+  play: async ({ args, canvasElement }) => {
+    const restore = stubClipboard(() =>
+      Promise.reject(new Error("blocked by Permissions-Policy")),
+    );
+    try {
+      const notes = await waitFor(
+        () => {
+          const b = canvasElement.querySelector<HTMLButtonElement>(
+            ".emr-rendered #notes > .emr-heading-link",
+          );
+          if (!b) throw new Error("no heading link yet");
+          return b;
+        },
+        { timeout: 5000 },
+      );
+      await userEvent.click(notes);
+      await waitFor(() =>
+        expect(notes.getAttribute("aria-label")).toBe("Couldn't copy link"),
+      );
+      await expect(args.onHeadingLinkCopied).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  },
+};
+
+/**
+ * Heading links are offered on the live document only: while stepping through
+ * an older version the headings may not exist in the version a shared link
+ * opens, so the buttons are withdrawn and return on the current version.
+ */
+export const HeadingLinksHiddenOnHistoricalVersion: Story = {
+  args: stepLoaders(),
+  decorators: [withHostLinks(PR_TAB_LINK)],
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered .emr-heading-link"),
+      ).not.toBeNull(),
+    );
+    const rail = () =>
+      within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+    await userEvent.click(
+      await waitFor(() =>
+        rail().getByRole("button", { name: "Older version" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(rail().getByText(/pull request #101/)).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered .emr-heading-link"),
+      ).toBeNull(),
+    );
+    await userEvent.click(
+      rail().getByRole("button", { name: "Newer version" }),
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered .emr-heading-link"),
+      ).not.toBeNull(),
+    );
+  },
+};
+
+// ---------------- text (selection) links ----------------
+
+/** Host-shaped builder for text links; text in "Retention" can't link. */
+const TEXT_LINK: DeepLinkBuilder = (target) =>
+  target.kind === "text" && target.anchor !== "retention"
+    ? `https://dev.azure.com/org/proj/_git/repo/pullrequest/7?path=%2Fdocs%2Fglossary.md&text=${encodeURIComponent(target.text)}&anchor=${target.anchor}`
+    : undefined;
+
+const GLOSSARY_ARGS = {
+  pr: PR_GLOSSARY,
+  loadFileSource: makeGlossaryLoad(),
+  initialThreads: [],
+  initialSelectedPath: GLOSSARY,
+};
+
+/** Text currently wrapped by the text-link landing cue. */
+function textCue(canvasElement: HTMLElement): string {
+  return Array.from(canvasElement.querySelectorAll("[data-emr-text-cue]"))
+    .map((el) => el.textContent)
+    .join("");
+}
+
+/**
+ * `?text=` deep link: the seeded document opens, the collapsed section holding
+ * the text unfolds, and exactly the quoted words (here a `start,end` quote)
+ * flash with the heading link's landing cue, centred in the reader. The cue
+ * survives an article re-wrap, continuing its fade, then clears and leaves the
+ * text as it was. The section fallback (`?anchor=`) is not used.
+ */
+export const DeepLinkText: Story = {
+  args: {
+    ...GLOSSARY_ARGS,
+    initialTextFragment: "Classifier body text,deep link",
+    initialAnchor: "classifiers-hashing",
+  },
+  beforeEach: () => {
+    const undoCollapse = collapseTermsSection();
+    const undoTelemetry = recordLinksOpened();
+    return () => {
+      undoCollapse();
+      undoTelemetry();
+    };
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(textCue(canvasElement)).toBe(
+          "Classifier body text that the deep link",
+        ),
+      { timeout: 5000 },
+    );
+    const landedAt = performance.now();
+    const terms = canvasElement.querySelector<HTMLElement>(
+      '.emr-section[data-section-id="terms"]',
+    )!;
+    await expect(terms.hasAttribute("data-collapsed")).toBe(false);
+    const cue = canvasElement.querySelector<HTMLElement>(
+      "[data-emr-text-cue]",
+    )!;
+    await expect(cue.classList.contains("emr-anchor-target")).toBe(true);
+    await expect(getComputedStyle(cue).animationName).toBe("emr-anchor-land");
+    await expect(
+      canvasElement.querySelector("[data-emr-anchor-cue]"),
+    ).toBeNull();
+    await expect(linksOpened).toEqual([{ target: "text", found: true }]);
+    const scroller = readerScroller(canvasElement);
+    await waitFor(
+      () => {
+        expect(scroller.scrollTop).toBeGreaterThan(0);
+        const offset = offsetInScroller(scroller, cue);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThan(scroller.clientHeight);
+      },
+      { timeout: 2000 },
+    );
+
+    if (performance.now() - landedAt > 2000) {
+      throw new Error("setup exceeded the 2.5s landing-cue budget");
+    }
+    const article = canvasElement.querySelector<HTMLElement>(".emr-rendered")!;
+    const pristine = article.cloneNode(true) as HTMLElement;
+    pristine
+      .querySelectorAll("[data-emr-text-cue]")
+      .forEach((el) => el.replaceWith(...el.childNodes));
+    article.innerHTML = pristine.innerHTML;
+    const relaid = await waitFor(() => {
+      const el = article.querySelector<HTMLElement>("[data-emr-text-cue]");
+      if (!el) throw new Error("cue not carried over to the rebuilt article");
+      return el;
+    });
+    await expect(relaid.style.animationDelay).toMatch(/^-\d+ms$/);
+    await expect(textCue(canvasElement)).toBe(
+      "Classifier body text that the deep link",
+    );
+
+    await waitFor(
+      () =>
+        expect(canvasElement.querySelector("[data-emr-text-cue]")).toBeNull(),
+      { timeout: 3500 },
+    );
+    await expect(
+      within(canvasElement).getByText(
+        "Classifier body text that the deep link should reveal.",
+      ),
+    ).toBeVisible();
+  },
+};
+
+/**
+ * A `?text=` link whose words were since edited lands on its section heading
+ * (`?anchor=`) instead, and reports the text as not found.
+ */
+export const DeepLinkTextMissingFallsBackToSection: Story = {
+  args: {
+    ...GLOSSARY_ARGS,
+    initialTextFragment: "Wording that was edited away",
+    initialAnchor: "retention",
+  },
+  beforeEach: recordLinksOpened,
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(
+          canvasElement.querySelector(
+            ".emr-rendered #retention > .emr-anchor-target",
+          ),
+        ).not.toBeNull(),
+      { timeout: 5000 },
+    );
+    await expect(canvasElement.querySelector("[data-emr-text-cue]")).toBeNull();
+    await expect(linksOpened).toEqual([{ target: "text", found: false }]);
+  },
+};
+
+/** A malformed `?text=` with no section fallback opens the document as-is. */
+export const DeepLinkTextMalformed: Story = {
+  args: { ...GLOSSARY_ARGS, initialTextFragment: "a,b,c" },
+  beforeEach: () => {
+    const undoCue = recordAnchorCue();
+    const undoTelemetry = recordLinksOpened();
+    return () => {
+      undoCue();
+      undoTelemetry();
+    };
+  },
+  play: async ({ canvasElement }) => {
+    await articleBody(canvasElement, "Retention body text");
+    await waitFor(() =>
+      expect(linksOpened).toEqual([{ target: "text", found: false }]),
+    );
+    await settleFrames();
+    await expect(anchorCueSeen).toBe(false);
+    await expect(readerScroller(canvasElement).scrollTop).toBe(0);
+  },
+};
+
+/** Select the first `length` characters of the paragraph starting `prefix`. */
+async function selectParagraphText(
+  canvasElement: HTMLElement,
+  prefix: string,
+  length: number,
+): Promise<HTMLButtonElement> {
+  const para = await waitFor(
+    () => {
+      const p = Array.from(
+        canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
+      ).find((el) => el.textContent?.startsWith(prefix));
+      if (!p) throw new Error(`no paragraph "${prefix}"`);
+      return p;
+    },
+    { timeout: 5000 },
+  );
+  const range = document.createRange();
+  range.setStart(para.firstChild!, 0);
+  range.setEnd(para.firstChild!, length);
+  const sel = window.getSelection()!;
+  sel.removeAllRanges();
+  sel.addRange(range);
+  para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  return waitFor(() =>
+    within(canvasElement).getByRole<HTMLButtonElement>("button", {
+      name: "Copy link to selection",
+    }),
+  );
+}
+
+/**
+ * "Copy link to selection": copies the host's URL for the quoted text plus
+ * its section, and reports both so the host can mirror `?text=` / `?anchor=`
+ * into the address bar. Text the host can't link, or a blocked clipboard,
+ * reports a failure and is not mirrored.
+ */
+export const TextLinkCopy: Story = {
+  args: { ...GLOSSARY_ARGS, onTextLinkCopied: fn() },
+  decorators: [withHostLinks(TEXT_LINK)],
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const writeText = fn(() => Promise.resolve());
+    let restore = stubClipboard(writeText);
+    try {
+      await userEvent.click(
+        await selectParagraphText(canvasElement, "Shared vocabulary", 17),
+      );
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(
+          "https://dev.azure.com/org/proj/_git/repo/pullrequest/7?path=%2Fdocs%2Fglossary.md&text=Shared%20vocabulary&anchor=glossary",
+        ),
+      );
+      await waitFor(() =>
+        expect(args.onTextLinkCopied).toHaveBeenCalledWith(
+          "Shared vocabulary",
+          "glossary",
+        ),
+      );
+      await waitFor(() => canvas.getByRole("button", { name: "Link copied" }));
+
+      await userEvent.click(
+        await selectParagraphText(canvasElement, "Retention body", 9),
+      );
+      await waitFor(() =>
+        canvas.getByRole("button", { name: "Couldn't copy link" }),
+      );
+
+      restore();
+      restore = stubClipboard(() =>
+        Promise.reject(new Error("blocked by Permissions-Policy")),
+      );
+      await userEvent.click(
+        await selectParagraphText(canvasElement, "Overview paragraph 1 ", 8),
+      );
+      await waitFor(() =>
+        canvas.getByRole("button", { name: "Couldn't copy link" }),
+      );
+      await expect(args.onTextLinkCopied).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
   },
 };

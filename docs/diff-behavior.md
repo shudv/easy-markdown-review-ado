@@ -3,35 +3,40 @@
 Easy Markdown Review chooses the smallest trustworthy rendered diff. It does
 not use red/green when source lines cannot be aligned with confidence.
 
-| Change shape                                             | Presentation                                               | Before reveal                |
-| -------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------- |
-| Added block, list item, or table row                     | Green wash on the added leaf                               | No                           |
-| Deleted Markdown                                         | Red removed-content marker rendered as Markdown            | Built in                     |
-| Small prose, heading, list, or quote text edit           | Inline red removed words and green added words             | No                           |
-| Partial or multi-hunk hard-wrapped prose                 | Reconstruct the complete old block, then inline words      | No                           |
-| Wholesale prose or quote rewrite                         | Amber current block                                        | Hover/focus only             |
-| Bold, italic, inline-code, strike, or link wrapping      | Amber only the affected text range                         | No                           |
-| Heading level or equal-text block type                   | Amber only the affected text                               | No                           |
-| Ordered/bulleted list conversion                         | Amber list marker only                                     | No                           |
-| Checklist state toggle                                   | Amber checkbox outline only                                | No                           |
-| Code token or line edit                                  | Inline red/green tokens in the code block                  | No                           |
-| Code language only                                       | Metadata indicator with old/new language                   | No                           |
-| Code language plus precise body edit                     | Metadata indicator plus inline tokens                      | No                           |
-| Code fence options/meta only                             | Metadata indicator with old/new options                    | No                           |
-| Wholesale code rewrite                                   | Amber current code block                                   | Hover/focus only             |
-| Link destination change                                  | Inline target-change indicator; hostname changes warn      | No                           |
-| Image source, alt, or title change                       | Image metadata indicator                                   | No                           |
-| Mermaid source edit                                      | Diagram accent plus source-modal diff when reconstructable | Source modal                 |
-| Equal-width or anchored table edit                       | Changed cells only; inline words when possible             | No                           |
-| Added/removed table column                               | Green/red cells in their structural positions              | No                           |
-| Added/removed table row                                  | Green/red row in the existing grid                         | No                           |
-| Formatting-only table cell                               | Amber only the affected text range                         | No                           |
-| Unanchored, repeated, or partially replaced table schema | Amber current row/table                                    | Hover/focus only             |
-| Missing original source needed for reconstruction        | Conservative amber wash                                    | Only when old content exists |
-| Frontmatter                                              | Per-key value words; added keys use a small green key wash | No                           |
-| Changed source with no rendered DOM owner                | Compact source strip at its document position              | Hover/focus only             |
-| Deleted Markdown file                                    | Previous version, clean and read-only                      | Whole document               |
-| GitHub-style admonition                                  | Semantic alert; body diffed as prose                       | No                           |
+| Change shape                                                | Presentation                                                                                               | Before reveal                |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Added block, list item, or table row                        | Green wash on the added leaf                                                                               | No                           |
+| Nested items and child blocks under an added or edited item | Each nested item, continuation paragraph, code block, quote, or table carries its own wash or inline words | No                           |
+| Block rewritten into different blocks (coarse hunk)         | Red removed marker for old blocks; green for each new block                                                | Built in                     |
+| Deleted Markdown                                            | Red removed-content marker rendered as Markdown                                                            | Built in                     |
+| Small prose, heading, list, or quote text edit              | Inline red removed words and green added words                                                             | No                           |
+| Source-only edit that renders identically (renumbering)     | No highlight                                                                                               | No                           |
+| Ordered list whose start number changed                     | Amber list number only                                                                                     | No                           |
+| Partial or multi-hunk hard-wrapped prose                    | Reconstruct the complete old block, then inline words                                                      | No                           |
+| Wholesale prose or quote rewrite                            | Amber current block                                                                                        | Hover/focus only             |
+| Bold, italic, inline-code, strike, or link wrapping         | Amber only the affected text range                                                                         | No                           |
+| Heading level or equal-text block type                      | Amber only the affected text                                                                               | No                           |
+| Ordered/bulleted list conversion                            | Amber list marker only                                                                                     | No                           |
+| Checklist state toggle                                      | Amber checkbox outline only                                                                                | No                           |
+| Code token or line edit                                     | Inline red/green tokens in the code block                                                                  | No                           |
+| Code language only                                          | Metadata indicator with old/new language                                                                   | No                           |
+| Code language plus precise body edit                        | Metadata indicator plus inline tokens                                                                      | No                           |
+| Code fence options/meta only                                | Metadata indicator with old/new options                                                                    | No                           |
+| Wholesale code rewrite                                      | Amber current code block                                                                                   | Hover/focus only             |
+| Link destination change                                     | Inline target-change indicator; hostname changes warn                                                      | No                           |
+| Image source, alt, or title change                          | Image metadata indicator                                                                                   | No                           |
+| Mermaid source edit                                         | Diagram accent; Source callout with Changes + Before toggles                                               | Source callout               |
+| KaTeX equation source edit                                  | Equation accent; character diff + stale-colored Before toggle                                              | Source callout               |
+| Equal-width or anchored table edit                          | Changed cells only; inline words when possible                                                             | No                           |
+| Added/removed table column                                  | Green/red cells in their structural positions                                                              | No                           |
+| Added/removed table row                                     | Green/red row in the existing grid                                                                         | No                           |
+| Formatting-only table cell                                  | Amber only the affected text range                                                                         | No                           |
+| Unanchored, repeated, or partially replaced table schema    | Amber current row/table                                                                                    | Hover/focus only             |
+| Missing original source needed for reconstruction           | Conservative amber wash                                                                                    | Only when old content exists |
+| Frontmatter                                                 | Per-key value words; added keys use a small green key wash                                                 | No                           |
+| Changed source with no rendered DOM owner                   | Compact source strip at its document position                                                              | Hover/focus only             |
+| Deleted Markdown file                                       | Previous version, clean and read-only                                                                      | Whole document               |
+| GitHub-style admonition                                     | Semantic alert; body diffed as prose                                                                       | No                           |
 
 ## Confidence rules
 
@@ -41,8 +46,9 @@ not use red/green when source lines cannot be aligned with confidence.
    over block washes.
 3. Use broad amber only for low-similarity rewrites or structural alignment
    that cannot be proven.
-4. Keep Before controls out of layout. They appear on hover or keyboard focus,
-   and expanded history is a compact reference strip.
+4. Keep Before controls out of layout. Ambiguous prose/code/table comparisons
+   reveal a compact strip on hover or focus; generated content keeps Changes,
+   Current, and Before source/rendering together in its Source callout.
 5. Never infer table alignment from repeated or empty values.
 6. Never silently drop a changed source range. If rendering produces no DOM
    owner (for example a reference-link definition or unknown directive), show
@@ -51,6 +57,24 @@ not use red/green when source lines cannot be aligned with confidence.
    column: single lines, contiguous list items, and a wrapped paragraph's
    incomplete final line all stop at their text edge. Structural rows, code,
    media, and low-confidence table regions keep their specialized treatment.
+8. Re-align line hunks at Markdown block granularity before decorating. Line
+   diffs (Azure DevOps `getFileDiffs` and the update comparison alike) report
+   a rewrite as one coarse hunk and anchor on blank lines, pairing unrelated
+   blocks. `refineDiffRanges` (`src/markdown/diffRefine.ts`) merges hunks
+   separated only by blank lines, aligns the old and new blocks by word
+   similarity, and emits edits only for blocks that still match (a table with
+   an unchanged header is aligned row by row). Unmatched new blocks are added,
+   unmatched old blocks are removed, and a removed run with the same shape of
+   blocks as its added run pairs one for one as edits.
+9. Every changed line has exactly one painted owner. A list item or blockquote
+   owns only its lead content (the lines before its first child block); each
+   child block (a second paragraph, nested list, code block, quote, table,
+   diagram, or equation) owns and paints its own lines. A block defers to a
+   decorated ancestor only when that ancestor's paint physically covers it: a
+   line wash covers only the lead prose, an inline word diff covers only its
+   prose target, and only a plain box wash covers everything inside.
+   `test/markdown.diffOwnership.test.ts` enforces this across a generated
+   matrix of containers, child blocks, and nesting depths.
 
 ## Documentation dialects
 

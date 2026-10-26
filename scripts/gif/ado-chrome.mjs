@@ -160,11 +160,11 @@ export function adoChromeMarkup({ width, chromeHeight }) {
         </div>
       </div>
       <div class="ado-tabs">
-        <div class="ado-tab">Overview</div>
-        <div class="ado-tab">Files</div>
-        <div class="ado-tab">Updates</div>
-        <div class="ado-tab">Commits</div>
-        <div class="ado-tab active">Markdown Review</div>
+        <div class="ado-tab" data-tab="overview">Overview</div>
+        <div class="ado-tab" data-tab="files">Files</div>
+        <div class="ado-tab" data-tab="updates">Updates</div>
+        <div class="ado-tab" data-tab="commits">Commits</div>
+        <div class="ado-tab active" data-tab="review">Markdown Review</div>
       </div>
     </div>`;
 

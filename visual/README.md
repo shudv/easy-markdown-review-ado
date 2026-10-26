@@ -9,22 +9,6 @@ baselines with a tight tolerance.
 - Spec: [`curated.visual.spec.ts`](./curated.visual.spec.ts)
 - Baselines: [`__screenshots__/`](./__screenshots__) (committed, **one set** — rendered in the pinned Playwright container)
 
-## What it captures
-
-A curated set of deterministic shots fed fake fixtures (no ADO, no network):
-
-| Story / variant                   | Covers                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `Visual/PrTab` — Default/Dark     | Reader + **diff highlighting** (added/edited/removed) + rail, light & dark            |
-| `Visual/DocumentsHub`             | Repo/file navigator + reader + comment rail                                           |
-| `Visual/ArticleDiff` — Light/Dark | The diff-highlighting layer in isolation (add wash, inline word-diff, deleted-marker) |
-| `Visual/BalloonGallery`           | Comment-thread balloon states (active / resolved / orphaned)                          |
-
-Together they exercise Markdown rendering, the diff wash layer (both themes),
-comment balloons, and the rail chrome. To add a shot, author a deterministic
-`*.visual.stories.tsx` (no time, no animation, no Mermaid) and add a
-`{ title, name, settledSelector }` entry to the `SHOTS` array in the spec.
-
 ## Running locally
 
 Rendering happens in the pinned Playwright **container** (see below), so the
@@ -49,6 +33,31 @@ CI itself invokes — running it bare on a Windows/macOS host will mismatch.)
 > baseline silently drifts stale. The wrapper passes `--update-snapshots=all` so
 > a regenerate is always truthful. (The complementary guard against the check
 > _missing_ such a change is a **focused cropped shot** — see below.)
+
+## What it captures
+
+A curated set of deterministic shots fed fake fixtures (no ADO, no network):
+
+| Story / variant                   | Covers                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------- |
+| `Visual/PrTab` — Default/Dark     | Reader + **diff highlighting** (added/edited/removed) + rail, light & dark            |
+| `Visual/DocumentsHub`             | Repo/file navigator + reader + comment rail                                           |
+| `Visual/ArticleDiff` — Light/Dark | The diff-highlighting layer in isolation (add wash, inline word-diff, deleted-marker) |
+| `Visual/ArticleDiff` — Equations  | Lazy KaTeX, atomic accents, and unified source/current/before comparison              |
+| `Visual/ArticleDiff` — Nested     | New items nested in new/unchanged parents: one wash per item, never stacked           |
+| `Visual/BalloonGallery`           | Comment-thread balloon states (active / resolved / orphaned)                          |
+| `Visual/GeneratedSource`          | The shared source callout on its Mermaid side (header, diff, Before, live diagram)    |
+| `Visual/HeadingLink` — Light/Dark | Hover-revealed "Copy link to section" glyph (focused crops, incl. a diff-washed head) |
+
+Together they exercise Markdown rendering, the diff wash layer (both themes),
+comment balloons, and the rail chrome. To add a shot, author a deterministic
+`*.visual.stories.tsx` (no time, no animation) and add a
+`{ title, name, settledSelector }` entry to the `SHOTS` array in the spec.
+
+Mermaid renders asynchronously, so `stabilize()` hides diagrams **inside an
+article** (`.emr-rendered .emr-mermaid`) — integration shots don't wait for
+them. A story that blocks on the diagram before shooting, like
+`Visual/GeneratedSource`, is free to capture it.
 
 ## Focused (cropped) shots
 
@@ -82,10 +91,7 @@ they match CI. Commit the regenerated `*-chromium.png` files with your change.
 > **Bumping Playwright:** update the tag in **two** places together — the
 > `@playwright/test` dependency and `IMAGE` in
 > [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs) — then regenerate
-> the baselines. (The tag also appears in a comment in
-> [`.azure-pipelines/pr-validation.yml`](../.azure-pipelines/pr-validation.yml);
-> refresh it there for accuracy — CI reads the image from the wrapper, not a
-> `container:` resource.)
+> the baselines. CI reads the image from the wrapper.
 
 ## When a visual test fails
 

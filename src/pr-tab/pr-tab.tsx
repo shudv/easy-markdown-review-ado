@@ -15,6 +15,13 @@ import { createRoot } from "react-dom/client";
 
 import { PrTabApp } from "./PrTabApp";
 import { orchestrateBoot } from "../shell/boot";
+import { configureAdoSession } from "../shell/adoSessionSdk";
+import { warmAdoClients } from "../shell/adoClients";
+import { installDevFaults } from "../dev/faults";
+import {
+  followsRecentAutoReload,
+  sessionStorageOrUndefined,
+} from "../shell/adoSession";
 import { bootErrorDetail, renderBootErrorInto } from "../shell/bootError";
 import { syncHostTheme } from "../theme/theme";
 import {
@@ -23,17 +30,30 @@ import {
   installGlobalErrorHandlers,
   installAuthFailureCapture,
   markAppReady,
+  markBootAfterAutoReload,
   markBootPhase,
   markBootStart,
   setTelemetryContext,
   trackUserFacingError,
 } from "../telemetry";
 
+// Dev builds only: reproduce failure conditions (token dead window, slow host,
+// background tab…) on demand. Must run before anything fetches. Compiled out
+// of production builds.
+if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
+  installDevFaults();
+}
+
 // Start the boot-time clock as early as possible so the measurement spans the
 // whole path to first rendered Markdown (SDK handshake + fetches + render), not
 // just the time to kick off React. `markAppReady()` fires later — from PrShell
 // when the first document renders, or from PrTabApp for empty/error states.
 markBootStart();
+// Tag this boot if it is the reload we triggered to escape the token dead
+// window, so telemetry shows whether that reload actually worked.
+if (followsRecentAutoReload(sessionStorageOrUndefined(), Date.now())) {
+  markBootAfterAutoReload();
+}
 
 /**
  * The installed extension version as reported by the host
@@ -69,6 +89,10 @@ void orchestrateBoot({
     await SDK.ready();
     markBootPhase("sdk-ready");
     setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+    configureAdoSession();
+    // Resolve the Git client's location and fetch a token now, overlapping
+    // React mounting, instead of stalling the first REST call.
+    warmAdoClients();
   },
   run: async () => {
     syncHostTheme();

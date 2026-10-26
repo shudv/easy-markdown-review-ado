@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   captureAnchorFromSelection,
-  isWithinMermaid,
+  isWithinGeneratedContent,
+  relocateAnchor,
   resolveAnchor,
   withSourceLocation,
 } from "../src/comments/anchor";
@@ -284,7 +285,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
   });
 });
 
-describe("isWithinMermaid", () => {
+describe("isWithinGeneratedContent", () => {
   it("is true for the diagram container element itself", () => {
     const root = makeArticle(
       '<div class="emr-mermaid"><svg><text>Alpha</text></svg></div>',
@@ -293,23 +294,51 @@ describe("isWithinMermaid", () => {
     // ancestor): this pins the `instanceof Element ? node : parentElement`
     // branch — a mutant that always climbed to `parentElement` would step OUT
     // of the diagram (to the <article>) and wrongly report false.
-    expect(isWithinMermaid(root.querySelector(".emr-mermaid")!)).toBe(true);
+    expect(isWithinGeneratedContent(root.querySelector(".emr-mermaid")!)).toBe(
+      true,
+    );
   });
 
   it("is true for a text node inside a diagram's source fallback", () => {
     const root = makeArticle(
       '<div class="emr-mermaid"><pre>graph TD; A--&gt;B</pre></div>',
     );
-    expect(isWithinMermaid(root.querySelector("pre")!.firstChild!)).toBe(true);
+    expect(
+      isWithinGeneratedContent(root.querySelector("pre")!.firstChild!),
+    ).toBe(true);
+  });
+
+  it("is true for generated text inside a rendered equation", () => {
+    const root = makeArticle(
+      '<span class="katex"><span class="katex-html">x²</span></span>',
+    );
+    expect(
+      isWithinGeneratedContent(root.querySelector(".katex-html")!.firstChild!),
+    ).toBe(true);
+  });
+
+  it("is true for a text node inside an equation's source fallback", () => {
+    // KaTeX has not hydrated (or failed to load), so the raw TeX is selectable.
+    // That text disappears once hydration succeeds, so it must not be anchored.
+    const root = makeArticle(
+      '<div class="emr-math"><pre class="emr-math-fallback"><code>x^2</code></pre></div>',
+    );
+    expect(
+      isWithinGeneratedContent(root.querySelector("code")!.firstChild!),
+    ).toBe(true);
   });
 
   it("is false for a text node outside any diagram", () => {
     const root = makeArticle("<p>plain prose</p>");
-    expect(isWithinMermaid(root.querySelector("p")!.firstChild!)).toBe(false);
+    expect(isWithinGeneratedContent(root.querySelector("p")!.firstChild!)).toBe(
+      false,
+    );
   });
 
   it("is false for a detached node with no parent element", () => {
-    expect(isWithinMermaid(document.createTextNode("orphan"))).toBe(false);
+    expect(isWithinGeneratedContent(document.createTextNode("orphan"))).toBe(
+      false,
+    );
   });
 });
 
@@ -365,6 +394,20 @@ describe("captureAnchorFromSelection", () => {
     sel.removeAllRanges();
     sel.addRange(range);
     expect(captureAnchorFromSelection(mermaidRoot)).toBeNull();
+  });
+
+  it("returns null when the selection is inside a rendered equation", () => {
+    const mathRoot = makeArticle(
+      '<p>before</p><div class="emr-math"><span class="katex">x²</span></div>',
+    );
+    const glyphs = mathRoot.querySelector(".katex")!.firstChild! as Text;
+    const range = document.createRange();
+    range.setStart(glyphs, 0);
+    range.setEnd(glyphs, 2);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    expect(captureAnchorFromSelection(mathRoot)).toBeNull();
   });
 
   it("captures a TextQuoteAnchor with up to 80 chars of prefix/suffix", () => {
@@ -901,5 +944,80 @@ describe("withSourceLocation graded scoring (kills scoring math mutants)", () =>
       source,
     );
     expect(out.column).toBe(16);
+  });
+});
+
+describe("relocateAnchor", () => {
+  // The same document at two versions, as the renderer stamps it: an older
+  // update had an extra paragraph, so the shared text sits two lines lower.
+  const LATEST =
+    '<h1 data-source-line="1">Guide</h1><p data-source-line="3">Leave comments on the <strong data-source-line="3">rendered</strong> text.</p>';
+
+  it("re-locates a quote into another version and takes ITS source lines", () => {
+    const fromOlder = {
+      exact: "comments on the rendered",
+      prefix: "Leave ",
+      suffix: " text.",
+      line: 5,
+      endLine: 5,
+    };
+    expect(relocateAnchor(fromOlder, LATEST)).toEqual({
+      exact: "comments on the rendered",
+      prefix: "Leave ",
+      suffix: " text.",
+      line: 3,
+      endLine: 3,
+    });
+  });
+
+  it("returns null when the text no longer exists in that version", () => {
+    expect(
+      relocateAnchor(
+        { exact: "a sentence removed later", prefix: "", suffix: "" },
+        LATEST,
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for a file-level anchor (no text to re-locate)", () => {
+    expect(
+      relocateAnchor({ exact: "", prefix: "", suffix: "" }, LATEST),
+    ).toBeNull();
+  });
+
+  it("keeps the quote without lines when the HTML carries no source lines", () => {
+    // Strict: no `line` / `endLine` keys at all, not keys set to undefined.
+    expect(
+      relocateAnchor(
+        { exact: "plain", prefix: "", suffix: "", line: 9 },
+        "<p>plain text</p>",
+      ),
+    ).toStrictEqual({ exact: "plain", prefix: "", suffix: "" });
+  });
+
+  it("spans lines when the quote crosses blocks", () => {
+    const html =
+      '<p data-source-line="1">first block</p><p data-source-line="3">second block</p>';
+    expect(
+      relocateAnchor({ exact: "blocksecond", prefix: "", suffix: "" }, html),
+    ).toMatchObject({ line: 1, endLine: 3 });
+  });
+
+  it("ends on the start line when the quote runs into unsourced content", () => {
+    const html =
+      '<p data-source-line="4">sourced block</p><div>generated tail</div>';
+    expect(
+      relocateAnchor({ exact: "blockgenerated", prefix: "", suffix: "" }, html),
+    ).toMatchObject({ line: 4, endLine: 4 });
+  });
+
+  it("takes the start line from the quoted text, not the text before it", () => {
+    // The quote starts exactly where an inline element starts, which is also
+    // the END of the previous text node — on an earlier source line.
+    const html =
+      '<p data-source-line="1">Intro\n<strong data-source-line="2">rendered</strong> <a data-source-line="2" href="#">text</a></p>';
+    expect(
+      relocateAnchor({ exact: "rendered text", prefix: "", suffix: "" }, html),
+    ).toMatchObject({ line: 2, endLine: 2 });
   });
 });

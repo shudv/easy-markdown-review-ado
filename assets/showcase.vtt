@@ -1,0 +1,40 @@
+WEBVTT
+
+00:00:00.450 --> 00:00:07.290
+Markdown is how we write almost everything now. Design docs, runbooks, agent instructions.
+
+00:00:08.033 --> 00:00:18.377
+But the way we review it never really caught up. You open the Files tab, and you're reading markup. The only prose change here is one character, buried inside a link.
+
+00:00:19.117 --> 00:00:26.989
+So you flip to preview. Now you can see the page, but not what changed. And there's nothing here to comment on. So you flip back.
+
+00:00:28.100 --> 00:00:30.452
+So we built Easy Markdown Review.
+
+00:00:31.633 --> 00:00:39.337
+It puts a review tab on every pull request that touches Markdown. Your document, rendered, right where the review already happens.
+
+00:00:40.183 --> 00:00:43.063
+Highlight a sentence, anywhere on the page.
+
+00:00:43.733 --> 00:00:46.685
+Leave a comment the way you would in a Word doc.
+
+00:00:47.317 --> 00:00:54.517
+It posts as a real pull request comment, anchored to the exact words you picked, so it stays put when the author rewrites the paragraph.
+
+00:00:55.500 --> 00:01:04.284
+Changes show up in place. A link that moved. A row that was added. A row that's gone. You read the meaning, not the markup.
+
+00:01:05.300 --> 00:01:08.564
+And every file and every heading is one click away.
+
+00:01:09.667 --> 00:01:20.059
+Here's why that matters. Reviewers stop skipping the docs. Feedback gets specific. And the teams who've moved over tell us they won't go back to reviewing prose in a diff.
+
+00:01:21.133 --> 00:01:30.157
+This isn't a prototype. It's shipped, and it's running across fifteen Azure DevOps organizations at Microsoft, with hundreds of engineers on it every day.
+
+00:01:31.433 --> 00:01:36.809
+Easy Markdown Review. Review Markdown like a document, inside Azure DevOps.

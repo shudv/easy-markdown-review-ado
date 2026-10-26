@@ -311,6 +311,30 @@
       ]
     },
     {
+      "name": "equation-showcase",
+      "description": "Focused KaTeX review fixture: unchanged inline notation, one minimally edited display equation with unified source/current/before comparison, and newly added inline/fenced equations.",
+      "pullRequests": [
+        {
+          "title": "Revise RMS aggregation and add throughput equations",
+          "branch": "feature/revise-equations",
+          "description": "Changes exactly one line inside the RMS display equation (g_i to g_i^2), preserving an unchanged prose boundary so the rendered diff stays atomic and minimal. Adds a separate throughput section with inline and fenced math. The edited equation exposes source changes plus current/before source and rendering in one Source callout; equation internals intentionally do not accept comment anchors.",
+          "overlay": "revise-equations",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/equations.md",
+              "status": "active",
+              "rightStartLine": 17,
+              "rightEndLine": 17,
+              "comments": [
+                "The equation diff should remain one atomic highlight; use Source to compare changes and switch between current and previous rendering."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "production-markdown-showcase",
       "description": "Production-derived Markdown dialect coverage: reference definitions, GitHub alerts, safe HTML details/cards, definition continuations, code-fence options, section moves, and deleted-document review.",
       "pullRequests": [
@@ -461,6 +485,20 @@
       ]
     },
     {
+      "name": "rewrite-diff-showcase",
+      "description": "Block-level re-alignment of coarse line-diff hunks. A design-review doc whose PR rewrites sections the way real reviews do: a one-line placeholder grows into a table and a nested list, paragraphs and list items are inserted next to edits, a table gains a row, an ordered list is renumbered, a section is swapped, and an edited paragraph moves past a new section. Line diffs report these as coarse hunks that pair unrelated blocks; the PR tab must show new blocks as added, removed blocks as removed, and only genuine edits as edited.",
+      "pullRequests": [
+        {
+          "title": "Restructure the design review (rewrite diff showcase)",
+          "branch": "feature/restructure-design-doc",
+          "description": "Rewrites the performance placeholder into metrics guidance with a table and nested checklist, expands motivation and requirements, adds a telemetry owner, drops the clone step, adds a launch follow-up section, narrows the scope, swaps the phases, and rewrites the risk.",
+          "overlay": "restructure-design-doc",
+          "complete": false,
+          "threads": []
+        }
+      ]
+    },
+    {
       "name": "table-diff-showcase",
       "description": "A focused table-diff gallery in one Markdown file. Its active PR covers value and header edits, full replacements, structural rows/columns, confidence fallbacks, and shared inline semantics including formatting+target, text+image metadata, link wrapping, and dense sibling links/images.",
       "pullRequests": [
@@ -552,6 +590,31 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "update-scope-showcase",
+      "description": "One active pull request whose files come and go across native updates: Update 1 revises guide.md, Update 2 adds review-checklist.md and deletes legacy-checklist.md, Update 3 revises guide.md again. Exercises comparing a chosen update across every file of a PR — the selection persists across files, a file added later reads 'Not added yet at Update N', a deleted one 'Deleted by Update N', and a file added within the selection renders as wholly new.",
+      "pullRequests": [
+        {
+          "title": "Replace the legacy review checklist",
+          "branch": "feature/replace-review-checklist",
+          "description": "Three native updates: revise the guide, swap the legacy checklist for a new one, then point the guide at it. Left active so its updates can be compared in the PR tab.",
+          "overlay": "01-revise-guide",
+          "iterations": [
+            {
+              "title": "Add the review checklist and retire the legacy one",
+              "overlay": "02-replace-checklist",
+              "deletePaths": ["/docs/legacy-checklist.md"]
+            },
+            {
+              "title": "Point the guide at the new checklist",
+              "overlay": "03-polish-guide"
+            }
+          ],
+          "complete": false,
+          "threads": []
         }
       ]
     },

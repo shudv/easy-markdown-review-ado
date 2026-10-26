@@ -10,7 +10,6 @@ import * as SDK from "azure-devops-extension-sdk";
 import {
   CommonServiceIds,
   type IHostNavigationService,
-  type IProjectPageService,
 } from "azure-devops-extension-api";
 import {
   GitVersionOptions,
@@ -51,8 +50,17 @@ import {
   type RepoPage,
 } from "../shell/adoGitData";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
-import { readCommentParam, COMMENT_LINK_PARAM } from "../comments/commentLink";
+import {
+  ANCHOR_LINK_PARAM,
+  COMMENT_LINK_PARAM,
+  TEXT_LINK_PARAM,
+  readAnchorParam,
+  readCommentParam,
+  readTextParam,
+  type DeepLinkTarget,
+} from "../shell/deepLink";
 import type { DocRepo } from "../shell/types";
+import { resolveCurrentProject } from "../shell/adoClients";
 import type { FileSearchOutcome } from "../shell/almSearch";
 import {
   readLastPath,
@@ -61,10 +69,11 @@ import {
   writeLastRepo,
 } from "./lastVisited";
 import {
-  assembleHubCommentUrl,
+  assembleHubDeepLinkUrl,
   formatError,
   initialsOf,
   orgUrlFromReferrer,
+  routeUpdatesForPath,
 } from "./documentsHub.helpers";
 
 type RepoDetailsLoadState = "idle" | "loading" | "loaded" | "error";
@@ -87,6 +96,10 @@ interface DiscoveryState {
    * Forwarded to DocumentsApp alongside `initialSelectedPath`.
    */
   initialActiveThreadId?: string;
+  /** Heading to scroll to on first render, from the `?anchor=` route. */
+  initialAnchor?: string;
+  /** Serialized text fragment to flash in the initially opened document (`?text=`). */
+  initialTextFragment?: string;
   /** Resolved per-repo PR routing — populated lazily by `loadDetailsFor`. */
   prByRepo: Record<string, GitPullRequest | undefined>;
   /** Raw `GitRepository` payloads we need to feed `loadRepoPrRouting`. */
@@ -180,13 +193,7 @@ export function DocumentsHubApp(): React.ReactElement {
           console.log(`[DocumentsHubApp] ${step}`);
         };
 
-        log("getting project page service");
-        const projectService = await SDK.getService<IProjectPageService>(
-          CommonServiceIds.ProjectPageService,
-        );
-        log("loading project");
-        const project = await projectService.getProject();
-        if (!project) throw new Error("No active project on the page.");
+        const project = await resolveCurrentProject();
         log(`project: ${project.name}`);
 
         // De-identified telemetry context: project GUID only, never the name.
@@ -236,6 +243,8 @@ export function DocumentsHubApp(): React.ReactElement {
           ? `/${routedPath.replace(/^\/+/, "")}`
           : readLastPath(project.id, resolvedRepoId);
         const initialActiveThreadId = readCommentParam(routeParams);
+        const initialAnchor = readAnchorParam(routeParams);
+        const initialTextFragment = readTextParam(routeParams);
 
         // Seed the cache from wherever we landed so a later root-URL visit
         // restores it. Without this, a deep link (`?repo=…&path=…`) never
@@ -257,6 +266,10 @@ export function DocumentsHubApp(): React.ReactElement {
           initialRepoId: resolvedRepoId,
           initialSelectedPath,
           initialActiveThreadId,
+          // A heading only means something in the document the link named;
+          // without `?path=` the hub reopens the last-visited doc instead.
+          initialAnchor: routedPath ? initialAnchor : undefined,
+          initialTextFragment: routedPath ? initialTextFragment : undefined,
         });
         setPicker({
           viewIds: repos.map((r) => r.id),
@@ -876,43 +889,74 @@ export function DocumentsHubApp(): React.ReactElement {
         projectName={state.projectName}
         initialSelectedPath={state.initialSelectedPath}
         initialActiveThreadId={state.initialActiveThreadId}
-        buildCommentLink={(repoId, path, threadId) =>
-          buildHubCommentUrl(
+        initialAnchor={state.initialAnchor}
+        initialTextFragment={state.initialTextFragment}
+        buildDeepLink={(repoId, path, target) =>
+          buildHubDeepLinkUrl(
             resolveOrgUrl(),
             state.projectName,
             repoId,
             path,
-            threadId,
+            target,
           )
         }
         onSelectPath={(repoId, path) => {
           // Remember the document so a return visit reopens it (scoped per repo).
           writeLastPath(state.projectId, repoId, path);
-          // Strip the leading slash so the URL reads `?path=docs/x.md`, matching
-          // ADO's native Files experience (the host encodes `/` as %2F). Also
-          // pin the repo so the link round-trips to the right repository.
-          void setRouteQuery({ repo: repoId, path: path.replace(/^\/+/, "") });
+          // Pin repo + slash-free path (`?path=docs/x.md`, matching ADO's
+          // native Files experience) so the link round-trips; a heading
+          // anchor from the previous document is dropped (see helper).
+          void setRouteQuery((current) =>
+            routeUpdatesForPath(current, repoId, path),
+          );
         }}
         onSelectRepo={(repoId) => {
           // Remember the choice so a return visit reopens the same repo.
           writeLastRepo(state.projectId, repoId);
           // Switching repos lands on a different document set, so the previous
-          // repo's `?path=`/`?comment=` deep link no longer applies. Clear both
-          // (empty value removes the param) and pin the new repo, so the URL
-          // never momentarily shows the new repo paired with the OLD repo's
-          // path. DocumentsApp's onSelectPath repopulates `?path=` once the new
-          // repo's first document resolves, keeping the URL consistent.
+          // repo's `?path=`/`?comment=`/`?anchor=` deep link no longer applies.
+          // Clear them (empty value removes the param) and pin the new repo, so
+          // the URL never momentarily shows the new repo paired with the OLD
+          // repo's path. DocumentsApp's onSelectPath repopulates `?path=` once
+          // the new repo's first document resolves, keeping the URL consistent.
           void setRouteQuery({
             repo: repoId,
             path: "",
             [COMMENT_LINK_PARAM]: "",
+            [ANCHOR_LINK_PARAM]: "",
+            [TEXT_LINK_PARAM]: "",
           });
         }}
         onActiveThreadChange={(_repoId, threadId) => {
           // Mirror the active thread into `?comment=` so selecting a comment
           // yields the same shareable deep link the "Link to comment" action
-          // builds. An empty value removes the param when nothing is active.
-          void setRouteQuery({ [COMMENT_LINK_PARAM]: threadId ?? "" });
+          // builds. An empty value removes the param when nothing is active;
+          // an active comment supersedes any heading or text target.
+          void setRouteQuery(
+            threadId
+              ? {
+                  [COMMENT_LINK_PARAM]: threadId,
+                  [ANCHOR_LINK_PARAM]: "",
+                  [TEXT_LINK_PARAM]: "",
+                }
+              : { [COMMENT_LINK_PARAM]: "" },
+          );
+        }}
+        onHeadingLinkCopied={(_repoId, anchor) => {
+          // Mirror a copied heading link into the address bar, as ADO's own
+          // Markdown preview does when its anchor glyph is clicked.
+          void setRouteQuery({
+            [ANCHOR_LINK_PARAM]: anchor,
+            [COMMENT_LINK_PARAM]: "",
+            [TEXT_LINK_PARAM]: "",
+          });
+        }}
+        onTextLinkCopied={(_repoId, text, anchor) => {
+          void setRouteQuery({
+            [TEXT_LINK_PARAM]: text,
+            [ANCHOR_LINK_PARAM]: anchor ?? "",
+            [COMMENT_LINK_PARAM]: "",
+          });
         }}
         onDocNavigate={(repoId, target) => {
           // In the hub every Markdown link opens in place, so this only fires
@@ -969,35 +1013,45 @@ async function openInNewTab(url: string): Promise<void> {
 }
 
 /**
- * Merge `updates` into the hub's query string without reloading the page, so
- * in-hub navigation is reflected in (and shareable via) the URL. Existing
- * params are preserved. Best-effort when the navigation service is missing.
+ * Apply `updates` to the hub's query string without reloading the page, so
+ * in-hub navigation is reflected in (and shareable via) the URL. `updates` may
+ * be derived from the current params. Only the delta is sent: the host's
+ * `setQueryParams` merges (add / update / remove-on-empty), and resending a
+ * full snapshot would let one of two overlapping writes (e.g. a document
+ * switch and the comment it deselects) restore the other's stale values.
+ * Best-effort when the navigation service is missing.
  */
-async function setRouteQuery(updates: Record<string, string>): Promise<void> {
+async function setRouteQuery(
+  updates:
+    | Record<string, string>
+    | ((current: Record<string, string>) => Record<string, string>),
+): Promise<void> {
   try {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
-    const current = (await nav.getQueryParams()) ?? {};
-    nav.setQueryParams({ ...current, ...updates });
+    const next =
+      typeof updates === "function"
+        ? updates((await nav.getQueryParams()) ?? {})
+        : updates;
+    nav.setQueryParams(next);
   } catch {
     /* navigation service unavailable — route syncing is best-effort */
   }
 }
 
 /**
- * Build the absolute, shareable Documents-hub URL for a deep link to a thread.
- * Resolves the extension identity from the SDK, then delegates the URL
- * assembly to the pure `assembleHubCommentUrl`. Returns `undefined` when the
- * extension context can't be resolved, so the caller falls back to the
- * in-iframe hash link.
+ * Build the absolute, shareable Documents-hub URL for a deep link to a thread
+ * or heading. Resolves the extension identity from the SDK, then delegates the
+ * URL assembly to the pure `assembleHubDeepLinkUrl`. Returns `undefined` when
+ * the extension context can't be resolved (the copy then reports a failure).
  */
-function buildHubCommentUrl(
+function buildHubDeepLinkUrl(
   orgUrl: string,
   projectName: string,
   repoId: string,
   path: string,
-  threadId: string,
+  target: DeepLinkTarget,
 ): string | undefined {
   let ext: { publisherId: string; extensionId: string };
   try {
@@ -1005,14 +1059,7 @@ function buildHubCommentUrl(
   } catch {
     return undefined;
   }
-  return assembleHubCommentUrl(
-    orgUrl,
-    projectName,
-    ext,
-    repoId,
-    path,
-    threadId,
-  );
+  return assembleHubDeepLinkUrl(orgUrl, projectName, ext, repoId, path, target);
 }
 
 /**

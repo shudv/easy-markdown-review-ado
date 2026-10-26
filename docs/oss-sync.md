@@ -5,6 +5,8 @@
 - Public base: `d25cdc8` (version `0.0.2`).
 - Previously mirrored product boundary: `ff656e00fd92ea32e5acbcc6a0457e80cb0e17cb`.
 - New product boundary: `61830bf`.
+- OSS release version: `1.0.0` (package, root lockfile metadata, and Marketplace
+  manifest updated together).
 - Strategy: port the product tree delta, not the private repository's history.
   The repositories have no common merge base. The previous boundary was recorded
   in [sync PR #3](https://github.com/shudv/easy-markdown-review-ado/pull/3);
@@ -27,7 +29,7 @@ and synthetic sandbox documents accompany the runtime changes.
 ### Public-specific adaptations retained
 
 - MIT license, public security/feedback contacts, GitHub CI and release workflows,
-  repository metadata, and version `0.0.2`.
+  repository metadata. The OSS release version is intentionally bumped to `1.0.0`.
 - Public npm registry and the public dependency update to
   `css-minimizer-webpack-plugin` version 8; math dependencies are added without
   importing the private lockfile.

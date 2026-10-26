@@ -282,7 +282,7 @@ describe("simulateHidden", () => {
 });
 
 describe("installDevFaults", () => {
-  const originalFetch = window.fetch;
+  const originalFetch = window.fetch.bind(window);
 
   beforeEach(() => {
     vi.useFakeTimers();

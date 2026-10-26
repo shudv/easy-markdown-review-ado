@@ -38,6 +38,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { get } from "node:https";
 import os from "node:os";
 import path from "node:path";
+import { getCACertificates } from "node:tls";
 
 import { chromium } from "@playwright/test";
 
@@ -153,11 +154,12 @@ function profileDir(browser) {
 /** Probe the dev server; resolves `null` when nothing answers. */
 function probeDevServer(devOrigin) {
   return new Promise((resolve) => {
-    // Reachability only: the BROWSER validates the certificate (Node doesn't
-    // read the OS trust store that `npm run setup:cert` adds the dev cert to).
+    // Include the OS trust store where setup:cert installs the dev certificate.
     const req = get(
       `${devOrigin}/pr-tab/pr-tab.html`,
-      { rejectUnauthorized: false },
+      {
+        ca: [...getCACertificates("default"), ...getCACertificates("system")],
+      },
       (res) => {
         res.resume();
         resolve({

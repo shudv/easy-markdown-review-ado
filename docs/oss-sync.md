@@ -38,6 +38,8 @@ and synthetic sandbox documents accompany the runtime changes.
 - Telemetry remains disabled unless a build explicitly supplies a key.
 - The synthetic cross-host link regression uses an example organization,
   project, repository, and document path instead of a private repository URL.
+- The dev launcher's HTTPS probe uses Node 24's system trust store rather than
+  disabling certificate verification.
 
 ### Intentionally not mirrored
 

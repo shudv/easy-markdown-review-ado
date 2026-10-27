@@ -71,7 +71,11 @@ export const StablePagination: Story = {
     const chevron = trigger.querySelector<SVGElement>(
       ".emr-docnav-repo-chevron",
     )!;
-    expect(getComputedStyle(chevron).opacity).toBe("0");
+    // Browser tests use a real pointer, which can rest over the centered trigger.
+    const restingOpacity = trigger.matches(":hover, :focus-visible")
+      ? "0.75"
+      : "0";
+    expect(getComputedStyle(chevron).opacity).toBe(restingOpacity);
     expect(chevron.getBoundingClientRect().width).toBe(16);
     expect(
       trigger.getBoundingClientRect().right -

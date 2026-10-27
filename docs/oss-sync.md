@@ -5,13 +5,15 @@
 - Public base: `0d445ba` (the merged 2026-10-26 sync).
 - Previously mirrored product boundary: `61830bf`.
 - New product boundary: `4c90e4218c56336b161400b59a78ff8d807ea7c5`.
+- OSS release version: `1.1.0` (package, root lockfile metadata, and Marketplace
+  manifest updated together).
 - Strategy: replay the product tree delta without importing private history.
 
 ### Mirrored changes
 
 | Source merge | Changes represented                                                                                                                                                                                   |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `b41b534`    | The source version bump to `1.0.0` is already represented by the previous OSS sync; no additional version change is needed.                                                                           |
+| `b41b534`    | The source version bump to `1.0.0` was already represented by the previous OSS sync. This OSS release advances to `1.1.0`.                                                                            |
 | `4c90e42`    | In-place structural diffs, whitespace and line-break edits, CJK word boundaries, telemetry error-code extraction, matching pipeline/unit/visual regressions, and the per-function complexity ratchet. |
 
 The complexity baseline, checker, checker tests, ESLint feedback, and contributor
@@ -23,7 +25,7 @@ instead of importing the private Azure pipeline.
 - Keep all adaptations and exclusions from the 2026-10-26 sync below.
 - Preserve the public dependency lock; add only the SonarJS checker dependency
   and required transitive dependencies using public npm URLs.
-- Preserve version `1.0.0`, MIT licensing, public Marketplace identity, opt-in
+- Bump the OSS version to `1.1.0`; preserve MIT licensing, public Marketplace identity, opt-in
   telemetry, public contacts, and public synthetic regression fixtures.
 - Include the two synthetic structural-diff screenshots, not private generated
   showcase media or local artifacts.

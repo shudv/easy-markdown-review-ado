@@ -1,5 +1,39 @@
 # OSS mirror sync ledger
 
+## 2026-10-28 structural diff and complexity sync
+
+- Public base: `0d445ba` (the merged 2026-10-26 sync).
+- Previously mirrored product boundary: `61830bf`.
+- New product boundary: `4c90e4218c56336b161400b59a78ff8d807ea7c5`.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source merge | Changes represented                                                                                                                                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `b41b534`    | The source version bump to `1.0.0` is already represented by the previous OSS sync; no additional version change is needed.                                                                           |
+| `4c90e42`    | In-place structural diffs, whitespace and line-break edits, CJK word boundaries, telemetry error-code extraction, matching pipeline/unit/visual regressions, and the per-function complexity ratchet. |
+
+The complexity baseline, checker, checker tests, ESLint feedback, and contributor
+commands are included. Equivalent complexity gates are wired into GitHub CI
+instead of importing the private Azure pipeline.
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the 2026-10-26 sync below.
+- Preserve the public dependency lock; add only the SonarJS checker dependency
+  and required transitive dependencies using public npm URLs.
+- Preserve version `1.0.0`, MIT licensing, public Marketplace identity, opt-in
+  telemetry, public contacts, and public synthetic regression fixtures.
+- Include the two synthetic structural-diff screenshots, not private generated
+  showcase media or local artifacts.
+
+### Next sync
+
+Compare the next source product tree against `4c90e42` and integrate the delta
+on the latest public `main`. Preserve the adaptations and exclusions below,
+and record validation in the sync PR.
+
 ## 2026-10-26 product sync
 
 - Public base: `d25cdc8` (version `0.0.2`).
@@ -52,7 +86,7 @@ and synthetic sandbox documents accompany the runtime changes.
 
 ### Next sync
 
-Compare the next source product tree against `61830bf`, then integrate the delta
+For this historical sync, the next source boundary was `61830bf`. Integrate deltas
 on top of the latest public `main`. Recheck the adaptations and exclusions above;
 do not merge the private repository's history or overwrite public dependency
 updates. Record the new source boundary and validation in the sync PR.

@@ -12,7 +12,9 @@ import * as React from "react";
 import { expect, fn, waitFor } from "storybook/test";
 
 import type { CommentThread, DiffRange } from "../../types";
+import { refineDiffRanges } from "../../markdown/diffRefine";
 import { renderMarkdownSync } from "../../markdown/render";
+import { sourceDiffRanges } from "../prShellHelpers";
 import { ArticleView } from "./ArticleView";
 
 // Keep line numbers stable — the diff ranges below reference them. This fixture
@@ -2519,5 +2521,250 @@ export const TooltipEdgesHighContrastDark: Story = {
   args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-hcd.md" },
   play: async ({ canvasElement }) => {
     await prepareTooltipEdges(canvasElement);
+  },
+};
+
+// Structural edits: lines added to / removed from inside existing blocks,
+// whitespace-only code edits, combined checklist + text edits, list nesting,
+// nested quotes, CJK text and footnotes. Unlike the fixtures above, the ranges
+// come from the production pipeline (line diff + block refinement) and the
+// story passes both sources, so every in-block reconstruction path renders
+// exactly as it does for a real pull request.
+const STRUCTURAL_ORIGINAL = [
+  "# Structural Edits",
+  "",
+  "## Prose",
+  "",
+  "Reviews read best with one sentence per line.",
+  "Each line can change on its own.",
+  "",
+  "This paragraph had three lines.",
+  "The middle line was removed.",
+  "The last line stays.",
+  "",
+  "## Code",
+  "",
+  "```ts",
+  "function load(url) {",
+  "  const retries = 3;",
+  '  log("start");',
+  "  const legacy = true;",
+  "  return fetch(url, { retries });",
+  "}",
+  "```",
+  "",
+  "```sh",
+  "npm ci",
+  "npm test",
+  "```",
+  "",
+  "```go",
+  "func run() {",
+  "\treturn",
+  "}",
+  "```",
+  "",
+  "## Lists",
+  "",
+  "- [ ] Write the migration notes",
+  "- [ ] Ship the release",
+  "",
+  "Ownership:",
+  "",
+  "- Parent task",
+  "- Child task that belongs under the parent",
+  "- Sibling task",
+  "",
+  "## Quotes",
+  "",
+  "> Prefer small pull requests.",
+  "",
+  "> Reviewer guidance",
+  ">",
+  "> > Approve when the old checks pass.",
+  "",
+  "## Other scripts and footnotes",
+  "",
+  "今日は東京に行きます。",
+  "",
+  "Latency improved.[^bench]",
+  "",
+  "[^bench]: Measured on the old staging cluster.",
+].join("\n");
+
+const STRUCTURAL_SOURCE = [
+  "# Structural Edits",
+  "",
+  "## Prose",
+  "",
+  "Reviews read best with one sentence per line.",
+  "Each line can change on its own.",
+  "A new line shows only its own words.",
+  "",
+  "This paragraph had three lines.",
+  "The last line stays.",
+  "",
+  "## Code",
+  "",
+  "```ts",
+  "function load(url) {",
+  "    const retries = 3;",
+  '  log("start");',
+  "  return fetch(url, { retries });",
+  "  // Retries are handled by the caller.",
+  "}",
+  "```",
+  "",
+  "```sh",
+  "npm ci",
+  "",
+  "npm test",
+  "```",
+  "",
+  "```go",
+  "func run() {",
+  "    return",
+  "}",
+  "```",
+  "",
+  "## Lists",
+  "",
+  "- [x] Write the full migration notes",
+  "- [ ] Ship the release",
+  "",
+  "Ownership:",
+  "",
+  "- Parent task",
+  "  - Child task that belongs under the parent",
+  "- Sibling task",
+  "",
+  "## Quotes",
+  "",
+  "> Prefer small pull requests.",
+  "> They are easier to review.",
+  "",
+  "> Reviewer guidance",
+  ">",
+  "> > Approve when the new checks pass.",
+  "",
+  "## Other scripts and footnotes",
+  "",
+  "今日は大阪に行きます。",
+  "",
+  "Latency improved.[^bench]",
+  "",
+  "[^bench]: Measured on the new staging cluster.",
+].join("\n");
+
+const STRUCTURAL_ARGS = {
+  pristineHtml: renderMarkdownSync(STRUCTURAL_SOURCE),
+  currentSource: STRUCTURAL_SOURCE,
+  originalSource: STRUCTURAL_ORIGINAL,
+  threads: [],
+  activeThreadId: null,
+  diff: refineDiffRanges(
+    sourceDiffRanges(STRUCTURAL_ORIGINAL, STRUCTURAL_SOURCE),
+    STRUCTURAL_ORIGINAL,
+    STRUCTURAL_SOURCE,
+  ),
+};
+
+/** Every structural edit is shown in place, inside the block it changed. */
+async function prepareStructuralEdits(
+  canvasElement: HTMLElement,
+): Promise<void> {
+  const marked = (selector: string, text: string): boolean =>
+    Array.from(canvasElement.querySelectorAll(selector)).some(
+      (mark) => mark.textContent === text,
+    );
+  await waitFor(() => {
+    const checks: Array<[string, boolean]> = [
+      [
+        "appended prose line",
+        marked("p .emr-word-added", "\nA new line shows only its own words."),
+      ],
+      [
+        "removed prose line",
+        marked("p .emr-word-removed", "The middle line was removed.\n"),
+      ],
+      ["code re-indent", marked("pre .emr-word-added", "  ")],
+      [
+        "tab replaced by spaces",
+        canvasElement.querySelector(
+          'pre .emr-diff-format-change[data-diff-tooltip="Indentation changed from 1 tab to 4 spaces"]',
+        ) !== null,
+      ],
+      [
+        "removed code line",
+        marked("pre .emr-word-removed", "  const legacy = true;\n"),
+      ],
+      ["added blank code line", marked("pre .emr-word-added", "\n")],
+      [
+        "checklist toggle with text edit",
+        canvasElement.querySelector(
+          "li.emr-diff-block--inline .emr-diff-task-tooltip-anchor",
+        ) !== null && marked("li .emr-word-added", "full "),
+      ],
+      [
+        "list nesting",
+        canvasElement.querySelector(
+          'li .emr-diff-format-change[data-diff-tooltip="List nesting changed from level 1 to level 2"]',
+        ) !== null,
+      ],
+      [
+        "quote continuation",
+        marked("blockquote .emr-word-added", "\nThey are easier to review."),
+      ],
+      ["nested quote", marked("blockquote blockquote .emr-word-added", "new")],
+      ["CJK word", marked("p .emr-word-added", "大阪")],
+      ["footnote", marked("[data-footnotes] .emr-word-added", "new")],
+    ];
+    const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
+    if (missing.length > 0) {
+      throw new Error(`structural edits not decorated: ${missing.join(", ")}`);
+    }
+  });
+  if (canvasElement.querySelector(".emr-diff-block--added")) {
+    throw new Error("an edited block is painted as wholly added");
+  }
+  if (canvasElement.querySelector(".emr-diff-deleted-marker")) {
+    throw new Error("an in-block removal is shown as a separate marker");
+  }
+  const blankLine = canvasElement.querySelector(
+    "pre .emr-word-mark--line-break",
+  );
+  if (
+    !blankLine ||
+    getComputedStyle(blankLine, "::before").content !== '"\u21B5"'
+  ) {
+    throw new Error("the blank line added to code has no visible glyph");
+  }
+}
+
+export const StructuralEditsLight: Story = {
+  decorators: [
+    (Story) => (
+      <ThemeFrame>
+        <Story />
+      </ThemeFrame>
+    ),
+  ],
+  args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits.md" },
+  play: async ({ canvasElement }) => {
+    await prepareStructuralEdits(canvasElement);
+  },
+};
+
+export const StructuralEditsDark: Story = {
+  decorators: [
+    (Story) => (
+      <ThemeFrame theme="dark">
+        <Story />
+      </ThemeFrame>
+    ),
+  ],
+  args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits-dark.md" },
+  play: async ({ canvasElement }) => {
+    await prepareStructuralEdits(canvasElement);
   },
 };

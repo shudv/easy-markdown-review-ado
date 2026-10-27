@@ -4,6 +4,7 @@ import {
   WORD_ADDED_CLASS,
   WORD_REMOVED_CLASS,
   WORD_REMOVED_TIGHT_CLASS,
+  WORD_LINE_BREAK_CLASS,
 } from "../src/markdown/wordDiffDom";
 import { diffWords } from "../src/markdown/wordDiff";
 
@@ -36,6 +37,35 @@ function modifiedText(el: HTMLElement): string {
 describe("applyInlineWordDiff", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("flags blank-line marks so code can show them, keeping the text intact", () => {
+    const added = block("npm ci\n\nnpm test");
+    applyInlineWordDiff(
+      added,
+      diffWords("npm ci\nnpm test", "npm ci\n\nnpm test"),
+    );
+    const addedMark = added.querySelector(`.${WORD_ADDED_CLASS}`)!;
+    expect(addedMark.textContent).toBe("\n");
+    expect(addedMark.classList.contains(WORD_LINE_BREAK_CLASS)).toBe(true);
+    expect(modifiedText(added)).toBe("npm ci\n\nnpm test");
+
+    const removed = block("a\nb");
+    applyInlineWordDiff(removed, diffWords("a\n\nb", "a\nb"));
+    expect(
+      removed
+        .querySelector(`.${WORD_REMOVED_CLASS}`)!
+        .classList.contains(WORD_LINE_BREAK_CLASS),
+    ).toBe(true);
+  });
+
+  it("does not flag marks that carry visible text or plain spaces", () => {
+    const el = block("const a = 1;\nconst b = 2;\n  x");
+    applyInlineWordDiff(
+      el,
+      diffWords("const a = 1;\nx", "const a = 1;\nconst b = 2;\n  x"),
+    );
+    expect(el.querySelector(`.${WORD_LINE_BREAK_CLASS}`)).toBeNull();
   });
 
   it("wraps a single added word in an <ins>", () => {

@@ -272,6 +272,21 @@ const SHOTS: Shot[] = [
     settledSelector: "li li li.emr-diff-block--added",
   },
   {
+    // Lines added to / removed from inside existing blocks, whitespace-only
+    // code edits, checklist + text, list nesting, nested quotes, CJK and
+    // footnotes — every one shown in place, built by the production pipeline.
+    title: "Visual/ArticleDiff",
+    name: "Structural Edits Light",
+    settledSelector:
+      'pre .emr-word-removed, li .emr-diff-format-change[data-diff-tooltip^="List nesting changed"], pre .emr-diff-format-change, li .emr-diff-task-tooltip-anchor, [data-footnotes] .emr-word-added',
+  },
+  {
+    title: "Visual/ArticleDiff",
+    name: "Structural Edits Dark",
+    settledSelector:
+      'pre .emr-word-removed, li .emr-diff-format-change[data-diff-tooltip^="List nesting changed"], pre .emr-diff-format-change, li .emr-diff-task-tooltip-anchor, [data-footnotes] .emr-word-added',
+  },
+  {
     title: "Visual/ArticleDiff",
     name: "Production Syntax Light",
     settledSelector:

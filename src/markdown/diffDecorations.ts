@@ -10,7 +10,12 @@
 // whole block. Pure, idempotent DOM transform; jsdom-tested.
 
 import type { DiffRange } from "../types";
-import { diffWords, unchangedRatio } from "./wordDiff";
+import {
+  diffWords,
+  LINE_WHITESPACE,
+  unchangedRatio,
+  type WordDiffOp,
+} from "./wordDiff";
 import {
   frontmatterValuesForKey,
   frontmatterValueText,
@@ -281,17 +286,34 @@ function numAttr(el: Element, name: string): number | null {
  * below `start` when the container opens with a child block and so owns no
  * lines itself. Everything else owns its whole span.
  */
-function ownSpanEnd(el: HTMLElement, start: number, end: number): number {
+function ownSpanEnd(
+  el: HTMLElement,
+  start: number,
+  end: number,
+  currentLines?: readonly string[],
+): number {
   if (el.tagName !== "LI" && el.tagName !== "BLOCKQUOTE") return end;
   const lead = inlineProseTarget(el);
+  let ownEnd = end;
   for (const child of Array.from(el.children)) {
     if (!isChildBlock(child)) continue;
     const childStart = numAttr(child, "data-source-line");
     if (childStart == null) continue;
     if (child === lead && childStart === start) continue;
-    return childStart - 1;
+    ownEnd = childStart - 1;
+    break;
   }
-  return end;
+  // Blank separator lines (bare `>` in a quote) before a child block carry no
+  // lead content: adding a second paragraph adds one, and must not paint the
+  // unchanged lead as added.
+  while (
+    ownEnd > start &&
+    currentLines?.[ownEnd - 1] != null &&
+    /^[\s>]*$/.test(currentLines[ownEnd - 1]!)
+  ) {
+    ownEnd--;
+  }
+  return ownEnd;
 }
 
 /**
@@ -567,6 +589,11 @@ export function decorateDiffRanges(
       });
   }
   const originalLines = options?.originalSource?.split(/\r\n|\r|\n/);
+  const currentLines = options?.currentSource?.split(/\r\n|\r|\n/);
+  // Deletions shown inside the block they were removed from, not as markers.
+  const absorbedDeletions = new Set<DiffRange>();
+  // The original document, rendered only if a list item needs its old depth.
+  let originalDocument: HTMLElement | null = null;
 
   const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR));
 
@@ -582,9 +609,30 @@ export function decorateDiffRanges(
     if (coveredByDecoratedAncestor(el)) continue;
     // A list item or quote owns only its lead content; its child blocks
     // decorate themselves (see ownSpanEnd).
-    const ownEnd = ownSpanEnd(el, start, end);
+    const ownEnd = ownSpanEnd(el, start, end, currentLines);
     if (ownEnd < start) continue;
-    const kind = classifyBlock(start, ownEnd, changeRanges);
+    let kind = classifyBlock(start, ownEnd, changeRanges);
+    // A line added to, or removed from the middle of, a block that already
+    // existed edits that block: the block isn't new, and the removal belongs
+    // inside it rather than in a marker after it.
+    const interiorEdit =
+      options?.renderInline && currentLines && ownEnd === end
+        ? reconstructEditedBlock(
+            el,
+            start,
+            end,
+            changeRanges,
+            deletedRanges,
+            currentLines,
+            options.renderInline,
+          )
+        : null;
+    if (interiorEdit) {
+      kind = "modified";
+      for (const deletion of interiorEdit.deletions) {
+        absorbedDeletions.add(deletion);
+      }
+    }
     if (!kind) continue;
     el.classList.add(
       DIFF_BLOCK_CLASS,
@@ -613,21 +661,36 @@ export function decorateDiffRanges(
       // block changed, fall back to the block wash.
       const coversBlock =
         range != null && range.start <= start && range.end >= end;
-      const reconstructed = reconstructOriginalBlock(
-        start,
-        end,
-        changeRanges,
-        options.originalSource,
-        originalLines,
-      );
+      const reconstructed =
+        interiorEdit?.original ??
+        reconstructOriginalBlock(
+          start,
+          end,
+          changeRanges,
+          options.originalSource,
+          originalLines,
+        );
       let originalMarkdown = reconstructed;
       if (originalMarkdown == null && coversBlock) {
         originalMarkdown = range!.originalText ?? null;
       }
-      const rendering =
+      const comparison =
         originalMarkdown != null
           ? compareRendering(el, originalMarkdown, options.renderInline)
           : null;
+      // The item reads the same, but may now sit at a different list depth.
+      const nesting =
+        comparison != null && comparison.kind !== "different"
+          ? listNestingChange(el, start, changeRanges, () => {
+              originalDocument ??= renderSource(
+                root.ownerDocument,
+                options.originalSource,
+                options.renderInline!,
+              );
+              return originalDocument;
+            })
+          : null;
+      const rendering = nesting ?? comparison;
       if (rendering?.kind === "identical") {
         // A source-only edit — a renumbered list item, re-wrapped lines,
         // `*a*` → `_a_` — changes nothing a reader can see, so it isn't shown
@@ -644,7 +707,17 @@ export function decorateDiffRanges(
         decoratedEls.pop();
         continue;
       }
-      if (rendering?.kind === "numbering") {
+      if (rendering?.kind === "nesting") {
+        // Same text, different structure: tint the item's own text amber and
+        // explain it, as a heading-level change does. The bullet stays amber.
+        el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
+        explainLeadText(
+          el,
+          `List nesting changed from level ${rendering.before} to level ${rendering.after}`,
+        );
+        el.dataset.diffInline = "true";
+        inlined++;
+      } else if (rendering?.kind === "numbering") {
         // Only the list's start number changed: mark just the number.
         el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
         applyDiffTooltip(
@@ -706,13 +779,15 @@ export function decorateDiffRanges(
       const range = soleModifiedRange(start, end, changeRanges);
       const coversBlock =
         range != null && range.start <= start && range.end >= end;
-      const reconstructed = reconstructOriginalBlock(
-        start,
-        end,
-        changeRanges,
-        options.originalSource,
-        originalLines,
-      );
+      const reconstructed =
+        interiorEdit?.original ??
+        reconstructOriginalBlock(
+          start,
+          end,
+          changeRanges,
+          options.originalSource,
+          originalLines,
+        );
       let originalMarkdown = reconstructed;
       if (originalMarkdown == null && coversBlock) {
         originalMarkdown = range!.originalText ?? null;
@@ -759,18 +834,22 @@ export function decorateDiffRanges(
       !el.classList.contains(DIFF_INLINE_CLASS) &&
       el.dataset.diffInline !== "true"
     ) {
-      const originalBlock = reconstructOriginalBlock(
-        start,
-        end,
-        changeRanges,
-        options.originalSource,
-        originalLines,
-      );
+      const originalBlock =
+        interiorEdit?.original ??
+        reconstructOriginalBlock(
+          start,
+          end,
+          changeRanges,
+          options.originalSource,
+          originalLines,
+        );
       if (originalBlock) {
         if (el.classList.contains(DIFF_MATH_CLASS)) {
-          const scratch = document.createElement("div");
-          scratch.innerHTML = options.renderInline(originalBlock);
-          const encoded = scratch
+          const encoded = renderOriginalStandalone(
+            el,
+            originalBlock,
+            options.renderInline,
+          )
             .querySelector<HTMLElement>(".emr-math[data-math-src]")
             ?.getAttribute("data-math-src");
           if (encoded) {
@@ -790,6 +869,7 @@ export function decorateDiffRanges(
       el.dataset.diffInline !== "true" &&
       el.dataset.diffCells !== "true" &&
       el.dataset.diffAmberMode == null &&
+      el.dataset.diffOriginal == null &&
       !el.querySelector(`.${DIFF_TOOLTIP_CLASS}`)
     ) {
       applyDiffTooltip(
@@ -820,7 +900,25 @@ export function decorateDiffRanges(
     const end = numAttr(el, "data-source-end-line");
     if (start == null || end == null) continue;
     if (coveredByDecoratedAncestor(el)) continue;
-    const kind = classifyBlock(start, end, changeRanges);
+    let kind = classifyBlock(start, end, changeRanges);
+    const interiorEdit =
+      options?.renderInline && currentLines
+        ? reconstructEditedBlock(
+            el,
+            start,
+            end,
+            changeRanges,
+            deletedRanges,
+            currentLines,
+            options.renderInline,
+          )
+        : null;
+    if (interiorEdit) {
+      kind = "modified";
+      for (const deletion of interiorEdit.deletions) {
+        absorbedDeletions.add(deletion);
+      }
+    }
     if (!kind) continue;
     el.classList.add(
       DIFF_BLOCK_CLASS,
@@ -830,13 +928,15 @@ export function decorateDiffRanges(
     el.dataset.diffKind = kind;
     // Prefer reconstructing the complete pre-edit fence from the original
     // document so even a one-line edit gets a useful Source > Before view.
-    const originalBlock = reconstructOriginalBlock(
-      start,
-      end,
-      changeRanges,
-      options?.originalSource,
-      originalLines,
-    );
+    const originalBlock =
+      interiorEdit?.original ??
+      reconstructOriginalBlock(
+        start,
+        end,
+        changeRanges,
+        options?.originalSource,
+        originalLines,
+      );
     const originalSource = originalBlock
       ? stripMermaidFence(originalBlock)
       : "";
@@ -849,8 +949,7 @@ export function decorateDiffRanges(
       `${BLOCK_SELECTOR}, ${MERMAID_SELECTOR}`,
     ),
   );
-  if (options?.currentSource) {
-    const currentLines = options.currentSource.split(/\r\n|\r|\n/);
+  if (currentLines) {
     const renderedSpans = markerAnchors.flatMap((element) => {
       const start = numAttr(element, "data-source-line");
       const end = numAttr(element, "data-source-end-line");
@@ -892,6 +991,7 @@ export function decorateDiffRanges(
   // returns nodes in document order, which matches source order.
   let markers = 0;
   for (const r of deletedRanges) {
+    if (absorbedDeletions.has(r)) continue;
     const anchor = firstBlockAtOrAfter(markerAnchors, r.startLine);
     const tableMarker = options?.renderInline
       ? buildDeletedTableRows(r, anchor, markerAnchors, options.renderInline)
@@ -1336,6 +1436,99 @@ export function reconstructOriginalBlock(
   return sourceLines.slice(originalBlockStart - 1, originalBlockEnd).join("\n");
 }
 
+interface InteriorEdit {
+  /** The block's original Markdown source. */
+  original: string;
+  /** Deletions inside the block, shown by its inline diff instead of a marker. */
+  deletions: DiffRange[];
+}
+
+/** Blocks whose original can be rebuilt line by line and diffed in place. */
+function canDiffInPlace(el: HTMLElement): boolean {
+  return (
+    (PROSE_TAGS.has(el.tagName) ||
+      el.tagName === "PRE" ||
+      el.classList.contains("emr-math") ||
+      el.matches(MERMAID_SELECTOR)) &&
+    !isImageOnlyBlock(el) &&
+    !el.classList.contains(FRONTMATTER_ROW_CLASS)
+  );
+}
+
+/**
+ * Rebuild the original source of a block that a line diff only partly
+ * touches: lines added to it, or removed from its middle. ADO reports those as
+ * pure additions/deletions, which would paint the whole surviving block as new
+ * or float the removal after it. Walking the block's CURRENT lines — dropping
+ * added ones, restoring modified ones and splicing deletions back in — yields
+ * the original block to word-diff against. Returns null when the block is
+ * wholly new, untouched by such edits, or wasn't one block before.
+ */
+function reconstructEditedBlock(
+  el: HTMLElement,
+  start: number,
+  end: number,
+  ranges: readonly ChangeRange[],
+  deletedRanges: readonly DiffRange[],
+  currentLines: readonly string[],
+  renderInline: (md: string) => string,
+): InteriorEdit | null {
+  if (!canDiffInPlace(el)) return null;
+  const deletions = deletedRanges.filter(
+    (range) => range.startLine > start && range.startLine <= end,
+  );
+  const touching = ranges.filter((range) =>
+    overlaps(start, end, range.start, range.end),
+  );
+  const rangeAt = (line: number): ChangeRange | undefined =>
+    touching.find((range) => range.start <= line && line <= range.end);
+  if (deletions.length === 0) {
+    if (!touching.some((range) => range.kind === "added")) return null;
+    let existed = false;
+    for (let line = start; line <= end && !existed; line++) {
+      existed = rangeAt(line)?.kind !== "added";
+    }
+    if (!existed) return null;
+  }
+
+  const lines: string[] = [];
+  for (let line = start; line <= end; line++) {
+    for (const deletion of deletions) {
+      if (deletion.startLine !== line) continue;
+      if (deletion.deletedContent == null) return null;
+      lines.push(
+        ...deletion.deletedContent.replace(/\r?\n$/, "").split(/\r\n|\r|\n/),
+      );
+    }
+    const range = rangeAt(line);
+    if (range?.kind === "added") continue;
+    if (range) {
+      if (
+        range.start < start ||
+        range.end > end ||
+        range.originalText == null
+      ) {
+        return null;
+      }
+      if (line === range.start) {
+        lines.push(...range.originalText.split(/\r\n|\r|\n/));
+      }
+      continue;
+    }
+    const current = currentLines[line - 1];
+    if (current == null) return null;
+    lines.push(current);
+  }
+  const original = lines.join("\n");
+  // An edit that joined or split blocks reads better as separate changes.
+  const rendered = renderOriginalStandalone(el, original, renderInline);
+  if (rendered.children.length !== 1) return null;
+  if (el.tagName === "LI" && rendered.querySelectorAll("li").length !== 1) {
+    return null;
+  }
+  return { original, deletions };
+}
+
 function attachBlockBeforeDisclosure(
   block: HTMLElement,
   originalMarkdown: string,
@@ -1365,8 +1558,11 @@ function attachBlockBeforeDisclosure(
   label.textContent = "Before";
   const content = document.createElement("div");
   content.className = "emr-diff-before-content";
-  const scratch = document.createElement("div");
-  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
+  const scratch = renderOriginalStandalone(
+    block,
+    originalMarkdown,
+    renderInline,
+  );
   const originalBlock = scratch.querySelector<HTMLElement>(block.tagName);
   if (originalBlock) {
     if (block.tagName === "LI") {
@@ -1883,6 +2079,32 @@ function wrapFormattingRanges(
   }
 }
 
+/** The text a list item shows itself, before any nested list or child block. */
+function leadText(item: HTMLElement): string {
+  let lead = "";
+  for (const child of Array.from(inlineProseTarget(item).childNodes)) {
+    if (child instanceof HTMLElement && isChildBlock(child)) break;
+    lead += child.textContent;
+  }
+  return lead;
+}
+
+/**
+ * Tint a list item's own text — not its nested lists or child blocks — as an
+ * explained structural change. An item with no text of its own (an image, say)
+ * carries the explanation on the item itself.
+ */
+function explainLeadText(item: HTMLElement, label: string): void {
+  const lead = leadText(item);
+  const start = lead.length - lead.trimStart().length;
+  const end = lead.trimEnd().length;
+  if (end > start) {
+    wrapFormattingRanges(inlineProseTarget(item), [{ start, end, label }]);
+  } else {
+    applyDiffTooltip(item, label);
+  }
+}
+
 function applyFormattingDiff(
   target: HTMLElement,
   originalText: string,
@@ -2309,17 +2531,78 @@ function diffInlineContent(
     };
   }
 
-  const wordDiff = applyInlineWordDiff(target, operations);
+  // In code, a whitespace swap with no shared run (a tab for spaces) reads as
+  // one explained amber run rather than a struck-and-added pair.
+  const swaps =
+    target.tagName === "PRE"
+      ? explainWhitespaceSwaps(operations)
+      : { operations, ranges: [] };
+  wrapFormattingRanges(target, swaps.ranges);
+  const wordDiff = applyInlineWordDiff(target, swaps.operations);
   applyMetadata();
   /* v8 ignore next -- operations were produced from target's own rendered text */
   const inlineApplied =
     wordDiff != null && wordDiff.added + wordDiff.removed > 0;
   return {
-    handled: inlineApplied,
+    handled: inlineApplied || swaps.ranges.length > 0,
     formattingChanged: false,
     metadataChanged,
     tooDivergent: false,
   };
+}
+
+/** "4 spaces", "1 tab", "2 spaces and 1 tab". */
+function describeWhitespace(run: string): string {
+  const tabs = run.split("\t").length - 1;
+  const spaces = run.length - tabs;
+  return [
+    spaces > 0 ? `${spaces} space${spaces === 1 ? "" : "s"}` : "",
+    tabs > 0 ? `${tabs} tab${tabs === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" and ");
+}
+
+/**
+ * Turn each remaining in-line whitespace swap (removed run then added run)
+ * into unchanged text plus an explained range over the new run, in
+ * modified-text offsets.
+ */
+function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
+  operations: WordDiffOp[];
+  ranges: ExplainedTextRange[];
+} {
+  const operations: WordDiffOp[] = [];
+  const ranges: ExplainedTextRange[] = [];
+  let modified = "";
+  const push = (kind: WordDiffOp["kind"], value: string): void => {
+    const last = operations[operations.length - 1];
+    if (last?.kind === kind) last.value += value;
+    else operations.push({ kind, value });
+    if (kind !== "removed") modified += value;
+  };
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]!;
+    const next = ops[i + 1];
+    if (
+      op.kind === "removed" &&
+      next?.kind === "added" &&
+      LINE_WHITESPACE.test(op.value) &&
+      LINE_WHITESPACE.test(next.value)
+    ) {
+      const lineStart = modified === "" || modified.endsWith("\n");
+      ranges.push({
+        start: modified.length,
+        end: modified.length + next.value.length,
+        label: `${lineStart ? "Indentation" : "Whitespace"} changed from ${describeWhitespace(op.value)} to ${describeWhitespace(next.value)}`,
+      });
+      push("equal", next.value);
+      i++;
+      continue;
+    }
+    push(op.kind, op.value);
+  }
+  return { operations, ranges };
 }
 interface CodeMetadataChange {
   label: string;
@@ -2333,8 +2616,11 @@ function readCodeMetadataChange(
   originalMarkdown: string,
   renderInline: (md: string) => string,
 ): CodeMetadataChange | null {
-  const scratch = document.createElement("div");
-  scratch.innerHTML = renderInline(originalMarkdown);
+  const scratch = renderOriginalStandalone(
+    block,
+    originalMarkdown,
+    renderInline,
+  );
   const original = scratch.querySelector("pre");
   if (!original) return null;
   const before = codeMetadata(original);
@@ -2650,7 +2936,79 @@ function semanticSignature(root: Element): string {
 type RenderComparison =
   | { kind: "different" }
   | { kind: "identical" }
-  | { kind: "numbering"; before: number; after: number };
+  | { kind: "numbering"; before: number; after: number }
+  | { kind: "nesting"; before: number; after: number };
+
+/** Render a whole Markdown source into a detached container. */
+function renderSource(
+  doc: Document,
+  source: string | undefined,
+  renderInline: (md: string) => string,
+): HTMLElement | null {
+  if (!source) return null;
+  const container = doc.createElement("div");
+  container.innerHTML = renderInline(source);
+  return container;
+}
+
+/** How many list items `item` is nested inside (0 for a top-level item). */
+function listDepth(item: Element): number {
+  let depth = 0;
+  for (
+    let parent = item.parentElement?.closest("li");
+    parent;
+    parent = parent.parentElement?.closest("li")
+  ) {
+    depth++;
+  }
+  return depth;
+}
+
+/**
+ * The 1-based nesting levels of a list item that was indented or outdented,
+ * found by locating the same item in the rendered original document; null when
+ * its depth is unchanged or the original item can't be located.
+ */
+function listNestingChange(
+  item: HTMLElement,
+  start: number,
+  ranges: readonly ChangeRange[],
+  originalDocument: () => HTMLElement | null,
+): RenderComparison | null {
+  if (item.tagName !== "LI") return null;
+  const range = ranges.find(
+    (candidate) =>
+      candidate.kind === "modified" &&
+      candidate.start <= start &&
+      start <= candidate.end,
+  );
+  if (
+    range?.originalStart == null ||
+    range.originalEnd == null ||
+    range.end - range.start !== range.originalEnd - range.originalStart
+  ) {
+    return null;
+  }
+  const originalLine = range.originalStart + (start - range.start);
+  const original = originalDocument()?.querySelector<HTMLElement>(
+    `li[data-source-line="${originalLine}"]`,
+  );
+  if (!original) return null;
+  const before = listDepth(original) + 1;
+  const after = listDepth(item) + 1;
+  if (before === after) return null;
+  // An item carried along by its indented parent keeps its place under it.
+  const parent = item.parentElement!.closest<HTMLElement>("li");
+  const originalParent = original.parentElement!.closest<HTMLElement>("li");
+  if (
+    parent &&
+    originalParent &&
+    leadText(parent).trim() === leadText(originalParent).trim()
+  ) {
+    return null;
+  }
+  return { kind: "nesting", before, after };
+}
 
 function compareRendering(
   block: HTMLElement,
@@ -2659,8 +3017,11 @@ function compareRendering(
 ): RenderComparison {
   const different: RenderComparison = { kind: "different" };
   if (!IDENTITY_TAGS.has(block.tagName)) return different;
-  const scratch = block.ownerDocument.createElement("div");
-  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
+  const scratch = renderOriginalStandalone(
+    block,
+    originalMarkdown,
+    renderInline,
+  );
   const original = scratch.querySelector(block.tagName);
   if (original == null) return different;
   // The block's structural context must match too: a quote that became a
@@ -2692,19 +3053,67 @@ function compareRendering(
 }
 
 /**
- * The source to render on its own for comparison with `block`. A nested list
- * item keeps its source indentation, which — at four or more spaces — would
- * render standalone as an indented code block, so list items are dedented.
+ * The source to render on its own for comparison with `block`. The block's
+ * original lines still carry the syntax of the containers it sits in, which
+ * would render differently standalone: the `>` markers of enclosing quotes
+ * become an extra quote, and list-item indentation — at four or more spaces —
+ * an indented code block. Both are stripped so the original renders as the
+ * same kind of block the current one is.
  */
 function standaloneSource(block: HTMLElement, markdown: string): string {
-  if (block.tagName !== "LI") return markdown;
-  const lines = markdown.split("\n");
-  const indent = Math.min(
-    ...lines
-      .filter((line) => line.trim() !== "")
-      .map((line) => /^[ \t]*/.exec(line)![0].length),
+  let lines = markdown.split("\n");
+  for (
+    let quote = block.parentElement?.closest("blockquote");
+    quote;
+    quote = quote.parentElement?.closest("blockquote")
+  ) {
+    if (!lines.every((line) => line.trim() === "" || /^[ \t]*>/.test(line))) {
+      break;
+    }
+    lines = lines.map((line) => line.replace(/^[ \t]*> ?/, ""));
+  }
+  return (
+    block.closest("li")
+      ? dedentListContent(lines, block.tagName === "PRE")
+      : lines
+  ).join("\n");
+}
+
+/** Strip a list item's content indentation from its lines. */
+function dedentListContent(lines: readonly string[], code: boolean): string[] {
+  const content = lines.filter((line) => line.trim() !== "");
+  let indent = Math.min(
+    ...content.map((line) => /^[ \t]*/.exec(line)![0].length),
   );
-  return lines.map((line) => line.slice(indent)).join("\n");
+  // An indented (unfenced) code block keeps its own four-space indent.
+  if (code && !/^[ \t]*(`{3,}|~{3,})/.test(content.join("\n"))) {
+    indent = Math.max(0, indent - 4);
+  }
+  return lines.map((line) => line.slice(indent));
+}
+
+/**
+ * Render `block`'s original Markdown standalone (see `standaloneSource`) and
+ * return the element to look its counterpart up in. A footnote definition
+ * renders nothing without a reference, so one is supplied and the footnote
+ * list itself is returned.
+ */
+function renderOriginalStandalone(
+  block: HTMLElement,
+  markdown: string,
+  renderInline: (md: string) => string,
+): HTMLElement {
+  const scratch = block.ownerDocument.createElement("div");
+  let source = standaloneSource(block, markdown);
+  const footnote = block.closest("[data-footnotes]")
+    ? /^\[\^([^\]\s]+)\]:/.exec(source)
+    : null;
+  if (footnote) source = `[^${footnote[1]}]\n\n${source}`;
+  scratch.innerHTML = renderInline(source);
+  return (
+    (footnote && scratch.querySelector<HTMLElement>("[data-footnotes] ol")) ||
+    scratch
+  );
 }
 
 function tryInlineWordDiff(
@@ -2712,9 +3121,11 @@ function tryInlineWordDiff(
   originalMarkdown: string,
   renderInline: (md: string) => string,
 ): boolean {
-  const doc = block.ownerDocument;
-  const scratch = doc.createElement("div");
-  scratch.innerHTML = renderInline(standaloneSource(block, originalMarkdown));
+  const scratch = renderOriginalStandalone(
+    block,
+    originalMarkdown,
+    renderInline,
+  );
   // Compare the ORIGINAL's matching element, not the whole scratch wrapper.
   // Rendering a list-item source (`- foo`) standalone wraps it in a `<ul>`,
   // whose inter-tag whitespace pollutes `scratch.textContent` ("\nfoo\n") and
@@ -2755,7 +3166,12 @@ function tryInlineWordDiff(
     }
     return true;
   }
-  return contentDiff.handled;
+  // A reworded item can also have been ticked off or re-marked; the word diff
+  // alone would hide that.
+  /* v8 ignore next -- differing text always yields at least one word mark */
+  if (!contentDiff.handled) return false;
+  applyLeafStructureDiff(originalEl, block);
+  return true;
 }
 
 /** First block whose source range starts at/after `line` (document order). */

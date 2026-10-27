@@ -34,9 +34,15 @@ const DIFF_INSERT = 1;
  * round-trip of the input (no lost spaces) and edits align to word boundaries.
  */
 export function tokenizeWords(text: string): string[] {
-  // Runs of: word chars (letters/digits/underscore/combining marks) OR a
-  // single whitespace run OR any other single char (punctuation/symbol).
-  const matches = text.match(/[\p{L}\p{N}_]+|\s+|[^\p{L}\p{N}_\s]/gu);
+  // In order: a single CJK ideograph/kana (those scripts don't separate words
+  // with spaces, so a whole sentence would otherwise be one "word"); a run of
+  // other word chars (letters/digits/underscore); a line break on its own; a
+  // run of horizontal whitespace; or any other single char. Keeping line
+  // breaks apart from indentation stops a code re-indent from striking and
+  // re-adding the newline itself.
+  const matches = text.match(
+    /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}]|(?:(?![\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}])[\p{L}\p{N}_])+|\r\n?|\n|[^\S\r\n]+|[^\p{L}\p{N}_\s]/gu,
+  );
   return matches ?? [];
 }
 
@@ -102,6 +108,7 @@ export function diffWords(original: string, modified: string): WordDiffOp[] {
   // "everyw" + "here" to share the suffix of a nearby "here"). It also
   // coalesces adjacent same-op runs, so the expansion below needs no merging.
   dmp.diff_cleanupSemantic(diffs);
+  shiftEditsToBoundaries(diffs, tokenArray);
 
   const ops: WordDiffOp[] = [];
   for (const [op, chars] of diffs) {
@@ -109,7 +116,135 @@ export function diffWords(original: string, modified: string): WordDiffOp[] {
       op === DIFF_INSERT ? "added" : op === DIFF_DELETE ? "removed" : "equal";
     ops.push({ kind, value: charsToText(chars, tokenArray) });
   }
-  return ops;
+  return narrowWhitespaceSwaps(ops);
+}
+
+/** A run of whitespace within one line (spaces and tabs, no line break). */
+export const LINE_WHITESPACE = /^[^\S\r\n]+$/;
+
+/**
+ * Re-indenting replaces one whitespace run with another — two different
+ * tokens. When one run extends the other (2 → 4 spaces), keep the shared part
+ * unchanged and mark only the spaces actually added or removed.
+ */
+function narrowWhitespaceSwaps(ops: readonly WordDiffOp[]): WordDiffOp[] {
+  const out: WordDiffOp[] = [];
+  const push = (kind: WordDiffOp["kind"], value: string): void => {
+    const last = out[out.length - 1];
+    if (last?.kind === kind) last.value += value;
+    else out.push({ kind, value });
+  };
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]!;
+    const next = ops[i + 1];
+    if (
+      op.kind === "removed" &&
+      next?.kind === "added" &&
+      LINE_WHITESPACE.test(op.value) &&
+      LINE_WHITESPACE.test(next.value)
+    ) {
+      if (next.value.startsWith(op.value)) {
+        push("equal", op.value);
+        push("added", next.value.slice(op.value.length));
+        i++;
+        continue;
+      }
+      if (op.value.startsWith(next.value)) {
+        push("equal", next.value);
+        push("removed", op.value.slice(next.value.length));
+        i++;
+        continue;
+      }
+    }
+    push(op.kind, op.value);
+  }
+  return out;
+}
+
+/**
+ * How natural the boundary between `left` and `right` is for an edit to start
+ * or end at (higher is better), after diff-match-patch's
+ * `diff_cleanupSemanticScore_`: blank lines, then line breaks, whitespace and
+ * punctuation. The tokens beside the pair tell a blank line from a single line
+ * break. Ties go to the later position, so an edit starts at a word rather
+ * than at the space before it.
+ */
+function boundaryScore(
+  beforeLeft: string | undefined,
+  left: string,
+  right: string,
+  afterRight: string | undefined,
+): number {
+  const newline = (token?: string) => token != null && /^[\r\n]+$/.test(token);
+  if (
+    (newline(left) && newline(beforeLeft)) ||
+    (newline(right) && newline(afterRight))
+  ) {
+    return 5;
+  }
+  if (newline(left) || newline(right)) return 4;
+  if (/^\s+$/.test(left) || /^\s+$/.test(right)) return 2;
+  const word = /^[\p{L}\p{N}_]/u;
+  if (!word.test(left) || !word.test(right)) return 1;
+  return 0;
+}
+
+/**
+ * Slide each lone insertion/deletion between two equalities to its most
+ * natural position — `one.\n[-two.\n-]three` rather than the equivalent
+ * `one.\n[two.\n]three` split mid-line. diff-match-patch's own pass scores the
+ * ENCODED token chars, so it can't see real boundaries; this repeats it a
+ * whole token at a time (so it can never split a word) with real scores. The
+ * equalities always keep a token, so the op structure is unchanged.
+ */
+function shiftEditsToBoundaries(
+  diffs: [number, string][],
+  tokens: readonly string[],
+): void {
+  const token = (chars: string, index: number): string | undefined =>
+    tokens[chars.charCodeAt(index)];
+  const boundary = (chars: string, at: number): number =>
+    boundaryScore(
+      token(chars, at - 2),
+      token(chars, at - 1)!,
+      token(chars, at)!,
+      token(chars, at + 1),
+    );
+  const score = (before: string, edit: string, after: string): number => {
+    const chars = before + edit + after;
+    return (
+      boundary(chars, before.length) +
+      boundary(chars, before.length + edit.length)
+    );
+  };
+  for (let i = 1; i < diffs.length - 1; i++) {
+    if (diffs[i - 1]![0] !== 0 || diffs[i + 1]![0] !== 0) continue;
+    let before = diffs[i - 1]![1];
+    let edit = diffs[i]![1];
+    let after = diffs[i + 1]![1];
+    while (
+      before.length > 1 &&
+      before[before.length - 1] === edit[edit.length - 1]
+    ) {
+      const moved = edit[edit.length - 1]!;
+      before = before.slice(0, -1);
+      edit = moved + edit.slice(0, -1);
+      after = moved + after;
+    }
+    let best = { before, edit, after, score: score(before, edit, after) };
+    while (after.length > 1 && edit[0] === after[0]) {
+      before += edit[0];
+      edit = edit.slice(1) + after[0];
+      after = after.slice(1);
+      const candidate = score(before, edit, after);
+      if (candidate >= best.score) {
+        best = { before, edit, after, score: candidate };
+      }
+    }
+    diffs[i - 1]![1] = best.before;
+    diffs[i]![1] = best.edit;
+    diffs[i + 1]![1] = best.after;
+  }
 }
 
 /** Compute a character-level diff for source formats where every token matters. */

@@ -9,6 +9,10 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import noOnlyTests from "eslint-plugin-no-only-tests";
+import sonarjs from "eslint-plugin-sonarjs";
+import complexityBaseline from "./complexity-baseline.json" with { type: "json" };
+
+const complexityLimits = complexityBaseline.limits;
 
 export default tseslint.config(
   {
@@ -68,6 +72,7 @@ export default tseslint.config(
     plugins: {
       "react-hooks": reactHooks,
       "no-only-tests": noOnlyTests,
+      sonarjs,
     },
     rules: {
       // Classic Rules of Hooks + dependency completeness. The existing
@@ -99,8 +104,13 @@ export default tseslint.config(
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-explicit-any": "error",
 
-      // Complexity budget: a deterministic "split this" signal.
-      complexity: ["warn", { max: 25 }],
+      // Complexity budget: editor feedback for the limits in
+      // complexity-baseline.json. The enforced per-function ratchet (which
+      // grandfathers pre-existing functions at their current score) is
+      // `npm run complexity:check`; these stay warnings so pinned functions
+      // don't fail lint.
+      complexity: ["warn", { max: complexityLimits.cyclomatic }],
+      "sonarjs/cognitive-complexity": ["warn", complexityLimits.cognitive],
       "max-depth": ["warn", 5],
 
       // --- Ratchet backlog (warn, not error) ------------------------------

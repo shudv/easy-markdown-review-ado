@@ -24,6 +24,12 @@ export const WORD_REMOVED_CLASS = "emr-word-removed";
  * drop the strike for this class and lean on the red tint instead.
  */
 export const WORD_REMOVED_TIGHT_CLASS = "emr-word-removed--tight";
+/**
+ * Modifier on an added/removed mark that is only whitespace around a line
+ * break — a blank line added to or removed from code. Such a mark has no width
+ * to tint, so the styles give it a visible glyph inside `pre`.
+ */
+export const WORD_LINE_BREAK_CLASS = "emr-word-mark--line-break";
 
 /**
  * Class list for a removed run: the base mark, plus the "tight" modifier when
@@ -125,7 +131,9 @@ function makeMark(
   text: string,
 ): HTMLElement {
   const el = doc.createElement(tag);
-  el.className = className;
+  el.className = /^\s*[\r\n]\s*$/.test(text)
+    ? `${className} ${WORD_LINE_BREAK_CLASS}`
+    : className;
   el.textContent = text;
   return el;
 }

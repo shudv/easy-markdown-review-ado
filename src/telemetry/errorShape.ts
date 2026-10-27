@@ -46,9 +46,12 @@ const ADO_CODE_RE = /\bTF\d{5,6}\b/;
 /** Extract the ADO `TF######` error code from the error's text, if any. */
 export function adoErrorCodeOf(error: unknown): string | undefined {
   const texts: string[] = [];
-  if (error instanceof Error && error.message) texts.push(error.message);
+  if (typeof error === "string") texts.push(error);
   const e = asObject(error);
   if (e) {
+    // Not only `Error`s: the SDK can reject with a plain `{ message }` object
+    // (e.g. a TF400893 network failure), or an Error from another realm.
+    if (typeof e.message === "string") texts.push(e.message);
     if (typeof e.responseText === "string") texts.push(e.responseText);
     const se = asObject(e.serverError);
     if (se) {

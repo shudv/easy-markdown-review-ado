@@ -34,8 +34,9 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. End-to-end tests covering the Azure DevOps integration boundary.
-4. Visual regression tests to protect the UI.
+3. Function complexity is [pinned](complexity-baseline.json) (although this was done late so there are quite a few functions that don't meet the bar).
+4. End-to-end tests covering the Azure DevOps integration boundary.
+5. Visual regression tests to protect the UI.
 
 But of course that is not enough. I will continue to improve the code quality, stability, and security over time as my schedule allows. Contributions are welcome.
 
@@ -54,21 +55,30 @@ npm test
 Dependencies restore from public npm. The repository disables install scripts in
 [`.npmrc`](.npmrc), so install the pre-commit hook explicitly with `setup:hooks`.
 
-| Command             | What it does                                                       |
-| ------------------- | ------------------------------------------------------------------ |
-| `npm run storybook` | Browse the UI with fake data at http://localhost:6006              |
-| `npm run dev:ado`   | Open the dev extension in a browser with scoped localhost access   |
-| `npm run build`     | Production build, bundle-size check, and dev-fault exclusion check |
-| `npm run e2e`       | Run the Chromium integration suite once                            |
-| `npm run e2e:soak`  | Repeat the Chromium integration suite twice                        |
+| Command                     | What it does                                                       |
+| --------------------------- | ------------------------------------------------------------------ |
+| `npm run storybook`         | Browse the UI with fake data at http://localhost:6006              |
+| `npm run dev:ado`           | Open the dev extension in a browser with scoped localhost access   |
+| `npm run build`             | Production build, bundle-size check, and dev-fault exclusion check |
+| `npm run complexity`        | Report per-function cyclomatic and cognitive complexity            |
+| `npm run complexity:update` | Lock in complexity improvements in the baseline                    |
+| `npm run e2e`               | Run the Chromium integration suite once                            |
+| `npm run e2e:soak`          | Repeat the Chromium integration suite twice                        |
 
 Before opening a PR, run:
 
 ```pwsh
 npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run test:coverage; npm run build
+npm run depcruise; npm run complexity:check; npm run test:complexity
+npm run test:coverage; npm run build
 npm run test:visual:docker
 ```
+
+CI also enforces the per-function complexity limits and pinned scores.
+`complexity:check` fails when a pinned function gets simpler, so the gain is
+recorded: run `npm run complexity:update` and commit the baseline. An intentional
+increase needs `npm run complexity:update -- --accept`, which appears in the PR
+diff.
 
 The visual suite requires Docker. Azure DevOps integration tests require your
 own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),

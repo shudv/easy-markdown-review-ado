@@ -45,6 +45,12 @@ jobs:
       - name: Check architecture rules
         run: npm run depcruise
 
+      - name: Check function complexity
+        run: npm run complexity:check
+
+      - name: Test complexity checker
+        run: npm run test:complexity
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

@@ -6320,6 +6320,17 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
     );
   }
 
+  // A blank line added to or removed from code is a mark holding only a line
+  // break, which has no width to tint. Give it a tinted return glyph on the
+  // line it opens. Generated content stays out of `textContent`, so comment
+  // anchors are unaffected; prose collapses line breaks to spaces and needs no
+  // glyph.
+  pre .emr-word-mark--line-break::before {
+    content: "\21B5";
+    padding: 0 0.25ch;
+    opacity: 0.8;
+  }
+
   .emr-diff-metadata {
     display: inline-flex;
     margin-left: 5px;

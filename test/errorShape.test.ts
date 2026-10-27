@@ -45,6 +45,18 @@ describe("adoErrorCodeOf", () => {
     ).toBe("TF400813");
   });
 
+  it("extracts from a plain-object rejection's message and a thrown string", () => {
+    expect(
+      adoErrorCodeOf({
+        message:
+          "TF400893: Unable to contact the server. Please check your network connection and try again.",
+      }),
+    ).toBe("TF400893");
+    expect(adoErrorCodeOf("TF400893: Unable to contact the server.")).toBe(
+      "TF400893",
+    );
+  });
+
   it("returns undefined when there is no code", () => {
     expect(adoErrorCodeOf(new Error("plain failure"))).toBeUndefined();
     expect(adoErrorCodeOf({ status: 500 })).toBeUndefined();
@@ -93,6 +105,14 @@ describe("describeError", () => {
     // The safe, structured signals are still captured.
     expect(shape.httpStatus).toBe(403);
     expect(shape.adoErrorCode).toBe("TF400813");
+  });
+
+  it("carries the ADO code for a plain-object SDK rejection", () => {
+    const shape = describeError({
+      message: "TF400893: Unable to contact the server.",
+    });
+    expect(shape.message).toBe("TF400893: Unable to contact the server.");
+    expect(shape.adoErrorCode).toBe("TF400893");
   });
 
   it("passes a string through", () => {

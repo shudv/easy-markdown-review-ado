@@ -22,7 +22,31 @@
   "content": {
     "details": {
       "path": "static/overview.md"
+    },
+    "license": {
+      "path": "LICENSE"
     }
+  },
+  "links": {
+    "getstarted": {
+      "uri": "https://github.com/shudv/easy-markdown-review-ado#get-started"
+    },
+    "license": {
+      "uri": "https://github.com/shudv/easy-markdown-review-ado/blob/main/LICENSE"
+    },
+    "support": {
+      "uri": "https://github.com/shudv/easy-markdown-review-ado/issues"
+    },
+    "repository": {
+      "uri": "https://github.com/shudv/easy-markdown-review-ado"
+    },
+    "issues": {
+      "uri": "https://github.com/shudv/easy-markdown-review-ado/issues"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "uri": "https://github.com/shudv/easy-markdown-review-ado"
   },
   "files": [
     { "path": "dist", "addressable": true },

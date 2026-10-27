@@ -29,6 +29,10 @@ instead of importing the private Azure pipeline.
   telemetry, public contacts, and public synthetic regression fixtures.
 - Include the two synthetic structural-diff screenshots, not private generated
   showcase media or local artifacts.
+- Publish public project metadata in the Marketplace manifest: GitHub
+  repository, getting-started/support/issues/license links, and the packaged
+  MIT license. The repository field enables Marketplace's GitHub project
+  details.
 
 ### Next sync
 

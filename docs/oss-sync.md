@@ -4,9 +4,8 @@
 
 - Public base: `f36ed80` (OSS `1.1.1`, Marketplace privacy policy).
 - Previously mirrored product boundary: `4c90e4218c56336b161400b59a78ff8d807ea7c5`.
-- New product boundary: `d7c9b0e` on the source branch `feat/excalidraw-images`
-  (source PR 29853, not yet merged). Record the source merge commit here once it
-  lands.
+- New product boundary: `d7c9b0e` (source change not yet merged; record the
+  source merge commit here once it lands).
 - OSS release version: `1.2.0` (package, root lockfile metadata, and Marketplace
   manifest updated together). The source repository moves to `1.2.0` in the
   same change, so both versions line up again.

@@ -21,9 +21,14 @@
 
 - Keep all adaptations and exclusions from the earlier syncs below.
 - Preserve the public dependency lock. Add `@excalidraw/excalidraw` `0.18.1` and
-  its 126 transitive packages with public npm URLs. No pre-existing locked
-  version changed; 23 existing entries only lost their `dev` flag because they
-  are now reachable from a production dependency.
+  its transitive packages with public npm URLs. 23 existing entries only lost
+  their `dev` flag because they are now reachable from a production dependency.
+- Mirror the source `overrides` that clear the Excalidraw chain's vulnerable
+  pins: `lodash-es` `^4.18.1` (chevrotain pinned `4.17.21`), Excalidraw's
+  `nanoid` `^3.3.18` (pinned `3.3.3`), and `mermaid-to-excalidraw`'s `nanoid`
+  `^5.1.16` (was `4.0.2`). Both packages only call `nanoid()`, which is
+  unchanged across those majors. The shared root `nanoid` moves from `3.3.18`
+  to `3.3.20` as a result; no other locked version changes.
 - No private feed URLs, telemetry keys, or private pipeline metadata.
 
 ### Next sync

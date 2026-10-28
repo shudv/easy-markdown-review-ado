@@ -335,6 +335,39 @@
       ]
     },
     {
+      "name": "excalidraw-showcase",
+      "description": "Excalidraw drawings referenced as Markdown images: a raw .excalidraw scene rendered to SVG, an invalid scene and a missing file (both show the unavailable frame), and an active PR that edits one drawing without touching its Markdown and adds a second drawing.",
+      "pullRequests": [
+        {
+          "title": "Extend the review flow and add the comment lifecycle drawing",
+          "branch": "feature/update-diagrams",
+          "description": "Edits diagrams/review-flow.excalidraw (adds an approval decision, a merge step, and a rework loop) without changing the Markdown line that embeds it, and adds diagrams/comment-lifecycle.excalidraw with a new section in design.md. The first change is the known gap: a drawing-only edit shows the new drawing but no Markdown diff. The second exercises an added section containing a drawing.",
+          "overlay": "update-diagrams",
+          "complete": false,
+          "threads": [
+            {
+              "filePath": "/design.md",
+              "status": "active",
+              "rightStartLine": 9,
+              "rightEndLine": 9,
+              "comments": [
+                "This drawing changed in the PR (approval, merge, and rework steps), but its Markdown line didn't, so no diff appears here. Check whether reviewers would expect a changed-drawing marker."
+              ]
+            },
+            {
+              "filePath": "/design.md",
+              "status": "active",
+              "rightStartLine": 26,
+              "rightEndLine": 26,
+              "comments": [
+                "New drawing: check it renders with the hand-drawn font and recolours when the ADO theme switches to dark."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "production-markdown-showcase",
       "description": "Production-derived Markdown dialect coverage: reference definitions, GitHub alerts, safe HTML details/cards, definition continuations, code-fence options, section moves, and deleted-document review.",
       "pullRequests": [

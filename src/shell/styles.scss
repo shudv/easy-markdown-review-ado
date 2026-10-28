@@ -577,6 +577,15 @@ button {
   }
 }
 
+// Excalidraw drawings render once in light mode; dark palettes apply the same
+// filter Excalidraw uses for its own dark mode, so a theme flip needs no redraw.
+:root[data-emr-theme="dark"],
+:root[data-emr-theme="hc-dark"] {
+  .emr-rendered .emr-excalidraw {
+    filter: invert(93%) hue-rotate(180deg);
+  }
+}
+
 // The reading font is prose-only: code, pre and other fixed-width elements keep
 // their monospace face regardless of the chosen reading font (only their size
 // scales, since it is em-relative to `.emr-rendered`). Matches github-markdown-

@@ -3,8 +3,10 @@ import * as React from "react";
 import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
+import { renderExcalidrawSvgBlob } from "../../markdown/excalidraw";
 import { renderMarkdownSync } from "../../markdown/render";
 import { ArticleView } from "./ArticleView";
+import { excalidrawSceneBytes } from "./excalidrawScene.fixture";
 
 const SOURCE = [
   "# Goals",
@@ -751,6 +753,52 @@ export const RepositoryImageStorageFallback: Story = {
     await expect(args.resolveDocumentImage).toHaveBeenCalledWith(
       "/docs/fallback.svg",
     );
+  },
+};
+
+/**
+ * A raw `.excalidraw` scene renders through the real Excalidraw exporter (the
+ * resolver mirrors resolveAdoRepositoryImageObjectUrl) into a repository
+ * image tagged for the dark-mode filter.
+ */
+export const ExcalidrawDrawing: Story = {
+  beforeEach: () => {
+    // Storybook serves the bundled fonts here (see .storybook/main.ts).
+    (
+      window as Window & { EXCALIDRAW_ASSET_PATH?: string }
+    ).EXCALIDRAW_ASSET_PATH = `${window.location.origin}/excalidraw-assets/`;
+  },
+  args: {
+    pristineHtml: renderMarkdownSync(
+      "# Design\n\n![Review flow](./review-flow.excalidraw)",
+    ),
+    documentPath: "/docs/design.md",
+    threads: [],
+    draftAnchor: null,
+    diff: [],
+    resolveDocumentImage: fn(async () =>
+      URL.createObjectURL(
+        await renderExcalidrawSvgBlob(excalidrawSceneBytes()),
+      ),
+    ),
+  },
+  play: async ({ args, canvasElement }) => {
+    const image = await waitFor(
+      () => {
+        const element =
+          canvasElement.querySelector<HTMLImageElement>(".emr-excalidraw");
+        if (!element?.src.startsWith("blob:")) {
+          throw new Error("drawing has not rendered");
+        }
+        return element;
+      },
+      { timeout: 15_000 },
+    );
+    await expect(args.resolveDocumentImage).toHaveBeenCalledWith(
+      "/docs/review-flow.excalidraw",
+    );
+    await waitFor(() => expect(image.naturalWidth).toBeGreaterThan(400));
+    await expect(image.classList).toContain("emr-repo-image");
   },
 };
 

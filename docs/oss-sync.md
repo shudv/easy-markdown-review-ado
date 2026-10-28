@@ -1,5 +1,42 @@
 # OSS mirror sync ledger
 
+## 2026-10-28 Excalidraw drawings sync
+
+- Public base: `f36ed80` (OSS `1.1.1`, Marketplace privacy policy).
+- Previously mirrored product boundary: `4c90e4218c56336b161400b59a78ff8d807ea7c5`.
+- New product boundary: `7811fe9` (source change not yet merged; record the
+  source merge commit here once it lands).
+- OSS release version: `1.2.0` (package, root lockfile metadata, and Marketplace
+  manifest updated together). The source repository moves to `1.2.0` in the
+  same change, so both versions line up again.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit        | Changes represented                                                                                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `d7c9b0e`, `7811fe9` | `.excalidraw` image references rendered to SVG through the repository image frame, dark-mode filter, invalid scenes treated as content health, self-hosted Excalidraw fonts, webpack resolution and `import.meta.url` handling, unit tests, an ArticleView story, and the synthetic `excalidraw-showcase` sandbox. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- Preserve the public dependency lock. Add `@excalidraw/excalidraw` `0.18.1` and
+  its transitive packages with public npm URLs. 23 existing entries only lost
+  their `dev` flag because they are now reachable from a production dependency.
+- Mirror the source `overrides` that clear the Excalidraw chain's vulnerable
+  pins: `lodash-es` `^4.18.1` (chevrotain pinned `4.17.21`), Excalidraw's
+  `nanoid` `^3.3.18` (pinned `3.3.3`), and `mermaid-to-excalidraw`'s `nanoid`
+  `^5.1.16` (was `4.0.2`). Both packages only call `nanoid()`, which is
+  unchanged across those majors. The shared root `nanoid` moves from `3.3.18`
+  to `3.3.20` as a result; no other locked version changes.
+- No private feed URLs, telemetry keys, or private pipeline metadata.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `7811fe9` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-10-28 structural diff and complexity sync
 
 - Public base: `0d445ba` (the merged 2026-10-26 sync).

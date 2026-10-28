@@ -5,6 +5,7 @@ import {
   repositoryImageMimeType,
   resolveRepositoryImagePath,
 } from "../src/markdown/documentImages";
+import { ExcalidrawSceneError } from "../src/markdown/excalidraw";
 
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
@@ -201,6 +202,10 @@ describe("hydrateDocumentImages", () => {
       new Error("TF401174: The item '/docs/gone.png' could not be found."),
     ],
     ["a 404", Object.assign(new Error("Not Found"), { status: 404 })],
+    [
+      "an invalid Excalidraw scene",
+      new ExcalidrawSceneError("File is not an Excalidraw scene"),
+    ],
   ])(
     "shows a missing repository image (%s) as unavailable without reporting it",
     async (_label, failure) => {
@@ -219,4 +224,19 @@ describe("hydrateDocumentImages", () => {
       expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
     },
   );
+
+  it("tags Excalidraw drawings for the dark-mode filter", () => {
+    const root = document.createElement("div");
+    root.innerHTML = [
+      '<img src="./flow.excalidraw" alt="Flow">',
+      '<img src="./flow.Excalidraw.json" alt="Flow JSON">',
+      '<img src="./photo.png" alt="Photo">',
+    ].join("");
+    hydrateDocumentImages(root, "/docs/guide.md", async () => "blob:x");
+
+    const tagged = [...root.querySelectorAll("img")].map((image) =>
+      image.classList.contains("emr-excalidraw"),
+    );
+    expect(tagged).toEqual([true, true, false]);
+  });
 });

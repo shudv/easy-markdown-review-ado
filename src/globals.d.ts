@@ -29,3 +29,7 @@ declare const __EMR_TELEMETRY_CONFIG__:
 // in development builds, `false` in production; absent in tests / Storybook,
 // so read it as `typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__`.
 declare const __EMR_DEV_FAULTS__: boolean | undefined;
+
+// Webpack's runtime public path (the bundle root URL). Absent in tests and
+// Storybook, so read it as `typeof __webpack_public_path__ === "string"`.
+declare const __webpack_public_path__: string | undefined;

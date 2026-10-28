@@ -1,6 +1,10 @@
 import type { GitVersionDescriptor } from "azure-devops-extension-api/Git";
 
 import { repositoryImageMimeType } from "../markdown/documentImages";
+import {
+  isExcalidrawPath,
+  renderExcalidrawSvgBlob,
+} from "../markdown/excalidraw";
 import { fetchRepositoryImageContent } from "./adoRepositoryImages.helpers";
 import { withRetry } from "./retry";
 import { sharedGitClient } from "./adoClients";
@@ -39,7 +43,9 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
         label: "resolveAdoRepositoryImageObjectUrl.getItemContent",
       },
     );
-    const blob = new Blob([content], { type: repositoryImageMimeType(path) });
+    const blob = isExcalidrawPath(path)
+      ? await renderExcalidrawSvgBlob(content)
+      : new Blob([content], { type: repositoryImageMimeType(path) });
     return URL.createObjectURL(blob);
   })();
   // Surface the real failure (status + ADO code) to the reader's telemetry

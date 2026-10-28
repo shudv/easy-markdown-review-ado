@@ -1,5 +1,10 @@
 import { trackUserFacingError } from "../telemetry";
 import { adoErrorCodeOf, httpStatusOf } from "../telemetry/errorShape";
+import {
+  EXCALIDRAW_CLASS,
+  ExcalidrawSceneError,
+  isExcalidrawPath,
+} from "./excalidraw";
 
 export type RepositoryImageResolver = (
   repositoryPath: string,
@@ -74,6 +79,7 @@ export function hydrateDocumentImages(
     frame.append(image);
     image.removeAttribute("src");
     image.classList.add("emr-repo-image", "is-loading");
+    if (isExcalidrawPath(repositoryPath)) image.classList.add(EXCALIDRAW_CLASS);
     image.setAttribute("aria-busy", "true");
     let errorReported = false;
     const onLoad = () => {
@@ -90,12 +96,15 @@ export function hydrateDocumentImages(
       image.removeAttribute("aria-busy");
       if (!errorReported) {
         errorReported = true;
-        // An image path the document links to but the repo doesn't have is a
-        // broken link in the author's Markdown — content health, not an
-        // extension failure (the frame still shows it as unavailable).
-        const missingFromRepo =
-          httpStatusOf(error) === 404 || adoErrorCodeOf(error) === "TF401174";
-        if (!missingFromRepo) {
+        // An image path the document links to but the repo doesn't have, or
+        // an `.excalidraw` file that isn't a scene, is a problem in the
+        // author's content — not an extension failure (the frame still shows
+        // it as unavailable).
+        const authorContentProblem =
+          httpStatusOf(error) === 404 ||
+          adoErrorCodeOf(error) === "TF401174" ||
+          error instanceof ExcalidrawSceneError;
+        if (!authorContentProblem) {
           trackUserFacingError({
             error,
             source: "DocumentImage.hydrate",

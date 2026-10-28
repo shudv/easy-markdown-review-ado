@@ -368,6 +368,31 @@ export function rangeChangeTypes(
   return byPath;
 }
 
+/** Page size when listing a PR update's changed files. */
+export const ITERATION_CHANGES_PAGE = 500;
+
+/**
+ * Every change entry of a PR update, following ADO's `nextSkip` paging.
+ * `getPullRequestIterationChanges` returns 100 entries by default, so a single
+ * unpaged call silently drops the rest of a large PR's files. Stops when ADO
+ * reports no further page or a `nextSkip` that doesn't advance.
+ */
+export async function fetchAllIterationChanges<T>(
+  fetchPage: (
+    top: number,
+    skip: number,
+  ) => Promise<{ changeEntries?: T[]; nextSkip?: number }>,
+): Promise<T[]> {
+  const entries: T[] = [];
+  let skip = 0;
+  for (;;) {
+    const page = await fetchPage(ITERATION_CHANGES_PAGE, skip);
+    entries.push(...(page.changeEntries ?? []));
+    if (!page.nextSkip || page.nextSkip <= skip) return entries;
+    skip = page.nextSkip;
+  }
+}
+
 /**
  * Shareable URL that opens the PR on the Markdown Review tab (`_a` selects a
  * contributed PR tab by its fully-qualified contribution id) with `path` set

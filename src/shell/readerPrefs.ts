@@ -118,6 +118,11 @@ export interface ReaderPrefs {
   wordSpacingPct: number;
   /** Whether the document-navigation panel is shown. */
   showNav: boolean;
+  /**
+   * Whether the open document's heading outline is listed under it in the
+   * navigation panel. On by default; readers can turn it off.
+   */
+  showOutline: boolean;
   /** Whether the comments panel is shown. */
   showComments: boolean;
   /** Document-navigation width as a percentage of the default rail (50–130). */
@@ -135,6 +140,7 @@ export const DEFAULT_READER_PREFS: ReaderPrefs = {
   letterSpacingPct: DEFAULT_LETTER_SPACING_PCT,
   wordSpacingPct: DEFAULT_WORD_SPACING_PCT,
   showNav: true,
+  showOutline: true,
   showComments: true,
   navWidthPct: DEFAULT_NAV_WIDTH_PCT,
   commentWidthPct: DEFAULT_COMMENT_WIDTH_PCT,
@@ -332,6 +338,7 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
     ),
     wordSpacingPct: readSpacingPct("wordSpacingPct", DEFAULT_WORD_SPACING_PCT),
     showNav: typeof v.showNav === "boolean" ? v.showNav : true,
+    showOutline: typeof v.showOutline === "boolean" ? v.showOutline : true,
     showComments: typeof v.showComments === "boolean" ? v.showComments : true,
     navWidthPct,
     commentWidthPct,
@@ -381,6 +388,7 @@ export function writeReaderPrefs(scope: DraftScope, prefs: ReaderPrefs): void {
       layoutStorageKey(scope),
       JSON.stringify({
         showNav: prefs.showNav,
+        showOutline: prefs.showOutline,
         showComments: prefs.showComments,
         navWidthPct: prefs.navWidthPct,
         commentWidthPct: prefs.commentWidthPct,

@@ -22,6 +22,7 @@ import type { ReaderActivity } from "./readerActivity";
 import { SearchIcon } from "./icons";
 import {
   buildFolderTree,
+  mergeWikiPages,
   normalizeFolderPath,
   type DirNode,
   type FileNode,
@@ -62,6 +63,23 @@ interface DocNavProps {
   onExpandFolder?: (
     path: string,
   ) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
+  /**
+   * Azure DevOps wiki `.order` page names per folder (slash-free path, `""`
+   * for the root). Listed entries sort first, in that order.
+   */
+  folderOrders?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Show Azure DevOps wiki pages the way the wiki does: a page `Foo.md` and
+   * its subpage folder `Foo/` become one row that opens the page and expands
+   * to its subpages (see `mergeWikiPages`). Off in the PR tab, where every
+   * changed file keeps its own row.
+   */
+  wikiPages?: boolean;
+  /**
+   * List the open document's heading outline under its row. The reader's
+   * opt-in "Outline" preference; defaults to shown for direct embeds.
+   */
+  showOutline?: boolean;
   /**
    * Remote filename search (ALM Code Search). Debounced inside the DocNav.
    * Resolves with a `FileSearchOutcome` so we can distinguish "0 results" from
@@ -163,6 +181,13 @@ type NavNode =
       children: NavNode[];
       /** True when the folder is unenumerated; chevron triggers a fetch. */
       lazy?: boolean;
+      /** The folder's own wiki page (a page with subpages). */
+      page?: { file: FileInfo; openComments: number };
+      /**
+       * The open page's heading outline. Always shown under the row, apart
+       * from the subpages the chevron shows or hides.
+       */
+      outline?: NavNode[];
     }
   | {
       kind: "file";
@@ -186,6 +211,9 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     threadCountsByPath,
     unloadedFolders,
     onExpandFolder,
+    folderOrders,
+    wikiPages,
+    showOutline,
     onSearchFiles,
     titleSlot,
     headerActions,
@@ -443,7 +471,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
     );
-    /* v8 ignore next -- the active heading always has a rendered nav row */
+    /* v8 ignore next -- the active heading has a rendered row unless the reader turned the outline off */
     if (!item) return;
     const itemRect = item.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
@@ -520,9 +548,12 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
 
   // -----------------------------------------------------------------------
   // Build a nested tree from the flat heading list: each heading nests under
-  // the nearest preceding heading with a strictly lower level.
+  // the nearest preceding heading with a strictly lower level. Empty while the
+  // reader has the outline turned off.
   // -----------------------------------------------------------------------
+  const outlineShown = showOutline !== false;
   const headingTree = React.useMemo<NavNode[]>(() => {
+    if (!outlineShown) return [];
     const filtered = headings.filter((h) => h.level <= MAX_TREE_LEVEL);
     const roots: NavNode[] = [];
     const stack: Array<{ heading: NavHeading; children: NavNode[] }> = [];
@@ -539,7 +570,10 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
       stack.push({ heading: h, children: node.children });
     }
     return roots;
-  }, [headings]);
+  }, [headings, outlineShown]);
+  // With the outline off no heading row exists to carry the active state, so
+  // the open file's row keeps it while the reader scrolls.
+  const navActiveId = shownActiveHeading(outlineShown, activeId);
 
   // -----------------------------------------------------------------------
   // Wrap the heading tree under the selected file node. Build a sorted
@@ -547,21 +581,33 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // open-comment count and (for the selected file) the heading tree.
   // -----------------------------------------------------------------------
   const tree = React.useMemo<NavNode[]>(() => {
-    const folderTree = buildFolderTree<FileInfo>(files, {
+    const builtTree = buildFolderTree<FileInfo>(files, {
       extraFolders: unloadedFolders,
+      folderOrders,
     });
+    const folderTree = wikiPages ? mergeWikiPages(builtTree) : builtTree;
     function toNavNode(node: TreeNode<FileInfo>): NavNode {
       if (node.kind === "dir") {
         const dirNode = node as DirNode<FileInfo>;
         // "Lazy" iff the path is unloaded AND has no fetched children yet.
         const isLazy =
           dirNode.children.length === 0 && lazyDirSet.has(dirNode.path);
+        const page = dirNode.page;
         return {
           kind: "dir",
           path: dirNode.path,
           displayName: dirNode.displayName,
           children: dirNode.children.map(toNavNode),
           lazy: isLazy,
+          ...(page
+            ? {
+                page: {
+                  file: page,
+                  openComments: threadCountsByPath[page.path] ?? 0,
+                },
+                outline: page.path === selectedPath ? headingTree : [],
+              }
+            : {}),
         };
       }
       const fileNode = node as FileNode<FileInfo>;
@@ -576,6 +622,8 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   }, [
     files,
     unloadedFolders,
+    folderOrders,
+    wikiPages,
     lazyDirSet,
     selectedPath,
     headingTree,
@@ -729,7 +777,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
                   key={navNodeKey(node)}
                   node={node}
                   depth={0}
-                  activeId={activeId}
+                  activeId={navActiveId}
                   collapsedIds={collapsedIds}
                   collapsedDirs={collapsedDirs}
                   loadingDirs={loadingDirs}
@@ -789,109 +837,7 @@ function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
     onExpandLazyDir,
   } = props;
 
-  if (node.kind === "dir") {
-    const isLazy = node.lazy === true;
-    const isLoading = loadingDirs.has(node.path);
-    // Lazy folders are always "collapsed" until the user triggers a fetch
-    // via the chevron or label.
-    const isCollapsed = isLazy ? !isLoading : collapsedDirs.has(node.path);
-    const onDirToggle = (): void => {
-      if (isLazy) onExpandLazyDir(node.path);
-      else onToggleDir(node.path);
-    };
-    return (
-      <div
-        className={
-          "emr-docnav-branch emr-docnav-dir-branch" + (isLazy ? " is-lazy" : "")
-        }
-      >
-        <div
-          className={
-            "emr-docnav-item emr-docnav-dir" + (isLoading ? " is-loading" : "")
-          }
-          style={
-            {
-              ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-            } as React.CSSProperties
-          }
-        >
-          <button
-            type="button"
-            className="emr-docnav-twist"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDirToggle();
-            }}
-            aria-label={
-              isLazy
-                ? isLoading
-                  ? "Loading folder..."
-                  : "Load folder"
-                : isCollapsed
-                  ? "Expand folder"
-                  : "Collapse folder"
-            }
-            aria-expanded={!isCollapsed}
-            aria-busy={isLoading || undefined}
-            title={
-              isLazy
-                ? isLoading
-                  ? "Loading…"
-                  : "Click to load contents"
-                : isCollapsed
-                  ? "Expand folder"
-                  : "Collapse folder"
-            }
-            data-collapsed={isCollapsed ? "true" : undefined}
-            disabled={isLoading}
-          >
-            {isLoading ? <SvgSpinner /> : <SvgCaret />}
-          </button>
-          <button
-            type="button"
-            className="emr-docnav-label emr-docnav-dir-label"
-            onClick={onDirToggle}
-            title={node.path}
-            disabled={isLoading}
-          >
-            <span
-              className="emr-docnav-file-icon emr-docnav-folder-icon"
-              aria-hidden
-            >
-              <SvgFolder open={!isCollapsed} />
-            </span>
-            <span className="emr-docnav-item-text">{node.displayName}</span>
-            {isLazy && !isLoading ? (
-              <span className="emr-docnav-lazy-hint" aria-hidden>
-                …
-              </span>
-            ) : null}
-          </button>
-        </div>
-        {!isCollapsed && node.children.length > 0 ? (
-          <div className="emr-docnav-children">
-            {node.children.map((child) => (
-              <NavTreeItem
-                key={navNodeKey(child)}
-                node={child}
-                depth={depth + 1}
-                activeId={activeId}
-                collapsedIds={collapsedIds}
-                collapsedDirs={collapsedDirs}
-                loadingDirs={loadingDirs}
-                selectedPath={selectedPath}
-                onSelectHeading={onSelectHeading}
-                onToggleHeading={onToggleHeading}
-                onSelectFile={onSelectFile}
-                onToggleDir={onToggleDir}
-                onExpandLazyDir={onExpandLazyDir}
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
+  if (node.kind === "dir") return <DirNavRow {...props} node={node} />;
 
   if (node.kind === "file") {
     return (
@@ -1006,6 +952,186 @@ function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
 }
 
 // ---------------------------------------------------------------------------
+// DirNavRow — a folder row. The chevron and label expand/collapse it (a lazy
+// folder fetches its contents first). A folder that is also a wiki page (its
+// `page`, see `mergeWikiPages`) behaves like the wiki's page-with-subpages
+// node: the label opens the page — expanding it too — and the chevron alone
+// shows or hides the subpages. The open page's outline sits above them and
+// stays visible whether or not the subpages are shown (or loaded yet).
+// ---------------------------------------------------------------------------
+
+type DirNavNode = Extract<NavNode, { kind: "dir" }>;
+
+/** Accessible name + tooltip for a folder row's chevron. */
+function dirTwistText(
+  state: { lazy: boolean; loading: boolean; collapsed: boolean },
+  noun: "folder" | "subpages",
+): { label: string; title: string } {
+  if (state.loading) return { label: "Loading folder...", title: "Loading…" };
+  if (state.lazy) {
+    return { label: "Load folder", title: "Click to load contents" };
+  }
+  const text = `${state.collapsed ? "Expand" : "Collapse"} ${noun}`;
+  return { label: text, title: text };
+}
+
+function DirNavRow(
+  props: NavTreeItemProps & { node: DirNavNode },
+): React.ReactElement {
+  const {
+    node,
+    depth,
+    activeId,
+    collapsedDirs,
+    loadingDirs,
+    selectedPath,
+    onSelectFile,
+    onToggleDir,
+    onExpandLazyDir,
+  } = props;
+  const page = node.page;
+  const isLazy = node.lazy === true;
+  const isLoading = loadingDirs.has(node.path);
+  // Lazy folders are always "collapsed" until the user triggers a fetch
+  // via the chevron or label.
+  const isCollapsed = isLazy ? !isLoading : collapsedDirs.has(node.path);
+  const onDirToggle = (): void => {
+    if (isLazy) onExpandLazyDir(node.path);
+    else onToggleDir(node.path);
+  };
+  const twist = dirTwistText(
+    { lazy: isLazy, loading: isLoading, collapsed: isCollapsed },
+    page ? "subpages" : "folder",
+  );
+  const isActivePage = page?.file.path === selectedPath && activeId === null;
+  const rowClass = [
+    "emr-docnav-item emr-docnav-dir",
+    isLoading ? "is-loading" : "",
+    page ? "emr-docnav-page" : "",
+    isActivePage ? "is-active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div
+      className={
+        "emr-docnav-branch emr-docnav-dir-branch" + (isLazy ? " is-lazy" : "")
+      }
+    >
+      <div
+        className={rowClass}
+        style={
+          {
+            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
+          } as React.CSSProperties
+        }
+      >
+        <button
+          type="button"
+          className="emr-docnav-twist"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDirToggle();
+          }}
+          aria-label={twist.label}
+          aria-expanded={!isCollapsed}
+          aria-busy={isLoading || undefined}
+          title={twist.title}
+          data-collapsed={isCollapsed ? "true" : undefined}
+          disabled={isLoading}
+        >
+          {isLoading ? <SvgSpinner /> : <SvgCaret />}
+        </button>
+        {page ? (
+          <WikiPageLabel
+            page={page}
+            onOpen={() => {
+              onSelectFile(page.file.path);
+              if (isCollapsed) onDirToggle();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="emr-docnav-label emr-docnav-dir-label"
+            onClick={onDirToggle}
+            title={node.path}
+            disabled={isLoading}
+          >
+            <span
+              className="emr-docnav-file-icon emr-docnav-folder-icon"
+              aria-hidden
+            >
+              <SvgFolder open={!isCollapsed} />
+            </span>
+            <span className="emr-docnav-item-text">{node.displayName}</span>
+            {isLazy && !isLoading ? (
+              <span className="emr-docnav-lazy-hint" aria-hidden>
+                …
+              </span>
+            ) : null}
+          </button>
+        )}
+      </div>
+      <NavChildren
+        nodes={node.outline ?? []}
+        item={props}
+        className="emr-docnav-children emr-docnav-file-children"
+      />
+      {isCollapsed ? null : <NavChildren nodes={node.children} item={props} />}
+    </div>
+  );
+}
+
+/** A row's nested items, one level deeper; nothing when there are none. */
+function NavChildren(props: {
+  nodes: readonly NavNode[];
+  item: NavTreeItemProps;
+  className?: string;
+}): React.ReactElement | null {
+  const { nodes, item, className = "emr-docnav-children" } = props;
+  if (nodes.length === 0) return null;
+  return (
+    <div className={className}>
+      {nodes.map((child) => (
+        <NavTreeItem
+          key={navNodeKey(child)}
+          {...item}
+          node={child}
+          depth={item.depth + 1}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Label of a page-with-subpages row: opens the page; shows its comments. */
+function WikiPageLabel(props: {
+  page: NonNullable<DirNavNode["page"]>;
+  onOpen: () => void;
+}): React.ReactElement {
+  const { page, onOpen } = props;
+  return (
+    <button
+      type="button"
+      className="emr-docnav-label emr-docnav-page-label"
+      onClick={onOpen}
+      title={page.file.path}
+    >
+      <span className="emr-docnav-page-name">{basename(page.file.path)}</span>
+      {page.openComments > 0 ? (
+        <span
+          className="emr-docnav-badge is-open"
+          aria-label={`${page.openComments} open comments`}
+        >
+          {page.openComments}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FileNavRow — top-level file row. Clicking the label switches the active file
 // (or scrolls to the top of the current one). The heading-tree children render
 // only for the selected file, and the row lights up only when no heading is
@@ -1074,8 +1200,13 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
           } as React.CSSProperties
         }
       >
-        {/* File rows have no leading twist-spacer: the change-type icon is the
-            leading affordance. Nested headings indent via `--emr-nav-depth`. */}
+        {/* The change-type icon is the leading affordance and fills the twist
+            column. Without it (Documents hub) a spacer holds that column so
+            file names line up with sibling folder labels and sit indented
+            under their parent. Nested headings indent via `--emr-nav-depth`. */}
+        {showChangeIndicators ? null : (
+          <span className="emr-docnav-twist-spacer" aria-hidden />
+        )}
         <button
           type="button"
           className="emr-docnav-label emr-docnav-file-label"
@@ -1161,6 +1292,14 @@ function cssEscape(s: string): string {
   }
   /* v8 ignore next -- CSS.escape is available in all supported browsers */
   return s.replace(/([^\w-])/g, "\\$1");
+}
+
+/** The heading that's active in the nav: none while the outline is off. */
+function shownActiveHeading(
+  outlineShown: boolean,
+  activeId: string | null,
+): string | null {
+  return outlineShown ? activeId : null;
 }
 
 /**

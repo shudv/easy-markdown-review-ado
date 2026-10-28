@@ -208,8 +208,10 @@ export function isWithinGeneratedContent(node: Node): boolean {
   // `.emr-math` covers the pre-hydration and load-failure source fallback, not
   // just KaTeX output — that text is replaced once hydration succeeds, so an
   // anchor placed on it would orphan. Mirrors `.emr-mermaid`, which wraps its
-  // own fallback.
-  return el?.closest(".emr-mermaid, .emr-math, .katex") != null;
+  // own fallback. `.emr-wiki-macro` is a generated table of contents/subpages.
+  return (
+    el?.closest(".emr-mermaid, .emr-math, .katex, .emr-wiki-macro") != null
+  );
 }
 
 /**

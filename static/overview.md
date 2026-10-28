@@ -23,6 +23,7 @@ The commenting model is intentionally **document-style**: comments sit in the ma
 
 - **Mermaid diagrams** render inline — both GitHub <code>```mermaid</code> and Azure DevOps `:::mermaid` fences. Pop open the source any time.
 - Clean typography, collapsible sections, and a navigable outline of the whole document.
+- **Azure DevOps wiki syntax**: `[[_TOC_]]` renders a table of contents, `[[_TOSP_]]` lists a page's subpages, and each folder's `.order` file sets the page order in the Documents hub.
 - **@mentions, #work-items, and !pull-requests** become real, clickable links.
 - Fully **theme-aware** — light and dark follow your Azure DevOps theme.
 
@@ -38,6 +39,6 @@ The review tab highlights **added, modified, and removed** content right on the 
 
 ## 📚 Your repository is the wiki — the Documents hub
 
-Use the top-level **Documents** hub as a repository-native replacement for Azure DevOps Wiki. There is no wiki to create, separate repository to configure, or parallel hierarchy to maintain: the hub automatically presents the Markdown that already exists across your project repositories, with fast repo, folder, and document navigation.
+Use the top-level **Documents** hub as a repository-native replacement for Azure DevOps Wiki. There is no wiki to create, separate repository to configure, or parallel hierarchy to maintain: the hub automatically presents the Markdown that already exists across your project repositories, with fast repo, folder, and document navigation. Existing wiki repositories work as they are: a page and its subpages appear as one entry, pages keep their `.order` sequence, and `[[_TOC_]]` and `[[_TOSP_]]` render as they do in the wiki.
 
 You can also comment directly on a document without manually opening a pull request. Comments route to the most recent completed PR that changed that document, keeping the discussion in Azure DevOps and connected to the document's real source history.

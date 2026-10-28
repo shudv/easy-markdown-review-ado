@@ -17,7 +17,7 @@ import {
   type GitPullRequest,
 } from "azure-devops-extension-api/Git";
 
-import type { CommentAuthor, CommentThread, FileInfo } from "../types";
+import type { CommentAuthor, CommentThread } from "../types";
 import { AdoCommentApi } from "../shell/adoCommentApi";
 import type { CommentApi } from "../comments/api";
 import { checkRepoCommentPermission } from "../shell/commentPermission";
@@ -41,6 +41,7 @@ import {
   fetchRepoFileContent,
   findRoutingPrForDoc,
   listFolderMarkdown,
+  listSubpageFolder,
   loadDocPrHistory,
   loadThreadsForRepo,
   loadThreadsForRoutedPr,
@@ -59,7 +60,7 @@ import {
   readTextParam,
   type DeepLinkTarget,
 } from "../shell/deepLink";
-import type { DocRepo } from "../shell/types";
+import type { DocRepo, FolderListing } from "../shell/types";
 import { resolveCurrentProject } from "../shell/adoClients";
 import type { FileSearchOutcome } from "../shell/almSearch";
 import {
@@ -324,7 +325,7 @@ export function DocumentsHubApp(): React.ReactElement {
         // root markdown listing + PR routing, and the Contribute-permission
         // probe. They're independent, so fire them concurrently — selection
         // latency is the slower of the two, not their sum.
-        const [{ files, topLevelFolders, recentPr, pr }, perm] =
+        const [{ files, topLevelFolders, rootOrder, recentPr, pr }, perm] =
           await Promise.all([
             refreshRepoDiscovery(rawRepo, projectId),
             checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
@@ -338,6 +339,7 @@ export function DocumentsHubApp(): React.ReactElement {
                   ...r,
                   files,
                   topLevelFolders,
+                  rootOrder,
                   recentPr,
                   detailsLoaded: true,
                   canComment: perm.canComment,
@@ -394,7 +396,7 @@ export function DocumentsHubApp(): React.ReactElement {
       });
 
       try {
-        const [{ files, topLevelFolders, recentPr, pr }, perm] =
+        const [{ files, topLevelFolders, rootOrder, recentPr, pr }, perm] =
           await Promise.all([
             refreshRepoDiscovery(rawRepo, projectId),
             checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
@@ -432,6 +434,7 @@ export function DocumentsHubApp(): React.ReactElement {
                   ...r,
                   files,
                   topLevelFolders,
+                  rootOrder,
                   recentPr,
                   detailsLoaded: true,
                   canComment: perm.canComment,
@@ -625,14 +628,28 @@ export function DocumentsHubApp(): React.ReactElement {
   // Lazy folder expansion. Called the first time the user opens an
   // unenumerated folder; backed by `getItems(scopePath, OneLevel)`.
   const expandFolder = React.useCallback(
-    async (
-      repoId: string,
-      path: string,
-    ): Promise<{ files: FileInfo[]; folders: string[] }> => {
+    async (repoId: string, path: string): Promise<FolderListing> => {
       if (!state) return { files: [], folders: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { files: [], folders: [] };
       return listFolderMarkdown(repo, state.projectId, path);
+    },
+    [state],
+  );
+
+  // A wiki page's subpage folder, for its `[[_TOSP_]]` table: at the given
+  // commit for a historical version, else the default branch (a missing
+  // folder lists as empty — the page simply has no subpages).
+  const listSubpages = React.useCallback(
+    async (
+      repoId: string,
+      folderPath: string,
+      atCommitId?: string,
+    ): Promise<FolderListing> => {
+      if (!state) return { files: [], folders: [] };
+      const repo = state.repos.find((r) => r.id === repoId);
+      if (!repo) return { files: [], folders: [] };
+      return listSubpageFolder(repo, state.projectId, folderPath, atCommitId);
     },
     [state],
   );
@@ -882,6 +899,7 @@ export function DocumentsHubApp(): React.ReactElement {
         loadFileSourceAt={loadFileSourceAt}
         currentUser={user}
         onExpandFolder={expandFolder}
+        onListSubpageFolder={listSubpages}
         onSearchFiles={searchFiles}
         onLoadRepoDetails={loadDetailsFor}
         onRefreshRepo={refreshRepo}

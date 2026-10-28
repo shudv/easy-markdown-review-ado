@@ -19,6 +19,8 @@ import {
   normalizePath,
   prDate,
   projectMarkdownLevel,
+  findOrderFile,
+  listingFailureOutcome,
   prsTouchingPath,
   runWithConcurrency,
   selectRoutingPr,
@@ -49,6 +51,72 @@ describe("filterReposByName", () => {
 
   it("falls back to the full listing when the name matches nothing", () => {
     expect(filterReposByName(repos, "nonexistent")).toEqual(repos);
+  });
+});
+
+describe("listingFailureOutcome", () => {
+  const notFound = Object.assign(new Error("TF401174: item not found"), {
+    status: 404,
+  });
+  const forbidden = Object.assign(new Error("Forbidden"), { status: 403 });
+
+  it("treats a missing folder as an empty listing when allowed", () => {
+    expect(listingFailureOutcome(notFound, { missingOk: true })).toBe("empty");
+    expect(
+      listingFailureOutcome(notFound, { missingOk: true, propagate: true }),
+    ).toBe("empty");
+  });
+
+  it("rethrows other failures so callers can tell failed from empty", () => {
+    expect(
+      listingFailureOutcome(forbidden, { missingOk: true, propagate: true }),
+    ).toBe("throw");
+    expect(listingFailureOutcome(notFound, { propagate: true })).toBe("throw");
+  });
+
+  it("degrades to an empty listing for tree browsing", () => {
+    expect(listingFailureOutcome(forbidden, {})).toBe("degrade");
+    expect(listingFailureOutcome(notFound, {})).toBe("degrade");
+  });
+});
+
+describe("findOrderFile", () => {
+  const items = [
+    { path: "/Guides", isFolder: true },
+    { path: "/Guides/.order", isFolder: false },
+    { path: "/Guides/Install.md", isFolder: false },
+    { path: "/Guides/Deep", isFolder: true },
+  ];
+
+  it("finds the scope folder's own .order file", () => {
+    expect(findOrderFile(items, "/Guides")).toBe("/Guides/.order");
+  });
+
+  it("accepts slash-free and trailing-slash scope paths", () => {
+    expect(findOrderFile(items, "Guides")).toBe("/Guides/.order");
+    expect(findOrderFile(items, "/Guides/")).toBe("/Guides/.order");
+  });
+
+  it("finds the root .order", () => {
+    expect(
+      findOrderFile(
+        [{ path: "/", isFolder: true }, { path: "/.order" }, { path: "/a.md" }],
+        "/",
+      ),
+    ).toBe("/.order");
+  });
+
+  it("ignores folders named .order, other folders' files, and pathless items", () => {
+    expect(
+      findOrderFile(
+        [
+          { path: "/Guides/.order", isFolder: true },
+          { path: "/Other/.order" },
+          {},
+        ],
+        "/Guides",
+      ),
+    ).toBeUndefined();
   });
 });
 

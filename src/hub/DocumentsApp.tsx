@@ -36,7 +36,10 @@ import {
   trackUserFacingError,
 } from "../telemetry";
 
-import type { DocRepo } from "../shell/types";
+import type { DocRepo, FolderListing } from "../shell/types";
+import { normalizeFolderPath } from "../shell/components/folderTree";
+import type { FolderLister } from "../shell/wikiOrder";
+import { withFirstPageFirst } from "../shell/wikiOrder";
 import type { FileSearchOutcome } from "../shell/almSearch";
 import { COMMENT_PERMISSION_DENIED_MESSAGE } from "../shell/commentPermission.helpers";
 import { planRootAutoExpand } from "./autoExpand";
@@ -69,12 +72,19 @@ interface DocumentsAppProps {
   /**
    * Lazy folder enumeration, called the first time a folder is expanded.
    * Real ADO: `listFolderMarkdown`. Omitted in standalone. Returns the
-   * immediate `.md` files + subfolder paths.
+   * immediate `.md` files + subfolder paths, and the folder's wiki `.order`.
    */
-  onExpandFolder?: (
+  onExpandFolder?: (repoId: string, path: string) => Promise<FolderListing>;
+  /**
+   * Lists a repo folder for a document's `[[_TOSP_]]` (table of subpages)
+   * macro — at `atCommitId` for a historical version, else the default
+   * branch; a missing folder lists as empty. Omitted in standalone.
+   */
+  onListSubpageFolder?: (
     repoId: string,
-    path: string,
-  ) => Promise<{ files: FileInfo[]; folders: string[] }>;
+    folderPath: string,
+    atCommitId?: string,
+  ) => Promise<FolderListing>;
   /**
    * Async cross-folder filename search for one repo. Real ADO: ALM Code
    * Search. Omitted in standalone (DocNav falls back to local filter).
@@ -245,6 +255,18 @@ interface LazyTreeState {
   repoId: string;
   files: FileInfo[];
   unloadedFolders: string[];
+  /** Wiki `.order` page names per listed folder (slash-free path, root `""`). */
+  folderOrders: Record<string, string[]>;
+}
+
+/** Seed a repo's lazy tree from its root listing. */
+function seedLazyTree(repo: DocRepo): LazyTreeState {
+  return {
+    repoId: repo.id,
+    files: repo.files,
+    unloadedFolders: [...(repo.topLevelFolders ?? [])],
+    folderOrders: repo.rootOrder ? { "": repo.rootOrder } : {},
+  };
 }
 
 export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
@@ -357,11 +379,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     // from it would cache an empty tree that never refreshes when the real
     // root listing arrives, leaving the nav permanently empty.
     if (selectedRepo && selectedRepo.detailsLoaded !== false) {
-      m.set(selectedRepo.id, {
-        repoId: selectedRepo.id,
-        files: selectedRepo.files,
-        unloadedFolders: [...(selectedRepo.topLevelFolders ?? [])],
-      });
+      m.set(selectedRepo.id, seedLazyTree(selectedRepo));
     }
     return m;
   });
@@ -374,11 +392,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     setLazyTreeByRepo((curr) => {
       if (curr.has(selectedRepo.id)) return curr;
       const next = new Map(curr);
-      next.set(selectedRepo.id, {
-        repoId: selectedRepo.id,
-        files: selectedRepo.files,
-        unloadedFolders: [...(selectedRepo.topLevelFolders ?? [])],
-      });
+      next.set(selectedRepo.id, seedLazyTree(selectedRepo));
       return next;
     });
   }, [selectedRepo]);
@@ -398,7 +412,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     ): Promise<{ files: FileInfo[]; folders: string[] } | null> => {
       if (!selectedRepo || !onExpandFolder) return null;
       const repoIdAtCall = selectedRepo.id;
-      let payload: { files: FileInfo[]; folders: string[] };
+      let payload: FolderListing;
       try {
         payload = await onExpandFolder(repoIdAtCall, path);
       } catch (err) {
@@ -440,6 +454,12 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
           unloadedFolders: Array.from(unloaded).sort((a, b) =>
             a.localeCompare(b),
           ),
+          folderOrders: payload.order
+            ? {
+                ...entry.folderOrders,
+                [normalizeFolderPath(path)]: payload.order,
+              }
+            : entry.folderOrders,
         });
         return next;
       });
@@ -499,7 +519,8 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
       prId: selectedRepo.recentPr?.id ?? 0,
       title: `Documents in ${selectedRepo.name}`,
       authorName: selectedRepo.recentPr?.author ?? "\u2014",
-      files: treeFiles,
+      // The default document is the first file: a wiki opens its first page.
+      files: withFirstPageFirst(treeFiles, selectedRepo.rootOrder),
     };
   }, [selectedRepo, lazyTree]);
 
@@ -653,6 +674,14 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     const repoId = selectedRepo.id;
     return (path: string, commitId: string) => fn(repoId, path, commitId);
   }, [perDocumentMode, props.loadFileSourceAt, selectedRepo]);
+
+  // Folder lister for `[[_TOSP_]]` subpage tables, bound to the active repo.
+  const listSubpageFolderBound = React.useMemo<FolderLister | undefined>(() => {
+    const fn = props.onListSubpageFolder;
+    if (!fn || !selectedRepo) return undefined;
+    const repoId = selectedRepo.id;
+    return (folderPath, atCommitId) => fn(repoId, folderPath, atCommitId);
+  }, [props.onListSubpageFolder, selectedRepo]);
 
   // Build the routed-PR pill payload for the rail (only when the repo has a
   // completed PR; the rail hides when undefined).
@@ -885,12 +914,10 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
               fetchRemoteThreads={
                 perDocumentMode ? undefined : fetchRemoteThreads
               }
-              unloadedFolders={
-                lazyTree
-                  ? lazyTree.unloadedFolders
-                  : (selectedRepo.topLevelFolders ?? [])
-              }
+              unloadedFolders={shellUnloadedFolders}
               onExpandFolder={onExpandFolder ? handleExpandFolder : undefined}
+              folderOrders={lazyTree?.folderOrders}
+              listFolder={listSubpageFolderBound}
               onSearchFiles={handleSearchFiles}
               docNavTitleSlot={docNavTitleSlot}
               onRefreshFiles={onRefreshRepo ? handleRefresh : undefined}

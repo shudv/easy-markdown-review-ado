@@ -19,8 +19,8 @@
       "cognitive": 29
     },
     "src/hub/DocumentsApp.tsx::DocumentsApp": {
-      "cyclomatic": 56,
-      "cognitive": 58
+      "cyclomatic": 55,
+      "cognitive": 55
     },
     "src/hub/DocumentsApp.tsx::RepoPicker": {
       "cognitive": 26
@@ -104,8 +104,7 @@
       "cognitive": 20
     },
     "src/shell/components/DocNav.tsx::NavTreeItem": {
-      "cyclomatic": 31,
-      "cognitive": 51
+      "cognitive": 19
     },
     "src/shell/components/GeneratedSourceModal.tsx::GeneratedSourceModal": {
       "cyclomatic": 22,

@@ -655,6 +655,20 @@
       "name": "markdown-review-sandbox-v2",
       "description": "Intentionally has files but NO pull requests — exercises the Documents-hub empty state (commenting disabled until a PR exists). Maps to the project's auto-created default repo.",
       "pullRequests": []
+    },
+    {
+      "name": "wiki-showcase",
+      "description": "Azure DevOps wiki layout: a root and a subfolder `.order` that differ from alphabetical order, a `[[_TOC_]]` home page, and a `Guides` page whose `[[_TOSP_]]` lists its `Guides/` subpages. One active PR adds a subpage and reorders the folder, so the PR tab's subpage table reflects the PR's version.",
+      "pullRequests": [
+        {
+          "title": "Add an upgrade guide",
+          "branch": "feature/add-upgrade-guide",
+          "description": "Adds Guides/Upgrade.md and lists it second in Guides/.order, so the Guides page's subpage table changes in this PR.",
+          "overlay": "add-upgrade-guide",
+          "complete": false,
+          "threads": []
+        }
+      ]
     }
   ]
 }

@@ -130,6 +130,8 @@ import {
   type ReviewIterationRange,
 } from "./prShellHelpers";
 import { useDraftPersistence } from "./useDraftPersistence";
+import type { FolderLister } from "./wikiOrder";
+import { useWikiSubpages } from "./useWikiSubpages";
 import {
   NEW_DRAFT_THREAD_ID,
   addCommentDraftTarget,
@@ -173,6 +175,17 @@ interface PrShellProps {
   onExpandFolder?: (
     path: string,
   ) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
+  /**
+   * Azure DevOps wiki `.order` page names per folder (slash-free path, `""`
+   * for the root), forwarded to DocNav so wiki repos list pages in order.
+   */
+  folderOrders?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Lists a repository folder, for a document's `[[_TOSP_]]` (table of
+   * subpages) macro. Omitted where folders can't be listed; the macro then
+   * says subpages aren't available.
+   */
+  listFolder?: FolderLister;
   /** Async filename search; omitted in standalone (DocNav falls back to local filter). */
   onSearchFiles?: (
     query: string,
@@ -488,6 +501,10 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   }, [prefsScope, readerPrefs]);
   const toggleReaderNav = React.useCallback(
     () => setReaderPrefs((p) => ({ ...p, showNav: !p.showNav })),
+    [],
+  );
+  const toggleReaderOutline = React.useCallback(
+    () => setReaderPrefs((p) => ({ ...p, showOutline: !p.showOutline })),
     [],
   );
   const toggleReaderComments = React.useCallback(
@@ -2505,6 +2522,14 @@ export function PrShell(props: PrShellProps): React.ReactElement {
   const activePristineHtml = usingHistoricalContent
     ? (historicalHtml ?? "")
     : pristineHtml;
+
+  const articleHtml = useWikiSubpages({
+    html: activePristineHtml,
+    documentPath: selectedPath,
+    historical: usingHistoricalContent,
+    commitId: activeStop.commitId,
+    listFolder: props.listFolder,
+  });
   const activeStorageKey =
     viewingHistorical && historicalContentKey
       ? historicalContentKey
@@ -3013,6 +3038,9 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   threadCountsByPath={threadCountsByPath}
                   unloadedFolders={props.unloadedFolders}
                   onExpandFolder={props.onExpandFolder}
+                  folderOrders={props.folderOrders}
+                  wikiPages={props.documentsMode}
+                  showOutline={readerPrefs.showOutline}
                   onSearchFiles={props.onSearchFiles}
                   titleSlot={props.docNavTitleSlot}
                   // Per-file A/M/D change indicators only make sense against a
@@ -3114,7 +3142,7 @@ export function PrShell(props: PrShellProps): React.ReactElement {
                   <ArticleSkeleton />
                 ) : (
                   <ArticleView
-                    pristineHtml={activePristineHtml}
+                    pristineHtml={articleHtml}
                     documentPath={selectedPath}
                     readerFontFamily={readerFont.stack}
                     threads={visibleForArticle}
@@ -3302,6 +3330,8 @@ export function PrShell(props: PrShellProps): React.ReactElement {
             onSpacingChange={setReaderSpacing}
             showNav={readerPrefs.showNav}
             onToggleNav={toggleReaderNav}
+            showOutline={readerPrefs.showOutline}
+            onToggleOutline={toggleReaderOutline}
             navToggleable={navToggleable}
             showComments={readerPrefs.showComments}
             commentsAvailable={commentsAvailable}

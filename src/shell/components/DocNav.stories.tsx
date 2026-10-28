@@ -95,6 +95,9 @@ interface HarnessProps {
   initialSelected?: string;
   showChangeIndicators?: boolean;
   rangeChanges?: RangeChanges;
+  wikiPages?: boolean;
+  threadCounts?: Record<string, number>;
+  showOutline?: boolean;
 }
 
 function Harness(props: HarnessProps): React.ReactElement {
@@ -125,12 +128,14 @@ function Harness(props: HarnessProps): React.ReactElement {
         files={props.files ?? FILES}
         selectedPath={selectedPath}
         onSelectPath={handleSelect}
-        threadCountsByPath={THREAD_COUNTS}
+        threadCountsByPath={props.threadCounts ?? THREAD_COUNTS}
         unloadedFolders={props.unloadedFolders}
         onExpandFolder={props.onExpandFolder}
         onSearchFiles={props.onSearchFiles}
         showChangeIndicators={props.showChangeIndicators}
         rangeChanges={props.rangeChanges}
+        wikiPages={props.wikiPages}
+        showOutline={props.showOutline}
       />
       <main
         ref={scrollRef as React.Ref<HTMLElement>}
@@ -795,5 +800,162 @@ export const Empty: Story = {
   args: { files: [] },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector(".emr-docnav")).toBeNull();
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Azure DevOps wiki pages
+// ---------------------------------------------------------------------------
+
+function wikiFile(path: string): FileInfo {
+  return { path, changeType: "modified", linesAdded: 0, linesDeleted: 0 };
+}
+
+/**
+ * In the Documents hub a wiki page and its subpage folder (`Guides.md` +
+ * `Guides/`) are one row, as in the Azure DevOps wiki. The chevron shows or
+ * hides the subpages; the label opens the page (expanding it), and the open
+ * page's outline sits above its subpages.
+ */
+export const WikiPages: Story = {
+  args: {
+    files: [
+      wikiFile("Home.md"),
+      wikiFile("Guides.md"),
+      wikiFile("Guides/Install.md"),
+      wikiFile("Guides/Configure.md"),
+    ],
+    initialSelected: "Home.md",
+    showChangeIndicators: false,
+    wikiPages: true,
+    threadCounts: { "Guides.md": 2 },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const names = () =>
+      Array.from(canvasElement.querySelectorAll(".emr-docnav-file-name")).map(
+        (el) => el.textContent,
+      );
+    // No separate `Guides.md` file row: it's the folder's page.
+    await expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]);
+    const pageLabel = canvasElement.querySelector<HTMLElement>(
+      ".emr-docnav-page-label",
+    )!;
+    await expect(pageLabel.title).toBe("Guides.md");
+    await expect(pageLabel.textContent).toContain("Guides.md");
+    await expect(within(pageLabel).getByText("2")).toBeTruthy();
+
+    // The chevron alone hides and shows the subpages.
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Collapse subpages" }),
+    );
+    await expect(names()).toEqual(["Home.md"]);
+    await expect(args.onSelectPath).not.toHaveBeenCalled();
+
+    // The label opens the page and expands it, outline above the subpages.
+    await userEvent.click(pageLabel);
+    await expect(args.onSelectPath).toHaveBeenCalledWith("Guides.md");
+    await waitFor(() =>
+      expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]),
+    );
+    const row = pageLabel.closest(".emr-docnav-item")!;
+    await expect(row.classList.contains("is-active")).toBe(true);
+    const outline = row.nextElementSibling!;
+    await expect(outline.textContent).toContain("Introduction");
+    await expect(outline.nextElementSibling!.textContent).toBe(
+      "Configure.mdInstall.md",
+    );
+
+    // Opening an already-expanded page leaves it expanded.
+    await userEvent.click(pageLabel);
+    await expect(
+      canvas.getByRole("button", { name: "Collapse subpages" }),
+    ).toBeTruthy();
+
+    // Hiding the subpages keeps the open page's outline.
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Collapse subpages" }),
+    );
+    await expect(names()).toEqual(["Home.md"]);
+    await expect(
+      within(
+        canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+      ).getByText("Introduction"),
+    ).toBeTruthy();
+  },
+};
+
+/**
+ * An open page shows its outline even before its subpage folder has loaded.
+ */
+export const WikiPageOutlineBeforeSubpagesLoad: Story = {
+  args: {
+    files: [wikiFile("Archive.md")],
+    unloadedFolders: ["Archive"],
+    initialSelected: "Archive.md",
+    wikiPages: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("button", { name: "Load folder" }),
+    ).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        within(
+          canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
+        ).getByText("Introduction"),
+      ).toBeTruthy(),
+    );
+  },
+};
+
+/** A page whose subpage folder isn't loaded yet fetches it when opened. */
+export const WikiPageLazySubpages: Story = {
+  args: {
+    files: [wikiFile("Archive.md")],
+    unloadedFolders: ["Archive"],
+    initialSelected: "Home.md",
+    wikiPages: true,
+    onExpandFolder: fn(
+      () =>
+        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
+          setTimeout(() => resolve({ files: [], folders: [] }), 20),
+        ),
+    ),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("button", { name: "Load folder" }),
+    ).toBeTruthy();
+    await userEvent.click(
+      canvasElement.querySelector<HTMLElement>(".emr-docnav-page-label")!,
+    );
+    await expect(args.onSelectPath).toHaveBeenCalledWith("Archive.md");
+    await waitFor(() =>
+      expect(args.onExpandFolder).toHaveBeenCalledWith("Archive"),
+    );
+  },
+};
+
+/**
+ * With the reader's outline turned off, the open file lists no headings and its
+ * row stays highlighted as the reader scrolls through the document.
+ */
+export const OutlineOff: Story = {
+  args: { showOutline: false },
+  play: async ({ canvasElement }) => {
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    await expect(within(nav).queryByText("Introduction")).toBeNull();
+    const scroller = canvasElement.querySelector<HTMLElement>("main")!;
+    scroller.scrollTop = 400;
+    scroller.dispatchEvent(new Event("scroll"));
+    await waitFor(() =>
+      expect(
+        nav.querySelector(".emr-docnav-file.is-active .emr-docnav-file-name")
+          ?.textContent,
+      ).toBe("guide.md"),
+    );
   },
 };

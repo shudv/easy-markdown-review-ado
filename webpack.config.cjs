@@ -154,6 +154,13 @@ module.exports = (env, argv) => {
     module: {
       rules: [
         {
+          // Excalidraw's ESM build imports `roughjs/bin/rough` etc. without
+          // file extensions, which strict ESM resolution rejects.
+          test: /\.m?js$/,
+          include: /node_modules[\\/]@excalidraw[\\/]/,
+          resolve: { fullySpecified: false },
+        },
+        {
           test: /\.tsx?$/,
           exclude: /node_modules/,
           use: {
@@ -210,6 +217,10 @@ module.exports = (env, argv) => {
         // token dead window, slow hosts, etc. `false` in production, where the
         // guarded code is dropped; scripts/check-no-dev-faults.mjs verifies.
         __EMR_DEV_FAULTS__: JSON.stringify(isDev),
+        // Webpack otherwise bakes each module's build-machine `file:///` path
+        // into `import.meta.url`. Only Excalidraw reads it (to spawn its font
+        // subsetting worker), and it falls back to the main thread without it.
+        "import.meta.url": "undefined",
       }),
       new HtmlWebpackPlugin({
         template: "./src/pr-tab/pr-tab.html",
@@ -224,7 +235,17 @@ module.exports = (env, argv) => {
         inject: "body",
       }),
       new CopyPlugin({
-        patterns: [{ from: "static", to: "../static", noErrorOnMissing: true }],
+        patterns: [
+          { from: "static", to: "../static", noErrorOnMissing: true },
+          // Excalidraw inlines these fonts into rendered drawings; shipping
+          // them keeps it off its public CDN (see src/markdown/excalidraw.ts).
+          // Xiaolai (CJK, ~12.7 MB) is left out of the prototype.
+          {
+            from: "node_modules/@excalidraw/excalidraw/dist/prod/fonts",
+            to: "excalidraw-assets/fonts",
+            globOptions: { ignore: ["**/Xiaolai/**"] },
+          },
+        ],
       }),
       // Prod only: emit component CSS as standalone [name].css assets so it is
       // minified by CssMinimizerPlugin and served/cached separately from JS.

@@ -13,6 +13,13 @@ import type { StorybookConfig } from "@storybook/react-vite";
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
   addons: ["@storybook/addon-vitest"],
+  // Excalidraw's fonts, at the path stories point EXCALIDRAW_ASSET_PATH at.
+  staticDirs: [
+    {
+      from: "../node_modules/@excalidraw/excalidraw/dist/prod/fonts",
+      to: "/excalidraw-assets/fonts",
+    },
+  ],
   framework: {
     name: "@storybook/react-vite",
     options: {},

@@ -111,6 +111,7 @@ creates the native comment thread.
 | `iteration-history-showcase`   | Active PR with 10 iterations and an anchor/orphan/reanchor lifecycle  |
 | `update-scope-showcase`        | Active PR whose updates add one file and delete another               |
 | `equation-showcase`            | Active equation PR with atomic edits and unified source comparison    |
+| `excalidraw-showcase`          | `.excalidraw` image refs; active PR edits a drawing and adds another  |
 | `production-markdown-showcase` | Active dialect/deletion PR with native PNG, GIF, and file attachments |
 | `markdown-review-sandbox-v2`   | Files but **no PRs** — the "commenting disabled" empty state          |
 

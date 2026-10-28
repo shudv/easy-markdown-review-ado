@@ -4,7 +4,7 @@
 
 - Public base: `f36ed80` (OSS `1.1.1`, Marketplace privacy policy).
 - Previously mirrored product boundary: `4c90e4218c56336b161400b59a78ff8d807ea7c5`.
-- New product boundary: `d7c9b0e` (source change not yet merged; record the
+- New product boundary: `7811fe9` (source change not yet merged; record the
   source merge commit here once it lands).
 - OSS release version: `1.2.0` (package, root lockfile metadata, and Marketplace
   manifest updated together). The source repository moves to `1.2.0` in the
@@ -13,9 +13,9 @@
 
 ### Mirrored changes
 
-| Source commit | Changes represented                                                                                                                                                                                                                                                                                                |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `d7c9b0e`     | `.excalidraw` image references rendered to SVG through the repository image frame, dark-mode filter, invalid scenes treated as content health, self-hosted Excalidraw fonts, webpack resolution and `import.meta.url` handling, unit tests, an ArticleView story, and the synthetic `excalidraw-showcase` sandbox. |
+| Source commit        | Changes represented                                                                                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `d7c9b0e`, `7811fe9` | `.excalidraw` image references rendered to SVG through the repository image frame, dark-mode filter, invalid scenes treated as content health, self-hosted Excalidraw fonts, webpack resolution and `import.meta.url` handling, unit tests, an ArticleView story, and the synthetic `excalidraw-showcase` sandbox. |
 
 ### Public-specific adaptations retained
 
@@ -33,7 +33,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `d7c9b0e` and
+Compare the next source product tree against the merged form of `7811fe9` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

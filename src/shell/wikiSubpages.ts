@@ -10,6 +10,18 @@ import {
 } from "./wikiOrder";
 
 /**
+ * The commit to list a shown version's subpages at: undefined for the current
+ * version, null for a historical version without a commit. Its subpages can't
+ * be listed then — listing the current branch would show the wrong ones.
+ */
+export function subpagesCommit(
+  historical: boolean,
+  commitId: string | null | undefined,
+): string | null | undefined {
+  return historical ? (commitId ?? null) : undefined;
+}
+
+/**
  * A document's subpages, listed at the same revision as the document
  * (`atCommitId` for a historical version). Resolves to undefined when the
  * listing fails — the table then says subpages aren't available, rather than

@@ -28,6 +28,12 @@ describe("parseOrderFile", () => {
   it("is empty for an empty file", () => {
     expect(parseOrderFile("")).toEqual([]);
   });
+
+  it("drops a leading byte-order mark, so the first page still matches", () => {
+    const order = parseOrderFile("\uFEFFHome\r\nGuides\r\n");
+    expect(order).toEqual(["Home", "Guides"]);
+    expect(orderRank(order)("Home")).toBe(0);
+  });
 });
 
 describe("wikiPageName", () => {

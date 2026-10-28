@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { loadWikiSubpages } from "../src/shell/wikiSubpages";
+import { loadWikiSubpages, subpagesCommit } from "../src/shell/wikiSubpages";
 
 describe("loadWikiSubpages", () => {
   it("lists the page's subpage folder, in .order order", async () => {
@@ -40,5 +40,20 @@ describe("loadWikiSubpages", () => {
     ).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("subpagesCommit", () => {
+  it("lists the current version at the branch head", () => {
+    expect(subpagesCommit(false, "abc")).toBeUndefined();
+  });
+
+  it("lists a historical version at its own commit", () => {
+    expect(subpagesCommit(true, "abc")).toBe("abc");
+  });
+
+  it("can't list a historical version without a commit", () => {
+    expect(subpagesCommit(true, null)).toBeNull();
+    expect(subpagesCommit(true, undefined)).toBeNull();
   });
 });

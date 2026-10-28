@@ -12,7 +12,7 @@ import {
   type SubpagesState,
 } from "../markdown/wikiMacros";
 import type { FolderLister } from "./wikiOrder";
-import { loadWikiSubpages } from "./wikiSubpages";
+import { loadWikiSubpages, subpagesCommit } from "./wikiSubpages";
 
 export interface WikiSubpagesInput {
   /** The shown document's rendered HTML. */
@@ -30,8 +30,7 @@ export interface WikiSubpagesInput {
 /** `html` with its `[[_TOSP_]]` tables showing the shown version's subpages. */
 export function useWikiSubpages(input: WikiSubpagesInput): string {
   const { html, documentPath, listFolder } = input;
-  // Historical content only loads for a stop with a commit, so one is set.
-  const atCommitId = input.historical ? input.commitId! : undefined;
+  const atCommit = subpagesCommit(input.historical, input.commitId);
   const [byVersion, setByVersion] = React.useState<
     Record<string, SubpagesState>
   >({});
@@ -40,12 +39,14 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
   const listFolderRef = React.useRef(listFolder);
   listFolderRef.current = listFolder;
 
-  const key = `${documentPath}\u0000${atCommitId ?? ""}`;
-  const canList = listFolder !== undefined;
+  const key = `${documentPath}\u0000${atCommit ?? ""}`;
+  const canList = listFolder !== undefined && atCommit !== null;
   const needsListing =
     canList && hasSubpagesMacro(html) && byVersion[key] === undefined;
   React.useEffect(() => {
     if (!needsListing) return;
+    // `canList` rules out a null commit here.
+    const atCommitId = atCommit as string | undefined;
     void loadWikiSubpages(
       documentPath,
       listFolderRef.current!,
@@ -56,7 +57,7 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
         [key]: subpages ?? "unavailable",
       }));
     });
-  }, [needsListing, documentPath, atCommitId, key]);
+  }, [needsListing, documentPath, atCommit, key]);
 
   const state: SubpagesState = canList
     ? (byVersion[key] ?? "loading")

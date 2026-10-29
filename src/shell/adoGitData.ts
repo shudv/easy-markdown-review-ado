@@ -38,6 +38,8 @@ import {
   commitIds,
   docPrRefsFromHistory,
   escapeSearchQuery,
+  findOrderFile,
+  listingFailureOutcome,
   firstCommitId,
   normalizePath,
   normalizeRepoFilter,
@@ -49,6 +51,7 @@ import {
   stripRefsHeads,
 } from "./adoGitData.helpers";
 import { sharedGitClient } from "./adoClients";
+import { parseOrderFile } from "./wikiOrder";
 
 // Re-export `buildPrUrl` (the one helper external callers reach for through
 // this module's SDK-touching API surface).
@@ -175,6 +178,8 @@ export async function refreshRepoDiscovery(
 ): Promise<{
   files: FileInfo[];
   topLevelFolders: string[];
+  /** The root folder's wiki `.order` page names, when it has one. */
+  rootOrder?: string[];
   recentPr: DocRepo["recentPr"];
   pr: GitPullRequest | null;
 }> {
@@ -182,7 +187,7 @@ export async function refreshRepoDiscovery(
     listMarkdownRoot(rawRepo, projectId),
     loadRepoPrRouting(rawRepo, projectId),
   ]);
-  const root =
+  const root: FolderListing =
     rootResult.status === "fulfilled"
       ? rootResult.value
       : { files: [], folders: [] };
@@ -205,6 +210,7 @@ export async function refreshRepoDiscovery(
   return {
     files: root.files,
     topLevelFolders: root.folders,
+    rootOrder: root.order,
     recentPr: routing.recentPr,
     pr: routing.pr,
   };
@@ -251,31 +257,69 @@ export async function listFolderMarkdown(
   path: string,
 ): Promise<FolderListing> {
   if (!repo.defaultBranch) return { files: [], folders: [] };
-  // Synthesise the minimum shape `listMarkdownLevel` needs from the DocRepo.
-  const stub = {
+  return listMarkdownLevel(repoStub(repo), projectId, path);
+}
+
+/**
+ * List the folder holding a wiki page's subpages (for `[[_TOSP_]]`), at the
+ * default branch tip or at `atCommitId` (a pull request's content, or a
+ * historical version). A folder that doesn't exist means the page has no
+ * subpages, so it lists as empty; any other failure is thrown so the reader
+ * says subpages are unavailable rather than claiming there are none.
+ */
+export async function listSubpageFolder(
+  repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
+  projectId: string,
+  path: string,
+  atCommitId?: string,
+): Promise<FolderListing> {
+  return listMarkdownLevel(repoStub(repo), projectId, path, {
+    atCommitId,
+    missingOk: true,
+    propagate: true,
+  });
+}
+
+/** The minimum repository shape `listMarkdownLevel` needs, from a DocRepo. */
+function repoStub(
+  repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
+): Pick<GitRepository, "id" | "name" | "defaultBranch"> {
+  return {
     id: repo.id,
     name: repo.name,
     defaultBranch: `refs/heads/${repo.defaultBranch}`,
-  } as Pick<GitRepository, "id" | "name" | "defaultBranch">;
-  return listMarkdownLevel(stub, projectId, path);
+  };
 }
 
 async function listMarkdownLevel(
   repo: Pick<GitRepository, "id" | "name" | "defaultBranch">,
   projectId: string,
   scopePath: string,
+  options: {
+    atCommitId?: string;
+    missingOk?: boolean;
+    propagate?: boolean;
+  } = {},
 ): Promise<FolderListing> {
-  if (!repo.defaultBranch) return { files: [], folders: [] };
+  if (!repo.defaultBranch && !options.atCommitId) {
+    return { files: [], folders: [] };
+  }
   const gitClient = sharedGitClient();
 
   // Pin reads to the default branch's tip so repos with no default
-  // branch ref selection still return a coherent listing.
-  const branchName = stripRefsHeads(repo.defaultBranch);
-  const versionDescriptor = {
-    version: branchName,
-    versionType: GitVersionType.Branch,
-    versionOptions: GitVersionOptions.None,
-  };
+  // branch ref selection still return a coherent listing — or to a commit
+  // (a pull request's source) when one is given.
+  const versionDescriptor = options.atCommitId
+    ? {
+        version: options.atCommitId,
+        versionType: GitVersionType.Commit,
+        versionOptions: GitVersionOptions.None,
+      }
+    : {
+        version: stripRefsHeads(repo.defaultBranch!),
+        versionType: GitVersionType.Branch,
+        versionOptions: GitVersionOptions.None,
+      };
 
   let items: GitItem[];
   try {
@@ -295,6 +339,9 @@ async function listMarkdownLevel(
       { mode: "read", label: "listMarkdownLevel.getItems" },
     );
   } catch (err) {
+    const outcome = listingFailureOutcome(err, options);
+    if (outcome === "empty") return { files: [], folders: [] };
+    if (outcome === "throw") throw err;
     console.warn(
       `[documents-hub] getItems(OneLevel) failed for ${repo.name} @ ${scopePath}:`,
       err,
@@ -311,7 +358,44 @@ async function listMarkdownLevel(
   // ADO returns the scope folder itself as the first item — the pure
   // `projectMarkdownLevel` helper skips it, keeps only `.md` files
   // (case-insensitive), and sorts. See adoGitData.helpers for the invariants.
-  return projectMarkdownLevel(items, scopePath);
+  const listing = projectMarkdownLevel(items, scopePath);
+  // An Azure DevOps wiki folder orders its pages with a `.order` file.
+  const orderPath = findOrderFile(items, scopePath);
+  if (orderPath) {
+    try {
+      const text = await withRetry(
+        () =>
+          gitClient.getItemText(
+            repo.id,
+            orderPath,
+            projectId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            versionDescriptor,
+          ),
+        { mode: "read", label: "listMarkdownLevel.getItemText(.order)" },
+      );
+      listing.order = parseOrderFile(text);
+    } catch (err) {
+      // Best-effort: the folder still lists, alphabetically.
+      console.warn(
+        `[documents-hub] reading ${orderPath} failed for ${repo.name}:`,
+        err,
+      );
+      if (!isItemNotFoundError(err)) {
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsHubApp.repository",
+          operation: "wiki-order-load",
+          impact: "degraded",
+        });
+      }
+    }
+  }
+  return listing;
 }
 
 async function findMostRecentRoutingPr(

@@ -340,6 +340,15 @@ describe("isWithinGeneratedContent", () => {
       false,
     );
   });
+
+  it("is true for a generated wiki table of contents", () => {
+    const root = makeArticle(
+      '<nav class="emr-wiki-macro emr-wiki-toc"><ul><li><a href="#goals">Goals</a></li></ul></nav>',
+    );
+    expect(isWithinGeneratedContent(root.querySelector("a")!.firstChild!)).toBe(
+      true,
+    );
+  });
 });
 
 // captureAnchorFromSelection — jsdom Selection support is limited, but

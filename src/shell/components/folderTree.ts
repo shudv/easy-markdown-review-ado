@@ -17,6 +17,13 @@
 // reference. This lets the DocNav reuse the same nodes for both PR-tab
 // files (which carry `changeType` + diff stats) and Documents-hub files
 // (plain `path` only) without needing two trees.
+//
+// A folder with an Azure DevOps wiki `.order` file sorts the pages and
+// folders it lists first, in that order (see `../wikiOrder`). For wiki-style
+// browsing, `mergeWikiPages` folds a page `Foo.md` into its sibling subpage
+// folder `Foo/`, so the pair shows as one page-with-subpages node.
+
+import { compareRanks, orderRank, wikiPageName } from "../wikiOrder";
 
 export interface DirNode<F extends { path: string }> {
   kind: "dir";
@@ -25,6 +32,11 @@ export interface DirNode<F extends { path: string }> {
   /** Display label: the collapsed segments separated by `/`. */
   displayName: string;
   children: Array<DirNode<F> | FileNode<F>>;
+  /**
+   * The folder's own wiki page — the sibling `Foo.md` of folder `Foo/` — when
+   * `mergeWikiPages` folded it in. The node is then a page with subpages.
+   */
+  page?: F;
 }
 
 export interface FileNode<F extends { path: string }> {
@@ -60,7 +72,15 @@ export function normalizeFolderPath(path: string): string {
  */
 export function buildFolderTree<F extends { path: string }>(
   files: readonly F[],
-  options?: { extraFolders?: readonly string[] },
+  options?: {
+    extraFolders?: readonly string[];
+    /**
+     * Azure DevOps wiki `.order` page names per folder, keyed by the
+     * slash-free folder path (`""` for the root). Listed pages and folders sort
+     * first, in that order; the rest follow in the default order.
+     */
+    folderOrders?: Readonly<Record<string, readonly string[]>>;
+  },
 ): Array<TreeNode<F>> {
   // Internal building shape: keep children in a Map keyed by segment name
   // so insertion is O(1). We flatten to arrays + sort at the end.
@@ -154,7 +174,7 @@ export function buildFolderTree<F extends { path: string }>(
     for (const child of work.children.values()) {
       children.push(build(child));
     }
-    sortNodes(children);
+    sortNodes(children, ownOrder(options?.folderOrders, work.full));
     return {
       kind: "dir",
       path: work.full,
@@ -167,12 +187,32 @@ export function buildFolderTree<F extends { path: string }>(
   for (const child of root.children.values()) {
     roots.push(build(child));
   }
-  sortNodes(roots);
+  sortNodes(roots, ownOrder(options?.folderOrders, ""));
   return roots;
 }
 
-function sortNodes<F extends { path: string }>(nodes: TreeNode<F>[]): void {
+/**
+ * A folder's `.order` entry, read as an OWN property only — a folder named
+ * like an object property (`constructor`, `__proto__`) mustn't pick up an
+ * inherited value.
+ */
+function ownOrder(
+  orders: Readonly<Record<string, readonly string[]>> | undefined,
+  folder: string,
+): readonly string[] | undefined {
+  return orders && Object.prototype.hasOwnProperty.call(orders, folder)
+    ? orders[folder]
+    : undefined;
+}
+
+function sortNodes<F extends { path: string }>(
+  nodes: TreeNode<F>[],
+  order: readonly string[] | undefined,
+): void {
+  const rank = orderRank(order);
   nodes.sort((a, b) => {
+    const byOrder = compareRanks(rank(orderName(a)), rank(orderName(b)));
+    if (byOrder !== 0) return byOrder;
     const aDir = a.kind === "dir";
     const bDir = b.kind === "dir";
     if (aDir && !bDir) return -1;
@@ -181,6 +221,16 @@ function sortNodes<F extends { path: string }>(nodes: TreeNode<F>[]): void {
     const bn = b.kind === "dir" ? b.displayName : basename(b.file.path);
     return an.toLowerCase().localeCompare(bn.toLowerCase());
   });
+}
+
+/**
+ * The wiki page name a node is ordered by within its parent folder. A
+ * collapsed `a/b/c` row is ordered by the folder it starts with.
+ */
+function orderName<F extends { path: string }>(node: TreeNode<F>): string {
+  return node.kind === "dir"
+    ? node.displayName.split("/")[0]!
+    : wikiPageName(node.file.path);
 }
 
 function basename(p: string): string {
@@ -204,4 +254,42 @@ export function collectDirPaths<F extends { path: string }>(
   }
   for (const n of nodes) walk(n);
   return out;
+}
+
+/**
+ * Fold Azure DevOps wiki pages into their subpage folders. A wiki page `Foo`
+ * is the file `Foo.md`; its subpages live in the sibling folder `Foo/`. The
+ * wiki shows the pair as ONE node — a page that also has children — so each
+ * folder with a same-named sibling Markdown file takes that file as its
+ * `page`, and the separate file row is dropped. The merged node keeps the
+ * folder's position. A collapsed `a/b` chain isn't a single page, so it isn't
+ * merged.
+ */
+export function mergeWikiPages<F extends { path: string }>(
+  nodes: ReadonlyArray<TreeNode<F>>,
+): Array<TreeNode<F>> {
+  const pagesByName = new Map<string, F>();
+  for (const node of nodes) {
+    if (node.kind === "file" && /\.md$/i.test(node.file.path)) {
+      pagesByName.set(wikiPageName(node.file.path), node.file);
+    }
+  }
+  const merged = new Set<F>();
+  const out: Array<TreeNode<F>> = [];
+  for (const node of nodes) {
+    if (node.kind === "file") {
+      out.push(node);
+      continue;
+    }
+    const page = node.displayName.includes("/")
+      ? undefined
+      : pagesByName.get(node.displayName);
+    if (page) merged.add(page);
+    out.push({
+      ...node,
+      children: mergeWikiPages(node.children),
+      ...(page ? { page } : {}),
+    });
+  }
+  return out.filter((node) => node.kind === "dir" || !merged.has(node.file));
 }

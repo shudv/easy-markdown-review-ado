@@ -14,7 +14,6 @@ import {
   GitVersionType,
   PullRequestStatus,
   type GitPullRequest,
-  type GitPullRequestChange,
 } from "azure-devops-extension-api/Git";
 
 import {
@@ -28,7 +27,11 @@ import type {
 } from "../shell/prShellHelpers";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
-import { resolveAdoAvatarObjectUrl } from "../shell/adoGitData";
+import {
+  listSubpageFolder,
+  resolveAdoAvatarObjectUrl,
+} from "../shell/adoGitData";
+import type { FolderLister } from "../shell/wikiOrder";
 import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import { buildReposFileUrl } from "../markdown/docLinks";
@@ -93,6 +96,7 @@ import {
   rangeChangeTypes,
   contentCommitForChange,
   diffableFilePaths,
+  fetchAllIterationChanges,
   mapChangeType,
   markdownChangePath,
   pickPullRequestId,
@@ -130,9 +134,6 @@ interface PrContext {
 // the shell seeds its reducer with this instead of blocking first paint on the
 // thread fetch. Module-scoped so its identity never changes across renders.
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
-
-/** Page size when listing the files a comparison of PR updates changes. */
-const RANGE_CHANGES_PAGE = 500;
 
 export function PrTabApp(): React.ReactElement {
   const [ctx, setCtx] = React.useState<PrContext | null>(null);
@@ -401,6 +402,26 @@ export function PrTabApp(): React.ReactElement {
     return base ? (target) => withDeepLinkTarget(base, target) : null;
   }, [prWebUrl, activeDocPath, activeIterationParams]);
 
+  // `[[_TOSP_]]` subpage tables list the page's folder as this PR has it —
+  // or, for an earlier PR update, as that update had it.
+  const listFolder = React.useMemo<FolderLister | undefined>(() => {
+    const commitId =
+      ctx?.targetCommit ?? ctx?.pr.lastMergeSourceCommit?.commitId;
+    if (!ctx || !commitId) return undefined;
+    const repo = {
+      id: ctx.repositoryId,
+      name: ctx.repositoryName,
+      defaultBranch: "",
+    };
+    return (folderPath, atCommitId) =>
+      listSubpageFolder(
+        repo,
+        ctx.projectId,
+        folderPath,
+        atCommitId ?? commitId,
+      );
+  }, [ctx]);
+
   // Which Markdown files a comparison of PR updates touches, so the file list
   // can mark them: ADO's iteration changes for the newer update compared to
   // the older one (0 = the PR base), paged.
@@ -410,26 +431,21 @@ export function PrTabApp(): React.ReactElement {
       const params = iterationParamsForRange(range, ctx.reviewIterationStops);
       if (!params) return {};
       const gitClient = sharedGitClient();
-      const entries: GitPullRequestChange[] = [];
-      let skip = 0;
-      for (;;) {
-        const page = await withRetry(
+      const entries = await fetchAllIterationChanges((top, skip) =>
+        withRetry(
           () =>
             gitClient.getPullRequestIterationChanges(
               ctx.repositoryId,
               ctx.pullRequestId,
               params.iteration,
               ctx.projectId,
-              RANGE_CHANGES_PAGE,
+              top,
               skip,
               params.base,
             ),
           { mode: "read", label: "getPullRequestIterationChanges.range" },
-        );
-        entries.push(...(page.changeEntries ?? []));
-        if (!page.nextSkip) break;
-        skip = page.nextSkip;
-      }
+        ),
+      );
       return rangeChangeTypes(entries);
     },
     [ctx],
@@ -585,6 +601,7 @@ export function PrTabApp(): React.ReactElement {
         <DeepLinkContext.Provider value={buildDeepLink}>
           <PrShell
             pr={pr}
+            listFolder={listFolder}
             loadFileSource={loadFileSource}
             resolveDocumentImage={resolveDocumentImage}
             diffsByFile={diffsByFile}
@@ -739,19 +756,23 @@ async function resolvePrContext(
     if (!latest?.id) return { iterations, latest, changes: undefined };
     log("fetching iteration changes", latest.id);
     const latestId = latest.id;
-    const changes = await withRetry(
-      () =>
-        withAdoSessionRefreshDetection(
-          () =>
-            gitClient.getPullRequestIterationChanges(
-              repositoryId,
-              pullRequestId,
-              latestId,
-              projectId,
-            ),
-          readHostToken,
-        ),
-      { mode: "read", label: "getPullRequestIterationChanges" },
+    const changes = await fetchAllIterationChanges((top, skip) =>
+      withRetry(
+        () =>
+          withAdoSessionRefreshDetection(
+            () =>
+              gitClient.getPullRequestIterationChanges(
+                repositoryId,
+                pullRequestId,
+                latestId,
+                projectId,
+                top,
+                skip,
+              ),
+            readHostToken,
+          ),
+        { mode: "read", label: "getPullRequestIterationChanges" },
+      ),
     );
     return { iterations, latest, changes };
   };
@@ -789,7 +810,7 @@ async function resolvePrContext(
   }
 
   const mdEntries: { path: string; changeType: ChangeType }[] = [];
-  for (const e of changes.changeEntries ?? []) {
+  for (const e of changes) {
     const path = markdownChangePath(e);
     if (!path) continue;
     mdEntries.push({ path, changeType: mapChangeType(e.changeType) });

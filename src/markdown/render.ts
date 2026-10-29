@@ -23,6 +23,7 @@ import { preprocessMermaidBlocks, rehypeMermaidPlaceholder } from "./mermaid";
 import { remarkEmoji } from "./emoji";
 import { extractFrontmatter, renderFrontmatterHtml } from "./frontmatter";
 import { rehypeSafeHtml } from "./safeHtml";
+import { rehypeWikiMacros, remarkWikiMacros } from "./wikiMacros";
 
 const remarkCodeMetadata: Plugin = () => {
   return (tree) => {
@@ -317,6 +318,7 @@ const processor = unified()
   .use(remarkMath, { singleDollarTextMath: true })
   .use(remarkCodeMetadata)
   .use(remarkEmoji)
+  .use(remarkWikiMacros)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeSafeHtml)
   .use(rehypeSourcePositions)
@@ -325,6 +327,8 @@ const processor = unified()
   .use(rehypeMentions)
   .use(rehypeAlerts)
   .use(rehypeCollapsibleSections)
+  // After sections mint the heading ids the table of contents links to.
+  .use(rehypeWikiMacros)
   // Must run after every plugin that touches `href`/`src` and before
   // stringify. See `sanitize-urls.ts` for policy.
   .use(rehypeSanitizeUrls)

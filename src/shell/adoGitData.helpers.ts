@@ -6,9 +6,10 @@ import type {
   GitPullRequest,
   GitRepository,
 } from "azure-devops-extension-api/Git";
-import type { DocPrRef } from "./prShellHelpers";
+import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import type { FileInfo } from "../types";
+import { ORDER_FILE_NAME } from "./wikiOrder";
 
 // ---------------------------------------------------------------------------
 // Path normalization
@@ -146,6 +147,41 @@ export function projectMarkdownLevel(
   files.sort((a, b) => a.path.localeCompare(b.path));
   folders.sort((a, b) => a.localeCompare(b));
   return { files, folders };
+}
+
+/** What a failed folder listing becomes; see `listingFailureOutcome`. */
+export type ListingFailureOutcome = "empty" | "throw" | "degrade";
+
+/**
+ * Classify a folder-listing failure. With `missingOk`, a folder that doesn't
+ * exist is a successful empty listing (a wiki page without subpages). With
+ * `propagate`, any other failure is rethrown so the caller can tell "failed"
+ * from "empty"; otherwise it degrades to an empty listing (tree browsing
+ * stays usable) and is reported.
+ */
+export function listingFailureOutcome(
+  err: unknown,
+  options: { missingOk?: boolean; propagate?: boolean },
+): ListingFailureOutcome {
+  if (options.missingOk && isItemNotFoundError(err)) return "empty";
+  return options.propagate ? "throw" : "degrade";
+}
+
+/**
+ * The path of the scope folder's own Azure DevOps wiki `.order` file in a
+ * OneLevel listing, or undefined when the folder has none.
+ */
+export function findOrderFile(
+  items: readonly GitItemLike[],
+  scopePath: string,
+): string | undefined {
+  // Scope paths arrive with or without a leading slash; ADO item paths have one.
+  const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
+  const scope = bare(scopePath);
+  const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
+  return items.find(
+    (item) => !item.isFolder && bare(item.path ?? "") === expected,
+  )?.path;
 }
 
 // ---------------------------------------------------------------------------

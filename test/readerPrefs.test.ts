@@ -235,6 +235,7 @@ describe("readerPrefs — sanitize", () => {
         letterSpacingPct: 96,
         wordSpacingPct: 103,
         showNav: false,
+        showOutline: false,
         showComments: false,
         navWidthPct: 120,
         commentWidthPct: 85,
@@ -247,6 +248,7 @@ describe("readerPrefs — sanitize", () => {
       letterSpacingPct: 100,
       wordSpacingPct: 100,
       showNav: false,
+      showOutline: false,
       showComments: false,
       navWidthPct: 120,
       commentWidthPct: 85,
@@ -271,6 +273,7 @@ describe("readerPrefs — sanitize", () => {
       letterSpacingPct: false,
       wordSpacingPct: "wide",
       showNav: "yes",
+      showOutline: "yes",
       showComments: 0,
       navWidthPct: "wide",
       commentWidthPct: "wide",
@@ -282,6 +285,7 @@ describe("readerPrefs — sanitize", () => {
     expect(out.letterSpacingPct).toBe(DEFAULT_LETTER_SPACING_PCT);
     expect(out.wordSpacingPct).toBe(DEFAULT_WORD_SPACING_PCT);
     expect(out.showNav).toBe(true);
+    expect(out.showOutline).toBe(true);
     expect(out.showComments).toBe(true);
     expect(out.navWidthPct).toBe(DEFAULT_NAV_WIDTH_PCT);
     expect(out.commentWidthPct).toBe(DEFAULT_COMMENT_WIDTH_PCT);
@@ -317,6 +321,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       sizePct: 115,
       ...spacingPrefs(125),
       showNav: false,
+      showOutline: false,
       showComments: true,
       navWidthPct: 130,
       commentWidthPct: 90,
@@ -339,6 +344,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       sizePct: 130,
       ...spacingPrefs(120),
       showNav: false,
+      showOutline: false,
       showComments: false,
       navWidthPct: 130,
       commentWidthPct: 115,
@@ -351,6 +357,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       sizePct: 130,
       ...spacingPrefs(120),
       showNav: true,
+      showOutline: true,
       showComments: true,
       navWidthPct: DEFAULT_NAV_WIDTH_PCT,
       commentWidthPct: DEFAULT_COMMENT_WIDTH_PCT,
@@ -362,6 +369,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       sizePct: 90,
       ...spacingPrefs(110),
       showNav: true,
+      showOutline: true,
       showComments: true,
       navWidthPct: 70,
       commentWidthPct: 70,
@@ -371,6 +379,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       sizePct: 90,
       ...spacingPrefs(110),
       showNav: false,
+      showOutline: false,
       showComments: false,
       navWidthPct: 130,
       commentWidthPct: 115,

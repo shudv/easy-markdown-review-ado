@@ -1021,3 +1021,55 @@ export const FontDetectionUnavailable: Story = {
     expect(canvas.getByRole("slider", { name: "Text spacing" })).toBeTruthy();
   },
 };
+
+/**
+ * The navigation outline can be turned off from the status bar; the toggle sits
+ * next to Navigation and is only offered while the navigation is shown.
+ */
+export const OutlineToggle: Story = {
+  args: { showOutline: true, onToggleOutline: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole("button", { name: "Outline" });
+    await expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    await expect(toggle.title).toBe(
+      "Hide the document outline in the navigation",
+    );
+    await userEvent.click(toggle);
+    await expect(args.onToggleOutline).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** With the outline off the toggle reads as not pressed. */
+export const OutlineToggleOff: Story = {
+  args: { showOutline: false, onToggleOutline: fn() },
+  play: async ({ canvasElement }) => {
+    const toggle = within(canvasElement).getByRole("button", {
+      name: "Outline",
+    });
+    await expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    await expect(toggle.title).toBe(
+      "Show the document outline in the navigation",
+    );
+  },
+};
+
+/** Hidden navigation (or no toggle handler) drops the Outline control. */
+export const OutlineToggleHidden: Story = {
+  args: { showNav: false, onToggleOutline: fn() },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).queryByRole("button", { name: "Outline" }),
+    ).toBeNull();
+  },
+};
+
+/** Single-file mode has no navigation, so no Outline control either. */
+export const OutlineToggleSingleFile: Story = {
+  args: { navToggleable: false, onToggleOutline: fn() },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).queryByRole("button", { name: "Outline" }),
+    ).toBeNull();
+  },
+};

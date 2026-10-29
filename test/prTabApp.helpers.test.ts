@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import {
   BASE_LINK_PARAM,
+  ITERATION_CHANGES_PAGE,
   ITERATION_LINK_PARAM,
   buildPrTabDocUrl,
+  fetchAllIterationChanges,
   iterationParamsForRange,
   rangeChangeTypes,
   rangeFromIterationParams,
@@ -903,6 +905,48 @@ describe("rangeFromIterationParams", () => {
 
   it("ignores params when there are no params at all", () => {
     expect(rangeFromIterationParams(undefined, STOPS)).toBeUndefined();
+  });
+});
+
+describe("fetchAllIterationChanges", () => {
+  it("follows nextSkip until ADO reports no further page", async () => {
+    const pages: Record<
+      number,
+      { changeEntries?: string[]; nextSkip?: number }
+    > = {
+      0: { changeEntries: ["a.md", "b.ts"], nextSkip: 2 },
+      2: { changeEntries: ["c.md"], nextSkip: 3 },
+      3: { changeEntries: ["d.md"] },
+    };
+    const fetchPage = vi.fn(async (_top: number, skip: number) => pages[skip]!);
+
+    await expect(fetchAllIterationChanges(fetchPage)).resolves.toEqual([
+      "a.md",
+      "b.ts",
+      "c.md",
+      "d.md",
+    ]);
+    expect(fetchPage.mock.calls).toEqual([
+      [ITERATION_CHANGES_PAGE, 0],
+      [ITERATION_CHANGES_PAGE, 2],
+      [ITERATION_CHANGES_PAGE, 3],
+    ]);
+  });
+
+  it("treats a page without entries as empty", async () => {
+    await expect(
+      fetchAllIterationChanges(async () => ({ nextSkip: 0 })),
+    ).resolves.toEqual([]);
+  });
+
+  it("stops when nextSkip does not advance", async () => {
+    const fetchPage = vi.fn(async (_top: number, skip: number) => ({
+      changeEntries: [skip],
+      nextSkip: skip,
+    }));
+
+    await expect(fetchAllIterationChanges(fetchPage)).resolves.toEqual([0]);
+    expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 });
 

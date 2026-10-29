@@ -670,6 +670,45 @@ button {
     font-size: 12px;
     font-weight: 700;
   }
+
+  // Azure DevOps wiki `[[_TOC_]]` / `[[_TOSP_]]`: a compact, boxed list of
+  // in-page headings or subpage links.
+  .emr-wiki-macro {
+    display: inline-block;
+    min-width: 220px;
+    max-width: 100%;
+    margin: 0 0 16px;
+    padding: 8px 16px 8px 12px;
+    border: 1px solid var(--emr-rule);
+    border-radius: 6px;
+
+    ul {
+      margin: 0;
+      padding-left: 1.25em;
+    }
+
+    > ul {
+      padding-left: 1.1em;
+    }
+
+    li {
+      margin: 2px 0;
+    }
+  }
+
+  .emr-wiki-macro-title {
+    margin: 0 0 4px;
+    color: var(--emr-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .emr-wiki-macro-note {
+    margin: 0;
+    color: var(--emr-muted);
+    font-size: 13px;
+    font-style: italic;
+  }
 }
 
 // github-markdown-css bakes its prose colours as fixed hex (not variables), so
@@ -5201,7 +5240,8 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
   color: var(--emr-muted);
 }
 
-.emr-docnav-file-name {
+.emr-docnav-file-name,
+.emr-docnav-page-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;

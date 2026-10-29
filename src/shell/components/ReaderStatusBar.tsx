@@ -74,6 +74,13 @@ export interface ReaderStatusBarProps {
   onToggleNav: () => void;
   /** False in single-file mode (no file tree) — drops the Navigation control. */
   navToggleable: boolean;
+  /** Whether the open document's outline is listed in the navigation panel. */
+  showOutline?: boolean;
+  /**
+   * Toggle the navigation outline. Offered next to Navigation while the panel
+   * is shown; omitted drops the control.
+   */
+  onToggleOutline?: () => void;
 
   /** Whether the comments panel is currently shown. */
   showComments: boolean;
@@ -220,6 +227,52 @@ function IconChevron({
 
 function StatusBarSeparator(): React.ReactElement {
   return <div className="emr-statusbar-sep" aria-hidden="true" />;
+}
+
+function IconOutline(): React.ReactElement {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    >
+      <path d="M5 6h14" />
+      <path d="M9 12h10" />
+      <path d="M9 18h10" />
+    </svg>
+  );
+}
+
+/**
+ * Opt-in toggle for the heading outline under the open document in the
+ * navigation panel. Only offered while that panel is shown.
+ */
+function OutlineToggle(props: {
+  navToggleable: boolean;
+  navShown: boolean;
+  shown: boolean;
+  onToggle: (() => void) | undefined;
+}): React.ReactElement | null {
+  const { navToggleable, navShown, shown, onToggle } = props;
+  if (!navToggleable || !navShown || !onToggle) return null;
+  return (
+    <button
+      type="button"
+      className="emr-statusbar-btn emr-statusbar-outline is-toggle"
+      aria-pressed={shown}
+      title={
+        shown
+          ? "Hide the document outline in the navigation"
+          : "Show the document outline in the navigation"
+      }
+      onClick={onToggle}
+    >
+      <IconOutline />
+      <span className="emr-sr-only">Outline</span>
+    </button>
+  );
 }
 
 interface CommentStepperProps {
@@ -857,6 +910,8 @@ export function ReaderStatusBar(
     showNav,
     onToggleNav,
     navToggleable,
+    showOutline,
+    onToggleOutline,
     showComments,
     commentsAvailable = true,
     onToggleComments,
@@ -980,6 +1035,12 @@ export function ReaderStatusBar(
             <span className="emr-statusbar-btn-label">Navigation</span>
           </button>
         ) : null}
+        <OutlineToggle
+          navToggleable={navToggleable}
+          navShown={showNav}
+          shown={showOutline === true}
+          onToggle={onToggleOutline}
+        />
         {navToggleable &&
         (showContextControls || hasCount || deltaParts.length > 0) ? (
           <StatusBarSeparator />

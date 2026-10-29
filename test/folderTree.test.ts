@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildFolderTree,
   collectDirPaths,
+  mergeWikiPages,
   normalizeFolderPath,
   type TreeNode,
 } from "../src/shell/components/folderTree";
@@ -193,6 +194,91 @@ describe("buildFolderTree — extraFolders (lazy branches)", () => {
   });
 });
 
+describe("buildFolderTree — wiki .order", () => {
+  const files: F[] = [
+    { path: "/Zeta.md" },
+    { path: "/Overview.md" },
+    { path: "/Guides.md" },
+    { path: "/Guides/Install.md" },
+    { path: "/Guides/Configure.md" },
+    { path: "/Guides/Advanced.md" },
+    { path: "/Archive/2020/notes.md" },
+    { path: "/Archive/2021/notes.md" },
+  ];
+
+  it("sorts listed pages and folders first, in .order order", () => {
+    const tree = buildFolderTree<F>(files, {
+      folderOrders: {
+        "": ["Overview", "Guides", "Zeta"],
+        Guides: ["Install", "Configure"],
+      },
+    });
+    // Root: Overview, then the Guides page + its subpage folder (folder
+    // first, as elsewhere), then Zeta; the unlisted Archive folder follows.
+    expect(pp(tree)).toBe(
+      [
+        "FILE /Overview.md",
+        "DIR Guides (Guides)",
+        "  FILE /Guides/Install.md",
+        "  FILE /Guides/Configure.md",
+        "  FILE /Guides/Advanced.md",
+        "FILE /Guides.md",
+        "FILE /Zeta.md",
+        "DIR Archive (Archive)",
+        "  DIR 2020 (Archive/2020)",
+        "    FILE /Archive/2020/notes.md",
+        "  DIR 2021 (Archive/2021)",
+        "    FILE /Archive/2021/notes.md",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("orders a collapsed folder chain by its first segment", () => {
+    const tree = buildFolderTree<F>(
+      [{ path: "a.md" }, { path: "deep/er/x.md" }, { path: "deep/er/y.md" }],
+      { folderOrders: { "": ["deep", "a"] } },
+    );
+    expect(pp(tree)).toBe(
+      [
+        "DIR deep/er (deep/er)",
+        "  FILE deep/er/x.md",
+        "  FILE deep/er/y.md",
+        "FILE a.md",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps the default order for folders without an .order", () => {
+    const withOrders = buildFolderTree<F>(files, { folderOrders: {} });
+    expect(pp(withOrders)).toBe(pp(buildFolderTree<F>(files)));
+  });
+
+  it("ignores inherited properties for folders named like them", () => {
+    const named: F[] = ["constructor", "__proto__", "toString"].flatMap(
+      (folder) => [{ path: `/${folder}/b.md` }, { path: `/${folder}/a.md` }],
+    );
+    const tree = buildFolderTree<F>(named, {
+      folderOrders: { toString: ["b"] },
+    });
+    expect(pp(tree)).toBe(
+      [
+        "DIR __proto__ (__proto__)",
+        "  FILE /__proto__/a.md",
+        "  FILE /__proto__/b.md",
+        "DIR constructor (constructor)",
+        "  FILE /constructor/a.md",
+        "  FILE /constructor/b.md",
+        "DIR toString (toString)",
+        "  FILE /toString/b.md",
+        "  FILE /toString/a.md",
+        "",
+      ].join("\n"),
+    );
+  });
+});
+
 describe("normalizeFolderPath", () => {
   it("strips a leading slash (ADO-shaped paths)", () => {
     expect(normalizeFolderPath("/docs")).toBe("docs");
@@ -208,5 +294,105 @@ describe("normalizeFolderPath", () => {
 
   it("leaves an already-bare path untouched", () => {
     expect(normalizeFolderPath("docs/api")).toBe("docs/api");
+  });
+});
+
+describe("mergeWikiPages", () => {
+  /** Pretty-print with merged pages shown as `PAGE+DIR`. */
+  function ppMerged(nodes: ReadonlyArray<TreeNode<F>>, depth = 0): string {
+    let out = "";
+    for (const n of nodes) {
+      const pad = "  ".repeat(depth);
+      if (n.kind === "dir") {
+        out += n.page
+          ? `${pad}PAGE+DIR ${n.displayName} (${n.page.path})\n`
+          : `${pad}DIR ${n.displayName}\n`;
+        out += ppMerged(n.children, depth + 1);
+      } else {
+        out += `${pad}FILE ${n.file.path}\n`;
+      }
+    }
+    return out;
+  }
+
+  it("folds a page into its same-named subpage folder, at every level", () => {
+    const tree = mergeWikiPages(
+      buildFolderTree<F>([
+        { path: "/Home.md" },
+        { path: "/Guides.md" },
+        { path: "/Guides/Install.md" },
+        { path: "/Guides/Install/Linux.md" },
+        { path: "/Guides/Install/Windows.md" },
+        { path: "/Guides/Configure.md" },
+      ]),
+    );
+    expect(ppMerged(tree)).toBe(
+      [
+        "PAGE+DIR Guides (/Guides.md)",
+        "  PAGE+DIR Install (/Guides/Install.md)",
+        "    FILE /Guides/Install/Linux.md",
+        "    FILE /Guides/Install/Windows.md",
+        "  FILE /Guides/Configure.md",
+        "FILE /Home.md",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps folders without a page, and pages without a folder, as they are", () => {
+    const tree = mergeWikiPages(
+      buildFolderTree<F>([{ path: "/Archive/old.md" }, { path: "/Notes.md" }], {
+        extraFolders: ["/Lazy"],
+      }),
+    );
+    expect(ppMerged(tree)).toBe(
+      [
+        "DIR Archive",
+        "  FILE /Archive/old.md",
+        "DIR Lazy",
+        "FILE /Notes.md",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("merges a not-yet-loaded subpage folder with its page", () => {
+    const tree = mergeWikiPages(
+      buildFolderTree<F>([{ path: "/Guides.md" }], {
+        extraFolders: ["/Guides"],
+      }),
+    );
+    expect(ppMerged(tree)).toBe("PAGE+DIR Guides (/Guides.md)\n");
+  });
+
+  it("matches page names exactly and ignores non-Markdown files", () => {
+    const tree = mergeWikiPages(
+      buildFolderTree<F>([
+        { path: "/guides.md" },
+        { path: "/Guides/a.md" },
+        { path: "/Assets.txt" },
+        { path: "/Assets/logo.md" },
+      ]),
+    );
+    expect(ppMerged(tree)).toBe(
+      [
+        "DIR Assets",
+        "  FILE /Assets/logo.md",
+        "DIR Guides",
+        "  FILE /Guides/a.md",
+        "FILE /Assets.txt",
+        "FILE /guides.md",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("doesn't merge a collapsed folder chain", () => {
+    const tree = mergeWikiPages(
+      buildFolderTree<F>([{ path: "/a.md" }, { path: "/a/b/c.md" }]),
+    );
+    expect(ppMerged(tree)).toBe(
+      ["DIR a/b", "  FILE /a/b/c.md", "FILE /a.md", ""].join("\n"),
+    );
   });
 });

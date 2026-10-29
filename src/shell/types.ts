@@ -30,6 +30,11 @@ export interface DocRepo {
    */
   topLevelFolders?: string[];
   /**
+   * Azure DevOps wiki `.order` page names of the root folder, when it has
+   * one. Deeper folders' orders arrive with their lazy listings.
+   */
+  rootOrder?: string[];
+  /**
    * Most recent completed PR that targets `defaultBranch`. When
    * present the Documents view routes new comments there and the rail
    * shows a routed-PR pill; when absent the view disables commenting
@@ -73,4 +78,9 @@ export interface DocRepo {
 export interface FolderListing {
   files: FileInfo[];
   folders: string[];
+  /**
+   * Page names from the folder's Azure DevOps wiki `.order` file, in order.
+   * Absent when the folder has none (default alphabetical order).
+   */
+  order?: string[];
 }

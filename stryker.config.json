@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Mutation testing config. Uses the vitest runner scoped to the fast jsdom `unit` project (the `storybook` browser project is too slow/flaky to run per-mutant). Mutates the pure-logic TS modules that the unit suite actually exercises; the SDK-glue containers and browser-only React shells are excluded (same set that vitest.config.ts drops from coverage).",
+  "_comment": "Mutation testing config. Uses the vitest runner scoped to the fast jsdom `unit` project (the `storybook` browser project is too slow/flaky to run per-mutant). Mutates the pure-logic TS modules that the unit suite actually exercises; the SDK-glue containers and browser-only React shells are excluded (same set that vitest.config.ts drops from coverage), as are test fixtures and hooks only the Storybook suite exercises.",
   "packageManager": "npm",
   "testRunner": "vitest",
   "vitest": {
@@ -24,6 +24,8 @@
     "!src/**/*.stories.tsx",
     "!src/**/*.html",
     "!src/comments/fixtures.ts",
+    "!src/shell/components/excalidrawScene.fixture.ts",
+    "!src/shell/useWikiSubpages.ts",
     "!src/markdown/safeHtmlPolicy.ts",
     "!src/types.ts",
     "!src/shell/types.ts",

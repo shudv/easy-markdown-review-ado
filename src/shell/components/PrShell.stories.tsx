@@ -5012,3 +5012,210 @@ export const TextLinkCopy: Story = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Azure DevOps wiki syntax
+// ---------------------------------------------------------------------------
+
+const WIKI_SOURCES: Record<string, string> = {
+  "/Guides.md": "# Guides\n\n[[_TOC_]]\n\n## Start here\n\n[[_TOSP_]]\n",
+  "/Guides/Install.md": "# Install\n",
+  "/Guides/Configure.md": "# Configure\n",
+  "/Overview.md": "# Overview\n",
+};
+
+const listWikiFolder = fn(async (folderPath: string) => ({
+  files: ["/Guides/Configure.md", "/Guides/Install.md"]
+    .filter((path) => path.startsWith(`${folderPath}/`))
+    .map((path) => ({
+      path,
+      changeType: "modified" as const,
+      linesAdded: 0,
+      linesDeleted: 0,
+    })),
+  folders: [],
+  order: ["Install", "Configure"],
+}));
+
+/**
+ * A wiki page's `[[_TOC_]]` links its headings, `[[_TOSP_]]` lists its
+ * subpages (its same-named folder, in `.order` order), and the file tree
+ * follows each folder's `.order`. Subpage links open in place.
+ */
+export const WikiSyntax: Story = {
+  args: {
+    pr: {
+      ...PR,
+      files: Object.keys(WIKI_SOURCES).map((path) => ({
+        path,
+        changeType: "modified" as const,
+        linesAdded: 0,
+        linesDeleted: 0,
+      })),
+    },
+    loadFileSource: async (path: string) => WIKI_SOURCES[path]!,
+    initialThreads: [],
+    initialSelectedPath: "/Guides.md",
+    folderOrders: { "": ["Overview", "Guides"], Guides: ["Install"] },
+    listFolder: listWikiFolder,
+  },
+  beforeEach: () => {
+    listWikiFolder.mockClear();
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tosp = await waitFor(() => {
+      const nav = canvasElement.querySelector<HTMLElement>(
+        ".emr-rendered nav.emr-wiki-tosp",
+      );
+      if (!nav?.querySelector("a")) throw new Error("subpages not listed");
+      return nav;
+    });
+    await expect(listWikiFolder).toHaveBeenCalledWith("/Guides", undefined);
+    await expect(
+      Array.from(tosp.querySelectorAll("a")).map((a) => a.textContent),
+    ).toEqual(["Install", "Configure"]);
+    const toc = canvasElement.querySelector<HTMLElement>(
+      ".emr-rendered nav.emr-wiki-toc",
+    )!;
+    await expect(
+      within(toc).getByRole("link", { name: "Start here" }),
+    ).toBeTruthy();
+
+    // Root .order puts Overview before the Guides page.
+    const names = Array.from(
+      canvasElement.querySelectorAll(".emr-docnav-file-name"),
+    ).map((el) => el.textContent);
+    await expect(names.indexOf("Overview.md")).toBeLessThan(
+      names.indexOf("Guides.md"),
+    );
+
+    await userEvent.click(within(tosp).getByRole("link", { name: "Install" }));
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered h1")?.textContent,
+      ).toContain("Install"),
+    );
+    await expect(canvas.queryByText("[[_TOSP_]]")).toBeNull();
+  },
+};
+
+const listVersionedFolder = fn(
+  async (_folder: string, atCommitId?: string) => ({
+    files: [
+      {
+        path:
+          atCommitId === "update-1"
+            ? "/Guides/Earlier.md"
+            : "/Guides/Latest.md",
+        changeType: "modified" as const,
+        linesAdded: 0,
+        linesDeleted: 0,
+      },
+    ],
+    folders: [],
+  }),
+);
+
+/**
+ * An earlier PR update's `[[_TOSP_]]` lists the subpages that update had —
+ * listed at its commit — not today's.
+ */
+export const WikiSubpagesFollowTheShownUpdate: Story = {
+  args: {
+    ...COMPARISON_ARGS,
+    pr: {
+      ...PR,
+      files: [
+        {
+          path: "/Guides.md",
+          changeType: "modified" as const,
+          linesAdded: 1,
+          linesDeleted: 0,
+        },
+      ],
+    },
+    initialThreads: [],
+    initialSelectedPath: "/Guides.md",
+    loadFileSource: async () => WIKI_SOURCES["/Guides.md"]!,
+    loadFileSourceAt: async () => WIKI_SOURCES["/Guides.md"]!,
+    listFolder: listVersionedFolder,
+    initialIterationRange: { fromUpdate: 0, toUpdate: 1 },
+  },
+  beforeEach: () => {
+    listVersionedFolder.mockClear();
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered nav.emr-wiki-tosp a")
+          ?.textContent,
+      ).toBe("Earlier"),
+    );
+    await expect(listVersionedFolder).toHaveBeenCalledWith(
+      "/Guides",
+      "update-1",
+    );
+  },
+};
+
+const failingWikiFolder = fn(async () => {
+  throw new Error("403 Forbidden");
+});
+
+/**
+ * A subpage listing that fails says subpages aren't available — never that
+ * the page has none. The document itself renders without waiting for it.
+ */
+export const WikiSubpagesUnavailable: Story = {
+  args: {
+    ...WikiSyntax.args,
+    listFolder: failingWikiFolder,
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered nav.emr-wiki-tosp")
+          ?.textContent,
+      ).toContain("Subpages aren't available here."),
+    );
+    await expect(failingWikiFolder).toHaveBeenCalled();
+  },
+};
+
+/** Without a folder lister (e.g. standalone), subpages aren't available. */
+export const WikiSubpagesWithoutLister: Story = {
+  args: {
+    ...WikiSyntax.args,
+    listFolder: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() =>
+      expect(
+        canvasElement.querySelector(".emr-rendered nav.emr-wiki-tosp")
+          ?.textContent,
+      ).toContain("Subpages aren't available here."),
+    );
+  },
+};
+
+/**
+ * The status bar's Outline toggle hides and restores the open document's
+ * headings in the navigation (on by default).
+ */
+export const NavOutlineToggle: Story = {
+  play: async ({ canvasElement }) => {
+    await waitForHighlight(canvasElement, "t-active");
+    const canvas = within(canvasElement);
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    const headingRow = () =>
+      within(nav).queryByRole("button", { name: "Notes" });
+    await waitFor(() => expect(headingRow()).not.toBeNull());
+    const toggle = canvas.getByRole("button", { name: "Outline" });
+    await expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(toggle);
+    await waitFor(() => expect(headingRow()).toBeNull());
+    await userEvent.click(canvas.getByRole("button", { name: "Outline" }));
+    await waitFor(() => expect(headingRow()).not.toBeNull());
+  },
+};

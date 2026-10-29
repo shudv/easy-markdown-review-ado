@@ -12,7 +12,7 @@ documents and see exactly what changed.
 ## Features
 
 - **Pull-Request Tab:** Comment on rendered Markdown and see exactly what changed in a PR.
-- **Document Hub:** Central place for all your Markdown documents with all the same reading and commenting capabilities.
+- **Document Hub:** Central place for all your Markdown documents with all the same reading and commenting capabilities. Understands Azure DevOps wiki syntax (`[[_TOC_]]`, `[[_TOSP_]]`, `.order`).
 - **Equations and diagrams:** Render KaTeX math and Mermaid diagrams with source inspection.
 - **Shareable review links:** Link to comments, headings, selected text, and a chosen PR update comparison.
 

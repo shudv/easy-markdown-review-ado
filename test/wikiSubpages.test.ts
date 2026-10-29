@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import { loadWikiSubpages, subpagesCommit } from "../src/shell/wikiSubpages";
 
+const trackUserFacingErrorMock = vi.fn();
+vi.mock("../src/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/telemetry")>();
+  return {
+    ...actual,
+    trackUserFacingError: (...args: unknown[]) =>
+      trackUserFacingErrorMock(...args),
+  };
+});
+
 describe("loadWikiSubpages", () => {
   it("lists the page's subpage folder, in .order order", async () => {
     const listFolder = vi.fn(async () => ({
@@ -31,14 +41,24 @@ describe("loadWikiSubpages", () => {
     expect(listFolder).toHaveBeenCalledWith("/Guides", "abc123");
   });
 
-  it("is unavailable (not empty) when the listing fails", async () => {
+  it("is unavailable (not empty) when the listing fails, and reports it", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failure = new Error("403 Forbidden");
     await expect(
       loadWikiSubpages("/Guides.md", async () => {
-        throw new Error("403 Forbidden");
+        throw failure;
       }),
     ).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      "[wiki] listing subpages failed:",
+      failure,
+    );
+    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+      error: failure,
+      source: "PrShell.subpages",
+      operation: "subpages-load",
+      impact: "degraded",
+    });
     warn.mockRestore();
   });
 });

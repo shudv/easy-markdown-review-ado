@@ -5,7 +5,7 @@
 - Public base: `4e9ad2c` (OSS `1.2.0`, Excalidraw drawings).
 - Previously mirrored product boundary: `5764841` (the merged form of
   `7811fe9`).
-- New product boundary: `1aa464f` (source branch `feature/ado-wiki-syntax`, not
+- New product boundary: `52b3bd9` (source branch `feature/ado-wiki-syntax`, not
   yet merged; record the source merge commit here once it lands).
 - OSS release version: `1.3.0` (package, root lockfile metadata, and Marketplace
   manifest updated together). The source repository moves to `1.3.0` in the
@@ -20,6 +20,7 @@
 | `3af5af8`, `d6a7659`, `96d58a5` | Azure DevOps wiki syntax: `[[_TOC_]]` and `[[_TOSP_]]` (subpages filled after first paint, listed at the shown commit), `.order` page ordering and a wiki page merged with its subpage folder in the Documents hub, hub navigation indentation, a status-bar Outline toggle (on by default, per surface), unit tests, stories, and the synthetic `wiki-showcase` sandbox. |
 | `774edac`                       | Version `1.3.0`.                                                                                                                                                                                                                                                                                                                                                          |
 | `1aa464f`                       | Review follow-ups: a historical version without a commit shows its subpages as unavailable rather than listing the current branch, a `.order` byte-order-mark regression test, and refreshed status bar and hub navigation screenshots.                                                                                                                                   |
+| `52b3bd9`                       | Mutation-testing scope: assert subpage-load failure reporting, and exclude a test fixture and a Storybook-only hook from Stryker.                                                                                                                                                                                                                                         |
 
 ### Public-specific adaptations retained
 
@@ -31,7 +32,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `1aa464f` and
+Compare the next source product tree against the merged form of `52b3bd9` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

@@ -5,7 +5,7 @@
 - Public base: `5c0d730` (OSS `1.3.0`, Azure DevOps wiki compatibility).
 - Previously mirrored product boundary: `02cf7f9` (the merged form of
   `52b3bd9`).
-- New product boundary: `28598bb` (source branch
+- New product boundary: `60e23a3` (source branch
   `refactor/zero-complexity-baseline`, not yet merged; record the source merge
   commit here once it lands).
 - OSS release version: unchanged at `1.3.0`. The package version, lockfile root
@@ -18,6 +18,7 @@
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `11a59f2`     | Behavior-preserving decomposition that brings every function within the complexity limits and empties the `complexity-baseline.json` pin list (41 → 0): `PrShell` hooks, derivations and sub-components under `src/shell/prShell/`, `decorateDiffRanges` phase helpers, `DocumentsApp` hooks and helpers, split comment/reader components, smaller pure-logic helpers, and unit tests for the extracted helpers. |
 | `28598bb`     | Blocking jscpd duplication gate: `npm run duplication:check`, `.jscpd.json` (product code, 0.25%) and `.jscpd.fixtures.json` (stories and tests, 3%), and the README pre-PR checks.                                                                                                                                                                                                                              |
+| `60e23a3`     | Switching to an already-rendered document clears a previous load error and spinner, with regression tests.                                                                                                                                                                                                                                                                                                       |
 
 ### Public-specific adaptations retained
 
@@ -32,7 +33,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `28598bb` and
+Compare the next source product tree against the merged form of `60e23a3` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

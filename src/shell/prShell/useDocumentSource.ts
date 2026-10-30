@@ -45,6 +45,10 @@ export function useDocumentSource(
     /* v8 ignore next -- selectedPath is always set once a file is selected */
     if (!selectedPath) return;
     if (htmlByPath[selectedPath]) {
+      // A cache hit shows the cached document, so drop any error or spinner
+      // left over from a file that failed or was still loading.
+      setLoading(false);
+      setError(null);
       setRenderVersion((v) => v + 1);
       return;
     }

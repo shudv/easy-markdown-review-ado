@@ -34,9 +34,10 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. Function complexity is [pinned](complexity-baseline.json) (although this was done late so there are quite a few functions that don't meet the bar).
-4. End-to-end tests covering the Azure DevOps integration boundary.
-5. Visual regression tests to protect the UI.
+3. Function complexity is [pinned](complexity-baseline.json).
+4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
+5. End-to-end tests covering the Azure DevOps integration boundary.
+6. Visual regression tests to protect the UI.
 
 But of course that is not enough. I will continue to improve the code quality, stability, and security over time as my schedule allows. Contributions are welcome.
 

@@ -1,0 +1,11 @@
+{
+  "$comment": "Duplication gate for Storybook stories and tests (npm run duplication:check, which passes `src test`). Fixture setup repeats more than product code, so the budget is looser; product code is gated by .jscpd.json.",
+  "format": ["typescript", "tsx"],
+  "ignore": ["**/*.d.ts", "**/src/**/!(*.stories).{ts,tsx}"],
+  "minTokens": 50,
+  "minLines": 5,
+  "threshold": 3,
+  "reporters": ["console"],
+  "gitignore": true,
+  "absolute": false
+}

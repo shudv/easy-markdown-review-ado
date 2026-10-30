@@ -51,6 +51,9 @@ jobs:
       - name: Test complexity checker
         run: npm run test:complexity
 
+      - name: Check code duplication
+        run: npm run duplication:check
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

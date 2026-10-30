@@ -1,0 +1,11 @@
+{
+  "$comment": "Duplication gate for product code (npm run duplication:check, which passes `src`). Fails when duplicated lines exceed `threshold` percent. Stories and tests are gated separately by .jscpd.fixtures.json.",
+  "format": ["typescript", "tsx"],
+  "ignore": ["**/*.d.ts", "**/*.stories.tsx"],
+  "minTokens": 50,
+  "minLines": 5,
+  "threshold": 0.25,
+  "reporters": ["console"],
+  "gitignore": true,
+  "absolute": false
+}

@@ -70,7 +70,7 @@ Before opening a PR, run:
 ```pwsh
 npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
 npm run depcruise; npm run complexity:check; npm run test:complexity
-npm run test:coverage; npm run build
+npm run duplication:check; npm run test:coverage; npm run build
 npm run test:visual:docker
 ```
 
@@ -79,6 +79,12 @@ CI also enforces the per-function complexity limits and pinned scores.
 recorded: run `npm run complexity:update` and commit the baseline. An intentional
 increase needs `npm run complexity:update -- --accept`, which appears in the PR
 diff.
+
+CI also fails on copy-pasted code. `duplication:check` runs
+[jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it
+finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
+lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
+above 3%. Extract a shared helper or fixture rather than raising a threshold.
 
 The visual suite requires Docker. Azure DevOps integration tests require your
 own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),

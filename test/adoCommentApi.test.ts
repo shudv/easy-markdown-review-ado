@@ -1167,6 +1167,15 @@ describe("lineDiffBlocksToRanges", () => {
     expect(lineDiffBlocksToRanges(undefined)).toEqual([]);
   });
 
+  it("skips Add blocks that carry no modified lines", () => {
+    expect(
+      lineDiffBlocksToRanges([
+        { changeType: 1, modifiedLineNumberStart: 4, modifiedLinesCount: 0 },
+        { changeType: 1, modifiedLineNumberStart: 4 },
+      ]),
+    ).toEqual([]);
+  });
+
   it("treats a block with no changeType as an unchanged (None) block", () => {
     // A diff block that carries line numbers but no change type is not a real
     // edit, so it contributes no comment-able ranges.

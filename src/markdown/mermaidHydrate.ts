@@ -160,6 +160,84 @@ function paint(
   }
 }
 
+/** Settings shared by every diagram in one hydration pass. */
+interface HydrationPass {
+  api: MermaidApi;
+  theme: string;
+  fontFamily: string;
+}
+
+/** A placeholder's decoded `data-mermaid-src`, or `null` if absent/malformed. */
+function decodedSource(el: HTMLElement): string | null {
+  const enc = el.getAttribute("data-mermaid-src");
+  if (!enc) return null;
+  try {
+    return decodeURIComponent(enc);
+  } catch {
+    return null;
+  }
+}
+
+/** Flag a placeholder whose diagram could not be rendered, and report it. */
+function markRenderFailed(
+  pass: HydrationPass,
+  el: HTMLElement,
+  src: string,
+  error: unknown,
+): void {
+  el.setAttribute("data-hydrated", "true");
+  el.setAttribute("data-mermaid-theme", pass.theme);
+  el.setAttribute("data-mermaid-font", pass.fontFamily);
+  el.setAttribute("data-mermaid-error", "render-failed");
+  // Keep the fallback `<pre>` so the user can still read the source.
+
+  console.warn("[mermaid] render failed:", error);
+  if (isDiagramSyntaxError(error)) noteRenderIssueOnce(src, "syntax-error");
+  else reportOnce(`render:${src}`, "diagram-render", error);
+}
+
+/** Handle a failed render of `src`: try a repaired source once, else flag it. */
+async function recoverFailedRender(
+  pass: HydrationPass,
+  el: HTMLElement,
+  src: string,
+  err: unknown,
+): Promise<void> {
+  let error = err;
+  // `;` in sequence-diagram text reads as a statement break to Mermaid
+  // (the most common diagram failure in production). Retry once with
+  // those escaped — only after a failure, so a diagram that renders as
+  // written is never rewritten.
+  const repaired = isDiagramSyntaxError(err)
+    ? repairSequenceSemicolons(src)
+    : null;
+  if (repaired) {
+    try {
+      const { svg } = await renderWithChunkRetry(pass.api, repaired);
+      paint(el, svg, pass.theme, pass.fontFamily);
+      noteRenderIssueOnce(src, "repaired");
+      return;
+    } catch (repairErr) {
+      // Still a syntax error: keep the author's original one. Anything
+      // else (a chunk load, a runtime fault) is the real failure.
+      if (!isDiagramSyntaxError(repairErr)) error = repairErr;
+    }
+  }
+  markRenderFailed(pass, el, src, error);
+}
+
+/** Render one placeholder's diagram into SVG. */
+async function hydrateOne(pass: HydrationPass, el: HTMLElement): Promise<void> {
+  const src = decodedSource(el);
+  if (src === null) return;
+  try {
+    const { svg } = await renderWithChunkRetry(pass.api, src);
+    paint(el, svg, pass.theme, pass.fontFamily);
+  } catch (err) {
+    await recoverFailedRender(pass, el, src, err);
+  }
+}
+
 /**
  * Hydrate every `.emr-mermaid[data-mermaid-src]` placeholder under `root`
  * into a rendered SVG. Idempotent (skips `data-hydrated="true"`). The
@@ -201,51 +279,6 @@ export async function hydrateMermaid(
   // global config), so every diagram below renders in the reader's mode.
   api.initialize({ ...BASE_CONFIG, theme, fontFamily });
 
-  await Promise.all(
-    placeholders.map(async (el) => {
-      const enc = el.getAttribute("data-mermaid-src");
-      if (!enc) return;
-      let src: string;
-      try {
-        src = decodeURIComponent(enc);
-      } catch {
-        return;
-      }
-      try {
-        const { svg } = await renderWithChunkRetry(api, src);
-        paint(el, svg, theme, fontFamily);
-      } catch (err) {
-        let error = err;
-        // `;` in sequence-diagram text reads as a statement break to Mermaid
-        // (the most common diagram failure in production). Retry once with
-        // those escaped — only after a failure, so a diagram that renders as
-        // written is never rewritten.
-        const repaired = isDiagramSyntaxError(err)
-          ? repairSequenceSemicolons(src)
-          : null;
-        if (repaired) {
-          try {
-            const { svg } = await renderWithChunkRetry(api, repaired);
-            paint(el, svg, theme, fontFamily);
-            noteRenderIssueOnce(src, "repaired");
-            return;
-          } catch (repairErr) {
-            // Still a syntax error: keep the author's original one. Anything
-            // else (a chunk load, a runtime fault) is the real failure.
-            if (!isDiagramSyntaxError(repairErr)) error = repairErr;
-          }
-        }
-        el.setAttribute("data-hydrated", "true");
-        el.setAttribute("data-mermaid-theme", theme);
-        el.setAttribute("data-mermaid-font", fontFamily);
-        el.setAttribute("data-mermaid-error", "render-failed");
-        // Keep the fallback `<pre>` so the user can still read the source.
-
-        console.warn("[mermaid] render failed:", error);
-        if (isDiagramSyntaxError(error))
-          noteRenderIssueOnce(src, "syntax-error");
-        else reportOnce(`render:${src}`, "diagram-render", error);
-      }
-    }),
-  );
+  const pass: HydrationPass = { api, theme, fontFamily };
+  await Promise.all(placeholders.map((el) => hydrateOne(pass, el)));
 }

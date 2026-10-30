@@ -45,25 +45,24 @@ const ADO_CODE_RE = /\bTF\d{5,6}\b/;
 
 /** Extract the ADO `TF######` error code from the error's text, if any. */
 export function adoErrorCodeOf(error: unknown): string | undefined {
-  const texts: string[] = [];
-  if (typeof error === "string") texts.push(error);
-  const e = asObject(error);
-  if (e) {
-    // Not only `Error`s: the SDK can reject with a plain `{ message }` object
-    // (e.g. a TF400893 network failure), or an Error from another realm.
-    if (typeof e.message === "string") texts.push(e.message);
-    if (typeof e.responseText === "string") texts.push(e.responseText);
-    const se = asObject(e.serverError);
-    if (se) {
-      if (typeof se.message === "string") texts.push(se.message);
-      if (typeof se.typeKey === "string") texts.push(se.typeKey);
-    }
-  }
-  for (const t of texts) {
+  for (const t of errorTexts(error)) {
     const m = ADO_CODE_RE.exec(t);
     if (m) return m[0];
   }
   return undefined;
+}
+
+/** The error's searchable text fields, in priority order. */
+function errorTexts(error: unknown): string[] {
+  if (typeof error === "string") return [error];
+  const e = asObject(error);
+  if (!e) return [];
+  // Not only `Error`s: the SDK can reject with a plain `{ message }` object
+  // (e.g. a TF400893 network failure), or an Error from another realm.
+  const se = asObject(e.serverError);
+  return [e.message, e.responseText, se?.message, se?.typeKey].filter(
+    (t): t is string => typeof t === "string",
+  );
 }
 
 /** A readable message that never degrades to `"[object Object]"`. */

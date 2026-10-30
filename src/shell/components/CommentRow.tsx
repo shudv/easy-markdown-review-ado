@@ -14,11 +14,19 @@ import { isResolvedLike } from "../../types";
 import { Avatar } from "./Avatar";
 import { CommentMarkdown } from "./CommentMarkdown";
 import { Composer } from "./Composer";
-import { RegisterEditorContext } from "./editorRegistry";
-import { useDeepLink } from "../deepLink";
-import { copyText } from "../../comments/clipboard";
-import { formatLikeTooltip } from "../../comments/likeTooltip";
-import { events, track, trackUserFacingError } from "../../telemetry";
+import { commentRowPermissions, summarizeLikes } from "./CommentRow.helpers";
+import {
+  useCommentEditSession,
+  useCommentLinkCopy,
+  useCommentRowMenu,
+} from "./CommentRow.hooks";
+import {
+  CommentLikeButton,
+  CommentLikePill,
+  CommentMenuToggle,
+  CommentRowMenu,
+  CommentRowMeta,
+} from "./CommentRow.parts";
 
 interface CommentRowProps {
   threadId: string;
@@ -57,8 +65,6 @@ interface CommentRowProps {
   ) => void;
 }
 
-type ConfirmMode = null | "comment" | "thread";
-
 export function CommentRow(props: CommentRowProps): React.ReactElement {
   const {
     threadId,
@@ -78,115 +84,25 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
     onToggleReaction,
   } = props;
 
-  const [editing, setEditing] = React.useState(false);
-  // Each open of the editor is a new session; a save that lands later (e.g.
-  // held through an Azure DevOps reconnect) may only close the session it
-  // came from, and only while that editor still shows exactly what was saved.
-  const editSessionRef = React.useRef(0);
-  const editTextRef = React.useRef("");
-  const registerEditor = React.useContext(RegisterEditorContext);
-  React.useEffect(
-    () => (editing ? registerEditor() : undefined),
-    [editing, registerEditor],
+  const edit = useCommentEditSession(onEdit, threadId, comment.id);
+  const menu = useCommentRowMenu();
+  const { canLink, linkState, handleLink } = useCommentLinkCopy(threadId);
+
+  const { canEdit, canDelete, canReact, hasMenuItems } = commentRowPermissions({
+    isOwn: comment.author.id === currentUser.id,
+    interactive,
+    isFirst,
+    canLink,
+  });
+  const { likedByMe, likeCount, likeTooltip } = summarizeLikes(
+    comment.reactions,
+    currentUser.id,
   );
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const [confirm, setConfirm] = React.useState<ConfirmMode>(null);
-  const [linkState, setLinkState] = React.useState<
-    "idle" | "copied" | "failed"
-  >("idle");
-  // Host-supplied builder for a shareable deep link to this thread. Absent on
-  // surfaces with no shareable URL, where the "Link to comment" item is hidden
-  // (the iframe's own URL is a CDN asset that opens a blank page).
-  const buildDeepLink = useDeepLink();
 
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  const menuBtnRef = React.useRef<HTMLButtonElement>(null);
-
-  // Close menu on outside click / Escape.
-  React.useEffect(() => {
-    if (!menuOpen) return;
-    function onDocClick(e: MouseEvent) {
-      const target = e.target as Node | null;
-      if (
-        menuRef.current &&
-        target &&
-        !menuRef.current.contains(target) &&
-        menuBtnRef.current &&
-        !menuBtnRef.current.contains(target)
-      ) {
-        setMenuOpen(false);
-        setConfirm(null);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      /* v8 ignore next -- Escape-to-close key branch; not exercised in the render harness */
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setMenuOpen(false);
-        setConfirm(null);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
-
-  // ADO permission model: you can edit/delete your own comments. We gate both
-  // on "own comment".
-  const isOwn = comment.author.id === currentUser.id;
-  const canEdit = interactive && isOwn;
-  const canDelete = interactive && isOwn;
-  const canReact = interactive;
-  const canLink = buildDeepLink !== null;
-  // Thread actions always exist on the first comment; a later reply may have
-  // nothing to offer (someone else's reply on a surface with no shareable URL),
-  // in which case the ⋯ button is hidden rather than opening an empty menu.
-  const hasMenuItems = canLink || canEdit || canDelete || isFirst;
-  const reactions = comment.reactions ?? [];
-  const likeReaction = reactions.find((r) => r.kind === "like");
-  const likeUsers = likeReaction?.users ?? [];
-  const likedByMe = likeUsers.some((u) => u.id === currentUser.id);
-  const likeCount = likeUsers.length;
-  const likeTooltip = formatLikeTooltip(likeUsers, currentUser.id);
-
-  const closeMenu = () => {
-    setMenuOpen(false);
-    setConfirm(null);
-  };
-
-  const handleLink = () => {
-    /* v8 ignore next -- the item only renders when a builder exists */
-    if (!buildDeepLink) return;
-    const url = buildDeepLink({ kind: "comment", threadId });
-    // Keep the menu open so the inline label confirms the result. `copyText`
-    // resolves to a boolean (never rejects), so a host iframe blocking the
-    // async Clipboard API can't surface as an unhandled rejection — and we only
-    // claim success when a copy is actually confirmed.
-    const copied = url ? copyText(url) : Promise.resolve(false);
-    void copied.then((ok) => {
-      setLinkState(ok ? "copied" : "failed");
-      if (ok) {
-        track(events.linkCopied({ target: "comment" }));
-      } else {
-        trackUserFacingError({
-          error: new Error(
-            url ? "Comment link copy failed" : "Comment link unavailable",
-          ),
-          source: "CommentRow.copyLink",
-          operation: "comment-link-copy",
-          impact: "action-failed",
-        });
-      }
-      window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
-    });
-  };
+  const closeMenu = menu.close;
 
   const handleEdit = () => {
-    editSessionRef.current += 1;
-    setEditing(true);
+    edit.begin();
     closeMenu();
   };
 
@@ -228,6 +144,8 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
     closeMenu();
   };
 
+  const toggleLike = () => onToggleReaction(threadId, comment.id, "like");
+
   return (
     <div
       className="emr-comment"
@@ -237,284 +155,76 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
       <Avatar author={comment.author} size="sm" />
       <div className="emr-comment-body">
         <div className="emr-comment-header">
-          <div className="emr-comment-meta">
-            <span className="name">{comment.author.displayName}</span>
-            <span className="emr-comment-meta-time">
-              <span className="date">{formatFullTime(comment.createdAt)}</span>
-              {comment.updatedAt ? (
-                <span
-                  className="emr-comment-edited"
-                  title={`Edited ${formatFullTime(comment.updatedAt)}`}
-                >
-                  edited
-                </span>
-              ) : null}
-            </span>
-          </div>
+          <CommentRowMeta comment={comment} />
 
-          {interactive && !editing ? (
+          {interactive && !edit.editing ? (
             <div
               className="emr-comment-tools"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="emr-comment-tools-hover">
                 {hasMenuItems ? (
-                  <button
-                    ref={menuBtnRef}
-                    type="button"
-                    className={`emr-icon-btn${menuOpen ? " is-open" : ""}`}
-                    aria-label="More options"
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    title="More options"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen((o) => !o);
-                      setConfirm(null);
-                    }}
-                  >
-                    <SvgMore />
-                  </button>
+                  <CommentMenuToggle
+                    buttonRef={menu.menuBtnRef}
+                    open={menu.menuOpen}
+                    onToggle={menu.toggle}
+                  />
                 ) : null}
                 {canReact && likeCount === 0 ? (
-                  <button
-                    type="button"
-                    className="emr-icon-btn"
-                    aria-label="Like this comment"
-                    aria-pressed={false}
-                    title="Like this comment"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleReaction(threadId, comment.id, "like");
-                    }}
-                  >
-                    <span className="emr-thumb" aria-hidden="true">
-                      👍
-                    </span>
-                  </button>
+                  <CommentLikeButton onLike={toggleLike} />
                 ) : null}
               </div>
 
-              {/* Always-visible like pill when at least one person has reacted.
-                  Conveys info (count) so it should not be hover-gated. */}
               {likeCount > 0 ? (
-                <button
-                  type="button"
-                  className={`emr-like-pill${likedByMe ? " is-mine" : ""}`}
-                  disabled={!canReact}
-                  aria-pressed={likedByMe}
-                  title={likeTooltip}
-                  aria-label={likeTooltip}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    /* v8 ignore next -- guard duplicates the disabled state; canReact is always true when clickable */
-                    if (canReact)
-                      onToggleReaction(threadId, comment.id, "like");
-                  }}
-                >
-                  <span className="emr-thumb" aria-hidden="true">
-                    👍
-                  </span>
-                  <span className="emr-like-pill-count">{likeCount}</span>
-                </button>
+                <CommentLikePill
+                  likedByMe={likedByMe}
+                  likeCount={likeCount}
+                  likeTooltip={likeTooltip}
+                  canReact={canReact}
+                  onLike={toggleLike}
+                />
               ) : null}
 
-              {menuOpen ? (
-                <div
-                  ref={menuRef}
-                  className="emr-popover"
-                  role="menu"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {confirm === null ? (
-                    <>
-                      {canLink ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item"
-                          role="menuitem"
-                          onClick={handleLink}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgLink />
-                          </span>
-                          <span>
-                            {linkState === "copied"
-                              ? "Link copied"
-                              : linkState === "failed"
-                                ? "Couldn't copy link"
-                                : "Link to comment"}
-                          </span>
-                        </button>
-                      ) : null}
-                      {canEdit ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item"
-                          role="menuitem"
-                          onClick={handleEdit}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgPencil />
-                          </span>
-                          <span>Edit comment</span>
-                        </button>
-                      ) : null}
-                      {isFirst && isTerminal ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item"
-                          role="menuitem"
-                          onClick={handleReopen}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgUndo />
-                          </span>
-                          <span>Reopen thread</span>
-                        </button>
-                      ) : null}
-                      {isFirst && !isTerminal ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item"
-                          role="menuitem"
-                          onClick={handleResolve}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgCheck />
-                          </span>
-                          <span>Resolve thread</span>
-                        </button>
-                      ) : null}
-                      {isFirst && !isTerminal ? (
-                        threadStatus === "pending" ? (
-                          <button
-                            type="button"
-                            className="emr-popover-item"
-                            role="menuitem"
-                            onClick={handleReopen}
-                          >
-                            <span className="emr-popover-icon">
-                              <SvgUndo />
-                            </span>
-                            <span>Mark as active</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="emr-popover-item"
-                            role="menuitem"
-                            onClick={handleMarkPending}
-                          >
-                            <span className="emr-popover-icon">
-                              <SvgClock />
-                            </span>
-                            <span>Mark as pending</span>
-                          </button>
-                        )
-                      ) : null}
-                      {isFirst && !isTerminal ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item"
-                          role="menuitem"
-                          onClick={handleClose}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgArchive />
-                          </span>
-                          <span>Close thread</span>
-                        </button>
-                      ) : null}
-                      {isFirst && canDeleteThread ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item is-danger"
-                          role="menuitem"
-                          onClick={() => setConfirm("thread")}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgTrash />
-                          </span>
-                          <span>Delete thread</span>
-                        </button>
-                      ) : !isFirst && canDelete ? (
-                        <button
-                          type="button"
-                          className="emr-popover-item is-danger"
-                          role="menuitem"
-                          onClick={() => setConfirm("comment")}
-                        >
-                          <span className="emr-popover-icon">
-                            <SvgTrash />
-                          </span>
-                          <span>Delete comment</span>
-                        </button>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="emr-popover-confirm">
-                      <p className="emr-popover-confirm-text">
-                        {confirm === "thread"
-                          ? "Delete this thread and all its comments?"
-                          : "Delete this comment?"}
-                      </p>
-                      <div className="emr-popover-confirm-actions">
-                        <button
-                          type="button"
-                          className="emr-btn subtle"
-                          onClick={() => setConfirm(null)}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="emr-btn danger"
-                          onClick={
-                            confirm === "thread"
-                              ? confirmDeleteThread
-                              : confirmDeleteComment
-                          }
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              {menu.menuOpen ? (
+                <CommentRowMenu
+                  menuRef={menu.menuRef}
+                  confirm={menu.confirm}
+                  setConfirm={menu.setConfirm}
+                  state={{
+                    canLink,
+                    linkState,
+                    canEdit,
+                    canDelete,
+                    isFirst,
+                    isTerminal,
+                    threadStatus,
+                    canDeleteThread,
+                  }}
+                  actions={{
+                    link: handleLink,
+                    edit: handleEdit,
+                    reopen: handleReopen,
+                    resolve: handleResolve,
+                    markPending: handleMarkPending,
+                    close: handleClose,
+                    confirmDeleteComment,
+                    confirmDeleteThread,
+                  }}
+                />
               ) : null}
             </div>
           ) : null}
         </div>
 
-        {editing ? (
+        {edit.editing ? (
           <div onClick={(e) => e.stopPropagation()}>
             <Composer
               initial={comment.bodyMarkdown}
               submitLabel="Save"
               autoFocus
-              onChange={(text) => {
-                editTextRef.current = text;
-              }}
-              onSubmit={(body) => {
-                // Close only once the save went through, and only the editor
-                // session that sent it, still holding exactly that text. A
-                // failed save, newer typing, or a cancel-and-reopen keeps the
-                // user's current text on screen.
-                const session = editSessionRef.current;
-                void Promise.resolve(onEdit(threadId, comment.id, body)).then(
-                  (saved) => {
-                    if (saved === false) return;
-                    if (editSessionRef.current !== session) return;
-                    if (editTextRef.current.trim() !== body) return;
-                    setEditing(false);
-                  },
-                );
-              }}
-              onCancel={() => {
-                editSessionRef.current += 1;
-                setEditing(false);
-              }}
+              onChange={edit.onChange}
+              onSubmit={edit.onSubmit}
+              onCancel={edit.onCancel}
             />
           </div>
         ) : (
@@ -523,158 +233,4 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
       </div>
     </div>
   );
-}
-
-// Inline Lucide-style SVG icons (24 viewBox), kept inline to avoid an icon font.
-
-const iconStrokeProps = {
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-function SvgMore(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function SvgLink(): React.ReactElement {
-  // Lucide "link".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  );
-}
-
-function SvgPencil(): React.ReactElement {
-  // Lucide "pencil".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-
-function SvgTrash(): React.ReactElement {
-  // Lucide "trash-2".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <path d="M3 6h18" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-    </svg>
-  );
-}
-
-function SvgCheck(): React.ReactElement {
-  // Lucide "check".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function SvgUndo(): React.ReactElement {
-  // Lucide "rotate-ccw".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-      <path d="M3 3v5h5" />
-    </svg>
-  );
-}
-
-function SvgClock(): React.ReactElement {
-  // Lucide "clock".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
-
-function SvgArchive(): React.ReactElement {
-  // Lucide "archive".
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      {...iconStrokeProps}
-    >
-      <rect x="3" y="4" width="18" height="4" rx="1" />
-      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
-      <path d="M10 12h4" />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Date formatting — match the screenshot style ("May 11, 2026 at 11:41 AM").
-// ---------------------------------------------------------------------------
-
-function formatFullTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const date = d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${date} at ${time}`;
 }

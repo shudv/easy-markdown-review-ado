@@ -75,6 +75,51 @@ function classifyUrl(
   return { safe: false, reason: scheme };
 }
 
+type Properties = NonNullable<Element["properties"]>;
+
+function existingRelTokens(rel: unknown): string[] {
+  if (Array.isArray(rel)) return (rel as unknown[]).map(String);
+  if (typeof rel === "string") return rel.split(/\s+/).filter(Boolean);
+  return [];
+}
+
+function sanitizeAnchor(props: Properties): void {
+  const href = props.href;
+  if (typeof href === "string") {
+    const verdict = classifyUrl(href, SAFE_LINK_SCHEMES);
+    if (!verdict.safe) {
+      delete props.href;
+      props["dataEmrBlockedScheme"] = verdict.reason;
+    }
+  }
+  // New-context links always get safe rel, overriding any weaker value.
+  if (typeof props.target === "string" && props.target.length > 0) {
+    const required = new Set(["noopener", "noreferrer"]);
+    for (const r of existingRelTokens(props.rel)) required.add(r);
+    props.rel = Array.from(required);
+  }
+}
+
+function sanitizeImage(props: Properties): void {
+  const src = props.src;
+  if (typeof src === "string") {
+    const verdict = classifyUrl(src, SAFE_IMAGE_SCHEMES);
+    if (!verdict.safe) {
+      delete props.src;
+      props["dataEmrBlockedScheme"] = verdict.reason;
+      // Preserve accessibility: if there's no alt, advertise that an
+      // image was suppressed rather than silently rendering nothing.
+      if (typeof props.alt !== "string" || props.alt.length === 0) {
+        props.alt = "(blocked image)";
+      }
+    }
+  }
+  // Strip any `srcset` regardless — we don't use it, and validating
+  // each candidate URL adds complexity for zero benefit today. If a
+  // future feature needs srcset, validate it here.
+  delete props.srcset;
+}
+
 /**
  * Scrub unsafe URLs on links/images and force `rel="noopener noreferrer"` on
  * new-context links. Run AFTER any plugin that mutates `href`/`src` and
@@ -87,43 +132,9 @@ export const rehypeSanitizeUrls: Plugin<[], Root> = () => {
       const props = (node.properties ??= {});
 
       if (tag === "a") {
-        const href = props.href;
-        if (typeof href === "string") {
-          const verdict = classifyUrl(href, SAFE_LINK_SCHEMES);
-          if (!verdict.safe) {
-            delete props.href;
-            props["dataEmrBlockedScheme"] = verdict.reason;
-          }
-        }
-        // New-context links always get safe rel, overriding any weaker value.
-        if (typeof props.target === "string" && props.target.length > 0) {
-          const required = new Set(["noopener", "noreferrer"]);
-          const existing = Array.isArray(props.rel)
-            ? (props.rel as unknown[]).map(String)
-            : typeof props.rel === "string"
-              ? (props.rel as string).split(/\s+/).filter(Boolean)
-              : [];
-          for (const r of existing) required.add(r);
-          props.rel = Array.from(required);
-        }
+        sanitizeAnchor(props);
       } else if (tag === "img") {
-        const src = props.src;
-        if (typeof src === "string") {
-          const verdict = classifyUrl(src, SAFE_IMAGE_SCHEMES);
-          if (!verdict.safe) {
-            delete props.src;
-            props["dataEmrBlockedScheme"] = verdict.reason;
-            // Preserve accessibility: if there's no alt, advertise that an
-            // image was suppressed rather than silently rendering nothing.
-            if (typeof props.alt !== "string" || props.alt.length === 0) {
-              props.alt = "(blocked image)";
-            }
-          }
-        }
-        // Strip any `srcset` regardless — we don't use it, and validating
-        // each candidate URL adds complexity for zero benefit today. If a
-        // future feature needs srcset, validate it here.
-        delete props.srcset;
+        sanitizeImage(props);
       }
     });
   };

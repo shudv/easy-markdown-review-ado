@@ -82,15 +82,7 @@ export function buildFolderTree<F extends { path: string }>(
     folderOrders?: Readonly<Record<string, readonly string[]>>;
   },
 ): Array<TreeNode<F>> {
-  // Internal building shape: keep children in a Map keyed by segment name
-  // so insertion is O(1). We flatten to arrays + sort at the end.
-  interface Building {
-    name: string;
-    full: string;
-    children: Map<string, Building>;
-    file?: F;
-  }
-  const root: Building = { name: "", full: "", children: new Map() };
+  const root: Building<F> = { name: "", full: "", children: new Map() };
 
   for (const f of files) {
     // Strip leading slash so `"/docs/foo.md"` and `"docs/foo.md"` give
@@ -98,27 +90,7 @@ export function buildFolderTree<F extends { path: string }>(
     // are filtered out.
     const segments = f.path.replace(/^\/+/, "").split("/").filter(Boolean);
     if (segments.length === 0) continue;
-
-    let cursor = root;
-    for (let i = 0; i < segments.length; i += 1) {
-      const seg = segments[i]!;
-      const isLeaf = i === segments.length - 1;
-      const existing = cursor.children.get(seg);
-      if (existing) {
-        cursor = existing;
-      } else {
-        const next: Building = {
-          name: seg,
-          full: cursor.full ? `${cursor.full}/${seg}` : seg,
-          children: new Map(),
-        };
-        cursor.children.set(seg, next);
-        cursor = next;
-      }
-      if (isLeaf) {
-        cursor.file = f;
-      }
-    }
+    insertPath(root, segments).file = f;
   }
 
   // Inject any known-but-unloaded folder paths as empty branches. Each
@@ -128,67 +100,96 @@ export function buildFolderTree<F extends { path: string }>(
   for (const folderPath of options?.extraFolders ?? []) {
     const segments = normalizeFolderPath(folderPath).split("/").filter(Boolean);
     if (segments.length === 0) continue;
-    let cursor = root;
-    for (let i = 0; i < segments.length; i += 1) {
-      const seg = segments[i]!;
-      const existing = cursor.children.get(seg);
-      if (existing) {
-        cursor = existing;
-      } else {
-        const next: Building = {
-          name: seg,
-          full: cursor.full ? `${cursor.full}/${seg}` : seg,
-          children: new Map(),
-        };
-        cursor.children.set(seg, next);
-        cursor = next;
-      }
-    }
-    // No `cursor.file = …` here — that's what makes this a lazy folder.
-  }
-
-  // Convert + collapse: for every `Building` we visit, if it is a folder
-  // (no file) with exactly one child that is also a folder, merge into a
-  // single node and recurse. Stops as soon as we hit a folder whose
-  // single child is a file, or a folder with !=1 children.
-  function build(node: Building): TreeNode<F> {
-    if (node.file && node.children.size === 0) {
-      return { kind: "file", file: node.file };
-    }
-    // Collapse: while this folder has exactly one child folder and no
-    // file-of-its-own, fold that child up into ourselves. We accumulate
-    // the display segments so the rendered label reflects the full
-    // collapsed path.
-    const displaySegments = [node.name];
-    let work = node;
-    while (
-      work.file === undefined &&
-      work.children.size === 1 &&
-      [...work.children.values()][0]!.file === undefined
-    ) {
-      const onlyChild = [...work.children.values()][0]!;
-      displaySegments.push(onlyChild.name);
-      work = onlyChild;
-    }
-    const children: TreeNode<F>[] = [];
-    for (const child of work.children.values()) {
-      children.push(build(child));
-    }
-    sortNodes(children, ownOrder(options?.folderOrders, work.full));
-    return {
-      kind: "dir",
-      path: work.full,
-      displayName: displaySegments.join("/"),
-      children,
-    };
+    // No `.file = …` here — that's what makes this a lazy folder.
+    insertPath(root, segments);
   }
 
   const roots: TreeNode<F>[] = [];
   for (const child of root.children.values()) {
-    roots.push(build(child));
+    roots.push(buildTreeNode(child, options?.folderOrders));
   }
   sortNodes(roots, ownOrder(options?.folderOrders, ""));
   return roots;
+}
+
+// Internal building shape: keep children in a Map keyed by segment name
+// so insertion is O(1). We flatten to arrays + sort at the end.
+interface Building<F extends { path: string }> {
+  name: string;
+  full: string;
+  children: Map<string, Building<F>>;
+  file?: F;
+}
+
+/**
+ * Walk `segments` down from `root`, creating any missing `Building` nodes,
+ * and return the node for the last segment.
+ */
+function insertPath<F extends { path: string }>(
+  root: Building<F>,
+  segments: readonly string[],
+): Building<F> {
+  let cursor = root;
+  for (const seg of segments) {
+    let next = cursor.children.get(seg);
+    if (!next) {
+      next = {
+        name: seg,
+        full: cursor.full ? `${cursor.full}/${seg}` : seg,
+        children: new Map(),
+      };
+      cursor.children.set(seg, next);
+    }
+    cursor = next;
+  }
+  return cursor;
+}
+
+/** A folder's only child when it is itself a folder (so the two collapse). */
+function collapsibleChild<F extends { path: string }>(
+  node: Building<F>,
+): Building<F> | undefined {
+  if (node.file !== undefined || node.children.size !== 1) return undefined;
+  const onlyChild = [...node.children.values()][0]!;
+  return onlyChild.file === undefined ? onlyChild : undefined;
+}
+
+// Convert + collapse: for every `Building` we visit, if it is a folder
+// (no file) with exactly one child that is also a folder, merge into a
+// single node and recurse. Stops as soon as we hit a folder whose
+// single child is a file, or a folder with !=1 children.
+function buildTreeNode<F extends { path: string }>(
+  node: Building<F>,
+  folderOrders: Readonly<Record<string, readonly string[]>> | undefined,
+): TreeNode<F> {
+  if (node.file && node.children.size === 0) {
+    return { kind: "file", file: node.file };
+  }
+  // Collapse: while this folder has exactly one child folder and no
+  // file-of-its-own, fold that child up into ourselves. We accumulate
+  // the display segments so the rendered label reflects the full
+  // collapsed path.
+  const displaySegments = [node.name];
+  let work = node;
+  for (
+    let onlyChild = collapsibleChild(work);
+    onlyChild;
+    onlyChild = collapsibleChild(work)
+  ) {
+    displaySegments.push(onlyChild.name);
+    work = onlyChild;
+  }
+  const children: TreeNode<F>[] = [];
+  for (const child of work.children.values()) {
+    children.push(buildTreeNode(child, folderOrders));
+  }
+  sortNodes(children, ownOrder(folderOrders, work.full));
+  return {
+    kind: "dir",
+    path: work.full,
+    displayName: displaySegments.join("/"),
+    children,
+  };
 }
 
 /**

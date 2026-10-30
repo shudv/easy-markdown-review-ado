@@ -136,30 +136,40 @@ function matchFragment(
     i >= 0;
     i = key.indexOf(startKey, i + 1)
   ) {
-    if (
-      prefixKey &&
-      (i < prefixKey.length || !key.startsWith(prefixKey, i - prefixKey.length))
-    ) {
-      continue;
-    }
-    let stop = i + startKey.length;
-    if (endKey) {
-      let j = key.indexOf(endKey, stop);
-      while (
-        j >= 0 &&
-        suffixKey &&
-        !key.startsWith(suffixKey, j + endKey.length)
-      ) {
-        j = key.indexOf(endKey, j + 1);
-      }
-      if (j < 0) continue;
-      stop = j + endKey.length;
-    } else if (suffixKey && !key.startsWith(suffixKey, stop)) {
-      continue;
-    }
+    if (!hasPrefixAt(key, i, prefixKey)) continue;
+    const stop = matchStop(key, i + startKey.length, endKey, suffixKey);
+    if (stop < 0) continue;
     return { start: at[i]!, end: at[stop - 1]! + 1 };
   }
   return null;
+}
+
+/** True when `prefixKey` is empty or ends exactly where index `i` begins. */
+function hasPrefixAt(key: string, i: number, prefixKey: string): boolean {
+  return (
+    !prefixKey ||
+    (i >= prefixKey.length && key.startsWith(prefixKey, i - prefixKey.length))
+  );
+}
+
+/**
+ * Key index just past the match that begins its tail at `stop` — the first
+ * `endKey` (if any) followed by `suffixKey` (if any) — or -1 when none fits.
+ */
+function matchStop(
+  key: string,
+  stop: number,
+  endKey: string,
+  suffixKey: string,
+): number {
+  if (!endKey) {
+    return !suffixKey || key.startsWith(suffixKey, stop) ? stop : -1;
+  }
+  let j = key.indexOf(endKey, stop);
+  while (j >= 0 && suffixKey && !key.startsWith(suffixKey, j + endKey.length)) {
+    j = key.indexOf(endKey, j + 1);
+  }
+  return j < 0 ? -1 : j + endKey.length;
 }
 
 function toRange(
@@ -207,6 +217,15 @@ function rangeOffsets(
     end = run.start + to;
   }
   if (start < 0) return null;
+  return trimOffsets(text, start, end);
+}
+
+/** Shrink flat-text [start, end) past outer whitespace; null if nothing left. */
+function trimOffsets(
+  text: string,
+  start: number,
+  end: number,
+): { start: number; end: number } | null {
   while (start < end && /\s/.test(text[start]!)) start++;
   while (end > start && /\s/.test(text[end - 1]!)) end--;
   return end > start ? { start, end } : null;

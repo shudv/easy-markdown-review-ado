@@ -15,7 +15,11 @@ import { visit } from "unist-util-visit";
 import type { Plugin } from "unified";
 import type { Root, Element, ElementContent } from "hast";
 
-import { parseMentionUrl, preprocessUserMentions } from "../comments/mentions";
+import {
+  parseMentionUrl,
+  preprocessUserMentions,
+  type ParsedMentionUrl,
+} from "../comments/mentions";
 import { rehypeSanitizeUrls } from "./sanitize-urls";
 import { extractHastText } from "./hast-text";
 import { rehypeMathPlaceholder } from "./math";
@@ -57,6 +61,27 @@ const rehypeSourcePositions: Plugin<[], Root> = () => {
     });
   };
 };
+
+/** Leading state-dot span for work-item / PR mention pills. */
+function mentionStateDot(parsed: ParsedMentionUrl): ElementContent {
+  const stateColor = parsed.params["stateColor"];
+  const dotClass = ["emr-mention-state-dot"];
+  if (parsed.kind === "pullrequest") {
+    const status = parsed.params["status"];
+    if (status) dotClass.push(`emr-pr-state-${status}`);
+  }
+  const safeColor = stateColor ? sanitizeCssColor(stateColor) : null;
+  return {
+    type: "element",
+    tagName: "span",
+    properties: {
+      className: dotClass,
+      ariaHidden: "true",
+      ...(safeColor ? { style: `background:${safeColor}` } : {}),
+    },
+    children: [],
+  };
+}
 
 /**
  * Transform `mention://` links into rich inline pills.
@@ -110,24 +135,7 @@ const rehypeMentions: Plugin<[], Root> = () => {
       // Work items and PRs get a leading status dot so the state color
       // shows up without needing async hydration.
       if (parsed.kind === "workitem" || parsed.kind === "pullrequest") {
-        const stateColor = parsed.params["stateColor"];
-        const dotClass = ["emr-mention-state-dot"];
-        if (parsed.kind === "pullrequest") {
-          const status = parsed.params["status"];
-          if (status) dotClass.push(`emr-pr-state-${status}`);
-        }
-        const safeColor = stateColor ? sanitizeCssColor(stateColor) : null;
-        const dot: ElementContent = {
-          type: "element",
-          tagName: "span",
-          properties: {
-            className: dotClass,
-            ariaHidden: "true",
-            ...(safeColor ? { style: `background:${safeColor}` } : {}),
-          },
-          children: [],
-        };
-        node.children = [dot, ...node.children];
+        node.children = [mentionStateDot(parsed), ...node.children];
       }
     });
   };
@@ -214,6 +222,31 @@ export function slugifyHeading(text: string): string {
 
 const HEADING_RE = /^h([1-6])$/;
 
+/** Heading level (1-6) of `node`, or `null` when it isn't a heading element. */
+function headingLevel(node: ElementContent): number | null {
+  if (node.type !== "element") return null;
+  const match = node.tagName.match(HEADING_RE);
+  return match ? Number(match[1]!) : null;
+}
+
+/**
+ * Index of the next sibling heading at the same or higher level than `level`,
+ * searching from `start`; everything before it belongs inside the section.
+ */
+function sectionEnd(
+  nodes: ElementContent[],
+  start: number,
+  level: number,
+): number {
+  let j = start;
+  while (j < nodes.length) {
+    const peekLevel = headingLevel(nodes[j]!);
+    if (peekLevel !== null && peekLevel <= level) break;
+    j++;
+  }
+  return j;
+}
+
 /**
  * Wrap each heading and its following content in a `<section class="emr-section">`
  * so the body can be folded by toggling `data-collapsed`. Sections nest by
@@ -242,48 +275,40 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => {
       let i = 0;
       while (i < nodes.length) {
         const node = nodes[i]!;
-        const m =
-          node.type === "element" ? node.tagName.match(HEADING_RE) : null;
-        if (m) {
-          const level = Number(m[1]!);
-          // Find the next sibling heading at the same or higher level;
-          // everything before it belongs inside this heading's section.
-          let j = i + 1;
-          while (j < nodes.length) {
-            const peek = nodes[j]!;
-            if (peek.type === "element") {
-              const pm = peek.tagName.match(HEADING_RE);
-              if (pm && Number(pm[1]!) <= level) break;
-            }
-            j++;
-          }
-          const id = mintId(extractHastText(node as Element));
-          const headingProps = ((node as Element).properties ??= {});
-          /* v8 ignore next -- headings parsed from markdown never pre-carry an id, so the already-set branch is unreachable */
-          if (!headingProps.id) headingProps.id = id;
-
-          const body = nodes.slice(i + 1, j);
-          const sectionChildren: ElementContent[] = [
-            node as ElementContent,
-            ...wrapRange(body),
-          ];
-          out.push({
-            type: "element",
-            tagName: "section",
-            properties: {
-              className: ["emr-section", `emr-section-level-${level}`],
-              dataSectionId: id,
-              dataSectionLevel: String(level),
-            },
-            children: sectionChildren,
-          });
-          i = j;
-        } else {
+        const level = headingLevel(node);
+        if (level === null) {
           out.push(node);
           i++;
+          continue;
         }
+        const j = sectionEnd(nodes, i + 1, level);
+        out.push(wrapSection(node as Element, level, nodes.slice(i + 1, j)));
+        i = j;
       }
       return out;
+    }
+
+    /** Wrap `heading` and its (recursively sectioned) `body` in a section. */
+    function wrapSection(
+      heading: Element,
+      level: number,
+      body: ElementContent[],
+    ): Element {
+      const id = mintId(extractHastText(heading));
+      const headingProps = (heading.properties ??= {});
+      /* v8 ignore next -- headings parsed from markdown never pre-carry an id, so the already-set branch is unreachable */
+      if (!headingProps.id) headingProps.id = id;
+
+      return {
+        type: "element",
+        tagName: "section",
+        properties: {
+          className: ["emr-section", `emr-section-level-${level}`],
+          dataSectionId: id,
+          dataSectionLevel: String(level),
+        },
+        children: [heading, ...wrapRange(body)],
+      };
     }
 
     // Filter doctypes (allowed under Root but not Element) and wrap the body.

@@ -18,10 +18,7 @@ import {
 } from "./documentsAppRouting";
 import type { DocPrRef } from "../shell/prShellHelpers";
 import type { CommentApi } from "../comments/api";
-import {
-  MentionLinkContext,
-  type MentionLinkResolution,
-} from "../comments/mentionLinks";
+import { MentionLinkContext } from "../comments/mentionLinks";
 import {
   DeepLinkContext,
   type DeepLinkBuilder,
@@ -37,12 +34,22 @@ import {
 } from "../telemetry";
 
 import type { DocRepo, FolderListing } from "../shell/types";
-import { normalizeFolderPath } from "../shell/components/folderTree";
 import type { FolderLister } from "../shell/wikiOrder";
-import { withFirstPageFirst } from "../shell/wikiOrder";
 import type { FileSearchOutcome } from "../shell/almSearch";
-import { COMMENT_PERMISSION_DENIED_MESSAGE } from "../shell/commentPermission.helpers";
 import { planRootAutoExpand } from "./autoExpand";
+import {
+  buildMentionLinks,
+  buildRoutedPr,
+  buildSyntheticPr,
+  menuFocusTarget,
+  mergeFolderListing,
+  pickDeepLinkSeeds,
+  pickSelectedRepo,
+  resolveCommentGating,
+  resolveShellTree,
+  seedLazyTree,
+  type LazyTreeState,
+} from "./documentsApp.helpers";
 
 /** Stable empty seed for per-document mode (threads load lazily per file). */
 const EMPTY_THREADS: CommentThread[] = [];
@@ -246,58 +253,19 @@ interface DocumentsAppProps {
 }
 
 /**
- * Lazy tree state per active repo. Seeded from `selectedRepo.files` +
- * `topLevelFolders` on repo change; grows as folders are expanded via
- * `onExpandFolder`. Fully-loaded repos (standalone fixtures) leave
- * `unloadedFolders` empty.
+ * Active-repo selection. A third-party hub is never handed the repo the user
+ * had selected in Repos, so the hub lists every repo in the project and the
+ * user switches between them with the in-rail picker. `initialRepoId` seeds
+ * the choice (deep link > last-visited > first repo on page one).
  */
-interface LazyTreeState {
-  repoId: string;
-  files: FileInfo[];
-  unloadedFolders: string[];
-  /** Wiki `.order` page names per listed folder (slash-free path, root `""`). */
-  folderOrders: Record<string, string[]>;
-}
-
-/** Seed a repo's lazy tree from its root listing. */
-function seedLazyTree(repo: DocRepo): LazyTreeState {
-  return {
-    repoId: repo.id,
-    files: repo.files,
-    unloadedFolders: [...(repo.topLevelFolders ?? [])],
-    folderOrders: repo.rootOrder ? { "": repo.rootOrder } : {},
-  };
-}
-
-export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
-  const {
-    repos,
-    loadFileSource,
-    loadThreadsFor,
-    currentUser,
-    commentApiFor,
-    onExpandFolder,
-    onSearchFiles,
-    onLoadRepoDetails,
-    onRefreshRepo,
-    orgUrl,
-    projectName,
-    onSelectPath,
-    onSelectRepo,
-  } = props;
-
-  // Per-document "transparent PR" mode is enabled when the host supplies a
-  // per-document thread loader. In this mode each document owns a dedicated
-  // housing PR; the repo-level routing PR / read-only gating is bypassed.
-  const perDocumentMode = !!props.loadThreadsForPath;
-
-  // The active repo. A third-party hub is never handed the repo the user had
-  // selected in Repos, so the hub lists every repo in the project and the user
-  // switches between them with the in-rail picker below. `initialRepoId` seeds
-  // the choice (deep link > last-visited > first repo on page one).
-  const [selectedRepoId, setSelectedRepoId] = React.useState<string>(
-    props.initialRepoId ?? repos[0]?.id ?? "",
-  );
+function useSelectedRepo(
+  repos: DocRepo[],
+  initialRepoId: string,
+  onSelectRepo: DocumentsAppProps["onSelectRepo"],
+  onLoadRepoDetails: DocumentsAppProps["onLoadRepoDetails"],
+) {
+  const [selectedRepoId, setSelectedRepoId] =
+    React.useState<string>(initialRepoId);
 
   // Resolve the active repo from the accumulated `repos` union. Cached in a ref
   // so that when the picker's *view* is narrowed by a server-side filter — which
@@ -306,33 +274,13 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // user actually picks a new one.
   const selectedRepoRef = React.useRef<DocRepo | undefined>(undefined);
   const selectedRepo = React.useMemo(() => {
-    const found = repos.find((r) => r.id === selectedRepoId);
-    if (found) {
-      selectedRepoRef.current = found;
-      return found;
-    }
-    if (selectedRepoRef.current?.id === selectedRepoId) {
-      return selectedRepoRef.current;
-    }
-    const fallback = repos[0];
-    selectedRepoRef.current = fallback;
-    return fallback;
+    selectedRepoRef.current = pickSelectedRepo(
+      repos,
+      selectedRepoId,
+      selectedRepoRef.current,
+    );
+    return selectedRepoRef.current;
   }, [repos, selectedRepoId]);
-
-  // Deep-link path (`?path=`). PrShell is keyed by repo id, so it only needs
-  // to seed the *initial* repo's first mount. Once consumed — or once the user
-  // switches repos — it's dropped so it can never override later navigation.
-  // NOTE: consumption is latched only once PrShell actually mounts (see the
-  // `prShellMounting` effect below), not on this component's mount: in
-  // paginated mode the initial repo arrives as a content-less skeleton and
-  // PrShell is gated behind its details/threads loading, so latching on mount
-  // here would drop the deep-link path before PrShell ever reads it.
-  const initialRepoId = props.initialRepoId ?? repos[0]?.id ?? "";
-  const initialPathConsumedRef = React.useRef(false);
-  const initialSelectedPathForShell =
-    !initialPathConsumedRef.current && selectedRepoId === initialRepoId
-      ? props.initialSelectedPath
-      : undefined;
 
   const handleSelectRepo = React.useCallback(
     (repoId: string) => {
@@ -358,18 +306,20 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     }
   }, [selectedRepo, onLoadRepoDetails]);
 
-  // Threads are NOT fetched up front and awaited before mounting PrShell.
-  // Instead PrShell mounts as soon as the repo's routing is known and loads its
-  // threads via the mount-time thread sync (`fetchRemoteThreads` below, which
-  // calls the same `loadThreadsFor`), merging them into the rail when they land.
-  // This keeps the Markdown render off the thread-fetch critical path — the
-  // document paints immediately and comments stream in.
+  return { selectedRepoId, selectedRepo, handleSelectRepo };
+}
 
-  // Lazy-tree working set keyed by repo id. Each entry starts as
-  // `{ files: repo.files, unloadedFolders: repo.topLevelFolders }` and grows
-  // as `onExpandFolder` resolves. The map is NOT reset on repo switch —
-  // entries persist for the DocumentsApp lifetime so re-opening a repo doesn't
-  // re-fetch already-expanded folders.
+/**
+ * Lazy-tree working set keyed by repo id. Each entry starts as
+ * `{ files: repo.files, unloadedFolders: repo.topLevelFolders }` and grows
+ * as `onExpandFolder` resolves. The map is NOT reset on repo switch —
+ * entries persist for the DocumentsApp lifetime so re-opening a repo doesn't
+ * re-fetch already-expanded folders.
+ */
+function useLazyTree(
+  selectedRepo: DocRepo | undefined,
+  onExpandFolder: DocumentsAppProps["onExpandFolder"],
+) {
   const [lazyTreeByRepo, setLazyTreeByRepo] = React.useState<
     Map<string, LazyTreeState>
   >(() => {
@@ -428,39 +378,11 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
       setLazyTreeByRepo((curr) => {
         const entry = curr.get(repoIdAtCall);
         if (!entry) return curr;
-        const seenFiles = new Set(entry.files.map((f) => f.path));
-        const mergedFiles = entry.files.slice();
-        for (const f of payload.files) {
-          if (!seenFiles.has(f.path)) {
-            seenFiles.add(f.path);
-            mergedFiles.push(f);
-          }
-        }
-        // Drop the just-expanded folder; add new unloaded subfolders. Folder
-        // paths arrive in two flavours across the host boundary (`/docs` vs
-        // `docs`), so canonicalize every value to a "no leading slash" form
-        // — otherwise the set accumulates both variants.
-        const canonicalize = (p: string): string => p.replace(/^\/+/, "");
-        const unloaded = new Set(entry.unloadedFolders.map(canonicalize));
-        unloaded.delete(canonicalize(path));
-        for (const sub of payload.folders) {
-          unloaded.add(canonicalize(sub));
-        }
-        mergedFiles.sort((a, b) => a.path.localeCompare(b.path));
         const next = new Map(curr);
-        next.set(repoIdAtCall, {
-          repoId: repoIdAtCall,
-          files: mergedFiles,
-          unloadedFolders: Array.from(unloaded).sort((a, b) =>
-            a.localeCompare(b),
-          ),
-          folderOrders: payload.order
-            ? {
-                ...entry.folderOrders,
-                [normalizeFolderPath(path)]: payload.order,
-              }
-            : entry.folderOrders,
-        });
+        next.set(
+          repoIdAtCall,
+          mergeFolderListing(entry, repoIdAtCall, path, payload),
+        );
         return next;
       });
       return payload;
@@ -497,36 +419,20 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     for (const folder of plan.folders) void handleExpandFolder(folder);
   }, [selectedRepo, lazyTree, onExpandFolder, handleExpandFolder]);
 
-  // Repo-scoped search callback. Returns `undefined` (DocNav local-only
-  // filter) when no `onSearchFiles` is wired; otherwise curries the repo id.
-  const handleSearchFiles = React.useMemo<
-    | ((query: string, signal?: AbortSignal) => Promise<FileSearchOutcome>)
-    | undefined
-  >(() => {
-    if (!selectedRepo || !onSearchFiles) return undefined;
-    const repoIdAtBind = selectedRepo.id;
-    return (query: string, signal?: AbortSignal) =>
-      onSearchFiles(repoIdAtBind, query, signal);
-  }, [selectedRepo, onSearchFiles]);
+  return { lazyTree, setLazyTreeByRepo, handleExpandFolder };
+}
 
-  // Build the `PrInfo` PrShell expects (it only renders `files`; the other
-  // fields are set for a readable DevTools breadcrumb). `files` comes from
-  // the cached `lazyTree.files` so expansion + search visibly grow the tree.
-  const syntheticPr: PrInfo | null = React.useMemo(() => {
-    if (!selectedRepo) return null;
-    const treeFiles = lazyTree ? lazyTree.files : selectedRepo.files;
-    return {
-      prId: selectedRepo.recentPr?.id ?? 0,
-      title: `Documents in ${selectedRepo.name}`,
-      authorName: selectedRepo.recentPr?.author ?? "\u2014",
-      // The default document is the first file: a wiki opens its first page.
-      files: withFirstPageFirst(treeFiles, selectedRepo.rootOrder),
-    };
-  }, [selectedRepo, lazyTree]);
-
-  // Track the active document path so the "Link to comment" builder can encode
-  // it. Seeded from the deep-link/cache path (or the first file PrShell will
-  // open), updated as the user navigates, and reset when the repo switches.
+/**
+ * Track the active document path so the "Link to comment" builder can encode
+ * it. Seeded from the deep-link/cache path (or the first file PrShell will
+ * open), updated as the user navigates, and reset when the repo switches.
+ */
+function useActiveDocPath(
+  selectedRepoId: string,
+  syntheticPr: PrInfo | null,
+  initialSelectedPathForShell: string | undefined,
+  onSelectPath: DocumentsAppProps["onSelectPath"],
+) {
   const [activeDocPath, setActiveDocPath] = React.useState<string>(
     resolveInitialDocPath(
       initialSelectedPathForShell,
@@ -581,6 +487,21 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     setActiveDocPath(nextPath);
     onSelectPath?.(selectedRepoId, nextPath);
   }, [selectedRepoId, syntheticPr, initialSelectedPathForShell, onSelectPath]);
+
+  return [activeDocPath, setActiveDocPath] as const;
+}
+
+/**
+ * Repo-scoped loaders/APIs: curry the active repo id onto the host's
+ * `(repoId, …)` callbacks so PrShell's per-path contracts are satisfied
+ * without leaking the repo id.
+ */
+function useRepoBindings(
+  props: DocumentsAppProps,
+  selectedRepo: DocRepo | undefined,
+  perDocumentMode: boolean,
+) {
+  const { loadFileSource, commentApiFor } = props;
 
   // Curry the per-repo source loader so PrShell's `loadFileSource(path)`
   // contract is satisfied without leaking the repo id.
@@ -683,39 +604,185 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     return (folderPath, atCommitId) => fn(repoId, folderPath, atCommitId);
   }, [props.onListSubpageFolder, selectedRepo]);
 
-  // Build the routed-PR pill payload for the rail (only when the repo has a
-  // completed PR; the rail hides when undefined).
-  const routedPr = React.useMemo<RoutedPrInfo | null>(() => {
-    const rp = selectedRepo?.recentPr;
-    if (!rp) return null;
-    return {
-      prId: rp.id,
-      title: rp.title,
-      status: rp.status,
-      url: rp.url,
-    };
-  }, [selectedRepo]);
+  return {
+    repoScopedLoader,
+    resolveDocumentImageBound,
+    commentApi,
+    commentApiForPathBound,
+    loadThreadsForPathBound,
+    routedPrForPathBound,
+    loadDocHistoryBound,
+    loadThreadsForPrBound,
+    loadFileSourceAtBound,
+    listSubpageFolderBound,
+  };
+}
 
-  // Disable commenting when there's no PR to route through. The rail then
-  // renders a read-only banner and the article suppresses its selection bubble.
-  const readOnly = !selectedRepo?.recentPr;
-  const readOnlyMessage = readOnly
-    ? selectedRepo
-      ? `${selectedRepo.name} has no completed pull request — commenting is disabled until one is completed.`
-      : undefined
-    : undefined;
+/**
+ * Repo-level comment routing (single routing PR + background thread sync).
+ * Bypassed in per-document mode, where each document owns its housing PR.
+ */
+function repoLevelRouting<T extends object>(
+  perDocumentMode: boolean,
+  routing: T,
+): Partial<T> {
+  return perDocumentMode ? {} : routing;
+}
 
-  // Per-document mode has no routing PR to gate on; instead commenting is
-  // disabled only when ADO explicitly denied Contribute on the repo. The rail
-  // surfaces the reason in its read-only banner (right panel).
-  const perDocCommentDenied =
-    perDocumentMode && selectedRepo?.canComment === false;
-  const perDocReadOnly = perDocumentMode ? perDocCommentDenied : readOnly;
-  const perDocReadOnlyMessage = perDocumentMode
-    ? perDocCommentDenied
-      ? COMMENT_PERMISSION_DENIED_MESSAGE
-      : undefined
-    : readOnlyMessage;
+/**
+ * The DocNav title slot: the in-hub repo selector, or a static label for a
+ * single non-paginated repo.
+ */
+function renderDocNavTitleSlot(
+  props: DocumentsAppProps,
+  selectedRepo: DocRepo,
+  onSelect: (repoId: string) => void,
+): React.ReactElement {
+  const { repos } = props;
+  const paginated = !!props.onFilterRepos;
+  if (paginated || repos.length > 1) {
+    return (
+      <RepoPicker
+        repos={props.repoPickerView ?? repos}
+        selectedId={selectedRepo.id}
+        selectedName={selectedRepo.name}
+        onSelect={onSelect}
+        paginated={paginated}
+        filter={props.repoFilter ?? ""}
+        hasMore={props.reposHasMore ?? false}
+        loading={props.reposLoading ?? false}
+        onLoadMore={props.onLoadMoreRepos}
+        onFilter={props.onFilterRepos}
+      />
+    );
+  }
+  return (
+    <span className="emr-docnav-title" title={selectedRepo.name}>
+      <SvgRepo />
+      <span className="emr-docnav-repo-name">{selectedRepo.name}</span>
+    </span>
+  );
+}
+
+function renderRefreshButton(
+  refreshing: boolean,
+  onRefresh: () => Promise<void>,
+): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className="emr-icon-btn emr-docs-refresh-btn"
+      onClick={() => {
+        void onRefresh();
+      }}
+      disabled={refreshing}
+      aria-label="Refresh repository contents and PR routing"
+      title="Refresh repository contents and PR routing"
+    >
+      <SvgRefresh spinning={refreshing} />
+    </button>
+  );
+}
+
+export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
+  const {
+    repos,
+    loadThreadsFor,
+    currentUser,
+    onExpandFolder,
+    onSearchFiles,
+    onLoadRepoDetails,
+    onRefreshRepo,
+    orgUrl,
+    projectName,
+    onSelectPath,
+    onSelectRepo,
+  } = props;
+
+  // Per-document "transparent PR" mode is enabled when the host supplies a
+  // per-document thread loader. In this mode each document owns a dedicated
+  // housing PR; the repo-level routing PR / read-only gating is bypassed.
+  const perDocumentMode = !!props.loadThreadsForPath;
+
+  const initialRepoId = props.initialRepoId ?? repos[0]?.id ?? "";
+  const { selectedRepoId, selectedRepo, handleSelectRepo } = useSelectedRepo(
+    repos,
+    initialRepoId,
+    onSelectRepo,
+    onLoadRepoDetails,
+  );
+
+  // Deep-link path (`?path=`). PrShell is keyed by repo id, so it only needs
+  // to seed the *initial* repo's first mount. Once consumed — or once the user
+  // switches repos — it's dropped so it can never override later navigation.
+  // NOTE: consumption is latched only once PrShell actually mounts (see the
+  // `prShellMounting` effect below), not on this component's mount: in
+  // paginated mode the initial repo arrives as a content-less skeleton and
+  // PrShell is gated behind its details/threads loading, so latching on mount
+  // here would drop the deep-link path before PrShell ever reads it.
+  const initialPathConsumedRef = React.useRef(false);
+  const deepLinkSeeds = pickDeepLinkSeeds(
+    !initialPathConsumedRef.current && selectedRepoId === initialRepoId,
+    props,
+  );
+  const initialSelectedPathForShell = deepLinkSeeds.initialSelectedPath;
+
+  // Threads are NOT fetched up front and awaited before mounting PrShell.
+  // Instead PrShell mounts as soon as the repo's routing is known and loads its
+  // threads via the mount-time thread sync (`fetchRemoteThreads` below, which
+  // calls the same `loadThreadsFor`), merging them into the rail when they land.
+  // This keeps the Markdown render off the thread-fetch critical path — the
+  // document paints immediately and comments stream in.
+
+  const { lazyTree, setLazyTreeByRepo, handleExpandFolder } = useLazyTree(
+    selectedRepo,
+    onExpandFolder,
+  );
+
+  // Repo-scoped search callback. Returns `undefined` (DocNav local-only
+  // filter) when no `onSearchFiles` is wired; otherwise curries the repo id.
+  const handleSearchFiles = React.useMemo<
+    | ((query: string, signal?: AbortSignal) => Promise<FileSearchOutcome>)
+    | undefined
+  >(() => {
+    if (!selectedRepo || !onSearchFiles) return undefined;
+    const repoIdAtBind = selectedRepo.id;
+    return (query: string, signal?: AbortSignal) =>
+      onSearchFiles(repoIdAtBind, query, signal);
+  }, [selectedRepo, onSearchFiles]);
+
+  const syntheticPr: PrInfo | null = React.useMemo(
+    () => (selectedRepo ? buildSyntheticPr(selectedRepo, lazyTree) : null),
+    [selectedRepo, lazyTree],
+  );
+
+  const [activeDocPath, setActiveDocPath] = useActiveDocPath(
+    selectedRepoId,
+    syntheticPr,
+    initialSelectedPathForShell,
+    onSelectPath,
+  );
+
+  const {
+    repoScopedLoader,
+    resolveDocumentImageBound,
+    commentApi,
+    commentApiForPathBound,
+    loadThreadsForPathBound,
+    routedPrForPathBound,
+    loadDocHistoryBound,
+    loadThreadsForPrBound,
+    loadFileSourceAtBound,
+    listSubpageFolderBound,
+  } = useRepoBindings(props, selectedRepo, perDocumentMode);
+
+  const routedPr = React.useMemo<RoutedPrInfo | null>(
+    () => buildRoutedPr(selectedRepo),
+    [selectedRepo],
+  );
+
+  const { readOnly, shellReadOnly, shellReadOnlyMessage } =
+    resolveCommentGating(perDocumentMode, selectedRepo);
 
   // Background thread sync for the routed PR. Skipped when the repo has no PR.
   // PrShell polls this ~30s while visible and merges via `MERGE_REMOTE_THREADS`.
@@ -775,7 +842,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     } finally {
       setRefreshingRepoId((curr) => (curr === repoId ? null : curr));
     }
-  }, [selectedRepo, onRefreshRepo]);
+  }, [selectedRepo, onRefreshRepo, setLazyTreeByRepo]);
 
   // The DocNav header hosts the in-hub repo selector (the host never gives us
   // the selected repo, so this is the only way to switch). The repo name in the
@@ -784,70 +851,30 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // single non-paginated repo it degrades to a static label. Lives in the
   // DocNav title slot so the hub mirrors the PR tab's layout without a separate
   // header strip.
-  const paginated = !!props.onFilterRepos;
-  const pickerRepos = props.repoPickerView ?? repos;
-  const docNavTitleSlot =
-    paginated || repos.length > 1 ? (
-      <RepoPicker
-        repos={pickerRepos}
-        selectedId={selectedRepo.id}
-        selectedName={selectedRepo.name}
-        onSelect={handleSelectRepo}
-        paginated={paginated}
-        filter={props.repoFilter ?? ""}
-        hasMore={props.reposHasMore ?? false}
-        loading={props.reposLoading ?? false}
-        onLoadMore={props.onLoadMoreRepos}
-        onFilter={props.onFilterRepos}
-      />
-    ) : (
-      <span className="emr-docnav-title" title={selectedRepo.name}>
-        <SvgRepo />
-        <span className="emr-docnav-repo-name">{selectedRepo.name}</span>
-      </span>
-    );
-  const docNavHeaderActions = onRefreshRepo ? (
-    <button
-      type="button"
-      className="emr-icon-btn emr-docs-refresh-btn"
-      onClick={() => {
-        void handleRefresh();
-      }}
-      disabled={refreshingRepoId === selectedRepo.id}
-      aria-label="Refresh repository contents and PR routing"
-      title="Refresh repository contents and PR routing"
-    >
-      <SvgRefresh spinning={refreshingRepoId === selectedRepo.id} />
-    </button>
-  ) : null;
+  const docNavTitleSlot = renderDocNavTitleSlot(
+    props,
+    selectedRepo,
+    handleSelectRepo,
+  );
+  const docNavHeaderActions = onRefreshRepo
+    ? renderRefreshButton(refreshingRepoId === selectedRepo.id, handleRefresh)
+    : null;
 
-  // Mention-link hydration context. `defaultRepoName` tracks the selected repo
-  // so PR mentions that omit the `repo` URL param still resolve. Null when
-  // org/project aren't supplied (standalone) — the hydrator no-ops on null.
-  const mentionLinks: MentionLinkResolution | null =
-    orgUrl && projectName
-      ? {
-          orgUrl,
-          projectName,
-          defaultRepoName: selectedRepo?.name,
-        }
-      : null;
+  const mentionLinks = buildMentionLinks(
+    orgUrl,
+    projectName,
+    selectedRepo.name,
+  );
 
-  // A repo whose content has loaded but holds no markdown at all (no root
-  // files and no subfolders to expand). Drives the friendly "No documents"
-  // empty state instead of mounting PrShell on an empty file list.
-  const shellUnloadedFolders = lazyTree
-    ? lazyTree.unloadedFolders
-    : (selectedRepo.topLevelFolders ?? []);
-  const isEmptyRepo =
-    selectedRepo.detailsLoaded !== false &&
-    (syntheticPr?.files.length ?? 0) === 0 &&
-    shellUnloadedFolders.length === 0;
+  const shellTree = resolveShellTree(
+    selectedRepo,
+    lazyTree,
+    syntheticPr.files.length,
+  );
 
-  // True on renders where PrShell is actually shown (the repo's routing has
-  // resolved and the repo isn't empty). Used to latch the deep-link path as
-  // consumed only after PrShell has had a chance to read it.
-  const prShellMounting = selectedRepo.detailsLoaded !== false && !isEmptyRepo;
+  // Latch the deep-link path as consumed only after PrShell has had a chance
+  // to read it (`prShellMounting` is true on renders where PrShell is shown).
+  const prShellMounting = shellTree.prShellMounting;
   React.useEffect(() => {
     if (prShellMounting) initialPathConsumedRef.current = true;
   }, [prShellMounting]);
@@ -856,9 +883,16 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // never mounts PrShell (which would otherwise fire the "content" signal), so
   // mark boot ready as "empty" here. Idempotent — if a doc later renders,
   // PrShell's "content" already won.
+  const isEmptyRepo = shellTree.isEmptyRepo;
   React.useEffect(() => {
     if (isEmptyRepo) markAppReady("empty");
   }, [isEmptyRepo]);
+
+  const routing = repoLevelRouting(perDocumentMode, {
+    commentApi,
+    routedPr,
+    fetchRemoteThreads,
+  });
 
   return (
     <MentionLinkContext.Provider value={mentionLinks}>
@@ -899,22 +933,18 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
               currentUser={currentUser}
               draftScope="hub"
               documentsMode
-              commentApi={perDocumentMode ? undefined : commentApi}
+              commentApi={routing.commentApi}
               commentApiForPath={commentApiForPathBound}
               loadThreadsForPath={loadThreadsForPathBound}
               routedPrForPath={routedPrForPathBound}
               loadDocHistory={loadDocHistoryBound}
               loadThreadsForPr={loadThreadsForPrBound}
               loadFileSourceAt={loadFileSourceAtBound}
-              readOnly={perDocumentMode ? perDocReadOnly : readOnly}
-              readOnlyMessage={
-                perDocumentMode ? perDocReadOnlyMessage : readOnlyMessage
-              }
-              routedPr={perDocumentMode ? undefined : routedPr}
-              fetchRemoteThreads={
-                perDocumentMode ? undefined : fetchRemoteThreads
-              }
-              unloadedFolders={shellUnloadedFolders}
+              readOnly={shellReadOnly}
+              readOnlyMessage={shellReadOnlyMessage}
+              routedPr={routing.routedPr}
+              fetchRemoteThreads={routing.fetchRemoteThreads}
+              unloadedFolders={shellTree.unloadedFolders}
               onExpandFolder={onExpandFolder ? handleExpandFolder : undefined}
               folderOrders={lazyTree?.folderOrders}
               listFolder={listSubpageFolderBound}
@@ -923,24 +953,9 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
               onRefreshFiles={onRefreshRepo ? handleRefresh : undefined}
               feedbackEmail="shubd3@gmail.com"
               initialSelectedPath={initialSelectedPathForShell}
-              initialActiveThreadId={
-                !initialPathConsumedRef.current &&
-                selectedRepoId === initialRepoId
-                  ? props.initialActiveThreadId
-                  : undefined
-              }
-              initialAnchor={
-                !initialPathConsumedRef.current &&
-                selectedRepoId === initialRepoId
-                  ? props.initialAnchor
-                  : undefined
-              }
-              initialTextFragment={
-                !initialPathConsumedRef.current &&
-                selectedRepoId === initialRepoId
-                  ? props.initialTextFragment
-                  : undefined
-              }
+              initialActiveThreadId={deepLinkSeeds.initialActiveThreadId}
+              initialAnchor={deepLinkSeeds.initialAnchor}
+              initialTextFragment={deepLinkSeeds.initialTextFragment}
               onSelectPath={(path) => {
                 setActiveDocPath(path);
                 onSelectPath?.(selectedRepoId, path);
@@ -1263,27 +1278,13 @@ export function RepoPicker({
       close();
       return;
     }
-    const count = repos.length;
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      const dir = e.key === "ArrowDown" ? 1 : -1;
-      const current = optionRefs.current.findIndex(
-        (el) => el === document.activeElement,
-      );
-      if (current === -1) {
-        // Coming from the filter box (or nothing focused): enter the list.
-        optionRefs.current[dir === 1 ? 0 : count - 1]?.focus();
-        return;
-      }
-      const next = (current + dir + count) % count;
-      optionRefs.current[next]?.focus();
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      optionRefs.current[0]?.focus();
-    } else if (e.key === "End") {
-      e.preventDefault();
-      optionRefs.current[count - 1]?.focus();
-    }
+    const current = optionRefs.current.findIndex(
+      (el) => el === document.activeElement,
+    );
+    const target = menuFocusTarget(e.key, current, repos.length);
+    if (target === undefined) return;
+    e.preventDefault();
+    optionRefs.current[target]?.focus();
   };
 
   return (
@@ -1318,22 +1319,9 @@ export function RepoPicker({
           style={menuStyle}
           onKeyDown={onMenuKeyDown}
         >
-          {paginated ? (
-            <div className="emr-docnav-repo-filter">
-              <SearchIcon size={14} className="emr-docnav-repo-filter-glyph" />
-              <input
-                ref={filterInputRef}
-                type="text"
-                className="emr-docnav-repo-filter-input"
-                placeholder="Filter repositories"
-                aria-label="Filter repositories"
-                value={filterText}
-                spellCheck={false}
-                autoComplete="off"
-                onChange={(e) => setFilterText(e.target.value)}
-              />
-            </div>
-          ) : null}
+          {paginated
+            ? renderRepoFilter(filterInputRef, filterText, setFilterText)
+            : null}
           <div
             ref={listRef}
             className="emr-docnav-repo-list"
@@ -1368,31 +1356,71 @@ export function RepoPicker({
                 </button>
               );
             })}
-            {paginated ? (
-              <div
-                className="emr-docnav-repo-status emr-docnav-repo-page-status"
-                role={loading ? "status" : undefined}
-                aria-hidden={!loading && repos.length > 0 ? "true" : undefined}
-              >
-                {loading ? (
-                  <>
-                    <span
-                      className="emr-docnav-repo-spinner"
-                      aria-hidden="true"
-                    />
-                    Loading repositories…
-                  </>
-                ) : repos.length === 0 ? (
-                  <>No repositories match “{filterText.trim()}”.</>
-                ) : null}
-              </div>
-            ) : repos.length === 0 ? (
-              <div className="emr-docnav-repo-status">
-                No repositories match “{filterText.trim()}”.
-              </div>
-            ) : null}
+            {renderRepoListStatus(paginated, loading, repos.length, filterText)}
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Keyword filter box shown atop the paginated repo picker menu. */
+function renderRepoFilter(
+  inputRef: React.RefObject<HTMLInputElement>,
+  filterText: string,
+  setFilterText: (text: string) => void,
+): React.ReactElement {
+  return (
+    <div className="emr-docnav-repo-filter">
+      <SearchIcon size={14} className="emr-docnav-repo-filter-glyph" />
+      <input
+        ref={inputRef}
+        type="text"
+        className="emr-docnav-repo-filter-input"
+        placeholder="Filter repositories"
+        aria-label="Filter repositories"
+        value={filterText}
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => setFilterText(e.target.value)}
+      />
+    </div>
+  );
+}
+
+/** Trailing status row of the repo list (loading / no-match). */
+function renderRepoListStatus(
+  paginated: boolean,
+  loading: boolean,
+  count: number,
+  filterText: string,
+): React.ReactElement | null {
+  if (paginated) return renderRepoPageStatus(loading, count, filterText);
+  return count === 0 ? (
+    <div className="emr-docnav-repo-status">
+      No repositories match “{filterText.trim()}”.
+    </div>
+  ) : null;
+}
+
+function renderRepoPageStatus(
+  loading: boolean,
+  count: number,
+  filterText: string,
+): React.ReactElement {
+  return (
+    <div
+      className="emr-docnav-repo-status emr-docnav-repo-page-status"
+      role={loading ? "status" : undefined}
+      aria-hidden={!loading && count > 0 ? "true" : undefined}
+    >
+      {loading ? (
+        <>
+          <span className="emr-docnav-repo-spinner" aria-hidden="true" />
+          Loading repositories…
+        </>
+      ) : count === 0 ? (
+        <>No repositories match “{filterText.trim()}”.</>
       ) : null}
     </div>
   );

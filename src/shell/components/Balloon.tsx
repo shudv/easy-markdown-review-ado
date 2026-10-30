@@ -8,8 +8,13 @@
 import * as React from "react";
 import type { CommentThread, CommentAuthor, ReactionKind } from "../../types";
 import { isResolvedLike } from "../../types";
+import {
+  balloonClassName,
+  balloonStatusLabel,
+  balloonStyle,
+} from "./Balloon.helpers";
+import { BalloonReplyZone } from "./Balloon.parts";
 import { CommentRow } from "./CommentRow";
-import { Composer } from "./Composer";
 
 interface BalloonProps {
   thread: CommentThread;
@@ -112,36 +117,21 @@ export function Balloon(props: BalloonProps): React.ReactElement {
     thread.status,
   ]);
 
-  const classes = ["emr-balloon"];
-  if (inline) classes.push("inline");
-  if (isActive) classes.push("is-active");
-  if (isResolvedLike(thread.status)) {
-    classes.push("is-resolved");
-  }
-  if (isOrphaned) classes.push("is-orphaned");
-  if (general) classes.push("is-general");
+  const className = balloonClassName({
+    inline,
+    isActive,
+    resolved: isResolvedLike(thread.status),
+    isOrphaned,
+    general,
+  });
 
   const status = isOrphaned ? "orphaned" : thread.status;
-  const statusLabel =
-    status === "active"
-      ? "Active"
-      : status === "resolved"
-        ? "Resolved"
-        : status === "wontFix"
-          ? "Won't fix"
-          : status === "closed"
-            ? "Closed"
-            : status === "pending"
-              ? "Pending"
-              : "Anchor missing";
 
   // Only show the status chip in a non-default state — active threads stay
   // visually quiet, and orphaned cards rely on their section header.
   const showStatusChip = status !== "active" && !isOrphaned;
 
-  const style: React.CSSProperties = inline
-    ? {}
-    : { top: typeof topPx === "number" ? topPx : 0 };
+  const style = balloonStyle(inline, topPx);
 
   // Orphaned threads are still live conversations (only the in-doc highlight is
   // missing).
@@ -153,7 +143,7 @@ export function Balloon(props: BalloonProps): React.ReactElement {
   return (
     <div
       ref={ref}
-      className={classes.join(" ")}
+      className={className}
       style={style}
       onClick={() => onClick(thread.id)}
       data-thread-id={thread.id}
@@ -161,7 +151,7 @@ export function Balloon(props: BalloonProps): React.ReactElement {
       {showStatusChip ? (
         <div className="emr-balloon-header">
           <span className={`emr-balloon-status status-${status}`}>
-            {statusLabel}
+            {balloonStatusLabel(status)}
           </span>
         </div>
       ) : null}
@@ -197,34 +187,16 @@ export function Balloon(props: BalloonProps): React.ReactElement {
       ))}
 
       {isInteractive ? (
-        replyOpen ? (
-          <div className="emr-reply-zone" onClick={(e) => e.stopPropagation()}>
-            <Composer
-              submitLabel="Reply"
-              placeholder={`Replying as ${currentUser.displayName}…`}
-              autoFocus
-              initial={replyInitial}
-              onChange={onReplyChange}
-              onSubmit={(body) => {
-                onReply(thread.id, body);
-              }}
-              onCancel={() => onCancelReply?.(thread.id)}
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="emr-reply-trigger"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRequestReply?.(thread.id);
-            }}
-          >
-            <span className="emr-reply-trigger-placeholder">
-              @mention or reply
-            </span>
-          </button>
-        )
+        <BalloonReplyZone
+          threadId={thread.id}
+          replyOpen={replyOpen}
+          currentUser={currentUser}
+          replyInitial={replyInitial}
+          onReplyChange={onReplyChange}
+          onReply={onReply}
+          onRequestReply={onRequestReply}
+          onCancelReply={onCancelReply}
+        />
       ) : null}
     </div>
   );

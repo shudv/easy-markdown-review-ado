@@ -711,51 +711,21 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     <ChangeIndicatorContext.Provider value={showChangeIndicators}>
       <RangeChangesContext.Provider value={rangeChanges}>
         <aside className="emr-docnav" aria-label="Document navigation">
-          <div className="emr-docnav-header">
-            {searchOpen ? (
-              <input
-                ref={searchInputRef}
-                type="search"
-                className="emr-docnav-search-inline"
-                placeholder="Find a document or folder..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    // Let the user clear with Esc without also dismissing
-                    // any global selection state.
-                    e.stopPropagation();
-                    if (searchQuery) setSearchQuery("");
-                    else setSearchOpen(false);
-                  }
-                }}
-                onBlur={() => {
-                  // Collapse only if the user hasn't typed anything.
-                  if (!searchQuery) setSearchOpen(false);
-                }}
-                aria-label="Search documents"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            ) : (
-              (titleSlot ?? <span className="emr-docnav-title">Documents</span>)
-            )}
-            {headerActions}
-            {files.length >= 5 ||
-            (unloadedFolders?.length ?? 0) > 0 ||
-            isSearching ? (
-              <button
-                type="button"
-                className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
-                title={searchOpen ? "Close search (Esc)" : "Search documents"}
-                aria-label={searchOpen ? "Close search" : "Search documents"}
-                aria-pressed={searchOpen}
-                onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
-              >
-                {searchOpen ? <SvgX /> : <SearchIcon />}
-              </button>
-            ) : null}
-          </div>
+          <DocNavHeader
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchOpen={searchOpen}
+            setSearchOpen={setSearchOpen}
+            closeSearch={closeSearch}
+            searchInputRef={searchInputRef}
+            showSearchToggle={
+              files.length >= 5 ||
+              (unloadedFolders?.length ?? 0) > 0 ||
+              isSearching
+            }
+            titleSlot={titleSlot}
+            headerActions={headerActions}
+          />
 
           <nav
             className="emr-docnav-list"
@@ -794,6 +764,88 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         </aside>
       </RangeChangesContext.Provider>
     </ChangeIndicatorContext.Provider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DocNavHeader — the rail title (or the inline search input while searching),
+// the host's extra header actions, and the search toggle.
+// ---------------------------------------------------------------------------
+
+interface DocNavHeaderProps {
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
+  closeSearch: () => void;
+  searchInputRef: React.RefObject<HTMLInputElement>;
+  /** Offer the search toggle (enough documents, or a search in progress). */
+  showSearchToggle: boolean;
+  titleSlot?: React.ReactNode;
+  headerActions?: React.ReactNode;
+}
+
+function DocNavHeader(props: DocNavHeaderProps): React.ReactElement {
+  const { searchQuery, setSearchQuery, searchOpen, setSearchOpen } = props;
+  return (
+    <div className="emr-docnav-header">
+      {searchOpen ? (
+        <input
+          ref={props.searchInputRef}
+          type="search"
+          className="emr-docnav-search-inline"
+          placeholder="Find a document or folder..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              // Let the user clear with Esc without also dismissing
+              // any global selection state.
+              e.stopPropagation();
+              if (searchQuery) setSearchQuery("");
+              else setSearchOpen(false);
+            }
+          }}
+          onBlur={() => {
+            // Collapse only if the user hasn't typed anything.
+            if (!searchQuery) setSearchOpen(false);
+          }}
+          aria-label="Search documents"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      ) : (
+        (props.titleSlot ?? <span className="emr-docnav-title">Documents</span>)
+      )}
+      {props.headerActions}
+      {props.showSearchToggle ? (
+        <SearchToggleButton
+          searchOpen={searchOpen}
+          closeSearch={props.closeSearch}
+          setSearchOpen={setSearchOpen}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SearchToggleButton(props: {
+  searchOpen: boolean;
+  closeSearch: () => void;
+  setSearchOpen: (open: boolean) => void;
+}): React.ReactElement {
+  const { searchOpen, closeSearch, setSearchOpen } = props;
+  return (
+    <button
+      type="button"
+      className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
+      title={searchOpen ? "Close search (Esc)" : "Search documents"}
+      aria-label={searchOpen ? "Close search" : "Search documents"}
+      aria-pressed={searchOpen}
+      onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
+    >
+      {searchOpen ? <SvgX /> : <SearchIcon />}
+    </button>
   );
 }
 
@@ -860,6 +912,27 @@ function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
     );
   }
 
+  return <HeadingNavRow {...props} node={node} />;
+}
+
+// ---------------------------------------------------------------------------
+// HeadingNavRow — a heading row. The label scrolls to the heading; the chevron
+// folds the doc section and the nav children together.
+// ---------------------------------------------------------------------------
+
+type HeadingNavNode = Extract<NavNode, { kind: "heading" }>;
+
+function HeadingNavRow(
+  props: NavTreeItemProps & { node: HeadingNavNode },
+): React.ReactElement {
+  const {
+    node,
+    depth,
+    activeId,
+    collapsedIds,
+    onSelectHeading,
+    onToggleHeading,
+  } = props;
   const h = node.heading;
   const hasChildren = node.children.length > 0;
   const isCollapsed = collapsedIds.has(h.id);
@@ -881,20 +954,10 @@ function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
         }
       >
         {hasChildren ? (
-          <button
-            type="button"
-            className="emr-docnav-twist"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleHeading(h.id);
-            }}
-            aria-label={isCollapsed ? "Expand section" : "Collapse section"}
-            aria-expanded={!isCollapsed}
-            title={isCollapsed ? "Expand section" : "Collapse section"}
-            data-collapsed={isCollapsed ? "true" : undefined}
-          >
-            <SvgCaret />
-          </button>
+          <HeadingTwist
+            collapsed={isCollapsed}
+            onToggle={() => onToggleHeading(h.id)}
+          />
         ) : (
           <span className="emr-docnav-twist-spacer" aria-hidden />
         )}
@@ -909,46 +972,64 @@ function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
           }
         >
           <span className="emr-docnav-item-text">{h.text}</span>
-          {h.openComments > 0 ? (
-            <span
-              className="emr-docnav-badge is-open"
-              aria-label={`${h.openComments} open comments`}
-            >
-              {h.openComments}
-            </span>
-          ) : h.totalComments > 0 ? (
-            <span
-              className="emr-docnav-badge is-resolved"
-              aria-label={`${h.totalComments} resolved comments`}
-            >
-              {h.totalComments}
-            </span>
-          ) : null}
+          <HeadingCommentBadge heading={h} />
         </button>
       </div>
-      {hasChildren && !isCollapsed ? (
-        <div className="emr-docnav-children">
-          {node.children.map((child) => (
-            <NavTreeItem
-              key={navNodeKey(child)}
-              node={child}
-              depth={depth + 1}
-              activeId={activeId}
-              collapsedIds={collapsedIds}
-              collapsedDirs={collapsedDirs}
-              loadingDirs={loadingDirs}
-              selectedPath={selectedPath}
-              onSelectHeading={onSelectHeading}
-              onToggleHeading={onToggleHeading}
-              onSelectFile={onSelectFile}
-              onToggleDir={onToggleDir}
-              onExpandLazyDir={onExpandLazyDir}
-            />
-          ))}
-        </div>
-      ) : null}
+      {isCollapsed ? null : <NavChildren nodes={node.children} item={props} />}
     </div>
   );
+}
+
+/** A heading row's chevron: folds the doc section + nav children. */
+function HeadingTwist(props: {
+  collapsed: boolean;
+  onToggle: () => void;
+}): React.ReactElement {
+  const { collapsed, onToggle } = props;
+  return (
+    <button
+      type="button"
+      className="emr-docnav-twist"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-label={collapsed ? "Expand section" : "Collapse section"}
+      aria-expanded={!collapsed}
+      title={collapsed ? "Expand section" : "Collapse section"}
+      data-collapsed={collapsed ? "true" : undefined}
+    >
+      <SvgCaret />
+    </button>
+  );
+}
+
+/** Open-comment badge, else a resolved-comment badge; nothing when neither. */
+function HeadingCommentBadge(props: {
+  heading: NavHeading;
+}): React.ReactElement | null {
+  const { heading } = props;
+  if (heading.openComments > 0) {
+    return (
+      <span
+        className="emr-docnav-badge is-open"
+        aria-label={`${heading.openComments} open comments`}
+      >
+        {heading.openComments}
+      </span>
+    );
+  }
+  if (heading.totalComments > 0) {
+    return (
+      <span
+        className="emr-docnav-badge is-resolved"
+        aria-label={`${heading.totalComments} resolved comments`}
+      >
+        {heading.totalComments}
+      </span>
+    );
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

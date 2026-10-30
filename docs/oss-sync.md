@@ -1,5 +1,43 @@
 # OSS mirror sync ledger
 
+## 2026-10-30 Complexity baseline and duplication gate sync
+
+- Public base: `5c0d730` (OSS `1.3.0`, Azure DevOps wiki compatibility).
+- Previously mirrored product boundary: `02cf7f9` (the merged form of
+  `52b3bd9`).
+- New product boundary: `548f291` (source branch
+  `refactor/zero-complexity-baseline`, not yet merged; record the source merge
+  commit here once it lands).
+- OSS release version: unchanged at `1.3.0`. The package version, lockfile root
+  version and Marketplace manifest do not move.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `11a59f2`     | Behavior-preserving decomposition that brings every function within the complexity limits and empties the `complexity-baseline.json` pin list (41 → 0): `PrShell` hooks, derivations and sub-components under `src/shell/prShell/`, `decorateDiffRanges` phase helpers, `DocumentsApp` hooks and helpers, split comment/reader components, smaller pure-logic helpers, and unit tests for the extracted helpers. |
+| `28598bb`     | Blocking jscpd duplication gate: `npm run duplication:check`, `.jscpd.json` (product code, 0.25%) and `.jscpd.fixtures.json` (stories and tests, 3%), and the README pre-PR checks.                                                                                                                                                                                                                              |
+| `60e23a3`     | Switching to an already-rendered document clears a previous load error and spinner, with regression tests.                                                                                                                                                                                                                                                                                                       |
+| `548f291`     | README code-quality list: the complexity caveat is removed and the duplication gate is listed.                                                                                                                                                                                                                                                                                                                   |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below, including
+  the public feedback contact and the sanitized diff-scenario fixtures.
+- The source change also skips the local Agency review runner's live test on
+  Windows; that runner is intentionally not mirrored, so the change is omitted.
+- The duplication gate runs as a GitHub CI step instead of the private Azure
+  pipeline step.
+- Preserve the public dependency lock; add only `jscpd` `4.3.0` and its
+  transitive packages with public npm URLs. No existing locked version changes.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `548f291` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-10-29 Azure DevOps wiki compatibility sync
 
 - Public base: `4e9ad2c` (OSS `1.2.0`, Excalidraw drawings).

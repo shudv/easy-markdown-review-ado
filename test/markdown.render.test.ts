@@ -167,6 +167,30 @@ describe("renderMarkdown", () => {
     expect(unsafeClassOnly).not.toContain("evil");
   });
 
+  it("drops tag-scoped attributes on other tags and unknown attribute names", async () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "raw",
+          value:
+            '<span open href="https://example.com" target="_blank" rel="x" src="a.png" alt="A" width="5" data-show-in-doc="true" constructor="x" __proto__="x">Text</span>',
+        } as unknown as RootContent,
+      ],
+    };
+
+    await unified().use(rehypeSafeHtml).run(tree);
+
+    expect(tree.children).toEqual([
+      {
+        type: "element",
+        tagName: "span",
+        properties: {},
+        children: [{ type: "text", value: "Text" }],
+      },
+    ]);
+  });
+
   it("ignores a mismatched raw closing tag without escaping the safe container", async () => {
     const html = await renderMarkdown(
       [

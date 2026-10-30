@@ -86,11 +86,7 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
     // that entry's source span to cover the item line.
     const listItem = /^[ \t]+-[ \t]+(.*)$/.exec(line);
     if (listItem && current) {
-      const item = unquote(listItem[1]!.trim());
-      if (item !== "") {
-        current.values.push(item);
-        current.endLine = sourceLine;
-      }
+      appendListItem(current, listItem[1]!, sourceLine);
       continue;
     }
 
@@ -99,30 +95,40 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
     const key = kv[1]!.trim();
     const rawValue = kv[2]!.trim();
 
-    if (rawValue === "") {
-      // Bare key — a block list (or empty value) may follow on later lines.
-      current = { key, values: [], startLine: sourceLine, endLine: sourceLine };
-      entries.push(current);
-    } else if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
-      entries.push({
-        key,
-        values: parseInlineList(rawValue),
-        startLine: sourceLine,
-        endLine: sourceLine,
-      });
-      current = null;
-    } else {
-      entries.push({
-        key,
-        values: [unquote(rawValue)],
-        startLine: sourceLine,
-        endLine: sourceLine,
-      });
-      current = null;
-    }
+    const entry: FrontmatterEntry = {
+      key,
+      values: parseEntryValues(rawValue),
+      startLine: sourceLine,
+      endLine: sourceLine,
+    };
+    entries.push(entry);
+    // Bare key — a block list (or empty value) may follow on later lines.
+    current = rawValue === "" ? entry : null;
   }
 
   return entries;
+}
+
+/** Add a block-list item to `entry`, extending its source span to `sourceLine`. */
+function appendListItem(
+  entry: FrontmatterEntry,
+  itemText: string,
+  sourceLine: number,
+): void {
+  const item = unquote(itemText.trim());
+  if (item !== "") {
+    entry.values.push(item);
+    entry.endLine = sourceLine;
+  }
+}
+
+/** Values of a `key: value` line: none, an inline list, or one scalar. */
+function parseEntryValues(rawValue: string): string[] {
+  if (rawValue === "") return [];
+  if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+    return parseInlineList(rawValue);
+  }
+  return [unquote(rawValue)];
 }
 
 /** Parse an inline flow list `[a, b, c]` into its trimmed, unquoted values. */

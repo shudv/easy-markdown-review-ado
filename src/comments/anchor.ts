@@ -107,54 +107,74 @@ function matchTextQuote(
   const { text, runs } = flattenText(root);
   if (runs.length === 0) return null;
 
-  const composite = anchor.prefix + anchor.exact + anchor.suffix;
-
-  // Step 1: composite match — most reliable.
-  let exactStart = -1;
-  if (composite.length > anchor.exact.length) {
-    const cIdx = text.indexOf(composite);
-    if (cIdx >= 0) {
-      exactStart = cIdx + anchor.prefix.length;
-    }
-  }
-
-  // Step 2: bare exact + prefix/suffix scoring.
-  if (exactStart < 0) {
-    const candidates: number[] = [];
-    let from = 0;
-    while (from <= text.length) {
-      const idx = text.indexOf(anchor.exact, from);
-      if (idx < 0) break;
-      candidates.push(idx);
-      from = idx + 1;
-    }
-    if (candidates.length === 0) return null;
-    // Score: count of matching prefix chars (trailing) + suffix chars (leading)
-    // Best score wins; ties broken by smallest index (earliest match).
-    let best = candidates[0]!;
-    let bestScore = -1;
-    for (const c of candidates) {
-      const preActual = text.slice(Math.max(0, c - anchor.prefix.length), c);
-      const sufActual = text.slice(
-        c + anchor.exact.length,
-        c + anchor.exact.length + anchor.suffix.length,
-      );
-      const preScore = commonSuffixLen(preActual, anchor.prefix);
-      const sufScore = commonPrefixLen(sufActual, anchor.suffix);
-      const score = preScore + sufScore;
-      if (score > bestScore) {
-        bestScore = score;
-        best = c;
-      }
-    }
-    exactStart = best;
-  }
+  const exactStart = findQuoteStart(text, anchor);
+  if (exactStart < 0) return null;
 
   return {
     start: exactStart,
     end: exactStart + anchor.exact.length,
     runs,
   };
+}
+
+/**
+ * Start offset of `quote.exact` in `text`, or -1 when it doesn't occur.
+ * Shared by the DOM resolver and the source-text matcher:
+ *   1. composite (`prefix + exact + suffix`) match — most reliable;
+ *   2. otherwise every bare `exact` occurrence, scored by prefix/suffix overlap.
+ */
+function findQuoteStart(
+  text: string,
+  quote: Pick<TextQuoteAnchor, "exact" | "prefix" | "suffix">,
+): number {
+  const composite = quote.prefix + quote.exact + quote.suffix;
+  if (composite.length > quote.exact.length) {
+    const cIdx = text.indexOf(composite);
+    if (cIdx >= 0) return cIdx + quote.prefix.length;
+  }
+  return bestScoredOccurrence(text, quote);
+}
+
+/** Every start offset at which `needle` occurs in `text` (overlaps included). */
+function occurrencesOf(text: string, needle: string): number[] {
+  const candidates: number[] = [];
+  let from = 0;
+  while (from <= text.length) {
+    const idx = text.indexOf(needle, from);
+    if (idx < 0) break;
+    candidates.push(idx);
+    from = idx + 1;
+  }
+  return candidates;
+}
+
+/**
+ * Bare `exact` occurrence whose surroundings best match the quote's context,
+ * or -1 when `exact` doesn't occur. Score: count of matching prefix chars
+ * (trailing) + suffix chars (leading). Best score wins; ties broken by
+ * smallest index (earliest match).
+ */
+function bestScoredOccurrence(
+  text: string,
+  quote: Pick<TextQuoteAnchor, "exact" | "prefix" | "suffix">,
+): number {
+  const { exact, prefix, suffix } = quote;
+  let best = -1;
+  let bestScore = -1;
+  for (const c of occurrencesOf(text, exact)) {
+    const preActual = text.slice(Math.max(0, c - prefix.length), c);
+    const sufActual = text.slice(
+      c + exact.length,
+      c + exact.length + suffix.length,
+    );
+    const score =
+      commonSuffixLen(preActual, prefix) + commonPrefixLen(sufActual, suffix);
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
 }
 
 /**
@@ -385,46 +405,12 @@ function findTextQuoteOffsets(
 ): TextSpan | null {
   const { normalized, map } = normalizeSourceForMatching(text);
   const exact = normalizeNewlines(anchor.exact);
-  const prefix = normalizeNewlines(anchor.prefix);
-  const suffix = normalizeNewlines(anchor.suffix);
-  const composite = prefix + exact + suffix;
-
-  // Step 1: exact composite match.
-  let exactStart = -1;
-  if (composite.length > exact.length) {
-    const cIdx = normalized.indexOf(composite);
-    if (cIdx >= 0) exactStart = cIdx + prefix.length;
-  }
-
-  // Step 2: exact-only candidates scored by prefix/suffix overlap.
-  if (exactStart < 0) {
-    const candidates: number[] = [];
-    let from = 0;
-    while (from <= normalized.length) {
-      const idx = normalized.indexOf(exact, from);
-      if (idx < 0) break;
-      candidates.push(idx);
-      from = idx + 1;
-    }
-    if (candidates.length === 0) return null;
-
-    let best = candidates[0]!;
-    let bestScore = -1;
-    for (const c of candidates) {
-      const preActual = normalized.slice(Math.max(0, c - prefix.length), c);
-      const sufActual = normalized.slice(
-        c + exact.length,
-        c + exact.length + suffix.length,
-      );
-      const score =
-        commonSuffixLen(preActual, prefix) + commonPrefixLen(sufActual, suffix);
-      if (score > bestScore) {
-        bestScore = score;
-        best = c;
-      }
-    }
-    exactStart = best;
-  }
+  const exactStart = findQuoteStart(normalized, {
+    exact,
+    prefix: normalizeNewlines(anchor.prefix),
+    suffix: normalizeNewlines(anchor.suffix),
+  });
+  if (exactStart < 0) return null;
 
   // Map normalized offsets back to the original source.
   return { start: map[exactStart]!, end: map[exactStart + exact.length]! };

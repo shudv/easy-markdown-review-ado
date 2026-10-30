@@ -562,6 +562,34 @@ function clearDecorations(root: HTMLElement): void {
     .forEach((element) => element.remove());
 }
 
+/** Mutable state shared by the phases of {@link decorateDiffRanges}. */
+interface DecorationPass {
+  root: HTMLElement;
+  renderInline: ((md: string) => string) | undefined;
+  originalSource: string | undefined;
+  changeRanges: ChangeRange[];
+  deletedRanges: DiffRange[];
+  originalLines: string[] | undefined;
+  currentLines: string[] | undefined;
+  /** Deletions shown inside the block they were removed from, not as markers. */
+  absorbedDeletions: Set<DiffRange>;
+  /** The original document, rendered only if a list item needs its old depth. */
+  originalDocument: HTMLElement | null;
+  decoratedEls: HTMLElement[];
+  decorated: number;
+  inlined: number;
+}
+
+/** A changed block and the source span it was classified over. */
+interface ChangedBlock {
+  el: HTMLElement;
+  kind: "added" | "modified";
+  start: number;
+  end: number;
+  ownEnd: number;
+  interiorEdit: InteriorEdit | null;
+}
+
 /**
  * Apply subtle change decorations to `root` for the given `ranges`.
  * Safe to call repeatedly; each call first clears prior decorations.
@@ -574,6 +602,37 @@ export function decorateDiffRanges(
   clearDecorations(root);
   if (ranges.length === 0) return { decorated: 0, markers: 0, inlined: 0 };
 
+  const pass = createDecorationPass(root, ranges, options);
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR));
+  for (const el of blocks) decorateBlock(pass, el);
+
+  // Merge contiguous same-kind blocks into a single visual group so a run of
+  // added (or edited) siblings reads as one card with one corner tag.
+  markContiguousGroups(pass.decoratedEls);
+
+  // Mermaid diagrams: a rendered diagram can't be word- or wash-diffed, so a
+  // changed diagram gets a quiet left accent bar (hue by kind) and stashes its
+  // original source so the "Source" modal can show the full diagram diff.
+  for (const el of root.querySelectorAll<HTMLElement>(MERMAID_SELECTOR)) {
+    decorateMermaidBlock(pass, el);
+  }
+
+  const markerAnchors = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      `${BLOCK_SELECTOR}, ${MERMAID_SELECTOR}`,
+    ),
+  );
+  insertSourceOnlyMarkers(pass, markerAnchors);
+  const markers = insertDeletionMarkers(pass, markerAnchors);
+
+  return { decorated: pass.decorated, markers, inlined: pass.inlined };
+}
+
+function createDecorationPass(
+  root: HTMLElement,
+  ranges: readonly DiffRange[],
+  options: DiffDecorationOptions | undefined,
+): DecorationPass {
   const changeRanges: ChangeRange[] = [];
   const deletedRanges: DiffRange[] = [];
   for (const r of ranges) {
@@ -588,430 +647,540 @@ export function decorateDiffRanges(
         originalEnd: r.originalEndLine,
       });
   }
-  const originalLines = options?.originalSource?.split(/\r\n|\r|\n/);
-  const currentLines = options?.currentSource?.split(/\r\n|\r|\n/);
-  // Deletions shown inside the block they were removed from, not as markers.
-  const absorbedDeletions = new Set<DiffRange>();
-  // The original document, rendered only if a list item needs its old depth.
-  let originalDocument: HTMLElement | null = null;
+  return {
+    root,
+    renderInline: options?.renderInline,
+    originalSource: options?.originalSource,
+    changeRanges,
+    deletedRanges,
+    originalLines: options?.originalSource?.split(/\r\n|\r|\n/),
+    currentLines: options?.currentSource?.split(/\r\n|\r|\n/),
+    absorbedDeletions: new Set<DiffRange>(),
+    originalDocument: null,
+    decoratedEls: [],
+    decorated: 0,
+    inlined: 0,
+  };
+}
 
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR));
+/** A block's stamped `[start, end]` source span, or null when unstamped. */
+function readSourceSpan(el: Element): { start: number; end: number } | null {
+  const start = numAttr(el, "data-source-line");
+  const end = numAttr(el, "data-source-end-line");
+  return start == null || end == null ? null : { start, end };
+}
 
-  const decoratedEls: HTMLElement[] = [];
-  let decorated = 0;
-  let inlined = 0;
-  for (const el of blocks) {
-    const start = numAttr(el, "data-source-line");
-    const end = numAttr(el, "data-source-end-line");
-    if (start == null || end == null) continue;
-    // Avoid stacking paint: skip a block only when a decorated ancestor's
-    // paint actually covers it (e.g. the lead <p> of a washed <li>).
-    if (coveredByDecoratedAncestor(el)) continue;
-    // A list item or quote owns only its lead content; its child blocks
-    // decorate themselves (see ownSpanEnd).
-    const ownEnd = ownSpanEnd(el, start, end, currentLines);
-    if (ownEnd < start) continue;
-    let kind = classifyBlock(start, ownEnd, changeRanges);
-    // A line added to, or removed from the middle of, a block that already
-    // existed edits that block: the block isn't new, and the removal belongs
-    // inside it rather than in a marker after it.
-    const interiorEdit =
-      options?.renderInline && currentLines && ownEnd === end
-        ? reconstructEditedBlock(
-            el,
-            start,
-            end,
-            changeRanges,
-            deletedRanges,
-            currentLines,
-            options.renderInline,
-          )
-        : null;
-    if (interiorEdit) {
-      kind = "modified";
-      for (const deletion of interiorEdit.deletions) {
-        absorbedDeletions.add(deletion);
-      }
-    }
-    if (!kind) continue;
-    el.classList.add(
-      DIFF_BLOCK_CLASS,
-      kind === "added" ? "emr-diff-block--added" : "emr-diff-block--modified",
+/**
+ * A line added to, or removed from the middle of, a block that already
+ * existed edits that block: the block isn't new, and the removal belongs
+ * inside it rather than in a marker after it.
+ */
+function findInteriorEdit(
+  pass: DecorationPass,
+  el: HTMLElement,
+  start: number,
+  end: number,
+): InteriorEdit | null {
+  if (!pass.renderInline || !pass.currentLines) return null;
+  const interiorEdit = reconstructEditedBlock(
+    el,
+    start,
+    end,
+    pass.changeRanges,
+    pass.deletedRanges,
+    pass.currentLines,
+    pass.renderInline,
+  );
+  for (const deletion of interiorEdit?.deletions ?? []) {
+    pass.absorbedDeletions.add(deletion);
+  }
+  return interiorEdit;
+}
+
+/** The block's pre-edit Markdown, rebuilt from the original document. */
+function reconstructBlockOriginal(
+  pass: DecorationPass,
+  interiorEdit: InteriorEdit | null,
+  start: number,
+  end: number,
+): string | null {
+  return (
+    interiorEdit?.original ??
+    reconstructOriginalBlock(
+      start,
+      end,
+      pass.changeRanges,
+      pass.originalSource,
+      pass.originalLines,
+    )
+  );
+}
+
+function decorateBlock(pass: DecorationPass, el: HTMLElement): void {
+  const span = readSourceSpan(el);
+  if (!span) return;
+  const { start, end } = span;
+  // Avoid stacking paint: skip a block only when a decorated ancestor's
+  // paint actually covers it (e.g. the lead <p> of a washed <li>).
+  if (coveredByDecoratedAncestor(el)) return;
+  // A list item or quote owns only its lead content; its child blocks
+  // decorate themselves (see ownSpanEnd).
+  const ownEnd = ownSpanEnd(el, start, end, pass.currentLines);
+  if (ownEnd < start) return;
+  const interiorEdit =
+    ownEnd === end ? findInteriorEdit(pass, el, start, end) : null;
+  const kind = interiorEdit
+    ? "modified"
+    : classifyBlock(start, ownEnd, pass.changeRanges);
+  if (!kind) return;
+  markChangedBlock(pass, el, kind);
+  const block: ChangedBlock = { el, kind, start, end, ownEnd, interiorEdit };
+  if (!decorateBlockContent(pass, block)) return;
+
+  if (kind === "modified" && pass.renderInline && lacksOwnComparison(el)) {
+    attachOriginalComparison(pass, block, pass.renderInline);
+  }
+  if (kind === "modified" && needsUnavailableTooltip(el)) {
+    applyDiffTooltip(
+      el,
+      "Previous content unavailable; exact comparison cannot be shown",
     );
-    el.dataset.diffKind = kind;
-    el.dataset.diffLabel = KIND_LABEL[kind];
-    if (isImageOnlyBlock(el)) el.classList.add(DIFF_IMAGE_CLASS);
-    if (el.classList.contains("emr-math")) el.classList.add(DIFF_MATH_CLASS);
-    decorated++;
-    decoratedEls.push(el);
+  }
+  if (canLineWash(el)) applyLineWash(el);
+}
 
+function markChangedBlock(
+  pass: DecorationPass,
+  el: HTMLElement,
+  kind: "added" | "modified",
+): void {
+  el.classList.add(
+    DIFF_BLOCK_CLASS,
+    kind === "added" ? "emr-diff-block--added" : "emr-diff-block--modified",
+  );
+  el.dataset.diffKind = kind;
+  el.dataset.diffLabel = KIND_LABEL[kind];
+  if (isImageOnlyBlock(el)) el.classList.add(DIFF_IMAGE_CLASS);
+  if (el.classList.contains("emr-math")) el.classList.add(DIFF_MATH_CLASS);
+  pass.decorated++;
+  pass.decoratedEls.push(el);
+}
+
+/** Undo {@link markChangedBlock} for a modified block that reads the same. */
+function unmarkChangedBlock(
+  pass: DecorationPass,
+  el: HTMLElement,
+  ...extraClasses: string[]
+): void {
+  el.classList.remove(
+    DIFF_BLOCK_CLASS,
+    "emr-diff-block--modified",
+    ...extraClasses,
+  );
+  delete el.dataset.diffKind;
+  delete el.dataset.diffLabel;
+  pass.decorated--;
+  pass.decoratedEls.pop();
+}
+
+function markInlined(pass: DecorationPass, el: HTMLElement): void {
+  el.dataset.diffInline = "true";
+  pass.inlined++;
+}
+
+/**
+ * Apply the tag-specific precise diff to a changed block. Returns false when a
+ * modified block turned out to read the same and was undecorated.
+ */
+function decorateBlockContent(
+  pass: DecorationPass,
+  block: ChangedBlock,
+): boolean {
+  const { el, kind } = block;
+  if (kind === "modified" && pass.renderInline) {
     // For a reworded prose block, overlay an inline word-level diff so only
     // the changed words are coloured. Requires the caller's `renderInline` so
     // we can compare RENDERED-plain-text (not raw Markdown) on both sides.
     if (
-      kind === "modified" &&
-      options?.renderInline &&
-      PROSE_TAGS.has(el.tagName)
+      PROSE_TAGS.has(el.tagName) &&
+      !decorateModifiedProse(pass, block, pass.renderInline)
     ) {
-      const range = soleModifiedRange(start, end, changeRanges);
-      // The change range must COVER the block's whole source span. Otherwise
-      // `originalText` (only the changed lines) is a fragment of the block's
-      // text, and word-diffing it against the full rendered block would mark
-      // the unchanged remainder as "added". When only part of a multi-line
-      // block changed, fall back to the block wash.
-      const coversBlock =
-        range != null && range.start <= start && range.end >= end;
-      const reconstructed =
-        interiorEdit?.original ??
-        reconstructOriginalBlock(
-          start,
-          end,
-          changeRanges,
-          options.originalSource,
-          originalLines,
-        );
-      let originalMarkdown = reconstructed;
-      if (originalMarkdown == null && coversBlock) {
-        originalMarkdown = range!.originalText ?? null;
-      }
-      const comparison =
-        originalMarkdown != null
-          ? compareRendering(el, originalMarkdown, options.renderInline)
-          : null;
-      // The item reads the same, but may now sit at a different list depth.
-      const nesting =
-        comparison != null && comparison.kind !== "different"
-          ? listNestingChange(el, start, changeRanges, () => {
-              originalDocument ??= renderSource(
-                root.ownerDocument,
-                options.originalSource,
-                options.renderInline!,
-              );
-              return originalDocument;
-            })
-          : null;
-      const rendering = nesting ?? comparison;
-      if (rendering?.kind === "identical") {
-        // A source-only edit — a renumbered list item, re-wrapped lines,
-        // `*a*` → `_a_` — changes nothing a reader can see, so it isn't shown
-        // as an edit.
-        el.classList.remove(
-          DIFF_BLOCK_CLASS,
-          "emr-diff-block--modified",
-          DIFF_IMAGE_CLASS,
-          DIFF_MATH_CLASS,
-        );
-        delete el.dataset.diffKind;
-        delete el.dataset.diffLabel;
-        decorated--;
-        decoratedEls.pop();
-        continue;
-      }
-      if (rendering?.kind === "nesting") {
-        // Same text, different structure: tint the item's own text amber and
-        // explain it, as a heading-level change does. The bullet stays amber.
-        el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
-        explainLeadText(
-          el,
-          `List nesting changed from level ${rendering.before} to level ${rendering.after}`,
-        );
-        el.dataset.diffInline = "true";
-        inlined++;
-      } else if (rendering?.kind === "numbering") {
-        // Only the list's start number changed: mark just the number.
-        el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
-        applyDiffTooltip(
-          el,
-          `List numbering changed from ${rendering.before} to ${rendering.after}`,
-        );
-        el.dataset.diffInline = "true";
-        inlined++;
-      } else if (
-        originalMarkdown != null &&
-        tryInlineWordDiff(el, originalMarkdown, options.renderInline)
-      ) {
-        el.classList.add(DIFF_INLINE_CLASS);
-        el.dataset.diffInline = "true";
-        inlined++;
-      }
+      return false;
     }
-
     // For an edited TABLE ROW, highlight only the CELLS that changed rather
     // than the whole row. The line-based diff can't isolate a cell on its own,
     // but the original row's source is available, so we split both rows into
     // cells and compare them — turning a "single cell edit" or "column edit"
     // into precise per-cell highlights.
-    if (kind === "modified" && options?.renderInline && el.tagName === "TR") {
-      const range = soleModifiedRange(start, ownEnd, changeRanges);
-      // `soleModifiedRange`/`overlaps` guarantees the range covers this row's
-      // line, so `start - range.start` indexes the row's original source. A
-      // range without `originalText` (or an out-of-range index) yields a falsy
-      // `originalRow` and simply falls back to the whole-row tint.
-      const originalRow =
-        range?.originalText != null
-          ? range.originalText.split(/\r\n|\r|\n/)[start - range.start]
-          : undefined;
-      if (originalRow && range) {
-        const columnAlignment = el.closest("thead")
-          ? undefined
-          : resolveTableColumnAlignment(el, range, options.renderInline);
-        const tableDiff = diffTableRowCells(
-          el,
-          originalRow,
-          options.renderInline,
-          columnAlignment,
-        );
-        if (tableDiff === "precise") {
-          el.dataset.diffCells = "true";
-        } else if (tableDiff === "unchanged") {
-          el.classList.remove(DIFF_BLOCK_CLASS, "emr-diff-block--modified");
-          delete el.dataset.diffKind;
-          delete el.dataset.diffLabel;
-          decorated--;
-          decoratedEls.pop();
-        } else {
-          attachTableBeforeDisclosure(el, range, options.renderInline);
-        }
-      }
+    if (el.tagName === "TR") {
+      decorateModifiedTableRow(pass, block, pass.renderInline);
     }
-
-    if (kind === "modified" && options?.renderInline && el.tagName === "PRE") {
-      const range = soleModifiedRange(start, end, changeRanges);
-      const coversBlock =
-        range != null && range.start <= start && range.end >= end;
-      const reconstructed =
-        interiorEdit?.original ??
-        reconstructOriginalBlock(
-          start,
-          end,
-          changeRanges,
-          options.originalSource,
-          originalLines,
-        );
-      let originalMarkdown = reconstructed;
-      if (originalMarkdown == null && coversBlock) {
-        originalMarkdown = range!.originalText ?? null;
-      }
-      const metadataChange =
-        originalMarkdown != null
-          ? readCodeMetadataChange(el, originalMarkdown, options.renderInline)
-          : null;
-      const hasInlineDiff =
-        originalMarkdown != null &&
-        tryInlineWordDiff(el, originalMarkdown, options.renderInline);
-      if (metadataChange) {
-        applySimpleMetadataIndicator(
-          el,
-          metadataChange.label,
-          metadataChange.before,
-          metadataChange.after,
-        );
-      }
-      if (hasInlineDiff || metadataChange?.contentUnchanged) {
-        el.classList.add(DIFF_INLINE_CLASS);
-        el.dataset.diffInline = "true";
-        inlined++;
-      }
-    }
-
-    // For a frontmatter row, express the value change as a simple inline
-    // word-diff of its (comma-joined) value text: added words green, removed
-    // words struck red, unchanged neutral. This never washes the value cell
-    // (so a list never paints a bar stretching to the right) and reuses the
-    // same word-diff machinery as prose blocks.
-    if (el.classList.contains(FRONTMATTER_ROW_CLASS)) {
-      if (decorateFrontmatterValue(el, kind, start, ownEnd, changeRanges)) {
-        el.dataset.diffInline = "true";
-      }
-    }
-
-    if (
-      kind === "modified" &&
-      options?.renderInline &&
-      el.tagName !== "TR" &&
-      !el.classList.contains(FRONTMATTER_ROW_CLASS) &&
-      !el.classList.contains(DIFF_IMAGE_CLASS) &&
-      !el.classList.contains(DIFF_INLINE_CLASS) &&
-      el.dataset.diffInline !== "true"
-    ) {
-      const originalBlock =
-        interiorEdit?.original ??
-        reconstructOriginalBlock(
-          start,
-          end,
-          changeRanges,
-          options.originalSource,
-          originalLines,
-        );
-      if (originalBlock) {
-        if (el.classList.contains(DIFF_MATH_CLASS)) {
-          const encoded = renderOriginalStandalone(
-            el,
-            originalBlock,
-            options.renderInline,
-          )
-            .querySelector<HTMLElement>(".emr-math[data-math-src]")
-            ?.getAttribute("data-math-src");
-          if (encoded) {
-            el.dataset.diffOriginal = decodeURIComponent(encoded);
-          }
-        } else {
-          attachBlockBeforeDisclosure(el, originalBlock, options.renderInline);
-        }
-      }
-    }
-
-    if (
-      kind === "modified" &&
-      el.classList.contains("emr-diff-block--modified") &&
-      !el.classList.contains(DIFF_IMAGE_CLASS) &&
-      !el.classList.contains(DIFF_INLINE_CLASS) &&
-      el.dataset.diffInline !== "true" &&
-      el.dataset.diffCells !== "true" &&
-      el.dataset.diffAmberMode == null &&
-      el.dataset.diffOriginal == null &&
-      !el.querySelector(`.${DIFF_TOOLTIP_CLASS}`)
-    ) {
-      applyDiffTooltip(
-        el,
-        "Previous content unavailable; exact comparison cannot be shown",
-      );
-    }
-
-    if (
-      !el.classList.contains(DIFF_IMAGE_CLASS) &&
-      !el.classList.contains(DIFF_MATH_CLASS) &&
-      !el.classList.contains(DIFF_INLINE_CLASS) &&
-      el.dataset.diffCells !== "true"
-    ) {
-      applyLineWash(el);
+    if (el.tagName === "PRE") {
+      decorateModifiedCode(pass, block, pass.renderInline);
     }
   }
 
-  // Merge contiguous same-kind blocks into a single visual group so a run of
-  // added (or edited) siblings reads as one card with one corner tag.
-  markContiguousGroups(decoratedEls);
-
-  // Mermaid diagrams: a rendered diagram can't be word- or wash-diffed, so a
-  // changed diagram gets a quiet left accent bar (hue by kind) and stashes its
-  // original source so the "Source" modal can show the full diagram diff.
-  for (const el of root.querySelectorAll<HTMLElement>(MERMAID_SELECTOR)) {
-    const start = numAttr(el, "data-source-line");
-    const end = numAttr(el, "data-source-end-line");
-    if (start == null || end == null) continue;
-    if (coveredByDecoratedAncestor(el)) continue;
-    let kind = classifyBlock(start, end, changeRanges);
-    const interiorEdit =
-      options?.renderInline && currentLines
-        ? reconstructEditedBlock(
-            el,
-            start,
-            end,
-            changeRanges,
-            deletedRanges,
-            currentLines,
-            options.renderInline,
-          )
-        : null;
-    if (interiorEdit) {
-      kind = "modified";
-      for (const deletion of interiorEdit.deletions) {
-        absorbedDeletions.add(deletion);
-      }
-    }
-    if (!kind) continue;
-    el.classList.add(
-      DIFF_BLOCK_CLASS,
-      kind === "added" ? "emr-diff-block--added" : "emr-diff-block--modified",
-      DIFF_MERMAID_CLASS,
-    );
-    el.dataset.diffKind = kind;
-    // Prefer reconstructing the complete pre-edit fence from the original
-    // document so even a one-line edit gets a useful Source > Before view.
-    const originalBlock =
-      interiorEdit?.original ??
-      reconstructOriginalBlock(
-        start,
-        end,
-        changeRanges,
-        options?.originalSource,
-        originalLines,
-      );
-    const originalSource = originalBlock
-      ? stripMermaidFence(originalBlock)
-      : "";
-    if (originalSource) el.dataset.diffOriginal = originalSource;
-    decorated++;
+  // For a frontmatter row, express the value change as a simple inline
+  // word-diff of its (comma-joined) value text: added words green, removed
+  // words struck red, unchanged neutral. This never washes the value cell
+  // (so a list never paints a bar stretching to the right) and reuses the
+  // same word-diff machinery as prose blocks.
+  if (
+    el.classList.contains(FRONTMATTER_ROW_CLASS) &&
+    decorateFrontmatterValue(
+      el,
+      kind,
+      block.start,
+      block.ownEnd,
+      pass.changeRanges,
+    )
+  ) {
+    el.dataset.diffInline = "true";
   }
+  return true;
+}
 
-  const markerAnchors = Array.from(
-    root.querySelectorAll<HTMLElement>(
-      `${BLOCK_SELECTOR}, ${MERMAID_SELECTOR}`,
-    ),
+/**
+ * The original Markdown to compare a modified prose or code block against, or
+ * null when it can't be recovered.
+ */
+function resolveOriginalMarkdown(
+  pass: DecorationPass,
+  block: ChangedBlock,
+): string | null {
+  const { start, end } = block;
+  const range = soleModifiedRange(start, end, pass.changeRanges);
+  // The change range must COVER the block's whole source span. Otherwise
+  // `originalText` (only the changed lines) is a fragment of the block's
+  // text, and word-diffing it against the full rendered block would mark
+  // the unchanged remainder as "added". When only part of a multi-line
+  // block changed, fall back to the block wash.
+  const coversBlock = range != null && range.start <= start && range.end >= end;
+  const reconstructed = reconstructBlockOriginal(
+    pass,
+    block.interiorEdit,
+    start,
+    end,
   );
-  if (currentLines) {
-    const renderedSpans = markerAnchors.flatMap((element) => {
-      const start = numAttr(element, "data-source-line");
-      const end = numAttr(element, "data-source-end-line");
-      return start == null || end == null ? [] : [{ start, end }];
-    });
-    for (const range of changeRanges) {
-      if (
-        renderedSpans.some((span) =>
-          overlaps(span.start, span.end, range.start, range.end),
-        )
-      ) {
-        continue;
-      }
-      const currentText = currentLines
-        .slice(range.start - 1, range.end)
-        .join("\n");
-      if (currentText.trim().length === 0) continue;
-      const marker = buildSourceOnlyMarker(
-        range,
-        currentText,
-        root.ownerDocument,
-      );
-      const anchor = firstBlockAtOrAfter(markerAnchors, range.start);
-      if (anchor?.parentElement)
-        anchor.parentElement.insertBefore(marker, anchor);
-      else root.appendChild(marker);
-      decorated++;
-    }
+  if (reconstructed == null && coversBlock) {
+    return range!.originalText ?? null;
   }
+  return reconstructed;
+}
 
-  // Deletion markers: lines removed have no surviving DOM, so we insert a
-  // thin marker just before the block that now occupies the deletion's
-  // line, and stash the removed text for a hover/expand affordance.
-  //
-  // Anchor candidates must also include Mermaid placeholders (decorated in a
-  // separate pass, so absent from `blocks`) — otherwise a deletion sitting
-  // right before a diagram would skip past it and land on a later block, or
-  // fall through to being appended at the very end. The combined selector
-  // returns nodes in document order, which matches source order.
+function originalDocumentOf(
+  pass: DecorationPass,
+  renderInline: (md: string) => string,
+): HTMLElement | null {
+  pass.originalDocument ??= renderSource(
+    pass.root.ownerDocument,
+    pass.originalSource,
+    renderInline,
+  );
+  return pass.originalDocument;
+}
+
+function compareProseRendering(
+  pass: DecorationPass,
+  block: ChangedBlock,
+  originalMarkdown: string | null,
+  renderInline: (md: string) => string,
+): RenderComparison | null {
+  if (originalMarkdown == null) return null;
+  const comparison = compareRendering(block.el, originalMarkdown, renderInline);
+  if (comparison.kind === "different") return comparison;
+  // The item reads the same, but may now sit at a different list depth.
+  const nesting = listNestingChange(
+    block.el,
+    block.start,
+    pass.changeRanges,
+    () => originalDocumentOf(pass, renderInline),
+  );
+  return nesting ?? comparison;
+}
+
+/** Returns false when the block reads the same and was undecorated. */
+function decorateModifiedProse(
+  pass: DecorationPass,
+  block: ChangedBlock,
+  renderInline: (md: string) => string,
+): boolean {
+  const { el } = block;
+  const originalMarkdown = resolveOriginalMarkdown(pass, block);
+  const rendering = compareProseRendering(
+    pass,
+    block,
+    originalMarkdown,
+    renderInline,
+  );
+  if (rendering?.kind === "identical") {
+    // A source-only edit — a renumbered list item, re-wrapped lines,
+    // `*a*` → `_a_` — changes nothing a reader can see, so it isn't shown
+    // as an edit.
+    unmarkChangedBlock(pass, el, DIFF_IMAGE_CLASS, DIFF_MATH_CLASS);
+    return false;
+  }
+  if (rendering?.kind === "nesting") {
+    // Same text, different structure: tint the item's own text amber and
+    // explain it, as a heading-level change does. The bullet stays amber.
+    el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
+    explainLeadText(
+      el,
+      `List nesting changed from level ${rendering.before} to level ${rendering.after}`,
+    );
+    markInlined(pass, el);
+  } else if (rendering?.kind === "numbering") {
+    // Only the list's start number changed: mark just the number.
+    el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
+    applyDiffTooltip(
+      el,
+      `List numbering changed from ${rendering.before} to ${rendering.after}`,
+    );
+    markInlined(pass, el);
+  } else if (
+    originalMarkdown != null &&
+    tryInlineWordDiff(el, originalMarkdown, renderInline)
+  ) {
+    el.classList.add(DIFF_INLINE_CLASS);
+    markInlined(pass, el);
+  }
+  return true;
+}
+
+function decorateModifiedTableRow(
+  pass: DecorationPass,
+  block: ChangedBlock,
+  renderInline: (md: string) => string,
+): void {
+  const { el, start } = block;
+  const range = soleModifiedRange(start, block.ownEnd, pass.changeRanges);
+  // `soleModifiedRange`/`overlaps` guarantees the range covers this row's
+  // line, so `start - range.start` indexes the row's original source. A
+  // range without `originalText` (or an out-of-range index) yields a falsy
+  // `originalRow` and simply falls back to the whole-row tint.
+  const originalRow =
+    range?.originalText != null
+      ? range.originalText.split(/\r\n|\r|\n/)[start - range.start]
+      : undefined;
+  if (!originalRow || !range) return;
+  const columnAlignment = el.closest("thead")
+    ? undefined
+    : resolveTableColumnAlignment(el, range, renderInline);
+  const tableDiff = diffTableRowCells(
+    el,
+    originalRow,
+    renderInline,
+    columnAlignment,
+  );
+  if (tableDiff === "precise") {
+    el.dataset.diffCells = "true";
+  } else if (tableDiff === "unchanged") {
+    unmarkChangedBlock(pass, el);
+  } else {
+    attachTableBeforeDisclosure(el, range, renderInline);
+  }
+}
+
+function decorateModifiedCode(
+  pass: DecorationPass,
+  block: ChangedBlock,
+  renderInline: (md: string) => string,
+): void {
+  const { el } = block;
+  const originalMarkdown = resolveOriginalMarkdown(pass, block);
+  const metadataChange =
+    originalMarkdown != null
+      ? readCodeMetadataChange(el, originalMarkdown, renderInline)
+      : null;
+  const hasInlineDiff =
+    originalMarkdown != null &&
+    tryInlineWordDiff(el, originalMarkdown, renderInline);
+  if (metadataChange) {
+    applySimpleMetadataIndicator(
+      el,
+      metadataChange.label,
+      metadataChange.before,
+      metadataChange.after,
+    );
+  }
+  if (hasInlineDiff || metadataChange?.contentUnchanged) {
+    el.classList.add(DIFF_INLINE_CLASS);
+    markInlined(pass, el);
+  }
+}
+
+/** True when no precise diff already shows how a modified block changed. */
+function lacksOwnComparison(el: HTMLElement): boolean {
+  return (
+    el.tagName !== "TR" &&
+    !el.classList.contains(FRONTMATTER_ROW_CLASS) &&
+    !el.classList.contains(DIFF_IMAGE_CLASS) &&
+    !el.classList.contains(DIFF_INLINE_CLASS) &&
+    el.dataset.diffInline !== "true"
+  );
+}
+
+function attachOriginalComparison(
+  pass: DecorationPass,
+  block: ChangedBlock,
+  renderInline: (md: string) => string,
+): void {
+  const { el } = block;
+  const originalBlock = reconstructBlockOriginal(
+    pass,
+    block.interiorEdit,
+    block.start,
+    block.end,
+  );
+  if (!originalBlock) return;
+  if (el.classList.contains(DIFF_MATH_CLASS)) {
+    const encoded = renderOriginalStandalone(el, originalBlock, renderInline)
+      .querySelector<HTMLElement>(".emr-math[data-math-src]")
+      ?.getAttribute("data-math-src");
+    if (encoded) {
+      el.dataset.diffOriginal = decodeURIComponent(encoded);
+    }
+  } else {
+    attachBlockBeforeDisclosure(el, originalBlock, renderInline);
+  }
+}
+
+/** True when a modified block shows no comparison and no explanation. */
+function needsUnavailableTooltip(el: HTMLElement): boolean {
+  return (
+    el.classList.contains("emr-diff-block--modified") &&
+    !el.classList.contains(DIFF_IMAGE_CLASS) &&
+    !el.classList.contains(DIFF_INLINE_CLASS) &&
+    el.dataset.diffInline !== "true" &&
+    el.dataset.diffCells !== "true" &&
+    el.dataset.diffAmberMode == null &&
+    el.dataset.diffOriginal == null &&
+    !el.querySelector(`.${DIFF_TOOLTIP_CLASS}`)
+  );
+}
+
+function canLineWash(el: HTMLElement): boolean {
+  return (
+    !el.classList.contains(DIFF_IMAGE_CLASS) &&
+    !el.classList.contains(DIFF_MATH_CLASS) &&
+    !el.classList.contains(DIFF_INLINE_CLASS) &&
+    el.dataset.diffCells !== "true"
+  );
+}
+
+function decorateMermaidBlock(pass: DecorationPass, el: HTMLElement): void {
+  const span = readSourceSpan(el);
+  if (!span) return;
+  if (coveredByDecoratedAncestor(el)) return;
+  const { start, end } = span;
+  const interiorEdit = findInteriorEdit(pass, el, start, end);
+  const kind = interiorEdit
+    ? "modified"
+    : classifyBlock(start, end, pass.changeRanges);
+  if (!kind) return;
+  el.classList.add(
+    DIFF_BLOCK_CLASS,
+    kind === "added" ? "emr-diff-block--added" : "emr-diff-block--modified",
+    DIFF_MERMAID_CLASS,
+  );
+  el.dataset.diffKind = kind;
+  // Prefer reconstructing the complete pre-edit fence from the original
+  // document so even a one-line edit gets a useful Source > Before view.
+  const originalBlock = reconstructBlockOriginal(
+    pass,
+    interiorEdit,
+    start,
+    end,
+  );
+  const originalSource = originalBlock ? stripMermaidFence(originalBlock) : "";
+  if (originalSource) el.dataset.diffOriginal = originalSource;
+  pass.decorated++;
+}
+
+function insertBeforeAnchor(
+  root: HTMLElement,
+  marker: HTMLElement,
+  anchor: HTMLElement | null,
+): void {
+  if (anchor?.parentElement) {
+    anchor.parentElement.insertBefore(marker, anchor);
+  } else {
+    root.appendChild(marker);
+  }
+}
+
+/** Show changed source lines that no rendered block covers as raw source. */
+function insertSourceOnlyMarkers(
+  pass: DecorationPass,
+  markerAnchors: readonly HTMLElement[],
+): void {
+  const currentLines = pass.currentLines;
+  if (!currentLines) return;
+  const renderedSpans = markerAnchors.flatMap((element) => {
+    const span = readSourceSpan(element);
+    return span ? [span] : [];
+  });
+  for (const range of pass.changeRanges) {
+    if (
+      renderedSpans.some((span) =>
+        overlaps(span.start, span.end, range.start, range.end),
+      )
+    ) {
+      continue;
+    }
+    const currentText = currentLines
+      .slice(range.start - 1, range.end)
+      .join("\n");
+    if (currentText.trim().length === 0) continue;
+    const marker = buildSourceOnlyMarker(
+      range,
+      currentText,
+      pass.root.ownerDocument,
+    );
+    insertBeforeAnchor(
+      pass.root,
+      marker,
+      firstBlockAtOrAfter(markerAnchors, range.start),
+    );
+    pass.decorated++;
+  }
+}
+
+/**
+ * Deletion markers: lines removed have no surviving DOM, so we insert a
+ * thin marker just before the block that now occupies the deletion's
+ * line, and stash the removed text for a hover/expand affordance.
+ *
+ * Anchor candidates must also include Mermaid placeholders (decorated in a
+ * separate pass, so absent from `blocks`) — otherwise a deletion sitting
+ * right before a diagram would skip past it and land on a later block, or
+ * fall through to being appended at the very end. The combined selector
+ * returns nodes in document order, which matches source order.
+ */
+function insertDeletionMarkers(
+  pass: DecorationPass,
+  markerAnchors: readonly HTMLElement[],
+): number {
   let markers = 0;
-  for (const r of deletedRanges) {
-    if (absorbedDeletions.has(r)) continue;
+  for (const r of pass.deletedRanges) {
+    if (pass.absorbedDeletions.has(r)) continue;
     const anchor = firstBlockAtOrAfter(markerAnchors, r.startLine);
-    const tableMarker = options?.renderInline
-      ? buildDeletedTableRows(r, anchor, markerAnchors, options.renderInline)
+    const tableMarker = pass.renderInline
+      ? buildDeletedTableRows(r, anchor, markerAnchors, pass.renderInline)
       : null;
     if (tableMarker) {
       const { parent, before, rows } = tableMarker;
       for (const row of rows) parent.insertBefore(row, before);
-      markers++;
-      continue;
-    }
-    const marker = buildDeletedMarker(r, options?.renderInline);
-    if (anchor && anchor.parentElement) {
-      anchor.parentElement.insertBefore(marker, anchor);
     } else {
-      root.appendChild(marker);
+      insertBeforeAnchor(
+        pass.root,
+        buildDeletedMarker(r, pass.renderInline),
+        anchor,
+      );
     }
     markers++;
   }
-
-  return { decorated, markers, inlined };
+  return markers;
 }
 
 /**
@@ -1048,9 +1217,26 @@ export function alignTableCells(
     }));
   }
 
+  const isAnchor = uniqueCellAnchor(original, current);
+  const costs = cellAlignmentCosts(original.length, current.length, isAnchor);
+  return backtrackCellAlignment(
+    costs,
+    isAnchor,
+    original.length,
+    current.length,
+  );
+}
+
+type CellAnchorTest = (originalIndex: number, currentIndex: number) => boolean;
+
+/** An exact, non-empty cell value that is unique on both sides. */
+function uniqueCellAnchor(
+  original: readonly string[],
+  current: readonly string[],
+): CellAnchorTest {
   const originalCounts = countTableValues(original);
   const currentCounts = countTableValues(current);
-  const isAnchor = (originalIndex: number, currentIndex: number): boolean => {
+  return (originalIndex, currentIndex) => {
     const value = original[originalIndex]!;
     return (
       value !== "" &&
@@ -1059,14 +1245,21 @@ export function alignTableCells(
       currentCounts.get(value) === 1
     );
   };
+}
 
-  const costs = Array.from({ length: original.length + 1 }, () =>
-    Array<number>(current.length + 1).fill(0),
+/** Edit-distance table where only anchor cells substitute for free. */
+function cellAlignmentCosts(
+  originalLength: number,
+  currentLength: number,
+  isAnchor: CellAnchorTest,
+): number[][] {
+  const costs = Array.from({ length: originalLength + 1 }, () =>
+    Array<number>(currentLength + 1).fill(0),
   );
-  for (let i = 0; i <= original.length; i++) costs[i]![0] = i;
-  for (let j = 0; j <= current.length; j++) costs[0]![j] = j;
-  for (let i = 1; i <= original.length; i++) {
-    for (let j = 1; j <= current.length; j++) {
+  for (let i = 0; i <= originalLength; i++) costs[i]![0] = i;
+  for (let j = 0; j <= currentLength; j++) costs[0]![j] = j;
+  for (let i = 1; i <= originalLength; i++) {
+    for (let j = 1; j <= currentLength; j++) {
       const substitution =
         costs[i - 1]![j - 1]! + (isAnchor(i - 1, j - 1) ? 0 : 1);
       costs[i]![j] = Math.min(
@@ -1076,47 +1269,51 @@ export function alignTableCells(
       );
     }
   }
+  return costs;
+}
 
+function backtrackCellAlignment(
+  costs: readonly (readonly number[])[],
+  isAnchor: CellAnchorTest,
+  originalLength: number,
+  currentLength: number,
+): TableCellAlignment[] | null {
   const reversed: TableCellAlignment[] = [];
   let equalCount = 0;
-  let i = original.length;
-  let j = current.length;
+  let i = originalLength;
+  let j = currentLength;
   while (i > 0 || j > 0) {
-    if (
-      i > 0 &&
-      j > 0 &&
-      isAnchor(i - 1, j - 1) &&
-      costs[i]![j] === costs[i - 1]![j - 1]
-    ) {
-      reversed.push({
-        kind: "equal",
-        originalIndex: i - 1,
-        currentIndex: j - 1,
-      });
-      equalCount++;
-      i--;
-      j--;
-    } else if (i > 0 && j > 0 && costs[i]![j] === costs[i - 1]![j - 1]! + 1) {
-      reversed.push({
-        kind: "modified",
-        originalIndex: i - 1,
-        currentIndex: j - 1,
-      });
-      i--;
-      j--;
-    } else if (j > 0 && costs[i]![j] === costs[i]![j - 1]! + 1) {
-      reversed.push({ kind: "added", currentIndex: j - 1 });
-      j--;
-    } else {
-      reversed.push({
-        kind: "removed",
-        originalIndex: i - 1,
-        currentIndex: j,
-      });
-      i--;
-    }
+    const step = cellAlignmentStep(costs, isAnchor, i, j);
+    reversed.push(step);
+    if (step.kind === "equal") equalCount++;
+    if (step.kind !== "added") i--;
+    if (step.kind !== "removed") j--;
   }
   return equalCount > 0 ? reversed.reverse() : null;
+}
+
+/** The alignment step that reaches cell `[i][j]` of the cost table. */
+function cellAlignmentStep(
+  costs: readonly (readonly number[])[],
+  isAnchor: CellAnchorTest,
+  i: number,
+  j: number,
+): TableCellAlignment {
+  if (
+    i > 0 &&
+    j > 0 &&
+    isAnchor(i - 1, j - 1) &&
+    costs[i]![j] === costs[i - 1]![j - 1]
+  ) {
+    return { kind: "equal", originalIndex: i - 1, currentIndex: j - 1 };
+  }
+  if (i > 0 && j > 0 && costs[i]![j] === costs[i - 1]![j - 1]! + 1) {
+    return { kind: "modified", originalIndex: i - 1, currentIndex: j - 1 };
+  }
+  if (j > 0 && costs[i]![j] === costs[i]![j - 1]! + 1) {
+    return { kind: "added", currentIndex: j - 1 };
+  }
+  return { kind: "removed", originalIndex: i - 1, currentIndex: j };
 }
 
 function countTableValues(values: readonly string[]): Map<string, number> {
@@ -1480,45 +1677,14 @@ function reconstructEditedBlock(
   const touching = ranges.filter((range) =>
     overlaps(start, end, range.start, range.end),
   );
-  const rangeAt = (line: number): ChangeRange | undefined =>
-    touching.find((range) => range.start <= line && line <= range.end);
-  if (deletions.length === 0) {
-    if (!touching.some((range) => range.kind === "added")) return null;
-    let existed = false;
-    for (let line = start; line <= end && !existed; line++) {
-      existed = rangeAt(line)?.kind !== "added";
-    }
-    if (!existed) return null;
+  if (deletions.length === 0 && !blockPredatesAddition(touching, start, end)) {
+    return null;
   }
-
-  const lines: string[] = [];
-  for (let line = start; line <= end; line++) {
-    for (const deletion of deletions) {
-      if (deletion.startLine !== line) continue;
-      if (deletion.deletedContent == null) return null;
-      lines.push(
-        ...deletion.deletedContent.replace(/\r?\n$/, "").split(/\r\n|\r|\n/),
-      );
-    }
-    const range = rangeAt(line);
-    if (range?.kind === "added") continue;
-    if (range) {
-      if (
-        range.start < start ||
-        range.end > end ||
-        range.originalText == null
-      ) {
-        return null;
-      }
-      if (line === range.start) {
-        lines.push(...range.originalText.split(/\r\n|\r|\n/));
-      }
-      continue;
-    }
-    const current = currentLines[line - 1];
-    if (current == null) return null;
-    lines.push(current);
-  }
+  const lines = rebuildOriginalLines(
+    { start, end, deletions, touching },
+    currentLines,
+  );
+  if (!lines) return null;
   const original = lines.join("\n");
   // An edit that joined or split blocks reads better as separate changes.
   const rendered = renderOriginalStandalone(el, original, renderInline);
@@ -1527,6 +1693,98 @@ function reconstructEditedBlock(
     return null;
   }
   return { original, deletions };
+}
+
+/** The changes touching a block that {@link reconstructEditedBlock} undoes. */
+interface BlockEdits {
+  start: number;
+  end: number;
+  deletions: readonly DiffRange[];
+  touching: readonly ChangeRange[];
+}
+
+function changeRangeAt(
+  touching: readonly ChangeRange[],
+  line: number,
+): ChangeRange | undefined {
+  return touching.find((range) => range.start <= line && line <= range.end);
+}
+
+/** True when lines were added to a block that has at least one older line. */
+function blockPredatesAddition(
+  touching: readonly ChangeRange[],
+  start: number,
+  end: number,
+): boolean {
+  if (!touching.some((range) => range.kind === "added")) return false;
+  for (let line = start; line <= end; line++) {
+    if (changeRangeAt(touching, line)?.kind !== "added") return true;
+  }
+  return false;
+}
+
+function rebuildOriginalLines(
+  edits: BlockEdits,
+  currentLines: readonly string[],
+): string[] | null {
+  const lines: string[] = [];
+  for (let line = edits.start; line <= edits.end; line++) {
+    const deleted = deletedLinesAt(edits.deletions, line);
+    if (!deleted) return null;
+    lines.push(...deleted);
+    const range = changeRangeAt(edits.touching, line);
+    const restored = range
+      ? originalRangeLines(range, line, edits)
+      : currentLineAt(currentLines, line);
+    if (!restored) return null;
+    lines.push(...restored);
+  }
+  return lines;
+}
+
+/** Lines deleted just before `line`; null when their content is unknown. */
+function deletedLinesAt(
+  deletions: readonly DiffRange[],
+  line: number,
+): string[] | null {
+  const lines: string[] = [];
+  for (const deletion of deletions) {
+    if (deletion.startLine !== line) continue;
+    if (deletion.deletedContent == null) return null;
+    lines.push(
+      ...deletion.deletedContent.replace(/\r?\n$/, "").split(/\r\n|\r|\n/),
+    );
+  }
+  return lines;
+}
+
+/**
+ * The original lines a change range contributes at `line`: nothing for an
+ * added line, the whole original text at a modified range's first line, and
+ * null when the range spills outside the block or lost its original text.
+ */
+function originalRangeLines(
+  range: ChangeRange,
+  line: number,
+  block: { start: number; end: number },
+): string[] | null {
+  if (range.kind === "added") return [];
+  if (
+    range.start < block.start ||
+    range.end > block.end ||
+    range.originalText == null
+  ) {
+    return null;
+  }
+  return line === range.start ? range.originalText.split(/\r\n|\r|\n/) : [];
+}
+
+function currentLineAt(
+  currentLines: readonly string[],
+  line: number,
+): string[] | null {
+  const current = currentLines[line - 1];
+  return current == null ? null : [current];
 }
 
 function attachBlockBeforeDisclosure(
@@ -1677,17 +1935,8 @@ function diffTableRowCells(
     (c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH",
   );
   const doc = tr.ownerDocument;
-  const scratch = doc.createElement("div");
-  const originalSignatures: string[] = [];
-  const originalRenderedCells: HTMLElement[] = [];
-  const originalCells = splitTableRow(originalRow).map((source) => {
-    scratch.innerHTML = renderInline(source);
-    const content = scratch.querySelector("p") ?? scratch;
-    originalSignatures.push(tableCellStructureSignature(content));
-    originalRenderedCells.push(content.cloneNode(true) as HTMLElement);
-    /* v8 ignore next -- textContent is never null on an element */
-    return (content.textContent ?? "").trim();
-  });
+  const originals = renderOriginalTableCells(doc, originalRow, renderInline);
+  const originalCells = originals.texts;
   const currentCells = cells.map((cell) => {
     /* v8 ignore next -- textContent is never null on an element */
     return (cell.textContent ?? "").trim();
@@ -1699,21 +1948,7 @@ function diffTableRowCells(
   if (!rawAlignment) return "ambiguous";
   /* v8 ignore start -- column alignments are constructed from the same header widths; guard remains defensive */
   if (
-    rawAlignment.some((item) => {
-      if (item.kind === "added") {
-        return item.currentIndex >= currentCells.length;
-      }
-      if (item.kind === "removed") {
-        return (
-          item.originalIndex >= originalCells.length ||
-          item.currentIndex > currentCells.length
-        );
-      }
-      return (
-        item.originalIndex >= originalCells.length ||
-        item.currentIndex >= currentCells.length
-      );
-    })
+    alignmentOutOfRange(rawAlignment, originalCells.length, currentCells.length)
   ) {
     return "ambiguous";
   }
@@ -1729,72 +1964,151 @@ function diffTableRowCells(
     };
   });
 
+  const row: TableRowCells = { tr, doc, cells, originals };
   let marked = 0;
   for (const item of alignment) {
-    if (item.kind === "equal") {
-      const cell = cells[item.currentIndex]!;
-      const contentDiff = diffInlineContent(
-        originalRenderedCells[item.originalIndex]!,
-        cell,
-      );
-      if (contentDiff.handled) {
-        cell.classList.add(DIFF_CELL_CLASS);
-        if (contentDiff.formattingChanged) {
-          cell.classList.add(DIFF_CELL_INLINE_CLASS);
-        }
-        if (contentDiff.metadataChanged) {
-          cell.classList.add(DIFF_CELL_METADATA_CLASS);
-        }
-        marked++;
-      } else if (
-        originalSignatures[item.originalIndex] !==
-        tableCellStructureSignature(cell)
-      ) {
-        cell.classList.add(DIFF_CELL_CLASS);
-        applyDiffTooltip(
-          cell,
-          `Rendered structure changed from ${describeRenderedStructure(originalRenderedCells[item.originalIndex]!)} to ${describeRenderedStructure(cell)}`,
-        );
-        marked++;
-      }
-      continue;
-    }
-    if (item.kind === "removed") {
-      /* v8 ignore next -- a rendered table row reaching this path always has at least one td/th */
-      const removedCell = doc.createElement(cells[0]?.tagName ?? "td");
-      removedCell.classList.add(
-        DIFF_CELL_CLASS,
-        DIFF_CELL_INLINE_CLASS,
-        DIFF_CELL_REMOVED_CLASS,
-      );
-      applyInlineWordDiff(
-        removedCell,
-        diffWords(originalCells[item.originalIndex]!, ""),
-      );
-      tr.insertBefore(removedCell, cells[item.currentIndex] ?? null);
-      marked++;
-      continue;
-    }
-
-    const cell = cells[item.currentIndex]!;
-    if (item.kind === "added") {
-      cell.classList.add(DIFF_CELL_CLASS, DIFF_CELL_ADDED_CLASS);
-      marked++;
-      continue;
-    }
-    const contentDiff = diffInlineContent(
-      originalRenderedCells[item.originalIndex]!,
-      cell,
-    );
-    cell.classList.add(DIFF_CELL_CLASS);
-    marked++;
-    cell.classList.add(DIFF_CELL_INLINE_CLASS);
-    if (contentDiff.metadataChanged) {
-      cell.classList.add(DIFF_CELL_METADATA_CLASS);
-    }
+    if (markAlignedCell(row, item)) marked++;
   }
   if (marked > 0 || columnAlignment !== undefined) return "precise";
   return "unchanged";
+}
+
+/** An original row's cells rendered once for comparison. */
+interface RenderedTableCells {
+  /** Rendered plain text of each cell. */
+  texts: string[];
+  /** {@link tableCellStructureSignature} of each cell. */
+  signatures: string[];
+  /** Detached rendered content of each cell. */
+  rendered: HTMLElement[];
+}
+
+/** A live table row being diffed against its rendered original cells. */
+interface TableRowCells {
+  tr: HTMLElement;
+  doc: Document;
+  cells: HTMLElement[];
+  originals: RenderedTableCells;
+}
+
+function renderOriginalTableCells(
+  doc: Document,
+  originalRow: string,
+  renderInline: (md: string) => string,
+): RenderedTableCells {
+  const scratch = doc.createElement("div");
+  const signatures: string[] = [];
+  const rendered: HTMLElement[] = [];
+  const texts = splitTableRow(originalRow).map((source) => {
+    scratch.innerHTML = renderInline(source);
+    const content = scratch.querySelector("p") ?? scratch;
+    signatures.push(tableCellStructureSignature(content));
+    rendered.push(content.cloneNode(true) as HTMLElement);
+    /* v8 ignore next -- textContent is never null on an element */
+    return (content.textContent ?? "").trim();
+  });
+  return { texts, signatures, rendered };
+}
+
+/* v8 ignore start -- column alignments are constructed from the same header widths; guard remains defensive */
+function alignmentOutOfRange(
+  alignment: readonly TableCellAlignment[],
+  originalLength: number,
+  currentLength: number,
+): boolean {
+  return alignment.some((item) => {
+    if (item.kind === "added") {
+      return item.currentIndex >= currentLength;
+    }
+    if (item.kind === "removed") {
+      return (
+        item.originalIndex >= originalLength ||
+        item.currentIndex > currentLength
+      );
+    }
+    return (
+      item.originalIndex >= originalLength || item.currentIndex >= currentLength
+    );
+  });
+}
+/* v8 ignore stop */
+
+/** Mark one aligned cell; true when the cell shows a change. */
+function markAlignedCell(
+  row: TableRowCells,
+  item: TableCellAlignment,
+): boolean {
+  if (item.kind === "equal") return markEqualCell(row, item);
+  if (item.kind === "removed") {
+    insertRemovedCell(row, item);
+    return true;
+  }
+  const cell = row.cells[item.currentIndex]!;
+  if (item.kind === "added") {
+    cell.classList.add(DIFF_CELL_CLASS, DIFF_CELL_ADDED_CLASS);
+    return true;
+  }
+  const contentDiff = diffInlineContent(
+    row.originals.rendered[item.originalIndex]!,
+    cell,
+  );
+  cell.classList.add(DIFF_CELL_CLASS);
+  cell.classList.add(DIFF_CELL_INLINE_CLASS);
+  if (contentDiff.metadataChanged) {
+    cell.classList.add(DIFF_CELL_METADATA_CLASS);
+  }
+  return true;
+}
+
+/** A cell with equal text may still differ in formatting or structure. */
+function markEqualCell(
+  row: TableRowCells,
+  item: { originalIndex: number; currentIndex: number },
+): boolean {
+  const cell = row.cells[item.currentIndex]!;
+  const originalCell = row.originals.rendered[item.originalIndex]!;
+  const contentDiff = diffInlineContent(originalCell, cell);
+  if (contentDiff.handled) {
+    cell.classList.add(DIFF_CELL_CLASS);
+    if (contentDiff.formattingChanged) {
+      cell.classList.add(DIFF_CELL_INLINE_CLASS);
+    }
+    if (contentDiff.metadataChanged) {
+      cell.classList.add(DIFF_CELL_METADATA_CLASS);
+    }
+    return true;
+  }
+  if (
+    row.originals.signatures[item.originalIndex] !==
+    tableCellStructureSignature(cell)
+  ) {
+    cell.classList.add(DIFF_CELL_CLASS);
+    applyDiffTooltip(
+      cell,
+      `Rendered structure changed from ${describeRenderedStructure(originalCell)} to ${describeRenderedStructure(cell)}`,
+    );
+    return true;
+  }
+  return false;
+}
+
+/** Show a removed cell in place as a struck-through temporary cell. */
+function insertRemovedCell(
+  row: TableRowCells,
+  item: { originalIndex: number; currentIndex: number },
+): void {
+  /* v8 ignore next -- a rendered table row reaching this path always has at least one td/th */
+  const removedCell = row.doc.createElement(row.cells[0]?.tagName ?? "td");
+  removedCell.classList.add(
+    DIFF_CELL_CLASS,
+    DIFF_CELL_INLINE_CLASS,
+    DIFF_CELL_REMOVED_CLASS,
+  );
+  applyInlineWordDiff(
+    removedCell,
+    diffWords(row.originals.texts[item.originalIndex]!, ""),
+  );
+  row.tr.insertBefore(removedCell, row.cells[item.currentIndex] ?? null);
 }
 
 /**
@@ -2024,12 +2338,15 @@ function suppressNativeTitle(target: HTMLElement): void {
   target.removeAttribute("title");
 }
 
-function wrapFormattingRanges(
-  root: HTMLElement,
-  ranges: readonly ExplainedTextRange[],
-): void {
-  const nodes: Array<{ node: Text; start: number; end: number }> = [];
-  const titledAncestors = new Set<HTMLElement>();
+interface TextNodeSpan {
+  node: Text;
+  start: number;
+  end: number;
+}
+
+/** Every text node under `root` with its offset span in the root's text. */
+function collectTextNodeSpans(root: HTMLElement): TextNodeSpan[] {
+  const nodes: TextNodeSpan[] = [];
   let offset = 0;
   const walker = root.ownerDocument.createTreeWalker(
     root,
@@ -2042,31 +2359,48 @@ function wrapFormattingRanges(
     offset += text.data.length;
     node = walker.nextNode();
   }
-  for (const entry of nodes) {
+  return nodes;
+}
+
+/** Replace one text node with its text, wrapping each overlapping range. */
+function wrapTextNodeRanges(
+  doc: Document,
+  entry: TextNodeSpan,
+  overlaps: readonly ExplainedTextRange[],
+): void {
+  const fragment = doc.createDocumentFragment();
+  let cursor = 0;
+  for (const range of overlaps) {
+    const start = Math.max(range.start, entry.start) - entry.start;
+    const end = Math.min(range.end, entry.end) - entry.start;
+    if (start > cursor) {
+      fragment.append(entry.node.data.slice(cursor, start));
+    }
+    const mark = doc.createElement("span");
+    mark.className = DIFF_FORMAT_CLASS;
+    applyDiffTooltip(mark, range.label);
+    mark.append(entry.node.data.slice(start, end));
+    fragment.append(mark);
+    cursor = end;
+  }
+  if (cursor < entry.node.data.length) {
+    fragment.append(entry.node.data.slice(cursor));
+  }
+  entry.node.replaceWith(fragment);
+}
+
+function wrapFormattingRanges(
+  root: HTMLElement,
+  ranges: readonly ExplainedTextRange[],
+): void {
+  const titledAncestors = new Set<HTMLElement>();
+  for (const entry of collectTextNodeSpans(root)) {
     const overlaps = ranges.filter(
       (range) => range.start < entry.end && entry.start < range.end,
     );
     if (overlaps.length === 0) continue;
-    const fragment = root.ownerDocument.createDocumentFragment();
-    let cursor = 0;
-    for (const range of overlaps) {
-      const start = Math.max(range.start, entry.start) - entry.start;
-      const end = Math.min(range.end, entry.end) - entry.start;
-      if (start > cursor) {
-        fragment.append(entry.node.data.slice(cursor, start));
-      }
-      const mark = root.ownerDocument.createElement("span");
-      mark.className = DIFF_FORMAT_CLASS;
-      applyDiffTooltip(mark, range.label);
-      mark.append(entry.node.data.slice(start, end));
-      fragment.append(mark);
-      cursor = end;
-    }
-    if (cursor < entry.node.data.length) {
-      fragment.append(entry.node.data.slice(cursor));
-    }
     const parent = entry.node.parentElement;
-    entry.node.replaceWith(fragment);
+    wrapTextNodeRanges(root.ownerDocument, entry, overlaps);
     for (const mark of Array.from(
       parent!.querySelectorAll<HTMLElement>(`.${DIFF_FORMAT_CLASS}`),
     )) {
@@ -2124,62 +2458,82 @@ function applyLeafStructureDiff(
   target: HTMLElement,
 ): boolean {
   if (target.tagName !== "LI" || original.tagName !== "LI") return false;
-  let changed = false;
+  const markerLabel = listMarkerChangeLabel(original, target);
+  const taskChange = checklistStateChange(original, target);
+  if (markerLabel) target.classList.add(DIFF_LIST_MARKER_CLASS);
+  if (taskChange) taskChange.input.classList.add(DIFF_TASK_STATE_CLASS);
+  if (markerLabel) {
+    applyDiffTooltip(
+      target,
+      taskChange
+        ? `List item changed: ${markerLabel}; ${taskChange.label}`
+        : `List marker changed from ${markerLabel.slice("marker ".length)}`,
+    );
+    return true;
+  }
+  if (!taskChange) return false;
+  const currentTask = taskChange.input;
+  const wrapper = currentTask.ownerDocument.createElement("span");
+  wrapper.className = DIFF_TASK_TOOLTIP_CLASS;
+  currentTask.before(wrapper);
+  wrapper.appendChild(currentTask);
+  applyDiffTooltip(
+    wrapper,
+    `Checklist item changed from ${taskChange.label.slice("checklist item ".length)}`,
+  );
+  return true;
+}
+
+function isListTag(tag: string | undefined): boolean {
+  return tag === "UL" || tag === "OL";
+}
+
+function listKindName(tag: string | undefined): string {
+  return tag === "OL" ? "numbered" : "bulleted";
+}
+
+/** Label for a bullet <-> number switch of a list item, or null. */
+function listMarkerChangeLabel(
+  original: HTMLElement,
+  target: HTMLElement,
+): string | null {
   const originalList = original.parentElement?.tagName;
   const currentList = target.parentElement?.tagName;
   const markerChanged =
-    (originalList === "UL" || originalList === "OL") &&
-    (currentList === "UL" || currentList === "OL") &&
+    isListTag(originalList) &&
+    isListTag(currentList) &&
     originalList !== currentList;
+  return markerChanged
+    ? `marker ${listKindName(originalList)} to ${listKindName(currentList)}`
+    : null;
+}
+
+function checkedName(task: HTMLInputElement): string {
+  return task.checked ? "checked" : "unchecked";
+}
+
+/** The live checkbox of a task item whose checked state flipped, or null. */
+function checklistStateChange(
+  original: HTMLElement,
+  target: HTMLElement,
+): { input: HTMLInputElement; label: string } | null {
   const originalTask = original.querySelector<HTMLInputElement>(
     ':scope input[type="checkbox"]',
   );
   const currentTask = target.querySelector<HTMLInputElement>(
     ':scope input[type="checkbox"]',
   );
-  const taskChanged =
-    originalTask != null &&
-    currentTask != null &&
-    originalTask.checked !== currentTask.checked;
-  const markerLabel = markerChanged
-    ? `marker ${originalList === "OL" ? "numbered" : "bulleted"} to ${currentList === "OL" ? "numbered" : "bulleted"}`
-    : null;
-  const checklistLabel = taskChanged
-    ? `checklist item ${originalTask.checked ? "checked" : "unchecked"} to ${currentTask.checked ? "checked" : "unchecked"}`
-    : null;
-
-  if (markerChanged) {
-    target.classList.add(DIFF_LIST_MARKER_CLASS);
-    changed = true;
+  if (
+    originalTask == null ||
+    currentTask == null ||
+    originalTask.checked === currentTask.checked
+  ) {
+    return null;
   }
-  if (taskChanged) {
-    currentTask.classList.add(DIFF_TASK_STATE_CLASS);
-    changed = true;
-  }
-  if (!changed) return false;
-  if (markerLabel) {
-    if (checklistLabel) {
-      applyDiffTooltip(
-        target,
-        `List item changed: ${markerLabel}; ${checklistLabel}`,
-      );
-      return true;
-    }
-    applyDiffTooltip(
-      target,
-      `List marker changed from ${markerLabel.slice("marker ".length)}`,
-    );
-    return true;
-  }
-  const wrapper = currentTask!.ownerDocument.createElement("span");
-  wrapper.className = DIFF_TASK_TOOLTIP_CLASS;
-  currentTask!.before(wrapper);
-  wrapper.appendChild(currentTask!);
-  applyDiffTooltip(
-    wrapper,
-    `Checklist item changed from ${checklistLabel!.slice("checklist item ".length)}`,
-  );
-  return true;
+  return {
+    input: currentTask,
+    label: `checklist item ${checkedName(originalTask)} to ${checkedName(currentTask)}`,
+  };
 }
 
 function applyBlockStructureDiff(
@@ -3253,6 +3607,36 @@ function buildDeletedTableRows(
   if (!range.deletedContent) return null;
   const markdown = range.deletedContent.replace(/\n+$/, "");
   const lines = markdown.split(/\r\n|\r|\n/);
+  const columnCount = deletedTableColumnCount(lines);
+  if (columnCount == null) return null;
+
+  const referenceRow = deletedRowReference(range, anchor, anchors);
+  const parent = referenceRow?.parentElement;
+  if (
+    !referenceRow ||
+    !parent ||
+    parent.tagName !== "TBODY" ||
+    referenceRow.children.length !== columnCount
+  ) {
+    return null;
+  }
+
+  const removedRows = renderDeletedTableRows(lines, columnCount, renderInline);
+  /* v8 ignore next -- the validated rows plus synthesized delimiter always render a table/head row */
+  if (!removedRows) return null;
+
+  const before =
+    anchor?.tagName === "TR" && anchor.parentElement === parent
+      ? anchor
+      : referenceRow.nextSibling;
+  return { parent, before, rows: removedRows };
+}
+
+/**
+ * The shared column count of deleted lines that are all plain table rows (no
+ * delimiter row, at least two columns); null for anything else.
+ */
+function deletedTableColumnCount(lines: readonly string[]): number | null {
   const rows = lines.map(splitTableRow);
   const columnCount = rows[0]!.length;
   if (
@@ -3265,7 +3649,18 @@ function buildDeletedTableRows(
   ) {
     return null;
   }
+  return columnCount;
+}
 
+/**
+ * The live row that deleted rows are shown beside: the anchor row itself, or
+ * the last row of a table that ends just before the deletion.
+ */
+function deletedRowReference(
+  range: DiffRange,
+  anchor: HTMLElement | null,
+  anchors: readonly HTMLElement[],
+): HTMLElement | undefined {
   const previousRow = [...anchors]
     .reverse()
     .find(
@@ -3277,22 +3672,19 @@ function buildDeletedTableRows(
     previousRow == null ? null : numAttr(previousRow, "data-source-end-line");
   const immediatelyAfterPreviousTable =
     previousRowEnd != null && previousRowEnd + 1 === range.startLine;
-  const referenceRow =
-    anchor?.tagName === "TR"
-      ? anchor
-      : immediatelyAfterPreviousTable
-        ? previousRow
-        : undefined;
-  const parent = referenceRow?.parentElement;
-  if (
-    !referenceRow ||
-    !parent ||
-    parent.tagName !== "TBODY" ||
-    referenceRow.children.length !== columnCount
-  ) {
-    return null;
-  }
+  return anchor?.tagName === "TR"
+    ? anchor
+    : immediatelyAfterPreviousTable
+      ? previousRow
+      : undefined;
+}
 
+/** Render deleted table-row Markdown as body rows styled as removed. */
+function renderDeletedTableRows(
+  lines: readonly string[],
+  columnCount: number,
+  renderInline: (md: string) => string,
+): HTMLTableRowElement[] | null {
   const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
   const scratch = document.createElement("div");
   scratch.innerHTML = renderInline(
@@ -3319,12 +3711,7 @@ function buildDeletedTableRows(
     row.setAttribute("role", "note");
     row.setAttribute("aria-label", "Removed table row");
   }
-
-  const before =
-    anchor?.tagName === "TR" && anchor.parentElement === parent
-      ? anchor
-      : referenceRow.nextSibling;
-  return { parent, before, rows: removedRows };
+  return removedRows;
 }
 
 /**

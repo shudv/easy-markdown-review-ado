@@ -456,56 +456,82 @@ export function sourceDiffRanges(
       continue;
     }
 
-    const originalStartLine = originalLine;
-    const modifiedStartLine = modifiedLine;
-    let deletedText = "";
-    let deletedLines = 0;
-    let addedLines = 0;
-    while (index < diffs.length && diffs[index]![0] !== 0) {
-      const [change, changeText] = diffs[index]!;
-      const count = sourceLineCount(changeText);
-      if (change < 0) {
-        deletedText += changeText;
-        deletedLines += count;
-        originalLine += count;
-      } else {
-        addedLines += count;
-        modifiedLine += count;
-      }
-      index += 1;
-    }
-
-    if (addedLines > 0 && deletedLines > 0) {
-      ranges.push({
-        startLine: modifiedStartLine,
-        endLine: modifiedStartLine + addedLines - 1,
-        kind: "modified",
-        originalText: stripFinalLineBreak(deletedText),
-        originalStartLine,
-        originalEndLine: originalStartLine + deletedLines - 1,
-        linesAdded: addedLines,
-        linesDeleted: deletedLines,
-      });
-    } else if (addedLines > 0) {
-      ranges.push({
-        startLine: modifiedStartLine,
-        endLine: modifiedStartLine + addedLines - 1,
-        kind: "added",
-        linesAdded: addedLines,
-        linesDeleted: 0,
-      });
-    } else {
-      ranges.push({
-        startLine: Math.max(1, modifiedStartLine),
-        endLine: Math.max(1, modifiedStartLine),
-        kind: "deleted-marker",
-        deletedContent: stripFinalLineBreak(deletedText),
-        linesAdded: 0,
-        linesDeleted: deletedLines,
-      });
-    }
+    const run = collectChangeRun(diffs, index);
+    ranges.push(changeRunToRange(run, originalLine, modifiedLine));
+    originalLine += run.deletedLines;
+    modifiedLine += run.addedLines;
+    index = run.next;
   }
   return ranges;
+}
+
+/** A maximal run of consecutive non-equal diffs starting at some index. */
+interface ChangeRun {
+  /** Index of the first diff after the run. */
+  next: number;
+  deletedText: string;
+  deletedLines: number;
+  addedLines: number;
+}
+
+function collectChangeRun(
+  diffs: readonly (readonly [number, string])[],
+  start: number,
+): ChangeRun {
+  const run: ChangeRun = {
+    next: start,
+    deletedText: "",
+    deletedLines: 0,
+    addedLines: 0,
+  };
+  while (run.next < diffs.length && diffs[run.next]![0] !== 0) {
+    const [change, changeText] = diffs[run.next]!;
+    const count = sourceLineCount(changeText);
+    if (change < 0) {
+      run.deletedText += changeText;
+      run.deletedLines += count;
+    } else {
+      run.addedLines += count;
+    }
+    run.next += 1;
+  }
+  return run;
+}
+
+function changeRunToRange(
+  { deletedText, deletedLines, addedLines }: ChangeRun,
+  originalStartLine: number,
+  modifiedStartLine: number,
+): DiffRange {
+  if (addedLines > 0 && deletedLines > 0) {
+    return {
+      startLine: modifiedStartLine,
+      endLine: modifiedStartLine + addedLines - 1,
+      kind: "modified",
+      originalText: stripFinalLineBreak(deletedText),
+      originalStartLine,
+      originalEndLine: originalStartLine + deletedLines - 1,
+      linesAdded: addedLines,
+      linesDeleted: deletedLines,
+    };
+  }
+  if (addedLines > 0) {
+    return {
+      startLine: modifiedStartLine,
+      endLine: modifiedStartLine + addedLines - 1,
+      kind: "added",
+      linesAdded: addedLines,
+      linesDeleted: 0,
+    };
+  }
+  return {
+    startLine: Math.max(1, modifiedStartLine),
+    endLine: Math.max(1, modifiedStartLine),
+    kind: "deleted-marker",
+    deletedContent: stripFinalLineBreak(deletedText),
+    linesAdded: 0,
+    linesDeleted: deletedLines,
+  };
 }
 
 function sourceLineCount(text: string): number {

@@ -5,6 +5,12 @@
 // why and offers a way forward instead. Read-only surfaces show only the link.
 
 import * as React from "react";
+import { selectionLinkResultLabel } from "./SelectionBubble.helpers";
+import {
+  BlockedSelectionBubble,
+  SelectionLinkButton,
+  useSelectionCopyLink,
+} from "./SelectionBubble.parts";
 
 interface SelectionBubbleProps {
   /** Top in px relative to article-wrap. */
@@ -24,68 +30,21 @@ interface SelectionBubbleProps {
   block?: { message: string; actionLabel: string; onAction: () => void } | null;
 }
 
-const COPY_LINK_LABEL = "Copy link to selection";
-
-/** How long the copy outcome stays visible before the bubble closes. */
-const LINK_RESULT_MS = { copied: 1200, failed: 2400 } as const;
-
 export function SelectionBubble(
   props: SelectionBubbleProps,
 ): React.ReactElement {
   const { top, left, onAddComment, onCopyLink, onCopyLinkSettled, block } =
     props;
-  const [linkState, setLinkState] = React.useState<
-    "idle" | "pending" | keyof typeof LINK_RESULT_MS
-  >("idle");
-  const settledRef = React.useRef(onCopyLinkSettled);
-  settledRef.current = onCopyLinkSettled;
-
-  React.useEffect(() => {
-    if (linkState !== "copied" && linkState !== "failed") return;
-    const timer = window.setTimeout(
-      () => settledRef.current?.(),
-      LINK_RESULT_MS[linkState],
-    );
-    return () => window.clearTimeout(timer);
-  }, [linkState]);
+  const { linkState, copyLink } = useSelectionCopyLink(
+    onCopyLink,
+    onCopyLinkSettled,
+  );
 
   if (block) {
-    return (
-      <div
-        className="emr-selection-bubble is-blocked"
-        style={{ top, left }}
-        role="status"
-        // Don't let mousedown clear the selection.
-        onMouseDown={(e) => e.preventDefault()}
-      >
-        <span className="emr-selection-bubble-note">{block.message}</span>
-        <button type="button" onClick={block.onAction}>
-          {block.actionLabel}
-        </button>
-      </div>
-    );
+    return <BlockedSelectionBubble top={top} left={left} block={block} />;
   }
 
-  const copyLink = onCopyLink
-    ? () => {
-        if (linkState !== "idle") return;
-        setLinkState("pending");
-        // A rejection (e.g. the link builder threw) is a failed copy too —
-        // never a stuck "pending" bubble or an unhandled rejection.
-        void onCopyLink().then(
-          (ok) => setLinkState(ok ? "copied" : "failed"),
-          () => setLinkState("failed"),
-        );
-      }
-    : undefined;
-  const linkResult =
-    linkState === "copied"
-      ? "Link copied"
-      : linkState === "failed"
-        ? "Couldn't copy link"
-        : null;
-  // Alone (read-only), the link button carries a visible label.
-  const linkText = linkResult ?? (onAddComment ? null : "Copy link");
+  const linkResult = selectionLinkResultLabel(linkState);
 
   return (
     <div
@@ -104,22 +63,12 @@ export function SelectionBubble(
         <span className="emr-selection-bubble-divider" aria-hidden="true" />
       ) : null}
       {copyLink ? (
-        <button
-          type="button"
-          className={[
-            "emr-selection-bubble-link",
-            linkState === "copied" ? "is-copied" : "",
-            linkState === "failed" ? "is-failed" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-label={linkResult ?? COPY_LINK_LABEL}
-          title={linkResult ?? COPY_LINK_LABEL}
+        <SelectionLinkButton
+          linkState={linkState}
+          linkResult={linkResult}
+          alone={!onAddComment}
           onClick={copyLink}
-        >
-          <span className="emr-selection-bubble-link-icon" aria-hidden="true" />
-          {linkText ? <span aria-hidden="true">{linkText}</span> : null}
-        </button>
+        />
       ) : null}
       <span className="emr-sr-only" role="status" aria-live="polite">
         {linkResult ?? ""}

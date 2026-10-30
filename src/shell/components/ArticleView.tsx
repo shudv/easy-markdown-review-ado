@@ -259,6 +259,162 @@ function addHighlightKeyboardTargets(article: HTMLElement): void {
   });
 }
 
+/** Generated block whose Source action was clicked (see `GeneratedSourceModal`). */
+interface GeneratedSourceView {
+  kind: "mermaid" | "math";
+  source: string;
+  original: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Article click delegation. `ArticleView`'s single click listener tries each
+// target in order; a handler returns true when it consumed the click.
+// ---------------------------------------------------------------------------
+
+/**
+ * Relative in-repo doc link (or in-page #anchor) — let the host resolve +
+ * navigate instead of the iframe following a dead relative URL. The host
+ * returns false for external links (https/mailto/mention…), which then fall
+ * through to the browser's default handling.
+ */
+function handleDocLinkClick(
+  e: React.MouseEvent,
+  target: HTMLElement,
+  onDocLink: ((href: string) => boolean) | undefined,
+): boolean {
+  if (!onDocLink) return false;
+  const link = target.closest<HTMLElement>("a[href]");
+  if (link && onDocLink(link.getAttribute("href")!)) {
+    e.preventDefault();
+    return true;
+  }
+  return false;
+}
+
+function decodeGeneratedSource(enc: string): string {
+  try {
+    return decodeURIComponent(enc);
+  } catch {
+    /* v8 ignore next -- decode only throws on malformed input */
+    return enc;
+  }
+}
+
+/** 0) Generated-content Source affordance — open diagram/equation source. */
+function handleGeneratedSourceClick(
+  e: React.MouseEvent,
+  target: HTMLElement,
+  setGeneratedSource: (view: GeneratedSourceView) => void,
+): boolean {
+  const sourceBtn = target.closest<HTMLElement>(
+    GENERATED_SOURCE_BUTTON_SELECTOR,
+  );
+  if (!sourceBtn) return false;
+  e.preventDefault();
+  const spec = GENERATED_SOURCE_KINDS.find((candidate) =>
+    sourceBtn.classList.contains(candidate.buttonClass),
+  )!;
+  const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
+  const enc = block?.getAttribute(spec.sourceAttribute);
+  const original = block?.dataset.diffOriginal ?? null;
+  /* v8 ignore next -- source buttons are added only to encoded blocks */
+  if (enc) {
+    const source = decodeGeneratedSource(enc);
+    setGeneratedSource({ kind: spec.kind, source, original });
+    track(
+      spec.kind === "math"
+        ? events.mathSourceViewed({ changed: original !== null })
+        : events.mermaidSourceViewed({ changed: original !== null }),
+    );
+  }
+  return true;
+}
+
+/** 1) Heading link — copy a shareable link to this section. */
+function handleHeadingLinkClick(
+  e: React.MouseEvent,
+  target: HTMLElement,
+  onCopyHeadingLink: ((headingId: string) => Promise<boolean>) | undefined,
+  setLinkAnnouncement: (text: string) => void,
+): boolean {
+  const headingLink = target.closest<HTMLElement>(`.${HEADING_LINK_CLASS}`);
+  if (!headingLink) return false;
+  e.preventDefault();
+  const headingId = headingLink.dataset.headingId!;
+  /* v8 ignore next -- buttons are only rendered when the callback exists */
+  if (!onCopyHeadingLink) return true;
+  void onCopyHeadingLink(headingId).then((ok) => {
+    showHeadingLinkResult(headingLink, ok);
+    setLinkAnnouncement(ok ? "Link copied" : "Couldn't copy link");
+  });
+  return true;
+}
+
+/**
+ * 2) Section toggle. Only the dedicated chevron button folds content; heading
+ * text remains ordinary selectable/commentable document text.
+ */
+function handleSectionToggleClick(
+  target: HTMLElement,
+  storageKey: string,
+  wrapRef: React.RefObject<HTMLDivElement | null>,
+): boolean {
+  const sectionToggle = target.closest<HTMLButtonElement>(
+    ".emr-section-toggle",
+  );
+  if (!sectionToggle) return false;
+  const section = sectionToggle.closest<HTMLElement>(".emr-section");
+  /* v8 ignore next -- toggle buttons are only hydrated inside sections */
+  if (!section) return true;
+  /* v8 ignore next -- hydrated sections always carry a source-derived id */
+  const sid = section.dataset.sectionId ?? "";
+  const wasCollapsed = section.getAttribute("data-collapsed") === "true";
+  if (wasCollapsed) section.removeAttribute("data-collapsed");
+  else section.setAttribute("data-collapsed", "true");
+  sectionToggle.setAttribute(
+    "aria-label",
+    wasCollapsed ? "Collapse section" : "Expand section",
+  );
+  sectionToggle.setAttribute("aria-expanded", wasCollapsed ? "true" : "false");
+  sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
+  /* v8 ignore next -- sid is always non-empty; guard remains defensive */
+  if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
+  wrapRef.current?.dispatchEvent(
+    new CustomEvent("emr-sections-changed", { bubbles: false }),
+  );
+  return true;
+}
+
+/**
+ * 3) Highlight click — the thread to open. Overlapping anchors are nested, so
+ * collect every thread under the click and cycle on repeated clicks; exact
+ * overlaps remain reachable without stacking visual layers. Null when the
+ * click hit no comment highlight.
+ */
+function nextClickedThreadId(
+  target: HTMLElement,
+  article: HTMLElement | null,
+  activeThreadId: string | null,
+): string | null {
+  const threadIds: string[] = [];
+  let highlight = target.closest<HTMLElement>(".emr-highlight");
+  while (highlight && article?.contains(highlight)) {
+    const threadId = highlight.dataset.threadId;
+    if (
+      threadId &&
+      threadId !== DRAFT_THREAD_ID &&
+      !threadIds.includes(threadId)
+    ) {
+      threadIds.push(threadId);
+    }
+    highlight =
+      highlight.parentElement?.closest<HTMLElement>(".emr-highlight") ?? null;
+  }
+  if (threadIds.length === 0) return null;
+  const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+  return threadIds[(activeIndex + 1) % threadIds.length]!;
+}
+
 export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const {
     pristineHtml,
@@ -307,11 +463,8 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   } | null>(null);
   // Generated block whose Source action was clicked. `original` carries the
   // pre-PR source so the modal can show an internal source-level diff.
-  const [generatedSource, setGeneratedSource] = React.useState<{
-    kind: "mermaid" | "math";
-    source: string;
-    original: string | null;
-  } | null>(null);
+  const [generatedSource, setGeneratedSource] =
+    React.useState<GeneratedSourceView | null>(null);
 
   // Keep stable refs so the layout effect's dep array can stay simple.
   const callbacksRef = React.useRef({
@@ -642,116 +795,25 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const onClick = React.useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
-
-      // Relative in-repo doc link (or in-page #anchor) — let the host resolve +
-      // navigate instead of the iframe following a dead relative URL. The host
-      // returns false for external links (https/mailto/mention…), which then
-      // fall through to the browser's default handling.
-      if (onDocLink) {
-        const link = target.closest<HTMLElement>("a[href]");
-        if (link && onDocLink(link.getAttribute("href")!)) {
-          e.preventDefault();
-          return;
-        }
+      if (handleDocLinkClick(e, target, onDocLink)) return;
+      if (handleGeneratedSourceClick(e, target, setGeneratedSource)) return;
+      if (
+        handleHeadingLinkClick(
+          e,
+          target,
+          onCopyHeadingLink,
+          setLinkAnnouncement,
+        )
+      ) {
+        return;
       }
-
-      // 0) Generated-content Source affordance — open diagram/equation source.
-      const sourceBtn = target.closest<HTMLElement>(
-        GENERATED_SOURCE_BUTTON_SELECTOR,
+      if (handleSectionToggleClick(target, storageKey, wrapRef)) return;
+      const threadId = nextClickedThreadId(
+        target,
+        articleRef.current,
+        activeThreadId,
       );
-      if (sourceBtn) {
-        e.preventDefault();
-        const spec = GENERATED_SOURCE_KINDS.find((candidate) =>
-          sourceBtn.classList.contains(candidate.buttonClass),
-        )!;
-        const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
-        const enc = block?.getAttribute(spec.sourceAttribute);
-        const original = block?.dataset.diffOriginal ?? null;
-        /* v8 ignore next -- source buttons are added only to encoded blocks */
-        if (enc) {
-          let source: string;
-          try {
-            source = decodeURIComponent(enc);
-          } catch {
-            /* v8 ignore next -- decode only throws on malformed input */
-            source = enc;
-          }
-          setGeneratedSource({ kind: spec.kind, source, original });
-          track(
-            spec.kind === "math"
-              ? events.mathSourceViewed({ changed: original !== null })
-              : events.mermaidSourceViewed({ changed: original !== null }),
-          );
-        }
-        return;
-      }
-
-      // 1) Heading link — copy a shareable link to this section.
-      const headingLink = target.closest<HTMLElement>(`.${HEADING_LINK_CLASS}`);
-      if (headingLink) {
-        e.preventDefault();
-        const headingId = headingLink.dataset.headingId!;
-        /* v8 ignore next -- buttons are only rendered when the callback exists */
-        if (!onCopyHeadingLink) return;
-        void onCopyHeadingLink(headingId).then((ok) => {
-          showHeadingLinkResult(headingLink, ok);
-          setLinkAnnouncement(ok ? "Link copied" : "Couldn't copy link");
-        });
-        return;
-      }
-
-      // 2) Section toggle. Only the dedicated chevron button folds content;
-      // heading text remains ordinary selectable/commentable document text.
-      const sectionToggle = target.closest<HTMLButtonElement>(
-        ".emr-section-toggle",
-      );
-      if (sectionToggle) {
-        const section = sectionToggle.closest<HTMLElement>(".emr-section");
-        /* v8 ignore next -- toggle buttons are only hydrated inside sections */
-        if (!section) return;
-        /* v8 ignore next -- hydrated sections always carry a source-derived id */
-        const sid = section.dataset.sectionId ?? "";
-        const wasCollapsed = section.getAttribute("data-collapsed") === "true";
-        if (wasCollapsed) section.removeAttribute("data-collapsed");
-        else section.setAttribute("data-collapsed", "true");
-        sectionToggle.setAttribute(
-          "aria-label",
-          wasCollapsed ? "Collapse section" : "Expand section",
-        );
-        sectionToggle.setAttribute(
-          "aria-expanded",
-          wasCollapsed ? "true" : "false",
-        );
-        sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
-        /* v8 ignore next -- sid is always non-empty; guard remains defensive */
-        if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
-        wrapRef.current?.dispatchEvent(
-          new CustomEvent("emr-sections-changed", { bubbles: false }),
-        );
-        return;
-      }
-
-      // 3) Highlight click — open the matching thread. Overlapping anchors are
-      // nested, so collect every thread under the click and cycle on repeated
-      // clicks; exact overlaps remain reachable without stacking visual layers.
-      const threadIds: string[] = [];
-      let highlight = target.closest<HTMLElement>(".emr-highlight");
-      while (highlight && articleRef.current?.contains(highlight)) {
-        const threadId = highlight.dataset.threadId;
-        if (
-          threadId &&
-          threadId !== DRAFT_THREAD_ID &&
-          !threadIds.includes(threadId)
-        ) {
-          threadIds.push(threadId);
-        }
-        highlight =
-          highlight.parentElement?.closest<HTMLElement>(".emr-highlight") ??
-          null;
-      }
-      if (threadIds.length === 0) return;
-      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
-      const threadId = threadIds[(activeIndex + 1) % threadIds.length]!;
+      if (threadId === null) return;
       syncHoveredHighlights(articleRef.current!, null);
       callbacksRef.current.onHighlightClick(threadId);
     },

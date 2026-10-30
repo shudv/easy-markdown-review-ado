@@ -16,44 +16,84 @@ interface RawNode {
   position?: RootContent["position"];
 }
 
+type Properties = NonNullable<Element["properties"]>;
+type AttributeHandler = (
+  properties: Properties,
+  value: string,
+  tagName: string,
+) => void;
+
+const assignTo =
+  (key: string): AttributeHandler =>
+  (properties, value) => {
+    properties[key] = value;
+  };
+
+/** Apply `handler` only when the attribute sits on a `tag` element. */
+const onlyOn =
+  (tag: string, handler: AttributeHandler): AttributeHandler =>
+  (properties, value, tagName) => {
+    if (tagName === tag) handler(properties, value, tagName);
+  };
+
+const assignDimension =
+  (key: string): AttributeHandler =>
+  (properties, value) => {
+    if (/^\d+$/.test(value)) properties[key] = Number(value);
+  };
+
+function assignClasses(properties: Properties, value: string): void {
+  const classes = value
+    .split(/\s+/)
+    .filter((token) => SAFE_HTML_CLASS.test(token));
+  if (classes.length > 0) properties.className = classes;
+}
+
+function assignLinkTarget(properties: Properties, value: string): void {
+  if (value === "_blank" || value === "_self") properties.target = value;
+}
+
+function assignLinkRel(properties: Properties, value: string): void {
+  properties.rel = value.split(/\s+/).filter(Boolean);
+}
+
+function assignAriaHidden(properties: Properties, value: string): void {
+  properties.ariaHidden = value === "false" ? "false" : "true";
+}
+
+function assignOpen(properties: Properties): void {
+  properties.open = true;
+}
+
+/**
+ * Allowlist of attributes kept on safe elements, keyed by attribute name.
+ * Anything not listed (or listed for a different tag) is dropped.
+ */
+const ATTRIBUTE_HANDLERS: ReadonlyMap<string, AttributeHandler> = new Map([
+  ["class", assignClasses],
+  ["id", assignTo("id")],
+  ["title", assignTo("title")],
+  ["open", onlyOn("details", assignOpen)],
+  ["href", onlyOn("a", assignTo("href"))],
+  ["target", onlyOn("a", assignLinkTarget)],
+  ["rel", onlyOn("a", assignLinkRel)],
+  ["src", onlyOn("img", assignTo("src"))],
+  ["alt", onlyOn("img", assignTo("alt"))],
+  ["width", onlyOn("img", assignDimension("width"))],
+  ["height", onlyOn("img", assignDimension("height"))],
+  ["aria-hidden", assignAriaHidden],
+  ["aria-label", assignTo("ariaLabel")],
+  ["data-show-in-doc", onlyOn("div", assignTo("dataShowInDoc"))],
+  ["data-show-in-sidebar", onlyOn("div", assignTo("dataShowInSidebar"))],
+]);
+
 function safeProperties(
   tagName: string,
   attrs: ReadonlyArray<{ name: string; value: string }>,
 ): Element["properties"] {
-  const properties: NonNullable<Element["properties"]> = {};
+  const properties: Properties = {};
   for (const { name, value } of attrs) {
-    if (name === "class") {
-      const classes = value
-        .split(/\s+/)
-        .filter((token) => SAFE_HTML_CLASS.test(token));
-      if (classes.length > 0) properties.className = classes;
-    } else if (name === "id" || name === "title") {
-      properties[name] = value;
-    } else if (tagName === "details" && name === "open") {
-      properties.open = true;
-    } else if (tagName === "a" && name === "href") {
-      properties.href = value;
-    } else if (tagName === "a" && name === "target") {
-      if (value === "_blank" || value === "_self") properties.target = value;
-    } else if (tagName === "a" && name === "rel") {
-      properties.rel = value.split(/\s+/).filter(Boolean);
-    } else if (tagName === "img" && ["src", "alt"].includes(name)) {
-      properties[name] = value;
-    } else if (
-      tagName === "img" &&
-      (name === "width" || name === "height") &&
-      /^\d+$/.test(value)
-    ) {
-      properties[name] = Number(value);
-    } else if (name === "aria-hidden") {
-      properties.ariaHidden = value === "false" ? "false" : "true";
-    } else if (name === "aria-label") {
-      properties.ariaLabel = value;
-    } else if (tagName === "div" && name === "data-show-in-doc") {
-      properties.dataShowInDoc = value;
-    } else if (tagName === "div" && name === "data-show-in-sidebar") {
-      properties.dataShowInSidebar = value;
-    }
+    ATTRIBUTE_HANDLERS.get(name)?.(properties, value, tagName);
   }
   return properties;
 }
@@ -94,42 +134,57 @@ function openingContainer(value: string): string | null {
     : null;
 }
 
+interface TransformState {
+  current: RootContent[];
+  stack: Array<{ element: Element; parent: RootContent[] }>;
+}
+
+/** Close the innermost open container if `close` matches its tag. */
+function closeContainer(
+  state: TransformState,
+  close: string,
+  raw: RawNode,
+): void {
+  const active = state.stack[state.stack.length - 1];
+  if (active?.element.tagName !== close) return;
+  if (raw.position && active.element.position) {
+    active.element.position.end = raw.position.end;
+  }
+  state.current = active.parent;
+  state.stack.pop();
+}
+
+/**
+ * Append the sanitized nodes of a raw HTML fragment; if it opens a container
+ * left unclosed in the fragment, descend into it until its closing tag.
+ */
+function appendRawFragment(state: TransformState, raw: RawNode): void {
+  const parsed = parseFragment(raw.value);
+  const converted = parsed.childNodes.flatMap(convertNode);
+  for (const node of converted) {
+    node.position = raw.position;
+    state.current.push(node);
+  }
+  const open = openingContainer(raw.value);
+  const container = converted.find(
+    (node): node is Element => node.type === "element" && node.tagName === open,
+  );
+  if (open && container) {
+    state.stack.push({ element: container, parent: state.current });
+    state.current = container.children;
+  }
+}
+
 function transformChildren(children: RootContent[]): RootContent[] {
   const output: RootContent[] = [];
-  const stack: Array<{ element: Element; parent: RootContent[] }> = [];
-  let current = output;
+  const state: TransformState = { current: output, stack: [] };
 
   for (const child of children) {
     if (child.type === "raw") {
       const raw = child as RawNode;
       const close = closingTag(raw.value);
-      if (close) {
-        const active = stack[stack.length - 1];
-        if (active?.element.tagName === close) {
-          if (raw.position && active.element.position) {
-            active.element.position.end = raw.position.end;
-          }
-          current = active.parent;
-          stack.pop();
-        }
-        continue;
-      }
-
-      const parsed = parseFragment(raw.value);
-      const converted = parsed.childNodes.flatMap(convertNode);
-      for (const node of converted) {
-        node.position = raw.position;
-        current.push(node);
-      }
-      const open = openingContainer(raw.value);
-      const container = converted.find(
-        (node): node is Element =>
-          node.type === "element" && node.tagName === open,
-      );
-      if (open && container) {
-        stack.push({ element: container, parent: current });
-        current = container.children;
-      }
+      if (close) closeContainer(state, close, raw);
+      else appendRawFragment(state, raw);
       continue;
     }
 
@@ -138,7 +193,7 @@ function transformChildren(children: RootContent[]): RootContent[] {
         child.children as RootContent[],
       ) as ElementContent[];
     }
-    current.push(child);
+    state.current.push(child);
   }
   return output;
 }

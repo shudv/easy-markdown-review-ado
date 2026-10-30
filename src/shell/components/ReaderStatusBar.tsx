@@ -27,13 +27,19 @@ import {
 import {
   allReviewIterations,
   betweenReviewUpdates,
-  formatWordDelta,
   oneReviewUpdate,
   resolveReviewIterationRange,
-  reviewRangeLabel,
   type ReviewIterationRange,
   type WordCountDelta,
+  type WordDeltaPart,
 } from "../prShellHelpers";
+import {
+  baseCommitTitle,
+  iterationOptionClassName,
+  iterationPickerModel,
+  statusBarVisibility,
+  type StatusBarVisibility,
+} from "./readerStatusBarModel";
 import {
   ReaderActivityIndicator,
   selectReaderActivity,
@@ -491,27 +497,36 @@ function handlePopoverEscape(
   close();
 }
 
-function adjacentIterationRange(
-  resolved: ReturnType<typeof resolveReviewIterationRange>,
-  updateCount: number,
-  direction: -1 | 1,
-): ReviewIterationRange | null {
-  if (resolved.isAllChanges) {
-    return direction < 0 ? oneReviewUpdate(updateCount, updateCount) : null;
-  }
-
-  if (direction < 0) {
-    const previousUpdate = resolved.range.fromUpdate;
-    return previousUpdate >= 1
-      ? oneReviewUpdate(previousUpdate, updateCount)
-      : null;
-  }
-
-  const nextUpdate = resolved.range.toUpdate + 1;
-  if (nextUpdate <= updateCount) {
-    return oneReviewUpdate(nextUpdate, updateCount);
-  }
-  return allReviewIterations(updateCount);
+/** The picker's previous (left) / next (right) comparison step. */
+function IterationStepButton({
+  direction,
+  label,
+  range,
+  onStep,
+}: {
+  direction: "left" | "right";
+  label: string | null;
+  range: ReviewIterationRange | null;
+  onStep: (range: ReviewIterationRange) => void;
+}): React.ReactElement {
+  const word = direction === "left" ? "Previous" : "Next";
+  const edge = direction === "left" ? "First" : "Last";
+  return (
+    <button
+      type="button"
+      className="emr-statusbar-iteration-step"
+      aria-label={
+        label
+          ? `${word} comparison: ${label}`
+          : `No ${word.toLowerCase()} comparison`
+      }
+      title={label ? `${word}: ${label}` : `${edge} comparison`}
+      disabled={!range}
+      onClick={range ? () => onStep(range) : undefined}
+    >
+      <IconChevron direction={direction} />
+    </button>
+  );
 }
 
 function IterationPicker({
@@ -526,41 +541,19 @@ function IterationPicker({
   const [open, setOpen] = React.useState(false);
   const { triggerRef, popoverRef, restoreFocusAfterClose } =
     useInertPopover(open);
-  const resolved = resolveReviewIterationRange(range, options.length);
-  const allChangesSelected = resolved.isAllChanges;
-  const baseComparison = !allChangesSelected && resolved.range.fromUpdate === 0;
-  const baseCommitTitle = baseCommit
-    ? `Base commit ${baseCommit.slice(0, 7)}`
-    : "Base commit";
-  const firstSelectedUpdate = resolved.range.fromUpdate + 1;
-  const selectionLabel = reviewRangeLabel(range, options.length);
-  const stableLabels = [
-    "All updates",
-    ...options
-      .filter((option) => option.number > 1)
-      .map((option) =>
-        reviewRangeLabel(
-          oneReviewUpdate(option.number, options.length),
-          options.length,
-        ),
-      ),
-  ].filter((label, index, labels) => labels.indexOf(label) === index);
-  const previousRange = adjacentIterationRange(resolved, options.length, -1);
-  const nextRange = adjacentIterationRange(resolved, options.length, 1);
-  const previousLabel = previousRange
-    ? reviewRangeLabel(previousRange, options.length)
-    : null;
-  const nextLabel = nextRange
-    ? reviewRangeLabel(nextRange, options.length)
-    : null;
-  const fromTitle =
-    resolved.range.fromUpdate === 0
-      ? "Pull request base"
-      : options.find((option) => option.number === resolved.range.fromUpdate)
-          ?.title;
-  const toTitle = options.find(
-    (option) => option.number === resolved.range.toUpdate,
-  )?.title;
+  const {
+    resolved,
+    allChangesSelected,
+    baseComparison,
+    firstSelectedUpdate,
+    selectionLabel,
+    stableLabels,
+    previousRange,
+    nextRange,
+    previousLabel,
+    nextLabel,
+    triggerTitle,
+  } = iterationPickerModel(options, range);
 
   React.useEffect(() => {
     if (!open) return undefined;
@@ -606,22 +599,12 @@ function IterationPicker({
       className={`emr-statusbar-iteration${open ? " is-open" : ""}`}
     >
       <div className="emr-statusbar-iteration-stepper">
-        <button
-          type="button"
-          className="emr-statusbar-iteration-step"
-          aria-label={
-            previousLabel
-              ? `Previous comparison: ${previousLabel}`
-              : "No previous comparison"
-          }
-          title={
-            previousLabel ? `Previous: ${previousLabel}` : "First comparison"
-          }
-          disabled={!previousRange}
-          onClick={previousRange ? () => stepTo(previousRange) : undefined}
-        >
-          <IconChevron direction="left" />
-        </button>
+        <IterationStepButton
+          direction="left"
+          label={previousLabel}
+          range={previousRange}
+          onStep={stepTo}
+        />
         <div className="emr-statusbar-iteration-trigger-slot">
           <span
             className="emr-statusbar-iteration-trigger-sizer"
@@ -649,11 +632,7 @@ function IterationPicker({
             aria-haspopup="listbox"
             aria-expanded={open}
             aria-label={baseComparison ? selectionLabel : undefined}
-            title={
-              allChangesSelected
-                ? "All updates from the pull request base to the newest update"
-                : `${fromTitle} to ${toTitle}`
-            }
+            title={triggerTitle}
             onClick={() => {
               if (
                 !open &&
@@ -670,7 +649,7 @@ function IterationPicker({
                 <>
                   <span
                     className="emr-statusbar-iteration-base"
-                    title={baseCommitTitle}
+                    title={baseCommitTitle(baseCommit)}
                     aria-hidden="true"
                   >
                     <span className="emr-statusbar-iteration-base-dot" />
@@ -696,18 +675,12 @@ function IterationPicker({
             </span>
           </button>
         </div>
-        <button
-          type="button"
-          className="emr-statusbar-iteration-step"
-          aria-label={
-            nextLabel ? `Next comparison: ${nextLabel}` : "No next comparison"
-          }
-          title={nextLabel ? `Next: ${nextLabel}` : "Last comparison"}
-          disabled={!nextRange}
-          onClick={nextRange ? () => stepTo(nextRange) : undefined}
-        >
-          <IconChevron direction="right" />
-        </button>
+        <IterationStepButton
+          direction="right"
+          label={nextLabel}
+          range={nextRange}
+          onStep={stepTo}
+        />
       </div>
       <div
         ref={popoverRef}
@@ -750,15 +723,10 @@ function IterationPicker({
                 type="button"
                 role="option"
                 aria-selected={isSelected}
-                className={`emr-statusbar-iteration-option${
-                  isSelected && option.number === firstSelectedUpdate
-                    ? " is-range-start"
-                    : ""
-                }${
-                  isSelected && option.number === resolved.range.toUpdate
-                    ? " is-range-end"
-                    : ""
-                }`}
+                className={iterationOptionClassName(option.number, isSelected, {
+                  firstSelectedUpdate,
+                  toUpdate: resolved.range.toUpdate,
+                })}
                 title={option.title}
                 onClick={(event) => {
                   if (event.shiftKey && !allChangesSelected) {
@@ -893,13 +861,365 @@ function PercentSlider({
   );
 }
 
+/** Document-position status: the word count and the PR word-count delta. */
+function WordStatus({
+  wordCount,
+  hasCount,
+  deltaParts,
+}: {
+  wordCount: number | undefined;
+  hasCount: boolean;
+  deltaParts: readonly WordDeltaPart[];
+}): React.ReactElement {
+  return (
+    <div className="emr-statusbar-status">
+      {hasCount ? (
+        <span className="emr-statusbar-words">
+          <b>{wordCount!.toLocaleString()}</b> words
+        </span>
+      ) : null}
+      {deltaParts.length > 0 ? (
+        <span className="emr-statusbar-delta">
+          {deltaParts.map((part) => (
+            <span
+              key={part.kind}
+              className={
+                part.kind === "added"
+                  ? "emr-statusbar-delta-add"
+                  : "emr-statusbar-delta-rem"
+              }
+              aria-label={part.a11y}
+            >
+              {part.label}
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** PR-comparison controls: the update picker and the Changes toggle. */
+function ContextControls(props: {
+  showIterationPicker: boolean;
+  iterationOptions: ReaderStatusBarProps["iterationOptions"];
+  iterationBaseCommit: string | undefined;
+  iterationRange: ReviewIterationRange | undefined;
+  onIterationRangeChange: ReaderStatusBarProps["onIterationRangeChange"];
+  changesAvailable: boolean;
+  changesShown: boolean;
+  onToggleChanges: () => void;
+}): React.ReactElement {
+  const { changesAvailable, changesShown, onToggleChanges } = props;
+  return (
+    <div className="emr-statusbar-context-controls">
+      {props.showIterationPicker ? (
+        <IterationPicker
+          options={props.iterationOptions!}
+          baseCommit={props.iterationBaseCommit}
+          range={props.iterationRange!}
+          onChange={props.onIterationRangeChange!}
+        />
+      ) : null}
+      {changesAvailable ? (
+        <button
+          type="button"
+          className="emr-statusbar-btn emr-statusbar-changes is-toggle"
+          aria-pressed={changesShown}
+          title={
+            changesShown
+              ? "Hide the change highlights"
+              : "Show what changed in this pull request"
+          }
+          onClick={onToggleChanges}
+        >
+          <IconChanges />
+          <span className="emr-sr-only">Changes</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** Left side: Navigation / Outline toggles, comparison controls, status. */
+function StatusBarLeft({
+  props,
+  visibility,
+}: {
+  props: ReaderStatusBarProps;
+  visibility: StatusBarVisibility;
+}): React.ReactElement {
+  const { navToggleable, showNav } = props;
+  const { hasCount, deltaParts, showIterationPicker, showContextControls } =
+    visibility;
+  const hasStatus = hasCount || deltaParts.length > 0;
+  return (
+    <div className="emr-statusbar-left">
+      {navToggleable ? (
+        <button
+          type="button"
+          className="emr-statusbar-btn is-toggle"
+          aria-pressed={showNav}
+          title={showNav ? "Hide navigation" : "Show navigation"}
+          onClick={props.onToggleNav}
+        >
+          <IconNav />
+          <span className="emr-statusbar-btn-label">Navigation</span>
+        </button>
+      ) : null}
+      <OutlineToggle
+        navToggleable={navToggleable}
+        navShown={showNav}
+        shown={props.showOutline === true}
+        onToggle={props.onToggleOutline}
+      />
+      {navToggleable && (showContextControls || hasStatus) ? (
+        <StatusBarSeparator />
+      ) : null}
+      {showContextControls ? (
+        <ContextControls
+          showIterationPicker={showIterationPicker}
+          iterationOptions={props.iterationOptions}
+          iterationBaseCommit={props.iterationBaseCommit}
+          iterationRange={props.iterationRange}
+          onIterationRangeChange={props.onIterationRangeChange}
+          changesAvailable={props.changesAvailable}
+          changesShown={props.changesShown}
+          onToggleChanges={props.onToggleChanges}
+        />
+      ) : null}
+      {showContextControls && hasStatus ? <StatusBarSeparator /> : null}
+
+      <WordStatus
+        wordCount={props.wordCount}
+        hasCount={hasCount}
+        deltaParts={deltaParts}
+      />
+    </div>
+  );
+}
+
+/** Badge linking the latest completed PR for the open Documents Hub file. */
+function ResolvedPullRequestBadge({
+  pullRequest,
+}: {
+  pullRequest: ReaderStatusBarProps["resolvedPullRequest"];
+}): React.ReactElement | null {
+  if (!pullRequest) return null;
+  const label = `Latest completed PR for this file: #${pullRequest.prId} ${pullRequest.title}`;
+  const content = (
+    <>
+      <IconPullRequest />
+      <span>PR #{pullRequest.prId}</span>
+    </>
+  );
+  return pullRequest.url ? (
+    <a
+      className="emr-statusbar-resolved-pr"
+      href={pullRequest.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={label}
+      aria-label={label}
+    >
+      {content}
+    </a>
+  ) : (
+    <span
+      className="emr-statusbar-resolved-pr"
+      title={label}
+      aria-label={label}
+    >
+      {content}
+    </span>
+  );
+}
+
+/** Comment stepper, Comments toggle, and the resolved-PR badge. */
+function CommentControls({
+  props,
+  showCommentStepper,
+}: {
+  props: ReaderStatusBarProps;
+  showCommentStepper: boolean;
+}): React.ReactElement {
+  const { showComments } = props;
+  return (
+    <>
+      <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
+        {showCommentStepper ? (
+          <CommentStepper
+            threadIds={props.commentThreadIds!}
+            activeThreadId={props.activeCommentThreadId ?? null}
+            onCycle={props.onCycleComment!}
+          />
+        ) : null}
+        <button
+          type="button"
+          className="emr-statusbar-btn is-toggle"
+          aria-pressed={showComments}
+          title={showComments ? "Hide comments" : "Show comments"}
+          onClick={props.onToggleComments}
+        >
+          <IconComments />
+          <span className="emr-statusbar-btn-label">Comments</span>
+        </button>
+        <ResolvedPullRequestBadge pullRequest={props.resolvedPullRequest} />
+      </div>
+      <StatusBarSeparator />
+    </>
+  );
+}
+
+/** The "Aa" reading-preferences popover plus the text-size slider. */
+function ReadingPreferencesControls(props: {
+  rootRef: React.RefObject<HTMLDivElement>;
+  triggerRef: React.RefObject<HTMLButtonElement>;
+  popoverRef: React.RefObject<HTMLDivElement>;
+  open: boolean;
+  onToggleOpen: () => void;
+  availableFonts: readonly (typeof READER_FONTS)[number][];
+  effectiveFontId: string;
+  hasAlternativeFonts: boolean;
+  onFontChange: (fontId: string) => void;
+  sizePct: number;
+  onSizeChange: (sizePct: number) => void;
+  spacingPct: number;
+  onSpacingChange: (spacingPct: number) => void;
+}): React.ReactElement {
+  const {
+    open,
+    hasAlternativeFonts,
+    onFontChange,
+    spacingPct,
+    onSpacingChange,
+  } = props;
+  return (
+    <div className="emr-statusbar-control-group">
+      <div
+        ref={props.rootRef}
+        className={`emr-statusbar-type${open ? " is-open" : ""}`}
+      >
+        <button
+          ref={props.triggerRef}
+          type="button"
+          className="emr-statusbar-btn"
+          aria-haspopup="true"
+          aria-expanded={open}
+          title="Reading preferences"
+          onClick={props.onToggleOpen}
+        >
+          <span className="emr-statusbar-aa">Aa</span>
+          <IconCaret />
+        </button>
+        <div
+          ref={props.popoverRef}
+          className="emr-statusbar-pop"
+          role="group"
+          aria-label="Reading preferences"
+          aria-hidden={!open}
+        >
+          {hasAlternativeFonts ? (
+            <>
+              <div className="emr-statusbar-pop-label">Reading font</div>
+              <div className="emr-statusbar-fontlist">
+                {props.availableFonts.map((font) => (
+                  <button
+                    key={font.id}
+                    type="button"
+                    className={`emr-statusbar-font ${fontClass(font.id)}`}
+                    aria-pressed={font.id === props.effectiveFontId}
+                    onClick={() => onFontChange(font.id)}
+                  >
+                    <span>{font.name}</span>
+                    <IconCheck />
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+          <div
+            className={`emr-statusbar-pop-section${
+              hasAlternativeFonts ? "" : " is-only"
+            }`}
+          >
+            <div className="emr-statusbar-pop-label">Text spacing</div>
+            <PercentSlider
+              label="Text spacing"
+              value={spacingPct}
+              onChange={onSpacingChange}
+              fluid
+              min={READER_SPACING_UI_MIN}
+              max={READER_SPACING_UI_MAX}
+              showDefaultMarker={false}
+            />
+          </div>
+        </div>
+      </div>
+
+      <PercentSlider
+        label="Text size"
+        value={props.sizePct}
+        onChange={props.onSizeChange}
+      />
+    </div>
+  );
+}
+
+/** Refresh and Feedback controls, after a separator; nothing when neither. */
+function RefreshFeedbackControls({
+  onRefresh,
+  refreshing,
+  refreshLabel,
+  feedbackHref,
+}: Pick<
+  ReaderStatusBarProps,
+  "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref"
+>): React.ReactElement | null {
+  if (!onRefresh && !feedbackHref) return null;
+  const label = refreshLabel ?? "Refresh";
+  return (
+    <>
+      <StatusBarSeparator />
+      <div className="emr-statusbar-control-group">
+        {onRefresh ? (
+          <button
+            type="button"
+            className={`emr-statusbar-btn emr-statusbar-refresh${refreshing ? " is-refreshing" : ""}`}
+            onClick={onRefresh}
+            disabled={refreshing}
+            title={label}
+            aria-label={label}
+          >
+            <IconRefresh />
+          </button>
+        ) : null}
+        {feedbackHref ? (
+          <a
+            className="emr-statusbar-btn emr-statusbar-feedback"
+            href={feedbackHref}
+            // The extension runs in a sandboxed ADO iframe, which blocks a
+            // same-frame `mailto:` navigation; open in a new browsing context
+            // so the OS mail handler launches.
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Share feedback or report a bug"
+            aria-label="Share feedback or report a bug"
+          >
+            <IconFeedback />
+          </a>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 export function ReaderStatusBar(
   props: ReaderStatusBarProps,
 ): React.ReactElement {
   const {
     wordCount,
     wordDelta,
-    resolvedPullRequest,
     fontId,
     sizePct,
     spacingPct,
@@ -907,28 +1227,15 @@ export function ReaderStatusBar(
     onSizeChange,
     onSpacingChange,
     availableFontIds,
-    showNav,
-    onToggleNav,
-    navToggleable,
-    showOutline,
-    onToggleOutline,
     showComments,
     commentsAvailable = true,
-    onToggleComments,
     commentThreadIds,
-    activeCommentThreadId,
     onCycleComment,
     changesAvailable,
     changesShown,
-    onToggleChanges,
     iterationOptions,
-    iterationBaseCommit,
     iterationRange,
     onIterationRangeChange,
-    feedbackHref,
-    onRefresh,
-    refreshing,
-    refreshLabel,
     activities = [],
     activityDelayMs = 250,
   } = props;
@@ -988,25 +1295,19 @@ export function ReaderStatusBar(
     };
   }, [typeOpen, restoreTypeFocusAfterClose]);
 
-  const hasCount = typeof wordCount === "number" && wordCount > 0;
-  const deltaParts =
-    wordDelta && changesAvailable && changesShown
-      ? formatWordDelta(wordDelta)
-      : [];
-  const showCommentStepper = !!(
-    commentsAvailable &&
-    showComments &&
-    commentThreadIds &&
-    commentThreadIds.length > 1 &&
-    onCycleComment
-  );
-  const showIterationPicker = !!(
-    iterationOptions?.length &&
-    iterationOptions.length > 1 &&
-    iterationRange &&
-    onIterationRangeChange
-  );
-  const showContextControls = showIterationPicker || changesAvailable;
+  const visibility = statusBarVisibility({
+    wordCount,
+    wordDelta,
+    changesAvailable,
+    changesShown,
+    commentsAvailable,
+    showComments,
+    commentThreadIds,
+    onCycleComment,
+    iterationCount: iterationOptions?.length,
+    hasIterationRange: !!iterationRange,
+    onIterationRangeChange,
+  });
   const selectedActivity = React.useMemo(
     () => selectReaderActivity(activities),
     [activities],
@@ -1022,86 +1323,7 @@ export function ReaderStatusBar(
       role="toolbar"
       aria-label="Reader status and controls"
     >
-      <div className="emr-statusbar-left">
-        {navToggleable ? (
-          <button
-            type="button"
-            className="emr-statusbar-btn is-toggle"
-            aria-pressed={showNav}
-            title={showNav ? "Hide navigation" : "Show navigation"}
-            onClick={onToggleNav}
-          >
-            <IconNav />
-            <span className="emr-statusbar-btn-label">Navigation</span>
-          </button>
-        ) : null}
-        <OutlineToggle
-          navToggleable={navToggleable}
-          navShown={showNav}
-          shown={showOutline === true}
-          onToggle={onToggleOutline}
-        />
-        {navToggleable &&
-        (showContextControls || hasCount || deltaParts.length > 0) ? (
-          <StatusBarSeparator />
-        ) : null}
-        {showContextControls ? (
-          <div className="emr-statusbar-context-controls">
-            {showIterationPicker ? (
-              <IterationPicker
-                options={iterationOptions!}
-                baseCommit={iterationBaseCommit}
-                range={iterationRange!}
-                onChange={onIterationRangeChange!}
-              />
-            ) : null}
-            {changesAvailable ? (
-              <button
-                type="button"
-                className="emr-statusbar-btn emr-statusbar-changes is-toggle"
-                aria-pressed={changesShown}
-                title={
-                  changesShown
-                    ? "Hide the change highlights"
-                    : "Show what changed in this pull request"
-                }
-                onClick={onToggleChanges}
-              >
-                <IconChanges />
-                <span className="emr-sr-only">Changes</span>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {showContextControls && (hasCount || deltaParts.length > 0) ? (
-          <StatusBarSeparator />
-        ) : null}
-
-        <div className="emr-statusbar-status">
-          {hasCount ? (
-            <span className="emr-statusbar-words">
-              <b>{wordCount!.toLocaleString()}</b> words
-            </span>
-          ) : null}
-          {deltaParts.length > 0 ? (
-            <span className="emr-statusbar-delta">
-              {deltaParts.map((part) => (
-                <span
-                  key={part.kind}
-                  className={
-                    part.kind === "added"
-                      ? "emr-statusbar-delta-add"
-                      : "emr-statusbar-delta-rem"
-                  }
-                  aria-label={part.a11y}
-                >
-                  {part.label}
-                </span>
-              ))}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <StatusBarLeft props={props} visibility={visibility} />
 
       <div className="emr-statusbar-center">
         {visibleActivity ? (
@@ -1114,155 +1336,34 @@ export function ReaderStatusBar(
 
       <div className="emr-statusbar-controls">
         {commentsAvailable ? (
-          <>
-            <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
-              {showCommentStepper ? (
-                <CommentStepper
-                  threadIds={commentThreadIds}
-                  activeThreadId={activeCommentThreadId ?? null}
-                  onCycle={onCycleComment}
-                />
-              ) : null}
-              <button
-                type="button"
-                className="emr-statusbar-btn is-toggle"
-                aria-pressed={showComments}
-                title={showComments ? "Hide comments" : "Show comments"}
-                onClick={onToggleComments}
-              >
-                <IconComments />
-                <span className="emr-statusbar-btn-label">Comments</span>
-              </button>
-              {resolvedPullRequest ? (
-                resolvedPullRequest.url ? (
-                  <a
-                    className="emr-statusbar-resolved-pr"
-                    href={resolvedPullRequest.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
-                    aria-label={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
-                  >
-                    <IconPullRequest />
-                    <span>PR #{resolvedPullRequest.prId}</span>
-                  </a>
-                ) : (
-                  <span
-                    className="emr-statusbar-resolved-pr"
-                    title={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
-                    aria-label={`Latest completed PR for this file: #${resolvedPullRequest.prId} ${resolvedPullRequest.title}`}
-                  >
-                    <IconPullRequest />
-                    <span>PR #{resolvedPullRequest.prId}</span>
-                  </span>
-                )
-              ) : null}
-            </div>
-            <StatusBarSeparator />
-          </>
-        ) : null}
-
-        <div className="emr-statusbar-control-group">
-          <div
-            ref={typeRef}
-            className={`emr-statusbar-type${typeOpen ? " is-open" : ""}`}
-          >
-            <button
-              ref={typeTriggerRef}
-              type="button"
-              className="emr-statusbar-btn"
-              aria-haspopup="true"
-              aria-expanded={typeOpen}
-              title="Reading preferences"
-              onClick={() => setTypeOpen((o) => !o)}
-            >
-              <span className="emr-statusbar-aa">Aa</span>
-              <IconCaret />
-            </button>
-            <div
-              ref={typePopoverRef}
-              className="emr-statusbar-pop"
-              role="group"
-              aria-label="Reading preferences"
-              aria-hidden={!typeOpen}
-            >
-              {hasAlternativeFonts ? (
-                <>
-                  <div className="emr-statusbar-pop-label">Reading font</div>
-                  <div className="emr-statusbar-fontlist">
-                    {availableFonts.map((font) => (
-                      <button
-                        key={font.id}
-                        type="button"
-                        className={`emr-statusbar-font ${fontClass(font.id)}`}
-                        aria-pressed={font.id === effectiveFontId}
-                        onClick={() => onFontChange(font.id)}
-                      >
-                        <span>{font.name}</span>
-                        <IconCheck />
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-              <div
-                className={`emr-statusbar-pop-section${
-                  hasAlternativeFonts ? "" : " is-only"
-                }`}
-              >
-                <div className="emr-statusbar-pop-label">Text spacing</div>
-                <PercentSlider
-                  label="Text spacing"
-                  value={spacingPct}
-                  onChange={onSpacingChange}
-                  fluid
-                  min={READER_SPACING_UI_MIN}
-                  max={READER_SPACING_UI_MAX}
-                  showDefaultMarker={false}
-                />
-              </div>
-            </div>
-          </div>
-
-          <PercentSlider
-            label="Text size"
-            value={sizePct}
-            onChange={onSizeChange}
+          <CommentControls
+            props={props}
+            showCommentStepper={visibility.showCommentStepper}
           />
-        </div>
-
-        {onRefresh || feedbackHref ? <StatusBarSeparator /> : null}
-        {onRefresh || feedbackHref ? (
-          <div className="emr-statusbar-control-group">
-            {onRefresh ? (
-              <button
-                type="button"
-                className={`emr-statusbar-btn emr-statusbar-refresh${refreshing ? " is-refreshing" : ""}`}
-                onClick={onRefresh}
-                disabled={refreshing}
-                title={refreshLabel ?? "Refresh"}
-                aria-label={refreshLabel ?? "Refresh"}
-              >
-                <IconRefresh />
-              </button>
-            ) : null}
-            {feedbackHref ? (
-              <a
-                className="emr-statusbar-btn emr-statusbar-feedback"
-                href={feedbackHref}
-                // The extension runs in a sandboxed ADO iframe, which blocks a
-                // same-frame `mailto:` navigation; open in a new browsing context
-                // so the OS mail handler launches.
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Share feedback or report a bug"
-                aria-label="Share feedback or report a bug"
-              >
-                <IconFeedback />
-              </a>
-            ) : null}
-          </div>
         ) : null}
+
+        <ReadingPreferencesControls
+          rootRef={typeRef}
+          triggerRef={typeTriggerRef}
+          popoverRef={typePopoverRef}
+          open={typeOpen}
+          onToggleOpen={() => setTypeOpen((o) => !o)}
+          availableFonts={availableFonts}
+          effectiveFontId={effectiveFontId}
+          hasAlternativeFonts={hasAlternativeFonts}
+          onFontChange={onFontChange}
+          sizePct={sizePct}
+          onSizeChange={onSizeChange}
+          spacingPct={spacingPct}
+          onSpacingChange={onSpacingChange}
+        />
+
+        <RefreshFeedbackControls
+          onRefresh={props.onRefresh}
+          refreshing={props.refreshing}
+          refreshLabel={props.refreshLabel}
+          feedbackHref={props.feedbackHref}
+        />
       </div>
     </div>
   );

@@ -194,33 +194,43 @@ export function encodePickedMentions(
   let out = text;
   for (const { label, id } of sorted) {
     if (!label) continue;
-    const token = `@${label}`;
-    const replacement = `@<${id}>`;
-    let result = "";
-    let i = 0;
-    for (;;) {
-      const at = out.indexOf(token, i);
-      if (at === -1) {
-        result += out.slice(i);
-        break;
-      }
-      const before = at === 0 ? "" : out[at - 1]!;
-      const after = out[at + token.length];
-      const leftOk = at === 0 || /\s/.test(before);
-      // Boundary rules consistent with `detectActiveTrigger`, which allows
-      // `[\w.\-]` inside mention text: don't encode when the token is followed
-      // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
-      const rightOk = after === undefined || !/[\w.\-]/.test(after);
-      if (leftOk && rightOk) {
-        result += out.slice(i, at) + replacement;
-      } else {
-        result += out.slice(i, at + token.length);
-      }
-      i = at + token.length;
-    }
-    out = result;
+    out = replaceStandaloneMention(out, `@${label}`, `@<${id}>`);
   }
   return out;
+}
+
+/** Replace every occurrence of `token` in `text` that stands alone as a mention. */
+function replaceStandaloneMention(
+  text: string,
+  token: string,
+  replacement: string,
+): string {
+  let result = "";
+  let i = 0;
+  for (;;) {
+    const at = text.indexOf(token, i);
+    if (at === -1) return result + text.slice(i);
+    result += isStandaloneMention(text, at, token.length)
+      ? text.slice(i, at) + replacement
+      : text.slice(i, at + token.length);
+    i = at + token.length;
+  }
+}
+
+/** True when the token at `[at, at + length)` starts a word and ends a mention. */
+function isStandaloneMention(
+  text: string,
+  at: number,
+  length: number,
+): boolean {
+  const before = at === 0 ? "" : text[at - 1]!;
+  const after = text[at + length];
+  const leftOk = at === 0 || /\s/.test(before);
+  // Boundary rules consistent with `detectActiveTrigger`, which allows
+  // `[\w.\-]` inside mention text: don't encode when the token is followed
+  // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
+  const rightOk = after === undefined || !/[\w.\-]/.test(after);
+  return leftOk && rightOk;
 }
 
 /**

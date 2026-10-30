@@ -200,34 +200,24 @@ export function chunkSimilarity(a: DiffChunk, b: DiffChunk): number {
   return (2 * shared) / (a.wordCount + b.wordCount);
 }
 
-/**
- * Order-preserving alignment of two chunk lists that maximises the total
- * weight of matched chunks (identical > similar > blank), the same shape as a
- * longest-common-subsequence but with fuzzy, weighted matches.
- */
-function alignChunks(
-  before: readonly DiffChunk[],
-  after: readonly DiffChunk[],
-): AlignmentOp[] {
-  const rows = before.length;
-  const cols = after.length;
-  const width = cols + 1;
-  const weight = new Float64Array(rows * cols);
-  for (let i = 0; i < rows; i++) {
-    for (let j = 0; j < cols; j++) {
-      const a = before[i]!;
-      const b = after[j]!;
-      if (a.text === b.text) {
-        // Blank lines never anchor an alignment: pairing them would split one
-        // rewritten region into many small removed/added runs.
-        weight[i * cols + j] = a.blank ? -1 : EQUAL_WEIGHT;
-        continue;
-      }
-      const similarity = chunkSimilarity(a, b);
-      weight[i * cols + j] =
-        similarity >= PAIR_MIN_SIMILARITY ? similarity : -1;
-    }
+/** Match weight of pairing `a` with `b`; -1 when they must not pair. */
+function pairWeight(a: DiffChunk, b: DiffChunk): number {
+  if (a.text === b.text) {
+    // Blank lines never anchor an alignment: pairing them would split one
+    // rewritten region into many small removed/added runs.
+    return a.blank ? -1 : EQUAL_WEIGHT;
   }
+  const similarity = chunkSimilarity(a, b);
+  return similarity >= PAIR_MIN_SIMILARITY ? similarity : -1;
+}
+
+/** Row-major `(rows + 1) x (cols + 1)` table of best total match weight. */
+function alignmentScores(
+  weight: Float64Array,
+  rows: number,
+  cols: number,
+): Float64Array {
+  const width = cols + 1;
   const score = new Float64Array((rows + 1) * width);
   for (let i = 1; i <= rows; i++) {
     for (let j = 1; j <= cols; j++) {
@@ -240,28 +230,46 @@ function alignChunks(
       );
     }
   }
+  return score;
+}
 
+interface AlignmentGrid {
+  before: readonly DiffChunk[];
+  after: readonly DiffChunk[];
+  cols: number;
+  width: number;
+  weight: Float64Array;
+  score: Float64Array;
+}
+
+/** Whether the best path to cell (i, j) pairs `before[i-1]` with `after[j-1]`. */
+function takesDiagonal(grid: AlignmentGrid, i: number, j: number): boolean {
+  if (i === 0 || j === 0) return false;
+  const { cols, width, weight, score } = grid;
+  const w = weight[(i - 1) * cols + (j - 1)]!;
+  return (
+    w > 0 && score[i * width + j] === score[(i - 1) * width + (j - 1)]! + w
+  );
+}
+
+/** Walk the score table back from the bottom-right corner into ops. */
+function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
+  const { before, after, width, score } = grid;
   const ops: AlignmentOp[] = [];
-  let i = rows;
-  let j = cols;
+  let i = before.length;
+  let j = after.length;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0) {
-      const w = weight[(i - 1) * cols + (j - 1)]!;
-      if (
-        w > 0 &&
-        score[i * width + j] === score[(i - 1) * width + (j - 1)]! + w
-      ) {
-        const a = before[i - 1]!;
-        const b = after[j - 1]!;
-        ops.push({
-          type: a.text === b.text ? "equal" : "pair",
-          before: a,
-          after: b,
-        });
-        i--;
-        j--;
-        continue;
-      }
+    if (takesDiagonal(grid, i, j)) {
+      const a = before[i - 1]!;
+      const b = after[j - 1]!;
+      ops.push({
+        type: a.text === b.text ? "equal" : "pair",
+        before: a,
+        after: b,
+      });
+      i--;
+      j--;
+      continue;
     }
     if (
       j > 0 &&
@@ -275,6 +283,34 @@ function alignChunks(
     }
   }
   return ops.reverse();
+}
+
+/**
+ * Order-preserving alignment of two chunk lists that maximises the total
+ * weight of matched chunks (identical > similar > blank), the same shape as a
+ * longest-common-subsequence but with fuzzy, weighted matches.
+ */
+function alignChunks(
+  before: readonly DiffChunk[],
+  after: readonly DiffChunk[],
+): AlignmentOp[] {
+  const rows = before.length;
+  const cols = after.length;
+  const weight = new Float64Array(rows * cols);
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      weight[i * cols + j] = pairWeight(before[i]!, after[j]!);
+    }
+  }
+  const score = alignmentScores(weight, rows, cols);
+  return backtrackAlignment({
+    before,
+    after,
+    cols,
+    width: cols + 1,
+    weight,
+    score,
+  });
 }
 
 /** Drop blank chunks from both ends of a run. */

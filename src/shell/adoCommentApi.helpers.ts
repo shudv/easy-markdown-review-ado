@@ -226,66 +226,84 @@ export function lineDiffBlocksToRanges(
 ): DiffRange[] {
   const ranges: DiffRange[] = [];
   for (const b of blocks ?? []) {
-    const ct = b.changeType ?? 0;
-    const modStart = b.modifiedLineNumberStart ?? 0;
-    const modCount = b.modifiedLinesCount ?? 0;
-    const origStart = b.originalLineNumberStart ?? 0;
-    const origCount = b.originalLinesCount ?? 0;
-
-    if (ct === 1 /* Add */ && modCount > 0) {
-      ranges.push({
-        startLine: modStart,
-        endLine: modStart + modCount - 1,
-        kind: "added",
-        linesAdded: modCount,
-        linesDeleted: 0,
-      });
-    } else if (ct === 3 /* Edit */) {
-      if (modCount > 0 && origCount === 0) {
-        // An "edit" block that removed no original lines is really a pure
-        // insertion — surface it as an addition (green) rather than an edit.
-        ranges.push({
-          startLine: modStart,
-          endLine: modStart + modCount - 1,
-          kind: "added",
-          linesAdded: modCount,
-          linesDeleted: 0,
-        });
-      } else if (modCount > 0) {
-        ranges.push({
-          startLine: modStart,
-          endLine: modStart + modCount - 1,
-          kind: "modified",
-          originalStartLine: origStart,
-          originalEndLine: origStart + origCount - 1,
-          linesAdded: modCount,
-          linesDeleted: origCount,
-          ...(sliceOriginalLines(originalLines, origStart, origCount) !==
-          undefined
-            ? {
-                originalText: sliceOriginalLines(
-                  originalLines,
-                  origStart,
-                  origCount,
-                ),
-              }
-            : {}),
-        });
-      } else {
-        // Edit that left no modified lines behaves like a deletion.
-        const at = Math.max(1, modStart);
-        ranges.push(
-          buildDeletedMarkerRange(at, origCount, originalLines, origStart),
-        );
-      }
-    } else if (ct === 2 /* Delete */) {
-      const at = Math.max(1, modStart);
-      ranges.push(
-        buildDeletedMarkerRange(at, origCount, originalLines, origStart),
-      );
-    }
+    const range = lineDiffBlockToRange(b, originalLines);
+    if (range) ranges.push(range);
   }
   return ranges;
+}
+
+/** Convert one ADO line-diff block to a `DiffRange`, or `undefined` if empty. */
+function lineDiffBlockToRange(
+  b: LineDiffBlockLike,
+  originalLines: readonly string[] | undefined,
+): DiffRange | undefined {
+  const ct = b.changeType ?? 0;
+  const modStart = b.modifiedLineNumberStart ?? 0;
+  const modCount = b.modifiedLinesCount ?? 0;
+  const origStart = b.originalLineNumberStart ?? 0;
+  const origCount = b.originalLinesCount ?? 0;
+
+  if (ct === 1 /* Add */) {
+    return modCount > 0 ? addedLinesRange(modStart, modCount) : undefined;
+  }
+  if (ct === 3 /* Edit */) {
+    return editBlockToRange(
+      modStart,
+      modCount,
+      origStart,
+      origCount,
+      originalLines,
+    );
+  }
+  if (ct === 2 /* Delete */) {
+    const at = Math.max(1, modStart);
+    return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
+  }
+  return undefined;
+}
+
+function addedLinesRange(modStart: number, modCount: number): DiffRange {
+  return {
+    startLine: modStart,
+    endLine: modStart + modCount - 1,
+    kind: "added",
+    linesAdded: modCount,
+    linesDeleted: 0,
+  };
+}
+
+function editBlockToRange(
+  modStart: number,
+  modCount: number,
+  origStart: number,
+  origCount: number,
+  originalLines: readonly string[] | undefined,
+): DiffRange {
+  if (modCount > 0 && origCount === 0) {
+    // An "edit" block that removed no original lines is really a pure
+    // insertion — surface it as an addition (green) rather than an edit.
+    return addedLinesRange(modStart, modCount);
+  }
+  if (modCount > 0) {
+    const originalText = sliceOriginalLines(
+      originalLines,
+      origStart,
+      origCount,
+    );
+    return {
+      startLine: modStart,
+      endLine: modStart + modCount - 1,
+      kind: "modified",
+      originalStartLine: origStart,
+      originalEndLine: origStart + origCount - 1,
+      linesAdded: modCount,
+      linesDeleted: origCount,
+      ...(originalText !== undefined ? { originalText } : {}),
+    };
+  }
+  // Edit that left no modified lines behaves like a deletion.
+  const at = Math.max(1, modStart);
+  return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
 }
 
 /**
@@ -682,23 +700,16 @@ export function adoThreadToLocal(
       : thread;
 
   // (1) Extension-authored thread with a stored text-quote anchor.
-  const schema = readProp(t.properties, PROP_SCHEMA);
-  const anchorJson = readProp(t.properties, PROP_ANCHOR);
-  if (schema === SCHEMA_VERSION && typeof anchorJson === "string") {
-    try {
-      const anchor = JSON.parse(anchorJson) as TextQuoteAnchor;
-      return withMentions({
-        id,
-        filePath: t.threadContext?.filePath ?? "",
-        anchor,
-        status,
-        comments,
-        origin: "extension",
-      });
-    } catch {
-      // Malformed anchor — fall through and treat as a native thread so the
-      // comment isn't silently lost.
-    }
+  const extensionAnchor = readExtensionAnchor(t);
+  if (extensionAnchor !== undefined) {
+    return withMentions({
+      id,
+      filePath: t.threadContext?.filePath ?? "",
+      anchor: extensionAnchor,
+      status,
+      comments,
+      origin: "extension",
+    });
   }
 
   const ctx = t.threadContext;
@@ -706,22 +717,10 @@ export function adoThreadToLocal(
 
   // (2) Native thread anchored to a file + diff line.
   if (filePath) {
-    const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
-    const anchor: TextQuoteAnchor =
-      typeof startLine === "number" && startLine > 0
-        ? {
-            exact: "",
-            prefix: "",
-            suffix: "",
-            line: startLine,
-            endLine:
-              ctx?.rightFileEnd?.line ?? ctx?.leftFileEnd?.line ?? startLine,
-          }
-        : { exact: "", prefix: "", suffix: "" };
     return withMentions({
       id,
       filePath,
-      anchor,
+      anchor: nativeDiffLineAnchor(ctx),
       status,
       comments,
       origin: "ado",
@@ -738,6 +737,43 @@ export function adoThreadToLocal(
     origin: "ado",
     general: true,
   });
+}
+
+/**
+ * Parse the text-quote anchor stored on an extension-authored thread, or
+ * `undefined` when the thread isn't ours or the anchor is malformed (so the
+ * caller treats it as a native thread and the comment isn't silently lost).
+ */
+function readExtensionAnchor(
+  t: GitPullRequestCommentThread,
+): TextQuoteAnchor | undefined {
+  const schema = readProp(t.properties, PROP_SCHEMA);
+  const anchorJson = readProp(t.properties, PROP_ANCHOR);
+  if (schema !== SCHEMA_VERSION || typeof anchorJson !== "string") {
+    return undefined;
+  }
+  try {
+    return JSON.parse(anchorJson) as TextQuoteAnchor;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Synthesize a line anchor for a native diff-anchored thread. */
+function nativeDiffLineAnchor(
+  ctx: GitPullRequestCommentThread["threadContext"] | undefined,
+): TextQuoteAnchor {
+  const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
+  if (typeof startLine !== "number" || startLine <= 0) {
+    return { exact: "", prefix: "", suffix: "" };
+  }
+  return {
+    exact: "",
+    prefix: "",
+    suffix: "",
+    line: startLine,
+    endLine: ctx?.rightFileEnd?.line ?? ctx?.leftFileEnd?.line ?? startLine,
+  };
 }
 
 /**

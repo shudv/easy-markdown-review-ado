@@ -80,161 +80,43 @@ export function initialThreadState(seed: CommentThread[] = []): ThreadState {
   return { threadsById, order };
 }
 
+type ActionOf<T extends ThreadAction["type"]> = Extract<
+  ThreadAction,
+  { type: T }
+>;
+
 export function threadReducer(
   state: ThreadState,
   action: ThreadAction,
 ): ThreadState {
   switch (action.type) {
-    case "ADD_THREAD": {
-      if (state.threadsById[action.thread.id]) return state;
-      return {
-        threadsById: {
-          ...state.threadsById,
-          [action.thread.id]: action.thread,
-        },
-        // newest first
-        order: [action.thread.id, ...state.order],
-      };
-    }
-    case "ADD_REPLY": {
-      const existing = state.threadsById[action.threadId];
-      if (!existing) return state;
-      const next: CommentThread = {
+    case "ADD_THREAD":
+      return addThread(state, action);
+    case "ADD_REPLY":
+      return updateThread(state, action.threadId, (existing) => ({
         ...existing,
         comments: [...existing.comments, action.comment],
-      };
-      return {
-        ...state,
-        threadsById: { ...state.threadsById, [action.threadId]: next },
-      };
-    }
-    case "EDIT_COMMENT": {
-      const existing = state.threadsById[action.threadId];
-      if (!existing) return state;
-      const next: CommentThread = {
-        ...existing,
-        comments: existing.comments.map((c) =>
-          c.id === action.commentId
-            ? {
-                ...c,
-                bodyMarkdown: action.newBodyMarkdown,
-                updatedAt: action.updatedAt,
-              }
-            : c,
-        ),
-      };
-      return {
-        ...state,
-        threadsById: { ...state.threadsById, [action.threadId]: next },
-      };
-    }
-    case "DELETE_COMMENT": {
-      const existing = state.threadsById[action.threadId];
-      if (!existing) return state;
-      const remaining = existing.comments.filter(
-        (c) => c.id !== action.commentId,
+      }));
+    case "EDIT_COMMENT":
+      return updateThread(state, action.threadId, (existing) =>
+        editComment(existing, action),
       );
-      if (remaining.length === 0) {
-        // Deleting the last comment removes the thread entirely.
-        const { [action.threadId]: _drop, ...rest } = state.threadsById;
-        return {
-          threadsById: rest,
-          order: state.order.filter((id) => id !== action.threadId),
-        };
-      }
-      const next: CommentThread = { ...existing, comments: remaining };
-      return {
-        ...state,
-        threadsById: { ...state.threadsById, [action.threadId]: next },
-      };
-    }
-    case "TOGGLE_REACTION": {
-      const existing = state.threadsById[action.threadId];
-      if (!existing) return state;
-      const next: CommentThread = {
+    case "DELETE_COMMENT":
+      return deleteComment(state, action);
+    case "TOGGLE_REACTION":
+      return updateThread(state, action.threadId, (existing) =>
+        toggleCommentReaction(existing, action),
+      );
+    case "SET_STATUS":
+      return updateThread(state, action.threadId, (existing) => ({
         ...existing,
-        comments: existing.comments.map((c) => {
-          if (c.id !== action.commentId) return c;
-          const reactions = c.reactions ?? [];
-          const idx = reactions.findIndex((r) => r.kind === action.kind);
-          let nextReactions: Reaction[];
-          if (idx === -1) {
-            // No reaction of this kind yet — add one.
-            nextReactions = [
-              ...reactions,
-              {
-                kind: action.kind,
-                users: [{ id: action.userId, displayName: action.displayName }],
-              },
-            ];
-          } else {
-            const cur = reactions[idx]!;
-            const has = cur.users.some((u) => u.id === action.userId);
-            const nextUsers = has
-              ? cur.users.filter((u) => u.id !== action.userId)
-              : [
-                  ...cur.users,
-                  { id: action.userId, displayName: action.displayName },
-                ];
-            if (nextUsers.length === 0) {
-              // Drop the whole reaction entry when no one is left reacting.
-              nextReactions = reactions.filter((_, i) => i !== idx);
-            } else {
-              nextReactions = reactions.map((r, i) =>
-                i === idx ? { ...r, users: nextUsers } : r,
-              );
-            }
-          }
-          return { ...c, reactions: nextReactions };
-        }),
-      };
-      return {
-        ...state,
-        threadsById: { ...state.threadsById, [action.threadId]: next },
-      };
-    }
-    case "SET_STATUS": {
-      const existing = state.threadsById[action.threadId];
-      if (!existing) return state;
-      const next: CommentThread = { ...existing, status: action.status };
-      return {
-        ...state,
-        threadsById: { ...state.threadsById, [action.threadId]: next },
-      };
-    }
-    case "DELETE_THREAD": {
+        status: action.status,
+      }));
+    case "DELETE_THREAD":
       if (!state.threadsById[action.threadId]) return state;
-      const { [action.threadId]: _drop, ...rest } = state.threadsById;
-      return {
-        threadsById: rest,
-        order: state.order.filter((id) => id !== action.threadId),
-      };
-    }
-    case "MERGE_REMOTE_THREADS": {
-      const nextById: Record<string, CommentThread> = { ...state.threadsById };
-      const appended: string[] = [];
-      let changed = false;
-      for (const incoming of action.threads) {
-        const existing = nextById[incoming.id];
-        if (!existing) {
-          nextById[incoming.id] = incoming;
-          appended.push(incoming.id);
-          changed = true;
-          continue;
-        }
-        const merged = mergeOneThread(existing, incoming);
-        if (merged !== existing) {
-          nextById[incoming.id] = merged;
-          changed = true;
-        }
-      }
-      if (!changed) return state;
-      return {
-        threadsById: nextById,
-        order:
-          appended.length > 0 ? [...state.order, ...appended] : state.order,
-      };
-    }
+      return removeThread(state, action.threadId);
+    case "MERGE_REMOTE_THREADS":
+      return mergeRemoteThreads(state, action.threads);
     default: {
       // Exhaustiveness guard: `action` must be `never` here.
       const _exhaustive: never = action;
@@ -242,6 +124,154 @@ export function threadReducer(
       return state;
     }
   }
+}
+
+function addThread(
+  state: ThreadState,
+  action: ActionOf<"ADD_THREAD">,
+): ThreadState {
+  if (state.threadsById[action.thread.id]) return state;
+  return {
+    threadsById: {
+      ...state.threadsById,
+      [action.thread.id]: action.thread,
+    },
+    // newest first
+    order: [action.thread.id, ...state.order],
+  };
+}
+
+/**
+ * Replace thread `threadId` with `update(existing)`; returns `state` unchanged
+ * when the thread is unknown.
+ */
+function updateThread(
+  state: ThreadState,
+  threadId: string,
+  update: (existing: CommentThread) => CommentThread,
+): ThreadState {
+  const existing = state.threadsById[threadId];
+  if (!existing) return state;
+  return replaceThread(state, threadId, update(existing));
+}
+
+function replaceThread(
+  state: ThreadState,
+  threadId: string,
+  next: CommentThread,
+): ThreadState {
+  return {
+    ...state,
+    threadsById: { ...state.threadsById, [threadId]: next },
+  };
+}
+
+function removeThread(state: ThreadState, threadId: string): ThreadState {
+  const { [threadId]: _drop, ...rest } = state.threadsById;
+  return {
+    threadsById: rest,
+    order: state.order.filter((id) => id !== threadId),
+  };
+}
+
+function editComment(
+  existing: CommentThread,
+  action: ActionOf<"EDIT_COMMENT">,
+): CommentThread {
+  return {
+    ...existing,
+    comments: existing.comments.map((c) =>
+      c.id === action.commentId
+        ? {
+            ...c,
+            bodyMarkdown: action.newBodyMarkdown,
+            updatedAt: action.updatedAt,
+          }
+        : c,
+    ),
+  };
+}
+
+function deleteComment(
+  state: ThreadState,
+  action: ActionOf<"DELETE_COMMENT">,
+): ThreadState {
+  const existing = state.threadsById[action.threadId];
+  if (!existing) return state;
+  const remaining = existing.comments.filter((c) => c.id !== action.commentId);
+  if (remaining.length === 0) {
+    // Deleting the last comment removes the thread entirely.
+    return removeThread(state, action.threadId);
+  }
+  return replaceThread(state, action.threadId, {
+    ...existing,
+    comments: remaining,
+  });
+}
+
+function toggleCommentReaction(
+  existing: CommentThread,
+  action: ActionOf<"TOGGLE_REACTION">,
+): CommentThread {
+  return {
+    ...existing,
+    comments: existing.comments.map((c) =>
+      c.id === action.commentId
+        ? { ...c, reactions: toggleReaction(c.reactions ?? [], action) }
+        : c,
+    ),
+  };
+}
+
+/** Add or remove the acting user from the `action.kind` reaction. */
+function toggleReaction(
+  reactions: Reaction[],
+  action: ActionOf<"TOGGLE_REACTION">,
+): Reaction[] {
+  const user = { id: action.userId, displayName: action.displayName };
+  const idx = reactions.findIndex((r) => r.kind === action.kind);
+  if (idx === -1) {
+    // No reaction of this kind yet — add one.
+    return [...reactions, { kind: action.kind, users: [user] }];
+  }
+  const cur = reactions[idx]!;
+  const has = cur.users.some((u) => u.id === action.userId);
+  const nextUsers = has
+    ? cur.users.filter((u) => u.id !== action.userId)
+    : [...cur.users, user];
+  if (nextUsers.length === 0) {
+    // Drop the whole reaction entry when no one is left reacting.
+    return reactions.filter((_, i) => i !== idx);
+  }
+  return reactions.map((r, i) => (i === idx ? { ...r, users: nextUsers } : r));
+}
+
+function mergeRemoteThreads(
+  state: ThreadState,
+  threads: CommentThread[],
+): ThreadState {
+  const nextById: Record<string, CommentThread> = { ...state.threadsById };
+  const appended: string[] = [];
+  let changed = false;
+  for (const incoming of threads) {
+    const existing = nextById[incoming.id];
+    if (!existing) {
+      nextById[incoming.id] = incoming;
+      appended.push(incoming.id);
+      changed = true;
+      continue;
+    }
+    const merged = mergeOneThread(existing, incoming);
+    if (merged !== existing) {
+      nextById[incoming.id] = merged;
+      changed = true;
+    }
+  }
+  if (!changed) return state;
+  return {
+    threadsById: nextById,
+    order: appended.length > 0 ? [...state.order, ...appended] : state.order,
+  };
 }
 
 /** Filter to threads for a particular file path. */

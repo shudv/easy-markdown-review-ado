@@ -7,7 +7,11 @@
 // the first line of defence — there is simply no field here to put a name,
 // path, email, or document text into.
 
-import type { TelemetryEvent } from "./types";
+import type {
+  TelemetryEvent,
+  TelemetryMeasurements,
+  TelemetryProperties,
+} from "./types";
 
 export const EVENT = {
   AppLoaded: "app.loaded",
@@ -97,52 +101,56 @@ export type DiagramRenderOutcome = "repaired" | "syntax-error";
  */
 export type AppReadyReason = "content" | "empty" | "error";
 
+/** Boot-time payload for {@link events.appLoaded}. */
+interface AppLoadedPayload {
+  bootTimeMs: number;
+  activeBootTimeMs?: number;
+  hiddenTimeMs?: number;
+  authRefreshWaitMs?: number;
+  sdkReadyMs?: number;
+  contextReadyMs?: number;
+  renderReadyMs?: number;
+  readyReason?: AppReadyReason;
+  bootHadHiddenInterval?: boolean;
+  /** This load followed an automatic host reload (dead-window recovery). */
+  afterAutoReload?: boolean;
+}
+
+/** Optional `app.loaded` measurements, in the order they're emitted. */
+const OPTIONAL_BOOT_MEASUREMENTS = [
+  "activeBootTimeMs",
+  "hiddenTimeMs",
+  "authRefreshWaitMs",
+  "sdkReadyMs",
+  "contextReadyMs",
+  "renderReadyMs",
+] as const;
+
+function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
+  return {
+    ...(p.readyReason ? { readyReason: p.readyReason } : {}),
+    ...(p.bootHadHiddenInterval !== undefined
+      ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
+      : {}),
+    ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
+  };
+}
+
+function appLoadedMeasurements(p: AppLoadedPayload): TelemetryMeasurements {
+  const measurements: TelemetryMeasurements = { bootTimeMs: p.bootTimeMs };
+  for (const key of OPTIONAL_BOOT_MEASUREMENTS) {
+    const value = p[key];
+    if (value !== undefined) measurements[key] = value;
+  }
+  return measurements;
+}
+
 export const events = {
-  appLoaded(p?: {
-    bootTimeMs: number;
-    activeBootTimeMs?: number;
-    hiddenTimeMs?: number;
-    authRefreshWaitMs?: number;
-    sdkReadyMs?: number;
-    contextReadyMs?: number;
-    renderReadyMs?: number;
-    readyReason?: AppReadyReason;
-    bootHadHiddenInterval?: boolean;
-    /** This load followed an automatic host reload (dead-window recovery). */
-    afterAutoReload?: boolean;
-  }): TelemetryEvent {
+  appLoaded(p?: AppLoadedPayload): TelemetryEvent {
     return {
       name: EVENT.AppLoaded,
-      properties: p
-        ? {
-            ...(p.readyReason ? { readyReason: p.readyReason } : {}),
-            ...(p.bootHadHiddenInterval !== undefined
-              ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
-              : {}),
-            ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
-          }
-        : undefined,
-      measurements: p
-        ? {
-            bootTimeMs: p.bootTimeMs,
-            ...(p.activeBootTimeMs !== undefined
-              ? { activeBootTimeMs: p.activeBootTimeMs }
-              : {}),
-            ...(p.hiddenTimeMs !== undefined
-              ? { hiddenTimeMs: p.hiddenTimeMs }
-              : {}),
-            ...(p.authRefreshWaitMs !== undefined
-              ? { authRefreshWaitMs: p.authRefreshWaitMs }
-              : {}),
-            ...(p.sdkReadyMs !== undefined ? { sdkReadyMs: p.sdkReadyMs } : {}),
-            ...(p.contextReadyMs !== undefined
-              ? { contextReadyMs: p.contextReadyMs }
-              : {}),
-            ...(p.renderReadyMs !== undefined
-              ? { renderReadyMs: p.renderReadyMs }
-              : {}),
-          }
-        : undefined,
+      properties: p ? appLoadedProperties(p) : undefined,
+      measurements: p ? appLoadedMeasurements(p) : undefined,
     };
   },
 

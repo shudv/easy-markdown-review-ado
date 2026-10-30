@@ -10,13 +10,19 @@ import type {
   TextQuoteAnchor,
 } from "../../types";
 import { Balloon } from "./Balloon";
-import { Composer } from "./Composer";
 import { RailToolbar, type HistoryNav } from "./RailToolbar";
+import { buildRailModel, DRAFT_ID } from "./CommentRail.helpers";
 import {
-  buildRailModel,
-  chooseRailEmptyMessage,
-  DRAFT_ID,
-} from "./CommentRail.helpers";
+  isRailTrayExpanded,
+  railDraftY,
+  railEmptyMessageFor,
+  shouldShowRailHeader,
+} from "./CommentRail.layout";
+import {
+  RailCollapsibleTray,
+  RailDraftBalloon,
+  RailReadOnlyBanner,
+} from "./CommentRail.parts";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
 
 export { chooseRailEmptyMessage } from "./CommentRail.helpers";
@@ -189,6 +195,16 @@ export function CommentRail(props: RailProps): React.ReactElement {
   // Shape the threads into the rail's ordered, grouped view model (anchored
   // comments by document position, then the unanchored trays). Pure + tested in
   // CommentRail.helpers so the rail component stays a thin renderer.
+  const model = buildRailModel({
+    currentThreads,
+    generalThreads,
+    orphanedFileThreads,
+    hiddenThreadIds,
+    orphanedThreadIds,
+    yByThreadId,
+    draftY: railDraftY(readOnly, draftAnchor, draftY),
+    onlyThisFile,
+  });
   const {
     orderedAnchoredIds,
     kindById,
@@ -196,65 +212,64 @@ export function CommentRail(props: RailProps): React.ReactElement {
     visibleGeneralThreads,
     visibleOrphanedFileThreads,
     hasVisibleComments,
-  } = buildRailModel({
-    currentThreads,
-    generalThreads,
-    orphanedFileThreads,
-    hiddenThreadIds,
-    orphanedThreadIds,
-    yByThreadId,
-    draftY: !readOnly && draftAnchor && draftY !== null ? draftY : null,
-    onlyThisFile,
-  });
+  } = model;
 
   // Auto-expand a cross-file tray while its comment is active (e.g. status-bar
   // navigation landed there), so the selected balloon is on screen.
-  const activeInGeneral =
-    activeThreadId != null &&
-    visibleGeneralThreads.some((t) => t.id === activeThreadId);
-  const activeInOrphanedFiles =
-    activeThreadId != null &&
-    visibleOrphanedFileThreads.some((t) => t.id === activeThreadId);
   const searchActive = commentQuery.trim().length > 0;
-  const generalExpanded =
-    !generalCollapsed ||
-    activeInGeneral ||
-    (searchActive && visibleGeneralThreads.length > 0);
-  const orphanedFilesExpanded =
-    !orphanedFilesCollapsed ||
-    activeInOrphanedFiles ||
-    (searchActive && visibleOrphanedFileThreads.length > 0);
+  const generalExpanded = isRailTrayExpanded({
+    collapsed: generalCollapsed,
+    threads: visibleGeneralThreads,
+    activeThreadId,
+    searchActive,
+  });
+  const orphanedFilesExpanded = isRailTrayExpanded({
+    collapsed: orphanedFilesCollapsed,
+    threads: visibleOrphanedFileThreads,
+    activeThreadId,
+    searchActive,
+  });
 
-  // Show the rail header when there are comments OR a (visible) routed PR to
-  // link to. When the pill is suppressed (PR tab) the PR alone doesn't warrant
-  // a header — comments do.
-  const showHeader =
-    !readOnly ||
-    totalCommentCount > 0 ||
-    orphanedFileThreads.length > 0 ||
-    (!!routedPr && !hidePrPill);
+  const showHeader = shouldShowRailHeader({
+    readOnly,
+    totalCommentCount,
+    orphanedFileThreadCount: orphanedFileThreads.length,
+    hasRoutedPr: !!routedPr,
+    hidePrPill,
+  });
 
-  const emptyMessage =
-    orderedAnchoredIds.length === 0 && !draftAnchor
-      ? chooseRailEmptyMessage({
-          commentQuery,
-          filterMode,
-          fileThreadCount: currentThreads.length,
-          hasOtherSections:
-            orphanedThreads.length > 0 ||
-            visibleGeneralThreads.length > 0 ||
-            visibleOrphanedFileThreads.length > 0,
-          readOnly,
-        })
-      : null;
+  const emptyMessage = railEmptyMessageFor(model, {
+    hasDraft: !!draftAnchor,
+    commentQuery,
+    filterMode,
+    fileThreadCount: currentThreads.length,
+    readOnly,
+  });
+
+  // Props shared by every thread balloon in the rail.
+  const balloonProps = {
+    currentUser,
+    onClick: onSelectThread,
+    onReply,
+    onResolve,
+    onReopen,
+    onMarkPending,
+    onClose,
+    onEditComment,
+    onDeleteComment,
+    onDeleteThread,
+    onToggleReaction,
+    readOnly,
+    replyInitial: replyInitialBody,
+    onReplyChange: onDraftChange,
+    onRequestReply,
+    onCancelReply,
+  };
 
   return (
     <aside className="emr-rail-col" aria-label="Comments">
       {readOnly && showReadOnlyBanner ? (
-        <div className="emr-rail-readonly-banner" role="status">
-          {readOnlyMessage ??
-            "Commenting is disabled because this document has no completed pull request."}
-        </div>
+        <RailReadOnlyBanner message={readOnlyMessage} />
       ) : null}
       {showHeader ? (
         <div className="emr-rail-sticky-header">
@@ -287,29 +302,15 @@ export function CommentRail(props: RailProps): React.ReactElement {
         {orderedAnchoredIds.map((id) => {
           if (kindById.get(id) === "draft" && draftAnchor) {
             return (
-              <div
+              <RailDraftBalloon
                 key={DRAFT_ID}
-                className="emr-balloon inline is-active is-draft"
-                data-thread-id={DRAFT_ID}
-              >
-                <div className="emr-balloon-header">
-                  <span className="emr-balloon-status status-active">New</span>
-                  {draftAnchor.implicit ? null : (
-                    <span className="emr-balloon-meta">
-                      Anchored to: <em>“{truncate(draftAnchor.exact, 40)}”</em>
-                    </span>
-                  )}
-                </div>
-                <Composer
-                  submitLabel="Comment"
-                  placeholder={`Comment as ${currentUser.displayName}…`}
-                  autoFocus
-                  initial={draftInitialBody}
-                  onChange={onDraftChange}
-                  onSubmit={onSubmitDraft}
-                  onCancel={onCancelDraft}
-                />
-              </div>
+                draftAnchor={draftAnchor}
+                currentUser={currentUser}
+                draftInitialBody={draftInitialBody}
+                onDraftChange={onDraftChange}
+                onSubmitDraft={onSubmitDraft}
+                onCancelDraft={onCancelDraft}
+              />
             );
           }
           const t = currentThreads.find((x) => x.id === id)!;
@@ -319,23 +320,8 @@ export function CommentRail(props: RailProps): React.ReactElement {
               thread={t}
               inline
               isActive={t.id === activeThreadId}
-              currentUser={currentUser}
-              onClick={onSelectThread}
-              onReply={onReply}
-              onResolve={onResolve}
-              onReopen={onReopen}
-              onMarkPending={onMarkPending}
-              onClose={onClose}
-              onEditComment={onEditComment}
-              onDeleteComment={onDeleteComment}
-              onDeleteThread={onDeleteThread}
-              onToggleReaction={onToggleReaction}
-              readOnly={readOnly}
+              {...balloonProps}
               replyOpen={t.id === activeReplyThreadId}
-              replyInitial={replyInitialBody}
-              onReplyChange={onDraftChange}
-              onRequestReply={onRequestReply}
-              onCancelReply={onCancelReply}
             />
           );
         })}
@@ -359,23 +345,8 @@ export function CommentRail(props: RailProps): React.ReactElement {
                 inline
                 isOrphaned
                 isActive={t.id === activeThreadId}
-                currentUser={currentUser}
-                onClick={onSelectThread}
-                onReply={onReply}
-                onResolve={onResolve}
-                onReopen={onReopen}
-                onMarkPending={onMarkPending}
-                onClose={onClose}
-                onEditComment={onEditComment}
-                onDeleteComment={onDeleteComment}
-                onDeleteThread={onDeleteThread}
-                onToggleReaction={onToggleReaction}
-                readOnly={readOnly}
+                {...balloonProps}
                 replyOpen={t.id === activeReplyThreadId}
-                replyInitial={replyInitialBody}
-                onReplyChange={onDraftChange}
-                onRequestReply={onRequestReply}
-                onCancelReply={onCancelReply}
               />
             ))}
           </div>
@@ -387,122 +358,51 @@ export function CommentRail(props: RailProps): React.ReactElement {
           not-anchored-to-this-file section rather than more of this file's
           discussion. */}
       {visibleGeneralThreads.length > 0 ? (
-        <div className="emr-rail-section emr-rail-section--general">
-          <button
-            type="button"
-            className="emr-rail-section-header emr-rail-section-header--toggle"
-            aria-expanded={generalExpanded}
-            onClick={() => setGeneralCollapsed((v) => !v)}
-          >
-            <span className="emr-rail-section-title">
-              <span
-                className="emr-rail-section-twist"
-                data-collapsed={generalExpanded ? undefined : "true"}
-                aria-hidden="true"
-              >
-                <SvgChevronRight />
-              </span>
-              General comments
-            </span>
-            <span className="emr-rail-section-count">
-              {visibleGeneralThreads.length}
-            </span>
-          </button>
-          {!generalExpanded ? null : (
-            <div className="emr-rail-section-body">
-              {visibleGeneralThreads.map((t) => (
-                <Balloon
-                  key={t.id}
-                  thread={t}
-                  inline
-                  general
-                  isActive={t.id === activeThreadId}
-                  currentUser={currentUser}
-                  onClick={onSelectThread}
-                  onReply={onReply}
-                  onResolve={onResolve}
-                  onReopen={onReopen}
-                  onMarkPending={onMarkPending}
-                  onClose={onClose}
-                  onEditComment={onEditComment}
-                  onDeleteComment={onDeleteComment}
-                  onDeleteThread={onDeleteThread}
-                  onToggleReaction={onToggleReaction}
-                  readOnly={readOnly}
-                  replyOpen={t.id === activeReplyThreadId}
-                  replyInitial={replyInitialBody}
-                  onReplyChange={onDraftChange}
-                  onRequestReply={onRequestReply}
-                  onCancelReply={onCancelReply}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <RailCollapsibleTray
+          title="General comments"
+          count={visibleGeneralThreads.length}
+          expanded={generalExpanded}
+          onToggle={() => setGeneralCollapsed((v) => !v)}
+        >
+          {visibleGeneralThreads.map((t) => (
+            <Balloon
+              key={t.id}
+              thread={t}
+              inline
+              general
+              isActive={t.id === activeThreadId}
+              {...balloonProps}
+              replyOpen={t.id === activeReplyThreadId}
+            />
+          ))}
+        </RailCollapsibleTray>
       ) : null}
       {/* Orphaned-file tray: threads on files removed from the PR. No tab to
           open, so they live here (below General), each labelled with its file.
           Collapsible, collapsed by default. */}
       {visibleOrphanedFileThreads.length > 0 ? (
-        <div className="emr-rail-section emr-rail-section--general">
-          <button
-            type="button"
-            className="emr-rail-section-header emr-rail-section-header--toggle"
-            aria-expanded={orphanedFilesExpanded}
-            onClick={() => setOrphanedFilesCollapsed((v) => !v)}
-          >
-            <span className="emr-rail-section-title">
-              <span
-                className="emr-rail-section-twist"
-                data-collapsed={orphanedFilesExpanded ? undefined : "true"}
-                aria-hidden="true"
-              >
-                <SvgChevronRight />
-              </span>
-              Comments on files no longer in this PR
-            </span>
-            <span className="emr-rail-section-count">
-              {visibleOrphanedFileThreads.length}
-            </span>
-          </button>
-          {!orphanedFilesExpanded ? null : (
-            <div className="emr-rail-section-body">
-              {visibleOrphanedFileThreads.map((t) => (
-                <div key={t.id} className="emr-rail-orphan-file-item">
-                  <div
-                    className="emr-rail-orphan-file-label"
-                    title={t.filePath}
-                  >
-                    {baseName(t.filePath)}
-                  </div>
-                  <Balloon
-                    thread={t}
-                    inline
-                    general
-                    isActive={t.id === activeThreadId}
-                    currentUser={currentUser}
-                    onClick={onSelectThread}
-                    onReply={onReply}
-                    onResolve={onResolve}
-                    onReopen={onReopen}
-                    onMarkPending={onMarkPending}
-                    onClose={onClose}
-                    onEditComment={onEditComment}
-                    onDeleteComment={onDeleteComment}
-                    onDeleteThread={onDeleteThread}
-                    onToggleReaction={onToggleReaction}
-                    readOnly={readOnly}
-                    replyOpen={t.id === activeReplyThreadId}
-                    replyInitial={replyInitialBody}
-                    onReplyChange={onDraftChange}
-                    onRequestReply={onRequestReply}
-                    onCancelReply={onCancelReply}
-                  />
-                </div>
-              ))}
+        <RailCollapsibleTray
+          title="Comments on files no longer in this PR"
+          count={visibleOrphanedFileThreads.length}
+          expanded={orphanedFilesExpanded}
+          onToggle={() => setOrphanedFilesCollapsed((v) => !v)}
+        >
+          {visibleOrphanedFileThreads.map((t) => (
+            <div key={t.id} className="emr-rail-orphan-file-item">
+              <div className="emr-rail-orphan-file-label" title={t.filePath}>
+                {baseName(t.filePath)}
+              </div>
+              <Balloon
+                thread={t}
+                inline
+                general
+                isActive={t.id === activeThreadId}
+                {...balloonProps}
+                replyOpen={t.id === activeReplyThreadId}
+              />
             </div>
-          )}
-        </div>
+          ))}
+        </RailCollapsibleTray>
       ) : null}
     </aside>
   );
@@ -512,27 +412,4 @@ export function CommentRail(props: RailProps): React.ReactElement {
 function baseName(p: string): string {
   const i = p.lastIndexOf("/");
   return i === -1 ? p : p.slice(i + 1);
-}
-
-function SvgChevronRight(): React.ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="12"
-      height="12"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function truncate(s: string, n: number): string {
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1) + "…";
 }

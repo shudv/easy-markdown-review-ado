@@ -12,9 +12,7 @@ Easy Markdown Review gives you the best of both: a polished, rendered review exp
 
 ## ✍️ Comment on the rendered page, not the raw diff
 
-A **Markdown Review** tab appears on every pull request that touches a `.md` file. Highlight any sentence on the beautifully rendered page and drop a comment right on it — exactly like reviewing in Word.
-
-The commenting model is intentionally **document-style**: comments sit in the margin next to the prose they're about, the way they do in Word, Google Docs, and the Office apps — not stacked at the bottom of a diff. It's review UX your team already knows.
+A **Markdown Review** tab appears on every pull request that touches a `.md` file. Highlight any sentence on the beautifully rendered page and drop a comment in the margin beside it — exactly like reviewing in Word, not at the bottom of a diff.
 
 - Threads pin to the surrounding prose with a stable text anchor, so they **survive edits and re-wordings**.
 - New comments from teammates appear **without a reload**.

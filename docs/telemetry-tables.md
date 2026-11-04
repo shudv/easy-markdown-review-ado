@@ -1,13 +1,14 @@
 # Telemetry tables (thematic model)
 
-Status: **migration in progress** — dual emission opened **2026-08-03**, legacy
-tables retire **~2026-09-03**.
+Status: **dual emission active** since **2026-08-03**. The cutover planned for
+~2026-09-03 has not happened yet: events that predate the migration are still
+also sent to their legacy per-event tables (see "Migration" below).
 
 Code: [src/telemetry/eventTables.ts](../src/telemetry/eventTables.ts) (routing),
 [src/telemetry/sinks/oneDsSink.ts](../src/telemetry/sinks/oneDsSink.ts) (emission),
 [src/telemetry/events.ts](../src/telemetry/events.ts) (event-name catalog).
 Tests: [test/telemetry.eventTables.test.ts](../test/telemetry.eventTables.test.ts).
-Privacy model: [docs/threat-model.md §8](./threat-model.md).
+Privacy model: [docs/threat-model.md §7](./threat-model.md).
 
 ## Problem
 
@@ -145,60 +146,23 @@ syntax errors (`diagram.renderIssue`), and a Documents-hub document that no
 longer exists (a stale `?path=` link or remembered path after a rename/delete
 — the hub opens another document and says so).
 
-### Production exception triage (2026-08-25)
+Reading the exception counts:
 
-The 30-day legacy `app_exception` sample contained 40 sessions / 90 events with
-`401 + TF400813`, all from comment writes. Twenty-four sessions retried at least
-once (up to 10 failed writes in one session); all 40 also had an `auth_failure`
-row with `WWW-Authenticate`, and 24 used the legacy host. This is the host token
-dead window: the embedded ADO grant expires before the cached AAD token.
+- `ThreadSync.poll` reports once per **failure streak**, not per poll: the
+  comment poller pauses during a token dead window and backs other failures off
+  from 30s to 5 min.
+- Boot timeouts (`Timeout after 15000ms`) count only visible time, so a tab
+  opened in the background doesn't time out.
+- Mermaid chunk loads retry after 1s and 3s, and a failure is reported once per
+  diagram per page load.
+- Unhandled rejections with a non-`Error` reason carry a `rejectionType`
+  property (e.g. `object:null-prototype`).
 
-Mitigation: PR boot and comment mutation paths re-inspect the current token
-after an auth-shaped failure. Only the combination of a server rejection and a
-lapsed embedded grant becomes `SessionRefreshingError`; JWT timestamps alone
-never block an operation. Comment mutations rejected this way are now held and
-retried once the session is back (see "Living with the dead window" below);
-only a hold that times out preserves the draft and asks the user to reload.
-The iframe cannot force the parent ADO host to mint a token before its AAD
-expiry, so this improves recovery without eliminating the host dead window.
+### Living with the token dead window
 
-Two `Delete thread` failures were `400` with “Only the comment author and project
-admins can delete a comment.” The old UI offered thread deletion based only on
-the root row, then deleted replies by other authors. The action is now available
-only when every comment belongs to the current user, and replies are deleted
-before the root. Two `TF400893` rows were genuine network failures; write-mode
-retries intentionally do not replay ambiguous connection failures because the
-server may already have committed the write. Those remain actionable errors
-with the draft preserved for a user retry.
-
-### Production exception triage (2026-10-16)
-
-Seven days: ~3.2k sessions, 8.4k `app_exception` rows. Fixes and their effect on
-the numbers:
-
-- **Comment poll during the dead window** (~96% of rows). `ThreadSync.poll`
-  re-polled every 30s through every hourly dead window (bursts recur every
-  62–72 min per open tab; one tab ran 88h), retrying each 401 three times. The
-  poll path now classifies `SessionRefreshingError` (no futile retries), pauses
-  until its `recoverAtMs`, backs other failures off exponentially (30s → 5 min),
-  and reports **once per failure streak** — so `ThreadSync.poll` counts streaks,
-  not polls.
-- **False boot timeouts** (`Timeout after 15000ms`, `pr-context-load`,
-  blocking). 96% of these sessions booted in a hidden tab (median 33s hidden)
-  versus ~16% overall. `withTimeout` now counts only visible time.
-- **Crashing global handler** (`window.onerror` `TypeError: Cannot convert object
-to primitive value`; Safari: `No default value`). `onUnhandledRejection` called
-  `String(reason)` on a reason with no primitive conversion, so every unhandled
-  rejection surfaced as this TypeError instead (zero `unhandledrejection` rows in
-  30 days). The reason is now passed through intact; non-`Error` reasons carry a
-  `rejectionType` property (e.g. `object:null-prototype`) for triage.
-- **Mermaid**: transient `ChunkLoadError`s (library and per-diagram chunks) are
-  retried after 1s and 3s, and a failure is reported **once per diagram per page
-  load** rather than on every redraw/revisit.
-
-#### Living with the dead window
-
-The iframe cannot make the host mint a fresh token (`SDK.getAccessToken()` is a
+The ADO host's embedded grant can expire before its cached AAD token, so for a
+few minutes every ADO call is rejected with `401 + TF400813`. The iframe cannot
+make the host mint a fresh token (`SDK.getAccessToken()` is a
 pass-through to the host's cache, which checks only the AAD `exp`; tracked
 upstream in Developer Community 11084050 and SDK PR #137). Poll bursts end a
 median 4.4 min after they start, well before the ~10 min AAD `exp`, so the host
@@ -245,51 +209,9 @@ diagnostics
 | extend successPct = round(100.0 * straightIn / loads, 1)
 ```
 
-## Release watch: reliability fixes (baseline week to 2026-10-21)
+## Alarms
 
-After shipping the reliability work (token dead window, false timeouts, error
-handler, poll backoff, held writes), compare a week of production against this
-baseline. Same table and filters throughout (`Diagnostics`).
-
-| Signal                                                                  | Baseline (7 days)            | Target after release                                 |
-| ----------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
-| Loaded sessions                                                         | 3,448                        | — (denominator)                                      |
-| Comment-poll `TF400813` exceptions                                      | 24,182 events / 263 sessions | ↓ > 90% (one per streak)                             |
-| False boot timeouts (`Timeout after 15000ms`)                           | 45 sessions                  | ↓ ≥ 80%                                              |
-| Global-handler crash (`… primitive value`)                              | 7 sessions                   | 0 (real `unhandledrejection` rows appear instead)    |
-| Writes failing with `SessionRefreshingError`                            | 16 sessions                  | ≈ 0 (held instead)                                   |
-| Boot in the dead window (`session-refresh`)                             | 71 sessions                  | similar (it's the host); but see auto-reload success |
-| Automatic reload gets the user straight in                              | ~74% (inferred)              | ≥ 70% measured                                       |
-| Likely duplicate comment/reply (same session, same length, ≤ 30s apart) | 60 of 5,228 writes / 30 days | no increase                                          |
-
-```kusto
-let since = ago(7d);
-let x = diagnostics | where EventInfo_Time > since and environment == "production";
-let ex = x | where name == "app.exception";
-print
-  loadedSessions = toscalar(x | where name == "app.loaded" | summarize dcount(sessionId)),
-  pollTF400813Events = toscalar(ex | where source == "ThreadSync.poll" and adoErrorCode == "TF400813" | count),
-  falseTimeoutSessions = toscalar(ex | where message startswith "Timeout after 15000ms" | summarize dcount(sessionId)),
-  handlerCrashSessions = toscalar(ex | where source == "window.onerror" and message has "primitive value" | summarize dcount(sessionId)),
-  writeFailSessions = toscalar(ex | where errorName == "SessionRefreshingError" and impact == "action-failed" | summarize dcount(sessionId)),
-  bootRefreshSessions = toscalar(ex | where source == "PrTabApp.context" and operation == "session-refresh" | summarize dcount(sessionId))
-```
-
-Auto-reload success, and how dead-window spells end:
-
-```kusto
-diagnostics
-| where EventInfo_Time > ago(7d) and name == "app.loaded" and column_ifexists("afterAutoReload", false) == true
-| summarize loads = count(),
-            straightIn = countif(authRefreshWaitMs == 0 and readyReason != "error")
-| extend successPct = round(100.0 * straightIn / loads, 1);
-diagnostics
-| where EventInfo_Time > ago(7d) and name == "auth.sessionRefresh" and phase == "end"
-| summarize spells = count(), p50Sec = percentile(durationSec, 50),
-            p90Sec = percentile(durationSec, 90) by trigger, outcome
-```
-
-**Alarms** — investigate immediately if either fires:
+Investigate immediately if either fires:
 
 ```kusto
 // Reload loop: more than one automatic reload for the same client within 10 min.
@@ -340,7 +262,7 @@ pre-migration events are sent twice, which roughly **doubles their volume** —
 expected — and lets existing per-event dashboards keep working while the thematic
 tables are validated.
 
-### Cutover checklist (~2026-09-03)
+### Cutover checklist (pending; planned for ~2026-09-03)
 
 1. Confirm in Kusto that `Engagement` and `Diagnostics` are populating, the
    `name` column is present and correct, and per-event row counts match the
@@ -354,17 +276,7 @@ tables are validated.
 
 ## Querying
 
-Before (per-event tables, union):
-
-```kusto
-union comment_created, comment_replied, comment_edited, comment_deleted,
-      thread_resolved, thread_reopened, thread_deleted, file_opened,
-      repo_switched, search_performed
-| where environment == "production"
-| summarize count() by name = "…"  // no shared discriminator
-```
-
-After (one thematic table):
+User actions by day:
 
 ```kusto
 engagement

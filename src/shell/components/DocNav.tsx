@@ -400,7 +400,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // Keep the active nav item visible inside the rail's scroll container.
   // -----------------------------------------------------------------------
   React.useEffect(() => {
-    if (!open || !activeId) return;
+    if (!activeId) return;
     const list = listRef.current!;
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
@@ -414,7 +414,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     } else if (itemRect.bottom > listRect.bottom - margin) {
       list.scrollTop += itemRect.bottom - (listRect.bottom - margin);
     }
-  }, [activeId, open]);
+  }, [activeId]);
 
   // -----------------------------------------------------------------------
   // Smooth-scroll to a heading on click.
@@ -613,8 +613,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     [folderStorageKey],
   );
 
-  if (files.length === 0 && (unloadedFolders?.length ?? 0) === 0) return null;
-
   // -----------------------------------------------------------------------
   // File-row click: produce a single active state on the row. Switch files
   // for a different path; scroll back to top for the same path.
@@ -634,6 +632,8 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     },
     [onSelectPath, selectedPath, scrollRef],
   );
+
+  if (files.length === 0 && (unloadedFolders?.length ?? 0) === 0) return null;
 
   return (
     <ChangeIndicatorContext.Provider value={showChangeIndicators}>

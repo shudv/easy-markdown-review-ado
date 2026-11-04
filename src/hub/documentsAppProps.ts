@@ -202,7 +202,7 @@ export interface DocumentsAppProps {
    * this prop switches the picker into paginated mode (filter box + scroll
    * loading) and makes it render even for a single visible repo.
    */
-  onLoadMoreRepos?: () => void;
+  onLoadMoreRepos?: () => void | Promise<void>;
   /** Re-query the repo list with a server-side name filter (debounced by the picker). */
-  onFilterRepos?: (keyword: string) => void;
+  onFilterRepos?: (keyword: string) => void | Promise<void>;
 }

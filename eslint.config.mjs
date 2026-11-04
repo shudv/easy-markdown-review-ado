@@ -92,11 +92,10 @@ export default tseslint.config(
       sonarjs,
     },
     rules: {
-      // Classic Rules of Hooks + dependency completeness. The existing
-      // `// eslint-disable-next-line react-hooks/exhaustive-deps` comments in
-      // the codebase were written against exactly these two rules.
-      "react-hooks/rules-of-hooks": "warn",
-      "react-hooks/exhaustive-deps": "warn",
+      // Classic Rules of Hooks + dependency completeness. A hook after an
+      // early return crashes React when that return toggles, so both gate.
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error",
 
       // No stray console in shipped code — the codebase already annotates the
       // intentional ones with `// eslint-disable-next-line no-console`.
@@ -125,27 +124,25 @@ export default tseslint.config(
       // an error in the "Complexity and size gate" block below.
       complexity: ["warn", { max: LIMITS.cyclomatic }],
       "sonarjs/cognitive-complexity": ["warn", LIMITS.cognitive],
-      "max-depth": ["warn", 5],
+      "max-depth": ["error", 5],
 
-      // --- Ratchet backlog (warn, not error) ------------------------------
-      // These fire against pre-existing, intentional code. Kept as warnings so
-      // the gate is green today and the findings stay visible; fix a rule's
-      // sites, then flip it to "error" to tighten the ratchet — one rule at a
-      // time, never a big-bang. New code should avoid adding to these.
+      // Type-aware correctness rules. These were warnings while existing
+      // sites were cleaned up; all now gate. A genuine exception is an
+      // `eslint-disable-next-line <rule> -- <reason>` next to the code.
       //
       //   no-unnecessary-type-assertion / require-await are OFF: they clash
       //   with deliberate defensive `arr[i]!` and async-signature symmetry.
       "@typescript-eslint/no-unnecessary-type-assertion": "off",
       "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/no-misused-promises": "warn",
-      "@typescript-eslint/only-throw-error": "warn",
-      "@typescript-eslint/prefer-promise-reject-errors": "warn",
-      "@typescript-eslint/no-base-to-string": "warn",
-      "@typescript-eslint/no-unsafe-enum-comparison": "warn",
-      "@typescript-eslint/no-unsafe-assignment": "warn",
-      "no-useless-escape": "warn",
-      "no-useless-assignment": "warn",
-      "preserve-caught-error": "warn",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/prefer-promise-reject-errors": "error",
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-unsafe-enum-comparison": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "no-useless-escape": "error",
+      "no-useless-assignment": "error",
+      "preserve-caught-error": "error",
     },
   },
 
@@ -203,7 +200,7 @@ export default tseslint.config(
     rules: {
       "no-console": "off",
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-call": "off",

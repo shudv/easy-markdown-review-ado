@@ -594,12 +594,16 @@ function toUserSuggestion(
  * matches the user's query. Implementation lives in `./adoCommentApi.helpers`.
  */
 
+function stringField(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 function toWorkItemSuggestion(w: WorkItem): WorkItemSuggestion {
   const fields = (w.fields ?? {}) as Record<string, unknown>;
   const id = w.id ?? Number(fields["System.Id"] ?? 0);
-  const title = String(fields["System.Title"] ?? "");
-  const workItemType = String(fields["System.WorkItemType"] ?? "Work item");
-  const state = String(fields["System.State"] ?? "");
+  const title = stringField(fields["System.Title"], "");
+  const workItemType = stringField(fields["System.WorkItemType"], "Work item");
+  const state = stringField(fields["System.State"], "");
   return {
     kind: "workitem",
     id: String(id),

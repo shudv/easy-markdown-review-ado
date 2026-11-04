@@ -587,7 +587,7 @@ function firstLastText(el: Element): { first: Text; last: Text } | null {
   const first = walker.nextNode() as Text | null;
   if (!first) return null;
   let last: Text = first;
-  let n: Node | null = first;
+  let n: Node | null;
   while ((n = walker.nextNode())) last = n as Text;
   return { first, last };
 }

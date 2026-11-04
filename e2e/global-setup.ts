@@ -48,6 +48,7 @@ export default async function globalSetup(): Promise<void> {
         "failed to start, run it yourself to see why:\n" +
         "  npm run dev:verify\n" +
         "(e2e enforces the strict server so it runs under the same CSP the ADO host imposes.)",
+      { cause: err },
     );
   }
 

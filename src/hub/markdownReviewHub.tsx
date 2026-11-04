@@ -185,8 +185,12 @@ async function boot(): Promise<void> {
         </ErrorBoundary>,
       );
     },
-    notifySucceeded: () => SDK.notifyLoadSucceeded(),
-    notifyFailed: (err) => SDK.notifyLoadFailed(err),
+    notifySucceeded: () => {
+      void SDK.notifyLoadSucceeded();
+    },
+    notifyFailed: (err) => {
+      void SDK.notifyLoadFailed(err);
+    },
     onError: (err) => {
       console.error("[MarkdownReviewHub] startup failed", err);
       trackUserFacingError({

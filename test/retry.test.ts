@@ -208,6 +208,7 @@ describe("withRetry", () => {
     const controller = new AbortController();
     const fn = vi.fn().mockImplementation(() => {
       controller.abort();
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- mimics ADO's plain `{ status }` REST error objects
       return Promise.reject({ status: 503 });
     });
     await expect(
@@ -301,6 +302,7 @@ describe("withRetry", () => {
     const seen: number[] = [];
     const fn = vi.fn().mockImplementation((attempt: number) => {
       seen.push(attempt);
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- mimics ADO's plain `{ status }` REST error objects
       if (attempt < 3) return Promise.reject({ status: 503 });
       return Promise.resolve("done");
     });

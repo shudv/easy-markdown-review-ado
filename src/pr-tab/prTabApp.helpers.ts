@@ -571,6 +571,7 @@ export function withTimeout<T>(
       (err) => {
         if (settled) return;
         finish();
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejects the wrapped promise's reason unchanged; callers inspect ADO error fields like `status`
         reject(err);
       },
     );

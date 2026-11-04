@@ -3,7 +3,10 @@
 // evaluate). `adoCommentApi.ts` re-exports these by name, so the production
 // call shape is unchanged.
 
-import type { PullRequestStatus } from "azure-devops-extension-api/Git";
+import type {
+  CommentType,
+  PullRequestStatus,
+} from "azure-devops-extension-api/Git";
 import type {
   GitPullRequestCommentThread,
   Comment as AdoComment,
@@ -145,6 +148,11 @@ export function buildWorkItemWiql(query: string): string {
 // Status mapping
 // ---------------------------------------------------------------------------
 
+// SDK enum runtime values (Abandoned=2, Completed=3), typed via a type-only
+// import so this file stays SDK-free at runtime.
+const PR_STATUS_ABANDONED = 2 as PullRequestStatus;
+const PR_STATUS_COMPLETED = 3 as PullRequestStatus;
+
 /**
  * Map ADO's `PullRequestStatus` enum to our string status. Numeric literals
  * are the SDK enum's runtime values (Abandoned=2, Completed=3), keeping this
@@ -154,9 +162,9 @@ export function prStatusLabel(
   status: PullRequestStatus | undefined,
 ): "active" | "completed" | "abandoned" {
   switch (status) {
-    case 3 /* Completed */:
+    case PR_STATUS_COMPLETED:
       return "completed";
-    case 2 /* Abandoned */:
+    case PR_STATUS_ABANDONED:
       return "abandoned";
     default:
       return "active";
@@ -168,6 +176,7 @@ export function prStatusLabel(
 //   CommentType:         Unknown=0, Text=1, CodeChange=2, System=3
 //   CommentThreadStatus: Unknown=0, Active=1, Fixed=2, WontFix=3,
 //                        Closed=4, ByDesign=5, Pending=6
+const COMMENT_TYPE_SYSTEM = 3 as CommentType;
 
 /** Property-bag keys + schema tag for extension-authored threads. */
 export const PROP_ANCHOR = "emrAnchor";
@@ -470,7 +479,7 @@ export function adoThreadToLocal(
   // Drop ADO system/auto threads (votes, reviewer changes, status updates,
   // ref updates) — they're commentType=System(3) and aren't review discussion.
   const comments = (t.comments ?? [])
-    .filter((c) => !c.isDeleted && c.commentType !== 3 /* System */)
+    .filter((c) => !c.isDeleted && c.commentType !== COMMENT_TYPE_SYSTEM)
     .map(adoCommentToLocal);
   if (comments.length === 0) return null;
 

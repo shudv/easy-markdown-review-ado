@@ -18,10 +18,8 @@ import { sourceDiffRanges } from "../src/shell/prShellHelpers";
 
 const lines = (...source: string[]) => source.join("\n");
 
-/** Text of `node` with diff marks annotated and nested blocks left out. */
-function annotate(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-  if (!(node instanceof HTMLElement)) return "";
+/** Annotation for a diff-mark element, or `null` when `node` isn't one. */
+function diffMarkText(node: HTMLElement): string | null {
   const cls = node.classList;
   if (
     cls.contains("emr-diff-before-panel") ||
@@ -36,14 +34,26 @@ function annotate(node: Node): string {
   }
   if (cls.contains("emr-word-added")) return `{+${node.textContent}+}`;
   if (cls.contains("emr-word-removed")) return `[-${node.textContent}-]`;
-  if (node.dataset.diffKind && node.dataset.summarized !== "self") return "";
-  if (
+  return null;
+}
+
+/** Whether `node` is a nested block summarized on its own line. */
+function isNestedBlock(node: HTMLElement): boolean {
+  if (node.dataset.summarized === "self") return false;
+  if (node.dataset.diffKind) return true;
+  return (
     ["UL", "OL", "TABLE", "PRE"].includes(node.tagName) &&
-    node.hasAttribute("data-source-line") &&
-    node.dataset.summarized !== "self"
-  ) {
-    return "";
-  }
+    node.hasAttribute("data-source-line")
+  );
+}
+
+/** Text of `node` with diff marks annotated and nested blocks left out. */
+function annotate(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (!(node instanceof HTMLElement)) return "";
+  const mark = diffMarkText(node);
+  if (mark !== null) return mark;
+  if (isNestedBlock(node)) return "";
   const inner = Array.from(node.childNodes).map(annotate).join("");
   const tip = node.dataset.diffTooltip;
   return tip && node.dataset.summarized !== "self" ? `⟨${tip}⟩${inner}` : inner;

@@ -42,8 +42,8 @@ export function RepoPicker({
   filter?: string;
   hasMore?: boolean;
   loading?: boolean;
-  onLoadMore?: () => void;
-  onFilter?: (keyword: string) => void;
+  onLoadMore?: () => void | Promise<void>;
+  onFilter?: (keyword: string) => void | Promise<void>;
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({});
@@ -100,7 +100,7 @@ export function RepoPicker({
     if (!paginated) return;
     if (filterText === filter) return; // already in sync (e.g. external reset)
     const handle = window.setTimeout(() => {
-      onFilterRef.current?.(filterText);
+      void onFilterRef.current?.(filterText);
     }, 250);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filter` is omitted on purpose: the debounce follows local input only
@@ -113,7 +113,7 @@ export function RepoPicker({
   React.useEffect(() => {
     if (open) return;
     if (filterText !== "") setFilterText("");
-    if (paginated && filter !== "") onFilterRef.current?.("");
+    if (paginated && filter !== "") void onFilterRef.current?.("");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to open/close transitions, not to filter or paging changes
   }, [open]);
 
@@ -174,7 +174,7 @@ export function RepoPicker({
     const el = listRef.current!;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
       loadMoreRequestedRef.current = true;
-      onLoadMore();
+      void onLoadMore();
     }
   }, [paginated, hasMore, loading, onLoadMore]);
 

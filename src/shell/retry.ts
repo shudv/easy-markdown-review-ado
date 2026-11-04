@@ -91,6 +91,7 @@ function abortableSleep(
       },
       (e) => {
         cleanup();
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwards the injected sleep's rejection unchanged; wrapping would hide the original reason from callers
         reject(e);
       },
     );

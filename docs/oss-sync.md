@@ -1,11 +1,11 @@
 # OSS mirror sync ledger
 
-## 2026-11-04 Size cleanup, ESLint complexity gate, coverage-ignore audit, doc fixes and v1 telemetry retirement sync
+## 2026-11-04 Size cleanup, ESLint complexity gate, lint warnings as errors, coverage-ignore audit, doc fixes and v1 telemetry retirement sync
 
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
-- New product boundary: `b871f9e` (source branch `refactor/clear-size-baseline`,
+- New product boundary: `df98345` (source branch `refactor/clear-size-baseline`,
   which also carries `14843f8`; not yet merged, record the source merge commit
   here once it lands).
 - OSS release version: unchanged at `1.3.0`.
@@ -22,11 +22,12 @@
 | `4ef8ce8`     | v1 telemetry retired: dual emission to the per-event tables ends, `toTableEvent` sends each event only to `Engagement` or `Diagnostics`, and the telemetry doc drops its migration material.                                                                                                                                                                                             |
 | `ba9bd6e`     | Coverage-ignore audit: 185 `v8 ignore` directives reduced to 12 (the rest replaced by tests or removed with their dead code), the `emr/coverage-ignore-rationale` ESLint rule requiring a reason on every ignore, two "Before" disclosure builders deduplicated, and scratch `coverage-*/` folders gitignored.                                                                           |
 | `b871f9e`     | Complexity and size limits enforced by ESLint as errors, with exceptions as `eslint-disable … -- <reason>` comments next to the code; `reportUnusedDisableDirectives` and `@eslint-community/eslint-plugin-eslint-comments` (`require-description`, `no-unlimited-disable`) added; the custom checker, its JSON baseline and its CI steps removed; a test harness `unbound-method` fix.  |
+| `df98345`     | All 37 ESLint warnings fixed and their rules flipped to errors: `DocumentsApp` and `DocNav` no longer call hooks after an early return (`DocumentsApp` splits into a `DocumentsAppBody`), `AlmSearchError` is an `Error` subclass, ADO enum comparisons use typed constants, and smaller promise, escape and assignment fixes. Complexity stays advisory in tests and e2e.               |
 
 ### Public-specific adaptations retained
 
 - Keep all adaptations and exclusions from the earlier syncs below. The public
-  feedback contact stays in `DocumentsApp.tsx` and `PrTabApp.tsx`; the shorter
+  feedback contact stays in `DocumentsApp.tsx` (now in `DocumentsAppBody`) and `PrTabApp.tsx`; the shorter
   `togglePopover` call moves with its code to
   `src/markdown/diffDecorations/metadata.ts`.
 - The README keeps its public wording; only the complexity paragraph changes.

@@ -105,8 +105,12 @@ void orchestrateBoot({
       </ErrorBoundary>,
     );
   },
-  notifySucceeded: () => SDK.notifyLoadSucceeded(),
-  notifyFailed: (err) => SDK.notifyLoadFailed(err),
+  notifySucceeded: () => {
+    void SDK.notifyLoadSucceeded();
+  },
+  notifyFailed: (err) => {
+    void SDK.notifyLoadFailed(err);
+  },
   onError: (err) => {
     console.error("Markdown Review tab failed to boot", err);
     trackUserFacingError({

@@ -180,28 +180,38 @@ describe("markerInViewport", () => {
   });
 });
 
+/** Build the scroller/track geometry the thumb helpers take. */
+function geometry(
+  clientHeight: number,
+  scrollHeight: number,
+  trackPx: number,
+  minThumbPx: number,
+) {
+  return { clientHeight, scrollHeight, trackPx, minThumbPx };
+}
+
 describe("thumbMetrics", () => {
   it("sizes the thumb by the visible fraction", () => {
     // 100 visible of 400 total over a 200px track → 50px thumb at the top.
-    expect(thumbMetrics(0, 100, 400, 200, 20)).toEqual({
+    expect(thumbMetrics(0, geometry(100, 400, 200, 20))).toEqual({
       topPx: 0,
       heightPx: 50,
     });
   });
   it("reaches the bottom EXACTLY at max scroll (no overshoot)", () => {
     // maxScroll = 300; at the bottom the thumb bottom == track bottom (200).
-    const m = thumbMetrics(300, 100, 400, 200, 20);
+    const m = thumbMetrics(300, geometry(100, 400, 200, 20));
     expect(m.heightPx).toBe(50);
     expect(m.topPx).toBe(150); // 150 + 50 == 200
   });
   it("honours the min thumb height but still bottoms out correctly", () => {
     // Proportional height would be 1px; clamped up to 20px.
-    const m = thumbMetrics(990, 10, 1000, 100, 20);
+    const m = thumbMetrics(990, geometry(10, 1000, 100, 20));
     expect(m.heightPx).toBe(20);
     expect(m.topPx).toBe(80); // 80 + 20 == 100 (track bottom), no overshoot
   });
   it("fills the track when the document fits", () => {
-    expect(thumbMetrics(0, 400, 400, 200, 20)).toEqual({
+    expect(thumbMetrics(0, geometry(400, 400, 200, 20))).toEqual({
       topPx: 0,
       heightPx: 200,
     });
@@ -211,16 +221,18 @@ describe("thumbMetrics", () => {
 describe("scrollFromThumbDrag", () => {
   it("tracks the pointer 1:1 across the available track", () => {
     // thumb 50px on a 200px track → 150px of travel maps to 300px of scroll.
-    expect(scrollFromThumbDrag(0, 50, 100, 400, 200, 20)).toBe(100);
+    expect(scrollFromThumbDrag(0, 50, geometry(100, 400, 200, 20))).toBe(100);
   });
   it("clamps a drag past the bottom (no over-scroll)", () => {
-    expect(scrollFromThumbDrag(300, 100, 100, 400, 200, 20)).toBe(300);
+    expect(scrollFromThumbDrag(300, 100, geometry(100, 400, 200, 20))).toBe(
+      300,
+    );
   });
   it("is a no-op when the document fits", () => {
-    expect(scrollFromThumbDrag(0, 50, 400, 400, 200, 20)).toBe(0);
+    expect(scrollFromThumbDrag(0, 50, geometry(400, 400, 200, 20))).toBe(0);
   });
   it("is a no-op when the track is shorter than the min thumb", () => {
     // trackPx 20 < minThumb 28 → thumb fills the track → nothing to drag.
-    expect(scrollFromThumbDrag(0, 50, 40, 400, 20, 28)).toBe(0);
+    expect(scrollFromThumbDrag(0, 50, geometry(40, 400, 20, 28))).toBe(0);
   });
 });

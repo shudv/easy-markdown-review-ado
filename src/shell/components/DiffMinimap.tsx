@@ -62,6 +62,7 @@ function readMetrics(scroller: HTMLElement): Metrics {
   };
 }
 
+// eslint-disable-next-line max-lines-per-function -- Diff minimap: change markers, thumb drag and scroll sync act on one scroll container. Geometry lives in diffMinimap.helpers.ts.
 export function DiffMinimap({
   scrollRef,
   version,
@@ -78,7 +79,6 @@ export function DiffMinimap({
 
   const measure = React.useCallback(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scrollRef (the reader body) is attached before effects run; defensive guard */
     if (!scroller) return;
     const m = readMetrics(scroller);
     const scRect = scroller.getBoundingClientRect();
@@ -99,7 +99,6 @@ export function DiffMinimap({
 
   const syncScroll = React.useCallback(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scroller is present whenever the scroll listener calling this is attached */
     if (!scroller) return;
     setMetrics(readMetrics(scroller));
   }, [scrollRef]);
@@ -112,7 +111,6 @@ export function DiffMinimap({
   // Follow ArticleView's post-decoration signal, plus scroll + resize.
   React.useEffect(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scrollRef is attached before effects run; defensive guard */
     if (!scroller) return;
     let raf = 0;
     const onScroll = () => {
@@ -166,13 +164,12 @@ export function DiffMinimap({
   // margins (plus the ruler's CSS top offset) already inset it to align with the
   // reading surface, so no extra inset is subtracted here.
   const rulerH = metrics.clientHeight;
-  const thumb = thumbMetrics(
-    metrics.scrollTop,
-    metrics.clientHeight,
-    metrics.scrollHeight,
-    rulerH,
-    MIN_THUMB,
-  );
+  const thumb = thumbMetrics(metrics.scrollTop, {
+    clientHeight: metrics.clientHeight,
+    scrollHeight: metrics.scrollHeight,
+    trackPx: rulerH,
+    minThumbPx: MIN_THUMB,
+  });
   const viewportFrac = viewportRange(
     metrics.scrollTop,
     metrics.clientHeight,
@@ -182,7 +179,6 @@ export function DiffMinimap({
   const jumpTo = (clientY: number) => {
     const track = trackRef.current;
     const scroller = scrollRef.current;
-    /* v8 ignore next -- track + scroller exist whenever the rendered bar's click handler runs */
     if (!track || !scroller) return;
     const rect = track.getBoundingClientRect();
     const fraction = (clientY - rect.top) / rect.height;
@@ -199,7 +195,6 @@ export function DiffMinimap({
   // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
   const onThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scroller exists whenever the rendered thumb is grabbed */
     if (!scroller) return;
     // Tear down any listeners a previous drag left attached (defensive).
     dragCleanupRef.current?.();
@@ -213,11 +208,13 @@ export function DiffMinimap({
       scroller.scrollTop = scrollFromThumbDrag(
         startScroll,
         ev.clientY - startY,
-        ch,
-        sh,
-        // The track spans the full visible height now, so trackPx === clientHeight.
-        ch,
-        MIN_THUMB,
+        {
+          clientHeight: ch,
+          scrollHeight: sh,
+          // The track spans the full visible height now, so trackPx === clientHeight.
+          trackPx: ch,
+          minThumbPx: MIN_THUMB,
+        },
       );
     };
     // End the drag on pointerup OR pointercancel, and expose the teardown via a

@@ -843,7 +843,7 @@ button {
 
 // Graceful degradation: when the frame is narrower than the visible columns
 // need (a very narrow window, or zoomed in), the reader disables cleanly. The
-// PrShell ResizeObserver toggles `.is-too-narrow`, which hides every reader
+// Shell ResizeObserver toggles `.is-too-narrow`, which hides every reader
 // column + the toolbar and lets the notice card fill the frame instead of
 // squishing the prose or scrolling horizontally.
 .emr-too-narrow {
@@ -2300,7 +2300,7 @@ button {
 // Clicking / cycling to a comment scrolls it to the top of the rail. Offset the
 // scroll target below the sticky header (the shell-top gap + the single toolbar
 // row) with a CONSTANT so the comment lands fully in view, not tucked under the
-// "COMMENTS" strip. PrShell's `scrollIntoView({ block: "start" })` respects it.
+// "COMMENTS" strip. Shell's `scrollIntoView({ block: "start" })` respects it.
 .emr-rail-col .emr-balloon {
   scroll-margin-top: calc(var(--emr-shell-top) + 44px);
 }
@@ -5580,7 +5580,7 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
 
 // Generic spinner — any SvgRefresh-style icon with .is-spinning
 // rotates. Used by both the docs-hub repo refresh button and the
-// per-PR thread refresh button in PrShell's rail header.
+// per-PR thread refresh button in Shell's rail header.
 .emr-icon.is-spinning {
   animation: emr-spin 0.8s linear infinite;
 }
@@ -5594,7 +5594,7 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
   }
 }
 
-// Make the PrShell .emr-app stretch to fill the docs container so the
+// Make the Shell .emr-app stretch to fill the docs container so the
 // rail + article share the full available height.
 .emr-docs-app .emr-app {
   flex: 1 1 auto;

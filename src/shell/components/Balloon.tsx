@@ -69,6 +69,7 @@ interface BalloonProps {
   onCancelReply?: (threadId: string) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
 export function Balloon(props: BalloonProps): React.ReactElement {
   const {
     thread,
@@ -102,11 +103,9 @@ export function Balloon(props: BalloonProps): React.ReactElement {
     if (!ref.current || !onHeightChange) return;
     const el = ref.current;
     onHeightChange(thread.id, el.getBoundingClientRect().height);
-    /* v8 ignore start -- ResizeObserver fires asynchronously; its timing is non-deterministic under the test runner */
     const ro = new ResizeObserver(() => {
       onHeightChange(thread.id, el.getBoundingClientRect().height);
     });
-    /* v8 ignore stop */
     ro.observe(el);
     return () => ro.disconnect();
   }, [

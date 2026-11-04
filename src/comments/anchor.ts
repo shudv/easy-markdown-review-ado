@@ -8,6 +8,7 @@
 // Both operate purely on text nodes within `article` (data-source-line attrs
 // don't affect text content), so they're robust to the rendering pipeline.
 
+import { numAttr } from "../markdown/diffDecorations/shared";
 import type { TextQuoteAnchor } from "../types";
 
 /** Context length captured on either side of a new anchor. */
@@ -48,15 +49,12 @@ function flattenText(root: Element): { text: string; runs: TextRun[] } {
 function locateOffset(
   runs: TextRun[],
   offset: number,
-): { run: TextRun; nodeOffset: number } | null {
-  // Binary search would be nicer but linear is fine for documents of our size.
-  for (const run of runs) {
-    if (offset >= run.start && offset <= run.end) {
-      return { run, nodeOffset: offset - run.start };
-    }
-  }
-  /* v8 ignore next 2 -- unreachable: callers pass in-bounds indexOf offsets, so only a degenerate empty-text root could miss */
-  return null;
+): { run: TextRun; nodeOffset: number } {
+  // Runs are contiguous from 0 and callers pass in-bounds match offsets, so
+  // the first run ending at/after `offset` always contains it. Linear is fine
+  // for documents of our size.
+  const run = runs.find((candidate) => offset <= candidate.end)!;
+  return { run, nodeOffset: offset - run.start };
 }
 
 /**
@@ -91,8 +89,8 @@ function resolveTextQuote(
 ): Range | null {
   const match = matchTextQuote(root, anchor);
   if (!match) return null;
-  const start = locateOffset(match.runs, match.start)!;
-  const end = locateOffset(match.runs, match.end)!;
+  const start = locateOffset(match.runs, match.start);
+  const end = locateOffset(match.runs, match.end);
   const range = document.createRange();
   range.setStart(start.run.node, start.nodeOffset);
   range.setEnd(end.run.node, end.nodeOffset);
@@ -263,17 +261,16 @@ export function captureAnchorFromSelection(
     range.endContainer,
     range.endOffset,
   );
-  /* v8 ignore next -- valid DOM ranges inside root resolve ordered boundary offsets */
+  // An empty Text node has no run, so a boundary inside one maps to -1.
   if (rawStart < 0 || rawEnd < rawStart) return null;
 
   // Trim the selection as represented by the article's flattened text, not
   // Range.toString(). Triple-click appends synthetic block separators (`\n\n`)
   // and often ends at child offset 0 on the next block element; those line
   // breaks do not exist in the durable rendered-text model. Double-click's
-  // adjacent space does exist there, so it is still trimmed as before.
+  // adjacent space does exist there, so it is still trimmed as before. The
+  // slice holds exactly the range's Text data, so it is non-blank like `raw`.
   const selectedText = text.slice(rawStart, rawEnd);
-  /* v8 ignore next -- raw.trim() above already rejects textless selections; this guards browser-only synthetic separators */
-  if (!selectedText.trim()) return null;
   const leadWs = selectedText.length - selectedText.trimStart().length;
   const trailWs = selectedText.length - selectedText.trimEnd().length;
   const exact = selectedText.slice(leadWs, selectedText.length - trailWs);
@@ -320,7 +317,6 @@ function sourceLineFromNode(node: Node): number | undefined {
     const raw = el.getAttribute("data-source-line");
     if (raw != null) {
       const n = Number.parseInt(raw, 10);
-      /* v8 ignore next -- parseInt of a present numeric attribute is always finite */
       if (Number.isFinite(n)) return n;
     }
     el = el.parentElement;
@@ -447,7 +443,7 @@ function boundaryOffsetToFlat(
     for (const run of runs) {
       if (run.node === node) return run.start + offsetInNode;
     }
-    /* v8 ignore next -- root containment guarantees selected text nodes occur in runs */
+    // Empty Text nodes are skipped by flattenText, so they have no run.
     return -1;
   }
 
@@ -469,21 +465,15 @@ function boundaryOffsetToFlat(
 
   // Empty inline wrappers can themselves be range boundaries. Lift the point
   // to the equivalent boundary in the parent and continue toward the root.
-  const parent = node.parentNode;
-  /* v8 ignore next -- a valid selection boundary inside root always has a parent */
-  if (parent) {
-    const index = Array.prototype.indexOf.call(
-      parent.childNodes,
-      node,
-    ) as number;
-    return boundaryOffsetToFlat(
-      runs,
-      parent,
-      offsetInNode === 0 ? index : index + 1,
-    );
-  }
-  /* v8 ignore next -- defensive fallback for a detached non-Text boundary */
-  return -1;
+  // The caller only passes boundaries inside a root holding a non-blank text
+  // run, so the scans above always succeed by the time the lift reaches root.
+  const parent = node.parentNode!;
+  const index = Array.prototype.indexOf.call(parent.childNodes, node) as number;
+  return boundaryOffsetToFlat(
+    runs,
+    parent,
+    offsetInNode === 0 ? index : index + 1,
+  );
 }
 
 function commonPrefixLen(a: string, b: string): number {
@@ -511,14 +501,6 @@ function commonSuffixLen(a: string, b: string): number {
 const LINE_ANCHOR_BLOCK_SELECTOR =
   "p, li, pre, blockquote, dd, dt, td, th, h1, h2, h3, h4, h5, h6, img";
 
-function lineAttr(el: Element, name: string): number | null {
-  const raw = el.getAttribute(name);
-  if (raw == null) return null;
-  const n = Number.parseInt(raw, 10);
-  /* v8 ignore next -- parseInt of a present numeric attribute is always finite */
-  return Number.isFinite(n) ? n : null;
-}
-
 /**
  * Resolve a 1-based source line range to a Range over the rendered block(s)
  * that own those lines, via the `data-source-line` / `data-source-end-line`
@@ -540,8 +522,8 @@ function resolveLineAnchor(
     let best: HTMLElement | null = null;
     let bestStart = -1;
     for (const el of blocks) {
-      const s = lineAttr(el, "data-source-line");
-      const e = lineAttr(el, "data-source-end-line");
+      const s = numAttr(el, "data-source-line");
+      const e = numAttr(el, "data-source-end-line");
       if (s == null || e == null) continue;
       if (s <= line && line <= e && s > bestStart) {
         best = el;
@@ -572,7 +554,7 @@ function resolveLineAnchor(
   // after it so the balloon lands near the right place.
   let fallback: HTMLElement | null = null;
   for (const el of blocks) {
-    const s = lineAttr(el, "data-source-line");
+    const s = numAttr(el, "data-source-line");
     if (s != null && s >= startLine) {
       fallback = el;
       break;
@@ -605,7 +587,7 @@ function firstLastText(el: Element): { first: Text; last: Text } | null {
   const first = walker.nextNode() as Text | null;
   if (!first) return null;
   let last: Text = first;
-  let n: Node | null = first;
+  let n: Node | null;
   while ((n = walker.nextNode())) last = n as Text;
   return { first, last };
 }

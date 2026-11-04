@@ -1,0 +1,136 @@
+// Documents hub: the lazily loaded file tree per repository.
+
+import * as React from "react";
+
+import type { FileInfo } from "../types";
+import type { DocRepo, FolderListing } from "../shell/types";
+import { trackUserFacingError } from "../telemetry";
+import { planRootAutoExpand } from "./autoExpand";
+import {
+  mergeFolderListing,
+  seedLazyTree,
+  type LazyTreeState,
+} from "./documentsApp.helpers";
+import type { DocumentsAppProps } from "./documentsAppProps";
+
+/**
+ * Lazy-tree working set keyed by repo id. Each entry starts as
+ * `{ files: repo.files, unloadedFolders: repo.topLevelFolders }` and grows
+ * as `onExpandFolder` resolves. The map is NOT reset on repo switch —
+ * entries persist for the DocumentsApp lifetime so re-opening a repo doesn't
+ * re-fetch already-expanded folders.
+ */
+export function useLazyTree(
+  selectedRepo: DocRepo | undefined,
+  onExpandFolder: DocumentsAppProps["onExpandFolder"],
+) {
+  const [lazyTreeByRepo, setLazyTreeByRepo] = React.useState<
+    Map<string, LazyTreeState>
+  >(() => {
+    const m = new Map<string, LazyTreeState>();
+    // Only seed once the repo's listing has loaded. The paginated picker hands
+    // us a content-less skeleton (`detailsLoaded === false`) first; seeding
+    // from it would cache an empty tree that never refreshes when the real
+    // root listing arrives, leaving the nav permanently empty.
+    if (selectedRepo && selectedRepo.detailsLoaded !== false) {
+      m.set(selectedRepo.id, seedLazyTree(selectedRepo));
+    }
+    return m;
+  });
+  // Seed an entry the first time we see a repo with loaded content; existing
+  // entries are the cache. Skeletons (`detailsLoaded === false`) are skipped so
+  // the entry is first created from the real listing, not the empty skeleton.
+  React.useEffect(() => {
+    if (!selectedRepo) return;
+    if (selectedRepo.detailsLoaded === false) return;
+    setLazyTreeByRepo((curr) => {
+      if (curr.has(selectedRepo.id)) return curr;
+      const next = new Map(curr);
+      next.set(selectedRepo.id, seedLazyTree(selectedRepo));
+      return next;
+    });
+  }, [selectedRepo]);
+
+  // The cached entry for the active repo (undefined for the one render right
+  // after a new repo is selected, before the seeding effect lands — read
+  // sites fall back to `selectedRepo.files`).
+  const lazyTree = selectedRepo
+    ? lazyTreeByRepo.get(selectedRepo.id)
+    : undefined;
+
+  // Lazy folder expansion handler: returns the raw payload to the DocNav and
+  // merges the result into the per-repo `lazyTreeByRepo` entry.
+  const handleExpandFolder = React.useCallback(
+    async (
+      path: string,
+    ): Promise<{ files: FileInfo[]; folders: string[] } | null> => {
+      if (!selectedRepo || !onExpandFolder) return null;
+      const repoIdAtCall = selectedRepo.id;
+      let payload: FolderListing;
+      try {
+        payload = await onExpandFolder(repoIdAtCall, path);
+      } catch (err) {
+        console.warn("[documents-hub] expand folder failed:", path, err);
+        trackUserFacingError({
+          error: err,
+          source: "DocumentsApp.navigation",
+          operation: "folder-expand",
+          impact: "action-failed",
+        });
+        return null;
+      }
+      setLazyTreeByRepo((curr) => {
+        const entry = curr.get(repoIdAtCall);
+        if (!entry) return curr;
+        const next = new Map(curr);
+        next.set(
+          repoIdAtCall,
+          mergeFolderListing(entry, repoIdAtCall, path, payload),
+        );
+        return next;
+      });
+      return payload;
+    },
+    [selectedRepo, onExpandFolder],
+  );
+
+  useRootAutoExpand(selectedRepo, lazyTree, onExpandFolder, handleExpandFolder);
+
+  return { lazyTree, setLazyTreeByRepo, handleExpandFolder };
+}
+
+// After a repo's listing loads, auto-expand its folders so the markdown
+// surfaces immediately — a docs repo usually keeps its content under a
+// folder (e.g. `/docs`), so the root listing alone has no files and the nav
+// would otherwise read as empty until the user manually drilled in. Walks
+// one level per pass (the effect re-runs as the tree grows) until the first
+// document appears, then stops. Deduped + budgeted via refs so it never
+// re-fetches a folder or walks a large repo without bound.
+function useRootAutoExpand(
+  selectedRepo: DocRepo | undefined,
+  lazyTree: LazyTreeState | undefined,
+  onExpandFolder: DocumentsAppProps["onExpandFolder"],
+  handleExpandFolder: (path: string) => Promise<unknown>,
+): void {
+  const autoExpandedFoldersRef = React.useRef<Set<string>>(new Set());
+  const autoExpandUsedRef = React.useRef<Map<string, number>>(new Map());
+  React.useEffect(() => {
+    if (!selectedRepo || !onExpandFolder) return;
+    if (selectedRepo.detailsLoaded === false) return;
+    const tree = lazyTree;
+    if (!tree || tree.unloadedFolders.length === 0) return;
+    const repoId = selectedRepo.id;
+    const plan = planRootAutoExpand({
+      repoId,
+      fileCount: tree.files.length,
+      unloadedFolders: tree.unloadedFolders,
+      expandedKeys: autoExpandedFoldersRef.current,
+      used: autoExpandUsedRef.current.get(repoId) ?? 0,
+      max: 40, // safety cap per repo
+    });
+    if (plan.folders.length === 0) return;
+    for (const key of plan.keys) autoExpandedFoldersRef.current.add(key);
+    autoExpandUsedRef.current.set(repoId, plan.used);
+    for (const folder of plan.folders) void handleExpandFolder(folder);
+  }, [selectedRepo, lazyTree, onExpandFolder, handleExpandFolder]);
+}

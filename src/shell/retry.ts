@@ -74,10 +74,8 @@ function abortableSleep(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   if (!signal) return sleep(ms);
-  // Defensive: the retry loop already checks `signal.aborted` before sleeping,
-  // so this guard is not reachable from `withRetry`; it keeps the helper safe
-  // if reused standalone.
-  /* v8 ignore next */
+  // An `onRetry` callback can abort the signal after the loop's own check; an
+  // already-aborted signal never fires "abort", so reject up front.
   if (signal.aborted) return Promise.reject(abortError());
   return new Promise<void>((resolve, reject) => {
     const onAbort = () => {
@@ -93,6 +91,7 @@ function abortableSleep(
       },
       (e) => {
         cleanup();
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwards the injected sleep's rejection unchanged; wrapping would hide the original reason from callers
         reject(e);
       },
     );
@@ -144,15 +143,16 @@ export function computeBackoffMs(
   return Math.floor(random() * exp);
 }
 
-/**
- * Run `fn` with ret/backoff per the resiliency policy. `fn` receives the
- * 1-based attempt number. The last error is rethrown once attempts are
- * exhausted or the failure is classified non-retryable.
- */
-export async function withRetry<T>(
-  fn: (attempt: number) => Promise<T>,
-  opts: RetryOptions,
-): Promise<T> {
+type ResolvedRetryOptions = Required<
+  Pick<
+    RetryOptions,
+    "mode" | "attempts" | "baseDelayMs" | "maxDelayMs" | "sleep" | "random"
+  >
+> &
+  Pick<RetryOptions, "signal" | "onRetry">;
+
+/** Fill in the policy defaults for any omitted retry options. */
+function resolveRetryOptions(opts: RetryOptions): ResolvedRetryOptions {
   const {
     mode,
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
@@ -165,6 +165,37 @@ export async function withRetry<T>(
   const attempts =
     opts.attempts ??
     (mode === "write" ? DEFAULT_WRITE_ATTEMPTS : DEFAULT_READ_ATTEMPTS);
+  return {
+    mode,
+    attempts,
+    baseDelayMs,
+    maxDelayMs,
+    signal,
+    sleep,
+    random,
+    onRetry,
+  };
+}
+
+/**
+ * Run `fn` with ret/backoff per the resiliency policy. `fn` receives the
+ * 1-based attempt number. The last error is rethrown once attempts are
+ * exhausted or the failure is classified non-retryable.
+ */
+export async function withRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  opts: RetryOptions,
+): Promise<T> {
+  const {
+    mode,
+    attempts,
+    baseDelayMs,
+    maxDelayMs,
+    signal,
+    sleep,
+    random,
+    onRetry,
+  } = resolveRetryOptions(opts);
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -186,8 +217,7 @@ export async function withRetry<T>(
       await abortableSleep(sleep, delayMs, signal);
     }
   }
-  // Unreachable: the loop either returns or throws. Rethrow defensively.
-  /* v8 ignore next 2 */
+  // Only reached when `attempts` < 1, so the loop never ran.
   throw lastError;
 }
 

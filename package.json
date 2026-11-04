@@ -27,10 +27,6 @@
     "lint:staged": "lint-staged",
     "knip": "knip",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
-    "complexity": "node scripts/check-complexity.mjs",
-    "complexity:check": "node scripts/check-complexity.mjs --check",
-    "complexity:update": "node scripts/check-complexity.mjs --update",
-    "test:complexity": "node --test scripts/check-complexity.test.mjs",
     "duplication:check": "jscpd src --config .jscpd.json && jscpd src test --config .jscpd.fixtures.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -95,6 +91,7 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "@resvg/resvg-js": "^2.6.2",

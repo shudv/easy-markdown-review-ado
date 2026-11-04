@@ -59,7 +59,7 @@ export function readCollapsedDirs(key: string): Set<string> {
   try {
     const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
     if (!raw) return new Set();
-    const arr = JSON.parse(raw);
+    const arr: unknown = JSON.parse(raw);
     return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
   } catch {
     return new Set();

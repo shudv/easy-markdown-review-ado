@@ -25,8 +25,6 @@ import {
   GitRestClient,
   CommentThreadStatus,
   PullRequestStatus,
-  GitVersionType,
-  GitVersionOptions,
   type GitPullRequestCommentThread,
   type GitPullRequestSearchCriteria,
   type Comment as AdoComment,
@@ -38,12 +36,7 @@ import {
   type IVssIdentityService,
 } from "azure-devops-extension-api/Identities/IdentityService";
 
-import type {
-  CommentThread,
-  DiffRange,
-  ReactionKind,
-  ThreadStatus,
-} from "../types";
+import type { CommentThread, ReactionKind, ThreadStatus } from "../types";
 import { trackUserFacingError } from "../telemetry";
 import type {
   CommentApi,
@@ -66,15 +59,10 @@ import {
   buildThreadContext,
   buildWorkItemWiql,
   buildIdentitiesUrl,
-  fileDiffCacheReplacer,
-  hashString,
   initialsOf,
-  lineDiffBlocksToCounts,
-  lineDiffBlocksToRanges,
   normalizeIdentityGuid,
   parseIdentitiesResponse,
   pickerAvatarUrl,
-  pathsRequiringOriginalSource,
   prStatusLabel,
   reactionClientMethod,
   toAdoStatusValue,
@@ -83,11 +71,17 @@ import {
   PROP_SCHEMA,
   SCHEMA_VERSION,
 } from "./adoCommentApi.helpers";
+import {
+  loadFileDiffs,
+  type FileDiffInfo,
+  type FileDiffQuery,
+} from "./adoFileDiffs.helpers";
 import { sharedGitClient, sharedWorkItemClient } from "./adoClients";
 
 // Re-export `adoThreadToLocal` (used by adoGitData's thread mapping) from the
 // same place as the SDK-touching API surface.
 export { adoThreadToLocal };
+export type { FileDiffInfo };
 
 // ---------------------------------------------------------------------------
 // Status mapping
@@ -534,211 +528,15 @@ export class AdoCommentApi implements CommentApi {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetches per-file diff data for the given file paths using ADO's
- * `getFileDiffs` endpoint. Returned record is keyed by file path and carries
- * both aggregate add/delete counts (for the file tree) and `DiffRange[]`
- * (for inline change bars / deletion markers in the rendered article).
- *
- * Missing entries imply "no diff data available" — caller should default
- * those to zero counts / empty ranges.
- *
- * Results are cached in `sessionStorage` keyed by
- * `(projectId, repositoryId, baseCommit, targetCommit, sorted paths hash)`
- * so reopening the same PR tab (or its iframe being re-instantiated mid-
- * navigation) doesn't re-hit `getFileDiffs`. The cache invalidates
- * automatically when the PR's iteration changes — `baseCommit` and
- * `targetCommit` are commit SHAs, so new iterations bump them.
+ * Per-file diff data (aggregate counts + inline `DiffRange[]`) for `paths`,
+ * cached per iteration in `sessionStorage`. See {@link loadFileDiffs}.
  */
-export async function fetchFileDiffs(
-  repositoryId: string,
-  project: string,
-  baseCommit: string,
-  targetCommit: string,
+export function fetchFileDiffs(
+  diff: FileDiffQuery,
   paths: string[],
 ): Promise<Record<string, FileDiffInfo>> {
-  if (paths.length === 0) return {};
-  const cacheKey = buildLineCountsCacheKey(
-    project,
-    repositoryId,
-    baseCommit,
-    targetCommit,
-    paths,
-  );
-  const cached = readLineCountsCache(cacheKey);
-  if (cached) {
-    const pathsToHydrate = pathsRequiringOriginalSource(cached);
-    if (pathsToHydrate.length === 0) return cached;
-    const gitClient = sharedGitClient();
-    await Promise.all(
-      pathsToHydrate.map(async (path) => {
-        const originalLines = await fetchOriginalLines(
-          gitClient,
-          repositoryId,
-          project,
-          baseCommit,
-          path,
-        );
-        if (originalLines)
-          cached[path]!.originalSource = originalLines.join("\n");
-      }),
-    );
-    return cached;
-  }
-
-  const gitClient = sharedGitClient();
-  const diffs = await withRetry(
-    () =>
-      gitClient.getFileDiffs(
-        {
-          baseVersionCommit: baseCommit,
-          targetVersionCommit: targetCommit,
-          fileDiffParams: paths.map((p) => ({ originalPath: p, path: p })),
-        },
-        project,
-        repositoryId,
-      ),
-    { mode: "read", label: "fetchFileDiffs.getFileDiffs" },
-  );
-  const out: Record<string, FileDiffInfo> = {};
-  for (const d of diffs ?? []) {
-    if (!d.path) continue;
-    const blocks = d.lineDiffBlocks;
-    const { linesAdded, linesDeleted } = lineDiffBlocksToCounts(blocks);
-    // ADO's diff response carries no removed text, so for files that delete
-    // lines we fetch the original at the base commit and slice the removed
-    // range into each marker's expandable body. Fetched lazily (only files
-    // with deletions) and tolerant of failure — the marker still renders.
-    let originalLines: string[] | undefined;
-    if (linesDeleted > 0) {
-      originalLines = await fetchOriginalLines(
-        gitClient,
-        repositoryId,
-        project,
-        baseCommit,
-        d.path,
-      );
-    }
-    out[d.path] = {
-      linesAdded,
-      linesDeleted,
-      originalSource: originalLines?.join("\n"),
-      ranges: lineDiffBlocksToRanges(blocks, originalLines),
-    };
-  }
-  writeLineCountsCache(cacheKey, out);
-  return out;
+  return loadFileDiffs(diff, paths, sharedGitClient);
 }
-
-/**
- * Fetch a file's text at a specific commit and split it into lines. Used to
- * recover the removed prose that ADO's `getFileDiffs` omits. Returns
- * `undefined` on any failure so diff decoration degrades gracefully.
- */
-async function fetchOriginalLines(
-  gitClient: GitRestClient,
-  repositoryId: string,
-  project: string,
-  commitId: string,
-  path: string,
-): Promise<string[] | undefined> {
-  try {
-    const text = await withRetry(
-      () =>
-        gitClient.getItemText(
-          repositoryId,
-          path,
-          project,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          {
-            version: commitId,
-            versionType: GitVersionType.Commit,
-            versionOptions: GitVersionOptions.None,
-          },
-          true,
-        ),
-      { mode: "read", label: "fetchFileDiffs.getItemText(original)" },
-    );
-    return text.split(/\r\n|\r|\n/);
-  } catch (err) {
-    console.warn(
-      "[fetchFileDiffs] original content fetch failed; deletion bodies will be empty",
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "PrTabApp.diff",
-      operation: "original-content-load",
-      impact: "degraded",
-    });
-    return undefined;
-  }
-}
-
-/** Per-file diff summary: aggregate counts plus inline `DiffRange[]`. */
-export interface FileDiffInfo {
-  linesAdded: number;
-  linesDeleted: number;
-  /** Complete Markdown source at the diff base commit, when fetched. */
-  originalSource?: string;
-  ranges: DiffRange[];
-}
-
-// `sessionStorage` cache for `fetchFileDiffs`. Same iteration = same
-// commit SHAs = same cache key, so a re-load of the PR tab in the same
-// session skips the (potentially slow) `getFileDiffs` round-trip.
-const LINE_COUNTS_CACHE_PREFIX = "emr:fileDiffs:v6:";
-
-function buildLineCountsCacheKey(
-  project: string,
-  repositoryId: string,
-  baseCommit: string,
-  targetCommit: string,
-  paths: string[],
-): string {
-  // Sort + join paths so order-independent across calls; commit SHAs
-  // already include the iteration identity, so we don't need to encode
-  // iteration id separately.
-  const sortedPaths = [...paths].sort();
-  const pathHash = hashString(sortedPaths.join("\n"));
-  return (
-    `${LINE_COUNTS_CACHE_PREFIX}${project}:${repositoryId}:` +
-    `${baseCommit}:${targetCommit}:${pathHash}`
-  );
-}
-
-function readLineCountsCache(key: string): Record<string, FileDiffInfo> | null {
-  try {
-    if (typeof sessionStorage === "undefined") return null;
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, FileDiffInfo>;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeLineCountsCache(
-  key: string,
-  value: Record<string, FileDiffInfo>,
-): void {
-  try {
-    if (typeof sessionStorage === "undefined") return;
-    sessionStorage.setItem(key, JSON.stringify(value, fileDiffCacheReplacer));
-  } catch {
-    // Quota exceeded / disabled storage — silent. The next call will
-    // just refetch.
-  }
-}
-
-// Tiny non-cryptographic string hash so the cache key stays a sensible
-// size even for repos with hundreds of paths. Collisions only mean we
-// might serve stale data; the commit-SHA portion of the key is the real
-// identity guard. Implementation lives in `./adoCommentApi.helpers`.
 
 // ---------------------------------------------------------------------------
 // Mention typeahead — shape adapters
@@ -796,12 +594,16 @@ function toUserSuggestion(
  * matches the user's query. Implementation lives in `./adoCommentApi.helpers`.
  */
 
+function stringField(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 function toWorkItemSuggestion(w: WorkItem): WorkItemSuggestion {
   const fields = (w.fields ?? {}) as Record<string, unknown>;
   const id = w.id ?? Number(fields["System.Id"] ?? 0);
-  const title = String(fields["System.Title"] ?? "");
-  const workItemType = String(fields["System.WorkItemType"] ?? "Work item");
-  const state = String(fields["System.State"] ?? "");
+  const title = stringField(fields["System.Title"], "");
+  const workItemType = stringField(fields["System.WorkItemType"], "Work item");
+  const state = stringField(fields["System.State"], "");
   return {
     kind: "workitem",
     id: String(id),

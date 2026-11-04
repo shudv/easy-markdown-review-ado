@@ -1,6 +1,5 @@
-// Tests for thematic-table routing (src/telemetry/eventTables.ts) — the mapping
-// that collapses per-event tables into Engagement/Diagnostics, and the
-// dual-emission plan used during the legacy → thematic migration window.
+// Tests for thematic-table routing (src/telemetry/eventTables.ts): every event
+// lands in Engagement or Diagnostics with its name in a `name` column.
 
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +7,7 @@ import { EVENT } from "../src/telemetry/events";
 import {
   TELEMETRY_TABLE,
   tableFor,
-  toTableEvents,
+  toTableEvent,
 } from "../src/telemetry/eventTables";
 
 const ENGAGEMENT_EVENTS = [
@@ -22,23 +21,6 @@ const ENGAGEMENT_EVENTS = [
   EVENT.FileOpened,
   EVENT.RepoSwitched,
   EVENT.SearchPerformed,
-  EVENT.CommentReacted,
-  EVENT.CommentFiltered,
-  EVENT.ThreadMarkedPending,
-  EVENT.ThreadClosed,
-  EVENT.DiffToggled,
-  EVENT.CommentNavigated,
-  EVENT.CommentsRefreshed,
-  EVENT.MermaidSourceViewed,
-  EVENT.MermaidSourceCopied,
-  EVENT.MathSourceViewed,
-  EVENT.MathSourceCopied,
-  EVENT.LinkCopied,
-  EVENT.LinkOpened,
-];
-
-// Events added *after* the thematic migration — thematic-only, no legacy table.
-const POST_MIGRATION_EVENTS = [
   EVENT.CommentReacted,
   EVENT.CommentFiltered,
   EVENT.ThreadMarkedPending,
@@ -87,35 +69,25 @@ describe("tableFor", () => {
   });
 });
 
-describe("toTableEvents", () => {
+describe("toTableEvent", () => {
   const data = { anchorKind: "line", bodyLength: 12, projectId: "p1" };
 
-  it("dual-emits BOTH the legacy per-event table and the thematic table", () => {
-    const emissions = toTableEvents(EVENT.CommentCreated, data);
-    expect(emissions).toHaveLength(2);
-
-    const [legacy, thematic] = emissions;
-    // Legacy: the event name IS the table; data is untouched (no discriminator).
-    expect(legacy).toEqual({ name: "comment.created", data });
-    expect(legacy!.data).not.toHaveProperty("name");
-    // Thematic: theme is the table; original name moves into a `name` column.
-    expect(thematic).toEqual({
+  it("emits once, to the thematic table, with the event name in a `name` column", () => {
+    expect(toTableEvent(EVENT.CommentCreated, data)).toEqual({
       name: TELEMETRY_TABLE.Engagement,
       data: { ...data, name: "comment.created" },
     });
   });
 
-  it("routes a diagnostics event's thematic emission to the Diagnostics table", () => {
-    const [, thematic] = toTableEvents(EVENT.AuthFailure, data);
-    expect(thematic).toEqual({
+  it("routes a diagnostics event to the Diagnostics table", () => {
+    expect(toTableEvent(EVENT.AuthFailure, data)).toEqual({
       name: TELEMETRY_TABLE.Diagnostics,
       data: { ...data, name: "auth.failure" },
     });
   });
 
   it("routes exceptions to the Diagnostics table under the app.exception name", () => {
-    const [, thematic] = toTableEvents(EVENT.AppException, data);
-    expect(thematic).toMatchObject({
+    expect(toTableEvent(EVENT.AppException, data)).toMatchObject({
       name: TELEMETRY_TABLE.Diagnostics,
       data: { name: "app.exception" },
     });
@@ -123,35 +95,23 @@ describe("toTableEvents", () => {
 
   it("makes the `name` discriminator authoritative (a stray property cannot clobber it)", () => {
     const withStrayName = { ...data, name: "attacker.controlled" };
-    const [, thematic] = toTableEvents(EVENT.FileOpened, withStrayName);
-    expect(thematic!.data.name).toBe("file.opened");
+    expect(toTableEvent(EVENT.FileOpened, withStrayName).data.name).toBe(
+      "file.opened",
+    );
   });
 
-  it("copies data so neither emission shares a reference with the input", () => {
-    const [legacy, thematic] = toTableEvents(EVENT.RepoSwitched, data);
-    expect(legacy!.data).not.toBe(data);
-    expect(thematic!.data).not.toBe(data);
-    expect(legacy!.data).toEqual(data);
+  it("copies data so the emission doesn't share a reference with the input", () => {
+    const emission = toTableEvent(EVENT.RepoSwitched, data);
+    expect(emission.data).not.toBe(data);
+    expect(data).not.toHaveProperty("name");
   });
 
-  it.each(POST_MIGRATION_EVENTS)(
-    "emits ONLY the thematic table for %s (no new legacy table)",
+  it.each(Object.values(EVENT))(
+    "never emits %s to a per-event table",
     (name) => {
-      const emissions = toTableEvents(name, data);
-      expect(emissions).toHaveLength(1);
-      expect(emissions[0]).toEqual({
-        name: TELEMETRY_TABLE.Engagement,
-        data: { ...data, name },
-      });
+      expect(Object.values(TELEMETRY_TABLE)).toContain(
+        toTableEvent(name, data).name,
+      );
     },
   );
-
-  it.each([
-    EVENT.CommentCreated,
-    EVENT.AppLoaded,
-    EVENT.AuthFailure,
-    EVENT.AppException,
-  ])("still dual-emits the pre-migration event %s", (name) => {
-    expect(toTableEvents(name, data)).toHaveLength(2);
-  });
 });

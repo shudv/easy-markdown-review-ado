@@ -109,6 +109,13 @@ export function resolveDocLink(
   };
 }
 
+/** The org, project and repo a {@link buildReposFileUrl} link points into. */
+interface ReposRepoRef {
+  orgUrl: string;
+  project: string;
+  repoName: string;
+}
+
 /**
  * Absolute Azure Repos Files URL for `path` in `repoName`, e.g.
  * `https://dev.azure.com/org/Proj/_git/Repo?path=/docs/x.md&version=GBmain`.
@@ -117,9 +124,7 @@ export function resolveDocLink(
  * required); the `_git/` route needs the repo NAME, not its GUID.
  */
 export function buildReposFileUrl(
-  orgUrl: string,
-  project: string,
-  repoName: string,
+  { orgUrl, project, repoName }: ReposRepoRef,
   path: string,
   version?: string,
 ): string {

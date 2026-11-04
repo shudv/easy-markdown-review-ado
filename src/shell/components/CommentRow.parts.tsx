@@ -104,8 +104,7 @@ export function CommentLikePill(props: {
       aria-label={likeTooltip}
       onClick={(e) => {
         e.stopPropagation();
-        /* v8 ignore next -- guard duplicates the disabled state; canReact is always true when clickable */
-        if (canReact) onLike();
+        onLike();
       }}
     >
       <span className="emr-thumb" aria-hidden="true">

@@ -55,7 +55,7 @@ describe("loadWikiSubpages", () => {
     );
     expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
       error: failure,
-      source: "PrShell.subpages",
+      source: "Shell.subpages",
       operation: "subpages-load",
       impact: "degraded",
     });

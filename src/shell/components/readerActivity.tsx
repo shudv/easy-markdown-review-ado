@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, type ReactElement } from "react";
-import type { ReaderActivity } from "../prShellHelpers";
+import type { ReaderActivity } from "../shellHelpers";
 
-export type { ReaderActivity } from "../prShellHelpers";
+export type { ReaderActivity } from "../shellHelpers";
 
 /** Highest priority wins; later entries win ties as the newest activity. */
 export function selectReaderActivity(

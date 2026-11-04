@@ -24,7 +24,7 @@ import type { TelemetryBuildConfig } from "../buildConfig";
 import { redactText } from "../sanitize";
 import { describeError } from "../errorShape";
 import { EVENT } from "../events";
-import { toTableEvents } from "../eventTables";
+import { toTableEvent } from "../eventTables";
 import type {
   TelemetryContext,
   TelemetryEvent,
@@ -97,9 +97,8 @@ export function createOneDsSink(
           ...event.measurements,
           ...contextData(ctx),
         };
-        // Hand off to the telemetry layer's routing; the sink stays oblivious
-        // to how many tables this lands in (see ../eventTables.ts).
-        for (const item of toTableEvents(event.name, data)) core.track(item);
+        // The telemetry layer owns table routing (see ../eventTables.ts).
+        core.track(toTableEvent(event.name, data));
       } catch {
         /* never throw from telemetry */
       }
@@ -129,10 +128,8 @@ export function createOneDsSink(
           source: info.source,
           handled: info.handled ?? true,
         };
-        // Exceptions are a Diagnostics signal; routed like any other event so
-        // the sink stays oblivious to the destination table(s).
-        for (const item of toTableEvents(EVENT.AppException, data))
-          core.track(item);
+        // Exceptions are a Diagnostics signal, routed like any other event.
+        core.track(toTableEvent(EVENT.AppException, data));
       } catch {
         /* never throw from telemetry */
       }

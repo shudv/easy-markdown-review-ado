@@ -207,176 +207,40 @@ in `.env`:
 | `AZDO_E2E_REWRITE_DIFF_REPO`      | `rewrite-diff-showcase`                                 | Repo whose PR rewrites sections into coarse ADO hunks    |
 | `AZDO_E2E_REWRITE_DIFF_PR_TITLE`  | `Restructure the design review (rewrite diff showcase)` | Active PR used by the block re-alignment diff spec       |
 
-## What each spec asserts
+## What the specs cover
 
-- `reconnect.spec.ts` — how the PR tab behaves when Azure DevOps misbehaves,
-  with conditions reproduced by the fault injector. Every scenario checks that
-  nothing the user typed is lost and that nothing is saved twice — verified
-  against ADO itself over REST (`AZDO_PAT`), not just the UI. Comments carry a
-  unique `e2e-reconnect-…` marker and are deleted afterwards; leftovers from an
-  interrupted run are swept first.
-  - **A** Opening during the token dead window shows "Reconnecting…", reloads
-    the host **once**, and gets the user in (`app.loaded.afterAutoReload`).
-  - **B** If that reload lands in the window again: no reload loop, a calm
-    "usually fixes itself" screen with a manual reload, then the tab loads on
-    its own when the window ends.
-  - **D** A comment posted during the window, then an edit of it during a
-    second window, each show "Sending…" (the editor stays open), the banner
-    promises they will be saved (and offers no reload that would drop them),
-    and each is saved **exactly once** when its window ends.
-  - **E** A typed reply survives the banner's "Reload page" and posts once.
-  - **H** A dropped connection on a write shows an error, keeps the text,
-    doesn't retry on its own (no duplicate), and posts once on resubmit.
-  - **I** Opening the PR in a background tab on a slow host never shows a
-    false "Timeout" (the boot clock only counts visible time).
+Each spec proves something only the real host can show. The test names spell
+out the individual assertions.
 
-  Run it alone with `npx playwright test --project=chromium reconnect`
-  (scenarios wait out real recovery timing). Telemetry assertions (A, I) need
-  the served build to log telemetry: let Playwright start the dev server, or
-  start a reused `dev:verify` with `TELEMETRY_DEBUG=1` — otherwise they fail.
+| Spec                        | Proves, against the real host                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pr-tab.spec.ts`            | The PR tab mounts and renders the changed Markdown with a seeded thread; selection opens a draft; @-mentions resolve live and on load. Also guards boot request order.               |
+| `documents-hub.spec.ts`     | The hub boots, discovers a repo and renders a document; an in-progress draft survives a host reload.                                                                                 |
+| `pr-diff-highlight.spec.ts` | Changes are highlighted and toggle off/on; coarse ADO hunks re-align so new blocks read as added; an edited equation compares in one callout.                                        |
+| `iteration-picker.spec.ts`  | Picking PR updates re-resolves anchors, keeps "All updates" exclusive, persists across files, explains files missing at an update, and shares/marks/comments on a chosen comparison. |
+| `comment-deeplink.spec.ts`  | Selecting a comment puts `?comment=` in the host URL, and opening that URL activates the thread.                                                                                     |
+| `share-links.spec.ts`       | Comment, heading and hub heading links copy the host page URL (never the iframe's) and land on the right file and anchor.                                                            |
+| `text-link.spec.ts`         | Selection links carry the quoted text, open the right file and flash exactly the live words (never removed ones).                                                                    |
+| `path-deeplink.spec.ts`     | `?path=` deep links, last-visited restore, and independent per-repo path memory in the iframe's `localStorage`.                                                                      |
+| `doc-links.spec.ts`         | Repository-relative and Git LFS images render; relative links open in place, ADO Files or the hub as appropriate.                                                                    |
+| `comment-media.spec.ts`     | Native ADO images, GIFs and attachments render inside comments.                                                                                                                      |
+| `reconnect.spec.ts`         | Fault-injected host failures (token dead window, slow host, dropped writes): nothing typed is lost and nothing is saved twice, checked against ADO over REST.                        |
+| `theme-sync.spec.ts`        | Switching the ADO theme updates the app's theme.                                                                                                                                     |
+| `theme-hc.spec.ts`          | Forced colors map to the high-contrast themes.                                                                                                                                       |
 
-  Scenarios that the real host adds nothing to live lower down, because every
-  fault is injected in-app: the mid-session banner clearing by itself
-  (`Components/SessionNotice` stories; E covers the banner appearing on a real
-  poll) and a plain 401 never being mistaken for the window
-  (`Components/PrShell` › Plain Unauthorized Is Not Reconnecting, plus the
-  `adoSession` unit tests).
+`reconnect.spec.ts` waits out real recovery timing, so run it alone with
+`npx playwright test --project=chromium reconnect`. Its telemetry assertions
+need the served build to log telemetry: let Playwright start the dev server, or
+start a reused `dev:verify` with `TELEMETRY_DEBUG=1`. Its comments carry an
+`e2e-reconnect-…` marker and are cleaned up, including leftovers from an
+interrupted run.
 
-- `documents-hub.spec.ts`
-  - **Loads the contribution iframe and renders live Markdown:** ADO renders
-    OUR Documents hub iframe (matched by the dev-origin bundle URL, so a
-    co-installed prod extension can't satisfy it), the cross-origin React tree
-    boots, leaves "Loading Documents…", discovers a sandbox repo and renders a
-    real, non-empty document — proving the SDK handshake, repo discovery and
-    first data turn completed.
-  - **Preserves an in-progress draft across a page reload:** opens a draft
-    composer over a real selection, types into it, reloads the host page, and
-    asserts the hub restores the draft balloon + text from `localStorage` (scope
-    `hub`) — then cancels to clear it. The host-only half of local draft
-    persistence surviving a full iframe re-mount.
-
-- `comment-deeplink.spec.ts`
-  - **Selecting a comment reflects it in the host route, and that link
-    auto-activates the thread on load** (one journey over both directions of
-    the binding): discovers a real thread id from the rendered document,
-    activates the thread by clicking its highlight, and asserts the host page
-    URL gains `?comment=<threadId>` (outbound — the link is shareable). It then
-    opens the hub fresh with that `?comment=` and asserts the thread becomes
-    active (highlight and balloon) with no user interaction (inbound).
-    Regression guard for the seed-wipe bug where the deep-link seed was cleared
-    before the async document render finished, so auto-scroll/highlight never
-    fired.
-
-- `iteration-picker.spec.ts`
-  - **Re-resolves a text anchor when stepping across updates:** in the
-    10-update `iteration-history-showcase` PR, picking single updates orphans
-    and then restores a seeded comment's anchor.
-  - **Keeps "All updates" exclusive and compares numbered updates:** the
-    picker lists "All updates" first, then updates newest to oldest; single,
-    shift-click range, and chevron stepping keep the trigger geometry stable.
-  - **Keeps the chosen update across files and explains files missing at
-    it:** in the `update-scope-showcase` PR (Update 2 adds one file and deletes
-    another), a chosen comparison persists when switching files; a file absent
-    at the older end renders as new; one absent at the newer end shows "Not
-    added yet at Update 1" or "Deleted by Update 2/3" (from ADO's real
-    404 / `TF401174`) with **Show all updates**. Also proves deleted files are
-    listed in the PR tab (ADO reports them by `originalPath`).
-  - **Shares, marks and comments on a chosen comparison of updates:** the
-    address bar carries the comparison as ADO's own `iteration`/`base` ids
-    and a fresh load restores it; the file list dims files that ADO reports
-    unchanged between the two updates; and text in an earlier update that the
-    latest update still has takes a comment (the draft is cancelled).
-- `share-links.spec.ts`
-  - **PR tab: Link to comment copies a working PR-tab link:** activates a seeded
-    thread and asserts the address bar gains `?comment=` and `?path=` while
-    keeping our tab (`_a`) selected; then copies "Link to comment" and asserts
-    the copied URL is the PR page itself (`…/pullrequest/<id>?_a=…&path=…&comment=…`),
-    never the iframe's Marketplace-CDN `pr-tab.html` URL. Opening that link
-    fresh activates the thread with no interaction. Regression guard for the
-    blank-page bug (ADO's PR payload has no `_links.web`, so the old builder
-    always fell back to the iframe URL). Copies go through the iframe's
-    `execCommand` fallback; an init script records the copied text in every
-    frame so the spec can read it back.
-  - **PR tab: a heading link opens that heading in that file:** opens the PR's
-    _second_ changed file, copies a heading's "Copy link to section" link, and
-    asserts it carries `path` + `anchor` (also mirrored into the address bar).
-    Opening it fresh lands on that file (not the PR's first) with the heading
-    scrolled to the top of the reader, and keeps `?anchor=` in the URL.
-  - **Documents hub: a heading link survives the round trip:** the same for the
-    hub (`?repo=&path=&anchor=`), including that the hub's on-load re-publish
-    of the opened document doesn't strip the anchor.
-
-- `text-link.spec.ts`
-  - **Documents hub: a selection link flashes the text on open:** selects
-    words in a below-the-fold paragraph, clicks the selection bubble's "Copy
-    link to selection" (next to "Add comment"), and asserts the copied hub URL
-    carries `repo` + `path` + `text` (the quote, `%20`-encoded) + `anchor` (its
-    section, as a fallback), mirrored into the address bar. Opening it fresh
-    scrolls the text into view and flashes exactly those words with the
-    heading link's landing cue, which then clears. A link whose text no longer
-    exists lands on (and flashes) the section heading instead.
-  - **PR tab: a selection link opens that file and flashes the text:** the
-    same on the PR's _second_ changed file (`…/pullrequest/<id>?_a=…&path=…&text=…&anchor=…`).
-  - **PR tab: a selection across removed + added words links live text only:**
-    on the diff showcase PR, selects from live text across struck-out removed
-    words (`del.emr-word-removed`) into added ones. Opening the link flashes
-    exactly the live words (never the removed ones). That the same live words
-    copy the identical link with **Changes** toggled off is a pure
-    text-fragment contract, pinned in `test/textFragment.test.ts`.
-
-- `path-deeplink.spec.ts`
-  - **`?path=` deep-links + last-visited restore + per-repo path memory** (one
-    journey, because the assertions build on accumulated `localStorage`): learns
-    both sandbox repos' GUIDs via the in-hub picker (the hub addresses repos by
-    GUID, never by name), then exercises the three documented load behaviours by
-    pure URL navigation — **Behaviour 3** (`?path=Y` opens exactly that
-    document), **Behaviour 1** (a bare hub URL restores the last repo **and** its
-    last path), and **Behaviour 2** (`?repo=X` with no path reopens that repo's
-    _own_ remembered document, proving each repo persists its path
-    independently). Finally an explicit `?path=` is shown to override the
-    remembered path. Each open document is identified by its unique reader `<h1>`.
-    This is the host-only half of the single `emr.docs.lastVisited` JSON-map
-    cache that unit tests can't reach: the real cross-origin iframe origin's
-    `localStorage` surviving across navigations, plus the host navigation
-    service supplying `?repo=`/`?path=`.
-
-- `doc-links.spec.ts`
-  - **Renders repository-relative images in both hosts:** opens
-    `docs/getting-started.md` in Documents hub and the nested
-    `docs/guides/install.md` in an active PR, then requires the shared
-    repository SVG to load through an authenticated `blob:` URL with nonzero
-    dimensions. This covers `../assets/...` at a branch tip and
-    `../../assets/...` at the PR source commit.
-  - Also verifies relative Markdown links navigate in place, non-Markdown links
-    open ADO Files, and links outside the current PR open Documents hub.
-
-- `pr-tab.spec.ts`
-  - **Mounts the PR-tab contribution and renders the PR's changed Markdown
-    and seeded thread:** discovers a real completed PR's id by reading its row
-    in the authenticated PR-list UI (the org's session cookie can't authorize
-    the `_apis` REST endpoint, so id discovery goes through the web UI, not a
-    REST call), opens that PR's Markdown Review tab, and asserts OUR pr-tab
-    iframe (matched by the dev-origin `pr-tab.html` bundle URL) mounts, paints
-    the changed Markdown, and anchors a seeded thread highlight
-    (`.emr-highlight[data-thread-id]`) — proving the PR-tab SDK handshake,
-    iteration/diff fetch and thread load completed. It also guards the boot
-    critical path by **request order** (not timing, which a shared host makes
-    flaky): the PR's updates must start loading before the PR itself arrives
-    (they run in parallel), without requesting every update's commits. The
-    dev build's boot timing (`visible · context · render`) is attached to the
-    test as a `boot timing (dev build)` annotation in the HTML report.
-  - **Selecting rendered text opens a draft composer anchored to the
-    excerpt:** a real selection in the cross-origin iframe surfaces the bubble
-    and opens a draft whose anchor carries the excerpt (then cancels).
-  - **@-mention typeahead** and **a mentioned non-author resolves to a name on
-    load:** the live identity search, and a persisted mention resolving after a
-    reload.
-
-  Draft persistence across a reload in the PR tab is covered by
-  `reconnect.spec.ts` › E; the discard guard and the native triple-click
-  selection by the `Components/PrShell` › Draft Guard and
-  `Components/ArticleViewSelection` › Triple Click Line Dark stories, which
-  run in real Chromium.
+Draft persistence across a reload in the PR tab is covered by
+`reconnect.spec.ts` (scenario E). Behaviour that doesn't depend on the host is
+tested lower down instead: the discard guard, triple-click selection and the
+mid-session banner clearing itself run as `Components/Shell`,
+`Components/ArticleViewSelection` and `Components/SessionNotice` stories in real
+Chromium, and plain 401 handling in the `adoSession` unit tests.
 
 ## Writing specs and locators
 

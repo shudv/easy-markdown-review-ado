@@ -9,14 +9,14 @@
  * `#emr-ado-files[data-mode]` to "diff" or "preview".
  *
  * Content mirrors the showcase story fixture (src/shell/components/
- * PrShell.visual.stories.tsx) so the two acts read as the same document.
+ * Shell.visual.stories.tsx) so the two acts read as the same document.
  *
  * Build-time asset generator only — not shipped in the extension.
  */
 const FILE_NAME = "production-rollout.md";
 
 // Unified diff of the fixture (SHOWCASE_SOURCE + SHOWCASE_DIFF in
-// src/shell/components/PrShell.visual.stories.tsx). It has to state exactly the
+// src/shell/components/Shell.visual.stories.tsx). It has to state exactly the
 // same three changes the review tab shows: v1 -> v2 inside a link target, the
 // Web row added, the Notifications row deleted.
 const DIFF = [

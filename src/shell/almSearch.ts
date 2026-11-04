@@ -83,19 +83,25 @@ export type AlmSearchErrorKind =
   | "no-config"
   | "unknown";
 
-export interface AlmSearchError {
-  kind: AlmSearchErrorKind;
-  status?: number;
-  message?: string;
+/**
+ * Discriminated failure thrown by `AlmSearchClient.searchCode`. `status`
+ * carries the HTTP status (when one exists) so the retry classifier can read
+ * it the same way it reads any other status-bearing error.
+ */
+export class AlmSearchError extends Error {
+  override readonly name = "AlmSearchError";
+  readonly kind: AlmSearchErrorKind;
+  readonly status?: number;
+
+  constructor(kind: AlmSearchErrorKind, message: string, status?: number) {
+    super(message);
+    this.kind = kind;
+    this.status = status;
+  }
 }
 
 export function isAlmSearchError(e: unknown): e is AlmSearchError {
-  return (
-    !!e &&
-    typeof e === "object" &&
-    "kind" in (e as Record<string, unknown>) &&
-    typeof (e as AlmSearchError).kind === "string"
-  );
+  return e instanceof AlmSearchError;
 }
 
 function errMsg(e: unknown): string {
@@ -135,10 +141,8 @@ export class AlmSearchRestClient implements AlmSearchClient {
   constructor(
     private readonly orgName: string,
     private readonly getToken: () => Promise<string>,
-    /* v8 ignore start -- default delegates to the real fetch; tests inject a fake */
     private readonly fetchImpl: typeof fetch = (input, init) =>
       fetch(input, init),
-    /* v8 ignore stop */
     /**
      * Injectable backoff sleep for the internal retry loop. Defaults to the
      * real timer (via `withRetry`); tests pass a no-op to run retries instantly.
@@ -171,10 +175,10 @@ export class AlmSearchRestClient implements AlmSearchClient {
           try {
             token = await this.getToken();
           } catch (err) {
-            throw mkError("auth", undefined, errMsg(err));
+            throw new AlmSearchError("auth", errMsg(err));
           }
           if (!token) {
-            throw mkError("auth", undefined, "empty access token");
+            throw new AlmSearchError("auth", "empty access token");
           }
           const r = await this.fetchImpl(url, {
             method: "POST",
@@ -189,7 +193,11 @@ export class AlmSearchRestClient implements AlmSearchClient {
           // classifier can distinguish transient (retry) from terminal
           // (extension-missing / bad-request) failures.
           if (!r.ok) {
-            throw mkError(statusToKind(r.status), r.status, r.statusText);
+            throw new AlmSearchError(
+              statusToKind(r.status),
+              r.statusText,
+              r.status,
+            );
           }
           return r;
         },
@@ -214,23 +222,15 @@ export class AlmSearchRestClient implements AlmSearchClient {
       // A shaped AlmSearchError (from a non-2xx / auth throw above) propagates
       // as-is; a raw throw from fetch itself is a network failure.
       if (isAlmSearchError(err)) throw err;
-      throw mkError("network", undefined, errMsg(err));
+      throw new AlmSearchError("network", errMsg(err));
     }
 
     try {
       return (await res.json()) as CodeSearchResponse;
     } catch (err) {
-      throw mkError("unknown", res.status, errMsg(err));
+      throw new AlmSearchError("unknown", errMsg(err), res.status);
     }
   }
-}
-
-function mkError(
-  kind: AlmSearchErrorKind,
-  status?: number,
-  message?: string,
-): AlmSearchError {
-  return { kind, status, message };
 }
 
 /**

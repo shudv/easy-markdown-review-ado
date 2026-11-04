@@ -4,7 +4,7 @@ import {
   readerActivityKey,
   selectReaderActivity,
 } from "../src/shell/components/readerActivity";
-import { buildReaderActivities } from "../src/shell/prShellHelpers";
+import { buildReaderActivities } from "../src/shell/shellHelpers";
 
 describe("selectReaderActivity", () => {
   it("selects the highest priority activity", () => {

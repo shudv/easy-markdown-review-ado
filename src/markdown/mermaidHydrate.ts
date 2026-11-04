@@ -48,11 +48,10 @@ function getMermaid(): Promise<MermaidApi> {
   if (mermaidPromise) return mermaidPromise;
   mermaidPromise = (async () => {
     const mod = await importWithChunkRetry();
-    /* v8 ignore start -- ESM/CJS interop fallback; the bundler always provides `default` */
+    // A CommonJS-interop namespace exposes the API without a `default`.
     const api: MermaidApi =
       (mod as { default: MermaidApi }).default ??
       (mod as unknown as MermaidApi);
-    /* v8 ignore stop */
     return api;
   })().catch((error: unknown) => {
     // Drop the rejected promise so a later pass (a theme redraw, a re-render)

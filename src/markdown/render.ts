@@ -99,7 +99,7 @@ const rehypeMentions: Plugin<[], Root> = () => {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "a") return;
       const href = node.properties?.href;
-      /* v8 ignore next -- markdown links always carry a string href; guard is defensive */
+      // Raw-HTML anchors such as `<a id="top">` pass rehypeSafeHtml without one.
       if (typeof href !== "string") return;
       const parsed = parseMentionUrl(href);
       if (!parsed) return;
@@ -296,8 +296,9 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => {
     ): Element {
       const id = mintId(extractHastText(heading));
       const headingProps = (heading.properties ??= {});
-      /* v8 ignore next -- headings parsed from markdown never pre-carry an id, so the already-set branch is unreachable */
-      if (!headingProps.id) headingProps.id = id;
+      // Top-level headings only come from Markdown syntax (rehypeSafeHtml
+      // drops raw-HTML headings), so none carries an id before this point.
+      headingProps.id = id;
 
       return {
         type: "element",

@@ -436,3 +436,50 @@ describe("theme — non-DOM safety", () => {
     expect(() => stop()).not.toThrow();
   });
 });
+
+describe("theme — partial DOM environments", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute("data-emr-theme");
+  });
+
+  it.each(["window", "MutationObserver"])(
+    "syncHostTheme still mirrors the theme when %s is missing",
+    (name) => {
+      vi.stubGlobal(name, undefined);
+      const restoreCS = stubComputedBackground(() => "rgb(255, 255, 255)");
+      try {
+        const stop = syncHostTheme();
+        expect(document.documentElement.getAttribute("data-emr-theme")).toBe(
+          "light",
+        );
+        expect(() => stop()).not.toThrow();
+      } finally {
+        restoreCS();
+      }
+    },
+  );
+  it("treats the host as light when no background colour resolves", () => {
+    const restoreCS = stubComputedBackground(() => "");
+    const restoreMM = stubMatchMedia(() => false);
+    try {
+      expect(resolveHostTheme()).toBe("light");
+    } finally {
+      restoreCS();
+      restoreMM();
+    }
+  });
+
+  it("treats the host as light and observes only <html> when there is no body", () => {
+    const body = document.body;
+    body.remove();
+    try {
+      expect(document.body).toBeNull();
+      expect(resolveHostTheme()).toBe("light");
+      const stop = syncHostTheme();
+      expect(() => stop()).not.toThrow();
+    } finally {
+      document.documentElement.appendChild(body);
+    }
+  });
+});

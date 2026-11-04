@@ -195,6 +195,22 @@ export const NoHeightCallback: Story = {
   },
 };
 
+/** A card that grows on its own (no prop change) re-reports its height. */
+export const ReportsHeightOnResize: Story = {
+  args: { onHeightChange: fn() },
+  play: async ({ args, canvasElement }) => {
+    const card = canvasElement.querySelector<HTMLElement>(
+      "[data-thread-id='t1']",
+    )!;
+    const before = card.getBoundingClientRect().height;
+    card.style.minHeight = `${before + 60}px`;
+    await waitFor(() => {
+      const calls = (args.onHeightChange as ReturnType<typeof fn>).mock.calls;
+      expect(calls[calls.length - 1]?.[1]).toBeGreaterThanOrEqual(before + 60);
+    });
+  },
+};
+
 const commentImageUrl = new URL("../../../static/logo.png", import.meta.url)
   .href;
 

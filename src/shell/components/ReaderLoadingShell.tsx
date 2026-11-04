@@ -22,6 +22,7 @@ interface ReaderLoadingShellProps {
 }
 
 /** The settled reader geometry, filled with quiet placeholders during boot. */
+// eslint-disable-next-line max-lines-per-function -- Boot skeleton: static placeholder markup that mirrors the reader layout so nothing shifts on load. No logic to extract.
 export function ReaderLoadingShell({
   scope,
   ariaLabel,

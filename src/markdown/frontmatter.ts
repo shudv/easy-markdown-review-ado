@@ -187,8 +187,8 @@ export function extractFrontmatter(src: string): {
   if (!match) return { body: src, entries: null, sourceRange: null };
 
   const consumed = match[0];
-  /* v8 ignore next -- FRONTMATTER_RE always matches at least one newline, so `match` is never null */
-  const blankLines = (consumed.match(/\r?\n/g) ?? []).length;
+  // FRONTMATTER_RE requires a newline after the opening fence.
+  const blankLines = consumed.match(/\r?\n/g)!.length;
   const body = "\n".repeat(blankLines) + src.slice(consumed.length);
   // The block runs from line 1 through its closing fence. Drop a trailing
   // newline before counting so the EOF-close and newline-close cases agree.
@@ -224,7 +224,6 @@ function frontmatterToHast(
       ...(entry.startLine != null
         ? {
             dataSourceLine: entry.startLine,
-            /* v8 ignore next -- the parser always co-sets endLine with startLine; the ?? is a type guard */
             dataSourceEndLine: entry.endLine ?? entry.startLine,
           }
         : {}),

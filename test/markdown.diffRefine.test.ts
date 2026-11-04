@@ -6,8 +6,8 @@ import {
   MAX_ALIGNMENT_CELLS,
   chunkMarkdownLines,
   chunkSimilarity,
-  refineDiffRanges,
-} from "../src/markdown/diffRefine";
+} from "../src/markdown/diffChunks";
+import { refineDiffRanges } from "../src/markdown/diffRefine";
 import { lineDiffBlocksToRanges } from "../src/shell/adoCommentApi.helpers";
 import type { DiffRange } from "../src/types";
 

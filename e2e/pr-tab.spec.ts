@@ -7,7 +7,7 @@
 // exercises — the SDK resolves the active PR/project from the page, and the tab
 // bundle is served cross-origin from the dev origin
 // (https://localhost:3000/pr-tab/pr-tab.html). Unit tests and Storybook mount
-// the shared <PrShell/> in a plain page; they cannot reproduce the PR-tab SDK
+// the shared <Shell/> in a plain page; they cannot reproduce the PR-tab SDK
 // handshake, the changed-file discovery, or the Git diff/thread load.
 //
 // The PR id is discovered at runtime (filtered by a known source branch) rather

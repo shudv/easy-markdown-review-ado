@@ -1,5 +1,8 @@
+import type { Element, Root } from "hast";
+import { unified } from "unified";
 import { describe, expect, it, vi } from "vitest";
 
+import { rehypeMathPlaceholder } from "../src/markdown/math";
 import { hydrateMath } from "../src/markdown/mathHydrate";
 import { renderMarkdown, renderMarkdownSync } from "../src/markdown/render";
 
@@ -138,6 +141,20 @@ describe("renderMarkdown — mathematical notation", () => {
     expect(equation.querySelector(".emr-math-fallback")?.textContent).toBe("%");
   });
 
+  it("skips a placeholder whose encoded source is empty", async () => {
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<span class="emr-math" data-math-src=""><code class="emr-math-fallback"></code></span>';
+    const renderToString = vi.fn(() => '<span class="katex"></span>');
+
+    await hydrateMath(root, async () => ({ renderToString }));
+
+    const equation = root.querySelector<HTMLElement>(".emr-math")!;
+    expect(renderToString).not.toHaveBeenCalled();
+    expect(equation.dataset.hydrated).toBeUndefined();
+    expect(equation.dataset.mathError).toBeUndefined();
+  });
+
   it("appends rendered math when a placeholder has no source fallback", async () => {
     const root = document.createElement("div");
     root.innerHTML = `<span class="emr-math" data-math-src="${encodeURIComponent("x^2")}" data-math-display="false"></span>`;
@@ -214,5 +231,52 @@ describe("rehypeMathPlaceholder — placeholder contract", () => {
     ).querySelector<HTMLElement>(".emr-math--display")!;
 
     expect(decodeURIComponent(host.dataset.mathSrc!)).toBe("a + b\n\nc + d");
+  });
+});
+
+describe("rehypeMathPlaceholder — non-pipeline input", () => {
+  function run(children: Root["children"]): Root {
+    return unified()
+      .use(rehypeMathPlaceholder)
+      .runSync({ type: "root", children });
+  }
+
+  function mathCode(className: string, value: string): Element {
+    return {
+      type: "element",
+      tagName: "code",
+      properties: { className: [className] },
+      children: value ? [{ type: "text", value }] : [],
+    };
+  }
+
+  it("omits source-line attributes when the math node has none", () => {
+    const tree = run([mathCode("math-inline", "x")]);
+    const host = tree.children[0] as Element;
+    expect(host.properties.className).toContain("emr-math--inline");
+    expect(host.properties).not.toHaveProperty("dataSourceLine");
+    expect(host.properties).not.toHaveProperty("dataSourceEndLine");
+  });
+
+  it("leaves a <pre> without a <code> child alone", () => {
+    const pre: Element = {
+      type: "element",
+      tagName: "pre",
+      properties: {},
+      children: [{ type: "text", value: "x^2" }],
+    };
+    expect(run([pre]).children[0]).toBe(pre);
+  });
+
+  it("leaves an empty inline math node alone", () => {
+    const code = mathCode("math-inline", "");
+    expect(run([code]).children[0]).toBe(code);
+  });
+
+  it("keeps an empty fenced math block as an ordinary code block", () => {
+    const root = document.createElement("div");
+    root.innerHTML = renderMarkdownSync("```math\n```");
+    expect(root.querySelector(".emr-math")).toBeNull();
+    expect(root.querySelector("pre > code")).not.toBeNull();
   });
 });

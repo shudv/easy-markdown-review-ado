@@ -337,3 +337,61 @@ describe("useDocSearch — remote merge", () => {
     expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
   });
 });
+
+describe("useDocSearch — superseded remote searches", () => {
+  beforeEach(() => vi.useFakeTimers());
+
+  /**
+   * Mount with a remote searcher whose calls settle only when the test says
+   * so, fire a search for "ab", then change the query while it is in flight.
+   */
+  async function supersedeInFlightSearch() {
+    const calls: Array<{
+      resolve: (outcome: FileSearchOutcome) => void;
+      reject: (err: Error) => void;
+    }> = [];
+    const onSearchFiles = vi.fn(
+      () =>
+        new Promise<FileSearchOutcome>((resolve, reject) => {
+          calls.push({ resolve, reject });
+        }),
+    );
+    const h = mount({ files: [], onSearchFiles });
+    act(() => h.current!.setSearchQuery("ab"));
+    await flush(250);
+    act(() => h.current!.setSearchQuery("abc"));
+    return { calls, h };
+  }
+
+  async function settle(run: () => void): Promise<void> {
+    await act(async () => {
+      run();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it("drops hits that arrive after the query changed", async () => {
+    const { calls, h } = await supersedeInFlightSearch();
+    await settle(() =>
+      calls[0]!.resolve({ kind: "ok", files: [file("stale.md")] }),
+    );
+    expect(h.current!.searchResults).toEqual([]);
+    expect(h.current!.remoteLoading).toBe(true);
+
+    await flush(250);
+    await settle(() =>
+      calls[1]!.resolve({ kind: "ok", files: [file("fresh.md")] }),
+    );
+    expect(h.current!.searchResults.map((f) => f.path)).toEqual(["fresh.md"]);
+    expect(h.current!.remoteLoading).toBe(false);
+  });
+
+  it("drops a failure that arrives after the query changed", async () => {
+    const { calls, h } = await supersedeInFlightSearch();
+    await settle(() => calls[0]!.reject(new Error("aborted")));
+    expect(h.current!.searchUnavailable).toBeNull();
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    expect(h.current!.remoteLoading).toBe(true);
+  });
+});

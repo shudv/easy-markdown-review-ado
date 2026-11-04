@@ -26,6 +26,7 @@ interface GeneratedSourceModalProps {
   onClose: () => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Generated-source dialog: header, view toggle and source/diff panes share the dialog state and focus trap.
 export function GeneratedSourceModal(
   props: GeneratedSourceModalProps,
 ): React.ReactElement | null {

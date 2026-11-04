@@ -374,11 +374,16 @@ function reactionsEqual(
   return true;
 }
 
+/** The identity and location of a thread built by {@link makeNewThread}. */
+interface NewThreadTarget {
+  id: string;
+  filePath: string;
+  anchor: TextQuoteAnchor;
+}
+
 /** Convenience constructor for the "new thread" reducer action. */
 export function makeNewThread(
-  id: string,
-  filePath: string,
-  anchor: TextQuoteAnchor,
+  { id, filePath, anchor }: NewThreadTarget,
   author: CommentAuthor,
   bodyMarkdown: string,
   now: string = new Date().toISOString(),

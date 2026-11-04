@@ -517,6 +517,81 @@ describe("paragraphs", () => {
     expect(indicator.querySelector("button")?.textContent).toBe("");
   });
 
+  it("treats a link whose unsafe target was stripped as an empty target", () => {
+    const root = render("Open the [guide](https://docs.contoso.test/guide).");
+    decorate(root, [
+      {
+        startLine: 1,
+        endLine: 1,
+        kind: "modified",
+        originalText: "Open the [guide](javascript:alert(1)).",
+      },
+    ]);
+    const indicator = root.querySelector<HTMLElement>(
+      `.${DIFF_METADATA_CLASS}`,
+    )!;
+    expect(indicator.classList.contains("is-warning")).toBe(true);
+    expect(
+      indicator.querySelector(".emr-diff-metadata-target-diff")?.textContent,
+    ).toContain("https://docs.contoso.test/guide");
+  });
+
+  it("warns about a link whose previous target has an unparseable host", () => {
+    const root = render("Open the [guide](https://docs.contoso.test/guide).");
+    decorate(root, [
+      {
+        startLine: 1,
+        endLine: 1,
+        kind: "modified",
+        originalText: "Open the [guide](http://[broken/guide).",
+      },
+    ]);
+    const indicator = root.querySelector<HTMLElement>(
+      `.${DIFF_METADATA_CLASS}`,
+    )!;
+    expect(indicator.classList.contains("is-warning")).toBe(true);
+  });
+
+  it("keeps the block wash when the previous line was only whitespace", () => {
+    const root = render("Hello brave new world.");
+    const res = decorate(root, [
+      { startLine: 1, endLine: 1, kind: "modified", originalText: "   " },
+    ]);
+    const paragraph = root.querySelector<HTMLElement>("p")!;
+    expect(res.inlined).toBe(0);
+    expect(paragraph.classList.contains("emr-diff-block--modified")).toBe(true);
+    expect(paragraph.classList.contains(DIFF_INLINE_CLASS)).toBe(false);
+    expect(words(paragraph)).toEqual({ added: "", removed: "" });
+  });
+
+  it("ignores comment nodes when locating a formatting change", () => {
+    const root = render("Keep **bold** text.");
+    const paragraph = root.querySelector<HTMLElement>("p")!;
+    paragraph.prepend(document.createComment("reviewer note"));
+    decorate(root, [
+      {
+        startLine: 1,
+        endLine: 1,
+        kind: "modified",
+        originalText: "Keep bold text.",
+      },
+    ]);
+    const mark = paragraph.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!;
+    expect(mark.textContent).toBe("bold");
+  });
+
+  it("skips tooltip alignment for an explained change outside a rendered article", () => {
+    const root = render("Retry policy changed.");
+    root.classList.remove("emr-rendered");
+    decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
+    const paragraph = root.querySelector<HTMLElement>(
+      `.${DIFF_TOOLTIP_CLASS}`,
+    )!;
+    const className = paragraph.className;
+    paragraph.dispatchEvent(new Event("focus"));
+    expect(paragraph.className).toBe(className);
+  });
+
   it("combines a cross-host link target change with added trailing prose", () => {
     const linkLabel = "`docs/ReviewGuide/README.md`";
     const current =
@@ -1451,14 +1526,15 @@ describe("task lists", () => {
 
 describe("reconstructOriginalBlock", () => {
   it("returns null without an overlapping modified range", () => {
-    expect(reconstructOriginalBlock(3, 3, [], "one\ntwo\nthree")).toBeNull();
+    expect(
+      reconstructOriginalBlock({ start: 3, end: 3 }, [], "one\ntwo\nthree"),
+    ).toBeNull();
   });
 
   it("rejects invalid inferred original coordinates", () => {
     expect(
       reconstructOriginalBlock(
-        1,
-        2,
+        { start: 1, end: 2 },
         [
           {
             start: 2,
@@ -1477,8 +1553,7 @@ describe("reconstructOriginalBlock", () => {
   it("rejects a mismatched hunk extending beyond the block", () => {
     expect(
       reconstructOriginalBlock(
-        2,
-        2,
+        { start: 2, end: 2 },
         [
           {
             start: 1,
@@ -2557,6 +2632,31 @@ describe("tables", () => {
     ).toContain("too | many | cells");
   });
 
+  it("falls back to the removal card when the renderer cannot rebuild deleted rows as a table", () => {
+    const root = render(table);
+    decorateDiffRanges(
+      root,
+      [
+        {
+          startLine: 5,
+          endLine: 5,
+          kind: "deleted-marker",
+          linesDeleted: 1,
+          deletedContent: "| extra | 9 |\n",
+        },
+      ],
+      { renderInline: (md) => `<p>${md}</p>` },
+    );
+    expect(root.querySelector(".emr-diff-deleted-table-row")).toBeNull();
+    const marker = root.querySelector<HTMLElement>(
+      `.${DIFF_DELETED_MARKER_CLASS}`,
+    )!;
+    expect(marker.tagName).toBe("DIV");
+    expect(
+      marker.querySelector(".emr-diff-deleted-body")?.textContent,
+    ).toContain("| extra | 9 |");
+  });
+
   it("shows all deleted rows when linesDeleted is absent", () => {
     const root = render(table);
     decorate(root, [
@@ -2791,6 +2891,34 @@ describe("tables", () => {
     expect(before.querySelectorAll("table")).toHaveLength(1);
     expect(before.querySelectorAll("thead th")).toHaveLength(2);
     expect(before.querySelectorAll("tbody td")).toHaveLength(2);
+    expect(root.querySelectorAll(".emr-diff-before-control")).toHaveLength(1);
+  });
+
+  it("falls back when the original body row had fewer cells than its header", () => {
+    const matrix = [
+      "| Service | Owner | Tier |",
+      "| --- | --- | --- |",
+      "| Checkout | Platform | Gold |",
+    ].join("\n");
+    const root = render(matrix);
+    decorate(root, [
+      {
+        startLine: 1,
+        endLine: 3,
+        kind: "modified",
+        originalText: [
+          "| Service | Owner | Tier |",
+          "| --- | --- | --- |",
+          "| Checkout |",
+        ].join("\n"),
+      },
+    ]);
+    const row = Array.from(root.querySelectorAll<HTMLElement>("tbody tr")).at(
+      -1,
+    )!;
+    expect(row.classList.contains("emr-diff-block--modified")).toBe(true);
+    expect(row.dataset.diffCells).toBeUndefined();
+    expect(row.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
     expect(root.querySelectorAll(".emr-diff-before-control")).toHaveLength(1);
   });
 

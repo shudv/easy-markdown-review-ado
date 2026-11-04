@@ -3,7 +3,10 @@
 // evaluate). `adoCommentApi.ts` re-exports these by name, so the production
 // call shape is unchanged.
 
-import type { PullRequestStatus } from "azure-devops-extension-api/Git";
+import type {
+  CommentType,
+  PullRequestStatus,
+} from "azure-devops-extension-api/Git";
 import type {
   GitPullRequestCommentThread,
   Comment as AdoComment,
@@ -12,7 +15,6 @@ import type {
   Comment,
   CommentAuthor,
   CommentThread,
-  DiffRange,
   MentionedIdentity,
   ReactionKind,
   TextQuoteAnchor,
@@ -24,40 +26,15 @@ import {
   normalizeIdentityGuid,
 } from "../comments/mentions";
 
-// ---------------------------------------------------------------------------
-// Hashing
-// ---------------------------------------------------------------------------
-
-/**
- * Tiny non-cryptographic string hash (djb2 + xor) for the sessionStorage
- * per-file line-count cache key. Collisions only risk stale data; the
- * commit-SHA portion of the key is the real identity guard.
- */
-export function hashString(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) + h) ^ s.charCodeAt(i);
-  }
-  return (h >>> 0).toString(16);
-}
-
-/** JSON replacer that keeps complete base-file content out of browser storage. */
-export function fileDiffCacheReplacer(key: string, value: unknown): unknown {
-  return key === "originalSource" ? undefined : value;
-}
-
-/** Cached deletion diffs need base text rehydrated for precise block diffs. */
-export function pathsRequiringOriginalSource(
-  entries: Readonly<
-    Record<string, { linesDeleted: number; originalSource?: string }>
-  >,
-): string[] {
-  return Object.entries(entries)
-    .filter(
-      ([, info]) => info.linesDeleted > 0 && info.originalSource === undefined,
-    )
-    .map(([path]) => path);
-}
+// The file-diff helpers live in `./adoFileDiffs.helpers`; re-exported here so
+// existing importers keep their path.
+export {
+  fileDiffCacheReplacer,
+  hashString,
+  lineDiffBlocksToCounts,
+  lineDiffBlocksToRanges,
+  pathsRequiringOriginalSource,
+} from "./adoFileDiffs.helpers";
 
 // ---------------------------------------------------------------------------
 // Display helpers
@@ -171,6 +148,11 @@ export function buildWorkItemWiql(query: string): string {
 // Status mapping
 // ---------------------------------------------------------------------------
 
+// SDK enum runtime values (Abandoned=2, Completed=3), typed via a type-only
+// import so this file stays SDK-free at runtime.
+const PR_STATUS_ABANDONED = 2 as PullRequestStatus;
+const PR_STATUS_COMPLETED = 3 as PullRequestStatus;
+
 /**
  * Map ADO's `PullRequestStatus` enum to our string status. Numeric literals
  * are the SDK enum's runtime values (Abandoned=2, Completed=3), keeping this
@@ -180,197 +162,13 @@ export function prStatusLabel(
   status: PullRequestStatus | undefined,
 ): "active" | "completed" | "abandoned" {
   switch (status) {
-    case 3 /* Completed */:
+    case PR_STATUS_COMPLETED:
       return "completed";
-    case 2 /* Abandoned */:
+    case PR_STATUS_ABANDONED:
       return "abandoned";
     default:
       return "active";
   }
-}
-
-// ---------------------------------------------------------------------------
-// File diff: line-diff blocks → DiffRange[] (SDK-free)
-// ---------------------------------------------------------------------------
-
-/**
- * The subset of ADO's `LineDiffBlock` we read (structural to stay SDK-free).
- * Line numbers are 1-based; counts are 0 when the side doesn't participate.
- * `changeType`: 0=None, 1=Add, 2=Delete, 3=Edit.
- */
-export interface LineDiffBlockLike {
-  changeType?: number;
-  originalLineNumberStart?: number;
-  originalLinesCount?: number;
-  modifiedLineNumberStart?: number;
-  modifiedLinesCount?: number;
-}
-
-/**
- * Convert ADO `lineDiffBlocks` for one file into `DiffRange[]` in *modified*
- * (new-file) line numbers — matching the renderer's `data-source-line` attrs.
- * Adds/edits become span ranges; deletes become a `deleted-marker` at the
- * deletion point.
- *
- * ADO's `getFileDiffs` returns only line NUMBERS/COUNTS — never the removed
- * text (that lives on `FileDiffDetail`, which no SDK/REST method exposes). So
- * to show *what* was removed, callers fetch the original file at the base
- * commit and pass its lines as `originalLines`; this function then slices the
- * removed range (`originalLineNumberStart .. +originalLinesCount`) into each
- * deletion's `deletedContent`. When `originalLines` is omitted the markers
- * still render, just without an expandable body.
- */
-export function lineDiffBlocksToRanges(
-  blocks: readonly LineDiffBlockLike[] | undefined,
-  originalLines?: readonly string[],
-): DiffRange[] {
-  const ranges: DiffRange[] = [];
-  for (const b of blocks ?? []) {
-    const range = lineDiffBlockToRange(b, originalLines);
-    if (range) ranges.push(range);
-  }
-  return ranges;
-}
-
-/** Convert one ADO line-diff block to a `DiffRange`, or `undefined` if empty. */
-function lineDiffBlockToRange(
-  b: LineDiffBlockLike,
-  originalLines: readonly string[] | undefined,
-): DiffRange | undefined {
-  const ct = b.changeType ?? 0;
-  const modStart = b.modifiedLineNumberStart ?? 0;
-  const modCount = b.modifiedLinesCount ?? 0;
-  const origStart = b.originalLineNumberStart ?? 0;
-  const origCount = b.originalLinesCount ?? 0;
-
-  if (ct === 1 /* Add */) {
-    return modCount > 0 ? addedLinesRange(modStart, modCount) : undefined;
-  }
-  if (ct === 3 /* Edit */) {
-    return editBlockToRange(
-      modStart,
-      modCount,
-      origStart,
-      origCount,
-      originalLines,
-    );
-  }
-  if (ct === 2 /* Delete */) {
-    const at = Math.max(1, modStart);
-    return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
-  }
-  return undefined;
-}
-
-function addedLinesRange(modStart: number, modCount: number): DiffRange {
-  return {
-    startLine: modStart,
-    endLine: modStart + modCount - 1,
-    kind: "added",
-    linesAdded: modCount,
-    linesDeleted: 0,
-  };
-}
-
-function editBlockToRange(
-  modStart: number,
-  modCount: number,
-  origStart: number,
-  origCount: number,
-  originalLines: readonly string[] | undefined,
-): DiffRange {
-  if (modCount > 0 && origCount === 0) {
-    // An "edit" block that removed no original lines is really a pure
-    // insertion — surface it as an addition (green) rather than an edit.
-    return addedLinesRange(modStart, modCount);
-  }
-  if (modCount > 0) {
-    const originalText = sliceOriginalLines(
-      originalLines,
-      origStart,
-      origCount,
-    );
-    return {
-      startLine: modStart,
-      endLine: modStart + modCount - 1,
-      kind: "modified",
-      originalStartLine: origStart,
-      originalEndLine: origStart + origCount - 1,
-      linesAdded: modCount,
-      linesDeleted: origCount,
-      ...(originalText !== undefined ? { originalText } : {}),
-    };
-  }
-  // Edit that left no modified lines behaves like a deletion.
-  const at = Math.max(1, modStart);
-  return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
-}
-
-/**
- * Build a `deleted-marker` range, attaching `deletedContent` only when the
- * removed text could be recovered from `originalLines` (so the range shape
- * stays clean when the original file wasn't fetched).
- */
-function buildDeletedMarkerRange(
-  at: number,
-  origCount: number,
-  originalLines: readonly string[] | undefined,
-  originalStart: number,
-): DiffRange {
-  const range: DiffRange = {
-    startLine: at,
-    endLine: at,
-    kind: "deleted-marker",
-    linesAdded: 0,
-    linesDeleted: origCount,
-  };
-  const content = sliceOriginalLines(originalLines, originalStart, origCount);
-  if (content !== undefined) range.deletedContent = content;
-  return range;
-}
-
-/**
- * Slice the removed source lines out of the original file's line array.
- * `originalLineNumberStart` is 1-based. Returns `undefined` when the original
- * text isn't available or the range is empty so the marker stays body-less.
- */
-function sliceOriginalLines(
-  originalLines: readonly string[] | undefined,
-  originalStart: number,
-  originalCount: number,
-): string | undefined {
-  if (!originalLines || originalCount <= 0 || originalStart <= 0) {
-    return undefined;
-  }
-  const from = originalStart - 1;
-  const slice = originalLines.slice(from, from + originalCount);
-  if (slice.length === 0) return undefined;
-  return slice.join("\n");
-}
-
-/** Aggregate added/deleted line counts from `lineDiffBlocks` for one file. */
-export function lineDiffBlocksToCounts(
-  blocks: readonly LineDiffBlockLike[] | undefined,
-): { linesAdded: number; linesDeleted: number } {
-  let added = 0;
-  let deleted = 0;
-  for (const b of blocks ?? []) {
-    switch (b.changeType ?? 0) {
-      case 1: // Add
-        added += b.modifiedLinesCount ?? 0;
-        break;
-      case 2: // Delete
-        deleted += b.originalLinesCount ?? 0;
-        break;
-      case 3: // Edit
-        added += b.modifiedLinesCount ?? 0;
-        deleted += b.originalLinesCount ?? 0;
-        break;
-      default:
-        break;
-    }
-  }
-  return { linesAdded: added, linesDeleted: deleted };
 }
 
 // Thread/comment conversion. Numeric literals stand in for SDK enum values so
@@ -378,6 +176,7 @@ export function lineDiffBlocksToCounts(
 //   CommentType:         Unknown=0, Text=1, CodeChange=2, System=3
 //   CommentThreadStatus: Unknown=0, Active=1, Fixed=2, WontFix=3,
 //                        Closed=4, ByDesign=5, Pending=6
+const COMMENT_TYPE_SYSTEM = 3 as CommentType;
 
 /** Property-bag keys + schema tag for extension-authored threads. */
 export const PROP_ANCHOR = "emrAnchor";
@@ -680,7 +479,7 @@ export function adoThreadToLocal(
   // Drop ADO system/auto threads (votes, reviewer changes, status updates,
   // ref updates) — they're commentType=System(3) and aren't review discussion.
   const comments = (t.comments ?? [])
-    .filter((c) => !c.isDeleted && c.commentType !== 3 /* System */)
+    .filter((c) => !c.isDeleted && c.commentType !== COMMENT_TYPE_SYSTEM)
     .map(adoCommentToLocal);
   if (comments.length === 0) return null;
 

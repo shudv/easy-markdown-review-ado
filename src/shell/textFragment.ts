@@ -14,7 +14,7 @@
 // both when building a link and when resolving one, so a link always lands on
 // live document text.
 //
-// Pure DOM helpers (no React), unit-testable in jsdom; PrShell owns when they
+// Pure DOM helpers (no React), unit-testable in jsdom; Shell owns when they
 // run.
 
 import {
@@ -342,18 +342,30 @@ export function parseTextFragment(value: string): TextFragment | null {
     return null;
   }
   try {
-    const decode = (piece: string): string => decodeURIComponent(piece).trim();
-    const start = decode(parts[0]!);
-    const end = parts[1] !== undefined ? decode(parts[1]) : undefined;
-    if (!start || end === "") return null;
-    const fragment: TextFragment = { start };
-    if (end) fragment.end = end;
-    const p = prefix !== undefined ? decode(prefix) : "";
-    const s = suffix !== undefined ? decode(suffix) : "";
-    if (p) fragment.prefix = p;
-    if (s) fragment.suffix = s;
-    return fragment;
+    return decodeTextFragment(parts, prefix, suffix);
   } catch {
     return null;
   }
+}
+
+/**
+ * Decode the split `start[,end]` quote parts plus optional context pieces.
+ * Returns null for a blank quote; throws on a bad percent-escape.
+ */
+function decodeTextFragment(
+  parts: readonly string[],
+  prefix: string | undefined,
+  suffix: string | undefined,
+): TextFragment | null {
+  const decode = (piece: string): string => decodeURIComponent(piece).trim();
+  const start = decode(parts[0]!);
+  const end = parts[1] !== undefined ? decode(parts[1]) : undefined;
+  if (!start || end === "") return null;
+  const fragment: TextFragment = { start };
+  if (end) fragment.end = end;
+  const p = prefix !== undefined ? decode(prefix) : "";
+  const s = suffix !== undefined ? decode(suffix) : "";
+  if (p) fragment.prefix = p;
+  if (s) fragment.suffix = s;
+  return fragment;
 }

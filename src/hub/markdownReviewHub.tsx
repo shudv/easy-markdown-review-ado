@@ -137,7 +137,7 @@ async function boot(): Promise<void> {
   }
   // Start the boot-time clock before the SDK handshake so the measurement spans
   // the whole path to first rendered Markdown, not just React startup.
-  // `markAppReady()` fires later — from PrShell when the first document renders,
+  // `markAppReady()` fires later — from Shell when the first document renders,
   // or from HubApp for the empty landing state.
   markBootStart();
   initTelemetry({ appName: "documents-hub" });
@@ -185,8 +185,12 @@ async function boot(): Promise<void> {
         </ErrorBoundary>,
       );
     },
-    notifySucceeded: () => SDK.notifyLoadSucceeded(),
-    notifyFailed: (err) => SDK.notifyLoadFailed(err),
+    notifySucceeded: () => {
+      void SDK.notifyLoadSucceeded();
+    },
+    notifyFailed: (err) => {
+      void SDK.notifyLoadFailed(err);
+    },
     onError: (err) => {
       console.error("[MarkdownReviewHub] startup failed", err);
       trackUserFacingError({

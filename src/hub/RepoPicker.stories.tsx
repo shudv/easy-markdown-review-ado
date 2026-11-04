@@ -3,7 +3,7 @@ import * as React from "react";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
 
 import type { DocRepo } from "../shell/types";
-import { RepoPicker } from "./DocumentsApp";
+import { RepoPicker } from "./RepoPicker";
 
 const allRepos: DocRepo[] = Array.from({ length: 24 }, (_, index) => ({
   id: `repo-${index + 1}`,

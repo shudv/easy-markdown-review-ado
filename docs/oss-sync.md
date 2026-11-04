@@ -1,13 +1,92 @@
 # OSS mirror sync ledger
 
+## 2026-11-04 Size cleanup, ESLint complexity gate, lint warnings as errors, coverage-ignore audit, doc fixes, v1 telemetry retirement and Shell rename sync
+
+- Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
+  Both syncs land together in one PR (#29) on public `main` `0c7433f`.
+- Previously mirrored product boundary: `14843f8`.
+- New product boundary: `5e3935e` (source branch `refactor/clear-size-baseline`,
+  which also carries `14843f8`; not yet merged, record the source merge commit
+  here once it lands).
+- OSS release version: unchanged at `1.3.0`.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c989462`     | Every pinned baseline entry must carry a `reason`; `complexity:update` keeps reasons.                                                                                                                                                                                                                                                                                                    |
+| `39cf78e`     | The 16 functions with more than 4 parameters take option objects instead.                                                                                                                                                                                                                                                                                                                |
+| `f844c87`     | Hooks, plain functions, effect callbacks and files brought within the size limits (`diffDecorations.ts` split into `src/markdown/diffDecorations/`, `DocNav`, `ReaderStatusBar`, `ArticleView`, hub, PR tab, ADO data and PrShell hook splits, fixture modules), new unit tests, and 26 documented exceptions: 24 React component bodies plus `PrShell.tsx` and `DocumentsHubApp.tsx`.   |
+| `2e812c9`     | Docs: the threat model's browser-storage and outbound-request claims corrected and its render pipeline completed; the telemetry doc's status reflects that dual emission is still active, with dated triage and release-watch sections removed; the e2e README's per-spec narrative becomes a table covering all 13 specs; smaller trims in `visual/README.md` and `static/overview.md`. |
+| `4ef8ce8`     | v1 telemetry retired: dual emission to the per-event tables ends, `toTableEvent` sends each event only to `Engagement` or `Diagnostics`, and the telemetry doc drops its migration material.                                                                                                                                                                                             |
+| `ba9bd6e`     | Coverage-ignore audit: 185 `v8 ignore` directives reduced to 12 (the rest replaced by tests or removed with their dead code), the `emr/coverage-ignore-rationale` ESLint rule requiring a reason on every ignore, two "Before" disclosure builders deduplicated, and scratch `coverage-*/` folders gitignored.                                                                           |
+| `b871f9e`     | Complexity and size limits enforced by ESLint as errors, with exceptions as `eslint-disable … -- <reason>` comments next to the code; `reportUnusedDisableDirectives` and `@eslint-community/eslint-plugin-eslint-comments` (`require-description`, `no-unlimited-disable`) added; the custom checker, its JSON baseline and its CI steps removed; a test harness `unbound-method` fix.  |
+| `df98345`     | All 37 ESLint warnings fixed and their rules flipped to errors: `DocumentsApp` and `DocNav` no longer call hooks after an early return (`DocumentsApp` splits into a `DocumentsAppBody`), `AlmSearchError` is an `Error` subclass, ADO enum comparisons use typed constants, and smaller promise, escape and assignment fixes. Complexity stays advisory in tests and e2e.               |
+| `fc2e2aa`     | `PrShell` renamed to `Shell` (it backs both the PR tab and the Documents hub): `src/shell/Shell.tsx`, `src/shell/shell/` (was `src/shell/prShell/`), `ShellProps`, `shellHelpers`, `Components/Shell` stories, `test/shell*` tests, `[Shell]` console prefixes and `Shell.*` telemetry error sources. Earlier rows keep the old name.                                                    |
+| `5e3935e`     | A selection spanning an open "Before" panel no longer offers a comment (its old text would become the anchor); collapsed panels still allow commenting across the live text around them.                                                                                                                                                                                                 |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below. The public
+  feedback contact stays in `DocumentsApp.tsx` (now in `DocumentsAppBody`) and `PrTabApp.tsx` (both now render `Shell`); the shorter
+  `togglePopover` call moves with its code to
+  `src/markdown/diffDecorations/metadata.ts`.
+- The README keeps its public wording; only the complexity paragraph changes.
+- `visual/README.md` keeps its public Playwright-bump note (no Azure pipeline
+  to update).
+- The public lock adds only `@eslint-community/eslint-plugin-eslint-comments`
+  `4.8.1` and its dependencies, with public npm URLs. GitHub CI drops its two
+  complexity-checker steps; lint is the gate.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `b871f9e` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
+## 2026-11-04 Complexity and size ratchet sync
+
+- Public base: `0c7433f` (OSS `1.3.0`, complexity baseline and duplication
+  gate).
+- Previously mirrored product boundary: `4b47a94` (the merged form of
+  `548f291`).
+- New product boundary: `14843f8` (source branch `chore/size-ratchet`, not yet
+  merged; record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.0`. The package version, lockfile root
+  version and Marketplace manifest do not move.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `14843f8`     | Complexity ratchet extended to size: cyclomatic limit 20 → 15 (the 7 functions above it split, nothing pinned for complexity), new limits of 80 code lines and 4 parameters per function and 500 code lines per file, today's offenders pinned in `complexity-baseline.json` (`functions` and a new `files` section), checker tests, ESLint editor warnings, and README docs. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The source change also updates a comment in the private Azure pipeline; the
+  GitHub CI step runs the same `complexity:check` and needs no change.
+- The README keeps its public wording; only the complexity commands and limits
+  are updated.
+- The public `diffDecorations.ts` keeps its shorter `togglePopover` call, so its
+  pinned file length is one line lower (3080) than the source baseline.
+- No dependency changes.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `14843f8` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-10-30 Complexity baseline and duplication gate sync
 
 - Public base: `5c0d730` (OSS `1.3.0`, Azure DevOps wiki compatibility).
 - Previously mirrored product boundary: `02cf7f9` (the merged form of
   `52b3bd9`).
 - New product boundary: `548f291` (source branch
-  `refactor/zero-complexity-baseline`, not yet merged; record the source merge
-  commit here once it lands).
+  `refactor/zero-complexity-baseline`, merged as `4b47a94`).
 - OSS release version: unchanged at `1.3.0`. The package version, lockfile root
   version and Marketplace manifest do not move.
 - Strategy: replay the product tree delta without importing private history.

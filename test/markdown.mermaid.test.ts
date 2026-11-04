@@ -1,7 +1,12 @@
 // Tests for ADO-style `:::mermaid` fences and rehype placeholder emission.
+import type { Element, Root } from "hast";
+import { unified } from "unified";
 import { describe, it, expect } from "vitest";
 
-import { preprocessMermaidBlocks } from "../src/markdown/mermaid";
+import {
+  preprocessMermaidBlocks,
+  rehypeMermaidPlaceholder,
+} from "../src/markdown/mermaid";
 import { renderMarkdown } from "../src/markdown/render";
 
 describe("preprocessMermaidBlocks", () => {
@@ -140,5 +145,45 @@ describe("renderMarkdown — mermaid placeholders", () => {
     const html = await renderMarkdown("```\nplain code\n```\n");
     expect(html).not.toContain("emr-mermaid");
     expect(html).toContain("plain code");
+  });
+});
+
+describe("rehypeMermaidPlaceholder — non-pipeline input", () => {
+  function run(children: Root["children"]): Root {
+    return unified()
+      .use(rehypeMermaidPlaceholder)
+      .runSync({ type: "root", children });
+  }
+
+  it("leaves a <pre> without a <code> child alone", () => {
+    const pre: Element = {
+      type: "element",
+      tagName: "pre",
+      properties: {},
+      children: [{ type: "text", value: "graph TD" }],
+    };
+    expect(run([pre]).children[0]).toBe(pre);
+  });
+
+  it("omits source-line attributes when the fence has none", () => {
+    const tree = run([
+      {
+        type: "element",
+        tagName: "pre",
+        properties: {},
+        children: [
+          {
+            type: "element",
+            tagName: "code",
+            properties: { className: ["language-mermaid"] },
+            children: [{ type: "text", value: "graph TD\n" }],
+          },
+        ],
+      },
+    ]);
+    const placeholder = tree.children[0] as Element;
+    expect(placeholder.properties.className).toEqual(["emr-mermaid"]);
+    expect(placeholder.properties).not.toHaveProperty("dataSourceLine");
+    expect(placeholder.properties).not.toHaveProperty("dataSourceEndLine");
   });
 });

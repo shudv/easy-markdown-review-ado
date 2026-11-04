@@ -21,10 +21,10 @@ npm run test:visual:report   # open the HTML diff report after a failure
 ```
 
 Both wrap [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs): it builds
-the static Storybook on the host (the bundle is platform-independent), then runs
-Playwright **inside** `mcr.microsoft.com/playwright:v1.61.1-jammy` so the render
-matches CI exactly. (`npm run test:visual` is the raw, in-container compare that
-CI itself invokes — running it bare on a Windows/macOS host will mismatch.)
+the static Storybook on the host, then runs Playwright inside the pinned
+container (see [Why one baseline set](#why-one-baseline-set-in-a-container)).
+`npm run test:visual` is the raw in-container compare that CI invokes; run bare
+on Windows or macOS it will mismatch.
 
 > **Why `--update-snapshots=all`:** Playwright's default update mode is
 > `changed`, which only rewrites a baseline when the new render diffs **beyond**
@@ -82,17 +82,6 @@ it), the suite pins **one** rendering environment — the
 CI and locally. Renders are byte-identical, so a **single** committed set
 (`<name>-chromium.png`) is authoritative everywhere.
 
-## Regenerating baselines
-
-Run `npm run test:visual:update` (needs Docker). It builds the static Storybook
-on the host, then (re)writes the baselines **inside** the pinned container so
-they match CI. Commit the regenerated `*-chromium.png` files with your change.
-
-> **Bumping Playwright:** update the tag in **two** places together — the
-> `@playwright/test` dependency and `IMAGE` in
-> [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs) — then regenerate
-> the baselines. CI reads the image from the wrapper.
-
 ## When a visual test fails
 
 1. Open the report: `npm run test:visual:report` (locally) or download the
@@ -100,3 +89,8 @@ they match CI. Commit the regenerated `*-chromium.png` files with your change.
 2. If the change is an **intended** visual update, regenerate the baselines with
    `npm run test:visual:update` (Docker) and commit the `*-chromium.png` files.
 3. If it's a **regression**, fix the CSS/layout — do not update the baseline.
+
+> **Bumping Playwright:** update the tag in **two** places together — the
+> `@playwright/test` dependency and `IMAGE` in
+> [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs) — then regenerate
+> the baselines. CI reads the image from the wrapper.

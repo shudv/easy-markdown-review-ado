@@ -2,7 +2,7 @@
 // (a heading slug from an `#anchor` link or an `?anchor=` deep link).
 //
 // Pure DOM helpers (no React) so the lookup rules are unit-testable in jsdom;
-// PrShell owns when they run.
+// Shell owns when they run.
 
 import { slugifyHeading } from "../markdown/render";
 import { wrapRangeTextNodes } from "../comments/highlight";
@@ -141,8 +141,8 @@ function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
     (node) => !(node instanceof Element && node.matches(CUE_EXCLUDED_SELECTOR)),
   );
   let cue = target;
-  /* v8 ignore next -- element/text/comment children always have string textContent; `?? ""` only satisfies the DOM typing */
-  if (nodes.some((node) => (node.textContent ?? "").trim().length > 0)) {
+  // Child nodes are never Documents/Doctypes, so textContent is never null.
+  if (nodes.some((node) => node.textContent!.trim().length > 0)) {
     cue = target.ownerDocument.createElement("span");
     cue.setAttribute(CUE_WRAPPER_ATTR, "");
     target.insertBefore(cue, nodes[0]!);

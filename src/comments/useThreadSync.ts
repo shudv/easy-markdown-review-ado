@@ -126,6 +126,204 @@ export interface ThreadSyncControls {
   isRefreshing: boolean;
 }
 
+/** Refs shared between the hook and its polling session. */
+interface ThreadSyncRefs {
+  fetchRef: React.MutableRefObject<UseThreadSyncOptions["fetchThreads"]>;
+  onThreadsRef: React.MutableRefObject<UseThreadSyncOptions["onThreads"]>;
+  onErrorRef: React.MutableRefObject<UseThreadSyncOptions["onError"]>;
+  subscribeRecoveredRef: React.MutableRefObject<
+    UseThreadSyncOptions["subscribeRecovered"]
+  >;
+  generationRef: React.MutableRefObject<number>;
+  inFlightRef: React.MutableRefObject<AbortController | null>;
+  refreshNowRef: React.MutableRefObject<() => void>;
+}
+
+/** Mutable state of one polling session (one run of the polling effect). */
+interface PollSession {
+  refs: ThreadSyncRefs;
+  setIsRefreshing: (value: boolean) => void;
+  intervalMs: number;
+  maxBackoffMs: number;
+  cancelled: boolean;
+  timerId: number | null;
+  // Consecutive failed polls; 0 while healthy. Drives backoff and the
+  // once-per-streak telemetry.
+  failureStreak: number;
+  // Wall-clock time the next automatic poll is due. Kept while hidden so a
+  // reveal mid-backoff resumes the wait instead of polling immediately.
+  nextDueAtMs: number | null;
+}
+
+const isVisible = (): boolean => document.visibilityState === "visible";
+
+function abortInFlight(refs: ThreadSyncRefs): void {
+  if (refs.inFlightRef.current) {
+    refs.inFlightRef.current.abort();
+    refs.inFlightRef.current = null;
+  }
+}
+
+function clearTimer(session: PollSession): void {
+  if (session.timerId !== null) {
+    window.clearTimeout(session.timerId);
+    session.timerId = null;
+  }
+}
+
+// Arm the next automatic poll `delayMs` from now. While hidden only the
+// due time is recorded; the reveal handler re-arms from it.
+function scheduleNext(session: PollSession, delayMs: number): void {
+  clearTimer(session);
+  session.nextDueAtMs = Date.now() + delayMs;
+  if (isVisible()) {
+    session.timerId = window.setTimeout(() => runFetch(session), delayMs);
+  }
+}
+
+function handleFetchFailure(session: PollSession, err: unknown): void {
+  session.failureStreak += 1;
+  scheduleNext(
+    session,
+    nextPollDelayMs({
+      failureStreak: session.failureStreak,
+      error: err,
+      nowMs: Date.now(),
+      intervalMs: session.intervalMs,
+      maxBackoffMs: session.maxBackoffMs,
+    }),
+  );
+  if (session.failureStreak === 1) {
+    trackUserFacingError({
+      error: err,
+      source: "ThreadSync.poll",
+      operation: "comments-refresh",
+      impact: "degraded",
+    });
+  }
+  (
+    session.refs.onErrorRef.current ??
+    ((e: unknown) => console.warn("[useThreadSync] fetch failed", e))
+  )(err);
+}
+
+function runFetch(session: PollSession): void {
+  const { refs } = session;
+  // refreshNowRef still targets this session after `enabled` turns off.
+  if (session.cancelled) return;
+  // Dedupe: if a request is already in flight, skip — its result
+  // (when it lands) is just as fresh as starting a new one would
+  // be, and it re-arms the schedule when it settles.
+  if (refs.inFlightRef.current) return;
+  clearTimer(session);
+  const myGeneration = refs.generationRef.current;
+  const controller = new AbortController();
+  refs.inFlightRef.current = controller;
+  session.setIsRefreshing(true);
+  refs.fetchRef
+    .current(controller.signal)
+    .then((threads) => {
+      // Teardown and every abort also bump the generation, so this one check
+      // drops results from cancelled sessions and aborted requests too.
+      if (myGeneration !== refs.generationRef.current) return;
+      session.failureStreak = 0;
+      scheduleNext(session, session.intervalMs);
+      refs.onThreadsRef.current(threads);
+    })
+    .catch((err: unknown) => {
+      if (myGeneration !== refs.generationRef.current) return;
+      handleFetchFailure(session, err);
+    })
+    .finally(() => {
+      if (refs.inFlightRef.current === controller) {
+        refs.inFlightRef.current = null;
+      }
+      // A torn-down session must not clear a newer session's spinner.
+      if (!session.cancelled) session.setIsRefreshing(false);
+    });
+}
+
+// Poll now, unless a failure backoff is still pending — then just re-arm
+// the remaining wait. Used by the automatic triggers (reveal / focus).
+function pollUnlessBackingOff(session: PollSession): void {
+  const remainingMs =
+    session.failureStreak > 0 && session.nextDueAtMs !== null
+      ? session.nextDueAtMs - Date.now()
+      : 0;
+  if (remainingMs > 0) scheduleNext(session, remainingMs);
+  else runFetch(session);
+}
+
+function handleVisibilityChange(session: PollSession): void {
+  const { refs } = session;
+  if (isVisible()) {
+    // Coming back to the tab — abort any stale in-flight, then fetch
+    // immediately (or resume a pending backoff).
+    abortInFlight(refs);
+    refs.generationRef.current += 1;
+    pollUnlessBackingOff(session);
+  } else {
+    // Going hidden — bump the generation so any in-flight result
+    // is discarded and pause the timer to save round-trips.
+    refs.generationRef.current += 1;
+    abortInFlight(refs);
+    session.setIsRefreshing(false);
+    clearTimer(session);
+  }
+}
+
+// The host says the failure condition cleared (e.g. a fresh ADO token):
+// drop any backoff and poll now — or on the next reveal when hidden.
+function handleRecovered(session: PollSession): void {
+  if (session.failureStreak === 0) return;
+  session.nextDueAtMs = Date.now();
+  if (isVisible()) runFetch(session);
+}
+
+/** Start one polling session; returns its teardown. */
+function startThreadPolling(
+  refs: ThreadSyncRefs,
+  options: Pick<PollSession, "setIsRefreshing" | "intervalMs" | "maxBackoffMs">,
+): () => void {
+  const session: PollSession = {
+    refs,
+    ...options,
+    cancelled: false,
+    timerId: null,
+    failureStreak: 0,
+    nextDueAtMs: null,
+  };
+
+  refs.refreshNowRef.current = () => runFetch(session);
+
+  const onVisibilityChange = (): void => handleVisibilityChange(session);
+  const onFocus = (): void => {
+    if (isVisible()) pollUnlessBackingOff(session);
+  };
+  const unsubscribeRecovered = refs.subscribeRecoveredRef.current?.(() =>
+    handleRecovered(session),
+  );
+
+  // Kick off the initial load. If the tab is hidden at mount we still do
+  // one fetch so Shell has data when the user comes back; the follow-up
+  // poll is armed only once visible.
+  runFetch(session);
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("focus", onFocus);
+
+  return () => {
+    session.cancelled = true;
+    refs.generationRef.current += 1;
+    abortInFlight(refs);
+    clearTimer(session);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("focus", onFocus);
+    unsubscribeRecovered?.();
+    session.setIsRefreshing(false);
+  };
+}
+
 export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   const {
     enabled,
@@ -159,168 +357,23 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   // request finishes.
   const generationRef = React.useRef(0);
   const inFlightRef = React.useRef<AbortController | null>(null);
-  /* v8 ignore next -- placeholder ref, replaced by runFetch before any call */
+  // No-op until the first polling session installs its trigger.
   const refreshNowRef = React.useRef<() => void>(() => {});
 
   React.useEffect(() => {
     if (!enabled) return;
-
-    let cancelled = false;
-    let timerId: number | null = null;
-    // Consecutive failed polls; 0 while healthy. Drives backoff and the
-    // once-per-streak telemetry.
-    let failureStreak = 0;
-    // Wall-clock time the next automatic poll is due. Kept while hidden so a
-    // reveal mid-backoff resumes the wait instead of polling immediately.
-    let nextDueAtMs: number | null = null;
-
-    const isVisible = (): boolean => document.visibilityState === "visible";
-
-    const clearTimer = (): void => {
-      if (timerId !== null) {
-        window.clearTimeout(timerId);
-        timerId = null;
-      }
-    };
-
-    // Arm the next automatic poll `delayMs` from now. While hidden only the
-    // due time is recorded; the reveal handler re-arms from it.
-    const scheduleNext = (delayMs: number): void => {
-      clearTimer();
-      nextDueAtMs = Date.now() + delayMs;
-      if (isVisible()) timerId = window.setTimeout(runFetch, delayMs);
-    };
-
-    const runFetch = (): void => {
-      /* v8 ignore next -- defensive: cancelled before the effect re-runs */
-      if (cancelled) return;
-      // Dedupe: if a request is already in flight, skip — its result
-      // (when it lands) is just as fresh as starting a new one would
-      // be, and it re-arms the schedule when it settles.
-      if (inFlightRef.current) return;
-      clearTimer();
-      const myGeneration = generationRef.current;
-      const controller = new AbortController();
-      inFlightRef.current = controller;
-      setIsRefreshing(true);
-      fetchRef
-        .current(controller.signal)
-        .then((threads) => {
-          /* v8 ignore next -- defensive: unmounted while the fetch was in flight */
-          if (cancelled) return;
-          if (myGeneration !== generationRef.current) return;
-          failureStreak = 0;
-          scheduleNext(intervalMs);
-          onThreadsRef.current(threads);
-        })
-        .catch((err: unknown) => {
-          /* v8 ignore start -- defensive cancel/abort/stale-generation guards */
-          if (cancelled) return;
-          if (controller.signal.aborted) return;
-          if (myGeneration !== generationRef.current) return;
-          /* v8 ignore stop */
-          failureStreak += 1;
-          scheduleNext(
-            nextPollDelayMs({
-              failureStreak,
-              error: err,
-              nowMs: Date.now(),
-              intervalMs,
-              maxBackoffMs,
-            }),
-          );
-          if (failureStreak === 1) {
-            trackUserFacingError({
-              error: err,
-              source: "ThreadSync.poll",
-              operation: "comments-refresh",
-              impact: "degraded",
-            });
-          }
-          (
-            onErrorRef.current ??
-            ((e: unknown) => console.warn("[useThreadSync] fetch failed", e))
-          )(err);
-        })
-        .finally(() => {
-          if (inFlightRef.current === controller) {
-            inFlightRef.current = null;
-          }
-          /* v8 ignore next -- defensive: cancelled during teardown */
-          if (!cancelled) setIsRefreshing(false);
-        });
-    };
-
-    refreshNowRef.current = runFetch;
-
-    // Poll now, unless a failure backoff is still pending — then just re-arm
-    // the remaining wait. Used by the automatic triggers (reveal / focus).
-    const pollUnlessBackingOff = (): void => {
-      const remainingMs =
-        failureStreak > 0 && nextDueAtMs !== null
-          ? nextDueAtMs - Date.now()
-          : 0;
-      if (remainingMs > 0) scheduleNext(remainingMs);
-      else runFetch();
-    };
-
-    const onVisibilityChange = (): void => {
-      if (isVisible()) {
-        // Coming back to the tab — abort any stale in-flight, then fetch
-        // immediately (or resume a pending backoff).
-        if (inFlightRef.current) {
-          inFlightRef.current.abort();
-          inFlightRef.current = null;
-        }
-        generationRef.current += 1;
-        pollUnlessBackingOff();
-      } else {
-        // Going hidden — bump the generation so any in-flight result
-        // is discarded and pause the timer to save round-trips.
-        generationRef.current += 1;
-        if (inFlightRef.current) {
-          inFlightRef.current.abort();
-          inFlightRef.current = null;
-        }
-        setIsRefreshing(false);
-        clearTimer();
-      }
-    };
-
-    const onFocus = (): void => {
-      if (isVisible()) pollUnlessBackingOff();
-    };
-
-    // The host says the failure condition cleared (e.g. a fresh ADO token):
-    // drop any backoff and poll now — or on the next reveal when hidden.
-    const onRecovered = (): void => {
-      if (failureStreak === 0) return;
-      nextDueAtMs = Date.now();
-      if (isVisible()) runFetch();
-    };
-    const unsubscribeRecovered = subscribeRecoveredRef.current?.(onRecovered);
-
-    // Kick off the initial load. If the tab is hidden at mount we still do
-    // one fetch so PrShell has data when the user comes back; the follow-up
-    // poll is armed only once visible.
-    runFetch();
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      cancelled = true;
-      generationRef.current += 1;
-      if (inFlightRef.current) {
-        inFlightRef.current.abort();
-        inFlightRef.current = null;
-      }
-      clearTimer();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", onFocus);
-      unsubscribeRecovered?.();
-      setIsRefreshing(false);
-    };
+    return startThreadPolling(
+      {
+        fetchRef,
+        onThreadsRef,
+        onErrorRef,
+        subscribeRecoveredRef,
+        generationRef,
+        inFlightRef,
+        refreshNowRef,
+      },
+      { setIsRefreshing, intervalMs, maxBackoffMs },
+    );
   }, [enabled, intervalMs, maxBackoffMs]);
 
   const refreshNow = React.useCallback(() => {

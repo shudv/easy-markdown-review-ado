@@ -7,24 +7,19 @@
 
 import * as SDK from "azure-devops-extension-sdk";
 import {
-  GitRestClient,
-  GitPullRequestQueryType,
   GitVersionOptions,
   GitVersionType,
   PullRequestStatus,
-  VersionControlRecursionType,
-  type GitItem,
   type GitPullRequest,
-  type GitPullRequestQuery,
-  type GitQueryCommitsCriteria,
   type GitRepository,
+  type GitRestClient,
 } from "azure-devops-extension-api/Git";
 
 import type { CommentThread, FileInfo } from "../types";
 import { trackUserFacingError } from "../telemetry";
 import { adoThreadToLocal } from "./adoCommentApi";
 import { withRetry } from "./retry";
-import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
+import type { DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import {
   createAlmSearchClient,
@@ -35,27 +30,28 @@ import {
 } from "./almSearch";
 import {
   buildPrUrl,
-  commitIds,
-  docPrRefsFromHistory,
   escapeSearchQuery,
-  findOrderFile,
-  listingFailureOutcome,
-  firstCommitId,
   normalizePath,
   normalizeRepoFilter,
-  projectMarkdownLevel,
   repoSkeleton,
-  selectRoutingPr,
-  selectRoutingPrFromQuery,
-  selectRoutingPrsFromQuery,
-  stripRefsHeads,
+  type GitScope,
 } from "./adoGitData.helpers";
+import { listMarkdownLevel, type ListedRepo } from "./adoFolderListing.helpers";
+import {
+  docPrHistory,
+  mostRecentRoutingPr,
+  routingPrForDoc,
+} from "./adoPrRouting.helpers";
 import { sharedGitClient } from "./adoClients";
-import { parseOrderFile } from "./wikiOrder";
 
 // Re-export `buildPrUrl` (the one helper external callers reach for through
 // this module's SDK-touching API surface).
 export { buildPrUrl };
+
+/** Injected-client reads in `project`, through the page's shared Git client. */
+function gitScope(projectId: string): GitScope<GitRestClient> {
+  return { git: sharedGitClient, projectId };
+}
 
 // ---------------------------------------------------------------------------
 // Repo discovery
@@ -163,7 +159,7 @@ export async function loadRepoPrRouting(
   rawRepo: GitRepository,
   projectId: string,
 ): Promise<{ recentPr: DocRepo["recentPr"]; pr: GitPullRequest | null }> {
-  const pr = await findMostRecentRoutingPr(rawRepo, projectId);
+  const pr = await mostRecentRoutingPr(gitScope(projectId), rawRepo);
   return { recentPr: prMetaFromGitPr(rawRepo, pr), pr };
 }
 
@@ -243,7 +239,7 @@ async function listMarkdownRoot(
   repo: GitRepository,
   projectId: string,
 ): Promise<FolderListing> {
-  return listMarkdownLevel(repo, projectId, "/");
+  return listMarkdownLevel(gitScope(projectId), repo, "/");
 }
 
 /**
@@ -257,7 +253,7 @@ export async function listFolderMarkdown(
   path: string,
 ): Promise<FolderListing> {
   if (!repo.defaultBranch) return { files: [], folders: [] };
-  return listMarkdownLevel(repoStub(repo), projectId, path);
+  return listMarkdownLevel(gitScope(projectId), repoStub(repo), path);
 }
 
 /**
@@ -273,7 +269,7 @@ export async function listSubpageFolder(
   path: string,
   atCommitId?: string,
 ): Promise<FolderListing> {
-  return listMarkdownLevel(repoStub(repo), projectId, path, {
+  return listMarkdownLevel(gitScope(projectId), repoStub(repo), path, {
     atCommitId,
     missingOk: true,
     propagate: true,
@@ -283,7 +279,7 @@ export async function listSubpageFolder(
 /** The minimum repository shape `listMarkdownLevel` needs, from a DocRepo. */
 function repoStub(
   repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
-): Pick<GitRepository, "id" | "name" | "defaultBranch"> {
+): ListedRepo {
   return {
     id: repo.id,
     name: repo.name,
@@ -291,422 +287,31 @@ function repoStub(
   };
 }
 
-async function listMarkdownLevel(
-  repo: Pick<GitRepository, "id" | "name" | "defaultBranch">,
-  projectId: string,
-  scopePath: string,
-  options: {
-    atCommitId?: string;
-    missingOk?: boolean;
-    propagate?: boolean;
-  } = {},
-): Promise<FolderListing> {
-  if (!repo.defaultBranch && !options.atCommitId) {
-    return { files: [], folders: [] };
-  }
-  const gitClient = sharedGitClient();
-
-  // Pin reads to the default branch's tip so repos with no default
-  // branch ref selection still return a coherent listing — or to a commit
-  // (a pull request's source) when one is given.
-  const versionDescriptor = options.atCommitId
-    ? {
-        version: options.atCommitId,
-        versionType: GitVersionType.Commit,
-        versionOptions: GitVersionOptions.None,
-      }
-    : {
-        version: stripRefsHeads(repo.defaultBranch!),
-        versionType: GitVersionType.Branch,
-        versionOptions: GitVersionOptions.None,
-      };
-
-  let items: GitItem[];
-  try {
-    items = await withRetry(
-      () =>
-        gitClient.getItems(
-          repo.id,
-          projectId,
-          scopePath,
-          VersionControlRecursionType.OneLevel,
-          false,
-          false,
-          false,
-          false,
-          versionDescriptor,
-        ),
-      { mode: "read", label: "listMarkdownLevel.getItems" },
-    );
-  } catch (err) {
-    const outcome = listingFailureOutcome(err, options);
-    if (outcome === "empty") return { files: [], folders: [] };
-    if (outcome === "throw") throw err;
-    console.warn(
-      `[documents-hub] getItems(OneLevel) failed for ${repo.name} @ ${scopePath}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.repository",
-      operation: "folder-listing-load",
-      impact: "degraded",
-    });
-    return { files: [], folders: [] };
-  }
-
-  // ADO returns the scope folder itself as the first item — the pure
-  // `projectMarkdownLevel` helper skips it, keeps only `.md` files
-  // (case-insensitive), and sorts. See adoGitData.helpers for the invariants.
-  const listing = projectMarkdownLevel(items, scopePath);
-  // An Azure DevOps wiki folder orders its pages with a `.order` file.
-  const orderPath = findOrderFile(items, scopePath);
-  if (orderPath) {
-    try {
-      const text = await withRetry(
-        () =>
-          gitClient.getItemText(
-            repo.id,
-            orderPath,
-            projectId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            versionDescriptor,
-          ),
-        { mode: "read", label: "listMarkdownLevel.getItemText(.order)" },
-      );
-      listing.order = parseOrderFile(text);
-    } catch (err) {
-      // Best-effort: the folder still lists, alphabetically.
-      console.warn(
-        `[documents-hub] reading ${orderPath} failed for ${repo.name}:`,
-        err,
-      );
-      if (!isItemNotFoundError(err)) {
-        trackUserFacingError({
-          error: err,
-          source: "DocumentsHubApp.repository",
-          operation: "wiki-order-load",
-          impact: "degraded",
-        });
-      }
-    }
-  }
-  return listing;
-}
-
-async function findMostRecentRoutingPr(
-  repo: GitRepository,
-  projectId: string,
-): Promise<GitPullRequest | null> {
-  if (!repo.defaultBranch) return null;
-  const gitClient = sharedGitClient();
-  // Fetch the most recent COMPLETED PRs targeting the default branch and let
-  // the pure `selectRoutingPr` helper make the routing decision (most recent
-  // completed; active PRs ignored). We over-fetch a small page rather than
-  // top-1 so the choice is robust to any host-side ordering quirks — the
-  // helper re-sorts by date regardless.
-  const criteria = {
-    targetRefName: repo.defaultBranch,
-    status: PullRequestStatus.Completed,
-  } as Parameters<GitRestClient["getPullRequests"]>[1];
-  try {
-    let completed: GitPullRequest[];
-    try {
-      completed = await withRetry(
-        () =>
-          gitClient.getPullRequests(
-            repo.id,
-            criteria,
-            projectId,
-            undefined,
-            0,
-            10,
-          ),
-        { mode: "read", label: "findMostRecentRoutingPr.getPullRequests" },
-      );
-    } catch (err) {
-      // Retries exhausted (or terminal) — degrade to "no routing PR".
-      trackUserFacingError({
-        error: err,
-        source: "DocumentsHubApp.repository",
-        operation: "repository-pr-routing",
-        impact: "degraded",
-      });
-      completed = [];
-    }
-    return selectRoutingPr(completed);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getPullRequests failed for ${repo.name}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.repository",
-      operation: "repository-pr-routing",
-      impact: "degraded",
-    });
-    return null;
-  }
-}
-
 /**
  * Resolve the most recent COMPLETED PR that changed `docPath` — the PR a
- * document's comments are routed to in the Documents hub — so a document's
- * comments live on a real PR in its history and NO comment-housing PR has to
- * be created. This is what keeps the extension off the `vso.code_write` scope
- * (it only reads PRs + writes comment threads).
- *
- * Resolution is a constant two calls regardless of how deep the file's history
- * is: `getCommits(itemPath, top 1)` finds the last commit on the default
- * branch that touched the file, then `getPullRequestQuery(LastMergeCommit)`
- * finds the PR that merged that commit. (The previous implementation scanned
- * up to 20 completed PRs newest-first, loading each one's iteration changes
- * sequentially — up to ~41 serial round-trips for a file last changed long
- * ago.) Falls back to the repo's most recent completed PR (regardless of path)
- * so every document still has a stable comment home — e.g. when the file last
- * changed via a direct push with no associated PR — and finally `null` when
- * the repo has no completed PRs at all.
+ * document's comments are routed to in the Documents hub, falling back to the
+ * repo's most recent completed PR. See {@link routingPrForDoc}.
  */
-export async function findRoutingPrForDoc(
+export function findRoutingPrForDoc(
   repo: GitRepository,
   projectId: string,
   docPath: string,
 ): Promise<GitPullRequest | null> {
-  if (!repo.defaultBranch) return null;
-  const gitClient = sharedGitClient();
-  const branch = stripRefsHeads(repo.defaultBranch);
-  const wanted = normalizePath(docPath);
-
-  // 1. The most recent commit on the default branch that touched this file.
-  //    `getCommits` returns newest-first, so `top: 1` is the last change.
-  let commitId: string | null = null;
-  try {
-    const commits = await withRetry(
-      () =>
-        gitClient.getCommits(
-          repo.id,
-          {
-            itemPath: wanted,
-            itemVersion: {
-              version: branch,
-              versionType: GitVersionType.Branch,
-              versionOptions: GitVersionOptions.None,
-            },
-            $top: 1,
-          } as GitQueryCommitsCriteria,
-          projectId,
-        ),
-      { mode: "read", label: "findRoutingPrForDoc.getCommits" },
-    );
-    commitId = firstCommitId(commits);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`,
-      err,
-    );
-    // A path that's no longer on the branch can't be routed — expected, not a
-    // failure; fall through to the repo's most recent completed PR below.
-    if (!isItemNotFoundError(err)) {
-      trackUserFacingError({
-        error: err,
-        source: "DocumentsHubApp.comments",
-        operation: "document-routing-commit-load",
-        impact: "degraded",
-      });
-    }
-  }
-
-  // 2. The PR that merged that commit (its last-merge commit). When the file
-  //    landed via a direct push the commit has no PR and we drop to the
-  //    fallback below.
-  if (commitId) {
-    try {
-      const query = await withRetry(
-        () =>
-          gitClient.getPullRequestQuery(
-            {
-              queries: [
-                {
-                  type: GitPullRequestQueryType.LastMergeCommit,
-                  items: [commitId],
-                },
-              ],
-            } as GitPullRequestQuery,
-            repo.id,
-            projectId,
-          ),
-        { mode: "read", label: "findRoutingPrForDoc.getPullRequestQuery" },
-      );
-      const pr = selectRoutingPrFromQuery(query.results, commitId);
-      if (pr) return pr;
-    } catch (err) {
-      console.warn(
-        `[documents-hub] getPullRequestQuery failed for ${repo.name}:`,
-        err,
-      );
-      trackUserFacingError({
-        error: err,
-        source: "DocumentsHubApp.comments",
-        operation: "document-pr-routing",
-        impact: "degraded",
-      });
-    }
-  }
-
-  // 3. No completed PR touched the document — fall back to the repo's most
-  //    recent completed PR so comments still have a home. No PR is ever created.
-  return findMostRecentRoutingPr(repo, projectId);
+  return routingPrForDoc(gitScope(projectId), repo, docPath);
 }
 
 /**
- * One page of a document's review history: the ordered, completed-only,
- * de-duped PRs that changed `docPath`, most recent first. Powers the
- * comment-history stepper (the ‹ › chevrons that walk PR-to-PR), where each PR
- * is a "stop" showing the document as it was at that PR's merge commit plus
- * that PR's comments.
- *
- * Built from the same two SDK calls as {@link findRoutingPrForDoc}, just
- * widened from 1→N: `getCommits(itemPath, $top, $skip)` pages the file's
- * commits newest-first, then a SINGLE `getPullRequestQuery(LastMergeCommit)`
- * over all those commit ids resolves the PRs that merged them. Pass
- * `nextCommitSkip` back as `skip` to load older stops. Note: PRs are de-duped
- * *within* a page; a caller paging across multiple calls should also de-dupe
- * by `pullRequestId` (several commits — across pages — can share one PR).
- * Degrades to an empty page on any failure so the stepper simply shows no
- * earlier history rather than breaking the document view.
+ * Load a document's review-history "stops" (the completed PRs that changed
+ * it, most recent first) for the comment-history stepper. See
+ * {@link docPrHistory}.
  */
-interface DocPrHistoryPage {
-  prs: GitPullRequest[];
-  /** Pass as the next call's `skip` to continue paging older commits. */
-  nextCommitSkip: number;
-  /** Whether more file commits may remain to scan for older PRs. */
-  hasMore: boolean;
-}
-
-async function findDocPrHistory(
-  repo: GitRepository,
-  projectId: string,
-  docPath: string,
-  opts: { top?: number; skip?: number } = {},
-): Promise<DocPrHistoryPage> {
-  const skip = opts.skip ?? 0;
-  const top = opts.top ?? 30;
-  const empty: DocPrHistoryPage = {
-    prs: [],
-    nextCommitSkip: skip,
-    hasMore: false,
-  };
-  if (!repo.defaultBranch) return empty;
-  const gitClient = sharedGitClient();
-  const branch = stripRefsHeads(repo.defaultBranch);
-  const wanted = normalizePath(docPath);
-
-  // 1. Page the commits on the default branch that touched this file,
-  //    newest-first.
-  let ids: string[];
-  try {
-    const commits = await withRetry(
-      () =>
-        gitClient.getCommits(
-          repo.id,
-          {
-            itemPath: wanted,
-            itemVersion: {
-              version: branch,
-              versionType: GitVersionType.Branch,
-              versionOptions: GitVersionOptions.None,
-            },
-            $top: top,
-            $skip: skip,
-          } as GitQueryCommitsCriteria,
-          projectId,
-        ),
-      { mode: "read", label: "findDocPrHistory.getCommits" },
-    );
-    ids = commitIds(commits);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
-      err,
-    );
-    // A path that's no longer on the branch has no history — expected, not a
-    // failure (the reader falls back to another document).
-    if (!isItemNotFoundError(err)) {
-      trackUserFacingError({
-        error: err,
-        source: "PrShell.history",
-        operation: "history-commit-load",
-        impact: "degraded",
-      });
-    }
-    return empty;
-  }
-  // A short page means we've reached the start of the file's history.
-  const hasMore = ids.length === top;
-  const nextCommitSkip = skip + ids.length;
-  if (ids.length === 0) return { prs: [], nextCommitSkip, hasMore: false };
-
-  // 2. One batched query maps every commit to the PR(s) that merged it.
-  try {
-    const query = await withRetry(
-      () =>
-        gitClient.getPullRequestQuery(
-          {
-            queries: [
-              {
-                type: GitPullRequestQueryType.LastMergeCommit,
-                items: ids,
-              },
-            ],
-          } as GitPullRequestQuery,
-          repo.id,
-          projectId,
-        ),
-      { mode: "read", label: "findDocPrHistory.getPullRequestQuery" },
-    );
-    return {
-      prs: selectRoutingPrsFromQuery(query.results, ids),
-      nextCommitSkip,
-      hasMore,
-    };
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getPullRequestQuery (history) failed for ${repo.name}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "PrShell.history",
-      operation: "history-pr-load",
-      impact: "degraded",
-    });
-    // Commits resolved but PR mapping failed — report no stops for this page
-    // but let the caller keep paging in case older commits map cleanly.
-    return { prs: [], nextCommitSkip, hasMore };
-  }
-}
-
-/**
- * Load a document's review-history "stops" as plain {@link DocPrRef} records —
- * the completed PRs that changed it, most recent first — for the comment-
- * history stepper. Thin glue over {@link findDocPrHistory} that projects the
- * raw `GitPullRequest`s via {@link docPrRefsFromHistory} (attaching each PR's
- * merge commit + web URL). A single page (default `top` commits) covers a
- * document's history in practice; degrades to `[]` on failure.
- */
-export async function loadDocPrHistory(
+export function loadDocPrHistory(
   repo: GitRepository,
   projectId: string,
   docPath: string,
   opts: { top?: number; skip?: number } = {},
 ): Promise<DocPrRef[]> {
-  const page = await findDocPrHistory(repo, projectId, docPath, opts);
-  return docPrRefsFromHistory(page.prs, (id) => buildPrUrl(repo, id));
+  return docPrHistory(gitScope(projectId), repo, docPath, opts);
 }
 
 /**
@@ -745,7 +350,7 @@ export async function loadThreadsForRoutedPr(
     );
     trackUserFacingError({
       error: err,
-      source: "PrShell.comments",
+      source: "Shell.comments",
       operation: "routed-comments-load",
       impact: "degraded",
     });
@@ -1020,7 +625,7 @@ export async function loadThreadsForRepo(
     );
     trackUserFacingError({
       error: err,
-      source: "PrShell.comments",
+      source: "Shell.comments",
       operation: "repository-comments-load",
       impact: "degraded",
     });

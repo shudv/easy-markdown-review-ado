@@ -8,7 +8,7 @@ import {
   statusBarVisibility,
   type StatusBarVisibilityInput,
 } from "../src/shell/components/readerStatusBarModel";
-import { resolveReviewIterationRange } from "../src/shell/prShellHelpers";
+import { resolveReviewIterationRange } from "../src/shell/shellHelpers";
 
 const baseInput: StatusBarVisibilityInput = {
   changesAvailable: false,

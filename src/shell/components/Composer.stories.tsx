@@ -8,6 +8,7 @@ import {
   type CommentApi,
 } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
+import type { MentionSuggestion } from "../../comments/mentions";
 import { Composer } from "./Composer";
 import { ComposerBusyContext } from "./composerBusy";
 
@@ -161,7 +162,7 @@ export const WorkItemMentionClick: Story = {
   },
 };
 
-/** !pullrequest typeahead dismissed with Escape (cancelMention). */
+/** !pullrequest typeahead ignores unhandled keys and is dismissed with Escape. */
 export const PullRequestMentionEscape: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -173,6 +174,9 @@ export const PullRequestMentionEscape: Story = {
       { timeout: 3000 },
     );
     ta.focus();
+    // A key the picker doesn't handle leaves it open.
+    await userEvent.keyboard("{Shift}");
+    await expect(canvas.getAllByRole("option").length).toBeGreaterThan(0);
     await userEvent.keyboard("{Escape}");
     await waitFor(() =>
       expect(canvas.queryAllByRole("option")).toHaveLength(0),
@@ -252,5 +256,156 @@ export const BusyWhileSending: Story = {
     await expect(submit.getAttribute("aria-busy")).toBe("true");
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
     await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};
+
+/** A CommentApi whose user searches settle only when the story says so. */
+function deferredSearchApi() {
+  const pending: Array<{
+    resolve: (suggestions: MentionSuggestion[]) => void;
+    reject: (err: Error) => void;
+  }> = [];
+  const api: CommentApi = Object.assign(new LocalOnlyCommentApi(), {
+    searchUsers: () =>
+      new Promise<MentionSuggestion[]>((resolve, reject) => {
+        pending.push({ resolve, reject });
+      }),
+  });
+  return { api, pending };
+}
+
+async function startMention(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
+  await userEvent.click(ta);
+  await userEvent.type(ta, "@al", { skipClick: true });
+  return { canvas, ta };
+}
+
+const staleSearch = deferredSearchApi();
+
+/**
+ * A slow search answered after the author kept typing is dropped — success or
+ * failure — and only the newest request fills the picker.
+ */
+export const SupersededMentionSearchesDropped: Story = {
+  decorators: [withApi(staleSearch.api)],
+  play: async ({ canvasElement }) => {
+    const { pending } = staleSearch;
+    const users = await localApi.searchUsers("al");
+    const { canvas, ta } = await startMention(canvasElement);
+    await waitFor(() => expect(pending).toHaveLength(1), { timeout: 3000 });
+    await userEvent.type(ta, "e", { skipClick: true });
+    await waitFor(() => expect(pending).toHaveLength(2), { timeout: 3000 });
+    pending[0]!.resolve(users);
+    await userEvent.type(ta, "x", { skipClick: true });
+    await waitFor(() => expect(pending).toHaveLength(3), { timeout: 3000 });
+    pending[1]!.reject(new Error("superseded"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(canvas.getByRole("listbox")).toBeTruthy();
+    await expect(canvas.queryAllByRole("option")).toHaveLength(0);
+
+    pending[2]!.resolve(users);
+    await waitFor(() =>
+      expect(canvas.getAllByRole("option").length).toBeGreaterThan(0),
+    );
+  },
+};
+
+const closedSearch = deferredSearchApi();
+
+/** Suggestions arriving after the author erased the trigger don't reopen it. */
+export const MentionResultsAfterTriggerErased: Story = {
+  decorators: [withApi(closedSearch.api)],
+  play: async ({ canvasElement }) => {
+    const { pending } = closedSearch;
+    const { canvas, ta } = await startMention(canvasElement);
+    await waitFor(() => expect(pending).toHaveLength(1), { timeout: 3000 });
+    await userEvent.clear(ta);
+    await waitFor(() => expect(canvas.queryByRole("listbox")).toBeNull());
+    pending[0]!.resolve(await localApi.searchUsers("al"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(canvas.queryByRole("listbox")).toBeNull();
+  },
+};
+
+/**
+ * Switching to Preview hides the open picker; a later resize has no textarea
+ * to anchor it to and leaves it hidden.
+ */
+export const MentionPickerHiddenInPreview: Story = {
+  play: async ({ canvasElement }) => {
+    const { canvas } = await startMention(canvasElement);
+    await waitFor(() => canvas.getByRole("option", { name: /Alex Rivera/ }), {
+      timeout: 3000,
+    });
+    // A keyboard-style click: a pointer press outside would cancel the picker.
+    canvas.getByRole("button", { name: "Preview" }).click();
+    await waitFor(() =>
+      expect(canvasElement.querySelector(".emr-preview")).toBeTruthy(),
+    );
+    window.dispatchEvent(new Event("resize"));
+    await expect(canvas.queryByRole("listbox")).toBeNull();
+  },
+};
+
+/**
+ * Committing a mention and switching to Preview in the same task unmounts the
+ * textarea before its deferred refocus frame runs; the commit still lands.
+ */
+export const MentionCommitThenPreview: Story = {
+  play: async ({ canvasElement }) => {
+    const { canvas, ta } = await startMention(canvasElement);
+    await waitFor(() => canvas.getByRole("option", { name: /Alex Rivera/ }), {
+      timeout: 3000,
+    });
+    ta.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    canvas.getByRole("button", { name: "Preview" }).click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await expect(canvas.queryByRole("textbox")).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Write" }));
+    await expect(
+      (canvas.getByRole("textbox") as HTMLTextAreaElement).value,
+    ).toContain("@Alex Rivera");
+  },
+};
+
+const unmountSearch = Object.assign(new LocalOnlyCommentApi(), {
+  searchUsers: fn(async (): Promise<MentionSuggestion[]> => []),
+});
+
+function ClosableComposer(
+  props: React.ComponentProps<typeof Composer>,
+): React.ReactElement {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(false)}>
+        Close composer
+      </button>
+      {open ? <Composer {...props} /> : null}
+    </>
+  );
+}
+
+/** Closing the composer mid-debounce cancels the queued mention search. */
+export const UnmountCancelsPendingMentionSearch: Story = {
+  decorators: [withApi(unmountSearch)],
+  render: (args) => <ClosableComposer {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
+    await userEvent.click(ta);
+    await userEvent.type(ta, "@al", { skipClick: true, delay: null });
+    canvas.getByRole("button", { name: "Close composer" }).click();
+    await waitFor(() => expect(canvas.queryByRole("textbox")).toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await expect(unmountSearch.searchUsers).not.toHaveBeenCalled();
   },
 };

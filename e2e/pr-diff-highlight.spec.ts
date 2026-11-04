@@ -8,7 +8,7 @@
 // diff the SDK loads inside ADO's pull-request view. Unit tests cover the pure
 // decoration + summary logic against synthetic ranges; only the real PR tab
 // exercises range-computation → render → decorate end to end, plus the toggle
-// wired through the shared <PrShell/>.
+// wired through the shared <Shell/>.
 
 import type { Locator } from "@playwright/test";
 

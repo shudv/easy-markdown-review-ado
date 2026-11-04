@@ -49,6 +49,7 @@ export default defineConfig({
         ".storybook/**",
         // Fixture data — static literals with no branches.
         "src/comments/fixtures.ts",
+        "src/comments/fixtures/**",
         // Type-only shapes.
         "src/types.ts",
         "src/shell/types.ts",
@@ -77,6 +78,9 @@ export default defineConfig({
         // logic is extracted into covered helpers and the shells stay out.
         "src/pr-tab/pr-tab.tsx",
         "src/pr-tab/PrTabApp.tsx",
+        // PrTabApp's SDK/REST glue: PR context resolution and host routing.
+        "src/pr-tab/prContext.ts",
+        "src/pr-tab/prTabHost.ts",
         "src/hub/DocumentsApp.tsx",
         "src/hub/DocumentsHubApp.tsx",
         "src/hub/markdownReader.tsx",

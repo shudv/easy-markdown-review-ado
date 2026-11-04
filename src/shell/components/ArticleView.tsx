@@ -1,16 +1,11 @@
 // Renders the Markdown HTML, then wraps each thread's anchor with a highlight
 // span and measures its Y relative to the article-wrap. Reports Y positions and
-// orphaned thread IDs to PrShell, and shows a floating "Add comment" bubble on
+// orphaned thread IDs to Shell, and shows a floating "Add comment" bubble on
 // text selection.
 
 import * as React from "react";
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
-import { isResolvedLike } from "../../types";
-import {
-  captureAnchorFromSelection,
-  resolveAnchor,
-} from "../../comments/anchor";
-import { wrapRangeWithHighlight } from "../../comments/highlight";
+import { captureAnchorFromSelection } from "../../comments/anchor";
 import {
   decorateDiffRanges,
   selectionTouchesDeletedDiff,
@@ -26,18 +21,49 @@ import {
   hydrateMentionLinks,
   MentionLinkContext,
 } from "../../comments/mentionLinks";
-import { SelectionBubble } from "./SelectionBubble";
-import { buildTextFragment, serializeTextFragment } from "../textFragment";
 import { GeneratedSourceModal } from "./GeneratedSourceModal";
-import { persistSectionState, readSectionState } from "./navStorage";
-import { events, track } from "../../telemetry";
+import type {
+  AnchorLayout,
+  CommentBlock,
+  SelectionLinkTarget,
+} from "./ArticleView.types";
+import { HEADING_LINK_CLASS } from "./ArticleView.headingLinks";
+import {
+  addHighlightKeyboardTargets,
+  containedThreadIds,
+  DRAFT_THREAD_ID,
+  syncActiveHighlights,
+  syncHoveredHighlights,
+} from "./ArticleView.highlights";
+import {
+  addGeneratedSourceButtons,
+  type GeneratedSourceView,
+} from "./ArticleView.generatedSource";
+import {
+  handleDocLinkClick,
+  handleGeneratedSourceClick,
+  handleHeadingLinkClick,
+  handleSectionToggleClick,
+  nextClickedThreadId,
+} from "./ArticleView.clicks";
+import {
+  ArticleSelectionBubble,
+  selectionBubblePosition,
+  selectionBubbleWidth,
+  selectionLinkTarget,
+  type SelectionBubbleState,
+} from "./ArticleView.selectionBubble";
+import {
+  anchorSignature,
+  focusedDatasetValue,
+  hasVisibleDiff,
+  hydrateSections,
+  measureAnchorYs,
+  restoreRewrapFocus,
+  wrapAnchors,
+} from "./ArticleView.wrap";
 
-export interface AnchorLayout {
-  /** Map from thread id → top px (relative to article-wrap). */
-  yByThreadId: Map<string, number>;
-  /** Threads whose anchor could not be resolved in the current HTML. */
-  orphanedThreadIds: string[];
-}
+export type { AnchorLayout, SelectionLinkTarget } from "./ArticleView.types";
 
 interface ArticleViewProps {
   pristineHtml: string;
@@ -103,318 +129,7 @@ interface ArticleViewProps {
   commentBlocker?: (anchor: TextQuoteAnchor) => CommentBlock | null;
 }
 
-/** Why a selection can't be commented on, and what to do instead. */
-export interface CommentBlock {
-  message: string;
-  actionLabel: string;
-  onAction: () => void;
-}
-
-/** What "Copy link to selection" links to. */
-export interface SelectionLinkTarget {
-  /** Serialized text fragment (see `serializeTextFragment`). */
-  text: string;
-  /** Id of the heading whose section holds the selection, if any. */
-  anchor?: string;
-}
-
-/** The link target for `range`, or null when it holds no live text. */
-function selectionLinkTarget(
-  article: HTMLElement,
-  range: Range,
-): SelectionLinkTarget | null {
-  const fragment = buildTextFragment(article, range);
-  /* v8 ignore next -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text */
-  if (!fragment) return null;
-  const start =
-    range.startContainer instanceof Element
-      ? range.startContainer
-      : range.startContainer.parentElement;
-  const heading = start
-    ?.closest(".emr-section")
-    ?.querySelector<HTMLElement>(":scope > :is(h1, h2, h3, h4, h5, h6)[id]");
-  return {
-    text: serializeTextFragment(fragment),
-    ...(heading ? { anchor: heading.id } : {}),
-  };
-}
-
-const DRAFT_THREAD_ID = "__draft__";
-
-const HEADING_LINK_CLASS = "emr-heading-link";
-const HEADING_LINK_LABEL = "Copy link to section";
-
-function createHeadingLinkButton(
-  doc: Document,
-  headingId: string,
-): HTMLElement {
-  const button = doc.createElement("button");
-  button.type = "button";
-  button.className = HEADING_LINK_CLASS;
-  button.dataset.headingId = headingId;
-  button.setAttribute("aria-label", HEADING_LINK_LABEL);
-  button.title = HEADING_LINK_LABEL;
-  return button;
-}
-
-/** Reflect a copy outcome on the heading link button, then reset it. */
-function showHeadingLinkResult(button: HTMLElement, ok: boolean): void {
-  const label = ok ? "Link copied" : "Couldn't copy link";
-  button.classList.toggle("is-copied", ok);
-  button.classList.toggle("is-failed", !ok);
-  button.setAttribute("aria-label", label);
-  button.title = label;
-  window.setTimeout(
-    () => {
-      button.classList.remove("is-copied", "is-failed");
-      button.setAttribute("aria-label", HEADING_LINK_LABEL);
-      button.title = HEADING_LINK_LABEL;
-    },
-    ok ? 1200 : 2400,
-  );
-}
-
-function syncActiveHighlights(
-  article: HTMLElement,
-  activeThreadId: string | null,
-  land: boolean,
-): void {
-  const highlights = Array.from(
-    article.querySelectorAll<HTMLElement>(".emr-highlight"),
-  );
-  highlights.forEach((highlight) => {
-    const threadId = highlight.dataset.threadId;
-    highlight.classList.toggle(
-      "is-active",
-      threadId === DRAFT_THREAD_ID || threadId === activeThreadId,
-    );
-    highlight.classList.remove("is-landing");
-  });
-
-  if (!land || activeThreadId === null) return;
-  const activeHighlights = highlights.filter(
-    (highlight) => highlight.dataset.threadId === activeThreadId,
-  );
-  if (activeHighlights.length === 0) return;
-  void article.offsetWidth;
-  activeHighlights.forEach((highlight) =>
-    highlight.classList.add("is-landing"),
-  );
-}
-
-function syncHoveredHighlights(
-  article: HTMLElement,
-  hoveredThreadId: string | null,
-): void {
-  article
-    .querySelectorAll<HTMLElement>(".emr-highlight")
-    .forEach((highlight) =>
-      highlight.classList.toggle(
-        "is-hover",
-        highlight.dataset.threadId === hoveredThreadId,
-      ),
-    );
-}
-
-function containedThreadIds(root: HTMLElement): string[] {
-  const highlights = Array.from(
-    root.querySelectorAll<HTMLElement>(
-      `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
-    ),
-  ).reverse();
-  highlights.push(root);
-  return [
-    ...new Set(highlights.map((highlight) => highlight.dataset.threadId!)),
-  ];
-}
-
-function addHighlightKeyboardTargets(article: HTMLElement): void {
-  const highlights = Array.from(
-    article.querySelectorAll<HTMLElement>(".emr-highlight"),
-  ).filter((highlight) => highlight.dataset.threadId !== DRAFT_THREAD_ID);
-  const roots = highlights.filter(
-    (highlight) =>
-      !highlight.parentElement?.closest(
-        `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
-      ),
-  );
-  const represented = new Set<string>();
-  roots.forEach((root) => {
-    const threadIds = containedThreadIds(root);
-    if (
-      threadIds.length === 0 ||
-      threadIds.every((id) => represented.has(id))
-    ) {
-      return;
-    }
-    threadIds.forEach((id) => represented.add(id));
-    const anchorText = root.innerText.replace(/\s+/g, " ").trim();
-    root.tabIndex = 0;
-    root.setAttribute("role", "button");
-    let label = "Open comment thread";
-    if (threadIds.length > 1) {
-      label = `Open ${threadIds.length} overlapping comment threads`;
-    }
-    root.setAttribute("aria-label", `${label}: ${anchorText}`);
-  });
-}
-
-/** Generated block whose Source action was clicked (see `GeneratedSourceModal`). */
-interface GeneratedSourceView {
-  kind: "mermaid" | "math";
-  source: string;
-  original: string | null;
-}
-
-// ---------------------------------------------------------------------------
-// Article click delegation. `ArticleView`'s single click listener tries each
-// target in order; a handler returns true when it consumed the click.
-// ---------------------------------------------------------------------------
-
-/**
- * Relative in-repo doc link (or in-page #anchor) — let the host resolve +
- * navigate instead of the iframe following a dead relative URL. The host
- * returns false for external links (https/mailto/mention…), which then fall
- * through to the browser's default handling.
- */
-function handleDocLinkClick(
-  e: React.MouseEvent,
-  target: HTMLElement,
-  onDocLink: ((href: string) => boolean) | undefined,
-): boolean {
-  if (!onDocLink) return false;
-  const link = target.closest<HTMLElement>("a[href]");
-  if (link && onDocLink(link.getAttribute("href")!)) {
-    e.preventDefault();
-    return true;
-  }
-  return false;
-}
-
-function decodeGeneratedSource(enc: string): string {
-  try {
-    return decodeURIComponent(enc);
-  } catch {
-    /* v8 ignore next -- decode only throws on malformed input */
-    return enc;
-  }
-}
-
-/** 0) Generated-content Source affordance — open diagram/equation source. */
-function handleGeneratedSourceClick(
-  e: React.MouseEvent,
-  target: HTMLElement,
-  setGeneratedSource: (view: GeneratedSourceView) => void,
-): boolean {
-  const sourceBtn = target.closest<HTMLElement>(
-    GENERATED_SOURCE_BUTTON_SELECTOR,
-  );
-  if (!sourceBtn) return false;
-  e.preventDefault();
-  const spec = GENERATED_SOURCE_KINDS.find((candidate) =>
-    sourceBtn.classList.contains(candidate.buttonClass),
-  )!;
-  const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
-  const enc = block?.getAttribute(spec.sourceAttribute);
-  const original = block?.dataset.diffOriginal ?? null;
-  /* v8 ignore next -- source buttons are added only to encoded blocks */
-  if (enc) {
-    const source = decodeGeneratedSource(enc);
-    setGeneratedSource({ kind: spec.kind, source, original });
-    track(
-      spec.kind === "math"
-        ? events.mathSourceViewed({ changed: original !== null })
-        : events.mermaidSourceViewed({ changed: original !== null }),
-    );
-  }
-  return true;
-}
-
-/** 1) Heading link — copy a shareable link to this section. */
-function handleHeadingLinkClick(
-  e: React.MouseEvent,
-  target: HTMLElement,
-  onCopyHeadingLink: ((headingId: string) => Promise<boolean>) | undefined,
-  setLinkAnnouncement: (text: string) => void,
-): boolean {
-  const headingLink = target.closest<HTMLElement>(`.${HEADING_LINK_CLASS}`);
-  if (!headingLink) return false;
-  e.preventDefault();
-  const headingId = headingLink.dataset.headingId!;
-  /* v8 ignore next -- buttons are only rendered when the callback exists */
-  if (!onCopyHeadingLink) return true;
-  void onCopyHeadingLink(headingId).then((ok) => {
-    showHeadingLinkResult(headingLink, ok);
-    setLinkAnnouncement(ok ? "Link copied" : "Couldn't copy link");
-  });
-  return true;
-}
-
-/**
- * 2) Section toggle. Only the dedicated chevron button folds content; heading
- * text remains ordinary selectable/commentable document text.
- */
-function handleSectionToggleClick(
-  target: HTMLElement,
-  storageKey: string,
-  wrapRef: React.RefObject<HTMLDivElement | null>,
-): boolean {
-  const sectionToggle = target.closest<HTMLButtonElement>(
-    ".emr-section-toggle",
-  );
-  if (!sectionToggle) return false;
-  const section = sectionToggle.closest<HTMLElement>(".emr-section");
-  /* v8 ignore next -- toggle buttons are only hydrated inside sections */
-  if (!section) return true;
-  /* v8 ignore next -- hydrated sections always carry a source-derived id */
-  const sid = section.dataset.sectionId ?? "";
-  const wasCollapsed = section.getAttribute("data-collapsed") === "true";
-  if (wasCollapsed) section.removeAttribute("data-collapsed");
-  else section.setAttribute("data-collapsed", "true");
-  sectionToggle.setAttribute(
-    "aria-label",
-    wasCollapsed ? "Collapse section" : "Expand section",
-  );
-  sectionToggle.setAttribute("aria-expanded", wasCollapsed ? "true" : "false");
-  sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
-  /* v8 ignore next -- sid is always non-empty; guard remains defensive */
-  if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
-  wrapRef.current?.dispatchEvent(
-    new CustomEvent("emr-sections-changed", { bubbles: false }),
-  );
-  return true;
-}
-
-/**
- * 3) Highlight click — the thread to open. Overlapping anchors are nested, so
- * collect every thread under the click and cycle on repeated clicks; exact
- * overlaps remain reachable without stacking visual layers. Null when the
- * click hit no comment highlight.
- */
-function nextClickedThreadId(
-  target: HTMLElement,
-  article: HTMLElement | null,
-  activeThreadId: string | null,
-): string | null {
-  const threadIds: string[] = [];
-  let highlight = target.closest<HTMLElement>(".emr-highlight");
-  while (highlight && article?.contains(highlight)) {
-    const threadId = highlight.dataset.threadId;
-    if (
-      threadId &&
-      threadId !== DRAFT_THREAD_ID &&
-      !threadIds.includes(threadId)
-    ) {
-      threadIds.push(threadId);
-    }
-    highlight =
-      highlight.parentElement?.closest<HTMLElement>(".emr-highlight") ?? null;
-  }
-  if (threadIds.length === 0) return null;
-  const activeIndex = threadIds.indexOf(activeThreadId ?? "");
-  return threadIds[(activeIndex + 1) % threadIds.length]!;
-}
-
+// eslint-disable-next-line max-lines-per-function -- Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree.
 export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const {
     pristineHtml,
@@ -452,15 +167,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     setLinkAnnouncementText("");
     window.requestAnimationFrame(() => setLinkAnnouncementText(text));
   }, []);
-  const [bubble, setBubble] = React.useState<{
-    top: number;
-    left: number;
-    anchor: TextQuoteAnchor;
-    /** Set when a comment can't be attached to this selection. */
-    block: CommentBlock | null;
-    /** Set when the selection can be linked to. */
-    link: SelectionLinkTarget | null;
-  } | null>(null);
+  const [bubble, setBubble] = React.useState<SelectionBubbleState | null>(null);
   // Generated block whose Source action was clicked. `original` carries the
   // pre-PR source so the modal can show an internal source-level diff.
   const [generatedSource, setGeneratedSource] =
@@ -484,22 +191,17 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const threadsKey = React.useMemo(
     () =>
       threads
-        .map(
-          (t) =>
-            `${t.id}|${t.status}|${t.anchor.exact}|${t.anchor.prefix}|${t.anchor.suffix}|${t.anchor.line ?? ""}|${t.anchor.implicit === true}`,
-        )
+        .map((t) => `${t.id}|${t.status}|${anchorSignature(t.anchor)}`)
         .join("\n"),
     [threads],
   );
-  const draftKey = draftAnchor
-    ? `${draftAnchor.exact}|${draftAnchor.prefix}|${draftAnchor.suffix}|${draftAnchor.line ?? ""}|${draftAnchor.implicit === true}`
-    : "";
+  const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
   const previousActiveThreadIdRef = React.useRef<string | null>(null);
 
   // Signature so the layout effect re-runs when the diff ranges (or the
   // show/hide toggle) change, without re-running on unrelated renders.
   const diffKey = React.useMemo(() => {
-    if (!showDiff || !diff || diff.length === 0) return "";
+    if (!hasVisibleDiff(showDiff, diff)) return "";
     return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
   }, [diff, showDiff]);
 
@@ -509,23 +211,18 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   React.useLayoutEffect(() => {
     const article = articleRef.current!;
     const wrap = wrapRef.current!;
-    const focusedThreadId = article.contains(
-      article.ownerDocument.activeElement,
-    )
-      ? (
-          article.ownerDocument.activeElement as HTMLElement
-        ).closest<HTMLElement>('.emr-highlight[role="button"]')?.dataset
-          .threadId
-      : undefined;
+    const focusedThreadId = focusedDatasetValue(
+      article,
+      '.emr-highlight[role="button"]',
+      "threadId",
+    );
     // A keyboard user on a heading link button keeps their place when a
     // thread poll / diff / image load re-wraps the article.
-    const focusedHeadingLinkId = article.contains(
-      article.ownerDocument.activeElement,
-    )
-      ? (
-          article.ownerDocument.activeElement as HTMLElement
-        ).closest<HTMLElement>(`.${HEADING_LINK_CLASS}`)?.dataset.headingId
-      : undefined;
+    const focusedHeadingLinkId = focusedDatasetValue(
+      article,
+      `.${HEADING_LINK_CLASS}`,
+      "headingId",
+    );
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
     article.innerHTML = pristineHtml;
@@ -542,93 +239,11 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
 
     // Hydrate persisted section collapse state BEFORE the wrap pass so the
     // measure step can detect hidden anchors and fall back to their heading y.
-    const sections = article.querySelectorAll<HTMLElement>(".emr-section");
-    sections.forEach((s) => {
-      const heading = s.querySelector<HTMLElement>(
-        ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
-      );
-      // A shareable link to the section, appended after the heading text so it
-      // sits where ADO's native preview shows its anchor glyph. Icon-only (no
-      // text node), so it never leaks into anchoring, outline labels, or the
-      // heading's accessible name below.
-      if (heading?.id && hasHeadingLinks) {
-        heading.setAttribute("aria-label", heading.textContent.trim());
-        heading.append(
-          createHeadingLinkButton(article.ownerDocument, heading.id),
-        );
-      }
-      // The document-title section is never collapsible (it has no chevron),
-      // so ignore any persisted state and keep it open.
-      if (s.classList.contains("emr-section--doc-title")) {
-        s.removeAttribute("data-collapsed");
-        return;
-      }
-      const sid = s.dataset.sectionId;
-      if (sid && readSectionState(storageKey, sid)) {
-        s.setAttribute("data-collapsed", "true");
-      } else {
-        s.removeAttribute("data-collapsed");
-      }
-      /* v8 ignore next -- rendered sections always begin with their heading */
-      if (!heading) return;
-      // The icon button lives inside the heading for stable gutter geometry;
-      // pin the heading's accessible name to its document text so the button's
-      // own "Collapse section" label is not folded into the heading name.
-      heading.setAttribute("aria-label", heading.textContent.trim());
-      const collapsed = s.getAttribute("data-collapsed") === "true";
-      const toggle = article.ownerDocument.createElement("button");
-      toggle.type = "button";
-      toggle.className = "emr-section-toggle";
-      toggle.setAttribute(
-        "aria-label",
-        collapsed ? "Expand section" : "Collapse section",
-      );
-      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      toggle.title = toggle.getAttribute("aria-label")!;
-      heading.prepend(toggle);
-    });
+    hydrateSections(article, storageKey, hasHeadingLinks);
 
     // Wrap each anchor with a highlight span; defer y measurement until all
     // wraps are done so section toggles can re-measure without re-wrapping.
-    const wrapOne = (
-      threadId: string,
-      anchor: TextQuoteAnchor,
-      classes: string,
-    ): boolean => {
-      const range = resolveAnchor(article, anchor);
-      if (anchor.implicit) {
-        const marker = document.createElement("span");
-        marker.className = "emr-implicit-anchor";
-        marker.dataset.threadId = threadId;
-        marker.setAttribute("aria-hidden", "true");
-        if (range) {
-          const insertion = range.cloneRange();
-          insertion.collapse(true);
-          insertion.insertNode(marker);
-        } else {
-          article.prepend(marker);
-        }
-        return true;
-      }
-      if (!range) return false;
-      const spans = wrapRangeWithHighlight(range, {
-        className: `emr-highlight ${classes}`.trim(),
-        threadId,
-      });
-      return spans.length > 0;
-    };
-
-    const orphaned: string[] = [];
-    for (const t of threads) {
-      const cls = isResolvedLike(t.status) ? "is-resolved" : "";
-      const ok = wrapOne(t.id, t.anchor, cls);
-      if (!ok) orphaned.push(t.id);
-    }
-
-    let hasDraft = false;
-    if (draftAnchor) {
-      hasDraft = wrapOne(DRAFT_THREAD_ID, draftAnchor, "is-active");
-    }
+    const { orphaned, hasDraft } = wrapAnchors(article, threads, draftAnchor);
 
     addHighlightKeyboardTargets(article);
 
@@ -637,7 +252,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     // Applied AFTER the anchor wrap (block source-line attrs intact) and
     // BEFORE measureAll (a deletion marker shifts anchor y-positions).
     // ---------------------------------------------------------------------
-    if (showDiff && diff && diff.length > 0) {
+    if (hasVisibleDiff(showDiff, diff)) {
       decorateDiffRanges(article, diff, {
         renderInline: renderMarkdownSync,
         originalSource,
@@ -648,55 +263,12 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     // Rewraps create fresh spans, so restore selection without replaying the
     // transient landing cue. The active-thread effect owns that animation.
     syncActiveHighlights(article, activeThreadId, false);
-    if (focusedThreadId) {
-      article
-        .querySelector<HTMLElement>(
-          `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
-        )
-        ?.focus();
-    }
-    if (focusedHeadingLinkId) {
-      article
-        .querySelector<HTMLElement>(
-          `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
-        )
-        ?.focus({ preventScroll: true });
-    }
+    restoreRewrapFocus(article, focusedThreadId, focusedHeadingLinkId);
 
-    // ---------------------------------------------------------------------
-    // Measure y of every wrapped highlight relative to the article-wrap.
-    // Highlights in a collapsed section have a zero rect; for those we use
-    // the section heading's y so balloons cluster at the section.
-    // ---------------------------------------------------------------------
+    // Measure y of every wrapped highlight relative to the article-wrap (see
+    // `measureAnchorYs`) and report the layout.
     function measureAll() {
-      const wrapRect = wrap!.getBoundingClientRect();
-      const yByThreadId = new Map<string, number>();
-      let draftY: number | null = null;
-
-      const seen = new Set<string>();
-      const highlights = article!.querySelectorAll<HTMLElement>(
-        ".emr-highlight, .emr-implicit-anchor",
-      );
-      highlights.forEach((el) => {
-        const tid = el.dataset.threadId;
-        if (!tid || seen.has(tid)) return;
-        seen.add(tid);
-        const rect = el.getBoundingClientRect();
-        let y: number;
-        if (rect.width === 0 && rect.height === 0) {
-          // Hidden inside a collapsed section — fall back to heading y.
-          const section = el.closest<HTMLElement>(".emr-section");
-          const heading = section?.querySelector<HTMLElement>(
-            "h1, h2, h3, h4, h5, h6",
-          );
-          /* v8 ignore next -- collapsed-section fallback geometry; headless layout gives zero rects */
-          y = heading ? heading.getBoundingClientRect().top - wrapRect.top : 0;
-        } else {
-          y = rect.top - wrapRect.top;
-        }
-        if (tid === DRAFT_THREAD_ID) draftY = y;
-        else yByThreadId.set(tid, y);
-      });
+      const { yByThreadId, draftY } = measureAnchorYs(wrap, article);
       callbacksRef.current.onAnchorsResolved(
         { yByThreadId, orphanedThreadIds: orphaned },
         hasDraft ? draftY : null,
@@ -733,7 +305,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
       cleanupDocumentImages?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on threadsKey/draftKey/diffKey rather than the objects, so the costly rewrap runs only when content changes; selection and focus have their own effects
   }, [
     pristineHtml,
     documentPath,
@@ -757,10 +329,9 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   React.useEffect(() => {
     const observer = new MutationObserver(() => {
       const article = articleRef.current;
-      /* v8 ignore next -- the observer can fire after unmount clears the ref */
+      /* v8 ignore next -- the article div is always rendered, and unmount disconnects this observer, which discards queued records, so the ref is never null here */
       if (!article) return;
       void hydrateMermaid(article, readerFontFamily).then(() => {
-        /* v8 ignore next -- unmounted between hydrate start and resolve */
         if (!wrapRef.current) return;
         addGeneratedSourceButtons(article);
         wrapRef.current.dispatchEvent(
@@ -897,7 +468,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         return;
       }
       const sel = window.getSelection();
-      /* v8 ignore next -- selection persists between capture and re-read */
+      /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
       if (!sel || sel.rangeCount === 0) return;
       // Removed (deleted-diff) content is shown for reference only; it isn't
       // part of the document, so a comment anchored there orphans immediately.
@@ -916,27 +487,17 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         hasSelectionLinks && !block
           ? selectionLinkTarget(article, range)
           : null;
-      /* v8 ignore next 4 -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text; read-only stories don't render those panels */
       if (readOnly && !link) {
         setBubble(null);
         return;
       }
       // Approx bubble width (button label + chrome). Used to clamp horizontal.
-      // The explained (blocked) variant carries a sentence and an action.
-      const BUBBLE_W = block ? 320 : readOnly ? 104 : link ? 170 : 132;
-      const desiredTop = rect.top - wrapRect.top - 36;
-      const desiredLeft =
-        rect.left + rect.width / 2 - wrapRect.left - BUBBLE_W / 2;
+      const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
       setBubble({
         anchor,
         block,
         link,
-        // Don't render above the article. If selection is at the very top,
-        // tuck the bubble just below it instead of off-screen.
-        /* v8 ignore next -- top-of-article clamp; headless getBoundingClientRect yields zeros */
-        top: desiredTop < 4 ? rect.bottom - wrapRect.top + 8 : desiredTop,
-        // Clamp horizontally so the bubble always fully fits inside wrap.
-        left: Math.max(4, Math.min(desiredLeft, wrapRect.width - BUBBLE_W - 4)),
+        ...selectionBubblePosition(rect, wrapRect, bubbleWidth),
       });
     });
   }, [readOnly, hasSelectionLinks]);
@@ -966,40 +527,13 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         onPointerOver={onPointerOver}
       />
       {bubble ? (
-        <SelectionBubble
+        <ArticleSelectionBubble
           key={`${bubble.top}:${bubble.left}:${bubble.anchor.exact}`}
-          top={bubble.top}
-          left={bubble.left}
-          block={
-            bubble.block
-              ? {
-                  ...bubble.block,
-                  onAction: () => {
-                    const action = bubble.block!.onAction;
-                    setBubble(null);
-                    window.getSelection()?.removeAllRanges();
-                    action();
-                  },
-                }
-              : null
-          }
-          onAddComment={
-            readOnly
-              ? undefined
-              : () => {
-                  const a = bubble.anchor;
-                  setBubble(null);
-                  // Collapse selection so the highlight is visible.
-                  window.getSelection()?.removeAllRanges();
-                  callbacksRef.current.onSelection(a);
-                }
-          }
-          onCopyLink={
-            bubble.link && onCopySelectionLink
-              ? () => onCopySelectionLink(bubble.link!)
-              : undefined
-          }
-          onCopyLinkSettled={() => setBubble(null)}
+          bubble={bubble}
+          readOnly={readOnly}
+          onCopySelectionLink={onCopySelectionLink}
+          onSelection={(a) => callbacksRef.current.onSelection(a)}
+          onDismiss={() => setBubble(null)}
         />
       ) : null}
       <GeneratedSourceModal
@@ -1015,56 +549,4 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       ) : null}
     </div>
   );
-}
-
-/**
- * Both generated block kinds share one Source affordance and one callout, so
- * the per-kind selectors/labels live here rather than in duplicated branches.
- */
-const GENERATED_SOURCE_KINDS = [
-  {
-    kind: "mermaid",
-    hostSelector: ".emr-mermaid",
-    hydratedSelector: ".emr-mermaid[data-mermaid-src]",
-    buttonClass: "emr-mermaid-source-btn",
-    sourceAttribute: "data-mermaid-src",
-    errorAttribute: "data-mermaid-error",
-    buttonTitle: "View diagram source",
-  },
-  {
-    kind: "math",
-    hostSelector: ".emr-math",
-    hydratedSelector: '.emr-math[data-math-src][data-hydrated="true"]',
-    buttonClass: "emr-math-source-btn",
-    sourceAttribute: "data-math-src",
-    errorAttribute: "data-math-error",
-    buttonTitle: "View equation source",
-  },
-] as const;
-
-const GENERATED_SOURCE_BUTTON_SELECTOR = GENERATED_SOURCE_KINDS.map(
-  (spec) => `.${spec.buttonClass}`,
-).join(", ");
-
-/**
- * Inject the "</> Source" affordance into every hydrated diagram/equation.
- * Runs after hydration so each block still carries its encoded source
- * attribute, which the callout reads back without extra state plumbing.
- */
-function addGeneratedSourceButtons(root: HTMLElement): void {
-  for (const spec of GENERATED_SOURCE_KINDS) {
-    root
-      .querySelectorAll<HTMLElement>(spec.hydratedSelector)
-      .forEach((block) => {
-        /* v8 ignore next -- hydration rebuilds block markup before each pass */
-        if (block.querySelector(`:scope > .${spec.buttonClass}`)) return;
-        if (block.getAttribute(spec.errorAttribute)) return;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = spec.buttonClass;
-        button.title = spec.buttonTitle;
-        button.textContent = "</> Source";
-        block.appendChild(button);
-      });
-  }
 }

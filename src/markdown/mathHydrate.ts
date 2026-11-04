@@ -34,7 +34,7 @@ function getKatex(): Promise<KatexApi> {
         import(/* webpackChunkName: "katex" */ "katex/dist/katex.min.css"),
       ]),
     );
-    /* v8 ignore next -- webpack's KaTeX ESM chunk always exposes `default` */
+    // A CommonJS-interop namespace exposes the API without a `default`.
     return (mod as { default?: KatexApi }).default ?? (mod as KatexApi);
   })().catch((error: unknown) => {
     // Drop the rejected promise so a later pass (a theme redraw, a re-render)
@@ -73,7 +73,7 @@ export async function hydrateMath(
 
   for (const element of placeholders) {
     const encoded = element.dataset.mathSrc;
-    /* v8 ignore next -- selector requires a data-math-src attribute */
+    // An empty `data-math-src` has nothing to render; keep its fallback.
     if (!encoded) continue;
     let source: string;
     try {

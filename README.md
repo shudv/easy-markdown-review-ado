@@ -34,7 +34,7 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. Function complexity is [pinned](complexity-baseline.json).
+3. Function complexity and function and file size are [capped by lint](eslint.config.mjs), with any exception documented next to the code.
 4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
 5. End-to-end tests covering the Azure DevOps integration boundary.
 6. Visual regression tests to protect the UI.
@@ -56,36 +56,49 @@ npm test
 Dependencies restore from public npm. The repository disables install scripts in
 [`.npmrc`](.npmrc), so install the pre-commit hook explicitly with `setup:hooks`.
 
-| Command                     | What it does                                                       |
-| --------------------------- | ------------------------------------------------------------------ |
-| `npm run storybook`         | Browse the UI with fake data at http://localhost:6006              |
-| `npm run dev:ado`           | Open the dev extension in a browser with scoped localhost access   |
-| `npm run build`             | Production build, bundle-size check, and dev-fault exclusion check |
-| `npm run complexity`        | Report per-function cyclomatic and cognitive complexity            |
-| `npm run complexity:update` | Lock in complexity improvements in the baseline                    |
-| `npm run e2e`               | Run the Chromium integration suite once                            |
-| `npm run e2e:soak`          | Repeat the Chromium integration suite twice                        |
+| Command             | What it does                                                       |
+| ------------------- | ------------------------------------------------------------------ |
+| `npm run storybook` | Browse the UI with fake data at http://localhost:6006              |
+| `npm run dev:ado`   | Open the dev extension in a browser with scoped localhost access   |
+| `npm run build`     | Production build, bundle-size check, and dev-fault exclusion check |
+| `npm run e2e`       | Run the Chromium integration suite once                            |
+| `npm run e2e:soak`  | Repeat the Chromium integration suite twice                        |
 
 Before opening a PR, run:
 
 ```pwsh
 npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run complexity:check; npm run test:complexity
-npm run duplication:check; npm run test:coverage; npm run build
+npm run depcruise; npm run duplication:check; npm run test:coverage
+npm run build
 npm run test:visual:docker
 ```
 
-CI also enforces the per-function complexity limits and pinned scores.
-`complexity:check` fails when a pinned function gets simpler, so the gain is
-recorded: run `npm run complexity:update` and commit the baseline. An intentional
-increase needs `npm run complexity:update -- --accept`, which appears in the PR
-diff.
+`npm run lint` also enforces complexity and size limits on production source,
+set in [`eslint.config.mjs`](eslint.config.mjs): cyclomatic and cognitive
+complexity of 15, 80 code lines and 4 parameters per function, and 500 code
+lines per file (blank and comment lines don't count). A deliberate exception,
+such as a top-level React component that reads better whole, is an ESLint
+directive with a reason, next to the code:
+
+```ts
+// eslint-disable-next-line max-lines-per-function -- <why it reads better whole>
+export function Big() { … }
+```
+
+Use `/* eslint-disable max-lines -- <reason> */` at the top of a long file. Lint
+fails on any `eslint-disable` without a `-- <reason>`, and on one the code no
+longer needs.
 
 CI also fails on copy-pasted code. `duplication:check` runs
 [jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it
 finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
 lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
 above 3%. Extract a shared helper or fixture rather than raising a threshold.
+
+Code that genuinely can't be reached or tested may be left out of coverage with
+`/* v8 ignore next -- <why it can't be reached or tested> */` (or a
+`start`/`stop` pair). `npm run lint` fails if the reason is missing or shorter
+than four words, or if a `start` has no matching `stop`.
 
 The visual suite requires Docker. Azure DevOps integration tests require your
 own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),

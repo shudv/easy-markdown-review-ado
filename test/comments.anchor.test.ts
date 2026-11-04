@@ -1030,3 +1030,59 @@ describe("relocateAnchor", () => {
     ).toMatchObject({ line: 2, endLine: 2 });
   });
 });
+
+describe("anchor guards against malformed DOM input", () => {
+  function selectRange(range: Range): void {
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  it("returns null when a selection boundary sits in an empty text node", () => {
+    const r = makeArticle("<p>Hello world</p>");
+    const p = r.querySelector("p")!;
+    const text = p.firstChild as Text;
+    const empty = document.createTextNode("");
+    p.insertBefore(empty, text);
+    const range = document.createRange();
+    range.setStart(empty, 0);
+    range.setEnd(text, 5);
+    selectRange(range);
+    expect(captureAnchorFromSelection(r)).toBeNull();
+  });
+
+  it("returns null when the selection ends in an empty text node", () => {
+    const r = makeArticle("<p>Hello world</p>");
+    const p = r.querySelector("p")!;
+    const text = p.firstChild as Text;
+    const empty = document.createTextNode("");
+    p.appendChild(empty);
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(empty, 0);
+    selectRange(range);
+    expect(captureAnchorFromSelection(r)).toBeNull();
+  });
+
+  it("skips a non-numeric data-source-line when capturing source lines", () => {
+    const html =
+      '<div data-source-line="7"><p data-source-line="x">hello there</p></div>';
+    expect(
+      relocateAnchor({ exact: "hello", prefix: "", suffix: "" }, html),
+    ).toMatchObject({ line: 7, endLine: 7 });
+  });
+
+  it("ignores blocks with a non-numeric data-source-line for line anchors", () => {
+    const root = makeArticle(
+      '<p data-source-line="x" data-source-end-line="x">bad</p>' +
+        '<p data-source-line="5" data-source-end-line="5">good</p>',
+    );
+    const range = resolveAnchor(root, {
+      exact: "",
+      prefix: "",
+      suffix: "",
+      line: 5,
+    });
+    expect(range?.toString()).toBe("good");
+  });
+});

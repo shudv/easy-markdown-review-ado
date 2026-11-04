@@ -16,10 +16,9 @@
 
 import * as React from "react";
 
-import type { ChangeType, FileInfo } from "../../types";
+import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
 import type { ReaderActivity } from "./readerActivity";
-import { SearchIcon } from "./icons";
 import {
   buildFolderTree,
   mergeWikiPages,
@@ -35,6 +34,22 @@ import {
   writeCollapsedDirs,
 } from "./navStorage";
 import { useDocSearch } from "./useDocSearch";
+import {
+  ChangeIndicatorContext,
+  type RangeChanges,
+  RangeChangesContext,
+  type NavHeading,
+  type NavNode,
+  cssEscape,
+  shownActiveHeading,
+  navNodeKey,
+  pathAncestors,
+} from "./DocNav.model";
+import { DocNavHeader } from "./DocNav.header";
+import { NavTreeItem } from "./DocNav.rows";
+import { SearchResultsList } from "./DocNav.search";
+
+export type { RangeChanges } from "./DocNav.model";
 
 interface DocNavProps {
   articleWrapRef: React.RefObject<HTMLDivElement | null>;
@@ -120,86 +135,11 @@ interface DocNavProps {
   onActivitiesChange?: (activities: readonly ReaderActivity[]) => void;
 }
 
-/**
- * Whether file rows should render change-type indicators. Provided by DocNav so
- * the deeply-nested `FileNavRow` / `SearchResultsList` renderers can read it
- * without drilling the flag through the recursive `NavTreeItem` tree. Defaults
- * to `true` so any renderer used outside a Provider keeps the PR-tab behaviour.
- */
-const ChangeIndicatorContext = React.createContext<boolean>(true);
-
-/** Files a comparison of PR updates touches; see `DocNavProps.rangeChanges`. */
-export interface RangeChanges {
-  /** e.g. "Update 4 → 5". */
-  label: string;
-  /** Change type within the comparison, keyed by repo path. */
-  byPath: Readonly<Record<string, ChangeType>>;
-}
-
-/** The active `RangeChanges`, read by the nested file-row renderers. */
-const RangeChangesContext = React.createContext<RangeChanges | undefined>(
-  undefined,
-);
-
-/**
- * How a file row presents its change: within the selected updates when a
- * comparison is active (dimmed when untouched), else its PR-wide change.
- */
-function fileChangeView(
-  file: FileInfo,
-  rangeChanges: RangeChanges | undefined,
-): { changeType: ChangeType; unchanged: boolean; note?: string } {
-  if (!rangeChanges) return { changeType: file.changeType, unchanged: false };
-  const inRange = rangeChanges.byPath[file.path];
-  return inRange
-    ? { changeType: inRange, unchanged: false }
-    : {
-        changeType: file.changeType,
-        unchanged: true,
-        note: `No changes in ${rangeChanges.label}`,
-      };
-}
-
-interface NavHeading {
-  id: string;
-  text: string;
-  level: number;
-  topPx: number;
-  /** Number of unresolved threads anchored inside this heading's section. */
-  openComments: number;
-  /** Total number of threads (any status) anchored inside this section. */
-  totalComments: number;
-}
-
-/** A node in the rendered tree: the folder/file tree plus the heading sub-tree
- *  under the selected file, with a "lazy-dir" kind for unenumerated folders. */
-type NavNode =
-  | {
-      kind: "dir";
-      path: string;
-      displayName: string;
-      children: NavNode[];
-      /** True when the folder is unenumerated; chevron triggers a fetch. */
-      lazy?: boolean;
-      /** The folder's own wiki page (a page with subpages). */
-      page?: { file: FileInfo; openComments: number };
-      /**
-       * The open page's heading outline. Always shown under the row, apart
-       * from the subpages the chevron shows or hides.
-       */
-      outline?: NavNode[];
-    }
-  | {
-      kind: "file";
-      file: FileInfo;
-      openComments: number;
-      children: NavNode[];
-    }
-  | { kind: "heading"; heading: NavHeading; children: NavNode[] };
-
 const ACTIVE_MARGIN = 24; // px from top before a heading is "active"
+
 const MAX_TREE_LEVEL = 4; // headings deeper than H4 are not shown in the nav
 
+// eslint-disable-next-line max-lines-per-function -- Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules.
 export function DocNav(props: DocNavProps): React.ReactElement | null {
   const {
     articleWrapRef,
@@ -271,8 +211,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   const expandLazyDir = React.useCallback(
     (dirPath: string) => {
       if (!onExpandFolder) return;
-      /* v8 ignore next -- the row's buttons are disabled while a fetch is in
-         flight, so this re-entrancy guard is unreachable via the UI */
       if (inFlightDirsRef.current.has(dirPath)) return;
       inFlightDirsRef.current.add(dirPath);
       setLoadingDirs((curr) => {
@@ -286,9 +224,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         } finally {
           inFlightDirsRef.current.delete(dirPath);
           setLoadingDirs((curr) => {
-            /* v8 ignore next -- defensive: the dir is always present in the
-               loading set when its fetch settles */
-            if (!curr.has(dirPath)) return curr;
             const next = new Set(curr);
             next.delete(dirPath);
             return next;
@@ -386,8 +321,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         }
         return {
           id: h.id,
-          /* v8 ignore next -- heading elements always expose string textContent, never null */
-          text: h.textContent ?? "",
+          text: h.textContent,
           level: Number(h.tagName.substring(1)),
           topPx: h.getBoundingClientRect().top - wrapRect.top,
           openComments,
@@ -466,24 +400,21 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // Keep the active nav item visible inside the rail's scroll container.
   // -----------------------------------------------------------------------
   React.useEffect(() => {
-    if (!open || !activeId) return;
+    if (!activeId) return;
     const list = listRef.current!;
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
     );
-    /* v8 ignore next -- the active heading has a rendered row unless the reader turned the outline off */
     if (!item) return;
     const itemRect = item.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const margin = 16;
-    /* v8 ignore start -- scroll-into-view geometry; the headless rail layout reproduces neither branch */
     if (itemRect.top < listRect.top + margin) {
       list.scrollTop -= listRect.top + margin - itemRect.top;
     } else if (itemRect.bottom > listRect.bottom - margin) {
       list.scrollTop += itemRect.bottom - (listRect.bottom - margin);
     }
-    /* v8 ignore stop */
-  }, [activeId, open]);
+  }, [activeId]);
 
   // -----------------------------------------------------------------------
   // Smooth-scroll to a heading on click.
@@ -633,7 +564,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // Auto-expand every ancestor folder of the selected file so the active row
   // stays visible after a navigation.
   React.useEffect(() => {
-    /* v8 ignore next -- a document is always selected while the nav is mounted */
     if (!selectedPath) return;
     const ancestors = pathAncestors(selectedPath);
     if (ancestors.length === 0) return;
@@ -661,7 +591,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // `lazyDirSet` change.
   const autoExpandedRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
-    /* v8 ignore next -- a document is always selected while the nav is mounted */
     if (!selectedPath) return;
     for (const dir of pathAncestors(selectedPath)) {
       if (lazyDirSet.has(dir) && !autoExpandedRef.current.has(dir)) {
@@ -684,8 +613,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     [folderStorageKey],
   );
 
-  if (files.length === 0 && (unloadedFolders?.length ?? 0) === 0) return null;
-
   // -----------------------------------------------------------------------
   // File-row click: produce a single active state on the row. Switch files
   // for a different path; scroll back to top for the same path.
@@ -700,12 +627,13 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         onSelectPath(path);
       } else {
         const scroller = scrollRef.current;
-        /* v8 ignore next -- scroll-to-top only when re-selecting the active file; scroller absent only pre-mount */
         if (scroller) scroller.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
     [onSelectPath, selectedPath, scrollRef],
   );
+
+  if (files.length === 0 && (unloadedFolders?.length ?? 0) === 0) return null;
 
   return (
     <ChangeIndicatorContext.Provider value={showChangeIndicators}>
@@ -764,914 +692,5 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         </aside>
       </RangeChangesContext.Provider>
     </ChangeIndicatorContext.Provider>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// DocNavHeader — the rail title (or the inline search input while searching),
-// the host's extra header actions, and the search toggle.
-// ---------------------------------------------------------------------------
-
-interface DocNavHeaderProps {
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  searchOpen: boolean;
-  setSearchOpen: (open: boolean) => void;
-  closeSearch: () => void;
-  searchInputRef: React.RefObject<HTMLInputElement>;
-  /** Offer the search toggle (enough documents, or a search in progress). */
-  showSearchToggle: boolean;
-  titleSlot?: React.ReactNode;
-  headerActions?: React.ReactNode;
-}
-
-function DocNavHeader(props: DocNavHeaderProps): React.ReactElement {
-  const { searchQuery, setSearchQuery, searchOpen, setSearchOpen } = props;
-  return (
-    <div className="emr-docnav-header">
-      {searchOpen ? (
-        <input
-          ref={props.searchInputRef}
-          type="search"
-          className="emr-docnav-search-inline"
-          placeholder="Find a document or folder..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              // Let the user clear with Esc without also dismissing
-              // any global selection state.
-              e.stopPropagation();
-              if (searchQuery) setSearchQuery("");
-              else setSearchOpen(false);
-            }
-          }}
-          onBlur={() => {
-            // Collapse only if the user hasn't typed anything.
-            if (!searchQuery) setSearchOpen(false);
-          }}
-          aria-label="Search documents"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      ) : (
-        (props.titleSlot ?? <span className="emr-docnav-title">Documents</span>)
-      )}
-      {props.headerActions}
-      {props.showSearchToggle ? (
-        <SearchToggleButton
-          searchOpen={searchOpen}
-          closeSearch={props.closeSearch}
-          setSearchOpen={setSearchOpen}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function SearchToggleButton(props: {
-  searchOpen: boolean;
-  closeSearch: () => void;
-  setSearchOpen: (open: boolean) => void;
-}): React.ReactElement {
-  const { searchOpen, closeSearch, setSearchOpen } = props;
-  return (
-    <button
-      type="button"
-      className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
-      title={searchOpen ? "Close search (Esc)" : "Search documents"}
-      aria-label={searchOpen ? "Close search" : "Search documents"}
-      aria-pressed={searchOpen}
-      onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
-    >
-      {searchOpen ? <SvgX /> : <SearchIcon />}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// NavTreeItem — recursive renderer. "file" rows switch the active file (or
-// scroll to top) and show change icon, name, diff stats, and a comment badge;
-// "heading" rows scroll on click and fold the doc section + nav children via
-// the chevron.
-// ---------------------------------------------------------------------------
-
-interface NavTreeItemProps {
-  node: NavNode;
-  depth: number;
-  activeId: string | null;
-  collapsedIds: Set<string>;
-  collapsedDirs: Set<string>;
-  /** Folder paths whose lazy-fetch is in flight. */
-  loadingDirs: Set<string>;
-  selectedPath: string;
-  onSelectHeading: (id: string) => void;
-  onToggleHeading: (id: string) => void;
-  onSelectFile: (path: string) => void;
-  onToggleDir: (path: string) => void;
-  /** Trigger a lazy fetch of a folder's children. No-op for regular dirs. */
-  onExpandLazyDir: (path: string) => void;
-}
-
-function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
-  const {
-    node,
-    depth,
-    activeId,
-    collapsedIds,
-    collapsedDirs,
-    loadingDirs,
-    selectedPath,
-    onSelectHeading,
-    onToggleHeading,
-    onSelectFile,
-    onToggleDir,
-    onExpandLazyDir,
-  } = props;
-
-  if (node.kind === "dir") return <DirNavRow {...props} node={node} />;
-
-  if (node.kind === "file") {
-    return (
-      <FileNavRow
-        file={node.file}
-        openComments={node.openComments}
-        children={node.children}
-        depth={depth}
-        activeId={activeId}
-        collapsedIds={collapsedIds}
-        collapsedDirs={collapsedDirs}
-        loadingDirs={loadingDirs}
-        selectedPath={selectedPath}
-        onSelectHeading={onSelectHeading}
-        onToggleHeading={onToggleHeading}
-        onSelectFile={onSelectFile}
-        onToggleDir={onToggleDir}
-        onExpandLazyDir={onExpandLazyDir}
-      />
-    );
-  }
-
-  return <HeadingNavRow {...props} node={node} />;
-}
-
-// ---------------------------------------------------------------------------
-// HeadingNavRow — a heading row. The label scrolls to the heading; the chevron
-// folds the doc section and the nav children together.
-// ---------------------------------------------------------------------------
-
-type HeadingNavNode = Extract<NavNode, { kind: "heading" }>;
-
-function HeadingNavRow(
-  props: NavTreeItemProps & { node: HeadingNavNode },
-): React.ReactElement {
-  const {
-    node,
-    depth,
-    activeId,
-    collapsedIds,
-    onSelectHeading,
-    onToggleHeading,
-  } = props;
-  const h = node.heading;
-  const hasChildren = node.children.length > 0;
-  const isCollapsed = collapsedIds.has(h.id);
-  const isActive = h.id === activeId;
-  return (
-    <div className="emr-docnav-branch">
-      <div
-        className={
-          "emr-docnav-item" +
-          ` lvl-${h.level}` +
-          (isActive ? " is-active" : "") +
-          (hasChildren ? " has-children" : "")
-        }
-        data-nav-id={h.id}
-        style={
-          {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
-        }
-      >
-        {hasChildren ? (
-          <HeadingTwist
-            collapsed={isCollapsed}
-            onToggle={() => onToggleHeading(h.id)}
-          />
-        ) : (
-          <span className="emr-docnav-twist-spacer" aria-hidden />
-        )}
-        <button
-          type="button"
-          className="emr-docnav-label"
-          onClick={() => onSelectHeading(h.id)}
-          title={
-            h.openComments > 0
-              ? `${h.text} \u2014 ${h.openComments} open comment${h.openComments === 1 ? "" : "s"}`
-              : h.text
-          }
-        >
-          <span className="emr-docnav-item-text">{h.text}</span>
-          <HeadingCommentBadge heading={h} />
-        </button>
-      </div>
-      {isCollapsed ? null : <NavChildren nodes={node.children} item={props} />}
-    </div>
-  );
-}
-
-/** A heading row's chevron: folds the doc section + nav children. */
-function HeadingTwist(props: {
-  collapsed: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
-  const { collapsed, onToggle } = props;
-  return (
-    <button
-      type="button"
-      className="emr-docnav-twist"
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-      aria-label={collapsed ? "Expand section" : "Collapse section"}
-      aria-expanded={!collapsed}
-      title={collapsed ? "Expand section" : "Collapse section"}
-      data-collapsed={collapsed ? "true" : undefined}
-    >
-      <SvgCaret />
-    </button>
-  );
-}
-
-/** Open-comment badge, else a resolved-comment badge; nothing when neither. */
-function HeadingCommentBadge(props: {
-  heading: NavHeading;
-}): React.ReactElement | null {
-  const { heading } = props;
-  if (heading.openComments > 0) {
-    return (
-      <span
-        className="emr-docnav-badge is-open"
-        aria-label={`${heading.openComments} open comments`}
-      >
-        {heading.openComments}
-      </span>
-    );
-  }
-  if (heading.totalComments > 0) {
-    return (
-      <span
-        className="emr-docnav-badge is-resolved"
-        aria-label={`${heading.totalComments} resolved comments`}
-      >
-        {heading.totalComments}
-      </span>
-    );
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// DirNavRow — a folder row. The chevron and label expand/collapse it (a lazy
-// folder fetches its contents first). A folder that is also a wiki page (its
-// `page`, see `mergeWikiPages`) behaves like the wiki's page-with-subpages
-// node: the label opens the page — expanding it too — and the chevron alone
-// shows or hides the subpages. The open page's outline sits above them and
-// stays visible whether or not the subpages are shown (or loaded yet).
-// ---------------------------------------------------------------------------
-
-type DirNavNode = Extract<NavNode, { kind: "dir" }>;
-
-/** Accessible name + tooltip for a folder row's chevron. */
-function dirTwistText(
-  state: { lazy: boolean; loading: boolean; collapsed: boolean },
-  noun: "folder" | "subpages",
-): { label: string; title: string } {
-  if (state.loading) return { label: "Loading folder...", title: "Loading…" };
-  if (state.lazy) {
-    return { label: "Load folder", title: "Click to load contents" };
-  }
-  const text = `${state.collapsed ? "Expand" : "Collapse"} ${noun}`;
-  return { label: text, title: text };
-}
-
-function DirNavRow(
-  props: NavTreeItemProps & { node: DirNavNode },
-): React.ReactElement {
-  const {
-    node,
-    depth,
-    activeId,
-    collapsedDirs,
-    loadingDirs,
-    selectedPath,
-    onSelectFile,
-    onToggleDir,
-    onExpandLazyDir,
-  } = props;
-  const page = node.page;
-  const isLazy = node.lazy === true;
-  const isLoading = loadingDirs.has(node.path);
-  // Lazy folders are always "collapsed" until the user triggers a fetch
-  // via the chevron or label.
-  const isCollapsed = isLazy ? !isLoading : collapsedDirs.has(node.path);
-  const onDirToggle = (): void => {
-    if (isLazy) onExpandLazyDir(node.path);
-    else onToggleDir(node.path);
-  };
-  const twist = dirTwistText(
-    { lazy: isLazy, loading: isLoading, collapsed: isCollapsed },
-    page ? "subpages" : "folder",
-  );
-  const isActivePage = page?.file.path === selectedPath && activeId === null;
-  const rowClass = [
-    "emr-docnav-item emr-docnav-dir",
-    isLoading ? "is-loading" : "",
-    page ? "emr-docnav-page" : "",
-    isActivePage ? "is-active" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return (
-    <div
-      className={
-        "emr-docnav-branch emr-docnav-dir-branch" + (isLazy ? " is-lazy" : "")
-      }
-    >
-      <div
-        className={rowClass}
-        style={
-          {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
-        }
-      >
-        <button
-          type="button"
-          className="emr-docnav-twist"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDirToggle();
-          }}
-          aria-label={twist.label}
-          aria-expanded={!isCollapsed}
-          aria-busy={isLoading || undefined}
-          title={twist.title}
-          data-collapsed={isCollapsed ? "true" : undefined}
-          disabled={isLoading}
-        >
-          {isLoading ? <SvgSpinner /> : <SvgCaret />}
-        </button>
-        {page ? (
-          <WikiPageLabel
-            page={page}
-            onOpen={() => {
-              onSelectFile(page.file.path);
-              if (isCollapsed) onDirToggle();
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            className="emr-docnav-label emr-docnav-dir-label"
-            onClick={onDirToggle}
-            title={node.path}
-            disabled={isLoading}
-          >
-            <span
-              className="emr-docnav-file-icon emr-docnav-folder-icon"
-              aria-hidden
-            >
-              <SvgFolder open={!isCollapsed} />
-            </span>
-            <span className="emr-docnav-item-text">{node.displayName}</span>
-            {isLazy && !isLoading ? (
-              <span className="emr-docnav-lazy-hint" aria-hidden>
-                …
-              </span>
-            ) : null}
-          </button>
-        )}
-      </div>
-      <NavChildren
-        nodes={node.outline ?? []}
-        item={props}
-        className="emr-docnav-children emr-docnav-file-children"
-      />
-      {isCollapsed ? null : <NavChildren nodes={node.children} item={props} />}
-    </div>
-  );
-}
-
-/** A row's nested items, one level deeper; nothing when there are none. */
-function NavChildren(props: {
-  nodes: readonly NavNode[];
-  item: NavTreeItemProps;
-  className?: string;
-}): React.ReactElement | null {
-  const { nodes, item, className = "emr-docnav-children" } = props;
-  if (nodes.length === 0) return null;
-  return (
-    <div className={className}>
-      {nodes.map((child) => (
-        <NavTreeItem
-          key={navNodeKey(child)}
-          {...item}
-          node={child}
-          depth={item.depth + 1}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** Label of a page-with-subpages row: opens the page; shows its comments. */
-function WikiPageLabel(props: {
-  page: NonNullable<DirNavNode["page"]>;
-  onOpen: () => void;
-}): React.ReactElement {
-  const { page, onOpen } = props;
-  return (
-    <button
-      type="button"
-      className="emr-docnav-label emr-docnav-page-label"
-      onClick={onOpen}
-      title={page.file.path}
-    >
-      <span className="emr-docnav-page-name">{basename(page.file.path)}</span>
-      {page.openComments > 0 ? (
-        <span
-          className="emr-docnav-badge is-open"
-          aria-label={`${page.openComments} open comments`}
-        >
-          {page.openComments}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// FileNavRow — top-level file row. Clicking the label switches the active file
-// (or scrolls to the top of the current one). The heading-tree children render
-// only for the selected file, and the row lights up only when no heading is
-// active (single-selection model).
-// ---------------------------------------------------------------------------
-
-interface FileNavRowProps {
-  file: FileInfo;
-  openComments: number;
-  children: NavNode[];
-  depth: number;
-  activeId: string | null;
-  collapsedIds: Set<string>;
-  collapsedDirs: Set<string>;
-  loadingDirs: Set<string>;
-  selectedPath: string;
-  onSelectHeading: (id: string) => void;
-  onToggleHeading: (id: string) => void;
-  onSelectFile: (path: string) => void;
-  onToggleDir: (path: string) => void;
-  onExpandLazyDir: (path: string) => void;
-}
-
-function FileNavRow(props: FileNavRowProps): React.ReactElement {
-  const {
-    file,
-    openComments,
-    children,
-    depth,
-    activeId,
-    collapsedIds,
-    collapsedDirs,
-    loadingDirs,
-    selectedPath,
-    onSelectHeading,
-    onToggleHeading,
-    onSelectFile,
-    onToggleDir,
-    onExpandLazyDir,
-  } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const change = fileChangeView(file, React.useContext(RangeChangesContext));
-  // Single selection: the file row lights up only when no heading is
-  // active (user is at the top of the current file). Everything else \u2014
-  // "this file is loaded" \u2014 is implicit from which row carries its
-  // heading children beneath it.
-  const isActive = file.path === selectedPath && activeId === null;
-  const fileName = basename(file.path);
-  const renamedFromName = file.renamedFrom ? basename(file.renamedFrom) : null;
-  const titleText =
-    (file.changeType === "renamed" && renamedFromName
-      ? `${renamedFromName} \u2192 ${fileName}`
-      : file.path) + (change.note ? ` \u2014 ${change.note}` : "");
-  return (
-    <div className="emr-docnav-branch emr-docnav-file-branch">
-      <div
-        className={
-          "emr-docnav-item emr-docnav-file" +
-          (isActive ? " is-active" : "") +
-          (change.unchanged ? " is-unchanged-in-range" : "")
-        }
-        data-change-type={change.changeType}
-        style={
-          {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
-        }
-      >
-        {/* The change-type icon is the leading affordance and fills the twist
-            column. Without it (Documents hub) a spacer holds that column so
-            file names line up with sibling folder labels and sit indented
-            under their parent. Nested headings indent via `--emr-nav-depth`. */}
-        {showChangeIndicators ? null : (
-          <span className="emr-docnav-twist-spacer" aria-hidden />
-        )}
-        <button
-          type="button"
-          className="emr-docnav-label emr-docnav-file-label"
-          onClick={() => onSelectFile(file.path)}
-          title={titleText}
-        >
-          {showChangeIndicators ? (
-            <span
-              className={"emr-docnav-file-icon is-" + change.changeType}
-              aria-hidden
-            >
-              {changeTypeGlyph(change.changeType)}
-            </span>
-          ) : null}
-          <span className="emr-docnav-file-name">{fileName}</span>
-          {change.note ? (
-            <span className="emr-sr-only">{` (${change.note})`}</span>
-          ) : null}
-          {openComments > 0 ? (
-            <span
-              className="emr-docnav-badge is-open"
-              aria-label={`${openComments} open comments`}
-            >
-              {openComments}
-            </span>
-          ) : null}
-        </button>
-      </div>
-      {children.length > 0 ? (
-        <div className="emr-docnav-children emr-docnav-file-children">
-          {children.map((child) => (
-            <NavTreeItem
-              key={navNodeKey(child)}
-              node={child}
-              // Headings nested under a file get a single depth bump so
-              // they visually indent past the file name without wasting
-              // horizontal space. The chevron lands in the file row's
-              // "icon column" and the heading text sits just to the
-              // right of the file name \u2014 tight but unambiguous
-              // hierarchy.
-              depth={depth + 1}
-              activeId={activeId}
-              collapsedIds={collapsedIds}
-              collapsedDirs={collapsedDirs}
-              loadingDirs={loadingDirs}
-              selectedPath={selectedPath}
-              onSelectHeading={onSelectHeading}
-              onToggleHeading={onToggleHeading}
-              onSelectFile={onSelectFile}
-              onToggleDir={onToggleDir}
-              onExpandLazyDir={onExpandLazyDir}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function basename(p: string): string {
-  const idx = p.lastIndexOf("/");
-  return idx === -1 ? p : p.slice(idx + 1);
-}
-
-function changeTypeGlyph(t: ChangeType): string {
-  switch (t) {
-    case "added":
-      return "A";
-    case "modified":
-      return "M";
-    case "renamed":
-      return "R";
-    case "deleted":
-      return "D";
-  }
-}
-
-/** Tiny CSS.escape polyfill so we don't pull a dep. */
-function cssEscape(s: string): string {
-  /* v8 ignore next -- the native-CSS.escape fallback path is dead in all supported browsers */
-  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-    return CSS.escape(s);
-  }
-  /* v8 ignore next -- CSS.escape is available in all supported browsers */
-  return s.replace(/([^\w-])/g, "\\$1");
-}
-
-/** The heading that's active in the nav: none while the outline is off. */
-function shownActiveHeading(
-  outlineShown: boolean,
-  activeId: string | null,
-): string | null {
-  return outlineShown ? activeId : null;
-}
-
-/**
- * Stable React list key for every NavNode kind. Dir paths, file paths (always
- * carry an extension), and slug-prefixed heading ids cannot collide.
- */
-function navNodeKey(node: NavNode): string {
-  if (node.kind === "dir") return `dir:${node.path}`;
-  if (node.kind === "file") return `file:${node.file.path}`;
-  return `heading:${node.heading.id}`;
-}
-
-/**
- * Return every ancestor folder path a file lives under, used to auto-expand
- * the selected file's parents.
- *
- *   pathAncestors("docs/api/v2/auth.md")
- *     → ["docs", "docs/api", "docs/api/v2"]
- */
-function pathAncestors(path: string): string[] {
-  const segments = path.replace(/^\/+/, "").split("/").filter(Boolean);
-  if (segments.length <= 1) return [];
-  const out: string[] = [];
-  let acc = "";
-  for (let i = 0; i < segments.length - 1; i += 1) {
-    acc = acc ? `${acc}/${segments[i]!}` : segments[i]!;
-    out.push(acc);
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Inline SVGs (no external icon dep). Stroke matches our other custom icons.
-// ---------------------------------------------------------------------------
-
-function SvgCaret(): React.ReactElement {
-  // Chevron rotated via CSS from the button's `data-collapsed` attribute.
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3.5,2 6.5,5 3.5,8" />
-    </svg>
-  );
-}
-
-function SvgFolder(props: { open: boolean }): React.ReactElement {
-  // Open / closed glyph picked on `open`.
-  if (props.open) {
-    return (
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M1.5 4.5 V12 a1 1 0 0 0 1 1 H13.5 L14.5 7 H4 L3 4.5 H1.5 Z" />
-        <path d="M1.5 4.5 V3.5 a1 1 0 0 1 1 -1 H6 L7.5 4.5 H1.5 Z" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M1.5 3.5 a1 1 0 0 1 1 -1 H6 L7.5 4 H13.5 a1 1 0 0 1 1 1 V12 a1 1 0 0 1 -1 1 H2.5 a1 1 0 0 1 -1 -1 Z" />
-    </svg>
-  );
-}
-
-function SvgSpinner(): React.ReactElement {
-  // CSS-animated stroke spinner; the rotation is driven by the
-  // `.emr-docnav-spinner` keyframe in styles.scss.
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      className="emr-docnav-spinner"
-      aria-hidden="true"
-    >
-      <path d="M8 2 a6 6 0 0 1 6 6" />
-    </svg>
-  );
-}
-
-function SvgInfo(): React.ReactElement {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="8" cy="8" r="6" />
-      <line x1="8" y1="7" x2="8" y2="11" />
-      <circle cx="8" cy="5" r="0.6" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function SvgX(): React.ReactElement {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <line x1="4" y1="4" x2="12" y2="12" />
-      <line x1="12" y1="4" x2="4" y2="12" />
-    </svg>
-  );
-}
-
-/**
- * Map an `AlmSearchError.kind` to a short user-facing string for the
- * "search unavailable" banner.
- */
-function unavailableMessage(reason: string): string {
-  switch (reason) {
-    case "extension-missing":
-      return "Code Search isn't installed in this org. Showing local matches only.";
-    case "auth":
-      return "Couldn't authenticate to Code Search. Showing local matches only.";
-    case "network":
-      return "Couldn't reach Code Search. Showing local matches only.";
-    case "bad-request":
-      return "Code Search rejected this query. Showing local matches only.";
-    case "no-config":
-      return "Code Search isn't available here. Showing local matches only.";
-    default:
-      return "Code Search is unavailable right now. Showing local matches only.";
-  }
-}
-
-// ---------------------------------------------------------------------------
-// SearchResultsList — flat results renderer used while searching. Mirrors the
-// file-row template but omits the heading sub-tree.
-// ---------------------------------------------------------------------------
-
-interface SearchResultsListProps {
-  results: ReadonlyArray<FileInfo>;
-  loading: boolean;
-  query: string;
-  /**
-   * Non-null when the most recent remote search call returned a
-   * `kind: "unavailable"` outcome. Surfaces a small inline banner
-   * above the local results so the user knows why the remote search
-   * isn't contributing matches.
-   */
-  unavailable: { reason: string; message?: string } | null;
-  selectedPath: string;
-  threadCountsByPath: Record<string, number>;
-  onSelectFile: (path: string) => void;
-}
-
-function SearchResultsList(props: SearchResultsListProps): React.ReactElement {
-  const {
-    results,
-    loading,
-    query,
-    unavailable,
-    selectedPath,
-    threadCountsByPath,
-    onSelectFile,
-  } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const rangeChanges = React.useContext(RangeChangesContext);
-  const banner = unavailable ? (
-    <div
-      className="emr-docnav-search-unavailable"
-      role="status"
-      aria-live="polite"
-      title={unavailable.message ?? undefined}
-    >
-      <SvgInfo />
-      <span>{unavailableMessage(unavailable.reason)}</span>
-    </div>
-  ) : null;
-  if (results.length === 0) {
-    return (
-      <>
-        {banner}
-        <div className="emr-docnav-search-empty">
-          {loading
-            ? `Searching for "${query}"…`
-            : query.length < 2
-              ? "Type at least 2 characters to search."
-              : `No files match "${query}".`}
-        </div>
-      </>
-    );
-  }
-  return (
-    <>
-      {banner}
-      {/* v8 ignore start -- incremental repo-search loading state; timing not reproduced in the render harness */}
-      {loading ? (
-        <div className="emr-docnav-search-status" aria-live="polite">
-          Searching the repo for more matches…
-        </div>
-      ) : null}
-      {/* v8 ignore stop */}
-      {results.map((file) => {
-        const isActive = file.path === selectedPath;
-        const fileName = basename(file.path);
-        const parentPath = file.path
-          .replace(/^\/+/, "")
-          .replace(/\/[^/]*$/, "");
-        const openComments = threadCountsByPath[file.path] ?? 0;
-        const change = fileChangeView(file, rangeChanges);
-        return (
-          <div
-            key={`search:${file.path}`}
-            className={
-              "emr-docnav-item emr-docnav-search-result" +
-              (isActive ? " is-active" : "") +
-              (change.unchanged ? " is-unchanged-in-range" : "")
-            }
-            data-change-type={change.changeType}
-          >
-            <button
-              type="button"
-              className="emr-docnav-label emr-docnav-search-label"
-              onClick={() => onSelectFile(file.path)}
-              title={file.path + (change.note ? ` \u2014 ${change.note}` : "")}
-            >
-              {showChangeIndicators ? (
-                <span
-                  className={"emr-docnav-file-icon is-" + change.changeType}
-                  aria-hidden
-                >
-                  {changeTypeGlyph(change.changeType)}
-                </span>
-              ) : null}
-              <span className="emr-docnav-search-name">{fileName}</span>
-              {change.note ? (
-                <span className="emr-sr-only">{` (${change.note})`}</span>
-              ) : null}
-              {/* v8 ignore start -- parent-path label only renders for nested search results */}
-              {parentPath ? (
-                <span className="emr-docnav-search-path" title={parentPath}>
-                  {parentPath}
-                </span>
-              ) : null}
-              {/* v8 ignore stop */}
-              {openComments > 0 ? (
-                <span
-                  className="emr-docnav-badge is-open"
-                  aria-label={`${openComments} open comments`}
-                >
-                  {openComments}
-                </span>
-              ) : null}
-            </button>
-          </div>
-        );
-      })}
-    </>
   );
 }

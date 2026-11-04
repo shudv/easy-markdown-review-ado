@@ -2,7 +2,7 @@
 // (`../hub/markdownReviewHub.tsx`) when a specific file is deep-linked via the
 // hub URL query params (e.g. a bookmarked / shared link).
 //
-// It renders the rendered Markdown + comments by reusing <PrShell hideDocNav/>
+// It renders the rendered Markdown + comments by reusing <Shell hideDocNav/>
 // — the same shell the PR tab uses, minus the file-tree navigation — and owns
 // all of the ADO data loading (repo lookup, PR routing, threads, current user,
 // file content). Callers only supply a `ReaderConfig` describing the target
@@ -18,7 +18,7 @@ import {
   type GitRepository,
 } from "azure-devops-extension-api/Git";
 import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages";
-import { PrShell, type RoutedPrInfo } from "../shell/PrShell";
+import { Shell, type RoutedPrInfo } from "../shell/Shell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AdoCommentApi } from "../shell/adoCommentApi";
@@ -129,6 +129,7 @@ function initialsOf(name: string): string {
  * Render a single Markdown file (rendered prose + inline comments) for the
  * given target. Owns all ADO data loading; surfaces loading/error states.
  */
+// eslint-disable-next-line max-lines-per-function -- Hub reader container: connects file loading, history and routing to Shell. Mostly prop wiring with little branching.
 export function MarkdownReader({
   config,
 }: {
@@ -266,7 +267,7 @@ export function MarkdownReader({
   }, [resolved]);
 
   // Boot-time completion for the reader's terminal error state, which bypasses
-  // PrShell (whose "content"/"error" signal covers the success + render-failure
+  // Shell (whose "content"/"error" signal covers the success + render-failure
   // paths). Without this a data-load failure here would drop the boot event.
   // Idempotent + no-ops outside a real boot.
   React.useEffect(() => {
@@ -310,7 +311,7 @@ export function MarkdownReader({
 
   return (
     <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
-      <PrShell
+      <Shell
         hideDocNav
         pr={pr}
         loadFileSource={loadFileSource}

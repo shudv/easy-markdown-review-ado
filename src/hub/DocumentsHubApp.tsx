@@ -5,12 +5,9 @@
 // <DocumentsApp/>. Repos with no active PR get no commentApi (writes fall
 // back to LocalOnly behind a banner).
 
+/* eslint-disable max-lines -- Holds only the DocumentsHubApp component, itself a documented exception, plus its imports; its logic lives in tested hub modules. */
+
 import * as React from "react";
-import * as SDK from "azure-devops-extension-sdk";
-import {
-  CommonServiceIds,
-  type IHostNavigationService,
-} from "azure-devops-extension-api";
 import {
   GitVersionOptions,
   GitVersionType,
@@ -25,18 +22,13 @@ import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages
 
 import { DocumentsApp } from "./DocumentsApp";
 import { AvatarImageContext } from "../shell/components/Avatar";
-import type { RoutedPrInfo } from "../shell/PrShell";
+import type { RoutedPrInfo } from "../shell/Shell";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { buildReposFileUrl } from "../markdown/docLinks";
-import type { DocPrRef } from "../shell/prShellHelpers";
-import {
-  markAppReady,
-  setTelemetryContext,
-  trackUserFacingError,
-} from "../telemetry";
+import type { DocPrRef } from "../shell/shellHelpers";
+import { markAppReady, trackUserFacingError } from "../telemetry";
 import {
   buildPrUrl,
-  fetchRepoById,
   fetchRepoPage,
   fetchRepoFileContent,
   findRoutingPrForDoc,
@@ -50,80 +42,36 @@ import {
   searchRepoFiles,
   type RepoPage,
 } from "../shell/adoGitData";
-import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import {
   ANCHOR_LINK_PARAM,
   COMMENT_LINK_PARAM,
   TEXT_LINK_PARAM,
-  readAnchorParam,
-  readCommentParam,
-  readTextParam,
-  type DeepLinkTarget,
 } from "../shell/deepLink";
 import type { DocRepo, FolderListing } from "../shell/types";
-import { resolveCurrentProject } from "../shell/adoClients";
 import type { FileSearchOutcome } from "../shell/almSearch";
+import { writeLastPath, writeLastRepo } from "./lastVisited";
+import { formatError, routeUpdatesForPath } from "./documentsHub.helpers";
 import {
-  readLastPath,
-  readLastRepo,
-  writeLastPath,
-  writeLastRepo,
-} from "./lastVisited";
+  REPO_PAGE_SIZE,
+  discoverHub,
+  type DiscoveryState,
+  type PickerState,
+  type RepoDetailsLoadState,
+} from "./hubDiscovery";
 import {
-  assembleHubDeepLinkUrl,
-  formatError,
-  initialsOf,
-  orgUrlFromReferrer,
-  routeUpdatesForPath,
-} from "./documentsHub.helpers";
+  buildHubDeepLinkUrl,
+  openInNewTab,
+  readCurrentUser,
+  resolveOrgUrl,
+  setRouteQuery,
+} from "./hubNavigation";
+import {
+  withRepoDetails,
+  withRepoDetailsLoaded,
+  withoutKeyPrefix,
+} from "./hubRepoState";
 
-type RepoDetailsLoadState = "idle" | "loading" | "loaded" | "error";
-
-import type { GitRepository } from "azure-devops-extension-api/Git";
-
-interface DiscoveryState {
-  projectId: string;
-  projectName: string;
-  repos: DocRepo[];
-  /** Repo to select on first render (the first repo with markdown). */
-  initialRepoId: string;
-  /**
-   * Document to open on first render, from the `?path=` deep-link route.
-   * Applies to the initial repo; undefined when no route was present.
-   */
-  initialSelectedPath?: string;
-  /**
-   * Thread to auto-open on first render, from the `?comment=` deep-link route.
-   * Forwarded to DocumentsApp alongside `initialSelectedPath`.
-   */
-  initialActiveThreadId?: string;
-  /** Heading to scroll to on first render, from the `?anchor=` route. */
-  initialAnchor?: string;
-  /** Serialized text fragment to flash in the initially opened document (`?text=`). */
-  initialTextFragment?: string;
-  /** Resolved per-repo PR routing — populated lazily by `loadDetailsFor`. */
-  prByRepo: Record<string, GitPullRequest | undefined>;
-  /** Raw `GitRepository` payloads we need to feed `loadRepoPrRouting`. */
-  rawRepoById: Map<string, GitRepository>;
-}
-
-/** Picker pagination/filter view state (see the `picker` useState comment). */
-interface PickerState {
-  /** Ordered repo ids currently displayed in the dropdown. */
-  viewIds: string[];
-  /** Active server-side name filter (empty = unfiltered). */
-  filter: string;
-  /** Continuation token for the current view; `null` when fully paged. */
-  token: string | null;
-  /** Whether another page can be fetched for the current view. */
-  hasMore: boolean;
-  /** A page (or filter) fetch is in flight. */
-  loading: boolean;
-}
-
-/** Repos fetched per page as the user scrolls the picker. */
-const REPO_PAGE_SIZE = 50;
-
+// eslint-disable-next-line max-lines-per-function -- Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one Shell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host.
 export function DocumentsHubApp(): React.ReactElement {
   const [state, setState] = React.useState<DiscoveryState | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -190,104 +138,16 @@ export function DocumentsHubApp(): React.ReactElement {
     void (async () => {
       try {
         const log = (step: string) => {
-          // eslint-disable-next-line no-console
+          // eslint-disable-next-line no-console -- boot step trace in the host DevTools console, for diagnosing hub boot problems in a real org
           console.log(`[DocumentsHubApp] ${step}`);
         };
 
-        const project = await resolveCurrentProject();
-        log(`project: ${project.name}`);
-
-        // De-identified telemetry context: project GUID only, never the name.
-        setTelemetryContext({ projectId: project.id });
-
-        // A third-party hub is never handed the repo the user had selected in
-        // Repos, so we page in the project's repos and let the in-hub picker
-        // choose. The first page (plus the user + route params) is all we need
-        // to render; the rest stream in as the user scrolls or filters.
-        log("fetching first repo page + route params");
-        const [firstPage, routeParams] = await Promise.all([
-          fetchRepoPage(project.id, { top: REPO_PAGE_SIZE }),
-          readRouteParams(),
-        ]);
-        log(`first page: ${firstPage.repos.length} repo(s)`);
-
-        // Accumulated union of every repo we've fetched, keyed for dedupe.
-        const repos = [...firstPage.repos];
-        const rawRepoById = new Map(firstPage.rawRepoById);
-
-        // Resolve which repo opens first: a deep link wins, else the
-        // last-visited repo for this project, else the first repo on page one.
-        // The first two may live beyond page one, so fetch them by id and fold
-        // them into the union (and to the front of the view) when missing.
-        const routedRepoId = routeParams.repo;
-        const lastRepoId = readLastRepo(project.id);
-        const preferredId = routedRepoId || lastRepoId;
-        let resolvedRepoId = firstPage.repos[0]?.id ?? "";
-        if (preferredId) {
-          if (repos.some((r) => r.id === preferredId)) {
-            resolvedRepoId = preferredId;
-          } else {
-            const fetched = await fetchRepoById(project.id, preferredId);
-            if (fetched) {
-              repos.unshift(fetched.repo);
-              rawRepoById.set(fetched.repo.id, fetched.raw);
-              resolvedRepoId = fetched.repo.id;
-            }
-          }
-        }
-
-        const routedPath = routeParams.path;
-        // The route stores a slash-free path (`docs/x.md`) to match ADO's
-        // Files URLs; downstream code expects the repo-rooted form. A deep link
-        // wins; otherwise reopen the repo's last-visited document, if any.
-        const initialSelectedPath = routedPath
-          ? `/${routedPath.replace(/^\/+/, "")}`
-          : readLastPath(project.id, resolvedRepoId);
-        const initialActiveThreadId = readCommentParam(routeParams);
-        const initialAnchor = readAnchorParam(routeParams);
-        const initialTextFragment = readTextParam(routeParams);
-
-        // Seed the cache from wherever we landed so a later root-URL visit
-        // restores it. Without this, a deep link (`?repo=…&path=…`) never
-        // updates the cache — the initial repo/path don't flow through the
-        // `onSelectRepo`/`onSelectPath` callbacks (those only fire on later
-        // user-driven changes), so returning to `/` would fall back to the
-        // first repo + default document instead of where the user last was.
-        writeLastRepo(project.id, resolvedRepoId);
-        if (initialSelectedPath) {
-          writeLastPath(project.id, resolvedRepoId, initialSelectedPath);
-        }
-
-        setState({
-          projectId: project.id,
-          projectName: project.name,
-          repos,
-          prByRepo: {},
-          rawRepoById,
-          initialRepoId: resolvedRepoId,
-          initialSelectedPath,
-          initialActiveThreadId,
-          // A heading only means something in the document the link named;
-          // without `?path=` the hub reopens the last-visited doc instead.
-          initialAnchor: routedPath ? initialAnchor : undefined,
-          initialTextFragment: routedPath ? initialTextFragment : undefined,
-        });
-        setPicker({
-          viewIds: repos.map((r) => r.id),
-          filter: "",
-          token: firstPage.continuationToken,
-          hasMore: firstPage.continuationToken !== null,
-          loading: false,
-        });
+        const { discovery, picker: initialPicker } = await discoverHub(log);
+        setState(discovery);
+        setPicker(initialPicker);
 
         log("reading current user");
-        const u = SDK.getUser();
-        setUser({
-          id: u.id,
-          displayName: u.displayName,
-          initials: initialsOf(u.displayName),
-          avatarUrl: identityAvatarUrl(u),
-        });
+        setUser(readCurrentUser());
 
         log("ready");
       } catch (err: unknown) {
@@ -325,33 +185,14 @@ export function DocumentsHubApp(): React.ReactElement {
         // root markdown listing + PR routing, and the Contribute-permission
         // probe. They're independent, so fire them concurrently — selection
         // latency is the slower of the two, not their sum.
-        const [{ files, topLevelFolders, rootOrder, recentPr, pr }, perm] =
-          await Promise.all([
-            refreshRepoDiscovery(rawRepo, projectId),
-            checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
-          ]);
+        const [details, perm] = await Promise.all([
+          refreshRepoDiscovery(rawRepo, projectId),
+          checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
+        ]);
         detailsStatusRef.current.set(repoId, "loaded");
-        setState((curr) => {
-          if (!curr) return curr;
-          const nextRepos = curr.repos.map((r) =>
-            r.id === repoId
-              ? {
-                  ...r,
-                  files,
-                  topLevelFolders,
-                  rootOrder,
-                  recentPr,
-                  detailsLoaded: true,
-                  canComment: perm.canComment,
-                }
-              : r,
-          );
-          const nextPrByRepo = {
-            ...curr.prByRepo,
-            [repoId]: pr ?? undefined,
-          };
-          return { ...curr, repos: nextRepos, prByRepo: nextPrByRepo };
-        });
+        setState((curr) =>
+          withRepoDetails(curr, repoId, details, perm.canComment),
+        );
       } catch (err) {
         console.warn(`[DocumentsHubApp] PR routing failed for ${repoId}:`, err);
         trackUserFacingError({
@@ -363,13 +204,7 @@ export function DocumentsHubApp(): React.ReactElement {
         detailsStatusRef.current.set(repoId, "error");
         // Still mark `detailsLoaded: true` so the shell stops waiting — the
         // read-only banner then surfaces the no-PR state.
-        setState((curr) => {
-          if (!curr) return curr;
-          const nextRepos = curr.repos.map((r) =>
-            r.id === repoId ? { ...r, detailsLoaded: true } : r,
-          );
-          return { ...curr, repos: nextRepos };
-        });
+        setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
       }
     },
     [],
@@ -377,7 +212,7 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // User-initiated refresh: re-run root listing + PR routing in parallel.
   // While in flight, `detailsLoaded` flips back to `false` so DocumentsApp
-  // tears down threads/PrShell and shows a loading state.
+  // tears down threads/Shell and shows a loading state.
   const refreshRepo = React.useCallback(
     async (repoId: string): Promise<void> => {
       const snapshot = stateRef.current;
@@ -387,20 +222,13 @@ export function DocumentsHubApp(): React.ReactElement {
 
       // Flip back to "loading" so DocumentsApp's effects gate on it.
       detailsStatusRef.current.set(repoId, "loading");
-      setState((curr) => {
-        if (!curr) return curr;
-        const nextRepos = curr.repos.map((r) =>
-          r.id === repoId ? { ...r, detailsLoaded: false } : r,
-        );
-        return { ...curr, repos: nextRepos };
-      });
+      setState((curr) => withRepoDetailsLoaded(curr, repoId, false));
 
       try {
-        const [{ files, topLevelFolders, rootOrder, recentPr, pr }, perm] =
-          await Promise.all([
-            refreshRepoDiscovery(rawRepo, projectId),
-            checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
-          ]);
+        const [details, perm] = await Promise.all([
+          refreshRepoDiscovery(rawRepo, projectId),
+          checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
+        ]);
         // Drop any cached commentApi so a new PR target gets a fresh instance.
         apiCacheRef.current.delete(repoId);
         // Also invalidate per-document routing for this repo so each doc
@@ -413,40 +241,11 @@ export function DocumentsHubApp(): React.ReactElement {
         routingInFlightRef.current.forEach((key) => {
           if (key.startsWith(keyPrefix)) routingInFlightRef.current.delete(key);
         });
-        setRoutingPrByPath((prev) => {
-          let changed = false;
-          const next: typeof prev = {};
-          for (const [key, value] of Object.entries(prev)) {
-            if (key.startsWith(keyPrefix)) {
-              changed = true;
-              continue;
-            }
-            next[key] = value;
-          }
-          return changed ? next : prev;
-        });
+        setRoutingPrByPath((prev) => withoutKeyPrefix(prev, keyPrefix));
         detailsStatusRef.current.set(repoId, "loaded");
-        setState((curr) => {
-          if (!curr) return curr;
-          const nextRepos = curr.repos.map((r) =>
-            r.id === repoId
-              ? {
-                  ...r,
-                  files,
-                  topLevelFolders,
-                  rootOrder,
-                  recentPr,
-                  detailsLoaded: true,
-                  canComment: perm.canComment,
-                }
-              : r,
-          );
-          const nextPrByRepo = {
-            ...curr.prByRepo,
-            [repoId]: pr ?? undefined,
-          };
-          return { ...curr, repos: nextRepos, prByRepo: nextPrByRepo };
-        });
+        setState((curr) =>
+          withRepoDetails(curr, repoId, details, perm.canComment),
+        );
       } catch (err) {
         console.warn(`[DocumentsHubApp] refresh failed for ${repoId}:`, err);
         trackUserFacingError({
@@ -456,13 +255,7 @@ export function DocumentsHubApp(): React.ReactElement {
           impact: "action-failed",
         });
         detailsStatusRef.current.set(repoId, "error");
-        setState((curr) => {
-          if (!curr) return curr;
-          const nextRepos = curr.repos.map((r) =>
-            r.id === repoId ? { ...r, detailsLoaded: true } : r,
-          );
-          return { ...curr, repos: nextRepos };
-        });
+        setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
       }
     },
     [],
@@ -670,7 +463,7 @@ export function DocumentsHubApp(): React.ReactElement {
     [state],
   );
 
-  // Cache constructed AdoCommentApi instances per repo so PrShell sees
+  // Cache constructed AdoCommentApi instances per repo so Shell sees
   // a stable identity across renders.
   const apiCacheRef = React.useRef<Map<string, CommentApi>>(new Map());
 
@@ -730,7 +523,7 @@ export function DocumentsHubApp(): React.ReactElement {
       const cached = pathApiCacheRef.current.get(key);
       if (cached) return cached;
       // The routing PR is resolved lazily by loadThreadsForPath. Until it
-      // lands, return undefined so PrShell uses its read-only session stub;
+      // lands, return undefined so Shell uses its read-only session stub;
       // this callback's identity changes when routingPrByPath updates, so the
       // write-capable api is adopted on the next render.
       const pr = routingPrByPath[key];
@@ -829,10 +622,10 @@ export function DocumentsHubApp(): React.ReactElement {
   );
 
   // Boot-time completion for terminal states that never mount DocumentsApp /
-  // PrShell (which would otherwise fire the "content" signal): a discovery
+  // Shell (which would otherwise fire the "content" signal): a discovery
   // error, or a project with no repositories. Without this the boot event would
   // silently never fire for those sessions. Idempotent + no-ops outside a real
-  // boot; if content later renders, PrShell's "content" already won.
+  // boot; if content later renders, Shell's "content" already won.
   const noRepos = !!state && state.repos.length === 0;
   React.useEffect(() => {
     if (error) markAppReady("error");
@@ -911,10 +704,12 @@ export function DocumentsHubApp(): React.ReactElement {
         initialTextFragment={state.initialTextFragment}
         buildDeepLink={(repoId, path, target) =>
           buildHubDeepLinkUrl(
-            resolveOrgUrl(),
-            state.projectName,
-            repoId,
-            path,
+            {
+              orgUrl: resolveOrgUrl(),
+              projectName: state.projectName,
+              repoId,
+              path,
+            },
             target,
           )
         }
@@ -985,9 +780,11 @@ export function DocumentsHubApp(): React.ReactElement {
           if (!rawRepo) return;
           void openInNewTab(
             buildReposFileUrl(
-              resolveOrgUrl(),
-              state.projectName,
-              rawRepo.name,
+              {
+                orgUrl: resolveOrgUrl(),
+                project: state.projectName,
+                repoName: rawRepo.name,
+              },
               target.path,
             ),
           );
@@ -995,102 +792,4 @@ export function DocumentsHubApp(): React.ReactElement {
       />
     </AvatarImageContext.Provider>
   );
-}
-
-// ---------------- helpers ----------------
-
-/**
- * Read the hub's current query parameters (e.g. the `?path=` deep-link).
- * Best-effort: returns `{}` when the navigation service is unavailable.
- */
-async function readRouteParams(): Promise<Record<string, string>> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    return (await nav.getQueryParams()) ?? {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Open `url` in a new browser tab via the host navigation service, used to
- * route a non-Markdown relative link to ADO's native Files view. Best-effort:
- * a missing navigation service is silently ignored (the click just no-ops).
- */
-async function openInNewTab(url: string): Promise<void> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    nav.openNewWindow(url, "");
-  } catch {
-    /* navigation service unavailable — opening the file is best-effort */
-  }
-}
-
-/**
- * Apply `updates` to the hub's query string without reloading the page, so
- * in-hub navigation is reflected in (and shareable via) the URL. `updates` may
- * be derived from the current params. Only the delta is sent: the host's
- * `setQueryParams` merges (add / update / remove-on-empty), and resending a
- * full snapshot would let one of two overlapping writes (e.g. a document
- * switch and the comment it deselects) restore the other's stale values.
- * Best-effort when the navigation service is missing.
- */
-async function setRouteQuery(
-  updates:
-    | Record<string, string>
-    | ((current: Record<string, string>) => Record<string, string>),
-): Promise<void> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    const next =
-      typeof updates === "function"
-        ? updates((await nav.getQueryParams()) ?? {})
-        : updates;
-    nav.setQueryParams(next);
-  } catch {
-    /* navigation service unavailable — route syncing is best-effort */
-  }
-}
-
-/**
- * Build the absolute, shareable Documents-hub URL for a deep link to a thread
- * or heading. Resolves the extension identity from the SDK, then delegates the
- * URL assembly to the pure `assembleHubDeepLinkUrl`. Returns `undefined` when
- * the extension context can't be resolved (the copy then reports a failure).
- */
-function buildHubDeepLinkUrl(
-  orgUrl: string,
-  projectName: string,
-  repoId: string,
-  path: string,
-  target: DeepLinkTarget,
-): string | undefined {
-  let ext: { publisherId: string; extensionId: string };
-  try {
-    ext = SDK.getExtensionContext();
-  } catch {
-    return undefined;
-  }
-  return assembleHubDeepLinkUrl(orgUrl, projectName, ext, repoId, path, target);
-}
-
-/**
- * Resolve the org's web URL (no trailing slash) for hydrating mention links.
- * Mirrors the helper in `pr-tab/PrTabApp.tsx`. Returns `""` when nothing is
- * resolvable, leaving mentions non-navigable rather than pointing wrong.
- */
-function resolveOrgUrl(): string {
-  try {
-    const host = SDK.getHost();
-    if (host?.name) return `https://dev.azure.com/${host.name}`;
-  } catch {
-    // Falls through to the referrer-based heuristic.
-  }
-  return orgUrlFromReferrer(document.referrer);
 }

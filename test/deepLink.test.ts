@@ -1,6 +1,6 @@
 // Tests for the pure deep-linking helpers. The React context plumbing
 // (DeepLinkContext / useDeepLink) is exercised by the CommentRow, ArticleView,
-// and PrShell stories; here we cover the URL read/write logic exhaustively.
+// and Shell stories; here we cover the URL read/write logic exhaustively.
 
 import { describe, expect, it } from "vitest";
 

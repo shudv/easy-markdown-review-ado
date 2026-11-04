@@ -5,11 +5,22 @@
 import type {
   GitPullRequest,
   GitRepository,
+  PullRequestStatus,
 } from "azure-devops-extension-api/Git";
-import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
+import { isItemNotFoundError, type DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import type { FileInfo } from "../types";
 import { ORDER_FILE_NAME } from "./wikiOrder";
+
+/**
+ * Where an injected REST read runs: the project plus a getter for the
+ * (structurally typed) Git client, called only once a round-trip is actually
+ * needed. The SDK glue passes `sharedGitClient`; tests pass a fake.
+ */
+export interface GitScope<C> {
+  git: () => C;
+  projectId: string;
+}
 
 // ---------------------------------------------------------------------------
 // Path normalization
@@ -194,7 +205,7 @@ export function findOrderFile(
  * (which would 400). Not exhaustive — just the common delimiters.
  */
 export function escapeSearchQuery(s: string): string {
-  return s.replace(/[\\:"*?(){}\[\]^~]/g, " ").trim();
+  return s.replace(/[\\:"*?(){}[\]^~]/g, " ").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +270,7 @@ export function prDate(pr: GitPullRequest): number {
  * import we deliberately avoid here so this module stays Node-testable). Kept
  * as a named constant so the magic number has a single, documented home.
  */
-export const COMPLETED_PR_STATUS = 3;
+export const COMPLETED_PR_STATUS = 3 as PullRequestStatus;
 
 /**
  * Pick the PR that the Documents hub and the in-context dialog route comments
@@ -460,7 +471,7 @@ export async function runWithConcurrency<T, R>(
 ): Promise<R[]> {
   if (items.length === 0) return [];
   const safeCap = Math.max(1, Math.min(cap, items.length));
-  const results: R[] = new Array(items.length);
+  const results: R[] = new Array<R>(items.length);
   let cursor = 0;
 
   async function pump(): Promise<void> {

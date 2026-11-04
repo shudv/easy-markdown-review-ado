@@ -10,11 +10,28 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import noOnlyTests from "eslint-plugin-no-only-tests";
 import sonarjs from "eslint-plugin-sonarjs";
-import complexityBaseline from "./complexity-baseline.json" with { type: "json" };
+import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
+import emrRules from "./scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
-const complexityLimits = complexityBaseline.limits;
+// Complexity and size limits for production source (src/, excluding stories
+// and type declarations), enforced as lint errors. Line limits count code
+// lines only: blank and comment lines don't count.
+const LIMITS = {
+  cyclomatic: 15,
+  cognitive: 15,
+  linesPerFunction: 80,
+  params: 4,
+  linesPerFile: 500,
+};
+const CODE_LINES_ONLY = { skipBlankLines: true, skipComments: true };
 
 export default tseslint.config(
+  {
+    // An `eslint-disable` the code no longer needs is an error, so documented
+    // exceptions can't outlive the problem they excuse.
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+  },
+
   {
     // Anything generated, vendored, or not source. Config/glue files that are
     // outside the TypeScript projects are excluded so type-aware rules don't
@@ -75,11 +92,10 @@ export default tseslint.config(
       sonarjs,
     },
     rules: {
-      // Classic Rules of Hooks + dependency completeness. The existing
-      // `// eslint-disable-next-line react-hooks/exhaustive-deps` comments in
-      // the codebase were written against exactly these two rules.
-      "react-hooks/rules-of-hooks": "warn",
-      "react-hooks/exhaustive-deps": "warn",
+      // Classic Rules of Hooks + dependency completeness. A hook after an
+      // early return crashes React when that return toggles, so both gate.
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error",
 
       // No stray console in shipped code — the codebase already annotates the
       // intentional ones with `// eslint-disable-next-line no-console`.
@@ -104,34 +120,77 @@ export default tseslint.config(
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-explicit-any": "error",
 
-      // Complexity budget: editor feedback for the limits in
-      // complexity-baseline.json. The enforced per-function ratchet (which
-      // grandfathers pre-existing functions at their current score) is
-      // `npm run complexity:check`; these stay warnings so pinned functions
-      // don't fail lint.
-      complexity: ["warn", { max: complexityLimits.cyclomatic }],
-      "sonarjs/cognitive-complexity": ["warn", complexityLimits.cognitive],
-      "max-depth": ["warn", 5],
+      // Complexity: advisory in tests and e2e; production source is gated as
+      // an error in the "Complexity and size gate" block below.
+      complexity: ["warn", { max: LIMITS.cyclomatic }],
+      "sonarjs/cognitive-complexity": ["warn", LIMITS.cognitive],
+      "max-depth": ["error", 5],
 
-      // --- Ratchet backlog (warn, not error) ------------------------------
-      // These fire against pre-existing, intentional code. Kept as warnings so
-      // the gate is green today and the findings stay visible; fix a rule's
-      // sites, then flip it to "error" to tighten the ratchet — one rule at a
-      // time, never a big-bang. New code should avoid adding to these.
+      // Type-aware correctness rules. These were warnings while existing
+      // sites were cleaned up; all now gate. A genuine exception is an
+      // `eslint-disable-next-line <rule> -- <reason>` next to the code.
       //
       //   no-unnecessary-type-assertion / require-await are OFF: they clash
       //   with deliberate defensive `arr[i]!` and async-signature symmetry.
       "@typescript-eslint/no-unnecessary-type-assertion": "off",
       "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/no-misused-promises": "warn",
-      "@typescript-eslint/only-throw-error": "warn",
-      "@typescript-eslint/prefer-promise-reject-errors": "warn",
-      "@typescript-eslint/no-base-to-string": "warn",
-      "@typescript-eslint/no-unsafe-enum-comparison": "warn",
-      "@typescript-eslint/no-unsafe-assignment": "warn",
-      "no-useless-escape": "warn",
-      "no-useless-assignment": "warn",
-      "preserve-caught-error": "warn",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/only-throw-error": "error",
+      "@typescript-eslint/prefer-promise-reject-errors": "error",
+      "@typescript-eslint/no-base-to-string": "error",
+      "@typescript-eslint/no-unsafe-enum-comparison": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "no-useless-escape": "error",
+      "no-useless-assignment": "error",
+      "preserve-caught-error": "error",
+    },
+  },
+
+  {
+    // Every exception says why, next to the code it excuses:
+    //   - coverage: `/* v8 ignore next -- <reason> */`, with balanced
+    //     `start`/`stop` pairs (a local rule);
+    //   - lint: `// eslint-disable-next-line <rule> -- <reason>`, never a bare
+    //     or unlimited disable.
+    files: [
+      "src/**/*.{ts,tsx}",
+      "e2e/**/*.ts",
+      "visual/**/*.ts",
+      "test/**/*.{ts,tsx}",
+    ],
+    plugins: {
+      emr: emrRules,
+      "@eslint-community/eslint-comments": eslintComments,
+    },
+    rules: {
+      "emr/coverage-ignore-rationale": "error",
+      "@eslint-community/eslint-comments/require-description": "error",
+      "@eslint-community/eslint-comments/no-unlimited-disable": "error",
+      "@eslint-community/eslint-comments/no-duplicate-disable": "error",
+      "@eslint-community/eslint-comments/disable-enable-pair": [
+        "error",
+        { allowWholeFile: true },
+      ],
+    },
+  },
+
+  {
+    // Complexity and size gate for production source. A deliberate exception
+    // is documented in place, e.g. for a component that reads better whole:
+    //   // eslint-disable-next-line max-lines-per-function -- <reason>
+    // or, for a long file, `/* eslint-disable max-lines -- <reason> */` at the
+    // top. Unused disables are errors (see linterOptions above).
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.stories.tsx", "src/**/*.d.ts"],
+    rules: {
+      complexity: ["error", { max: LIMITS.cyclomatic }],
+      "sonarjs/cognitive-complexity": ["error", LIMITS.cognitive],
+      "max-lines-per-function": [
+        "error",
+        { max: LIMITS.linesPerFunction, ...CODE_LINES_ONLY },
+      ],
+      "max-params": ["error", LIMITS.params],
+      "max-lines": ["error", { max: LIMITS.linesPerFile, ...CODE_LINES_ONLY }],
     },
   },
 
@@ -141,7 +200,7 @@ export default tseslint.config(
     rules: {
       "no-console": "off",
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-call": "off",

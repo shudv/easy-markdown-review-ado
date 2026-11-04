@@ -148,7 +148,7 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
 
 /** Escape markdown-special chars in the label so they survive parsing. */
 function escapeLabel(s: string): string {
-  return s.replace(/([\[\]\\])/g, "\\$1");
+  return s.replace(/([[\]\\])/g, "\\$1");
 }
 
 /**
@@ -227,9 +227,9 @@ function isStandaloneMention(
   const after = text[at + length];
   const leftOk = at === 0 || /\s/.test(before);
   // Boundary rules consistent with `detectActiveTrigger`, which allows
-  // `[\w.\-]` inside mention text: don't encode when the token is followed
+  // `[\w.-]` inside mention text: don't encode when the token is followed
   // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
-  const rightOk = after === undefined || !/[\w.\-]/.test(after);
+  const rightOk = after === undefined || !/[\w.-]/.test(after);
   return leftOk && rightOk;
 }
 
@@ -355,7 +355,7 @@ export function collectUserMentionIds(body: string): string[] {
     try {
       add(decodeURIComponent(m[1]!));
     } catch {
-      /* v8 ignore next -- malformed percent-encoding: fall back to raw id */
+      // Malformed percent-encoding: fall back to the raw id.
       add(m[1]!);
     }
   }

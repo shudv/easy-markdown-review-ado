@@ -5,12 +5,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  AlmSearchError,
   AlmSearchRestClient,
   createAlmSearchClient,
   isAlmSearchError,
   outcomeFromError,
   statusToKind,
-  type AlmSearchError,
   type CodeSearchRequest,
 } from "../src/shell/almSearch";
 
@@ -44,8 +44,19 @@ describe("statusToKind", () => {
 });
 
 describe("isAlmSearchError", () => {
-  it("detects shaped errors", () => {
-    const e: AlmSearchError = { kind: "auth", status: 401 };
+  it("detects AlmSearchError instances", () => {
+    const e = new AlmSearchError("auth", "unauthorized", 401);
+    expect(isAlmSearchError(e)).toBe(true);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe("AlmSearchError");
+    expect(e.kind).toBe("auth");
+    expect(e.status).toBe(401);
+    expect(e.message).toBe("unauthorized");
+  });
+
+  it("leaves `status` undefined when none is supplied", () => {
+    const e = new AlmSearchError("network", "offline");
+    expect(e.status).toBeUndefined();
     expect(isAlmSearchError(e)).toBe(true);
   });
 
@@ -56,9 +67,9 @@ describe("isAlmSearchError", () => {
     expect(isAlmSearchError({})).toBe(false);
   });
 
-  it("rejects an object whose `kind` is not a string", () => {
-    // `kind` is present but the wrong type — not a real AlmSearchError.
+  it("rejects plain objects, even ones shaped like an AlmSearchError", () => {
     expect(isAlmSearchError({ kind: 123 })).toBe(false);
+    expect(isAlmSearchError({ kind: "auth", status: 401 })).toBe(false);
   });
 });
 
@@ -98,6 +109,19 @@ describe("AlmSearchRestClient", () => {
     const res = await client.searchCode(REQ, "P");
     expect(res.count).toBe(1);
     expect(res.results?.[0]?.fileName).toBe("a.md");
+  });
+
+  it("defaults to the global fetch when none is injected", async () => {
+    const globalFetch = vi.fn(async () => jsonResponse({ count: 2 }));
+    vi.stubGlobal("fetch", globalFetch);
+    try {
+      const client = new AlmSearchRestClient("org", async () => "TOK");
+      const res = await client.searchCode(REQ, "P");
+      expect(res.count).toBe(2);
+      expect(globalFetch).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("propagates an AbortSignal through to fetch", async () => {
@@ -175,6 +199,7 @@ describe("AlmSearchRestClient", () => {
     );
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "auth",
+      message: "empty access token",
     });
   });
 
@@ -216,9 +241,13 @@ describe("AlmSearchRestClient", () => {
         fetchImpl,
         noSleep,
       );
-      await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
+      const err: unknown = await client.searchCode(REQ, "P").catch((e) => e);
+      expect(err).toBeInstanceOf(AlmSearchError);
+      expect(err).toMatchObject({
+        name: "AlmSearchError",
         kind,
         status,
+        message: `status ${status}`,
       });
     },
   );
@@ -346,10 +375,13 @@ describe("createAlmSearchClient", () => {
 describe("outcomeFromError", () => {
   it("wraps an AlmSearchError into an `unavailable` outcome carrying its kind", () => {
     expect(
-      outcomeFromError({ kind: "extension-missing", status: 404 }),
+      outcomeFromError(
+        new AlmSearchError("extension-missing", "Not Found", 404),
+      ),
     ).toEqual({
       kind: "unavailable",
       reason: "extension-missing",
+      message: "Not Found",
     });
   });
 

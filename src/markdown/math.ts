@@ -18,11 +18,9 @@ function classesOf(element: Element): string[] {
 
 function sourceProperties(element: Element): Record<string, unknown> {
   return {
-    /* v8 ignore next -- parsed math nodes always carry source positions */
     ...(element.properties?.dataSourceLine != null
       ? { dataSourceLine: element.properties.dataSourceLine }
       : {}),
-    /* v8 ignore next -- parsed math nodes always carry source positions */
     ...(element.properties?.dataSourceEndLine != null
       ? { dataSourceEndLine: element.properties.dataSourceEndLine }
       : {}),
@@ -74,7 +72,7 @@ function placeholder(
 export const rehypeMathPlaceholder: Plugin<[], Root> = () => {
   return (tree) => {
     visit(tree, "element", (node: Element, index, parent) => {
-      /* v8 ignore next -- element visitors always receive an indexed parent */
+      /* v8 ignore next -- visit() over a Root only matches descendant elements, which always have a parent and index; this only narrows the optional callback params */
       if (index == null || !parent) return;
 
       if (node.tagName === "pre") {
@@ -82,7 +80,6 @@ export const rehypeMathPlaceholder: Plugin<[], Root> = () => {
           (child): child is Element =>
             child.type === "element" && child.tagName === "code",
         );
-        /* v8 ignore next -- remark-rehype always wraps fenced code in `<code>` */
         if (!code) return;
         const classes = classesOf(code);
         if (
@@ -92,7 +89,7 @@ export const rehypeMathPlaceholder: Plugin<[], Root> = () => {
           return;
         }
         const source = extractHastText(code).replace(/\n+$/g, "");
-        /* v8 ignore next -- empty math fences remain ordinary code blocks */
+        // Empty math fences remain ordinary code blocks.
         if (!source) return;
         parent.children[index] = placeholder(source, true, node);
         return SKIP;
@@ -100,7 +97,6 @@ export const rehypeMathPlaceholder: Plugin<[], Root> = () => {
 
       if (node.tagName === "code" && classesOf(node).includes("math-inline")) {
         const source = extractHastText(node);
-        /* v8 ignore next -- remark-math does not emit empty inline math nodes */
         if (!source) return;
         parent.children[index] = placeholder(source, false, node);
         return SKIP;

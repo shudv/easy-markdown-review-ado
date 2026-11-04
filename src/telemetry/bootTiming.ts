@@ -8,7 +8,7 @@
 //
 // Instead, the entry point calls `markBootStart()` as early as possible, and
 // the app signals `markAppReady()` at the moment the first document's Markdown
-// has been committed to the DOM (see PrShell). Terminal no-content states
+// has been committed to the DOM (see Shell). Terminal no-content states
 // (no Markdown files, a boot error) call `markAppReady("empty" | "error")` so a
 // boot event still fires. `markAppReady` is idempotent — only the first call
 // per boot wins — so multiple render passes / call sites are safe.

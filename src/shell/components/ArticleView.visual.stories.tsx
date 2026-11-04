@@ -14,7 +14,7 @@ import { expect, fn, waitFor } from "storybook/test";
 import type { CommentThread, DiffRange } from "../../types";
 import { refineDiffRanges } from "../../markdown/diffRefine";
 import { renderMarkdownSync } from "../../markdown/render";
-import { sourceDiffRanges } from "../prShellHelpers";
+import { sourceDiffRanges } from "../shellHelpers";
 import { ArticleView } from "./ArticleView";
 
 // Keep line numbers stable — the diff ranges below reference them. This fixture

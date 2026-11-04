@@ -4,7 +4,7 @@
 // filter Azure DevOps offers on its own PR discussion.
 //
 // Kept as a pure, component-free module so the filtering + counting logic is
-// unit-tested directly (and imported by both the React toolbar and PrShell)
+// unit-tested directly (and imported by both the React toolbar and Shell)
 // without dragging the component tree into the jsdom project.
 
 import type { CommentThread } from "../../types";

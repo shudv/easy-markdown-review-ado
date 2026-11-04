@@ -1,8 +1,0 @@
-{
-  "$comment": "Complexity ratchet, enforced by `npm run complexity:check` (scripts/check-complexity.mjs). New functions must stay within `limits`; functions listed under `functions` predate the gate and are pinned at their measured score — they may only go down. Lower scores with `npm run complexity:update`; raising one requires `npm run complexity:update -- --accept` and is visible in review.",
-  "limits": {
-    "cyclomatic": 20,
-    "cognitive": 15
-  },
-  "functions": {}
-}

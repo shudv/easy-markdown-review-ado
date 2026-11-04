@@ -15,13 +15,16 @@
 //                  comment lines)
 //
 // The gate works like the coverage/mutation thresholds, but per function and
-// per file: `complexity-baseline.json` holds the limits for new code plus every
-// existing function (`functions`) or file (`files`) that already exceeds them,
-// pinned at its current score. The check fails when
+// per file: `complexity-baseline.json` holds the limits for new code plus the
+// documented exceptions — functions (`functions`) or files (`files`) that
+// exceed a limit, pinned at their current score with a `reason`. The check
+// fails when
 //   1. a function or file not in the baseline exceeds a limit,
-//   2. a grandfathered one gets worse than its pinned score, or
+//   2. a pinned one gets worse than its pinned score,
 //   3. the baseline is stale (a pinned entry improved, was renamed, or was
-//      removed) — so improvements are locked in and can never silently regress.
+//      removed) — so improvements are locked in and can never silently
+//      regress, or
+//   4. a pinned entry has no `reason`.
 //
 // Usage:
 //   node scripts/check-complexity.mjs                    # report (never fails)
@@ -436,6 +439,21 @@ function evaluateScope(records, pinned, limits, { metrics, key: keyOf }) {
 }
 
 /**
+ * Pinned entries without a written `reason`. Every exception to a limit must
+ * say why it is acceptable, so the check fails until one is added.
+ */
+function undocumentedEntries(baseline) {
+  const keys = [];
+  for (const scope of SCOPES) {
+    for (const [key, entry] of Object.entries(baseline[scope.pinnedIn] ?? {})) {
+      if (typeof entry.reason !== "string" || !entry.reason.trim())
+        keys.push(key);
+    }
+  }
+  return keys;
+}
+
+/**
  * Compare measurements (`{ functions, files }`) to the baseline. Pure, so it
  * is unit-testable.
  */
@@ -453,10 +471,10 @@ export function evaluate(measurement, baseline) {
     violations.push(...result.violations);
     stale.push(...result.stale);
   }
-  return { violations, stale };
+  return { violations, stale, undocumented: undocumentedEntries(baseline) };
 }
 
-/** One scope's next pinned entries, sorted by key. */
+/** One scope's next pinned entries, sorted by key. Reasons are kept. */
 function nextScope(records, pinned, limits, { metrics, key: keyOf }, accept) {
   const entries = {};
   for (const record of records) {
@@ -470,7 +488,9 @@ function nextScope(records, pinned, limits, { metrics, key: keyOf }, accept) {
       else if (previous !== undefined)
         entry[metric] = Math.min(previous, actual);
     }
-    if (Object.keys(entry).length) entries[key] = entry;
+    if (!Object.keys(entry).length) continue;
+    const reason = pinned[key]?.reason;
+    entries[key] = reason === undefined ? entry : { ...entry, reason };
   }
   return Object.fromEntries(
     Object.keys(entries)
@@ -591,7 +611,7 @@ const METRIC_LABELS = {
   fileLines: "file length (code lines)",
 };
 
-function printGate({ violations, stale }) {
+function printGate({ violations, stale, undocumented = [] }) {
   for (const v of violations) {
     const label = METRIC_LABELS[v.metric];
     console.error(
@@ -620,6 +640,16 @@ function printGate({ violations, stale }) {
         " complexity-baseline.json.",
     );
   }
+  for (const key of undocumented) {
+    console.error(`? ${key}: pinned without a "reason"`);
+  }
+  if (undocumented.length) {
+    console.error(
+      '\nEvery exception needs a "reason" in complexity-baseline.json explaining' +
+        " why the limit doesn't fit. Add one, or fix the code and run" +
+        " `npm run complexity:update` to drop the entry.",
+    );
+  }
 }
 
 function readBaseline() {
@@ -640,14 +670,16 @@ function runUpdate(measurement, baseline, accept) {
   console.log(
     `complexity-baseline.json updated: ${pinnedCount(baseline)} → ${pinnedCount(next)} pinned entries.`,
   );
-  const { violations } = evaluate(measurement, next);
+  const { violations, undocumented } = evaluate(measurement, next);
+  if (undocumented.length)
+    printGate({ violations: [], stale: [], undocumented });
   if (!violations.length) return 0;
   printGate({ violations, stale: [] });
   return 1;
 }
 
 function runCheck(measurement, baseline, gate) {
-  if (gate.violations.length || gate.stale.length) {
+  if (gate.violations.length || gate.stale.length || gate.undocumented.length) {
     printGate(gate);
     return 1;
   }
@@ -688,8 +720,9 @@ async function main(argv) {
 
   printReport(measurement, baseline);
   const status =
-    gate.violations.length || gate.stale.length
-      ? `${gate.violations.length} violation(s), ${gate.stale.length} stale baseline entr(ies) — run with --check for details.`
+    gate.violations.length || gate.stale.length || gate.undocumented.length
+      ? `${gate.violations.length} violation(s), ${gate.stale.length} stale and ` +
+        `${gate.undocumented.length} undocumented baseline entr(ies) — run with --check for details.`
       : "Gate: passing.";
   console.log(`\n${status}`);
   return 0;

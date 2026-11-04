@@ -5,26 +5,10 @@
 
 import * as React from "react";
 import * as SDK from "azure-devops-extension-sdk";
-import {
-  CommonServiceIds,
-  type IHostNavigationService,
-} from "azure-devops-extension-api";
-import {
-  GitVersionOptions,
-  GitVersionType,
-  PullRequestStatus,
-  type GitPullRequest,
-} from "azure-devops-extension-api/Git";
+import { PullRequestStatus } from "azure-devops-extension-api/Git";
 
-import {
-  PrShell,
-  type RoutedPrInfo,
-  type DocLinkNavigation,
-} from "../shell/PrShell";
-import type {
-  HistoryStop,
-  ReviewIterationRange,
-} from "../shell/prShellHelpers";
+import { PrShell, type RoutedPrInfo } from "../shell/PrShell";
+import type { ReviewIterationRange } from "../shell/prShellHelpers";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import {
@@ -33,17 +17,8 @@ import {
 } from "../shell/adoGitData";
 import type { FolderLister } from "../shell/wikiOrder";
 import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages";
-import { identityAvatarUrl } from "../shell/adoGitData.helpers";
-import { buildReposFileUrl } from "../markdown/docLinks";
-import { buildHubDocUrl } from "../hub/documentsHub.helpers";
-import type {
-  ChangeType,
-  CommentAuthor,
-  CommentThread,
-  DiffRange,
-  FileInfo,
-  PrInfo,
-} from "../types";
+import { formatError } from "../hub/documentsHub.helpers";
+import type { CommentAuthor, CommentThread, DiffRange, PrInfo } from "../types";
 import {
   AdoCommentApi,
   fetchFileDiffs,
@@ -71,12 +46,10 @@ import {
   setTelemetryContext,
   trackUserFacingError,
 } from "../telemetry";
-import { withRetry } from "../shell/retry";
 import {
   detectSessionRefreshing,
   planSessionRefreshRetry,
   type AdoGrantState,
-  withAdoSessionRefreshDetection,
 } from "../shell/adoAuthToken";
 import {
   AUTO_RELOAD_STALL_MS,
@@ -93,42 +66,35 @@ import {
   buildPrTabDocUrl,
   buildPrWebUrl,
   iterationParamsForRange,
-  rangeChangeTypes,
-  contentCommitForChange,
   diffableFilePaths,
-  fetchAllIterationChanges,
-  mapChangeType,
-  markdownChangePath,
-  pickPullRequestId,
-  configuredRepositoryId,
-  loadWithRepositoryHint,
   prTabRoutePath,
-  resolvePrTabRouteSeed,
-  reviewIterationStops as mapReviewIterationStops,
-  selectDiffCommits,
-  withTimeout,
   type IterationParams,
   type PrTabRouteSeed,
 } from "./prTabApp.helpers";
-import { resolveCurrentProject, sharedGitClient } from "../shell/adoClients";
-
-interface PrContext {
-  projectId: string;
-  projectName: string;
-  repositoryId: string;
-  repositoryName: string;
-  /** Org root URL, e.g. `https://dev.azure.com/<org>`. No trailing slash. */
-  orgUrl: string;
-  pullRequestId: number;
-  pr: GitPullRequest;
-  /** Changed `.md` files; Markdown rendering never waits on diff data. */
-  changedMdFiles: FileInfo[];
-  /** Commits to diff between for inline change highlights. */
-  baseCommit?: string;
-  targetCommit?: string;
-  /** Native source-branch pushes for the status-bar iteration picker. */
-  reviewIterationStops: HistoryStop[];
-}
+import {
+  commentAuthorFromUser,
+  contentCommitForPath,
+  splitFileDiffs,
+  type PrContext,
+} from "./prContext.helpers";
+import {
+  commitVersionDescriptor,
+  fetchFileContent,
+  fetchFileContentAtCommit,
+  fetchRangeChangeTypes,
+  resolvePrContext,
+} from "./prContext";
+import {
+  openDocTarget,
+  readExtensionIdentity,
+  readRouteSeed,
+  writeRouteParams,
+} from "./prTabHost";
+import {
+  BootErrorView,
+  NoMarkdownFilesView,
+  SessionRefreshingView,
+} from "./PrTabStatusViews";
 
 // Stable empty array: threads load after mount via PrShell's thread sync, so
 // the shell seeds its reducer with this instead of blocking first paint on the
@@ -205,13 +171,7 @@ export function PrTabApp(): React.ReactElement {
         });
         setCtx(context);
         log("reading current user");
-        const u = SDK.getUser();
-        setUser({
-          id: u.id,
-          displayName: u.displayName,
-          initials: initialsOf(u.displayName),
-          avatarUrl: identityAvatarUrl(u),
-        });
+        setUser(commentAuthorFromUser(SDK.getUser()));
         const seed = await readRouteSeed(
           context.changedMdFiles,
           context.reviewIterationStops,
@@ -326,24 +286,14 @@ export function PrTabApp(): React.ReactElement {
     if (!baseCommit || !targetCommit || diffPaths.length === 0) return;
     let cancelled = false;
     void fetchFileDiffs(
-      repositoryId,
-      projectId,
-      baseCommit,
-      targetCommit,
+      { repositoryId, project: projectId, baseCommit, targetCommit },
       diffPaths,
     )
       .then((fileDiffs: Record<string, FileDiffInfo>) => {
         if (cancelled) return;
-        const nextDiffs: Record<string, DiffRange[]> = {};
-        const nextOriginalSources: Record<string, string> = {};
-        for (const [path, info] of Object.entries(fileDiffs)) {
-          if (info.ranges.length > 0) nextDiffs[path] = info.ranges;
-          if (info.originalSource != null) {
-            nextOriginalSources[path] = info.originalSource;
-          }
-        }
-        setDiffsByFile(nextDiffs);
-        setOriginalSourcesByFile(nextOriginalSources);
+        const { diffs, originalSources } = splitFileDiffs(fileDiffs);
+        setDiffsByFile(diffs);
+        setOriginalSourcesByFile(originalSources);
       })
       .catch((err: unknown) => {
         console.warn(
@@ -430,23 +380,7 @@ export function PrTabApp(): React.ReactElement {
       if (!ctx) throw new Error("PR context not loaded yet");
       const params = iterationParamsForRange(range, ctx.reviewIterationStops);
       if (!params) return {};
-      const gitClient = sharedGitClient();
-      const entries = await fetchAllIterationChanges((top, skip) =>
-        withRetry(
-          () =>
-            gitClient.getPullRequestIterationChanges(
-              ctx.repositoryId,
-              ctx.pullRequestId,
-              params.iteration,
-              ctx.projectId,
-              top,
-              skip,
-              params.base,
-            ),
-          { mode: "read", label: "getPullRequestIterationChanges.range" },
-        ),
-      );
-      return rangeChangeTypes(entries);
+      return fetchRangeChangeTypes(ctx, params);
     },
     [ctx],
   );
@@ -466,28 +400,13 @@ export function PrTabApp(): React.ReactElement {
       atCommitId?: string,
     ): Promise<string | undefined> => {
       if (!ctx) return undefined;
-      const changeType = ctx.changedMdFiles.find(
-        (file) => file.path === documentPath,
-      )?.changeType;
       const sourceCommit =
-        atCommitId ??
-        contentCommitForChange(changeType, {
-          baseCommit: ctx.baseCommit ?? ctx.pr.lastMergeTargetCommit?.commitId,
-          targetCommit:
-            ctx.targetCommit ?? ctx.pr.lastMergeSourceCommit?.commitId,
-        });
-      const versionDescriptor = sourceCommit
-        ? {
-            version: sourceCommit,
-            versionType: GitVersionType.Commit,
-            versionOptions: GitVersionOptions.None,
-          }
-        : undefined;
+        atCommitId ?? contentCommitForPath(ctx, documentPath);
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: ctx.repositoryId,
         project: ctx.projectId,
         path: repositoryPath,
-        versionDescriptor,
+        versionDescriptor: commitVersionDescriptor(sourceCommit),
       });
     },
     [ctx],
@@ -514,41 +433,19 @@ export function PrTabApp(): React.ReactElement {
 
   if (refreshing) {
     return (
-      <div className="emr-error" role="status">
-        <h2>Reconnecting to Azure DevOps…</h2>
-        {refreshing.autoReload ? (
-          <p style={{ color: "var(--emr-muted)" }}>This only takes a moment.</p>
-        ) : (
-          <>
-            <p style={{ color: "var(--emr-muted)" }}>
-              This usually fixes itself within a few minutes.
-            </p>
-            <button
-              type="button"
-              className="emr-error-retry"
-              onClick={() => void adoSession.reloadHost("user")}
-            >
-              Reload page
-            </button>
-          </>
-        )}
-      </div>
+      <SessionRefreshingView
+        autoReload={refreshing.autoReload}
+        onReload={() => void adoSession.reloadHost("user")}
+      />
     );
   }
 
   if (error) {
     return (
-      <div className="emr-error">
-        <h2>Something went wrong</h2>
-        <pre>{error}</pre>
-        <button
-          type="button"
-          className="emr-error-retry"
-          onClick={() => setBootAttempt((n) => n + 1)}
-        >
-          Try again
-        </button>
-      </div>
+      <BootErrorView
+        error={error}
+        onRetry={() => setBootAttempt((n) => n + 1)}
+      />
     );
   }
 
@@ -575,14 +472,7 @@ export function PrTabApp(): React.ReactElement {
   };
 
   if (pr.files.length === 0) {
-    return (
-      <div className="emr-error" style={{ color: "var(--emr-muted)" }}>
-        <h2>No Markdown files changed in this PR</h2>
-        <p>
-          This tab only shows .md files. Switch to the Files tab for the rest.
-        </p>
-      </div>
-    );
+    return <NoMarkdownFilesView />;
   }
 
   // Mention-link hydration context — resolves work-item and PR mentions to
@@ -682,393 +572,4 @@ export function PrTabApp(): React.ReactElement {
       </AvatarImageContext.Provider>
     </MentionLinkContext.Provider>
   );
-}
-
-// ---------------- helpers ----------------
-
-async function resolvePrContext(
-  log: (step: string, extra?: unknown) => void,
-): Promise<PrContext> {
-  log("reading SDK configuration");
-  const config = SDK.getConfiguration() as Record<string, unknown> | undefined;
-  log("sdk configuration", config);
-  const pullRequestId = pickPullRequestId(
-    config,
-    typeof document !== "undefined" ? document.referrer : "",
-  );
-  if (!pullRequestId) {
-    throw new Error(
-      "Could not determine pull request id from SDK configuration. " +
-        "Raw configuration: " +
-        JSON.stringify(config, null, 2),
-    );
-  }
-  log("resolved pullRequestId", pullRequestId);
-
-  const project = await resolveCurrentProject();
-  log("got project", project);
-
-  const gitClient = sharedGitClient();
-  const projectId = project.id;
-
-  log("fetching pull request by id");
-  // Timeout wraps the WHOLE retry sequence (not each attempt). `withTimeout`
-  // can't cancel the underlying SDK request, so a per-attempt timeout would let
-  // a timed-out-but-still-in-flight call stack up with its retries. Bounding
-  // the entire `withRetry` instead means retries only fire on SETTLED
-  // rejections (a real 4xx/5xx — no dangling request), while a genuinely hung
-  // call still fails once after 15s rather than spinning forever.
-  const prRequest = withTimeout(
-    withRetry(
-      () =>
-        withAdoSessionRefreshDetection(
-          () => gitClient.getPullRequestById(pullRequestId, projectId),
-          readHostToken,
-        ),
-      {
-        mode: "read",
-        label: "getPullRequestById",
-      },
-    ),
-    15_000,
-    `getPullRequestById(${pullRequestId}, ${projectId})`,
-  );
-
-  // The PR's updates, then the latest update's changed files. Iteration
-  // descriptions already carry the push's title, so commits aren't requested.
-  const loadFileChanges = async (repositoryId: string) => {
-    log("fetching pull request iterations", repositoryId);
-    const iterations = await withRetry(
-      () =>
-        withAdoSessionRefreshDetection(
-          () =>
-            gitClient.getPullRequestIterations(
-              repositoryId,
-              pullRequestId,
-              projectId,
-              false,
-            ),
-          readHostToken,
-        ),
-      { mode: "read", label: "getPullRequestIterations" },
-    );
-    const latest = iterations[iterations.length - 1];
-    if (!latest?.id) return { iterations, latest, changes: undefined };
-    log("fetching iteration changes", latest.id);
-    const latestId = latest.id;
-    const changes = await fetchAllIterationChanges((top, skip) =>
-      withRetry(
-        () =>
-          withAdoSessionRefreshDetection(
-            () =>
-              gitClient.getPullRequestIterationChanges(
-                repositoryId,
-                pullRequestId,
-                latestId,
-                projectId,
-                top,
-                skip,
-              ),
-            readHostToken,
-          ),
-        { mode: "read", label: "getPullRequestIterationChanges" },
-      ),
-    );
-    return { iterations, latest, changes };
-  };
-
-  // The host passes the PR's repository with the tab's configuration, so the
-  // updates load in parallel with the PR instead of after it.
-  const { pr, changes: fileChanges } = await loadWithRepositoryHint(
-    prRequest,
-    configuredRepositoryId(config, pullRequestId),
-    loadFileChanges,
-  );
-  const repositoryId = pr.repository.id;
-  const repositoryName = pr.repository.name ?? "";
-  const orgUrl = resolveOrgUrl();
-  log("got pull request", { repositoryId, title: pr.title });
-
-  const { iterations, latest, changes } = fileChanges;
-  const reviewIterationStops = mapReviewIterationStops(
-    iterations,
-    pullRequestId,
-  );
-  if (!latest?.id || !changes) {
-    log("no iterations; returning empty file list");
-    return {
-      projectId,
-      projectName: project.name,
-      repositoryId,
-      repositoryName,
-      orgUrl,
-      pullRequestId,
-      pr,
-      changedMdFiles: [],
-      reviewIterationStops,
-    };
-  }
-
-  const mdEntries: { path: string; changeType: ChangeType }[] = [];
-  for (const e of changes) {
-    const path = markdownChangePath(e);
-    if (!path) continue;
-    mdEntries.push({ path, changeType: mapChangeType(e.changeType) });
-  }
-
-  // Return as soon as the Markdown file list is known so the shell can mount
-  // and start rendering the first document immediately. Line counts (diffs) and
-  // the comment threads are fetched OFF the critical path — diffs by the
-  // component below, threads by PrShell's mount-time thread sync — so first
-  // paint never waits on them.
-  //
-  // Diff against the iteration's MERGE BASE (three-dot), not the target
-  // branch's moving tip, so highlights stay correct after master advances —
-  // see `selectDiffCommits`.
-  const { baseCommit, targetCommit } = selectDiffCommits(latest, pr);
-
-  const changedMdFiles: FileInfo[] = mdEntries
-    .map(
-      (e) =>
-        ({
-          path: e.path,
-          changeType: e.changeType,
-          linesAdded: 0,
-          linesDeleted: 0,
-        }) satisfies FileInfo,
-    )
-    .sort((a, b) => a.path.localeCompare(b.path));
-
-  return {
-    projectId: project.id,
-    projectName: project.name,
-    repositoryId,
-    repositoryName,
-    orgUrl,
-    pullRequestId,
-    pr,
-    changedMdFiles,
-    baseCommit,
-    targetCommit,
-    reviewIterationStops,
-  };
-}
-
-async function fetchFileContent(ctx: PrContext, path: string): Promise<string> {
-  const changeType = ctx.changedMdFiles.find(
-    (file) => file.path === path,
-  )?.changeType;
-  const sourceCommit = contentCommitForChange(changeType, {
-    baseCommit: ctx.baseCommit ?? ctx.pr.lastMergeTargetCommit?.commitId,
-    targetCommit: ctx.targetCommit ?? ctx.pr.lastMergeSourceCommit?.commitId,
-  });
-  return fetchFileContentAtCommit(ctx, path, sourceCommit);
-}
-
-async function fetchFileContentAtCommit(
-  ctx: PrContext,
-  path: string,
-  commitId?: string,
-): Promise<string> {
-  const gitClient = sharedGitClient();
-  const versionDescriptor = commitId
-    ? {
-        version: commitId,
-        versionType: GitVersionType.Commit,
-        versionOptions: GitVersionOptions.None,
-      }
-    : undefined;
-  const ab = await withRetry(
-    () =>
-      gitClient.getItemContent(
-        ctx.repositoryId,
-        path,
-        ctx.projectId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        versionDescriptor,
-        true,
-      ),
-    { mode: "read", label: "fetchFileContent.getItemContent" },
-  );
-  return new TextDecoder("utf-8").decode(new Uint8Array(ab));
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-}
-
-function formatError(err: unknown): string {
-  if (err instanceof Error) return err.stack || err.message;
-  if (typeof err === "object" && err !== null)
-    return JSON.stringify(err, null, 2);
-  return String(err);
-}
-
-/**
- * The extension's publisher/extension ids (for the `_a` tab selector), or
- * `undefined` when the SDK context isn't available.
- */
-function readExtensionIdentity():
-  | { publisherId: string; extensionId: string }
-  | undefined {
-  try {
-    return SDK.getExtensionContext();
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * ADO Files `version` descriptor for the PR's source branch (`GB<branch>`), so
- * a non-markdown link opens the file as this PR sees it. Returns `undefined`
- * when the branch can't be resolved (Files then defaults to the repo's default
- * branch).
- */
-function prBranchVersion(pr: GitPullRequest): string | undefined {
-  const ref = pr.sourceRefName;
-  if (!ref) return undefined;
-  return "GB" + ref.replace(/^refs\/heads\//, "");
-}
-
-/**
- * Open a doc-link target that leaves the current PR view, in a new browser tab.
- * A markdown file that lives outside this PR opens in the Documents hub;
- * anything else (non-markdown, or a file not part of the PR) opens in the ADO
- * Files explorer at the PR's source branch. Best-effort — a missing navigation
- * service, extension context, or unresolvable URL is silently ignored (the
- * click just no-ops).
- */
-async function openDocTarget(
-  ctx: PrContext,
-  target: DocLinkNavigation,
-): Promise<void> {
-  let url: string | undefined;
-  if (target.kind === "repo-file") {
-    url = buildReposFileUrl(
-      ctx.orgUrl,
-      ctx.projectName,
-      ctx.repositoryName,
-      target.path,
-      prBranchVersion(ctx.pr),
-    );
-  } else {
-    let ext: { publisherId: string; extensionId: string };
-    try {
-      ext = SDK.getExtensionContext();
-    } catch (err) {
-      trackUserFacingError({
-        error: err,
-        source: "PrTabApp.navigation",
-        operation: "document-link-open",
-        impact: "action-failed",
-      });
-      return;
-    }
-    url = buildHubDocUrl(
-      ctx.orgUrl,
-      ctx.projectName,
-      ext,
-      ctx.repositoryId,
-      target.path,
-    );
-    // Carry a `#heading` from the link so the hub opens scrolled to it.
-    if (url && target.hash) {
-      url =
-        withDeepLinkTarget(url, { kind: "heading", anchor: target.hash }) ??
-        url;
-    }
-  }
-  if (!url) return;
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    nav.openNewWindow(url, "");
-  } catch (err) {
-    // Best-effort: the doc just doesn't open. Surface the failure for
-    // diagnostics (matching the console.warn pattern in the ADO data layer)
-    // rather than swallowing it silently.
-    console.warn("[pr-tab] opening doc link failed:", err);
-    trackUserFacingError({
-      error: err,
-      source: "PrTabApp.navigation",
-      operation: "document-link-open",
-      impact: "action-failed",
-    });
-  }
-}
-
-/**
- * Read the PR tab's deep-link targets (`?path=`, `?comment=`, `?anchor=`) from
- * the host's query params. Best-effort: an unavailable navigation service
- * yields no targets (the tab opens normally).
- */
-async function readRouteSeed(
-  files: readonly FileInfo[],
-  stops: readonly HistoryStop[],
-): Promise<PrTabRouteSeed> {
-  let params: Record<string, string> = {};
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    params = (await nav.getQueryParams()) ?? {};
-  } catch {
-    /* navigation service unavailable — open without deep-link targets */
-  }
-  return resolvePrTabRouteSeed(params, files, stops);
-}
-
-/**
- * Merge `updates` into the host page's query string (an empty value removes a
- * param), so the address bar mirrors the open file + active comment or heading
- * and is itself a shareable link. Best-effort: a missing navigation service is
- * silently ignored.
- */
-async function writeRouteParams(
-  updates: Record<string, string>,
-): Promise<void> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
-    nav.setQueryParams(updates);
-  } catch {
-    /* navigation service unavailable — route syncing is best-effort */
-  }
-}
-
-/**
- * Resolve the organization's web URL (no trailing slash) for building deep
- * links to mentioned work items and PRs. Probe `SDK.getHost().name` (the org
- * slug for modern ADO), then fall back to `document.referrer`'s origin + first
- * path segment. Returns `""` when nothing resolves (mentions stay
- * non-navigable rather than crashing).
- */
-function resolveOrgUrl(): string {
-  try {
-    const host = SDK.getHost();
-    if (host?.name) return `https://dev.azure.com/${host.name}`;
-  } catch {
-    // Falls through to the referrer-based heuristic.
-  }
-  try {
-    const ref = document.referrer;
-    if (ref) {
-      const u = new URL(ref);
-      const segments = u.pathname.split("/").filter(Boolean);
-      if (segments.length > 0) return `${u.origin}/${segments[0]}`;
-      return u.origin;
-    }
-  } catch {
-    // Falls through.
-  }
-  return "";
 }

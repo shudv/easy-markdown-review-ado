@@ -1,5 +1,5 @@
 {
-  "$comment": "Complexity and size ratchet, enforced by `npm run complexity:check` (scripts/check-complexity.mjs). New functions and files must stay within `limits` (`lines` is code lines per function, `fileLines` code lines per file, both excluding blank and comment lines). Entries under `functions` and `files` predate a limit and are pinned at their measured score — they may only go down. Lower scores with `npm run complexity:update`; raising one requires `npm run complexity:update -- --accept` and is visible in review.",
+  "$comment": "Complexity and size ratchet, enforced by `npm run complexity:check` (scripts/check-complexity.mjs). Functions and files must stay within `limits` (`lines` is code lines per function, `fileLines` code lines per file, both excluding blank and comment lines). `functions` and `files` list the documented exceptions: each is pinned at its measured score, may only go down, and must give a `reason`. Lower scores with `npm run complexity:update`; a new exception needs `npm run complexity:update -- --accept` plus a `reason`, both visible in review.",
   "limits": {
     "cyclomatic": 15,
     "cognitive": 15,
@@ -8,244 +8,111 @@
     "fileLines": 500
   },
   "functions": {
-    "src/comments/commentMedia.ts::decorateCommentMedia": {
-      "lines": 90
-    },
-    "src/comments/store.ts::makeNewThread": {
-      "params": 6
-    },
-    "src/comments/useThreadSync.ts::useThreadSync": {
-      "lines": 150
-    },
-    "src/comments/useThreadSync.ts::useThreadSync > React.useEffect(callback) #2": {
-      "lines": 122
-    },
     "src/hub/DocumentsApp.tsx::DocumentsApp": {
-      "lines": 220
-    },
-    "src/hub/DocumentsApp.tsx::RepoPicker": {
-      "lines": 219
-    },
-    "src/hub/DocumentsApp.tsx::useLazyTree": {
-      "lines": 82
-    },
-    "src/hub/DocumentsApp.tsx::useRepoBindings": {
-      "lines": 102
+      "lines": 220,
+      "reason": "Documents hub container: wires repo selection, the lazy file tree and the active document into PrShell in one render. Its hooks already live in their own modules; splitting the JSX would scatter one layout."
     },
     "src/hub/DocumentsHubApp.tsx::DocumentsHubApp": {
-      "lines": 679
+      "lines": 556,
+      "reason": "Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one PrShell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host."
     },
-    "src/hub/DocumentsHubApp.tsx::DocumentsHubApp > React.useEffect(callback)": {
-      "lines": 84
-    },
-    "src/hub/DocumentsHubApp.tsx::buildHubDeepLinkUrl": {
-      "params": 5
-    },
-    "src/hub/documentsHub.helpers.ts::assembleHubDeepLinkUrl": {
-      "params": 6
-    },
-    "src/hub/documentsHub.helpers.ts::buildHubDocUrl": {
-      "params": 5
+    "src/hub/RepoPicker.tsx::RepoPicker": {
+      "lines": 219,
+      "reason": "Repository dropdown: search box, listbox markup and keyboard navigation that share focus state. Kept whole so the ARIA listbox reads in one place."
     },
     "src/hub/markdownReader.tsx::MarkdownReader": {
-      "lines": 177
-    },
-    "src/markdown/diffDecorations.ts::clearDecorations": {
-      "lines": 119
-    },
-    "src/markdown/diffDecorations.ts::decorateFrontmatterValue": {
-      "params": 5
-    },
-    "src/markdown/diffDecorations.ts::reconstructEditedBlock": {
-      "params": 7
-    },
-    "src/markdown/diffDecorations.ts::reconstructOriginalBlock": {
-      "params": 5
-    },
-    "src/markdown/diffDecorations.ts::resolveFrontmatterOriginalValue": {
-      "params": 5
-    },
-    "src/markdown/diffRefine.ts::makeChunk": {
-      "params": 5
-    },
-    "src/markdown/diffRefine.ts::refineSpan": {
-      "lines": 105
-    },
-    "src/markdown/docLinks.ts::buildReposFileUrl": {
-      "params": 5
+      "lines": 177,
+      "reason": "Hub reader container: connects file loading, history and routing to PrShell. Mostly prop wiring with little branching."
     },
     "src/pr-tab/PrTabApp.tsx::PrTabApp": {
-      "lines": 457
-    },
-    "src/pr-tab/PrTabApp.tsx::resolvePrContext": {
-      "lines": 138
+      "lines": 381,
+      "reason": "PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into PrShell. Logic is extracted to tested modules; the rest is host wiring."
     },
     "src/shell/PrShell.tsx::PrShell": {
-      "lines": 509
-    },
-    "src/shell/adoCommentApi.helpers.ts::editBlockToRange": {
-      "params": 5
-    },
-    "src/shell/adoCommentApi.ts::buildLineCountsCacheKey": {
-      "params": 5
-    },
-    "src/shell/adoCommentApi.ts::fetchFileDiffs": {
-      "params": 5
-    },
-    "src/shell/adoCommentApi.ts::fetchOriginalLines": {
-      "params": 5
-    },
-    "src/shell/adoGitData.ts::findDocPrHistory": {
-      "lines": 92
-    },
-    "src/shell/adoGitData.ts::listMarkdownLevel": {
-      "lines": 95
+      "lines": 509,
+      "reason": "Reader root: composes about 25 single-purpose hooks and the nav, article and rail panes. Complexity is 6/2; the length is the wiring list itself."
     },
     "src/shell/components/ArticleView.tsx::ArticleView": {
-      "lines": 424
-    },
-    "src/shell/components/ArticleView.tsx::ArticleView > React.useLayoutEffect(callback)": {
-      "lines": 158
+      "lines": 330,
+      "reason": "Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree."
     },
     "src/shell/components/Balloon.tsx::Balloon": {
-      "lines": 116
+      "lines": 116,
+      "reason": "Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card."
     },
     "src/shell/components/CommentFilterMenu.tsx::CommentFilterMenu": {
-      "lines": 120
+      "lines": 120,
+      "reason": "Filter menu: status modes, file-scope toggle and menu keyboard handling share open/focus state and one ARIA menu."
     },
     "src/shell/components/CommentRail.tsx::CommentRail": {
-      "lines": 248
+      "lines": 248,
+      "reason": "Comment rail layout: positions threads against article anchors and hosts the draft balloon and tray. Layout math is in CommentRail.layout.ts; this is the render that applies it."
     },
     "src/shell/components/CommentRow.tsx::CommentRow": {
-      "lines": 146
+      "lines": 146,
+      "reason": "Single comment: author line, body or edit mode, reactions and actions menu share edit state. Hooks and parts are already split out."
     },
     "src/shell/components/Composer.tsx::Composer": {
-      "lines": 356
+      "lines": 356,
+      "reason": "Comment editor: textarea, @-mention typeahead, keyboard shortcuts and image paste all act on the same text and caret. Splitting would pass the caret state around."
     },
     "src/shell/components/DiffMinimap.tsx::DiffMinimap": {
-      "lines": 171
+      "lines": 172,
+      "reason": "Diff minimap: change markers, thumb drag and scroll sync act on one scroll container. Geometry lives in diffMinimap.helpers.ts."
     },
-    "src/shell/components/DocNav.tsx::DirNavRow": {
-      "lines": 82
+    "src/shell/components/DocNav.rows.tsx::DirNavRow": {
+      "lines": 82,
+      "reason": "Folder row in the navigation tree: twist button, label, badges and ARIA treeitem attributes for one row."
+    },
+    "src/shell/components/DocNav.rows.tsx::FileNavRow": {
+      "lines": 98,
+      "reason": "File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row."
+    },
+    "src/shell/components/DocNav.search.tsx::SearchResultsList": {
+      "lines": 107,
+      "reason": "Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list."
     },
     "src/shell/components/DocNav.tsx::DocNav": {
-      "lines": 438
-    },
-    "src/shell/components/DocNav.tsx::FileNavRow": {
-      "lines": 98
-    },
-    "src/shell/components/DocNav.tsx::SearchResultsList": {
-      "lines": 105
+      "lines": 438,
+      "reason": "Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules."
     },
     "src/shell/components/GeneratedSourceModal.tsx::GeneratedSourceModal": {
-      "lines": 132
+      "lines": 132,
+      "reason": "Generated-source dialog: header, view toggle and source/diff panes share the dialog state and focus trap."
+    },
+    "src/shell/components/IterationPicker.tsx::IterationPicker": {
+      "lines": 229,
+      "reason": "PR update picker: update listbox, comparison range and keyboard handling share selection state and one ARIA listbox."
     },
     "src/shell/components/MentionPicker.tsx::MentionPicker": {
-      "lines": 82
+      "lines": 82,
+      "reason": "Mention typeahead: suggestion list, highlighted row and keyboard selection for one ARIA listbox."
     },
     "src/shell/components/MentionPicker.tsx::SuggestionRow": {
-      "lines": 95
+      "lines": 95,
+      "reason": "One mention suggestion: avatar, name, secondary text and match highlighting with its ARIA option attributes."
     },
     "src/shell/components/ReaderLoadingShell.tsx::ReaderLoadingShell": {
-      "lines": 89
-    },
-    "src/shell/components/ReaderStatusBar.tsx::IterationPicker": {
-      "lines": 229
+      "lines": 89,
+      "reason": "Boot skeleton: static placeholder markup that mirrors the reader layout so nothing shifts on load. No logic to extract."
     },
     "src/shell/components/ReaderStatusBar.tsx::ReaderStatusBar": {
-      "lines": 143
+      "lines": 143,
+      "reason": "Status bar: composes its regions (comparison, comments, reading preferences, refresh) from ReaderStatusBar.parts."
     },
-    "src/shell/components/ReaderStatusBar.tsx::ReadingPreferencesControls": {
-      "lines": 92
-    },
-    "src/shell/components/diffMinimap.helpers.ts::scrollFromThumbDrag": {
-      "params": 6
-    },
-    "src/shell/components/diffMinimap.helpers.ts::thumbMetrics": {
-      "params": 5
-    },
-    "src/shell/components/useDocSearch.ts::useDocSearch": {
-      "lines": 142
-    },
-    "src/shell/prShell/useCommentPosting.ts::useCommentPosting": {
-      "lines": 115
-    },
-    "src/shell/prShell/useDocNavigation.ts::useDocNavigation": {
-      "lines": 92
-    },
-    "src/shell/prShell/useDocScroll.ts::useDocScroll": {
-      "lines": 89
-    },
-    "src/shell/prShell/useDocumentSource.ts::useDocumentSource": {
-      "lines": 88
-    },
-    "src/shell/prShell/useDraftController.ts::useDraftController": {
-      "lines": 126
-    },
-    "src/shell/prShell/useHistoryLoaders.ts::useHistoryLoaders": {
-      "lines": 191
-    },
-    "src/shell/prShell/usePaneResize.ts::usePaneResize": {
-      "lines": 184
-    },
-    "src/shell/prShell/useRailModel.ts::useRailModel": {
-      "lines": 160
-    },
-    "src/shell/prShell/useReviewHistory.ts::useReviewHistory": {
-      "lines": 83
-    },
-    "src/shell/prShell/useThreadMutations.ts::useThreadMutations": {
-      "lines": 160
-    },
-    "src/shell/prShell/useThreadStore.ts::useThreadStore": {
-      "lines": 120
-    },
-    "src/shell/prShell/useThreadViews.ts::useThreadViews": {
-      "lines": 85
+    "src/shell/components/ReadingPreferencesControls.tsx::ReadingPreferencesControls": {
+      "lines": 92,
+      "reason": "Reading preferences popover: font, size, spacing and width controls bound to one preferences object."
     }
   },
   "files": {
-    "src/comments/fixtures.ts": {
-      "fileLines": 1310
-    },
-    "src/hub/DocumentsApp.tsx": {
-      "fileLines": 1028
-    },
     "src/hub/DocumentsHubApp.tsx": {
-      "fileLines": 829
-    },
-    "src/markdown/diffDecorations.ts": {
-      "fileLines": 3080
-    },
-    "src/markdown/diffRefine.ts": {
-      "fileLines": 575
-    },
-    "src/pr-tab/PrTabApp.tsx": {
-      "fileLines": 881
+      "fileLines": 617,
+      "reason": "Contains only the DocumentsHubApp component (a documented exception, about 556 lines) and its imports; everything else was moved out."
     },
     "src/shell/PrShell.tsx": {
-      "fileLines": 636
-    },
-    "src/shell/adoCommentApi.helpers.ts": {
-      "fileLines": 532
-    },
-    "src/shell/adoCommentApi.ts": {
-      "fileLines": 612
-    },
-    "src/shell/adoGitData.ts": {
-      "fileLines": 765
-    },
-    "src/shell/components/ArticleView.tsx": {
-      "fileLines": 886
-    },
-    "src/shell/components/DocNav.tsx": {
-      "fileLines": 1343
-    },
-    "src/shell/components/ReaderStatusBar.tsx": {
-      "fileLines": 1228
-    },
-    "src/shell/prShell/derive.ts": {
-      "fileLines": 595
+      "fileLines": 566,
+      "reason": "Contains only the PrShell component (a documented exception, about 509 lines) and its imports; everything else was moved out."
     }
   }
 }

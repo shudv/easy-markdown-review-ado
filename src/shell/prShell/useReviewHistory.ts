@@ -92,6 +92,34 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value, not its object identity
   }, [reportedRangeKey]);
 
+  const docNavRangeChanges = useRangeChanges({
+    loadRangeChanges,
+    rangeChangesKey,
+    range: resolvedIterationRange.range,
+    historyStopCount: view.historyStops.length,
+  });
+
+  return {
+    ...view,
+    completedPrHistoryEnabled,
+    nativeIterationMode,
+    nativeUpdateCount,
+    iterationRange,
+    setIterationRange,
+    setHistoryByPath,
+    setCompletedHistoryStopIndex,
+    docNavRangeChanges,
+  };
+}
+
+/** The compared PR updates' changed-file map, loaded once per comparison. */
+function useRangeChanges(args: {
+  loadRangeChanges: ReviewHistoryOptions["loadRangeChanges"];
+  rangeChangesKey: string | null;
+  range: ReviewIterationRange;
+  historyStopCount: number;
+}) {
+  const { loadRangeChanges, rangeChangesKey, range, historyStopCount } = args;
   // Which files the compared updates touch, so the file list can mark them and
   // dim the rest. Cached per comparison; a failed load just leaves the
   // PR-wide indicators in place.
@@ -106,7 +134,7 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
     ) {
       return;
     }
-    loadRangeChanges(resolvedIterationRange.range)
+    loadRangeChanges(range)
       .then((byPath) =>
         setRangeChangesByKey((prev) => ({
           ...prev,
@@ -124,22 +152,10 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value
   }, [loadRangeChanges, rangeChangesKey, rangeChangesByKey]);
-  const docNavRangeChanges = docNavRangeChangesFor(
+  return docNavRangeChangesFor(
     rangeChangesKey,
     rangeChangesByKey,
-    resolvedIterationRange.range,
-    view.historyStops.length,
+    range,
+    historyStopCount,
   );
-
-  return {
-    ...view,
-    completedPrHistoryEnabled,
-    nativeIterationMode,
-    nativeUpdateCount,
-    iterationRange,
-    setIterationRange,
-    setHistoryByPath,
-    setCompletedHistoryStopIndex,
-    docNavRangeChanges,
-  };
 }

@@ -3,7 +3,12 @@
 import * as React from "react";
 
 import type { CommentAuthor, CommentThread } from "../../types";
-import { initialThreadState, threadReducer } from "../../comments/store";
+import {
+  initialThreadState,
+  threadReducer,
+  type ThreadAction,
+  type ThreadState,
+} from "../../comments/store";
 import type { IdentityStore } from "../../comments/identityStore";
 import { collectUserMentionIds } from "../../comments/mentions";
 import { useThreadSync } from "../../comments/useThreadSync";
@@ -41,39 +46,7 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     threadReducer,
     initialThreadState(opts.initialThreads),
   );
-
-  // Seed the identity store for free from everyone we already know: the current
-  // user plus every comment author. This resolves the common `@<GUID>` mentions
-  // (self, PR participants) with zero network. Referenced-but-unknown mention
-  // ids (people who aren't participants) are prefetched in one batch so their
-  // names resolve on load, rather than flashing a raw GUID until each pill
-  // happens to render.
-  React.useEffect(() => {
-    const people: Array<{
-      id: string;
-      displayName?: string;
-      avatarUrl?: string;
-    }> = [currentUser];
-    const mentionIds: string[] = [];
-    for (const id of threadState.order) {
-      const t = threadState.threadsById[id];
-      /* v8 ignore next -- order ids always have a thread entry */
-      if (!t) continue;
-      // Seed names ADO already resolved for this thread's @mentions. This is
-      // the authoritative source (works even in personal-MSA orgs where the
-      // by-id identities endpoint returns null), so mentions render as names on
-      // load with no network call.
-      if (t.mentionedIdentities) people.push(...t.mentionedIdentities);
-      for (const c of t.comments) {
-        people.push(c.author);
-        mentionIds.push(...collectUserMentionIds(c.bodyMarkdown));
-      }
-    }
-    identityStore.seed(people);
-    // `ensure` skips ids already known (e.g. seeded authors) and coalesces the
-    // rest into a single resolver call.
-    if (mentionIds.length > 0) identityStore.ensure(mentionIds);
-  }, [threadState, currentUser, identityStore]);
+  useIdentitySeeding(threadState, currentUser, identityStore);
 
   // Background remote-thread sync; merges snapshots preserving optimistic writes.
   const onRemoteThreads = React.useCallback((threads: CommentThread[]) => {
@@ -114,13 +87,68 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     // Resume polling the moment the ADO session is re-minted.
     subscribeRecovered: adoSession.onRecovered,
   });
-
   // Unified data refresh surfaced on the reading toolbar: pull a fresh comment
   // snapshot AND (when the host provides one) reload the file list in one click
   // — replacing the separate per-header refresh buttons. Gated on comment
   // refreshability, which every reader surface has; hosts that also expose a
   // file reload pass `onRefreshFiles` to fold it into the same click.
   const canRefreshComments = !!effectiveFetch;
+  const refresh = useUnifiedRefresh(threadSync, onRefreshFiles);
+  useFirstThreadLoad(loadThreadsForPath, selectedPath, dispatch);
+
+  return {
+    threadState,
+    dispatch,
+    prThreadSnapshots,
+    threadSync,
+    canRefreshComments,
+    ...refresh,
+  };
+}
+
+function useIdentitySeeding(
+  threadState: ThreadState,
+  currentUser: CommentAuthor,
+  identityStore: IdentityStore,
+): void {
+  // Seed the identity store for free from everyone we already know: the current
+  // user plus every comment author. This resolves the common `@<GUID>` mentions
+  // (self, PR participants) with zero network. Referenced-but-unknown mention
+  // ids (people who aren't participants) are prefetched in one batch so their
+  // names resolve on load, rather than flashing a raw GUID until each pill
+  // happens to render.
+  React.useEffect(() => {
+    const people: Array<{
+      id: string;
+      displayName?: string;
+      avatarUrl?: string;
+    }> = [currentUser];
+    const mentionIds: string[] = [];
+    for (const id of threadState.order) {
+      const t = threadState.threadsById[id];
+      /* v8 ignore next -- order ids always have a thread entry */
+      if (!t) continue;
+      // Seed names ADO already resolved for this thread's @mentions. This is
+      // the authoritative source (works even in personal-MSA orgs where the
+      // by-id identities endpoint returns null), so mentions render as names on
+      // load with no network call.
+      if (t.mentionedIdentities) people.push(...t.mentionedIdentities);
+      for (const c of t.comments) {
+        people.push(c.author);
+        mentionIds.push(...collectUserMentionIds(c.bodyMarkdown));
+      }
+    }
+    identityStore.seed(people);
+    // `ensure` skips ids already known (e.g. seeded authors) and coalesces the
+    // rest into a single resolver call.
+    if (mentionIds.length > 0) identityStore.ensure(mentionIds);
+  }, [threadState, currentUser, identityStore]);
+}
+
+function useUnifiedRefresh(
+  threadSync: ReturnType<typeof useThreadSync>,
+  onRefreshFiles: (() => void | Promise<void>) | undefined,
+) {
   // A host file reload can be async and slower than the comment poll. Track it
   // so the toolbar stays "refreshing" until BOTH settle — otherwise the button
   // re-enables the moment the poll finishes and a slow file reload could be
@@ -150,6 +178,14 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     ? "Refresh files and comments"
     : "Refresh comments";
 
+  return { fileRefreshInFlight, handleRefresh, refreshLabel };
+}
+
+function useFirstThreadLoad(
+  loadThreadsForPath: ((path: string) => Promise<CommentThread[]>) | undefined,
+  selectedPath: string,
+  dispatch: React.Dispatch<ThreadAction>,
+): void {
   // Per-document mode: load the selected file's threads the first time it's
   // opened (the poller above keeps the active file fresh thereafter).
   const loadedThreadPathsRef = React.useRef<Set<string>>(new Set());
@@ -182,16 +218,5 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     return () => {
       cancelled = true;
     };
-  }, [loadThreadsForPath, selectedPath]);
-
-  return {
-    threadState,
-    dispatch,
-    prThreadSnapshots,
-    threadSync,
-    canRefreshComments,
-    fileRefreshInFlight,
-    handleRefresh,
-    refreshLabel,
-  };
+  }, [loadThreadsForPath, selectedPath, dispatch]);
 }

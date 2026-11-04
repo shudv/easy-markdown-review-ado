@@ -138,13 +138,13 @@ test("ignores Storybook stories and type declarations", async () => {
 test("passes when functions are within limits or at their pinned score", () => {
   const baseline = {
     limits,
-    functions: { "src/a.ts::big": { cyclomatic: 40 } },
+    functions: { "src/a.ts::big": { cyclomatic: 40, reason: "legacy parser" } },
   };
   const result = evaluate(
     fns(record("small", 20, 15), record("big", 40, 10)),
     baseline,
   );
-  assert.deepEqual(result, { violations: [], stale: [] });
+  assert.deepEqual(result, { violations: [], stale: [], undocumented: [] });
 });
 
 test("fails a new function that exceeds a limit", () => {
@@ -199,8 +199,8 @@ test("update only tightens: lowers, drops resolved entries, never adds or raises
   const baseline = {
     limits,
     functions: {
-      "src/a.ts::lower": { cyclomatic: 40 },
-      "src/a.ts::resolved": { cognitive: 30 },
+      "src/a.ts::lower": { cyclomatic: 40, reason: "kept on update" },
+      "src/a.ts::resolved": { cognitive: 30, reason: "dropped with the entry" },
       "src/a.ts::worse": { cyclomatic: 30 },
     },
   };
@@ -212,7 +212,7 @@ test("update only tightens: lowers, drops resolved entries, never adds or raises
   ];
   const next = nextBaseline(fns(...records), baseline);
   assert.deepEqual(next.functions, {
-    "src/a.ts::lower": { cyclomatic: 35 },
+    "src/a.ts::lower": { cyclomatic: 35, reason: "kept on update" },
     "src/a.ts::worse": { cyclomatic: 30 },
   });
   assert.deepEqual(
@@ -232,9 +232,11 @@ test("update --accept pins current scores, including regressions and new offende
     "src/a.ts::fresh": { cyclomatic: 25, cognitive: 16 },
     "src/a.ts::worse": { cyclomatic: 31 },
   });
+  // Newly pinned entries have no reason yet, so the check still fails on them.
   assert.deepEqual(evaluate(fns(...records), next), {
     violations: [],
     stale: [],
+    undocumented: ["src/a.ts::fresh", "src/a.ts::worse"],
   });
 });
 
@@ -336,4 +338,19 @@ test("rejects a baseline with a missing limit instead of silently passing", () =
       }),
     /limits are missing: lines, params, fileLines/,
   );
+});
+
+test("fails pinned functions and files that don't document a reason", () => {
+  const { undocumented } = evaluate(
+    {
+      functions: [record("big", 30, 1)],
+      files: [{ file: "src/a.ts", fileLines: 600 }],
+    },
+    {
+      limits,
+      functions: { "src/a.ts::big": { cyclomatic: 30, reason: "  " } },
+      files: { "src/a.ts": { fileLines: 600 } },
+    },
+  );
+  assert.deepEqual(undocumented, ["src/a.ts::big", "src/a.ts"]);
 });

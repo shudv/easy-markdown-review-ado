@@ -158,9 +158,11 @@ describe("buildReposFileUrl", () => {
   it("builds an absolute Files URL with an encoded path", () => {
     expect(
       buildReposFileUrl(
-        "https://dev.azure.com/org",
-        "My Proj",
-        "My Repo",
+        {
+          orgUrl: "https://dev.azure.com/org",
+          project: "My Proj",
+          repoName: "My Repo",
+        },
         "/docs/x.md",
       ),
     ).toBe(
@@ -171,9 +173,11 @@ describe("buildReposFileUrl", () => {
   it("adds a version when supplied and trims a trailing slash from orgUrl", () => {
     expect(
       buildReposFileUrl(
-        "https://dev.azure.com/org/",
-        "Proj",
-        "Repo",
+        {
+          orgUrl: "https://dev.azure.com/org/",
+          project: "Proj",
+          repoName: "Repo",
+        },
         "/a.md",
         "GBmain",
       ),
@@ -184,7 +188,14 @@ describe("buildReposFileUrl", () => {
 
   it("collapses multiple trailing slashes on the org URL", () => {
     expect(
-      buildReposFileUrl("https://dev.azure.com/org//", "Proj", "Repo", "/a.md"),
+      buildReposFileUrl(
+        {
+          orgUrl: "https://dev.azure.com/org//",
+          project: "Proj",
+          repoName: "Repo",
+        },
+        "/a.md",
+      ),
     ).toBe("https://dev.azure.com/org/Proj/_git/Repo?path=%2Fa.md");
   });
 });

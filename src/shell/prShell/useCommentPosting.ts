@@ -2,8 +2,13 @@
 
 import * as React from "react";
 
-import type { CommentAuthor, TextQuoteAnchor } from "../../types";
-import type { CommentApi } from "../../comments/api";
+import type {
+  CommentAuthor,
+  CommentThread,
+  MentionedIdentity,
+  TextQuoteAnchor,
+} from "../../types";
+import type { CommentApi, CreatedThreadIds } from "../../comments/api";
 import { withSourceLocation } from "../../comments/anchor";
 import type { IdentityStore } from "../../comments/identityStore";
 import { collectMentionIdentities } from "../../comments/mentions";
@@ -36,6 +41,13 @@ interface CommentPostingOptions {
 
 /** Posting the open composer: a new comment thread or a reply. */
 export function useCommentPosting(opts: CommentPostingOptions) {
+  const onSubmitDraft = useSubmitDraft(opts);
+  const onReply = useReply(opts);
+  return { onSubmitDraft, onReply };
+}
+
+/** Posts the open new-comment composer as a fresh thread. */
+function useSubmitDraft(opts: CommentPostingOptions) {
   const {
     commentApi,
     persistWith,
@@ -52,7 +64,7 @@ export function useCommentPosting(opts: CommentPostingOptions) {
     setDraftY,
     setActiveThreadId,
   } = opts;
-  const onSubmitDraft = React.useCallback(
+  return React.useCallback(
     (body: string) => {
       // Anchor against the SAME source that produced the currently rendered
       // article so the comment can be located in it.
@@ -77,21 +89,14 @@ export function useCommentPosting(opts: CommentPostingOptions) {
         );
         /* v8 ignore next -- optimistic thread skipped when the remote write fails */
         if (!created) return;
-        const thread = makeNewThread(
-          created.threadId,
-          selectedPath,
+        const thread = createdThread({
+          created,
+          filePath: selectedPath,
           anchor,
-          currentUser,
+          author: currentUser,
           body,
-          created.createdAt,
-        );
-        /* v8 ignore start -- a freshly created thread has exactly one comment, so the else-arm is unreachable */
-        thread.comments = thread.comments.map((c, i) =>
-          i === 0 ? { ...c, id: created.firstCommentId } : c,
-        );
-        /* v8 ignore stop */
-        /* v8 ignore next -- exercised only when the new comment carries no @mentions */
-        if (mentions.length > 0) thread.mentionedIdentities = mentions;
+          mentions,
+        });
         dispatch({ type: "ADD_THREAD", thread });
         track(
           events.commentCreated({
@@ -123,8 +128,21 @@ export function useCommentPosting(opts: CommentPostingOptions) {
       setActiveThreadId,
     ],
   );
+}
 
-  const onReply = React.useCallback(
+/** Posts the open reply composer onto its thread. */
+function useReply(opts: CommentPostingOptions) {
+  const {
+    commentApi,
+    persistWith,
+    dispatch,
+    currentUser,
+    activeDraftRef,
+    draft,
+    isStillPostedDraft,
+    setActiveDraft,
+  } = opts;
+  return React.useCallback(
     (threadId: string, body: string) => {
       const postedTarget = activeDraftRef.current;
       void (async () => {
@@ -159,6 +177,30 @@ export function useCommentPosting(opts: CommentPostingOptions) {
       setActiveDraft,
     ],
   );
+}
 
-  return { onSubmitDraft, onReply };
+/** The local thread for a just-created remote thread and its first comment. */
+function createdThread(args: {
+  created: CreatedThreadIds;
+  filePath: string;
+  anchor: TextQuoteAnchor;
+  author: CommentAuthor;
+  body: string;
+  mentions: MentionedIdentity[];
+}): CommentThread {
+  const { created, filePath, anchor, author, body, mentions } = args;
+  const thread = makeNewThread(
+    { id: created.threadId, filePath, anchor },
+    author,
+    body,
+    created.createdAt,
+  );
+  /* v8 ignore start -- a freshly created thread has exactly one comment, so the else-arm is unreachable */
+  thread.comments = thread.comments.map((c, i) =>
+    i === 0 ? { ...c, id: created.firstCommentId } : c,
+  );
+  /* v8 ignore stop */
+  /* v8 ignore next -- exercised only when the new comment carries no @mentions */
+  if (mentions.length > 0) thread.mentionedIdentities = mentions;
+  return thread;
 }

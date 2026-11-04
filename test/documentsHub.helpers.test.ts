@@ -9,6 +9,16 @@ import {
   routeUpdatesForPath,
 } from "../src/hub/documentsHub.helpers";
 
+/** Build the document location the hub URL helpers take. */
+function hubDoc(
+  orgUrl: string,
+  projectName: string,
+  repoId: string,
+  path: string,
+) {
+  return { orgUrl, projectName, repoId, path };
+}
+
 describe("initialsOf", () => {
   it("uses the first two letters of a single name", () => {
     expect(initialsOf("Alice")).toBe("AL");
@@ -48,15 +58,12 @@ describe("assembleHubDeepLinkUrl", () => {
 
   it("returns undefined without an org or project", () => {
     expect(
-      assembleHubDeepLinkUrl("", "Proj", EXT, "r", "/x.md", T),
+      assembleHubDeepLinkUrl(hubDoc("", "Proj", "r", "/x.md"), EXT, T),
     ).toBeUndefined();
     expect(
       assembleHubDeepLinkUrl(
-        "https://dev.azure.com/org",
-        "",
+        hubDoc("https://dev.azure.com/org", "", "r", "/x.md"),
         EXT,
-        "r",
-        "/x.md",
         T,
       ),
     ).toBeUndefined();
@@ -64,17 +71,14 @@ describe("assembleHubDeepLinkUrl", () => {
 
   it("returns undefined when the base URL is malformed", () => {
     expect(
-      assembleHubDeepLinkUrl("not a url", "Proj", EXT, "r", "/x.md", T),
+      assembleHubDeepLinkUrl(hubDoc("not a url", "Proj", "r", "/x.md"), EXT, T),
     ).toBeUndefined();
   });
 
   it("assembles a hub URL with repo, path and comment params", () => {
     const url = assembleHubDeepLinkUrl(
-      "https://dev.azure.com/org/",
-      "My Proj",
+      hubDoc("https://dev.azure.com/org/", "My Proj", "repo1", "/docs/a.md"),
       EXT,
-      "repo1",
-      "/docs/a.md",
       { kind: "comment", threadId: "42" },
     );
     expect(url).toBeDefined();
@@ -90,11 +94,8 @@ describe("assembleHubDeepLinkUrl", () => {
   it("assembles a hub URL with a heading anchor", () => {
     const parsed = new URL(
       assembleHubDeepLinkUrl(
-        "https://dev.azure.com/org",
-        "Proj",
+        hubDoc("https://dev.azure.com/org", "Proj", "repo1", "/docs/a.md"),
         EXT,
-        "repo1",
-        "/docs/a.md",
         { kind: "heading", anchor: "goals" },
       )!,
     );
@@ -106,11 +107,8 @@ describe("assembleHubDeepLinkUrl", () => {
   it("returns undefined for a blank thread", () => {
     expect(
       assembleHubDeepLinkUrl(
-        "https://dev.azure.com/org",
-        "Proj",
+        hubDoc("https://dev.azure.com/org", "Proj", "", "/"),
         EXT,
-        "",
-        "/",
         { kind: "comment", threadId: "" },
       ),
     ).toBeUndefined();
@@ -119,11 +117,8 @@ describe("assembleHubDeepLinkUrl", () => {
   it("omits an empty repo and a root path on a valid target", () => {
     const url = new URL(
       assembleHubDeepLinkUrl(
-        "https://dev.azure.com/org",
-        "Proj",
+        hubDoc("https://dev.azure.com/org", "Proj", "", "/"),
         EXT,
-        "",
-        "/",
         {
           kind: "heading",
           anchor: "goals",
@@ -239,11 +234,8 @@ describe("buildHubDocUrl", () => {
   it("builds a hub URL with repo + path params (no comment)", () => {
     expect(
       buildHubDocUrl(
-        "https://dev.azure.com/org",
-        "Proj",
+        hubDoc("https://dev.azure.com/org", "Proj", "repo1", "/docs/x.md"),
         EXT,
-        "repo1",
-        "/docs/x.md",
       ),
     ).toBe(
       "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?repo=repo1&path=docs%2Fx.md",
@@ -251,21 +243,29 @@ describe("buildHubDocUrl", () => {
   });
 
   it("returns undefined without an org or project", () => {
-    expect(buildHubDocUrl("", "Proj", EXT, "r", "/x.md")).toBeUndefined();
     expect(
-      buildHubDocUrl("https://dev.azure.com/org", "", EXT, "r", "/x.md"),
+      buildHubDocUrl(hubDoc("", "Proj", "r", "/x.md"), EXT),
+    ).toBeUndefined();
+    expect(
+      buildHubDocUrl(
+        hubDoc("https://dev.azure.com/org", "", "r", "/x.md"),
+        EXT,
+      ),
     ).toBeUndefined();
   });
 
   it("returns undefined when the base URL is malformed", () => {
     expect(
-      buildHubDocUrl("not a url", "Proj", EXT, "r", "/x.md"),
+      buildHubDocUrl(hubDoc("not a url", "Proj", "r", "/x.md"), EXT),
     ).toBeUndefined();
   });
 
   it("omits the repo param when no repo id is given", () => {
     expect(
-      buildHubDocUrl("https://dev.azure.com/org", "Proj", EXT, "", "/x.md"),
+      buildHubDocUrl(
+        hubDoc("https://dev.azure.com/org", "Proj", "", "/x.md"),
+        EXT,
+      ),
     ).toBe(
       "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?path=x.md",
     );
@@ -274,11 +274,8 @@ describe("buildHubDocUrl", () => {
   it("collapses redundant slashes in the org URL and path", () => {
     expect(
       buildHubDocUrl(
-        "https://dev.azure.com/org//",
-        "Proj",
+        hubDoc("https://dev.azure.com/org//", "Proj", "r", "//docs/x.md"),
         EXT,
-        "r",
-        "//docs/x.md",
       ),
     ).toBe(
       "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?repo=r&path=docs%2Fx.md",

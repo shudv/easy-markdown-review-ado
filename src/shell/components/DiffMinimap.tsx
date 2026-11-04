@@ -166,13 +166,12 @@ export function DiffMinimap({
   // margins (plus the ruler's CSS top offset) already inset it to align with the
   // reading surface, so no extra inset is subtracted here.
   const rulerH = metrics.clientHeight;
-  const thumb = thumbMetrics(
-    metrics.scrollTop,
-    metrics.clientHeight,
-    metrics.scrollHeight,
-    rulerH,
-    MIN_THUMB,
-  );
+  const thumb = thumbMetrics(metrics.scrollTop, {
+    clientHeight: metrics.clientHeight,
+    scrollHeight: metrics.scrollHeight,
+    trackPx: rulerH,
+    minThumbPx: MIN_THUMB,
+  });
   const viewportFrac = viewportRange(
     metrics.scrollTop,
     metrics.clientHeight,
@@ -213,11 +212,13 @@ export function DiffMinimap({
       scroller.scrollTop = scrollFromThumbDrag(
         startScroll,
         ev.clientY - startY,
-        ch,
-        sh,
-        // The track spans the full visible height now, so trackPx === clientHeight.
-        ch,
-        MIN_THUMB,
+        {
+          clientHeight: ch,
+          scrollHeight: sh,
+          // The track spans the full visible height now, so trackPx === clientHeight.
+          trackPx: ch,
+          minThumbPx: MIN_THUMB,
+        },
       );
     };
     // End the drag on pointerup OR pointercancel, and expose the teardown via a

@@ -455,9 +455,7 @@ describe("selectGeneralThreads", () => {
 describe("makeNewThread", () => {
   it("constructs an active thread with a single root comment", () => {
     const t = makeNewThread(
-      "id1",
-      "doc.md",
-      anchor("body"),
+      { id: "id1", filePath: "doc.md", anchor: anchor("body") },
       AUTHOR,
       "Looks good!",
       "2024-03-01T00:00:00.000Z",
@@ -479,7 +477,11 @@ describe("makeNewThread", () => {
   });
 
   it("falls back to current time when none is supplied", () => {
-    const t = makeNewThread("id1", "doc.md", anchor(), AUTHOR, "x");
+    const t = makeNewThread(
+      { id: "id1", filePath: "doc.md", anchor: anchor() },
+      AUTHOR,
+      "x",
+    );
     expect(Number.isFinite(Date.parse(t.comments[0]!.createdAt))).toBe(true);
   });
 });

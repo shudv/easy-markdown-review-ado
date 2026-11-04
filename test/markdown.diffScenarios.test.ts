@@ -1451,14 +1451,15 @@ describe("task lists", () => {
 
 describe("reconstructOriginalBlock", () => {
   it("returns null without an overlapping modified range", () => {
-    expect(reconstructOriginalBlock(3, 3, [], "one\ntwo\nthree")).toBeNull();
+    expect(
+      reconstructOriginalBlock({ start: 3, end: 3 }, [], "one\ntwo\nthree"),
+    ).toBeNull();
   });
 
   it("rejects invalid inferred original coordinates", () => {
     expect(
       reconstructOriginalBlock(
-        1,
-        2,
+        { start: 1, end: 2 },
         [
           {
             start: 2,
@@ -1477,8 +1478,7 @@ describe("reconstructOriginalBlock", () => {
   it("rejects a mismatched hunk extending beyond the block", () => {
     expect(
       reconstructOriginalBlock(
-        2,
-        2,
+        { start: 2, end: 2 },
         [
           {
             start: 1,

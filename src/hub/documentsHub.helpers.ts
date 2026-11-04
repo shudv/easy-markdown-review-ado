@@ -32,6 +32,14 @@ export interface ExtensionIdentity {
   extensionId: string;
 }
 
+/** Where a Documents-hub document lives: org, project, repo and repo path. */
+export interface HubDocLocation {
+  orgUrl: string;
+  projectName: string;
+  repoId: string;
+  path: string;
+}
+
 /**
  * Absolute Documents-hub URL that opens `path` in `repoId`, e.g.
  * `<org>/<project>/_apps/hub/<publisher>.<extension>.documents-hub?repo=…&path=…`.
@@ -40,11 +48,8 @@ export interface ExtensionIdentity {
  * when the org/project can't be resolved or the base URL is malformed.
  */
 export function buildHubDocUrl(
-  orgUrl: string,
-  projectName: string,
+  { orgUrl, projectName, repoId, path }: HubDocLocation,
   ext: ExtensionIdentity,
-  repoId: string,
-  path: string,
 ): string | undefined {
   if (!orgUrl || !projectName) return undefined;
   const base = `${orgUrl.replace(/\/+$/, "")}/${encodeURIComponent(
@@ -72,14 +77,11 @@ export function buildHubDocUrl(
  * reports a copy failure) when the base URL can't build.
  */
 export function assembleHubDeepLinkUrl(
-  orgUrl: string,
-  projectName: string,
+  doc: HubDocLocation,
   ext: ExtensionIdentity,
-  repoId: string,
-  path: string,
   target: DeepLinkTarget,
 ): string | undefined {
-  const url = buildHubDocUrl(orgUrl, projectName, ext, repoId, path);
+  const url = buildHubDocUrl(doc, ext);
   if (!url) return undefined;
   return withDeepLinkTarget(url, target);
 }

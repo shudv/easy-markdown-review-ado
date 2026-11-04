@@ -90,16 +90,36 @@ export function useDocumentSource(
     };
   }, [selectedPath, loadFileSource, htmlByPath]);
 
-  // Boot-time signal: the experience is "loaded" the moment the first
-  // document's Markdown has been committed to the DOM — not when React first
-  // mounted. Boot completes on the TERMINAL outcome of the first document's
-  // content load: success ("content") OR a load/render failure ("error").
-  // Gating only on success would silently drop the boot event whenever the
-  // first file can't be fetched or rendered, so the dependent (boot completion)
-  // deterministically awaits the actual settle of the content fetch rather than
-  // assuming content will always appear. Fires once (markAppReady is idempotent
-  // + no-ops outside a real boot, e.g. Storybook). Runs in an effect so it
-  // lands after commit/paint.
+  useBootReadySignal(htmlByPath, selectedPath, error);
+
+  return {
+    htmlByPath,
+    sourceByPath,
+    loading,
+    setLoading,
+    error,
+    missingDoc,
+    setMissingDoc,
+    handleMissingDocRef,
+    renderVersion,
+  };
+}
+
+// Boot-time signal: the experience is "loaded" the moment the first
+// document's Markdown has been committed to the DOM — not when React first
+// mounted. Boot completes on the TERMINAL outcome of the first document's
+// content load: success ("content") OR a load/render failure ("error").
+// Gating only on success would silently drop the boot event whenever the
+// first file can't be fetched or rendered, so the dependent (boot completion)
+// deterministically awaits the actual settle of the content fetch rather than
+// assuming content will always appear. Fires once (markAppReady is idempotent
+// + no-ops outside a real boot, e.g. Storybook). Runs in an effect so it
+// lands after commit/paint.
+function useBootReadySignal(
+  htmlByPath: Record<string, string>,
+  selectedPath: string,
+  error: string | null,
+): void {
   const bootReadyFiredRef = React.useRef(false);
   React.useEffect(() => {
     if (bootReadyFiredRef.current) return;
@@ -114,16 +134,4 @@ export function useDocumentSource(
       markAppReady("error");
     }
   }, [htmlByPath, selectedPath, error]);
-
-  return {
-    htmlByPath,
-    sourceByPath,
-    loading,
-    setLoading,
-    error,
-    missingDoc,
-    setMissingDoc,
-    handleMissingDocRef,
-    renderVersion,
-  };
 }

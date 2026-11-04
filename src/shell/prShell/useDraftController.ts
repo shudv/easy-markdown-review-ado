@@ -9,7 +9,10 @@ import {
   type DraftScope,
   type DraftTarget,
 } from "../draftStorage";
-import { useDraftPersistence } from "../useDraftPersistence";
+import {
+  useDraftPersistence,
+  type DraftPersistence,
+} from "../useDraftPersistence";
 import { draftTargetsOnScreen, isSameDraftTarget } from "./derive";
 
 interface DraftControllerOptions {
@@ -25,8 +28,7 @@ interface DraftControllerOptions {
  * reply), its locally-persisted text, and the one-active-draft guard.
  */
 export function useDraftController(opts: DraftControllerOptions) {
-  const { selectedPath, selectedPathRef, revealComments, setActiveThreadId } =
-    opts;
+  const { selectedPath, revealComments, setActiveThreadId } = opts;
   // The single open comment composer for this experience, or null. A
   // new-comment draft uses `threadId === NEW_DRAFT_THREAD_ID` (+ its selection
   // anchor); a reply draft carries the real thread id. Only one is ever open —
@@ -36,11 +38,7 @@ export function useDraftController(opts: DraftControllerOptions) {
   );
   // Pending discard prompt: the composer the user asked to open plus the
   // existing draft's file + snippet to show in the dialog.
-  const [draftGuard, setDraftGuard] = React.useState<{
-    requested: DraftTarget;
-    existingPath: string;
-    snippet: string;
-  } | null>(null);
+  const [draftGuard, setDraftGuard] = React.useState<DraftGuard | null>(null);
   const [draftY, setDraftY] = React.useState<number | null>(null);
 
   // Locally-persisted draft (one per experience). `onRestore` adopts a stored
@@ -66,6 +64,72 @@ export function useDraftController(opts: DraftControllerOptions) {
     activeDraft,
     selectedPath,
   );
+  const requests = useDraftRequests({
+    ...opts,
+    draft,
+    activeDraft,
+    setActiveDraft,
+    setDraftGuard,
+    setDraftY,
+  });
+  const resolutions = useDraftResolutions({
+    ...opts,
+    draft,
+    draftGuard,
+    activeDraftRef: requests.activeDraftRef,
+    setActiveDraft,
+    setDraftGuard,
+    setDraftY,
+  });
+
+  return {
+    activeDraft,
+    setActiveDraft,
+    activeDraftRef: requests.activeDraftRef,
+    draftGuard,
+    draftY,
+    setDraftY,
+    draft,
+    draftAnchor,
+    activeReplyThreadId,
+    requestDraft: requests.requestDraft,
+    dismissEmptyDraftRef: requests.dismissEmptyDraftRef,
+    onAddImplicitComment: requests.onAddImplicitComment,
+    onRequestReply: requests.onRequestReply,
+    ...resolutions,
+  };
+}
+
+/** Pending discard prompt for a requested composer while another holds text. */
+interface DraftGuard {
+  requested: DraftTarget;
+  existingPath: string;
+  snippet: string;
+}
+
+interface DraftSetters {
+  setActiveDraft: React.Dispatch<React.SetStateAction<DraftTarget | null>>;
+  setDraftGuard: React.Dispatch<React.SetStateAction<DraftGuard | null>>;
+  setDraftY: React.Dispatch<React.SetStateAction<number | null>>;
+}
+
+interface DraftRequestsOptions extends DraftControllerOptions, DraftSetters {
+  draft: DraftPersistence;
+  activeDraft: DraftTarget | null;
+}
+
+/** Opening a composer (guarded) and dismissing an empty one. */
+function useDraftRequests(opts: DraftRequestsOptions) {
+  const {
+    selectedPathRef,
+    revealComments,
+    setActiveThreadId,
+    draft,
+    activeDraft,
+    setActiveDraft,
+    setDraftGuard,
+    setDraftY,
+  } = opts;
 
   // Guarded open: adopt the requested composer unless a *different* draft still
   // holds text, in which case prompt to discard it first. An empty existing
@@ -91,7 +155,7 @@ export function useDraftController(opts: DraftControllerOptions) {
         snippet: draftSnippet(draft.getSnapshot()),
       });
     },
-    [draft, revealComments, setActiveThreadId],
+    [draft, revealComments, setActiveThreadId, setActiveDraft, setDraftGuard],
   );
   // Stable ref for the document-level ESC / outside-click handlers so they can
   // dismiss an *empty* draft without re-subscribing on every draft change.
@@ -127,10 +191,37 @@ export function useDraftController(opts: DraftControllerOptions) {
     [requestDraft, selectedPathRef],
   );
 
+  return {
+    activeDraftRef,
+    requestDraft,
+    dismissEmptyDraftRef,
+    onAddImplicitComment,
+    onRequestReply,
+  };
+}
+
+interface DraftResolutionsOptions extends DraftControllerOptions, DraftSetters {
+  draft: DraftPersistence;
+  draftGuard: DraftGuard | null;
+  activeDraftRef: React.MutableRefObject<DraftTarget | null>;
+}
+
+/** Cancelling, posting and the draft-guard dialog's outcomes. */
+function useDraftResolutions(opts: DraftResolutionsOptions) {
+  const {
+    revealComments,
+    setActiveThreadId,
+    draft,
+    draftGuard,
+    activeDraftRef,
+    setActiveDraft,
+    setDraftGuard,
+    setDraftY,
+  } = opts;
   const onCancelReply = React.useCallback(() => {
     draft.clear();
     setActiveDraft(null);
-  }, [draft]);
+  }, [draft, setActiveDraft]);
 
   // Draft-guard dialog resolution. Discard drops the existing draft and opens
   // the composer the user asked for; keep-editing just dismisses the prompt.
@@ -146,8 +237,19 @@ export function useDraftController(opts: DraftControllerOptions) {
       setActiveThreadId(g.requested.threadId);
     }
     setDraftGuard(null);
-  }, [draft, draftGuard, revealComments, setActiveThreadId]);
-  const onKeepExistingDraft = React.useCallback(() => setDraftGuard(null), []);
+  }, [
+    draft,
+    draftGuard,
+    revealComments,
+    setActiveThreadId,
+    setActiveDraft,
+    setDraftGuard,
+    setDraftY,
+  ]);
+  const onKeepExistingDraft = React.useCallback(
+    () => setDraftGuard(null),
+    [setDraftGuard],
+  );
 
   // A write can be held for minutes through the ADO session refresh. By the
   // time it lands the user may have cancelled this composer or started another
@@ -157,29 +259,16 @@ export function useDraftController(opts: DraftControllerOptions) {
     (postedTarget: DraftTarget | null, body: string): boolean =>
       activeDraftRef.current === postedTarget &&
       draft.getSnapshot().trim() === body,
-    [draft],
+    [draft, activeDraftRef],
   );
 
   const onCancelDraft = React.useCallback(() => {
     setActiveDraft(null);
     setDraftY(null);
     draft.clear();
-  }, [draft]);
+  }, [draft, setActiveDraft, setDraftY]);
 
   return {
-    activeDraft,
-    setActiveDraft,
-    activeDraftRef,
-    draftGuard,
-    draftY,
-    setDraftY,
-    draft,
-    draftAnchor,
-    activeReplyThreadId,
-    requestDraft,
-    dismissEmptyDraftRef,
-    onAddImplicitComment,
-    onRequestReply,
     onCancelReply,
     onDiscardExistingDraft,
     onKeepExistingDraft,

@@ -34,6 +34,26 @@ interface RailModelOptions {
  * orphaned thread sets, the status-bar cycle order, and the summary counts.
  */
 export function useRailModel(opts: RailModelOptions) {
+  const { orphanedSet, hiddenSet } = useRailVisibility(opts);
+  const trays = useFilteredTrays(opts);
+  const commentCycleThreadIds = useCommentCycle(
+    opts,
+    trays,
+    hiddenSet,
+    orphanedSet,
+  );
+  const counts = useRailCounts(opts);
+  return {
+    orphanedSet,
+    hiddenSet,
+    ...trays,
+    commentCycleThreadIds,
+    ...counts,
+  };
+}
+
+/** The orphaned-thread set and the threads hidden by the search/filter. */
+function useRailVisibility(opts: RailModelOptions) {
   const {
     currentThreadsRaw,
     generalThreads,
@@ -41,11 +61,7 @@ export function useRailModel(opts: RailModelOptions) {
     anchorLayout,
     commentQuery,
     commentFilter,
-    onlyThisFile,
     currentUserId,
-    activeReadOnly,
-    activeDraft,
-    draftY,
   } = opts;
   const orphanedSet = React.useMemo(
     () => new Set(anchorLayout.orphanedThreadIds),
@@ -55,38 +71,22 @@ export function useRailModel(opts: RailModelOptions) {
     const s = new Set<string>();
     // Search spans all statuses; otherwise the selected filter applies. The
     // same rule covers current-file, General, and orphaned-file sections.
-    for (const t of currentThreadsRaw) {
-      if (
-        !threadVisibleForCommentView(
-          t,
-          commentQuery,
-          commentFilter,
-          currentUserId,
+    for (const section of [
+      currentThreadsRaw,
+      generalThreads,
+      orphanedFileThreads,
+    ]) {
+      for (const t of section) {
+        if (
+          !threadVisibleForCommentView(
+            t,
+            commentQuery,
+            commentFilter,
+            currentUserId,
+          )
         )
-      )
-        s.add(t.id);
-    }
-    for (const t of generalThreads) {
-      if (
-        !threadVisibleForCommentView(
-          t,
-          commentQuery,
-          commentFilter,
-          currentUserId,
-        )
-      )
-        s.add(t.id);
-    }
-    for (const t of orphanedFileThreads) {
-      if (
-        !threadVisibleForCommentView(
-          t,
-          commentQuery,
-          commentFilter,
-          currentUserId,
-        )
-      )
-        s.add(t.id);
+          s.add(t.id);
+      }
     }
     return s;
   }, [
@@ -97,7 +97,19 @@ export function useRailModel(opts: RailModelOptions) {
     commentFilter,
     currentUserId,
   ]);
+  return { orphanedSet, hiddenSet };
+}
 
+interface FilteredTrays {
+  filteredCurrentThreads: CommentThread[];
+  filteredGeneralThreads: CommentThread[];
+  filteredOrphanedFileThreads: CommentThread[];
+}
+
+/** The rail's three trays narrowed to the comment search. */
+function useFilteredTrays(opts: RailModelOptions): FilteredTrays {
+  const { currentThreadsRaw, generalThreads, orphanedFileThreads } = opts;
+  const { commentQuery } = opts;
   // ---- Comment search ----
   // Search spans every rail section and status. Article highlights use the
   // same matching rule, so the prose and rail always show the same result set.
@@ -117,7 +129,28 @@ export function useRailModel(opts: RailModelOptions) {
     () => orphanedFileThreads.filter(matchesQuery),
     [orphanedFileThreads, matchesQuery],
   );
-  const commentCycleThreadIds = React.useMemo(
+  return {
+    filteredCurrentThreads,
+    filteredGeneralThreads,
+    filteredOrphanedFileThreads,
+  };
+}
+
+/** The status-bar cycle order across the visible rail trays. */
+function useCommentCycle(
+  opts: RailModelOptions,
+  trays: FilteredTrays,
+  hiddenSet: Set<string>,
+  orphanedSet: Set<string>,
+): string[] {
+  const { anchorLayout, onlyThisFile, activeReadOnly, activeDraft, draftY } =
+    opts;
+  const {
+    filteredCurrentThreads,
+    filteredGeneralThreads,
+    filteredOrphanedFileThreads,
+  } = trays;
+  return React.useMemo(
     () =>
       buildRailModel({
         currentThreads: filteredCurrentThreads,
@@ -145,6 +178,17 @@ export function useRailModel(opts: RailModelOptions) {
       onlyThisFile,
     ],
   );
+}
+
+/** Thread/comment tallies for the search summary, header and filter menu. */
+function useRailCounts(opts: RailModelOptions) {
+  const {
+    currentThreadsRaw,
+    generalThreads,
+    orphanedFileThreads,
+    onlyThisFile,
+    currentUserId,
+  } = opts;
   // Counts for the search summary line.
   const totalCommentCount = React.useMemo(() => {
     let n = 0;
@@ -198,12 +242,6 @@ export function useRailModel(opts: RailModelOptions) {
   );
 
   return {
-    orphanedSet,
-    hiddenSet,
-    filteredCurrentThreads,
-    filteredGeneralThreads,
-    filteredOrphanedFileThreads,
-    commentCycleThreadIds,
     totalCommentCount,
     resolvedThreadCount,
     openThreadCount,

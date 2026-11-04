@@ -1,5 +1,39 @@
 # OSS mirror sync ledger
 
+## 2026-11-04 Size baseline cleanup sync
+
+- Public base: `c8bcb88` (the complexity and size ratchet sync, PR #28, not yet
+  merged; this sync is stacked on it).
+- Previously mirrored product boundary: `14843f8`.
+- New product boundary: `f844c87` (source branch `refactor/clear-size-baseline`,
+  stacked on `chore/size-ratchet`, not yet merged; record the source merge
+  commit here once it lands).
+- OSS release version: unchanged at `1.3.0`.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c989462`     | Every pinned baseline entry must carry a `reason`; `complexity:update` keeps reasons.                                                                                                                                                                                                                                                                                                  |
+| `39cf78e`     | The 16 functions with more than 4 parameters take option objects instead.                                                                                                                                                                                                                                                                                                              |
+| `f844c87`     | Hooks, plain functions, effect callbacks and files brought within the size limits (`diffDecorations.ts` split into `src/markdown/diffDecorations/`, `DocNav`, `ReaderStatusBar`, `ArticleView`, hub, PR tab, ADO data and PrShell hook splits, fixture modules), new unit tests, and 26 documented exceptions: 24 React component bodies plus `PrShell.tsx` and `DocumentsHubApp.tsx`. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below. The public
+  feedback contact stays in `DocumentsApp.tsx` and `PrTabApp.tsx`; the shorter
+  `togglePopover` call moves with its code to
+  `src/markdown/diffDecorations/metadata.ts`.
+- The README keeps its public wording; only the complexity paragraph changes.
+- No dependency changes.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `f844c87` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-04 Complexity and size ratchet sync
 
 - Public base: `0c7433f` (OSS `1.3.0`, complexity baseline and duplication

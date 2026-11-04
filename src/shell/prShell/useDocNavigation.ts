@@ -7,6 +7,7 @@ import {
   resolveDocLink,
   routeDocLink,
   samePath,
+  type DocLinkAction,
 } from "../../markdown/docLinks";
 import { events, track } from "../../telemetry";
 import type { ScrollDocToHash, ScrollDocToText } from "./useDocScroll";
@@ -51,7 +52,6 @@ export function useDocNavigation(opts: DocNavigationOptions) {
     setSelectedPath,
     setActiveThreadId,
     setMissingDoc,
-    setLoading,
     dismissEmptyDraftRef,
     scrollDocToHash,
   } = opts;
@@ -101,23 +101,12 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // is an expected state, not a failure: open the repo's first other document
   // instead — reporting it up so the route and the remembered path move on —
   // and say what happened. Elsewhere (the PR tab) it stays an error.
-  opts.handleMissingDocRef.current = (missing) => {
-    if (!opts.documentsMode) return "unexpected";
-    // Fall back once: if the replacement is missing too, stop there rather
-    // than bouncing between missing documents.
-    if (opts.missingDoc?.shown === missing) return "expected";
-    const next = files.find((f) => f.path !== missing)?.path;
-    if (!next) return "expected";
-    // A deep-link heading/text targeted the missing document; drop it.
-    pendingScrollHashRef.current = null;
-    pendingHashIsDeepLinkRef.current = false;
-    pendingTextRef.current = null;
-    setMissingDoc({ missing, shown: next });
-    setLoading(false);
-    setSelectedPath(next);
-    onSelectPath?.(next);
-    return "replaced";
-  };
+  opts.handleMissingDocRef.current = (missing) =>
+    replaceMissingDoc(missing, opts, {
+      pendingScrollHashRef,
+      pendingHashIsDeepLinkRef,
+      pendingTextRef,
+    });
 
   // A relative in-document link was clicked. Resolve it against the open file
   // and route it (see `routeDocLink`): scroll (in-page / self), select in place
@@ -139,16 +128,8 @@ export function useDocNavigation(opts: DocNavigationOptions) {
         // Scroll to the linked heading once the new document has rendered.
         pendingScrollHashRef.current = action.hash || null;
         pendingHashIsDeepLinkRef.current = false;
-      } else if (action.type === "open-file") {
-        /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
-        onDocNavigate?.({ kind: "repo-file", path: action.path });
       } else {
-        /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
-        onDocNavigate?.({
-          kind: "hub-doc",
-          path: action.path,
-          hash: action.hash,
-        });
+        navigateOutOfReader(action, onDocNavigate);
       }
       return true;
     },
@@ -162,6 +143,53 @@ export function useDocNavigation(opts: DocNavigationOptions) {
     pendingHashIsDeepLinkRef,
     pendingTextRef,
   };
+}
+
+interface PendingTargetRefs {
+  pendingScrollHashRef: React.MutableRefObject<string | null>;
+  pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
+  pendingTextRef: React.MutableRefObject<string | null>;
+}
+
+/** `handleMissingDocRef`'s body: open a replacement for a missing document. */
+function replaceMissingDoc(
+  missing: string,
+  opts: DocNavigationOptions,
+  pending: PendingTargetRefs,
+): MissingDocOutcome {
+  if (!opts.documentsMode) return "unexpected";
+  // Fall back once: if the replacement is missing too, stop there rather
+  // than bouncing between missing documents.
+  if (opts.missingDoc?.shown === missing) return "expected";
+  const next = opts.files.find((f) => f.path !== missing)?.path;
+  if (!next) return "expected";
+  // A deep-link heading/text targeted the missing document; drop it.
+  pending.pendingScrollHashRef.current = null;
+  pending.pendingHashIsDeepLinkRef.current = false;
+  pending.pendingTextRef.current = null;
+  opts.setMissingDoc({ missing, shown: next });
+  opts.setLoading(false);
+  opts.setSelectedPath(next);
+  opts.onSelectPath?.(next);
+  return "replaced";
+}
+
+/** Hands a link that leaves this reader to the host's navigation. */
+function navigateOutOfReader(
+  action: Extract<DocLinkAction, { type: "open-file" | "open-hub" }>,
+  onDocNavigate: ((target: DocLinkNavigation) => void) | undefined,
+): void {
+  if (action.type === "open-file") {
+    /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
+    onDocNavigate?.({ kind: "repo-file", path: action.path });
+  } else {
+    /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
+    onDocNavigate?.({
+      kind: "hub-doc",
+      path: action.path,
+      hash: action.hash,
+    });
+  }
 }
 
 interface PendingDocScrollOptions {

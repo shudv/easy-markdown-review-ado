@@ -1,4 +1,5 @@
-// Unit tests for PrShell's pure view-model derivations (`src/shell/prShell/derive.ts`).
+// Unit tests for PrShell's pure view-model derivations
+// (`src/shell/prShell/derive.ts` and `src/shell/prShell/deriveChrome.ts`).
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,26 +13,28 @@ import { DEFAULT_READER_PREFS } from "../src/shell/readerPrefs";
 import {
   activeArticleState,
   activeSources,
-  appClassName,
   buildHistoryNav,
   commentAccess,
   diffInputs,
   docNavRangeChangesFor,
   documentReadOnly,
   draftTargetsOnScreen,
-  feedbackHrefFor,
   historicalContentKeys,
   historicalStatus,
   historyModes,
   isDiffAvailable,
   isSameDraftTarget,
-  paneLayout,
   pickInitialPath,
+  resolveHistoryView,
+} from "../src/shell/prShell/derive";
+import {
+  appClassName,
+  feedbackHrefFor,
+  paneLayout,
   railChrome,
   readerStyleFor,
-  resolveHistoryView,
   statusBarExtras,
-} from "../src/shell/prShell/derive";
+} from "../src/shell/prShell/deriveChrome";
 
 const current: HistoryStop = {
   commitId: null,

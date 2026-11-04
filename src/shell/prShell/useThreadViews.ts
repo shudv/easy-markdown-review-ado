@@ -87,22 +87,10 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // comments on files that ARE still in the PR belong to those files and show
   // when the reader opens them, never here. Suppressed in the hub (`isHub`):
   // there's no change-set to leave, and its file list is a partial lazy tree.
-  const orphanedFileThreads = React.useMemo(() => {
-    if (isHub) return EMPTY_THREADS;
-    const inPr = new Set(files.map((f) => f.path));
-    const out: CommentThread[] = [];
-    for (const id of threadState.order) {
-      const t = threadState.threadsById[id];
-      /* v8 ignore next -- defensive: order ids always have a thread entry */
-      if (!t) continue;
-      // General/Overview threads have their own tray (an empty filePath always
-      // means general in our data model, so this also covers file-less threads).
-      if (t.general) continue;
-      if (inPr.has(t.filePath)) continue;
-      out.push(t);
-    }
-    return out;
-  }, [threadState, files, isHub]);
+  const orphanedFileThreads = React.useMemo(
+    () => (isHub ? EMPTY_THREADS : threadsOutsideFiles(threadState, files)),
+    [threadState, files, isHub],
+  );
 
   // Threads passed to ArticleView for anchoring: only those matching the
   // active comment filter (all / active / resolved / mine) are highlighted in
@@ -124,17 +112,10 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     return out;
   }, [currentThreadsRaw, commentQuery, commentFilter, currentUserId]);
 
-  const threadCountsByPath: Record<string, number> = React.useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const id of threadState.order) {
-      const t = threadState.threadsById[id];
-      /* v8 ignore next -- defensive: order ids always have a thread entry */
-      if (!t) continue;
-      if (isResolvedLike(t.status)) continue;
-      out[t.filePath] = (out[t.filePath] ?? 0) + 1;
-    }
-    return out;
-  }, [threadState]);
+  const threadCountsByPath: Record<string, number> = React.useMemo(
+    () => openThreadCountsByPath(threadState),
+    [threadState],
+  );
 
   return {
     currentThreadsRaw,
@@ -143,4 +124,39 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     visibleForArticle,
     threadCountsByPath,
   };
+}
+
+/** Threads anchored to a file outside `files` (General threads excluded). */
+function threadsOutsideFiles(
+  threadState: ThreadState,
+  files: FileInfo[],
+): CommentThread[] {
+  const inPr = new Set(files.map((f) => f.path));
+  const out: CommentThread[] = [];
+  for (const id of threadState.order) {
+    const t = threadState.threadsById[id];
+    /* v8 ignore next -- defensive: order ids always have a thread entry */
+    if (!t) continue;
+    // General/Overview threads have their own tray (an empty filePath always
+    // means general in our data model, so this also covers file-less threads).
+    if (t.general) continue;
+    if (inPr.has(t.filePath)) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+/** Unresolved thread counts keyed by file path. */
+function openThreadCountsByPath(
+  threadState: ThreadState,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const id of threadState.order) {
+    const t = threadState.threadsById[id];
+    /* v8 ignore next -- defensive: order ids always have a thread entry */
+    if (!t) continue;
+    if (isResolvedLike(t.status)) continue;
+    out[t.filePath] = (out[t.filePath] ?? 0) + 1;
+  }
+  return out;
 }

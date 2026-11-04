@@ -39,6 +39,14 @@ function clamp(n: number, lo: number, hi: number): number {
   return n < lo ? lo : n > hi ? hi : n;
 }
 
+/** The scroller and track dimensions shared by the thumb geometry helpers. */
+interface ThumbGeometry {
+  clientHeight: number;
+  scrollHeight: number;
+  trackPx: number;
+  minThumbPx: number;
+}
+
 /**
  * Native-scrollbar thumb geometry in pixels. The thumb height is proportional
  * to the visible fraction but never smaller than `minThumbPx`, and — crucially
@@ -49,10 +57,7 @@ function clamp(n: number, lo: number, hi: number): number {
  */
 export function thumbMetrics(
   scrollTop: number,
-  clientHeight: number,
-  scrollHeight: number,
-  trackPx: number,
-  minThumbPx: number,
+  { clientHeight, scrollHeight, trackPx, minThumbPx }: ThumbGeometry,
 ): { topPx: number; heightPx: number } {
   if (trackPx <= 0 || scrollHeight <= clientHeight) {
     return { topPx: 0, heightPx: Math.max(0, trackPx) };
@@ -78,10 +83,7 @@ export function thumbMetrics(
 export function scrollFromThumbDrag(
   startScrollTop: number,
   deltaY: number,
-  clientHeight: number,
-  scrollHeight: number,
-  trackPx: number,
-  minThumbPx: number,
+  { clientHeight, scrollHeight, trackPx, minThumbPx }: ThumbGeometry,
 ): number {
   const maxScroll = scrollHeight - clientHeight;
   if (maxScroll <= 0 || trackPx <= 0) return startScrollTop;

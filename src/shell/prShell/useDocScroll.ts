@@ -107,38 +107,13 @@ export function useDocScroll(initialStorageKey: string): {
   // back to the section heading).
   const scrollDocToText = React.useCallback<ScrollDocToText>(
     (serialized, onResolved) => {
-      window.requestAnimationFrame(() => {
-        const article = document.querySelector<HTMLElement>(
-          ".emr-article-wrap > .emr-rendered",
-        );
-        /* v8 ignore next -- the article is mounted whenever a document has rendered */
-        if (!article) return;
-        const fragment = parseTextFragment(serialized);
-        const range = fragment ? findTextFragment(article, fragment) : null;
-        onResolved(range !== null);
-        if (!fragment || !range) return;
-        revealAnchorTarget(
-          range.startContainer.parentElement!,
-          activeStorageKeyRef.current,
-        );
-        const resolveRange = () => findTextFragment(article, fragment);
-        stopLandingCueRef.current?.();
-        stopLandingCueRef.current = flashTextTarget(article, resolveRange);
-        // The cue's first span is the scroll target; the hold lasts as long
-        // as the cue (it re-finds the span after each re-wrap).
-        const resolveTarget = () => currentTextCue(article);
-        resolveTarget()?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        releaseScrollHoldRef.current?.();
-        releaseScrollHoldRef.current = holdScrollOnTarget(
-          article,
-          resolveTarget,
-          ANCHOR_TARGET_CUE_MS,
-          "center",
-        );
-      });
+      window.requestAnimationFrame(() =>
+        landOnTextFragment(serialized, onResolved, {
+          activeStorageKeyRef,
+          releaseScrollHoldRef,
+          stopLandingCueRef,
+        }),
+      );
     },
     [],
   );
@@ -149,4 +124,48 @@ export function useDocScroll(initialStorageKey: string): {
     scrollDocToText,
     activeStorageKeyRef,
   };
+}
+
+interface ScrollRefs {
+  activeStorageKeyRef: React.MutableRefObject<string>;
+  releaseScrollHoldRef: React.MutableRefObject<(() => void) | null>;
+  stopLandingCueRef: React.MutableRefObject<(() => void) | null>;
+}
+
+/** The body of `scrollDocToText`, run once the article is queryable. */
+function landOnTextFragment(
+  serialized: string,
+  onResolved: (found: boolean) => void,
+  refs: ScrollRefs,
+): void {
+  const article = document.querySelector<HTMLElement>(
+    ".emr-article-wrap > .emr-rendered",
+  );
+  /* v8 ignore next -- the article is mounted whenever a document has rendered */
+  if (!article) return;
+  const fragment = parseTextFragment(serialized);
+  const range = fragment ? findTextFragment(article, fragment) : null;
+  onResolved(range !== null);
+  if (!fragment || !range) return;
+  revealAnchorTarget(
+    range.startContainer.parentElement!,
+    refs.activeStorageKeyRef.current,
+  );
+  const resolveRange = () => findTextFragment(article, fragment);
+  refs.stopLandingCueRef.current?.();
+  refs.stopLandingCueRef.current = flashTextTarget(article, resolveRange);
+  // The cue's first span is the scroll target; the hold lasts as long
+  // as the cue (it re-finds the span after each re-wrap).
+  const resolveTarget = () => currentTextCue(article);
+  resolveTarget()?.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+  });
+  refs.releaseScrollHoldRef.current?.();
+  refs.releaseScrollHoldRef.current = holdScrollOnTarget(
+    article,
+    resolveTarget,
+    ANCHOR_TARGET_CUE_MS,
+    "center",
+  );
 }

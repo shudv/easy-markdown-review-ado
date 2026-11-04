@@ -23,14 +23,15 @@ interface ThreadMutationsOptions {
  * reactions — persisted first, then applied to the store.
  */
 export function useThreadMutations(opts: ThreadMutationsOptions) {
-  const {
-    commentApi,
-    persistWith,
-    dispatch,
-    currentUser,
-    threadsById,
-    setActiveThreadId,
-  } = opts;
+  const statusMutations = useStatusMutations(opts);
+  const commentMutations = useCommentMutations(opts);
+  const threadMutations = useThreadDeleteAndReaction(opts);
+  return { ...statusMutations, ...commentMutations, ...threadMutations };
+}
+
+/** Thread status changes: resolve, reopen, mark pending and close. */
+function useStatusMutations(opts: ThreadMutationsOptions) {
+  const { commentApi, persistWith, dispatch } = opts;
   const onResolve = React.useCallback(
     (tid: string) => {
       void (async () => {
@@ -95,6 +96,12 @@ export function useThreadMutations(opts: ThreadMutationsOptions) {
     [commentApi, persistWith, dispatch],
   );
 
+  return { onResolve, onReopen, onMarkPending, onCloseThread };
+}
+
+/** Comment edits and single-comment deletes. */
+function useCommentMutations(opts: ThreadMutationsOptions) {
+  const { commentApi, persistWith, dispatch, setActiveThreadId } = opts;
   const onEditComment = React.useCallback(
     async (
       threadId: string,
@@ -136,6 +143,19 @@ export function useThreadMutations(opts: ThreadMutationsOptions) {
     [commentApi, persistWith, dispatch, setActiveThreadId],
   );
 
+  return { onEditComment, onDeleteComment };
+}
+
+/** Whole-thread deletes and comment reaction toggles. */
+function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
+  const {
+    commentApi,
+    persistWith,
+    dispatch,
+    currentUser,
+    threadsById,
+    setActiveThreadId,
+  } = opts;
   const onDeleteThread = React.useCallback(
     (threadId: string) => {
       const thread = threadsById[threadId]!;
@@ -199,14 +219,5 @@ export function useThreadMutations(opts: ThreadMutationsOptions) {
     ],
   );
 
-  return {
-    onResolve,
-    onReopen,
-    onMarkPending,
-    onCloseThread,
-    onEditComment,
-    onDeleteComment,
-    onDeleteThread,
-    onToggleReaction,
-  };
+  return { onDeleteThread, onToggleReaction };
 }

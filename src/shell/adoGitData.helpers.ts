@@ -11,6 +11,16 @@ import type { DocRepo, FolderListing } from "./types";
 import type { FileInfo } from "../types";
 import { ORDER_FILE_NAME } from "./wikiOrder";
 
+/**
+ * Where an injected REST read runs: the project plus a getter for the
+ * (structurally typed) Git client, called only once a round-trip is actually
+ * needed. The SDK glue passes `sharedGitClient`; tests pass a fake.
+ */
+export interface GitScope<C> {
+  git: () => C;
+  projectId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Path normalization
 // ---------------------------------------------------------------------------

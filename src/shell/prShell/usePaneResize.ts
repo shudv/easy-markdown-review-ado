@@ -18,12 +18,23 @@ const NAV_BASE_WIDTH = 340;
 
 type PointerHandler = (e: React.PointerEvent<HTMLDivElement>) => void;
 
+type SetReaderPrefs = React.Dispatch<React.SetStateAction<ReaderPrefs>>;
+type FrameRef = React.MutableRefObject<HTMLDivElement | null>;
+
+function capturePointer(e: React.PointerEvent<HTMLDivElement>): void {
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId);
+  } catch {
+    /* a synthetic (test) pointer has no active id to capture — ignore */
+  }
+}
+
 /** Pointer handlers for the nav/comment resize handles and reopen grabbers. */
 export function usePaneResize(
   readerPrefs: ReaderPrefs,
-  setReaderPrefs: React.Dispatch<React.SetStateAction<ReaderPrefs>>,
+  setReaderPrefs: SetReaderPrefs,
 ): {
-  bodyFrameRef: React.MutableRefObject<HTMLDivElement | null>;
+  bodyFrameRef: FrameRef;
   commentsAvailableRef: React.MutableRefObject<boolean>;
   onNavResizeStart: PointerHandler;
   onNavResizeMove: PointerHandler;
@@ -53,6 +64,33 @@ export function usePaneResize(
   // resize INDEPENDENTLY (separate prefs); each drag is capped via
   // `maxRailWidthPct` so the OTHER rail (always budgeted, since it can be
   // revealed) plus the document floor still fit.
+  const navResize = useNavResize(
+    readerPrefs.navWidthPct,
+    setReaderPrefs,
+    bodyFrameRef,
+    commentsAvailableRef,
+  );
+  const commentResize = useCommentResize(
+    readerPrefs.commentWidthPct,
+    setReaderPrefs,
+    bodyFrameRef,
+  );
+  const reopen = usePaneReopen(setReaderPrefs);
+  return {
+    bodyFrameRef,
+    commentsAvailableRef,
+    ...navResize,
+    ...commentResize,
+    ...reopen,
+  };
+}
+
+function useNavResize(
+  navWidthPct: number,
+  setReaderPrefs: SetReaderPrefs,
+  bodyFrameRef: FrameRef,
+  commentsAvailableRef: React.MutableRefObject<boolean>,
+) {
   const navDragRef = React.useRef<{
     startX: number;
     startPct: number;
@@ -62,15 +100,11 @@ export function usePaneResize(
       e.preventDefault();
       navDragRef.current = {
         startX: e.clientX,
-        startPct: readerPrefs.navWidthPct,
+        startPct: navWidthPct,
       };
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* a synthetic (test) pointer has no active id to capture — ignore */
-      }
+      capturePointer(e);
     },
-    [readerPrefs.navWidthPct],
+    [navWidthPct],
   );
   const onNavResizeMove = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -102,11 +136,19 @@ export function usePaneResize(
         };
       });
     },
-    [setReaderPrefs],
+    [setReaderPrefs, bodyFrameRef, commentsAvailableRef],
   );
   const onNavResizeEnd = React.useCallback(() => {
     navDragRef.current = null;
   }, []);
+  return { onNavResizeStart, onNavResizeMove, onNavResizeEnd };
+}
+
+function useCommentResize(
+  commentWidthPct: number,
+  setReaderPrefs: SetReaderPrefs,
+  bodyFrameRef: FrameRef,
+) {
   const commentDragRef = React.useRef<{
     startX: number;
     startPct: number;
@@ -116,15 +158,11 @@ export function usePaneResize(
       e.preventDefault();
       commentDragRef.current = {
         startX: e.clientX,
-        startPct: readerPrefs.commentWidthPct,
+        startPct: commentWidthPct,
       };
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* a synthetic (test) pointer has no active id to capture — ignore */
-      }
+      capturePointer(e);
     },
-    [readerPrefs.commentWidthPct],
+    [commentWidthPct],
   );
   const onCommentResizeMove = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -155,25 +193,25 @@ export function usePaneResize(
         };
       });
     },
-    [setReaderPrefs],
+    [setReaderPrefs, bodyFrameRef],
   );
   const onCommentResizeEnd = React.useCallback(() => {
     commentDragRef.current = null;
   }, []);
-  // Reopen a collapsed pane by dragging its edge grabber inward. The grabber is
-  // only mounted while the pane is hidden; crossing the trigger flips show* back
-  // on (restoring the last width) and the grabber unmounts mid-drag — fine, the
-  // gesture is done. A ref holds the press origin (null = no drag in progress).
+  return { onCommentResizeStart, onCommentResizeMove, onCommentResizeEnd };
+}
+
+// Reopen a collapsed pane by dragging its edge grabber inward. The grabber is
+// only mounted while the pane is hidden; crossing the trigger flips show* back
+// on (restoring the last width) and the grabber unmounts mid-drag — fine, the
+// gesture is done. A ref holds the press origin (null = no drag in progress).
+function usePaneReopen(setReaderPrefs: SetReaderPrefs) {
   const navReopenRef = React.useRef<number | null>(null);
   const onNavReopenStart = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       navReopenRef.current = e.clientX;
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* a synthetic (test) pointer has no active id to capture — ignore */
-      }
+      capturePointer(e);
     },
     [],
   );
@@ -198,11 +236,7 @@ export function usePaneResize(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       commentReopenRef.current = e.clientX;
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* a synthetic (test) pointer has no active id to capture — ignore */
-      }
+      capturePointer(e);
     },
     [],
   );
@@ -223,14 +257,6 @@ export function usePaneResize(
     commentReopenRef.current = null;
   }, []);
   return {
-    bodyFrameRef,
-    commentsAvailableRef,
-    onNavResizeStart,
-    onNavResizeMove,
-    onNavResizeEnd,
-    onCommentResizeStart,
-    onCommentResizeMove,
-    onCommentResizeEnd,
     onNavReopenStart,
     onNavReopenMove,
     onNavReopenEnd,

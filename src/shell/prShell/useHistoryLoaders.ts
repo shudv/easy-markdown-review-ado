@@ -44,20 +44,8 @@ interface HistoryLoadersOptions {
  * history, and the historical content + threads of the selected stop(s).
  */
 export function useHistoryLoaders(opts: HistoryLoadersOptions) {
-  const {
-    selectedPath,
-    completedPrHistoryEnabled,
-    nativeIterationMode,
-    nativeUpdateCount,
-    viewingHistorical,
-    activeStop,
-    loadDocHistory,
-    loadThreadsForPr,
-    loadFileSourceAt,
-    setHistoryByPath,
-    setCompletedHistoryStopIndex,
-    setIterationRange,
-  } = opts;
+  const { selectedPath, nativeIterationMode, viewingHistorical, activeStop } =
+    opts;
   // Historical content/threads caches (keyed by `path\u0000commit` and
   // `path\u0000prId` respectively).
   const [historicalHtmlByKey, setHistoricalHtmlByKey] = React.useState<
@@ -81,6 +69,66 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     Record<string, CommentThread[]>
   >({});
 
+  useStepperResets(opts);
+  useDocHistoryLoad(opts);
+
+  // Load source + rendered HTML for every historical endpoint needed by the
+  // current selection. A range may need two commits; single selection needs one.
+  const keys = historicalContentKeys(opts);
+  const historicalLoadTargets = useHistoricalLoadTargets(
+    keys,
+    activeStop.commitId,
+  );
+  useHistoricalContentLoad({
+    loadFileSourceAt: opts.loadFileSourceAt,
+    selectedPath,
+    historicalLoadTargets,
+    nativeIterationMode,
+    caches: {
+      historicalErrorByKey,
+      historicalAbsentByKey,
+      historicalHtmlByKey,
+      historicalSourceByKey,
+    },
+    setters: {
+      setHistoricalHtmlByKey,
+      setHistoricalSourceByKey,
+      setHistoricalErrorByKey,
+      setHistoricalAbsentByKey,
+    },
+  });
+
+  // Load the active historical stop PR's threads (read-only).
+  const activeHistoricalPrId =
+    viewingHistorical && !nativeIterationMode ? activeStop.prId : null;
+  useHistoricalThreadsLoad({
+    activeHistoricalPrId,
+    loadThreadsForPr: opts.loadThreadsForPr,
+    selectedPath,
+    historicalThreadsByKey,
+    setHistoricalThreadsByKey,
+  });
+
+  return {
+    historicalContentKey: keys.historicalContentKey,
+    baselineContentKey: keys.baselineContentKey,
+    historicalLoadTargets,
+    historicalHtmlByKey,
+    historicalSourceByKey,
+    historicalErrorByKey,
+    historicalAbsentByKey,
+    historicalThreadsByKey,
+  };
+}
+
+/** Where each stepper selection starts when the document or updates change. */
+function useStepperResets(opts: HistoryLoadersOptions): void {
+  const {
+    selectedPath,
+    nativeUpdateCount,
+    setCompletedHistoryStopIndex,
+    setIterationRange,
+  } = opts;
   // ---- comment-history stepper effects ----
   // Always start a freshly-opened document at its live "Current" head: a
   // Documents-hub history is per document.
@@ -97,7 +145,16 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     updateCountRef.current = nativeUpdateCount;
     setIterationRange(allReviewIterations(nativeUpdateCount));
   }, [nativeUpdateCount, setIterationRange]);
+}
 
+/** Loads the selected document's review history the first time it's opened. */
+function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
+  const {
+    selectedPath,
+    completedPrHistoryEnabled,
+    loadDocHistory,
+    setHistoryByPath,
+  } = opts;
   // Load the selected document's review history the first time it's opened.
   const loadedHistoryPathsRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
@@ -132,15 +189,20 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     selectedPath,
     setHistoryByPath,
   ]);
+}
 
-  // Load source + rendered HTML for every historical endpoint needed by the
-  // current selection. A range may need two commits; single selection needs one.
-  const { historicalContentKey, baselineCommitId, baselineContentKey } =
-    historicalContentKeys(opts);
-  const historicalLoadTargets = React.useMemo(() => {
+type HistoricalContentKeys = ReturnType<typeof historicalContentKeys>;
+
+/** The distinct historical endpoints (cache key + commit) to load. */
+function useHistoricalLoadTargets(
+  keys: HistoricalContentKeys,
+  activeCommitId: string | null | undefined,
+) {
+  const { historicalContentKey, baselineCommitId, baselineContentKey } = keys;
+  return React.useMemo(() => {
     const targets = new Map<string, string>();
-    if (historicalContentKey && activeStop.commitId) {
-      targets.set(historicalContentKey, activeStop.commitId);
+    if (historicalContentKey && activeCommitId) {
+      targets.set(historicalContentKey, activeCommitId);
     }
     if (baselineContentKey && baselineCommitId) {
       targets.set(baselineContentKey, baselineCommitId);
@@ -148,10 +210,57 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     return [...targets].map(([key, commitId]) => ({ key, commitId }));
   }, [
     historicalContentKey,
-    activeStop.commitId,
+    activeCommitId,
     baselineContentKey,
     baselineCommitId,
   ]);
+}
+
+interface HistoricalContentCaches {
+  historicalErrorByKey: Record<string, string>;
+  historicalAbsentByKey: Record<string, true>;
+  historicalHtmlByKey: Record<string, string>;
+  historicalSourceByKey: Record<string, string>;
+}
+
+interface HistoricalContentSetters {
+  setHistoricalHtmlByKey: React.Dispatch<
+    React.SetStateAction<Record<string, string>>
+  >;
+  setHistoricalSourceByKey: React.Dispatch<
+    React.SetStateAction<Record<string, string>>
+  >;
+  setHistoricalErrorByKey: React.Dispatch<
+    React.SetStateAction<Record<string, string>>
+  >;
+  setHistoricalAbsentByKey: React.Dispatch<
+    React.SetStateAction<Record<string, true>>
+  >;
+}
+
+/** Fetches + renders each historical endpoint not yet cached (or failed). */
+function useHistoricalContentLoad(args: {
+  loadFileSourceAt: HistoryLoadersOptions["loadFileSourceAt"];
+  selectedPath: string;
+  historicalLoadTargets: ReadonlyArray<{ key: string; commitId: string }>;
+  nativeIterationMode: boolean;
+  caches: HistoricalContentCaches;
+  setters: HistoricalContentSetters;
+}): void {
+  const { loadFileSourceAt, selectedPath, historicalLoadTargets } = args;
+  const { nativeIterationMode } = args;
+  const {
+    historicalErrorByKey,
+    historicalAbsentByKey,
+    historicalHtmlByKey,
+    historicalSourceByKey,
+  } = args.caches;
+  const {
+    setHistoricalHtmlByKey,
+    setHistoricalSourceByKey,
+    setHistoricalErrorByKey,
+    setHistoricalAbsentByKey,
+  } = args.setters;
   React.useEffect(() => {
     if (!loadFileSourceAt || historicalLoadTargets.length === 0) return;
     let cancelled = false;
@@ -164,46 +273,18 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
       ) {
         continue;
       }
-      void loadFileSourceAt(selectedPath, target.commitId)
-        .then(async (source) => {
-          /* v8 ignore next -- bails if the selection changed mid-load */
-          if (cancelled) return;
-          const html = await renderMarkdown(source);
-          /* v8 ignore next -- bails if the selection changed mid-render */
-          if (cancelled) return;
-          setHistoricalSourceByKey((prev) => ({
-            ...prev,
-            [target.key]: source,
-          }));
-          setHistoricalHtmlByKey((prev) => ({
-            ...prev,
-            [target.key]: html,
-          }));
-        })
-        .catch((err: unknown) => {
-          /* v8 ignore next -- cleanup races ahead of a rejected request */
-          if (cancelled) return;
-          // Comparing PR updates: the file legitimately may not exist at an
-          // endpoint (the PR adds it later, or deleted it already).
-          if (nativeIterationMode && isItemNotFoundError(err)) {
-            setHistoricalAbsentByKey((prev) => ({
-              ...prev,
-              [target.key]: true,
-            }));
-            return;
-          }
-          console.warn("[PrShell] loadFileSourceAt failed:", err);
-          trackUserFacingError({
-            error: err,
-            source: "PrShell.history",
-            operation: "history-content-load",
-            impact: "action-failed",
-          });
-          setHistoricalErrorByKey((prev) => ({
-            ...prev,
-            [target.key]: errorMessage(err),
-          }));
-        });
+      loadHistoricalTarget({
+        load: loadFileSourceAt(selectedPath, target.commitId),
+        key: target.key,
+        isCancelled: () => cancelled,
+        nativeIterationMode,
+        setters: {
+          setHistoricalHtmlByKey,
+          setHistoricalSourceByKey,
+          setHistoricalErrorByKey,
+          setHistoricalAbsentByKey,
+        },
+      });
     }
     return () => {
       cancelled = true;
@@ -217,11 +298,81 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     historicalHtmlByKey,
     historicalSourceByKey,
     nativeIterationMode,
+    setHistoricalHtmlByKey,
+    setHistoricalSourceByKey,
+    setHistoricalErrorByKey,
+    setHistoricalAbsentByKey,
   ]);
+}
 
-  // Load the active historical stop PR's threads (read-only).
-  const activeHistoricalPrId =
-    viewingHistorical && !nativeIterationMode ? activeStop.prId : null;
+/** Settles one historical endpoint's source load into the content caches. */
+function loadHistoricalTarget(args: {
+  load: Promise<string>;
+  key: string;
+  isCancelled: () => boolean;
+  nativeIterationMode: boolean;
+  setters: HistoricalContentSetters;
+}): void {
+  const { load, key, isCancelled, nativeIterationMode, setters } = args;
+  void load
+    .then(async (source) => {
+      /* v8 ignore next -- bails if the selection changed mid-load */
+      if (isCancelled()) return;
+      const html = await renderMarkdown(source);
+      /* v8 ignore next -- bails if the selection changed mid-render */
+      if (isCancelled()) return;
+      setters.setHistoricalSourceByKey((prev) => ({
+        ...prev,
+        [key]: source,
+      }));
+      setters.setHistoricalHtmlByKey((prev) => ({
+        ...prev,
+        [key]: html,
+      }));
+    })
+    .catch((err: unknown) => {
+      /* v8 ignore next -- cleanup races ahead of a rejected request */
+      if (isCancelled()) return;
+      // Comparing PR updates: the file legitimately may not exist at an
+      // endpoint (the PR adds it later, or deleted it already).
+      if (nativeIterationMode && isItemNotFoundError(err)) {
+        setters.setHistoricalAbsentByKey((prev) => ({
+          ...prev,
+          [key]: true,
+        }));
+        return;
+      }
+      console.warn("[PrShell] loadFileSourceAt failed:", err);
+      trackUserFacingError({
+        error: err,
+        source: "PrShell.history",
+        operation: "history-content-load",
+        impact: "action-failed",
+      });
+      setters.setHistoricalErrorByKey((prev) => ({
+        ...prev,
+        [key]: errorMessage(err),
+      }));
+    });
+}
+
+/** Loads the active historical stop PR's threads (read-only), once per key. */
+function useHistoricalThreadsLoad(args: {
+  activeHistoricalPrId: number | null;
+  loadThreadsForPr: HistoryLoadersOptions["loadThreadsForPr"];
+  selectedPath: string;
+  historicalThreadsByKey: Record<string, CommentThread[]>;
+  setHistoricalThreadsByKey: React.Dispatch<
+    React.SetStateAction<Record<string, CommentThread[]>>
+  >;
+}): void {
+  const {
+    activeHistoricalPrId,
+    loadThreadsForPr,
+    selectedPath,
+    historicalThreadsByKey,
+    setHistoricalThreadsByKey,
+  } = args;
   React.useEffect(() => {
     if (activeHistoricalPrId == null || !loadThreadsForPr) return;
     const key = `${selectedPath}\u0000${activeHistoricalPrId}`;
@@ -253,16 +404,6 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
     loadThreadsForPr,
     selectedPath,
     historicalThreadsByKey,
+    setHistoricalThreadsByKey,
   ]);
-
-  return {
-    historicalContentKey,
-    baselineContentKey,
-    historicalLoadTargets,
-    historicalHtmlByKey,
-    historicalSourceByKey,
-    historicalErrorByKey,
-    historicalAbsentByKey,
-    historicalThreadsByKey,
-  };
 }

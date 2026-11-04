@@ -62,6 +62,7 @@ function readMetrics(scroller: HTMLElement): Metrics {
   };
 }
 
+// eslint-disable-next-line max-lines-per-function -- Diff minimap: change markers, thumb drag and scroll sync act on one scroll container. Geometry lives in diffMinimap.helpers.ts.
 export function DiffMinimap({
   scrollRef,
   version,

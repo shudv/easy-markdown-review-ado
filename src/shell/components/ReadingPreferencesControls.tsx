@@ -101,6 +101,7 @@ function PercentSlider({
 }
 
 /** The "Aa" reading-preferences popover plus the text-size slider. */
+// eslint-disable-next-line max-lines-per-function -- Reading preferences popover: font, size, spacing and width controls bound to one preferences object.
 export function ReadingPreferencesControls(props: {
   rootRef: React.RefObject<HTMLDivElement>;
   triggerRef: React.RefObject<HTMLButtonElement>;

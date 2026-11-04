@@ -79,6 +79,7 @@ function IterationStepButton({
   );
 }
 
+// eslint-disable-next-line max-lines-per-function -- PR update picker: update listbox, comparison range and keyboard handling share selection state and one ARIA listbox.
 export function IterationPicker({
   options,
   baseCommit,

@@ -1,11 +1,11 @@
 # OSS mirror sync ledger
 
-## 2026-11-04 Size baseline cleanup, doc fixes, v1 telemetry retirement and coverage-ignore audit sync
+## 2026-11-04 Size cleanup, ESLint complexity gate, coverage-ignore audit, doc fixes and v1 telemetry retirement sync
 
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
-- New product boundary: `ba9bd6e` (source branch `refactor/clear-size-baseline`,
+- New product boundary: `b871f9e` (source branch `refactor/clear-size-baseline`,
   which also carries `14843f8`; not yet merged, record the source merge commit
   here once it lands).
 - OSS release version: unchanged at `1.3.0`.
@@ -21,6 +21,7 @@
 | `2e812c9`     | Docs: the threat model's browser-storage and outbound-request claims corrected and its render pipeline completed; the telemetry doc's status reflects that dual emission is still active, with dated triage and release-watch sections removed; the e2e README's per-spec narrative becomes a table covering all 13 specs; smaller trims in `visual/README.md` and `static/overview.md`. |
 | `4ef8ce8`     | v1 telemetry retired: dual emission to the per-event tables ends, `toTableEvent` sends each event only to `Engagement` or `Diagnostics`, and the telemetry doc drops its migration material.                                                                                                                                                                                             |
 | `ba9bd6e`     | Coverage-ignore audit: 185 `v8 ignore` directives reduced to 12 (the rest replaced by tests or removed with their dead code), the `emr/coverage-ignore-rationale` ESLint rule requiring a reason on every ignore, two "Before" disclosure builders deduplicated, and scratch `coverage-*/` folders gitignored.                                                                           |
+| `b871f9e`     | Complexity and size limits enforced by ESLint as errors, with exceptions as `eslint-disable … -- <reason>` comments next to the code; `reportUnusedDisableDirectives` and `@eslint-community/eslint-plugin-eslint-comments` (`require-description`, `no-unlimited-disable`) added; the custom checker, its JSON baseline and its CI steps removed; a test harness `unbound-method` fix.  |
 
 ### Public-specific adaptations retained
 
@@ -31,11 +32,13 @@
 - The README keeps its public wording; only the complexity paragraph changes.
 - `visual/README.md` keeps its public Playwright-bump note (no Azure pipeline
   to update).
-- No dependency changes.
+- The public lock adds only `@eslint-community/eslint-plugin-eslint-comments`
+  `4.8.1` and its dependencies, with public npm URLs. GitHub CI drops its two
+  complexity-checker steps; lint is the gate.
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `ba9bd6e` and
+Compare the next source product tree against the merged form of `b871f9e` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

@@ -47,6 +47,7 @@ async function loadLocalReaderFont(
   return face.status === "loaded";
 }
 
+// eslint-disable-next-line max-lines-per-function -- Status bar: composes its regions (comparison, comments, reading preferences, refresh) from ReaderStatusBar.parts.
 export function ReaderStatusBar(
   props: ReaderStatusBarProps,
 ): React.ReactElement {

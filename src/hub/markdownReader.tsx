@@ -129,6 +129,7 @@ function initialsOf(name: string): string {
  * Render a single Markdown file (rendered prose + inline comments) for the
  * given target. Owns all ADO data loading; surfaces loading/error states.
  */
+// eslint-disable-next-line max-lines-per-function -- Hub reader container: connects file loading, history and routing to PrShell. Mostly prop wiring with little branching.
 export function MarkdownReader({
   config,
 }: {

@@ -139,6 +139,7 @@ function HeadingNavRow(
 // stays visible whether or not the subpages are shown (or loaded yet).
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line max-lines-per-function -- Folder row in the navigation tree: twist button, label, badges and ARIA treeitem attributes for one row.
 function DirNavRow(
   props: NavTreeItemProps & { node: DirNavNode },
 ): React.ReactElement {
@@ -259,6 +260,7 @@ interface FileNavRowProps extends Omit<NavTreeItemProps, "node"> {
   children: NavNode[];
 }
 
+// eslint-disable-next-line max-lines-per-function -- File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row.
 function FileNavRow(props: FileNavRowProps): React.ReactElement {
   const {
     file,

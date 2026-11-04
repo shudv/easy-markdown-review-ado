@@ -54,6 +54,7 @@ interface MentionState {
   requestId: number;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Comment editor: textarea, @-mention typeahead, keyboard shortcuts and image paste all act on the same text and caret. Splitting would pass the caret state around.
 export function Composer(props: ComposerProps): React.ReactElement {
   const busy = React.useContext(ComposerBusyContext);
   const {

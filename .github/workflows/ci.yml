@@ -36,7 +36,7 @@ jobs:
       - name: Typecheck end-to-end tests
         run: npm run typecheck:e2e
 
-      - name: Lint
+      - name: Lint (includes the complexity and size gate)
         run: npm run lint
 
       - name: Check formatting
@@ -44,12 +44,6 @@ jobs:
 
       - name: Check architecture rules
         run: npm run depcruise
-
-      - name: Check function complexity
-        run: npm run complexity:check
-
-      - name: Test complexity checker
-        run: npm run test:complexity
 
       - name: Check code duplication
         run: npm run duplication:check

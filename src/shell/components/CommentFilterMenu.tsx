@@ -30,6 +30,7 @@ interface CommentFilterMenuProps {
   onOnlyThisFileChange: (next: boolean) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Filter menu: status modes, file-scope toggle and menu keyboard handling share open/focus state and one ARIA menu.
 export function CommentFilterMenu(
   props: CommentFilterMenuProps,
 ): React.ReactElement {

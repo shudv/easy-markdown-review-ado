@@ -129,6 +129,7 @@ interface ArticleViewProps {
   commentBlocker?: (anchor: TextQuoteAnchor) => CommentBlock | null;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree.
 export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const {
     pristineHtml,
@@ -304,7 +305,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
       cleanupDocumentImages?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on threadsKey/draftKey/diffKey rather than the objects, so the costly rewrap runs only when content changes; selection and focus have their own effects
   }, [
     pristineHtml,
     documentPath,

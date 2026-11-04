@@ -14,15 +14,15 @@ import { describeError } from "../errorShape";
 export const consoleSink: TelemetrySink = {
   name: "console",
   init(context: TelemetryContext) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
     console.info("[telemetry] init", context);
   },
   setContext(context: TelemetryContext) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
     console.debug("[telemetry] context", context);
   },
   trackEvent(event: TelemetryEvent, context: TelemetryContext) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
     console.info("[telemetry] event", event.name, {
       properties: event.properties,
       measurements: event.measurements,

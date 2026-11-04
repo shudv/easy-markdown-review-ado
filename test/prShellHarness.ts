@@ -101,18 +101,20 @@ export function deferred<T>(): Deferred<T> {
  * frames run. Returns `flush` (runs the frames queued so far) and `restore`.
  */
 export function manualFrames(): { flush: () => void; restore: () => void } {
-  const original = window.requestAnimationFrame;
-  const originalCancel = window.cancelAnimationFrame;
   let queue = new Map<number, FrameRequestCallback>();
   let next = 1;
-  window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-    const handle = next++;
-    queue.set(handle, cb);
-    return handle;
-  };
-  window.cancelAnimationFrame = (handle: number): void => {
-    queue.delete(handle);
-  };
+  const request = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((cb: FrameRequestCallback): number => {
+      const handle = next++;
+      queue.set(handle, cb);
+      return handle;
+    });
+  const cancel = vi
+    .spyOn(window, "cancelAnimationFrame")
+    .mockImplementation((handle: number): void => {
+      queue.delete(handle);
+    });
   return {
     flush: () => {
       const due = queue;
@@ -122,8 +124,8 @@ export function manualFrames(): { flush: () => void; restore: () => void } {
       });
     },
     restore: () => {
-      window.requestAnimationFrame = original;
-      window.cancelAnimationFrame = originalCancel;
+      request.mockRestore();
+      cancel.mockRestore();
     },
   };
 }

@@ -201,7 +201,7 @@ export function useUserMentionHydration(
   const version = useIdentityVersion(store);
   React.useLayoutEffect(() => {
     hydrateUserMentions(ref.current, store);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [store, version, ...deps]);
 }
 

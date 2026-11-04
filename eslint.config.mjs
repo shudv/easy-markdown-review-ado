@@ -10,13 +10,28 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import noOnlyTests from "eslint-plugin-no-only-tests";
 import sonarjs from "eslint-plugin-sonarjs";
-import complexityBaseline from "./complexity-baseline.json" with { type: "json" };
-import { LINE_COUNT_OPTIONS } from "./scripts/check-complexity.mjs";
+import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
 import emrRules from "./scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
-const complexityLimits = complexityBaseline.limits;
+// Complexity and size limits for production source (src/, excluding stories
+// and type declarations), enforced as lint errors. Line limits count code
+// lines only: blank and comment lines don't count.
+const LIMITS = {
+  cyclomatic: 15,
+  cognitive: 15,
+  linesPerFunction: 80,
+  params: 4,
+  linesPerFile: 500,
+};
+const CODE_LINES_ONLY = { skipBlankLines: true, skipComments: true };
 
 export default tseslint.config(
+  {
+    // An `eslint-disable` the code no longer needs is an error, so documented
+    // exceptions can't outlive the problem they excuse.
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+  },
+
   {
     // Anything generated, vendored, or not source. Config/glue files that are
     // outside the TypeScript projects are excluded so type-aware rules don't
@@ -106,13 +121,10 @@ export default tseslint.config(
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-explicit-any": "error",
 
-      // Complexity budget: editor feedback for the limits in
-      // complexity-baseline.json. The enforced per-function ratchet (which
-      // grandfathers pre-existing functions at their current score) is
-      // `npm run complexity:check`; these stay warnings so pinned functions
-      // don't fail lint.
-      complexity: ["warn", { max: complexityLimits.cyclomatic }],
-      "sonarjs/cognitive-complexity": ["warn", complexityLimits.cognitive],
+      // Complexity: advisory in tests and e2e; production source is gated as
+      // an error in the "Complexity and size gate" block below.
+      complexity: ["warn", { max: LIMITS.cyclomatic }],
+      "sonarjs/cognitive-complexity": ["warn", LIMITS.cognitive],
       "max-depth": ["warn", 5],
 
       // --- Ratchet backlog (warn, not error) ------------------------------
@@ -138,37 +150,50 @@ export default tseslint.config(
   },
 
   {
-    // Coverage ignores are exceptions to the 100% gate: each must say, in the
-    // same comment, why the code can't be reached or tested, e.g.
-    // `/* v8 ignore next -- <reason> */`, and every `start` needs a `stop`.
+    // Every exception says why, next to the code it excuses:
+    //   - coverage: `/* v8 ignore next -- <reason> */`, with balanced
+    //     `start`/`stop` pairs (a local rule);
+    //   - lint: `// eslint-disable-next-line <rule> -- <reason>`, never a bare
+    //     or unlimited disable.
     files: [
       "src/**/*.{ts,tsx}",
       "e2e/**/*.ts",
       "visual/**/*.ts",
       "test/**/*.{ts,tsx}",
     ],
-    plugins: { emr: emrRules },
-    rules: { "emr/coverage-ignore-rationale": "error" },
+    plugins: {
+      emr: emrRules,
+      "@eslint-community/eslint-comments": eslintComments,
+    },
+    rules: {
+      "emr/coverage-ignore-rationale": "error",
+      "@eslint-community/eslint-comments/require-description": "error",
+      "@eslint-community/eslint-comments/no-unlimited-disable": "error",
+      "@eslint-community/eslint-comments/no-duplicate-disable": "error",
+      "@eslint-community/eslint-comments/disable-enable-pair": [
+        "error",
+        { allowWholeFile: true },
+      ],
+    },
   },
 
   {
-    // Size budget: editor feedback for the function/file size limits in
-    // complexity-baseline.json, on the same files the ratchet measures.
-    // `npm run complexity:check` enforces them and grandfathers pinned
-    // functions and files, so these stay warnings. (The gate counts only
-    // real functions' parameters; `max-params` also flags function types.)
+    // Complexity and size gate for production source. A deliberate exception
+    // is documented in place, e.g. for a component that reads better whole:
+    //   // eslint-disable-next-line max-lines-per-function -- <reason>
+    // or, for a long file, `/* eslint-disable max-lines -- <reason> */` at the
+    // top. Unused disables are errors (see linterOptions above).
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/**/*.stories.tsx", "src/**/*.d.ts"],
     rules: {
+      complexity: ["error", { max: LIMITS.cyclomatic }],
+      "sonarjs/cognitive-complexity": ["error", LIMITS.cognitive],
       "max-lines-per-function": [
-        "warn",
-        { max: complexityLimits.lines, ...LINE_COUNT_OPTIONS },
+        "error",
+        { max: LIMITS.linesPerFunction, ...CODE_LINES_ONLY },
       ],
-      "max-params": ["warn", complexityLimits.params],
-      "max-lines": [
-        "warn",
-        { max: complexityLimits.fileLines, ...LINE_COUNT_OPTIONS },
-      ],
+      "max-params": ["error", LIMITS.params],
+      "max-lines": ["error", { max: LIMITS.linesPerFile, ...CODE_LINES_ONLY }],
     },
   },
 

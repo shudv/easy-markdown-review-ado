@@ -3,6 +3,8 @@
 // thread, and draft anchor. All data arrives via props so callers can swap
 // fixtures for live ADO data without changing this component.
 
+/* eslint-disable max-lines -- Holds only the PrShell component, itself a documented exception, plus its imports; everything else lives in prShell/. */
+
 import * as React from "react";
 
 import { IdentityStoreContext } from "../comments/identityStore";
@@ -63,6 +65,7 @@ import { TooNarrowNotice } from "./prShell/TooNarrowNotice";
 
 export type { DocLinkNavigation, RoutedPrInfo } from "./prShell/types";
 
+// eslint-disable-next-line max-lines-per-function -- Reader root: composes the single-purpose hooks in prShell/ and the nav, article and rail panes. It barely branches; the length is the wiring list itself.
 export function PrShell(props: PrShellProps): React.ReactElement {
   const { pr, loadFileSource, initialThreads, currentUser } = props;
 

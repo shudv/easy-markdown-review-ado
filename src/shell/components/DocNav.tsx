@@ -139,6 +139,7 @@ const ACTIVE_MARGIN = 24; // px from top before a heading is "active"
 
 const MAX_TREE_LEVEL = 4; // headings deeper than H4 are not shown in the nav
 
+// eslint-disable-next-line max-lines-per-function -- Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules.
 export function DocNav(props: DocNavProps): React.ReactElement | null {
   const {
     articleWrapRef,

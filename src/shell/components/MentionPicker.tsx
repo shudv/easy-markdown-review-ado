@@ -24,6 +24,7 @@ export interface MentionPickerProps {
   onCancel: () => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Mention typeahead: suggestion list, highlighted row and keyboard selection for one ARIA listbox.
 export function MentionPicker(props: MentionPickerProps): React.ReactElement {
   const {
     kind,
@@ -121,6 +122,7 @@ export function MentionPicker(props: MentionPickerProps): React.ReactElement {
 // Per-kind row renderers
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line max-lines-per-function -- One mention suggestion: avatar, name, secondary text and match highlighting with its ARIA option attributes.
 function SuggestionRow({
   suggestion,
 }: {

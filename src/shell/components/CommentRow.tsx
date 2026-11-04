@@ -65,6 +65,7 @@ interface CommentRowProps {
   ) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Single comment: author line, body or edit mode, reactions and actions menu share edit state. Hooks and parts are already split out.
 export function CommentRow(props: CommentRowProps): React.ReactElement {
   const {
     threadId,

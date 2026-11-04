@@ -108,6 +108,7 @@ function renderRefreshButton(
   );
 }
 
+// eslint-disable-next-line max-lines-per-function -- Documents hub container: wires repo selection, the lazy file tree and the active document into PrShell in one render. Its hooks already live in their own modules; splitting the JSX would scatter one layout.
 export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   const {
     repos,

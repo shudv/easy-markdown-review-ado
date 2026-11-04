@@ -131,6 +131,7 @@ interface RailProps {
   headerActions?: React.ReactNode;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Comment rail layout: positions threads against article anchors and hosts the draft balloon and tray. Layout math is in CommentRail.layout.ts; this is the render that applies it.
 export function CommentRail(props: RailProps): React.ReactElement {
   const {
     currentThreads,

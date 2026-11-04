@@ -20,6 +20,7 @@ import { SvgRepo } from "./hubIcons";
  * more repos as the user scrolls (`onLoadMore`), so it scales to projects with
  * thousands of repositories.
  */
+// eslint-disable-next-line max-lines-per-function -- Repository dropdown: search box, listbox markup and keyboard navigation that share focus state. Kept whole so the ARIA listbox reads in one place.
 export function RepoPicker({
   repos,
   selectedId,
@@ -88,8 +89,7 @@ export function RepoPicker({
       repos.findIndex((r) => r.id === selectedId),
     );
     optionRefs.current[idx]?.focus();
-    // Only on open — re-focusing on every repos change would fight the user.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus only on open; re-focusing on every repos change would fight the user
   }, [open]);
 
   // Debounce the keyword filter: re-query 250ms after the last keystroke so a
@@ -103,8 +103,7 @@ export function RepoPicker({
       onFilterRef.current?.(filterText);
     }, 250);
     return () => window.clearTimeout(handle);
-    // `filter` intentionally omitted: we debounce off local input only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `filter` is omitted on purpose: the debounce follows local input only
   }, [filterText, paginated]);
 
   // Match native ADO: clear the keyword filter whenever the picker closes, so
@@ -115,8 +114,7 @@ export function RepoPicker({
     if (open) return;
     if (filterText !== "") setFilterText("");
     if (paginated && filter !== "") onFilterRef.current?.("");
-    // Only react to open/close transitions.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to open/close transitions, not to filter or paging changes
   }, [open]);
 
   // Dismiss on outside pointer, scroll (outside the menu) or resize while open.

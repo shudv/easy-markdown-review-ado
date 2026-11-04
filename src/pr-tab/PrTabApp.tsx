@@ -101,6 +101,7 @@ import {
 // thread fetch. Module-scoped so its identity never changes across renders.
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
 
+// eslint-disable-next-line max-lines-per-function -- PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into PrShell. Logic is extracted to tested modules; the rest is host wiring.
 export function PrTabApp(): React.ReactElement {
   const [ctx, setCtx] = React.useState<PrContext | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -147,7 +148,7 @@ export function PrTabApp(): React.ReactElement {
       setError(null);
       setRefreshing(null);
       const log = (step: string, extra?: unknown) => {
-        // eslint-disable-next-line no-console
+        // eslint-disable-next-line no-console -- boot step trace in the host DevTools console, for diagnosing PR tab boot problems in a real org
         console.log(`[PrTabApp] ${step}`, extra ?? "");
       };
       try {

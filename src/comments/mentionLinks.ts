@@ -128,6 +128,6 @@ export function useMentionLinkHydration(
   const ctx = React.useContext(MentionLinkContext);
   React.useLayoutEffect(() => {
     hydrateMentionLinks(ref.current, ctx);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [ctx, ...deps]);
 }

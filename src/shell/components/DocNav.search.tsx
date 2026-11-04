@@ -54,6 +54,7 @@ interface SearchResultsListProps {
   onSelectFile: (path: string) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list.
 export function SearchResultsList(
   props: SearchResultsListProps,
 ): React.ReactElement {

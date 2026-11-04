@@ -69,6 +69,7 @@ interface BalloonProps {
   onCancelReply?: (threadId: string) => void;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
 export function Balloon(props: BalloonProps): React.ReactElement {
   const {
     thread,

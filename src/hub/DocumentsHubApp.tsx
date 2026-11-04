@@ -5,6 +5,8 @@
 // <DocumentsApp/>. Repos with no active PR get no commentApi (writes fall
 // back to LocalOnly behind a banner).
 
+/* eslint-disable max-lines -- Holds only the DocumentsHubApp component, itself a documented exception, plus its imports; its logic lives in tested hub modules. */
+
 import * as React from "react";
 import {
   GitVersionOptions,
@@ -69,6 +71,7 @@ import {
   withoutKeyPrefix,
 } from "./hubRepoState";
 
+// eslint-disable-next-line max-lines-per-function -- Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one PrShell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host.
 export function DocumentsHubApp(): React.ReactElement {
   const [state, setState] = React.useState<DiscoveryState | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -135,7 +138,7 @@ export function DocumentsHubApp(): React.ReactElement {
     void (async () => {
       try {
         const log = (step: string) => {
-          // eslint-disable-next-line no-console
+          // eslint-disable-next-line no-console -- boot step trace in the host DevTools console, for diagnosing hub boot problems in a real org
           console.log(`[DocumentsHubApp] ${step}`);
         };
 

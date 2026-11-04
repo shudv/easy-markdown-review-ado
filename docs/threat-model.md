@@ -130,7 +130,7 @@ exceptions) — with the specific event carried in a `name` column. That `name` 
 always a **fixed value from the event catalog** ([events.ts](../src/telemetry/events.ts)),
 never free text, so the grouping changes only how signals are _stored_, not what
 is collected. See [docs/telemetry-tables.md](./telemetry-tables.md) for the full
-model and the legacy → thematic migration. The deny-by-default sanitizer below
+model. The deny-by-default sanitizer below
 still validates every payload regardless of table.
 
 **What is never collected**

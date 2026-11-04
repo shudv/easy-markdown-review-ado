@@ -1,11 +1,11 @@
 # OSS mirror sync ledger
 
-## 2026-11-04 Size baseline cleanup and doc fixes sync
+## 2026-11-04 Size baseline cleanup, doc fixes and v1 telemetry retirement sync
 
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
-- New product boundary: `2e812c9` (source branch `refactor/clear-size-baseline`,
+- New product boundary: `4ef8ce8` (source branch `refactor/clear-size-baseline`,
   which also carries `14843f8`; not yet merged, record the source merge commit
   here once it lands).
 - OSS release version: unchanged at `1.3.0`.
@@ -19,6 +19,7 @@
 | `39cf78e`     | The 16 functions with more than 4 parameters take option objects instead.                                                                                                                                                                                                                                                                                                                |
 | `f844c87`     | Hooks, plain functions, effect callbacks and files brought within the size limits (`diffDecorations.ts` split into `src/markdown/diffDecorations/`, `DocNav`, `ReaderStatusBar`, `ArticleView`, hub, PR tab, ADO data and PrShell hook splits, fixture modules), new unit tests, and 26 documented exceptions: 24 React component bodies plus `PrShell.tsx` and `DocumentsHubApp.tsx`.   |
 | `2e812c9`     | Docs: the threat model's browser-storage and outbound-request claims corrected and its render pipeline completed; the telemetry doc's status reflects that dual emission is still active, with dated triage and release-watch sections removed; the e2e README's per-spec narrative becomes a table covering all 13 specs; smaller trims in `visual/README.md` and `static/overview.md`. |
+| `4ef8ce8`     | v1 telemetry retired: dual emission to the per-event tables ends, `toTableEvent` sends each event only to `Engagement` or `Diagnostics`, and the telemetry doc drops its migration material.                                                                                                                                                                                             |
 
 ### Public-specific adaptations retained
 
@@ -33,7 +34,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `2e812c9` and
+Compare the next source product tree against the merged form of `4ef8ce8` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

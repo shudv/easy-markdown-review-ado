@@ -1,8 +1,8 @@
 # Telemetry tables (thematic model)
 
-Status: **dual emission active** since **2026-08-03**. The cutover planned for
-~2026-09-03 has not happened yet: events that predate the migration are still
-also sent to their legacy per-event tables (see "Migration" below).
+Every event goes to one of two thematic tables. The original per-event tables
+(`comment_created`, `app_exception`, …) were retired on 2026-11-04 and receive
+no new rows.
 
 Code: [src/telemetry/eventTables.ts](../src/telemetry/eventTables.ts) (routing),
 [src/telemetry/sinks/oneDsSink.ts](../src/telemetry/sinks/oneDsSink.ts) (emission),
@@ -44,18 +44,15 @@ table; `name` inside the payload is the specific event.
 `Engagement` (deliberate user actions):
 
 - `comment.created`, `comment.replied`, `comment.edited`, `comment.deleted`
-- `comment.reacted` (`active`, `kind`) · `comment.filtered` (`mode`, `scoped`) ᵀ
-- `comment.navigated` ᵀ · `comment.refreshed` ᵀ
-- `thread.resolved`, `thread.reopened`, `thread.deleted`, `thread.markedPending` ᵀ, `thread.closed` ᵀ
+- `comment.reacted` (`active`, `kind`) · `comment.filtered` (`mode`, `scoped`)
+- `comment.navigated` · `comment.refreshed`
+- `thread.resolved`, `thread.reopened`, `thread.deleted`, `thread.markedPending`, `thread.closed`
 - `file.opened`
 - `repo.switched`
 - `search.performed`
-- `diff.toggled` (`visible`) ᵀ
-- `mermaid.sourceViewed` (`changed`) ᵀ · `mermaid.sourceCopied` ᵀ
-- `link.copied` (`target`: `comment` | `heading`) ᵀ · `link.opened` (`target`, `found`) ᵀ
-
-ᵀ = instrumented **after** the migration, so **thematic-only** (never dual-emitted
-— no legacy per-event table is created for it; see the migration note).
+- `diff.toggled` (`visible`)
+- `mermaid.sourceViewed` (`changed`) · `mermaid.sourceCopied`
+- `link.copied` (`target`: `comment` | `heading`) · `link.opened` (`target`, `found`)
 
 `Diagnostics` (app/system observations, **not** user-triggered):
 
@@ -64,12 +61,12 @@ table; `name` inside the payload is the specific event.
   `bootHadHiddenInterval`; `afterAutoReload` when this load is the automatic
   host reload triggered to escape the token dead window)
 - `auth.failure` — reliability; ADO call returned 401/403 (`status`, `api`, header booleans)
-- `auth.sessionRefresh` ᵀ — one token dead-window spell, `phase` `start`/`end`
+- `auth.sessionRefresh` — one token dead-window spell, `phase` `start`/`end`
   (`trigger` `boot`|`poll`|`write`, `grantState`, end `outcome`
   `remint`|`success`|`reload-auto`|`reload-user`|`left`; seconds
   `secsUntilExpAtStart`, `secsSinceAdoExpAtStart`, `durationSec`,
   `secsBeforeExpAtEnd`, `heldWrites`). Timing only, never the token.
-- `diagram.renderIssue` ᵀ — content health: an author's Mermaid diagram didn't
+- `diagram.renderIssue` — content health: an author's Mermaid diagram didn't
   parse as written (`outcome` `repaired` = rendered after an automatic fix such
   as escaping `;` in sequence-diagram text, `syntax-error` = left as readable
   source). Once per diagram per page load; never counted in `app.exception`.
@@ -243,37 +240,6 @@ view). If that changes, splitting is a **one-line change**: remove
 to `TELEMETRY_TABLE`, and give it a `tableFor` branch. No call-site or emission
 changes.
 
-## Migration: dual emission
-
-Dual emission is an **internal detail of the telemetry layer** — there is no
-"mode" flag, and the instrumentation (call sites, `events.*` builders, the
-facade) is completely oblivious to it. All of it lives in one function,
-`toTableEvents` in [eventTables.ts](../src/telemetry/eventTables.ts), which
-expands each logical event into the concrete emissions:
-
-- **legacy** → `{ name: eventName, data }` (the event name is the table)
-- **thematic** → `{ name: tableFor(eventName), data + name }` (theme is the table)
-
-Only events that **pre-date** the migration dual-emit — they already own a legacy
-per-event table and are listed in the `LEGACY_EVENTS` set. Any event instrumented
-_after_ the migration (marked ᵀ above) is **thematic-only**, so instrumenting a
-new user action never spins up a fresh legacy table for it. During the window the
-pre-migration events are sent twice, which roughly **doubles their volume** —
-expected — and lets existing per-event dashboards keep working while the thematic
-tables are validated.
-
-### Cutover checklist (pending; planned for ~2026-09-03)
-
-1. Confirm in Kusto that `Engagement` and `Diagnostics` are populating, the
-   `name` column is present and correct, and per-event row counts match the
-   corresponding legacy tables.
-2. Point any dashboards/alerts at the thematic tables.
-3. **Delete the LEGACY branch** in `toTableEvents` and the `LEGACY_EVENTS` set
-   (plus this migration section). That is the only code change — nothing outside
-   `eventTables.ts` is touched, because no call site ever knew dual emission was
-   happening.
-4. Optionally shorten retention on / retire the legacy per-event tables.
-
 ## Querying
 
 User actions by day:
@@ -306,27 +272,16 @@ diagnostics
 
 ```kusto
 // Adjusted Cloud Experience: loaded sessions without any user-facing error.
-// During dual emission, union legacy + thematic and dedupe by session id.
 let WindowStart = ago(30d);
-let Loaded = union
-    (app_loaded
-    | where EventInfo_Time between (WindowStart .. now())
-    | where environment == "production"
-    | project Day=bin(EventInfo_Time, 1d), sessionId),
-    (diagnostics
-    | where EventInfo_Time between (WindowStart .. now())
-    | where environment == "production" and name == "app.loaded"
-    | project Day=bin(EventInfo_Time, 1d), sessionId)
+let Prod = diagnostics
+| where EventInfo_Time between (WindowStart .. now())
+| where environment == "production";
+let Loaded = Prod
+| where name == "app.loaded"
+| project Day=bin(EventInfo_Time, 1d), sessionId
 | distinct Day, sessionId;
-let Errors = union
-    (app_exception
-    | where EventInfo_Time between (WindowStart .. now())
-    | where environment == "production"
-    | project sessionId),
-    (diagnostics
-    | where EventInfo_Time between (WindowStart .. now())
-    | where environment == "production" and name == "app.exception"
-    | project sessionId)
+let Errors = Prod
+| where name == "app.exception"
 | distinct sessionId;
 Loaded
 | extend HasError = sessionId in (Errors)
@@ -338,6 +293,3 @@ Loaded
 | project Day, ACE, TotalSessions, ErrorSessions
 | order by Day asc
 ```
-
-During the dual window, legacy tables (`comment_created`, `app_exception`, …)
-remain queryable unchanged.

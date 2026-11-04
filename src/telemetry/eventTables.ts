@@ -12,8 +12,7 @@
 //   Engagement  — deliberate user actions (comments, threads, file opens, search)
 //   Diagnostics — app/system observations (boot timing, auth failures, exceptions)
 //
-// See docs/telemetry-tables.md for the full design, KQL examples, and the
-// migration timeline.
+// See docs/telemetry-tables.md for the full design and KQL examples.
 //
 // This logic lives here (a pure, unit-tested module) rather than inline in the
 // coverage-excluded sink so the routing contract is actually covered by tests.
@@ -56,31 +55,6 @@ export function tableFor(eventName: string): TelemetryTable {
     : TELEMETRY_TABLE.Engagement;
 }
 
-/**
- * Events that pre-date the thematic migration and therefore already own a
- * legacy per-event table. ONLY these dual-emit; any event added *after* the
- * migration is thematic-only, so instrumenting a new action never spins up a
- * fresh legacy table for it.
- *
- * When dual emission is retired, delete this set together with the legacy
- * branch in {@link toTableEvents}.
- */
-const LEGACY_EVENTS: ReadonlySet<string> = new Set([
-  EVENT.AppLoaded,
-  EVENT.CommentCreated,
-  EVENT.CommentReplied,
-  EVENT.CommentEdited,
-  EVENT.CommentDeleted,
-  EVENT.ThreadResolved,
-  EVENT.ThreadReopened,
-  EVENT.ThreadDeleted,
-  EVENT.FileOpened,
-  EVENT.RepoSwitched,
-  EVENT.SearchPerformed,
-  EVENT.AuthFailure,
-  EVENT.AppException,
-]);
-
 /** A single event ready to hand to `core.track`: envelope name + property bag. */
 export interface OneDsTableEvent {
   /** 1DS envelope event name — this is what becomes the destination table. */
@@ -90,39 +64,15 @@ export interface OneDsTableEvent {
 }
 
 /**
- * Expand one logical event into the concrete 1DS emissions. The caller (the
- * sink) hands over a sanitised, context-merged payload and stays oblivious to
- * how many tables it lands in — this module owns the entire routing decision.
- *
- * DUAL-EMISSION MIGRATION (window opened 2026-08-03; retire ~2026-09-03)
- * Events that pre-date the migration are emitted TWICE — once to their legacy
- * per-event table and once to the thematic table — so existing per-event
- * dashboards keep working while the thematic tables are validated. Events added
- * *after* the migration ({@link LEGACY_EVENTS} excludes them) are thematic-only,
- * so we never create a new legacy table for a newly instrumented action.
- * Nothing outside this module — no call site, event builder, facade, or sink
- * logic — is aware of any of this.
- *
- * To go thematic-only for everything, delete the LEGACY branch below and the
- * {@link LEGACY_EVENTS} set. That is the *only* change required.
+ * Route one logical event to its thematic table. The caller (the sink) hands
+ * over a sanitised, context-merged payload; this module owns the routing.
  *
  * The `name` discriminator is spread LAST so a stray property or context field
  * of the same name can never clobber the authoritative event name.
  */
-export function toTableEvents(
+export function toTableEvent(
   eventName: string,
   data: Readonly<Record<string, unknown>>,
-): OneDsTableEvent[] {
-  const emissions: OneDsTableEvent[] = [];
-  // ── LEGACY per-event table — only for events that already have one. ──
-  // Delete this block (and LEGACY_EVENTS) to retire dual emission.
-  if (LEGACY_EVENTS.has(eventName)) {
-    emissions.push({ name: eventName, data: { ...data } });
-  }
-  // ── THEMATIC table (the end state) — every event. ──
-  emissions.push({
-    name: tableFor(eventName),
-    data: { ...data, name: eventName },
-  });
-  return emissions;
+): OneDsTableEvent {
+  return { name: tableFor(eventName), data: { ...data, name: eventName } };
 }

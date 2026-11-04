@@ -5,7 +5,7 @@
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
-- New product boundary: `fc2e2aa` (source branch `refactor/clear-size-baseline`,
+- New product boundary: `5e3935e` (source branch `refactor/clear-size-baseline`,
   which also carries `14843f8`; not yet merged, record the source merge commit
   here once it lands).
 - OSS release version: unchanged at `1.3.0`.
@@ -24,6 +24,7 @@
 | `b871f9e`     | Complexity and size limits enforced by ESLint as errors, with exceptions as `eslint-disable … -- <reason>` comments next to the code; `reportUnusedDisableDirectives` and `@eslint-community/eslint-plugin-eslint-comments` (`require-description`, `no-unlimited-disable`) added; the custom checker, its JSON baseline and its CI steps removed; a test harness `unbound-method` fix.  |
 | `df98345`     | All 37 ESLint warnings fixed and their rules flipped to errors: `DocumentsApp` and `DocNav` no longer call hooks after an early return (`DocumentsApp` splits into a `DocumentsAppBody`), `AlmSearchError` is an `Error` subclass, ADO enum comparisons use typed constants, and smaller promise, escape and assignment fixes. Complexity stays advisory in tests and e2e.               |
 | `fc2e2aa`     | `PrShell` renamed to `Shell` (it backs both the PR tab and the Documents hub): `src/shell/Shell.tsx`, `src/shell/shell/` (was `src/shell/prShell/`), `ShellProps`, `shellHelpers`, `Components/Shell` stories, `test/shell*` tests, `[Shell]` console prefixes and `Shell.*` telemetry error sources. Earlier rows keep the old name.                                                    |
+| `5e3935e`     | A selection spanning an open "Before" panel no longer offers a comment (its old text would become the anchor); collapsed panels still allow commenting across the live text around them.                                                                                                                                                                                                 |
 
 ### Public-specific adaptations retained
 

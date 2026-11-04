@@ -1877,4 +1877,30 @@ describe("selectionTouchesDeletedDiff", () => {
     // Reverse (backwards) selection: focus precedes anchor.
     expect(selectionTouchesDeletedDiff(afterText, beforeText)).toBe(true);
   });
+
+  /** `[pBefore, "Before" panel, pAfter]`, with the panel open or collapsed. */
+  function setupBeforePanel(open: boolean) {
+    const root = document.createElement("div");
+    root.innerHTML =
+      "<p>before text</p>" +
+      '<div class="emr-diff-before-panel"><p>old wording</p></div>' +
+      "<p>after text</p>";
+    root.querySelector<HTMLElement>(".emr-diff-before-panel")!.hidden = !open;
+    const [first, , last] = [...root.querySelectorAll("p")];
+    return { beforeText: first!.firstChild, afterText: last!.firstChild };
+  }
+
+  it("is true when the selection spans an open Before panel", () => {
+    const { beforeText, afterText } = setupBeforePanel(true);
+    // The open panel's reference text would be swept into the selection.
+    expect(selectionTouchesDeletedDiff(beforeText, afterText)).toBe(true);
+    expect(selectionTouchesDeletedDiff(afterText, beforeText)).toBe(true);
+  });
+
+  it("is false when the selection spans a collapsed Before panel", () => {
+    const { beforeText, afterText } = setupBeforePanel(false);
+    // Collapsed panels sit beside every changed block but select no text, so
+    // they must not withhold commenting on the live text around them.
+    expect(selectionTouchesDeletedDiff(beforeText, afterText)).toBe(false);
+  });
 });

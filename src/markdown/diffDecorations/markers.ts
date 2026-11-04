@@ -381,9 +381,11 @@ export function selectionTouchesDeletedDiff(
   // marker when one lies between the endpoints in document order — i.e. exactly
   // one endpoint precedes it. Scope the scan to the nodes' shared tree so it
   // works whether the article is live in the document or a detached fixture.
+  // "Before" panels count only while open: a collapsed (`hidden`) panel sits
+  // beside every changed block but contributes no selected text.
   const scope = anchorNode.getRootNode() as ParentNode;
   for (const marker of scope.querySelectorAll(
-    `.${DIFF_DELETED_MARKER_CLASS}, .${DIFF_SOURCE_ONLY_CLASS}`,
+    `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel:not([hidden]), .${DIFF_SOURCE_ONLY_CLASS}`,
   )) {
     const markerAfterAnchor =
       (anchorNode.compareDocumentPosition(marker) &

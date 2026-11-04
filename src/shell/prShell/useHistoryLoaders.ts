@@ -164,7 +164,6 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
     let cancelled = false;
     loadDocHistory(selectedPath)
       .then((refs) => {
-        /* v8 ignore next -- cleanup races ahead of a slow resolve */
         if (cancelled) return;
         setHistoryByPath((prev) => ({ ...prev, [selectedPath]: refs }));
       })
@@ -316,10 +315,8 @@ function loadHistoricalTarget(args: {
   const { load, key, isCancelled, nativeIterationMode, setters } = args;
   void load
     .then(async (source) => {
-      /* v8 ignore next -- bails if the selection changed mid-load */
       if (isCancelled()) return;
       const html = await renderMarkdown(source);
-      /* v8 ignore next -- bails if the selection changed mid-render */
       if (isCancelled()) return;
       setters.setHistoricalSourceByKey((prev) => ({
         ...prev,
@@ -331,7 +328,6 @@ function loadHistoricalTarget(args: {
       }));
     })
     .catch((err: unknown) => {
-      /* v8 ignore next -- cleanup races ahead of a rejected request */
       if (isCancelled()) return;
       // Comparing PR updates: the file legitimately may not exist at an
       // endpoint (the PR adds it later, or deleted it already).
@@ -380,7 +376,6 @@ function useHistoricalThreadsLoad(args: {
     let cancelled = false;
     loadThreadsForPr(activeHistoricalPrId, selectedPath)
       .then((threads) => {
-        /* v8 ignore next -- cleanup races ahead of a slow resolve */
         if (cancelled) return;
         setHistoricalThreadsByKey((prev) => ({
           ...prev,

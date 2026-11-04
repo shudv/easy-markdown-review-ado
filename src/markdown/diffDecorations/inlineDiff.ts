@@ -42,10 +42,8 @@ export function diffInlineContent(
   target: HTMLElement,
   options: InlineContentDiffOptions = {},
 ): InlineContentDiffResult {
-  /* v8 ignore next 2 -- rendered elements always carry textContent */
-  const originalText = original.textContent ?? "";
-  /* v8 ignore next -- rendered elements always carry textContent */
-  const currentText = target.textContent ?? "";
+  const originalText = original.textContent;
+  const currentText = target.textContent;
   const linkChanges = findLinkTargetChanges(
     readLinkTargets(original),
     readLinkTargets(target),
@@ -62,7 +60,6 @@ export function diffInlineContent(
   if (originalText === currentText) {
     const formattingChanged = applyFormattingDiff(
       target,
-      originalText,
       formattingRanges(original),
     );
     applyMetadata();
@@ -96,7 +93,6 @@ export function diffInlineContent(
   wrapFormattingRanges(target, swaps.ranges);
   const wordDiff = applyInlineWordDiff(target, swaps.operations);
   applyMetadata();
-  /* v8 ignore next -- operations were produced from target's own rendered text */
   const inlineApplied =
     wordDiff != null && wordDiff.added + wordDiff.removed > 0;
   return {
@@ -137,7 +133,6 @@ export function tryInlineWordDiff(
   const semanticOriginal = scratch.querySelector<HTMLElement>(
     "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt",
   );
-  /* v8 ignore next -- Markdown rendering always emits at least one element */
   const originalEl =
     (block.tagName === "PRE" ? matchingOriginal : semanticOriginal) ??
     matchingOriginal ??
@@ -147,10 +142,8 @@ export function tryInlineWordDiff(
   // whitespace between the `<li>` and its `<p>` never becomes stray word marks.
   const originalProse = inlineProseTarget(originalEl);
   const target = inlineProseTarget(block);
-  /* v8 ignore next -- element/block textContent is never null */
-  const originalPlain = originalProse.textContent ?? "";
-  /* v8 ignore next -- element/block textContent is never null */
-  const modifiedPlain = target.textContent ?? "";
+  const originalPlain = originalProse.textContent;
+  const modifiedPlain = target.textContent;
   const contentDiff = diffInlineContent(originalProse, target, {
     minimumUnchangedRatio: INLINE_MIN_UNCHANGED_RATIO,
   });
@@ -169,7 +162,7 @@ export function tryInlineWordDiff(
   }
   // A reworded item can also have been ticked off or re-marked; the word diff
   // alone would hide that.
-  /* v8 ignore next -- differing text always yields at least one word mark */
+  /* v8 ignore next -- differing, not-too-divergent text always yields a word mark or (in code) an explained whitespace swap, since diffWords ops rebuild the target's own text */
   if (!contentDiff.handled) return false;
   applyLeafStructureDiff(originalEl, block);
   return true;

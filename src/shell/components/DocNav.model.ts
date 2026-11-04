@@ -103,11 +103,9 @@ export function changeTypeGlyph(t: ChangeType): string {
 
 /** Tiny CSS.escape polyfill so we don't pull a dep. */
 export function cssEscape(s: string): string {
-  /* v8 ignore next -- the native-CSS.escape fallback path is dead in all supported browsers */
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(s);
   }
-  /* v8 ignore next -- CSS.escape is available in all supported browsers */
   return s.replace(/([^\w-])/g, "\\$1");
 }
 

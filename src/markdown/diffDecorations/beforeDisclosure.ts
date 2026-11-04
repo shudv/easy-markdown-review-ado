@@ -6,7 +6,7 @@ import { renderOriginalStandalone } from "./rendering";
 import {
   type ChangeRange,
   DIFF_TABLE_COMPARISON_CLASS,
-  numAttr,
+  type SourceSpan,
 } from "./shared";
 
 export function attachTableBeforeDisclosure(
@@ -14,7 +14,7 @@ export function attachTableBeforeDisclosure(
   range: ChangeRange,
   renderInline: (md: string) => string,
 ): void {
-  /* v8 ignore next -- caller invokes disclosure only for ranges carrying original text */
+  /* v8 ignore next -- decorateModifiedTableRow calls this only after reading originalRow from range.originalText; the check narrows the optional field */
   if (range.originalText == null) return;
   row.dataset.diffAmberMode = "comparison";
   const table = row.closest<HTMLTableElement>("table");
@@ -38,22 +38,10 @@ export function attachTableBeforeDisclosure(
   const control = document.createElement("div");
   control.className = "emr-diff-before-control";
   control.dataset.diffBeforeKey = key;
-  const trigger = document.createElement("button");
-  trigger.type = "button";
-  trigger.className = "emr-diff-before-trigger";
-  trigger.textContent = "Before";
-  trigger.setAttribute("aria-label", "Show previous version");
-  trigger.setAttribute("aria-expanded", "false");
-  const panel = document.createElement("div");
-  panel.className = "emr-diff-before-panel markdown-body";
-  panel.id = `emr-diff-before-table-${range.start}-${range.end}`;
-  panel.hidden = true;
-  trigger.setAttribute("aria-controls", panel.id);
-  const label = document.createElement("span");
-  label.className = "emr-diff-before-label";
-  label.textContent = "Before";
-  const content = document.createElement("div");
-  content.className = "emr-diff-before-content";
+  const { trigger, panel, content } = createBeforeToggle(
+    `emr-diff-before-table-${range.start}-${range.end}`,
+    "emr-diff-before-panel markdown-body",
+  );
   content.appendChild(
     buildBeforeTableContent(
       range.originalText,
@@ -61,6 +49,39 @@ export function attachTableBeforeDisclosure(
       row.ownerDocument,
     ),
   );
+  control.appendChild(trigger);
+  parent.insertBefore(control, table);
+  parent.insertBefore(panel, table);
+}
+
+/**
+ * The "Before" trigger and its hidden panel (label + empty content), wired so
+ * the trigger shows and hides the panel. Callers fill `content` and place both.
+ */
+function createBeforeToggle(
+  panelId: string,
+  panelClassName: string,
+): {
+  trigger: HTMLButtonElement;
+  panel: HTMLDivElement;
+  content: HTMLDivElement;
+} {
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "emr-diff-before-trigger";
+  trigger.textContent = "Before";
+  trigger.setAttribute("aria-label", "Show previous version");
+  trigger.setAttribute("aria-expanded", "false");
+  const panel = document.createElement("div");
+  panel.className = panelClassName;
+  panel.id = panelId;
+  panel.hidden = true;
+  trigger.setAttribute("aria-controls", panel.id);
+  const label = document.createElement("span");
+  label.className = "emr-diff-before-label";
+  label.textContent = "Before";
+  const content = document.createElement("div");
+  content.className = "emr-diff-before-content";
   panel.append(label, content);
   trigger.addEventListener("click", () => {
     const open = panel.hidden === true;
@@ -72,9 +93,7 @@ export function attachTableBeforeDisclosure(
     );
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
   });
-  control.appendChild(trigger);
-  parent.insertBefore(control, table);
-  parent.insertBefore(panel, table);
+  return { trigger, panel, content };
 }
 
 function buildBeforeTableContent(
@@ -122,33 +141,17 @@ function buildBeforeTableContent(
 
 export function attachBlockBeforeDisclosure(
   block: HTMLElement,
+  span: SourceSpan,
   originalMarkdown: string,
   renderInline: (md: string) => string,
 ): void {
   block.dataset.diffAmberMode = "comparison";
   const control = document.createElement("div");
   control.className = "emr-diff-before-control emr-diff-before-control--block";
-  const trigger = document.createElement("button");
-  trigger.type = "button";
-  trigger.className = "emr-diff-before-trigger";
-  trigger.textContent = "Before";
-  trigger.setAttribute("aria-label", "Show previous version");
-  trigger.setAttribute("aria-expanded", "false");
-  /* v8 ignore next 2 -- callers only pass source-position-stamped rendered blocks */
-  const blockStart = numAttr(block, "data-source-line") ?? 0;
-  /* v8 ignore next -- source-position-stamped rendered blocks always carry an end line */
-  const blockEnd = numAttr(block, "data-source-end-line") ?? blockStart;
-  const panel = document.createElement("div");
-  panel.className =
-    "emr-diff-before-panel emr-diff-before-panel--block markdown-body";
-  panel.id = `emr-diff-before-${block.tagName.toLowerCase()}-${blockStart}-${blockEnd}`;
-  panel.hidden = true;
-  trigger.setAttribute("aria-controls", panel.id);
-  const label = document.createElement("span");
-  label.className = "emr-diff-before-label";
-  label.textContent = "Before";
-  const content = document.createElement("div");
-  content.className = "emr-diff-before-content";
+  const { trigger, panel, content } = createBeforeToggle(
+    `emr-diff-before-${block.tagName.toLowerCase()}-${span.start}-${span.end}`,
+    "emr-diff-before-panel emr-diff-before-panel--block markdown-body",
+  );
   const scratch = renderOriginalStandalone(
     block,
     originalMarkdown,
@@ -166,17 +169,6 @@ export function attachBlockBeforeDisclosure(
   } else {
     while (scratch.firstChild) content.appendChild(scratch.firstChild);
   }
-  panel.append(label, content);
-  trigger.addEventListener("click", () => {
-    const open = panel.hidden === true;
-    panel.hidden = !open;
-    trigger.textContent = open ? "Hide" : "Before";
-    trigger.setAttribute(
-      "aria-label",
-      open ? "Hide previous version" : "Show previous version",
-    );
-    trigger.setAttribute("aria-expanded", open ? "true" : "false");
-  });
   control.appendChild(trigger);
 
   if (block.tagName === "LI") {

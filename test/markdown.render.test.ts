@@ -610,6 +610,12 @@ describe("renderMarkdown — collapsible sections & slugs", () => {
 });
 
 describe("renderMarkdown — mention pills", () => {
+  it("leaves a raw-HTML anchor without an href untouched", async () => {
+    const html = await renderMarkdown('<a id="top">Top</a>\n');
+    expect(html).toMatch(/<a\b[^>]*id="top"[^>]*>Top<\/a>/);
+    expect(html).not.toContain("emr-mention");
+  });
+
   it("renders a user mention as a display-only span with no href", async () => {
     const html = await renderMarkdown("Hi [@Ann](mention://user/ann)\n");
     expect(html).toMatch(
@@ -747,6 +753,14 @@ describe("renderMarkdown — YAML frontmatter", () => {
     expect(html).toContain('class="emr-frontmatter"');
     expect(html).not.toContain("data-source-line");
     expect(html).not.toContain("data-source-end-line");
+  });
+
+  it("defaults a row's end line to its start line when only startLine is set", () => {
+    const html = renderFrontmatterHtml([
+      { key: "title", values: ["Doc"], startLine: 3 },
+    ]);
+    expect(html).toMatch(/data-source-line="3"/);
+    expect(html).toMatch(/data-source-end-line="3"/);
   });
 
   it("renders inline and block YAML lists as comma-separated values", async () => {

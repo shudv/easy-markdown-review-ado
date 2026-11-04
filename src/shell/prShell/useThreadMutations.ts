@@ -38,7 +38,6 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
         const ok = await persistWith("Resolve thread", () =>
           commentApi.setStatus(tid, "resolved"),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({ type: "SET_STATUS", threadId: tid, status: "resolved" });
         track(events.threadResolved());
@@ -53,7 +52,6 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
         const ok = await persistWith("Reopen thread", () =>
           commentApi.setStatus(tid, "active"),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({ type: "SET_STATUS", threadId: tid, status: "active" });
         track(events.threadReopened());
@@ -70,7 +68,6 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
         const ok = await persistWith("Mark thread pending", () =>
           commentApi.setStatus(tid, "pending"),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({ type: "SET_STATUS", threadId: tid, status: "pending" });
         track(events.threadMarkedPending());
@@ -87,7 +84,6 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
         const ok = await persistWith("Close thread", () =>
           commentApi.setStatus(tid, "closed"),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({ type: "SET_STATUS", threadId: tid, status: "closed" });
         track(events.threadClosed());
@@ -132,7 +128,6 @@ function useCommentMutations(opts: ThreadMutationsOptions) {
         const ok = await persistWith("Delete comment", () =>
           commentApi.deleteComment(threadId, commentId),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({ type: "DELETE_COMMENT", threadId, commentId });
         track(events.commentDeleted());
@@ -169,7 +164,6 @@ function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
             await commentApi.deleteComment(threadId, c.id);
           }
         });
-        /* v8 ignore next -- thread is dropped locally on success only */
         if (ok === null) return;
         dispatch({ type: "DELETE_THREAD", threadId });
         track(events.threadDeleted({ commentCount: thread.comments.length }));
@@ -185,18 +179,15 @@ function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
       const thread = threadsById[threadId];
       const comment = thread?.comments.find((c) => c.id === commentId);
       const hadIt =
-        /* v8 ignore start -- optional-chain/nullish guards for a missing comment or reactions array */
         comment?.reactions?.some(
           (r) =>
             r.kind === kind && r.users.some((u) => u.id === currentUser.id),
         ) ?? false;
-      /* v8 ignore stop */
       const add = !hadIt;
       void (async () => {
         const ok = await persistWith("Toggle reaction", () =>
           commentApi.toggleReaction(threadId, commentId, kind, add),
         );
-        /* v8 ignore next -- optimistic update skipped when the remote write fails */
         if (ok === null) return;
         dispatch({
           type: "TOGGLE_REACTION",

@@ -27,6 +27,8 @@ vss-extension.dev.generated.json
 
 # Test / coverage artefacts
 coverage/
+# Scratch coverage reports written during focused audits (--coverage.reportsDirectory)
+coverage-*/
 .nyc_output/
 playwright-report/
 playwright-report-visual/

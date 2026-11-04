@@ -36,11 +36,9 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   const commentApiRef = React.useRef<CommentApi | null>(null);
   if (commentApiRef.current === null) {
     commentApiRef.current = opts.commentApi ?? new LocalOnlyCommentApi();
-    /* v8 ignore start -- only when a caller swaps the CommentApi instance after mount */
   } else if (opts.commentApi && opts.commentApi !== commentApiRef.current) {
     commentApiRef.current = opts.commentApi;
   }
-  /* v8 ignore stop */
   // Per-document routing cache (Documents hub "transparent PR" mode). The
   // effective `commentApi` is resolved from `selectedPath` further below.
   const perPathApiCacheRef = React.useRef<Map<string, CommentApi>>(new Map());
@@ -54,13 +52,10 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   );
   const identityStoreRef = React.useRef<IdentityStore | null>(null);
   if (identityStoreRef.current === null) {
-    identityStoreRef.current = new IdentityStore(
-      (ids) =>
-        /* v8 ignore start -- resolver is always wired before IdentityStore first fetches */
-        resolveIdentitiesRef.current
-          ? resolveIdentitiesRef.current(ids)
-          : Promise.resolve({}),
-      /* v8 ignore stop */
+    identityStoreRef.current = new IdentityStore((ids) =>
+      resolveIdentitiesRef.current
+        ? resolveIdentitiesRef.current(ids)
+        : Promise.resolve({}),
     );
   }
   const identityStore = identityStoreRef.current;
@@ -99,11 +94,9 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   );
 
   // Keep the identity resolver pointed at the current effective CommentApi.
-  /* v8 ignore start -- else-arm hit only when the effective CommentApi lacks resolveIdentities */
   resolveIdentitiesRef.current = commentApi.resolveIdentities
     ? (ids) => commentApi.resolveIdentities!(ids)
     : undefined;
-  /* v8 ignore stop */
 
   return {
     identityStore,

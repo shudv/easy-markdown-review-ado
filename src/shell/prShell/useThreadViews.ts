@@ -56,12 +56,10 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // that PR's threads instead — read-only, loaded on demand and cached by id.
   const currentThreadsRaw = React.useMemo(() => {
     if (viewingHistorical && !nativeIterationMode) {
-      /* v8 ignore start -- historical-PR view branch; not exercised in the unit/storybook harness */
       return activeStopPrId != null
         ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStopPrId}`] ??
             EMPTY_THREADS)
         : EMPTY_THREADS;
-      /* v8 ignore stop */
     }
     return allThreadsForFile;
   }, [
@@ -135,8 +133,6 @@ function threadsOutsideFiles(
   const out: CommentThread[] = [];
   for (const id of threadState.order) {
     const t = threadState.threadsById[id];
-    /* v8 ignore next -- defensive: order ids always have a thread entry */
-    if (!t) continue;
     // General/Overview threads have their own tray (an empty filePath always
     // means general in our data model, so this also covers file-less threads).
     if (t.general) continue;
@@ -153,8 +149,6 @@ function openThreadCountsByPath(
   const out: Record<string, number> = {};
   for (const id of threadState.order) {
     const t = threadState.threadsById[id];
-    /* v8 ignore next -- defensive: order ids always have a thread entry */
-    if (!t) continue;
     if (isResolvedLike(t.status)) continue;
     out[t.filePath] = (out[t.filePath] ?? 0) + 1;
   }

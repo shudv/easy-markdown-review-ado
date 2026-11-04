@@ -28,7 +28,7 @@ export function CommentMarkdown({ body }: Props): React.ReactElement {
   useUserMentionHydration(ref, [html]);
   React.useLayoutEffect(() => {
     const root = ref.current;
-    /* v8 ignore next -- the div ref is attached whenever this effect runs */
+    /* v8 ignore next -- the div below renders unconditionally and React attaches its ref before layout effects run */
     if (!root) return;
     void hydrateMath(root);
     return decorateCommentMedia(root, resolveAdoAttachmentObjectUrl);

@@ -96,13 +96,11 @@ export function SearchResultsList(
   return (
     <>
       {banner}
-      {/* v8 ignore start -- incremental repo-search loading state; timing not reproduced in the render harness */}
       {loading ? (
         <div className="emr-docnav-search-status" aria-live="polite">
           Searching the repo for more matches…
         </div>
       ) : null}
-      {/* v8 ignore stop */}
       {results.map((file) => {
         const isActive = file.path === selectedPath;
         const fileName = basename(file.path);
@@ -139,13 +137,11 @@ export function SearchResultsList(
               {change.note ? (
                 <span className="emr-sr-only">{` (${change.note})`}</span>
               ) : null}
-              {/* v8 ignore start -- parent-path label only renders for nested search results */}
               {parentPath ? (
                 <span className="emr-docnav-search-path" title={parentPath}>
                   {parentPath}
                 </span>
-              ) : null}
-              {/* v8 ignore stop */}
+              ) : /* v8 ignore next -- the parent path is empty only for an empty or slash-only path, and search results always name a file */ null}
               {openComments > 0 ? (
                 <span
                   className="emr-docnav-badge is-open"

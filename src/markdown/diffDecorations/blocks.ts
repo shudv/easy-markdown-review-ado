@@ -331,7 +331,12 @@ function attachOriginalComparison(
       el.dataset.diffOriginal = decodeURIComponent(encoded);
     }
   } else {
-    attachBlockBeforeDisclosure(el, originalBlock, renderInline);
+    attachBlockBeforeDisclosure(
+      el,
+      { start: block.start, end: block.end },
+      originalBlock,
+      renderInline,
+    );
   }
 }
 

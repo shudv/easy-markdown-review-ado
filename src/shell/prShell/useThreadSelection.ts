@@ -40,8 +40,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
 
   const onSelectThread = React.useCallback(
     (tid: string) => {
-      /* v8 ignore next -- no-op updater branch when the thread is already active */
-      setActiveThreadId((curr) => (curr === tid ? curr : tid));
+      setActiveThreadId(tid);
       scrollDocToAnchor(tid);
     },
     [scrollDocToAnchor, setActiveThreadId],
@@ -74,10 +73,8 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
         threadId: NEW_DRAFT_THREAD_ID,
         anchor:
           nativeIterationMode && viewingHistorical
-            ? /* v8 ignore start -- the bubble only opens a composer for text found in the latest version */
-              (relocateAnchor(anchor, htmlByPath[path] ?? "") ?? anchor)
-            : /* v8 ignore stop */
-              anchor,
+            ? (relocateAnchor(anchor, htmlByPath[path] ?? "") ?? anchor)
+            : anchor,
       });
     },
     [

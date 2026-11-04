@@ -68,7 +68,6 @@ function useSubmitDraft(opts: CommentPostingOptions) {
     (body: string) => {
       // Anchor against the SAME source that produced the currently rendered
       // article so the comment can be located in it.
-      /* v8 ignore next -- committed-source fallback is defensive */
       const source = sourceByPath[selectedPath] ?? "";
       const anchor = withSourceLocation(draftAnchor!, source);
       // Names the picker already resolved for this body's @mentions. Persisted
@@ -87,7 +86,6 @@ function useSubmitDraft(opts: CommentPostingOptions) {
             mentions,
           }),
         );
-        /* v8 ignore next -- optimistic thread skipped when the remote write fails */
         if (!created) return;
         const thread = createdThread({
           created,
@@ -195,12 +193,11 @@ function createdThread(args: {
     body,
     created.createdAt,
   );
-  /* v8 ignore start -- a freshly created thread has exactly one comment, so the else-arm is unreachable */
-  thread.comments = thread.comments.map((c, i) =>
-    i === 0 ? { ...c, id: created.firstCommentId } : c,
-  );
-  /* v8 ignore stop */
-  /* v8 ignore next -- exercised only when the new comment carries no @mentions */
+  // `makeNewThread` mints exactly one comment; give it the server's id.
+  thread.comments = thread.comments.map((c) => ({
+    ...c,
+    id: created.firstCommentId,
+  }));
   if (mentions.length > 0) thread.mentionedIdentities = mentions;
   return thread;
 }

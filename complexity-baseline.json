@@ -17,7 +17,7 @@
       "reason": "Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one PrShell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host."
     },
     "src/hub/RepoPicker.tsx::RepoPicker": {
-      "lines": 219,
+      "lines": 215,
       "reason": "Repository dropdown: search box, listbox markup and keyboard navigation that share focus state. Kept whole so the ARIA listbox reads in one place."
     },
     "src/hub/markdownReader.tsx::MarkdownReader": {
@@ -69,11 +69,11 @@
       "reason": "File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row."
     },
     "src/shell/components/DocNav.search.tsx::SearchResultsList": {
-      "lines": 107,
+      "lines": 103,
       "reason": "Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list."
     },
     "src/shell/components/DocNav.tsx::DocNav": {
-      "lines": 438,
+      "lines": 437,
       "reason": "Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules."
     },
     "src/shell/components/GeneratedSourceModal.tsx::GeneratedSourceModal": {

@@ -25,7 +25,6 @@ export function useTooNarrow(
       return;
     }
     const frame = bodyFrameRef.current;
-    /* v8 ignore next -- the ref is always attached by the time a layout effect runs */
     if (!frame) return;
     // Budget for the comment rail when it can be revealed. A document that has
     // explicitly resolved without a housing PR has no comments UI to reserve.

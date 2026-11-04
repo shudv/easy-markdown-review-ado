@@ -12,6 +12,7 @@ import noOnlyTests from "eslint-plugin-no-only-tests";
 import sonarjs from "eslint-plugin-sonarjs";
 import complexityBaseline from "./complexity-baseline.json" with { type: "json" };
 import { LINE_COUNT_OPTIONS } from "./scripts/check-complexity.mjs";
+import emrRules from "./scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
 const complexityLimits = complexityBaseline.limits;
 
@@ -134,6 +135,20 @@ export default tseslint.config(
       "no-useless-assignment": "warn",
       "preserve-caught-error": "warn",
     },
+  },
+
+  {
+    // Coverage ignores are exceptions to the 100% gate: each must say, in the
+    // same comment, why the code can't be reached or tested, e.g.
+    // `/* v8 ignore next -- <reason> */`, and every `start` needs a `stop`.
+    files: [
+      "src/**/*.{ts,tsx}",
+      "e2e/**/*.ts",
+      "visual/**/*.ts",
+      "test/**/*.{ts,tsx}",
+    ],
+    plugins: { emr: emrRules },
+    rules: { "emr/coverage-ignore-rationale": "error" },
   },
 
   {

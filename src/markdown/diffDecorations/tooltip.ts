@@ -32,7 +32,6 @@ export function applyDiffTooltip(target: HTMLElement, label: string): void {
 export function alignDiffTooltip(event: Event): void {
   const target = event.currentTarget as HTMLElement;
   const article = target.closest<HTMLElement>(".emr-rendered");
-  /* v8 ignore next -- explained changes are always rendered inside the article */
   if (!article) return;
   const targetRect = target.getBoundingClientRect();
   const articleRect = article.getBoundingClientRect();

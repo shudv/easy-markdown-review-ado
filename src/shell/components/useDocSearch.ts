@@ -169,17 +169,14 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
     const handle = window.setTimeout(() => {
       onSearchFiles(trimmedQuery, controller.signal)
         .then((outcome) => {
-          /* v8 ignore next -- defensive: query changed before the fetch resolved */
           if (cancelled) return;
           applySearchOutcome(outcome, trimmedQuery, setters);
         })
         .catch((err: unknown) => {
-          /* v8 ignore next -- defensive: query changed before the fetch rejected */
           if (cancelled) return;
           applySearchFailure(err, trimmedQuery, setters);
         })
         .finally(() => {
-          /* v8 ignore next -- defensive: query changed before settle */
           if (cancelled) return;
           setRemoteLoading(false);
         });

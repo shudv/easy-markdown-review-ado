@@ -55,7 +55,6 @@ export function handleGeneratedSourceClick(
   const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
   const enc = block?.getAttribute(spec.sourceAttribute);
   const original = block?.dataset.diffOriginal ?? null;
-  /* v8 ignore next -- source buttons are added only to encoded blocks */
   if (enc) {
     const source = decodeGeneratedSource(enc);
     setGeneratedSource({ kind: spec.kind, source, original });
@@ -79,7 +78,6 @@ export function handleHeadingLinkClick(
   if (!headingLink) return false;
   e.preventDefault();
   const headingId = headingLink.dataset.headingId!;
-  /* v8 ignore next -- buttons are only rendered when the callback exists */
   if (!onCopyHeadingLink) return true;
   void onCopyHeadingLink(headingId).then((ok) => {
     showHeadingLinkResult(headingLink, ok);
@@ -102,9 +100,7 @@ export function handleSectionToggleClick(
   );
   if (!sectionToggle) return false;
   const section = sectionToggle.closest<HTMLElement>(".emr-section");
-  /* v8 ignore next -- toggle buttons are only hydrated inside sections */
   if (!section) return true;
-  /* v8 ignore next -- hydrated sections always carry a source-derived id */
   const sid = section.dataset.sectionId ?? "";
   const wasCollapsed = section.getAttribute("data-collapsed") === "true";
   if (wasCollapsed) section.removeAttribute("data-collapsed");
@@ -115,7 +111,6 @@ export function handleSectionToggleClick(
   );
   sectionToggle.setAttribute("aria-expanded", wasCollapsed ? "true" : "false");
   sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
-  /* v8 ignore next -- sid is always non-empty; guard remains defensive */
   if (sid) persistSectionState(storageKey, sid, !wasCollapsed);
   wrapRef.current?.dispatchEvent(
     new CustomEvent("emr-sections-changed", { bubbles: false }),

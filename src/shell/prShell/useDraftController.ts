@@ -227,7 +227,6 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
   // the composer the user asked for; keep-editing just dismisses the prompt.
   const onDiscardExistingDraft = React.useCallback(() => {
     const g = draftGuard;
-    /* v8 ignore next -- the dialog only renders while draftGuard is set */
     if (!g) return;
     draft.clear();
     setDraftY(null);

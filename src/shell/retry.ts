@@ -74,10 +74,8 @@ function abortableSleep(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   if (!signal) return sleep(ms);
-  // Defensive: the retry loop already checks `signal.aborted` before sleeping,
-  // so this guard is not reachable from `withRetry`; it keeps the helper safe
-  // if reused standalone.
-  /* v8 ignore next */
+  // An `onRetry` callback can abort the signal after the loop's own check; an
+  // already-aborted signal never fires "abort", so reject up front.
   if (signal.aborted) return Promise.reject(abortError());
   return new Promise<void>((resolve, reject) => {
     const onAbort = () => {
@@ -218,8 +216,7 @@ export async function withRetry<T>(
       await abortableSleep(sleep, delayMs, signal);
     }
   }
-  // Unreachable: the loop either returns or throws. Rethrow defensively.
-  /* v8 ignore next 2 */
+  // Only reached when `attempts` < 1, so the loop never ran.
   throw lastError;
 }
 

@@ -890,3 +890,78 @@ describe("useThreadSync — unmount cleanup", () => {
     expect(fetchThreads).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("useThreadSync — torn-down and stale sessions", () => {
+  function rerender(handle: HarnessHandle, opts: HarnessOpts): void {
+    act(() => {
+      root!.render(React.createElement(Harness, { ...opts, handle }));
+    });
+  }
+
+  it("treats refreshNow as a no-op before polling ever starts", () => {
+    const fetchThreads = vi.fn(async () => [] as CommentThread[]);
+    const handle = mount({ enabled: false, fetchThreads, onThreads: vi.fn() });
+    act(() => handle.controls!.refreshNow());
+    expect(fetchThreads).not.toHaveBeenCalled();
+  });
+
+  it("does not fetch from refreshNow once polling is disabled", async () => {
+    const fetchThreads = vi.fn(async () => [] as CommentThread[]);
+    const opts = { enabled: true, fetchThreads, onThreads: vi.fn() };
+    const handle = mount(opts);
+    await flush();
+    rerender(handle, { ...opts, enabled: false });
+    act(() => handle.controls!.refreshNow());
+    expect(fetchThreads).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a newer session's spinner when a torn-down fetch settles", async () => {
+    const first = defer<CommentThread[]>();
+    const second = defer<CommentThread[]>();
+    const fetchThreads = vi
+      .fn<(signal: AbortSignal) => Promise<CommentThread[]>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const onThreads = vi.fn();
+    const opts = { enabled: true, fetchThreads, onThreads };
+    const handle = mount(opts);
+    rerender(handle, { ...opts, enabled: false });
+    rerender(handle, opts);
+    expect(fetchThreads).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      first.resolve([{ id: "stale" } as unknown as CommentThread]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onThreads).not.toHaveBeenCalled();
+    expect(handle.controls!.isRefreshing).toBe(true);
+
+    const fresh = [{ id: "fresh" } as unknown as CommentThread];
+    await act(async () => {
+      second.resolve(fresh);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onThreads).toHaveBeenCalledWith(fresh);
+    expect(handle.controls!.isRefreshing).toBe(false);
+  });
+
+  it("does not report a failure from a request aborted by a tab hide", async () => {
+    const d = defer<CommentThread[]>();
+    const fetchThreads = vi.fn(async () => d.promise);
+    const onError = vi.fn();
+    mount({ enabled: true, fetchThreads, onThreads: vi.fn(), onError });
+    setVisibility("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(async () => {
+      d.reject(new DOMException("aborted", "AbortError"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onError).not.toHaveBeenCalled();
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+  });
+});

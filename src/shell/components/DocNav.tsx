@@ -210,8 +210,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   const expandLazyDir = React.useCallback(
     (dirPath: string) => {
       if (!onExpandFolder) return;
-      /* v8 ignore next -- the row's buttons are disabled while a fetch is in
-         flight, so this re-entrancy guard is unreachable via the UI */
       if (inFlightDirsRef.current.has(dirPath)) return;
       inFlightDirsRef.current.add(dirPath);
       setLoadingDirs((curr) => {
@@ -225,9 +223,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         } finally {
           inFlightDirsRef.current.delete(dirPath);
           setLoadingDirs((curr) => {
-            /* v8 ignore next -- defensive: the dir is always present in the
-               loading set when its fetch settles */
-            if (!curr.has(dirPath)) return curr;
             const next = new Set(curr);
             next.delete(dirPath);
             return next;
@@ -325,8 +320,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         }
         return {
           id: h.id,
-          /* v8 ignore next -- heading elements always expose string textContent, never null */
-          text: h.textContent ?? "",
+          text: h.textContent,
           level: Number(h.tagName.substring(1)),
           topPx: h.getBoundingClientRect().top - wrapRect.top,
           openComments,
@@ -410,18 +404,15 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
     );
-    /* v8 ignore next -- the active heading has a rendered row unless the reader turned the outline off */
     if (!item) return;
     const itemRect = item.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const margin = 16;
-    /* v8 ignore start -- scroll-into-view geometry; the headless rail layout reproduces neither branch */
     if (itemRect.top < listRect.top + margin) {
       list.scrollTop -= listRect.top + margin - itemRect.top;
     } else if (itemRect.bottom > listRect.bottom - margin) {
       list.scrollTop += itemRect.bottom - (listRect.bottom - margin);
     }
-    /* v8 ignore stop */
   }, [activeId, open]);
 
   // -----------------------------------------------------------------------
@@ -572,7 +563,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // Auto-expand every ancestor folder of the selected file so the active row
   // stays visible after a navigation.
   React.useEffect(() => {
-    /* v8 ignore next -- a document is always selected while the nav is mounted */
     if (!selectedPath) return;
     const ancestors = pathAncestors(selectedPath);
     if (ancestors.length === 0) return;
@@ -600,7 +590,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // `lazyDirSet` change.
   const autoExpandedRef = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
-    /* v8 ignore next -- a document is always selected while the nav is mounted */
     if (!selectedPath) return;
     for (const dir of pathAncestors(selectedPath)) {
       if (lazyDirSet.has(dir) && !autoExpandedRef.current.has(dir)) {
@@ -639,7 +628,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
         onSelectPath(path);
       } else {
         const scroller = scrollRef.current;
-        /* v8 ignore next -- scroll-to-top only when re-selecting the active file; scroller absent only pre-mount */
         if (scroller) scroller.scrollTo({ top: 0, behavior: "smooth" });
       }
     },

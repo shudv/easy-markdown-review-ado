@@ -56,7 +56,6 @@ export function Avatar({
     // Real host: fetch the photo with auth and adopt the local URL it returns.
     let cancelled = false;
     void resolveImage(avatarUrl).then((url) => {
-      /* v8 ignore next -- bails if the author / resolver changed mid-fetch */
       if (cancelled) return;
       setResolvedSrc(url);
     });

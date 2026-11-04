@@ -294,6 +294,12 @@ describe("collectUserMentionIds", () => {
     expect(collectUserMentionIds("[@x](mention://user/%20)")).toEqual([]);
   });
 
+  it("keeps the raw link id when its percent-encoding is malformed", () => {
+    expect(collectUserMentionIds("[@x](mention://user/a%E0%A4b)")).toEqual([
+      "a%E0%A4b",
+    ]);
+  });
+
   it("returns an empty array when there are no mentions", () => {
     expect(collectUserMentionIds("just prose, no mentions")).toEqual([]);
   });

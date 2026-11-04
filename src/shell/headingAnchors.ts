@@ -141,8 +141,8 @@ function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
     (node) => !(node instanceof Element && node.matches(CUE_EXCLUDED_SELECTOR)),
   );
   let cue = target;
-  /* v8 ignore next -- element/text/comment children always have string textContent; `?? ""` only satisfies the DOM typing */
-  if (nodes.some((node) => (node.textContent ?? "").trim().length > 0)) {
+  // Child nodes are never Documents/Doctypes, so textContent is never null.
+  if (nodes.some((node) => node.textContent!.trim().length > 0)) {
     cue = target.ownerDocument.createElement("span");
     cue.setAttribute(CUE_WRAPPER_ATTR, "");
     target.insertBefore(cue, nodes[0]!);

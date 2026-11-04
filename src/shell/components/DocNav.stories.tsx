@@ -98,6 +98,8 @@ interface HarnessProps {
   wikiPages?: boolean;
   threadCounts?: Record<string, number>;
   showOutline?: boolean;
+  /** Leave the document scroller unattached (no `scrollRef`). */
+  detachScroller?: boolean;
 }
 
 function Harness(props: HarnessProps): React.ReactElement {
@@ -138,7 +140,11 @@ function Harness(props: HarnessProps): React.ReactElement {
         showOutline={props.showOutline}
       />
       <main
-        ref={scrollRef as React.Ref<HTMLElement>}
+        ref={
+          props.detachScroller
+            ? undefined
+            : (scrollRef as React.Ref<HTMLElement>)
+        }
         style={{ overflow: "auto", height: 300, flex: 1 }}
       >
         <div ref={articleWrapRef} className="emr-article-wrap">
@@ -957,5 +963,127 @@ export const OutlineOff: Story = {
           ?.textContent,
       ).toBe("guide.md"),
     );
+  },
+};
+
+/** While the remote search is pending, local hits show with a loading note. */
+export const SearchLoadingUnderLocalHits: Story = {
+  args: { onSearchFiles: () => new Promise<FileSearchOutcome>(() => {}) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Search documents" }),
+    );
+    await userEvent.type(canvas.getByRole("searchbox"), "readme");
+    await waitFor(() =>
+      expect(
+        canvas.getByText("Searching the repo for more matches…"),
+      ).toBeTruthy(),
+    );
+    await expect(
+      canvasElement.querySelector(".emr-docnav-search-result"),
+    ).toBeTruthy();
+  },
+};
+
+/** Before any document is chosen the tree renders with no active file row. */
+export const NoDocumentSelected: Story = {
+  args: { initialSelected: "" },
+  play: async ({ canvasElement }) => {
+    await waitFor(() =>
+      expect(within(canvasElement).getByText("README.md")).toBeTruthy(),
+    );
+    await expect(
+      canvasElement.querySelector(".emr-docnav-file.is-active"),
+    ).toBeNull();
+  },
+};
+
+/** Re-selecting the open file with no scroller attached has nothing to scroll. */
+export const ReselectWithoutScroller: Story = {
+  args: { detachScroller: true },
+  play: async ({ args, canvasElement }) => {
+    const nav = within(
+      canvasElement.querySelector(".emr-docnav") as HTMLElement,
+    );
+    await userEvent.click(nav.getByRole("button", { name: /guide\.md/ }));
+    await expect(args.onSelectPath).not.toHaveBeenCalled();
+  },
+};
+
+let finishLazyFetch: () => void = () => {};
+
+/**
+ * A folder already loading from a click is not fetched again when a file under
+ * it is then opened from search (the deep-link reveal sees it in flight).
+ */
+export const OpenFromSearchWhileFolderLoads: Story = {
+  args: {
+    unloadedFolders: ["lazy"],
+    onExpandFolder: fn(
+      () =>
+        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) => {
+          finishLazyFetch = () => resolve({ files: [], folders: [] });
+        }),
+    ),
+    onSearchFiles: () =>
+      Promise.resolve<FileSearchOutcome>({
+        kind: "ok",
+        files: [
+          {
+            path: "lazy/deep.md",
+            changeType: "added",
+            linesAdded: 1,
+            linesDeleted: 0,
+          },
+        ],
+      }),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+    await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Search documents" }),
+    );
+    await userEvent.type(canvas.getByRole("searchbox"), "deep");
+    const result = await waitFor(
+      () => canvas.getByRole("button", { name: /deep\.md/ }),
+      { timeout: 3000 },
+    );
+    await userEvent.click(result);
+    await waitFor(() =>
+      expect(args.onSelectPath).toHaveBeenCalledWith("lazy/deep.md"),
+    );
+    await expect(args.onExpandFolder).toHaveBeenCalledTimes(1);
+    finishLazyFetch();
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole("button", { name: "Loading folder..." }),
+      ).toBeNull(),
+    );
+  },
+};
+
+/**
+ * In a short nav list, the active heading row is scrolled into view as the
+ * reader moves down the document and back up.
+ */
+export const ActiveHeadingKeptInView: Story = {
+  play: async ({ canvasElement }) => {
+    const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+    await waitFor(() => expect(within(nav).getByText("Extras")).toBeTruthy());
+    const list = nav.querySelector<HTMLElement>(".emr-docnav-list")!;
+    Object.assign(list.style, { height: "90px", flex: "none" });
+    const scroller = canvasElement.querySelector<HTMLElement>("main")!;
+
+    scroller.scrollTop = scroller.scrollHeight;
+    scroller.dispatchEvent(new Event("scroll"));
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+    const scrolledDown = list.scrollTop;
+
+    scroller.scrollTop = 30;
+    scroller.dispatchEvent(new Event("scroll"));
+    await waitFor(() => expect(list.scrollTop).toBeLessThan(scrolledDown));
   },
 };

@@ -61,24 +61,22 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     setPrThreadSnapshots((n) => n + 1);
   }, []);
   const noopFetch = React.useCallback(
-    /* v8 ignore next -- fallback fetch, only wired up when fetchRemoteThreads is absent */
+    /* v8 ignore next -- useThreadSync never calls fetchThreads while enabled is false */
     (_signal: AbortSignal): Promise<CommentThread[]> => Promise.resolve([]),
     [],
   );
   // Per-document mode: poll the *currently selected* document's threads. The
   // closure reads `selectedPathRef` so its identity stays stable across file
   // switches while always targeting the active document.
-  const perPathFetch = React.useCallback(
-    /* v8 ignore start -- guard only; perPathFetch is wired solely when loadThreadsForPath is set */
-    (_signal: AbortSignal): Promise<CommentThread[]> =>
+  const perPathFetch = React.useMemo(
+    () =>
       loadThreadsForPath
-        ? loadThreadsForPath(selectedPathRef.current)
-        : Promise.resolve([]),
-    /* v8 ignore stop */
+        ? (_signal: AbortSignal): Promise<CommentThread[]> =>
+            loadThreadsForPath(selectedPathRef.current)
+        : undefined,
     [loadThreadsForPath, selectedPathRef],
   );
-  const effectiveFetch =
-    opts.fetchRemoteThreads ?? (loadThreadsForPath ? perPathFetch : undefined);
+  const effectiveFetch = opts.fetchRemoteThreads ?? perPathFetch;
   const threadSync = useThreadSync({
     enabled: !!effectiveFetch,
     fetchThreads: effectiveFetch ?? noopFetch,
@@ -126,8 +124,6 @@ function useIdentitySeeding(
     const mentionIds: string[] = [];
     for (const id of threadState.order) {
       const t = threadState.threadsById[id];
-      /* v8 ignore next -- order ids always have a thread entry */
-      if (!t) continue;
       // Seed names ADO already resolved for this thread's @mentions. This is
       // the authoritative source (works even in personal-MSA orgs where the
       // by-id identities endpoint returns null), so mentions render as names on
@@ -196,11 +192,7 @@ function useFirstThreadLoad(
     let cancelled = false;
     loadThreadsForPath(selectedPath)
       .then((threads) => {
-        /* v8 ignore start -- cleanup races ahead of a slow resolve; not deterministically reproducible in tests */
-        if (cancelled) {
-          return;
-        }
-        /* v8 ignore stop */
+        if (cancelled) return;
         dispatch({ type: "MERGE_REMOTE_THREADS", threads });
       })
       .catch((err: unknown) => {

@@ -535,6 +535,18 @@ describe("commentAccess", () => {
     expect(r.activeReadOnly).toBe(true);
     expect(r.activeReadOnlyMessage).toMatch(/pull request #4/);
   });
+  it("labels a past PR pill even when the stop lacks its id or title", () => {
+    const untitled: HistoryStop = { ...past(4, "c4"), title: undefined };
+    expect(
+      commentAccess({ ...base, viewingHistorical: true, activeStop: untitled })
+        .activeRoutedPr,
+    ).toMatchObject({ prId: 4, title: "PR #4" });
+    const anonymous: HistoryStop = { ...past(4, "c4"), prId: null };
+    expect(
+      commentAccess({ ...base, viewingHistorical: true, activeStop: anonymous })
+        .activeRoutedPr,
+    ).toMatchObject({ prId: 0, title: "PR 4" });
+  });
   it("keeps earlier PR updates writable", () => {
     const r = commentAccess({
       ...base,

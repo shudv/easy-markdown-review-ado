@@ -93,6 +93,11 @@ finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
 lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
 above 3%. Extract a shared helper or fixture rather than raising a threshold.
 
+Code that genuinely can't be reached or tested may be left out of coverage with
+`/* v8 ignore next -- <why it can't be reached or tested> */` (or a
+`start`/`stop` pair). `npm run lint` fails if the reason is missing or shorter
+than four words, or if a `start` has no matching `stop`.
+
 The visual suite requires Docker. Azure DevOps integration tests require your
 own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),
 [end-to-end test guide](e2e/README.md), and [visual regression guide](visual/README.md).

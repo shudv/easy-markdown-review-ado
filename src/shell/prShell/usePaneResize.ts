@@ -111,7 +111,6 @@ function useNavResize(
       const drag = navDragRef.current;
       if (!drag) return;
       const frame = bodyFrameRef.current;
-      /* v8 ignore next -- the frame is mounted throughout any in-progress drag */
       if (!frame) return;
       const frameWidth = frame.clientWidth;
       // Nav's RIGHT-border handle: dragging right (larger clientX) widens it.
@@ -169,7 +168,6 @@ function useCommentResize(
       const drag = commentDragRef.current;
       if (!drag) return;
       const frame = bodyFrameRef.current;
-      /* v8 ignore next -- the frame is mounted throughout any in-progress drag */
       if (!frame) return;
       const frameWidth = frame.clientWidth;
       // Comment rail's LEFT-border handle: dragging LEFT (smaller clientX) widens

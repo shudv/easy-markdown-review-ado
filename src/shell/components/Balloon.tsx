@@ -102,11 +102,9 @@ export function Balloon(props: BalloonProps): React.ReactElement {
     if (!ref.current || !onHeightChange) return;
     const el = ref.current;
     onHeightChange(thread.id, el.getBoundingClientRect().height);
-    /* v8 ignore start -- ResizeObserver fires asynchronously; its timing is non-deterministic under the test runner */
     const ro = new ResizeObserver(() => {
       onHeightChange(thread.id, el.getBoundingClientRect().height);
     });
-    /* v8 ignore stop */
     ro.observe(el);
     return () => ro.disconnect();
   }, [

@@ -32,11 +32,9 @@ export function formattingRanges(root: Element): FormattingRange[] {
   let offset = 0;
   const visit = (node: Node): void => {
     if (node.nodeType === Node.TEXT_NODE) {
-      /* v8 ignore next -- Text.textContent is never null */
-      offset += node.textContent?.length ?? 0;
+      offset += (node as Text).data.length;
       return;
     }
-    /* v8 ignore next -- rendered content traversal only encounters text and element nodes */
     if (!(node instanceof Element)) return;
     const start = offset;
     for (const child of Array.from(node.childNodes)) visit(child);
@@ -216,13 +214,15 @@ export function wrapFormattingRanges(
   }
 }
 
+/**
+ * Mark formatting that differs from `originalRanges`. Callers pass ranges
+ * read from an original whose rendered text equals `target`'s, so the
+ * offsets on both sides index the same text.
+ */
 export function applyFormattingDiff(
   target: HTMLElement,
-  originalText: string,
   originalRanges: readonly FormattingRange[],
 ): boolean {
-  /* v8 ignore next -- callers invoke formatting comparison only after proving equal rendered text */
-  if (target.textContent !== originalText) return false;
   const currentRanges = formattingRanges(target);
   const changed = formattingChangeRanges(originalRanges, currentRanges);
   if (changed.length === 0) return false;

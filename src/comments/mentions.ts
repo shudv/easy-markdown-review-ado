@@ -355,7 +355,7 @@ export function collectUserMentionIds(body: string): string[] {
     try {
       add(decodeURIComponent(m[1]!));
     } catch {
-      /* v8 ignore next -- malformed percent-encoding: fall back to raw id */
+      // Malformed percent-encoding: fall back to the raw id.
       add(m[1]!);
     }
   }

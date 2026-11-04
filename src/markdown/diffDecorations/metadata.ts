@@ -17,14 +17,12 @@ function linkHost(value: string): string {
   try {
     return new URL(value, "https://relative.invalid").host;
   } catch {
-    /* v8 ignore next -- rendered links are URL-sanitized before decoration */
     return "";
   }
 }
 
 export function readLinkTargets(root: Element): string[] {
   return Array.from(root.querySelectorAll<HTMLAnchorElement>("a")).map(
-    /* v8 ignore next -- rendered anchors selected here always carry href */
     (link) => link.getAttribute("href") ?? "",
   );
 }
@@ -55,7 +53,7 @@ export function applyLinkTargetIndicators(
   const links = Array.from(root.querySelectorAll<HTMLAnchorElement>("a"));
   for (const change of changes) {
     const link = links[change.index];
-    /* v8 ignore next -- changes are built only when before/after link counts match */
+    /* v8 ignore next -- indexes come from readLinkTargets on this same target, and the word/format marks added since never add or remove anchors */
     if (!link) continue;
     const indicator = document.createElement("span");
     indicator.className = `${DIFF_METADATA_CLASS} emr-diff-metadata--link`;
@@ -226,9 +224,7 @@ function codeMetadata(pre: Element): RenderedCodeMetadata | null {
 }
 
 function imageDescription(image: Element): string {
-  /* v8 ignore next -- rendered images always carry a sanitized src */
   const src = image.getAttribute("src") ?? "no source";
-  /* v8 ignore next -- Markdown images always carry alt (possibly empty) */
   const alt = image.getAttribute("alt") ?? "no alt text";
   const title = image.getAttribute("title");
   return title
@@ -297,7 +293,6 @@ export function readCodeMetadataChange(
   const before = codeMetadata(original);
   const after = codeMetadata(block);
   if (!before || !after) return null;
-  /* v8 ignore next -- this path is entered only for a source-level code metadata change */
   if (before.language === after.language && before.options === after.options) {
     return null;
   }

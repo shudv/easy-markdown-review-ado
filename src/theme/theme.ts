@@ -132,12 +132,10 @@ export function syncHostTheme(): () => void {
   // Primary trigger: the SDK dispatches `themeApplied` after applying theme
   // vars (initial handshake and live toggles). Also listen for the raw
   // `themeChanged` in case a host emits it before the SDK relays.
-  /* v8 ignore start -- window is always present in the rendered iframe; the absent-window branch is defensive */
   if (
     typeof window !== "undefined" &&
     typeof window.addEventListener === "function"
   ) {
-    /* v8 ignore stop */
     const onThemeEvent = () => evaluate();
     window.addEventListener("themeApplied", onThemeEvent);
     window.addEventListener("themeChanged", onThemeEvent);
@@ -168,23 +166,19 @@ export function syncHostTheme(): () => void {
     }
   }
 
-  /* v8 ignore next -- MutationObserver is always defined in the iframe; the absent branch is defensive */
   if (typeof MutationObserver !== "undefined") {
     const observer = new MutationObserver(evaluate);
-    /* v8 ignore next -- document.body is always present in the rendered iframe */
     if (document.body) {
       observer.observe(document.body, {
         attributes: true,
         attributeFilter: ["class", "style"],
       });
     }
-    /* v8 ignore next -- document.documentElement is always present in the rendered iframe */
-    if (document.documentElement) {
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "style"],
-      });
-    }
+    // `evaluate()` above already wrote to documentElement, so it exists.
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
     cleanups.push(() => observer.disconnect());
   }
 
@@ -198,17 +192,14 @@ export function syncHostTheme(): () => void {
  * back to light outside a DOM context or when no background is resolvable.
  */
 function isHostDark(): boolean {
-  /* v8 ignore next -- document.body is always present in our rendered iframe */
   if (typeof document === "undefined" || !document.body) return false;
   if (typeof getComputedStyle !== "function") return false;
   try {
     const cs = getComputedStyle(document.body);
     const raw =
-      /* v8 ignore start -- the host always exposes --background-color; the raw backgroundColor / empty-string fallbacks are defensive */
       cs.getPropertyValue("--background-color").trim() ||
       cs.backgroundColor ||
       "";
-    /* v8 ignore stop */
     return isDarkLuminance(parseLuminance(raw));
   } catch {
     // getComputedStyle can throw in detached frames; treat as light.
@@ -222,7 +213,6 @@ function isHostDark(): boolean {
  * back to false outside a DOM context or when the value can't be read.
  */
 function isAdoHighContrast(): boolean {
-  /* v8 ignore next -- document.body is always present in our rendered iframe */
   if (typeof document === "undefined" || !document.body) return false;
   if (typeof getComputedStyle !== "function") return false;
   try {

@@ -95,7 +95,6 @@ function hydrateSection(
   } else {
     s.removeAttribute("data-collapsed");
   }
-  /* v8 ignore next -- rendered sections always begin with their heading */
   if (!heading) return;
   // The icon button lives inside the heading for stable gutter geometry;
   // pin the heading's accessible name to its document text so the button's
@@ -204,7 +203,6 @@ export function measureAnchorYs(
       const heading = section?.querySelector<HTMLElement>(
         "h1, h2, h3, h4, h5, h6",
       );
-      /* v8 ignore next -- collapsed-section fallback geometry; headless layout gives zero rects */
       y = heading ? heading.getBoundingClientRect().top - wrapRect.top : 0;
     } else {
       y = rect.top - wrapRect.top;

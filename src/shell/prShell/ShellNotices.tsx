@@ -68,10 +68,8 @@ export function ShellNotices(props: ShellNoticesProps): React.ReactElement {
       {draftGuard ? (
         <DraftGuardDialog
           fileName={
-            /* v8 ignore start -- pop() only yields undefined for an all-slash path */
             draftGuard.existingPath.split("/").filter(Boolean).pop() ??
             draftGuard.existingPath
-            /* v8 ignore stop */
           }
           snippet={draftGuard.snippet}
           onDiscard={props.onDiscardExistingDraft}

@@ -135,10 +135,8 @@ export class AlmSearchRestClient implements AlmSearchClient {
   constructor(
     private readonly orgName: string,
     private readonly getToken: () => Promise<string>,
-    /* v8 ignore start -- default delegates to the real fetch; tests inject a fake */
     private readonly fetchImpl: typeof fetch = (input, init) =>
       fetch(input, init),
-    /* v8 ignore stop */
     /**
      * Injectable backoff sleep for the internal retry loop. Defaults to the
      * real timer (via `withRetry`); tests pass a no-op to run retries instantly.

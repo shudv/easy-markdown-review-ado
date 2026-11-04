@@ -128,7 +128,7 @@ export function IterationPicker({
     if (!open) return;
     const list = listRef.current!;
     const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
-    /* v8 ignore next -- some option (All updates at least) is always selected */
+    /* v8 ignore next -- resolveReviewIterationRange clamps toUpdate into 1..updateCount, so either the All updates row or the toUpdate row is always aria-selected */
     if (!selected) return;
     const offset =
       selected.getBoundingClientRect().top - list.getBoundingClientRect().top;

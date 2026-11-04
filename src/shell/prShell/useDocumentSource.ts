@@ -42,7 +42,6 @@ export function useDocumentSource(
   const [renderVersion, setRenderVersion] = React.useState(0);
 
   React.useEffect(() => {
-    /* v8 ignore next -- selectedPath is always set once a file is selected */
     if (!selectedPath) return;
     if (htmlByPath[selectedPath]) {
       // A cache hit shows the cached document, so drop any error or spinner
@@ -57,10 +56,8 @@ export function useDocumentSource(
     setError(null);
     loadFileSource(selectedPath)
       .then(async (source) => {
-        /* v8 ignore next -- bails if the selected file changed mid-load */
         if (cancelled) return;
         const html = await renderMarkdown(source);
-        /* v8 ignore next -- bails if the selected file changed mid-render */
         if (cancelled) return;
         setSourceByPath((prev) => ({ ...prev, [selectedPath]: source }));
         setHtmlByPath((prev) => ({ ...prev, [selectedPath]: html }));
@@ -68,7 +65,6 @@ export function useDocumentSource(
         setRenderVersion((v) => v + 1);
       })
       .catch((err: unknown) => {
-        /* v8 ignore next -- bails if the selected file changed before the error surfaced */
         if (cancelled) return;
         const missing = isItemNotFoundError(err)
           ? handleMissingDocRef.current(selectedPath)

@@ -26,7 +26,6 @@ export function pickInitialPath(
   initialSelectedPath: string | undefined,
   files: readonly FileInfo[],
 ): string {
-  /* v8 ignore next -- files[0]?.path/"" fallbacks are defensive; tests supply initialSelectedPath or a non-empty file list */
   return initialSelectedPath ?? files[0]?.path ?? "";
 }
 
@@ -470,10 +469,8 @@ function activeRoutedPrFor(
 ): RoutedPrInfo | undefined {
   if (!viewingPastPr) return effectiveRoutedPr;
   return {
-    /* v8 ignore start -- a historical stop always carries prId/title; the fallbacks are defensive */
     prId: activeStop.prId ?? 0,
     title: activeStop.title ?? `PR #${activeStop.prId}`,
-    /* v8 ignore stop */
     status: "completed",
     url: activeStop.url,
   };

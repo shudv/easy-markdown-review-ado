@@ -30,8 +30,7 @@ export function decorateFrontmatterValue(
   const valueEl = el.querySelector<HTMLElement>(".emr-frontmatter-value");
   if (!valueEl) return false;
 
-  /* v8 ignore next -- a value cell's textContent is never null */
-  const modifiedText = valueEl.textContent ?? "";
+  const modifiedText = valueEl.textContent;
 
   // Resolve the pre-edit value text. A wholly-added row has no "before", so we
   // diff against an empty string — every word reads as added (green).

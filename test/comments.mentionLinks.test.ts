@@ -96,6 +96,18 @@ describe("hydrateMentionLinks — no-op guards", () => {
     );
     expect(() => hydrateMentionLinks(root, CTX)).not.toThrow();
   });
+
+  it("leaves a workitem-tagged anchor whose href is a user mention", () => {
+    // The selector matches on data-mention-kind, but the href's own kind
+    // decides the URL shape; a user href has no web URL to build.
+    const root = mountHtml(
+      '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://user/alice">#42</a>',
+    );
+    hydrateMentionLinks(root, CTX);
+    expect(root.querySelector("a")!.getAttribute("href")).toBe(
+      "mention://user/alice",
+    );
+  });
 });
 
 describe("hydrateMentionLinks — workitem rewrites", () => {

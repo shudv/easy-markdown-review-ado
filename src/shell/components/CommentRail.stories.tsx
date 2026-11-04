@@ -257,6 +257,24 @@ export const OnlyThisFileScope: Story = {
 };
 
 /**
+ * An embed that doesn't wire `onOnlyThisFileChange` still renders the scope
+ * toggle; choosing it is a harmless no-op that leaves the scope unchanged.
+ */
+export const OnlyThisFileUnwired: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: /^Filter comments/ }),
+    );
+    const scope = canvas.getByRole("menuitemcheckbox", {
+      name: "Hide comments not on this file",
+    });
+    await userEvent.click(scope);
+    await expect(scope.getAttribute("aria-checked")).toBe("false");
+  },
+};
+
+/**
  * Selecting a comment in a collapsed cross-file tray from an external surface
  * auto-expands the tray so the selection is on screen.
  */

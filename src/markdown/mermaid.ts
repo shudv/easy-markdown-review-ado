@@ -74,7 +74,6 @@ export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => {
       const codeChild = node.children.find(
         (c): c is Element => c.type === "element" && c.tagName === "code",
       );
-      /* v8 ignore next -- a <pre> emitted by the renderer always wraps a <code> */
       if (!codeChild) return;
       // Code fences emerge from the rehype pipeline with their className as a
       // string array (e.g. ["language-mermaid"]); a bare string never reaches
@@ -97,14 +96,12 @@ export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => {
           // Carry the source-line span (stamped on the original <pre> by
           // rehypeSourcePositions, which runs before us) onto the placeholder
           // so the diff decorator can tell when the diagram changed in a PR.
-          /* v8 ignore start -- a parsed code fence always carries a position, so the null fallbacks are defensive */
           ...(node.properties?.dataSourceLine != null
             ? { dataSourceLine: node.properties.dataSourceLine }
             : {}),
           ...(node.properties?.dataSourceEndLine != null
             ? { dataSourceEndLine: node.properties.dataSourceEndLine }
             : {}),
-          /* v8 ignore stop */
         },
         children: [
           {

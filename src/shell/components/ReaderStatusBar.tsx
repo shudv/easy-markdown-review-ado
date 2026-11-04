@@ -100,7 +100,6 @@ export function ReaderStatusBar(
     if (overriddenFonts) return undefined;
     let cancelled = false;
     void detectAvailableReaderFonts(loadLocalReaderFont).then((fonts) => {
-      /* v8 ignore next -- defensive unmount guard; no observable UI branch */
       if (cancelled) return;
       setDetectedFonts(fonts);
     });

@@ -209,7 +209,7 @@ function handleFetchFailure(session: PollSession, err: unknown): void {
 
 function runFetch(session: PollSession): void {
   const { refs } = session;
-  /* v8 ignore next -- defensive: cancelled before the effect re-runs */
+  // refreshNowRef still targets this session after `enabled` turns off.
   if (session.cancelled) return;
   // Dedupe: if a request is already in flight, skip — its result
   // (when it lands) is just as fresh as starting a new one would
@@ -223,26 +223,22 @@ function runFetch(session: PollSession): void {
   refs.fetchRef
     .current(controller.signal)
     .then((threads) => {
-      /* v8 ignore next -- defensive: unmounted while the fetch was in flight */
-      if (session.cancelled) return;
+      // Teardown and every abort also bump the generation, so this one check
+      // drops results from cancelled sessions and aborted requests too.
       if (myGeneration !== refs.generationRef.current) return;
       session.failureStreak = 0;
       scheduleNext(session, session.intervalMs);
       refs.onThreadsRef.current(threads);
     })
     .catch((err: unknown) => {
-      /* v8 ignore start -- defensive cancel/abort/stale-generation guards */
-      if (session.cancelled) return;
-      if (controller.signal.aborted) return;
       if (myGeneration !== refs.generationRef.current) return;
-      /* v8 ignore stop */
       handleFetchFailure(session, err);
     })
     .finally(() => {
       if (refs.inFlightRef.current === controller) {
         refs.inFlightRef.current = null;
       }
-      /* v8 ignore next -- defensive: cancelled during teardown */
+      // A torn-down session must not clear a newer session's spinner.
       if (!session.cancelled) session.setIsRefreshing(false);
     });
 }
@@ -361,7 +357,7 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   // request finishes.
   const generationRef = React.useRef(0);
   const inFlightRef = React.useRef<AbortController | null>(null);
-  /* v8 ignore next -- placeholder ref, replaced by runFetch before any call */
+  // No-op until the first polling session installs its trigger.
   const refreshNowRef = React.useRef<() => void>(() => {});
 
   React.useEffect(() => {

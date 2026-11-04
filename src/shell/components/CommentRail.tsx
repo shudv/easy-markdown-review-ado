@@ -283,7 +283,6 @@ export function CommentRail(props: RailProps): React.ReactElement {
             filterMode={filterMode}
             onFilterModeChange={onFilterModeChange}
             onlyThisFile={onlyThisFile}
-            /* v8 ignore next -- onOnlyThisFileChange is wired in every mounted usage; no-op fallback is defensive */
             onOnlyThisFileChange={onOnlyThisFileChange ?? (() => {})}
             routedPr={routedPr}
             historyNav={historyNav}

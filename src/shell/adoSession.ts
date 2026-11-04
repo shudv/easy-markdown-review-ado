@@ -262,9 +262,9 @@ export class AdoSessionMonitor {
   }
 
   private async checkToken(): Promise<void> {
-    const spell = this.spell;
-    /* v8 ignore next -- `recover` clears the timer, so a check never runs spell-less */
-    if (!spell) return;
+    // Only a pending timer calls this, and `recover` (the sole place a spell
+    // ends) clears that timer, so a spell is always open here.
+    const spell = this.spell!;
     let token: string | null;
     try {
       token = this.getToken ? await this.getToken() : null;

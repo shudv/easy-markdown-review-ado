@@ -87,7 +87,6 @@ export function useCommentRowMenu() {
       }
     }
     function onKey(e: KeyboardEvent) {
-      /* v8 ignore next -- Escape-to-close key branch; not exercised in the render harness */
       if (e.key === "Escape") {
         e.stopPropagation();
         setMenuOpen(false);
@@ -123,7 +122,6 @@ export function useCommentLinkCopy(threadId: string) {
   const buildDeepLink = useDeepLink();
 
   const handleLink = () => {
-    /* v8 ignore next -- the item only renders when a builder exists */
     if (!buildDeepLink) return;
     const url = buildDeepLink({ kind: "comment", threadId });
     // Keep the menu open so the inline label confirms the result. `copyText`

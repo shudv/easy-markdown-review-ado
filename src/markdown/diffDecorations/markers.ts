@@ -166,7 +166,6 @@ function firstBlockAtOrAfter(
 ): HTMLElement | null {
   for (const el of blocks) {
     const start = numAttr(el, "data-source-line");
-    /* v8 ignore next -- blocks reaching here always have a numeric source line */
     if (start != null && start >= line) return el;
   }
   return null;
@@ -234,7 +233,6 @@ function buildDeletedTableRows(
   anchors: readonly HTMLElement[],
   renderInline: (md: string) => string,
 ): DeletedTableRows | null {
-  /* v8 ignore next -- table-row reconstruction is attempted only for ranges carrying deleted content */
   if (!range.deletedContent) return null;
   const markdown = range.deletedContent.replace(/\n+$/, "");
   const lines = markdown.split(/\r\n|\r|\n/);
@@ -253,7 +251,6 @@ function buildDeletedTableRows(
   }
 
   const removedRows = renderDeletedTableRows(lines, columnCount, renderInline);
-  /* v8 ignore next -- the validated rows plus synthesized delimiter always render a table/head row */
   if (!removedRows) return null;
 
   const before =
@@ -323,7 +320,6 @@ function renderDeletedTableRows(
   );
   const table = scratch.querySelector<HTMLTableElement>("table");
   const headerRow = table?.querySelector<HTMLTableRowElement>("thead tr");
-  /* v8 ignore next -- the validated rows plus synthesized delimiter always render a table/head row */
   if (!table || !headerRow) return null;
 
   for (const header of Array.from(headerRow.querySelectorAll("th"))) {

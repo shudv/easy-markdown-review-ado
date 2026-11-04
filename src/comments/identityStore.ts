@@ -112,8 +112,6 @@ export class IdentityStore {
     this.flushScheduled = false;
     const ids = [...this.queued];
     this.queued.clear();
-    /* v8 ignore next -- defensive: flush only runs after ids were queued */
-    if (ids.length === 0) return;
     for (const k of ids) this.pending.add(k);
     try {
       const resolved = await this.resolver!(ids);

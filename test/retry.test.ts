@@ -260,6 +260,31 @@ describe("withRetry", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it("skips the backoff sleep when onRetry aborts the signal", async () => {
+    const { sleep, delays } = fakeSleep();
+    const controller = new AbortController();
+    const fn = vi.fn().mockRejectedValue({ status: 503 });
+    await expect(
+      withRetry(fn, {
+        mode: "read",
+        sleep,
+        random: () => 1,
+        signal: controller.signal,
+        onRetry: () => controller.abort(),
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("rejects with undefined without calling fn when attempts is 0", async () => {
+    const fn = vi.fn().mockResolvedValue("unused");
+    await expect(
+      withRetry(fn, { mode: "read", attempts: 0 }),
+    ).rejects.toBeUndefined();
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it("throws immediately if already aborted before the first attempt", async () => {
     const { sleep } = fakeSleep();
     const controller = new AbortController();

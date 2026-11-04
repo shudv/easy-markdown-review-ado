@@ -438,3 +438,74 @@ export const MixedFileTopToBottom: Story = {
     expect(marks[4]!.top).toBeCloseTo(0.92, 1);
   },
 };
+
+/** A host whose scroller can unmount while the bar itself stays mounted. */
+function DetachableReader({
+  initiallyMounted,
+}: {
+  initiallyMounted: boolean;
+}): React.ReactElement {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(initiallyMounted);
+  return (
+    <div style={{ position: "relative", width: 420, height: 360 }}>
+      {mounted ? (
+        <div
+          ref={scrollRef}
+          data-testid="scroller"
+          style={{ overflowY: "auto", height: 360 }}
+        >
+          <div style={{ height: 1600 }} />
+        </div>
+      ) : null}
+      <DiffMinimap scrollRef={scrollRef} version={0} showDiff />
+      <button type="button" onClick={() => setMounted(false)}>
+        Remove scroller
+      </button>
+    </div>
+  );
+}
+
+/** With no scroller attached there is nothing to measure → no bar. */
+export const ScrollerNotAttached: Story = {
+  render: () => <DetachableReader initiallyMounted={false} />,
+  play: async ({ canvasElement }) => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await expect(canvasElement.querySelector(".emr-diff-ruler")).toBeNull();
+  },
+};
+
+/**
+ * Once its scroller unmounts, the bar's scroll sync, re-measure, click-to-page
+ * and thumb drag all become no-ops instead of touching a missing element.
+ */
+export const ScrollerRemovedAfterMount: Story = {
+  render: () => <DetachableReader initiallyMounted />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ruler = await waitFor(() => {
+      const el = canvasElement.querySelector<HTMLElement>(".emr-diff-ruler");
+      if (!el) throw new Error("scrollbar not rendered yet");
+      return el;
+    });
+    const thumb = ruler.querySelector<HTMLElement>(".emr-diff-ruler-thumb")!;
+    const scroller = canvas.getByTestId("scroller");
+    const thumbTop = thumb.style.top;
+
+    canvas.getByRole("button", { name: "Remove scroller" }).click();
+    await waitFor(() => expect(canvas.queryByTestId("scroller")).toBeNull());
+
+    scroller.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("resize"));
+    ruler.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientY: 300 }),
+    );
+    thumb.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, clientY: 10 }),
+    );
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await expect(thumb.style.top).toBe(thumbTop);
+    await expect(canvasElement.querySelector(".emr-diff-ruler")).toBe(ruler);
+  },
+};

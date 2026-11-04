@@ -498,14 +498,11 @@ export interface VisibilityClock {
   subscribeVisibilityChange(listener: () => void): () => void;
 }
 
+// The PR tab only runs inside the browser iframe, so `document` always exists.
 const DOCUMENT_VISIBILITY: VisibilityClock = {
   now: () => Date.now(),
-  isVisible: () =>
-    /* v8 ignore next -- SSR guard; the app and tests always have a document */
-    typeof document === "undefined" || document.visibilityState === "visible",
+  isVisible: () => document.visibilityState === "visible",
   subscribeVisibilityChange(listener) {
-    /* v8 ignore next -- SSR guard; the app and tests always have a document */
-    if (typeof document === "undefined") return () => {};
     document.addEventListener("visibilitychange", listener);
     return () => document.removeEventListener("visibilitychange", listener);
   },

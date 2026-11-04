@@ -180,10 +180,8 @@ function navigateOutOfReader(
   onDocNavigate: ((target: DocLinkNavigation) => void) | undefined,
 ): void {
   if (action.type === "open-file") {
-    /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
     onDocNavigate?.({ kind: "repo-file", path: action.path });
   } else {
-    /* v8 ignore next -- onDocNavigate is optional; embeds without host nav omit it */
     onDocNavigate?.({
       kind: "hub-doc",
       path: action.path,

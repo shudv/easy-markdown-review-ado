@@ -107,7 +107,6 @@ function buildMentionWebUrl(
         repo,
       )}/pullrequest/${id}`;
     }
-    /* v8 ignore next 2 -- parseMentionUrl only yields handled kinds; defensive */
     default:
       return undefined;
   }

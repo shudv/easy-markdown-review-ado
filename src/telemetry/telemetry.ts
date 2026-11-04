@@ -47,7 +47,6 @@ function makeSessionId(): string {
 }
 
 function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
-  /* v8 ignore start */
   // The enabled branch constructs the 1DS SDK sink, which only runs in a real
   // browser build with a provisioned key. Neither successful construction nor
   // the SDK-init-failure fallback is reproducible under jsdom, so it is verified
@@ -64,7 +63,6 @@ function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
     );
     return cfg.debug ? consoleSink : NOOP_SINK;
   }
-  /* v8 ignore stop */
   return cfg.debug ? consoleSink : NOOP_SINK;
 }
 
@@ -110,7 +108,6 @@ export function initTelemetry(opts: {
     sink.init(context);
   } catch {
     // Defensive: telemetry setup must never break app boot.
-    /* v8 ignore next */
     sink = NOOP_SINK;
   }
 }

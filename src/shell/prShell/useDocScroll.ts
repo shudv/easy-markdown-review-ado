@@ -42,7 +42,6 @@ export function useDocScroll(initialStorageKey: string): {
   // (The rail-follow effect scrolls the rail to the balloon separately.)
   const scrollDocToAnchor = React.useCallback((tid: string) => {
     window.requestAnimationFrame(() => {
-      /* v8 ignore next -- scrollIntoView is inert in headless tests */
       document
         .querySelector(`.markdown-body [data-thread-id="${CSS.escape(tid)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -72,7 +71,6 @@ export function useDocScroll(initialStorageKey: string): {
       const article = document.querySelector<HTMLElement>(
         ".emr-article-wrap > .emr-rendered",
       );
-      /* v8 ignore next -- the article is mounted whenever a document has rendered */
       if (!article) return;
       const target = findAnchorTarget(article, hash);
       opts?.onResolved?.(target !== null);
@@ -141,7 +139,6 @@ function landOnTextFragment(
   const article = document.querySelector<HTMLElement>(
     ".emr-article-wrap > .emr-rendered",
   );
-  /* v8 ignore next -- the article is mounted whenever a document has rendered */
   if (!article) return;
   const fragment = parseTextFragment(serialized);
   const range = fragment ? findTextFragment(article, fragment) : null;

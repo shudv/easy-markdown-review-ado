@@ -328,10 +328,9 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   React.useEffect(() => {
     const observer = new MutationObserver(() => {
       const article = articleRef.current;
-      /* v8 ignore next -- the observer can fire after unmount clears the ref */
+      /* v8 ignore next -- the article div is always rendered, and unmount disconnects this observer, which discards queued records, so the ref is never null here */
       if (!article) return;
       void hydrateMermaid(article, readerFontFamily).then(() => {
-        /* v8 ignore next -- unmounted between hydrate start and resolve */
         if (!wrapRef.current) return;
         addGeneratedSourceButtons(article);
         wrapRef.current.dispatchEvent(
@@ -468,7 +467,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         return;
       }
       const sel = window.getSelection();
-      /* v8 ignore next -- selection persists between capture and re-read */
+      /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
       if (!sel || sel.rangeCount === 0) return;
       // Removed (deleted-diff) content is shown for reference only; it isn't
       // part of the document, so a comment anchored there orphans immediately.
@@ -487,7 +486,6 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         hasSelectionLinks && !block
           ? selectionLinkTarget(article, range)
           : null;
-      /* v8 ignore next 4 -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text; read-only stories don't render those panels */
       if (readOnly && !link) {
         setBubble(null);
         return;

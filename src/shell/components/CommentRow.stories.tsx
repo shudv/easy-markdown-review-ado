@@ -754,11 +754,13 @@ export const OtherUsersReply: Story = {
   },
 };
 
-/** Pressing Escape closes an open menu. */
+/** Pressing Escape closes an open menu; other keys leave it open. */
 export const MenuClosesOnEscape: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "More options" }));
+    await expect(canvas.getByRole("menu")).toBeTruthy();
+    await userEvent.keyboard("{Shift}");
     await expect(canvas.getByRole("menu")).toBeTruthy();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(canvas.queryByRole("menu")).toBeNull());

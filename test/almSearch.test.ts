@@ -100,6 +100,19 @@ describe("AlmSearchRestClient", () => {
     expect(res.results?.[0]?.fileName).toBe("a.md");
   });
 
+  it("defaults to the global fetch when none is injected", async () => {
+    const globalFetch = vi.fn(async () => jsonResponse({ count: 2 }));
+    vi.stubGlobal("fetch", globalFetch);
+    try {
+      const client = new AlmSearchRestClient("org", async () => "TOK");
+      const res = await client.searchCode(REQ, "P");
+      expect(res.count).toBe(2);
+      expect(globalFetch).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("propagates an AbortSignal through to fetch", async () => {
     const fetchImpl = vi.fn(async (_url, init) => {
       expect((init as RequestInit).signal).toBeDefined();

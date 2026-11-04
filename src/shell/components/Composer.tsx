@@ -126,12 +126,10 @@ export function Composer(props: ComposerProps): React.ReactElement {
   // Drop any pending debounced search when the composer unmounts.
   React.useEffect(() => {
     return () => {
-      /* v8 ignore start -- unmount rarely races a still-pending debounce timer */
       if (mentionDebounceRef.current !== null) {
         window.clearTimeout(mentionDebounceRef.current);
         mentionDebounceRef.current = null;
       }
-      /* v8 ignore stop */
     };
   }, []);
 
@@ -186,10 +184,8 @@ export function Composer(props: ComposerProps): React.ReactElement {
             break;
         }
         // Drop stale responses.
-        /* v8 ignore next -- debounce cancels superseded requests before they resolve */
         if (requestId !== requestSeq.current) return;
         setMention((prev) => {
-          /* v8 ignore next -- picker state always matches the resolving request */
           if (!prev || prev.requestId !== requestId) return prev;
           const clamped = Math.min(
             prev.selectedIndex,
@@ -210,7 +206,6 @@ export function Composer(props: ComposerProps): React.ReactElement {
           operation: "suggestion-search",
           impact: "degraded",
         });
-        /* v8 ignore next -- a failing request is never superseded mid-flight here */
         if (requestId !== requestSeq.current) return;
         setMention(null);
       }
@@ -266,7 +261,6 @@ export function Composer(props: ComposerProps): React.ReactElement {
    */
   const recomputePickerPos = React.useCallback(() => {
     const ta = taRef.current;
-    /* v8 ignore next -- textarea ref is attached whenever the picker can open */
     if (!ta) return;
     const rect = ta.getBoundingClientRect();
     setPickerPos({
@@ -341,7 +335,6 @@ export function Composer(props: ComposerProps): React.ReactElement {
       // textarea. Guard the ref so committing a mention never throws
       // ("Cannot read properties of null (reading 'focus')").
       const el = taRef.current;
-      /* v8 ignore next -- defensive: textarea can be unmounted between the rAF schedule and fire (prod-only race on the draft balloon) */
       if (!el) return;
       el.focus();
       el.setSelectionRange(nextCaret, nextCaret);
@@ -416,7 +409,6 @@ export function Composer(props: ComposerProps): React.ReactElement {
                 commitSelection();
                 return;
               }
-              /* v8 ignore next -- Escape-cancels-mention key branch; not exercised in the render harness */
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();

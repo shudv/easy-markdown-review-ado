@@ -23,7 +23,6 @@ export function selectionLinkTarget(
   range: Range,
 ): SelectionLinkTarget | null {
   const fragment = buildTextFragment(article, range);
-  /* v8 ignore next -- only a selection made entirely of reference content (a diff "Before" panel) has no linkable text */
   if (!fragment) return null;
   const start =
     range.startContainer instanceof Element
@@ -65,7 +64,6 @@ export function selectionBubblePosition(
   return {
     // Don't render above the article. If selection is at the very top,
     // tuck the bubble just below it instead of off-screen.
-    /* v8 ignore next -- top-of-article clamp; headless getBoundingClientRect yields zeros */
     top: desiredTop < 4 ? rect.bottom - wrapRect.top + 8 : desiredTop,
     // Clamp horizontally so the bubble always fully fits inside wrap.
     left: Math.max(4, Math.min(desiredLeft, wrapRect.width - bubbleWidth - 4)),

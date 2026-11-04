@@ -53,8 +53,7 @@ function readCurrentTableCellText(cell: HTMLElement): string {
   clone
     .querySelectorAll(`.${WORD_REMOVED_CLASS}, .${DIFF_METADATA_CLASS}`)
     .forEach((element) => element.remove());
-  /* v8 ignore next -- cloned table cells always have textContent */
-  return clone.textContent?.trim() ?? "";
+  return clone.textContent.trim();
 }
 
 function renderTableSourceTexts(
@@ -65,8 +64,7 @@ function renderTableSourceTexts(
   return splitTableRow(row).map((source) => {
     scratch.innerHTML = renderInline(source);
     const content = scratch.querySelector("p") ?? scratch;
-    /* v8 ignore next -- rendered fragments always have textContent */
-    return (content.textContent ?? "").trim();
+    return content.textContent.trim();
   });
 }
 
@@ -92,22 +90,17 @@ export function diffTableRowCells(
   const doc = tr.ownerDocument;
   const originals = renderOriginalTableCells(doc, originalRow, renderInline);
   const originalCells = originals.texts;
-  const currentCells = cells.map((cell) => {
-    /* v8 ignore next -- textContent is never null on an element */
-    return (cell.textContent ?? "").trim();
-  });
+  const currentCells = cells.map((cell) => cell.textContent.trim());
   const rawAlignment =
     columnAlignment === undefined
       ? alignTableCells(originalCells, currentCells)
       : columnAlignment;
   if (!rawAlignment) return "ambiguous";
-  /* v8 ignore start -- column alignments are constructed from the same header widths; guard remains defensive */
   if (
     alignmentOutOfRange(rawAlignment, originalCells.length, currentCells.length)
   ) {
     return "ambiguous";
   }
-  /* v8 ignore stop */
   const alignment = rawAlignment.map((item): TableCellAlignment => {
     if (item.kind === "added" || item.kind === "removed") return item;
     return {
@@ -159,13 +152,11 @@ function renderOriginalTableCells(
     const content = scratch.querySelector("p") ?? scratch;
     signatures.push(tableCellStructureSignature(content));
     rendered.push(content.cloneNode(true) as HTMLElement);
-    /* v8 ignore next -- textContent is never null on an element */
-    return (content.textContent ?? "").trim();
+    return content.textContent.trim();
   });
   return { texts, signatures, rendered };
 }
 
-/* v8 ignore start -- column alignments are constructed from the same header widths; guard remains defensive */
 function alignmentOutOfRange(
   alignment: readonly TableCellAlignment[],
   originalLength: number,
@@ -186,7 +177,6 @@ function alignmentOutOfRange(
     );
   });
 }
-/* v8 ignore stop */
 
 /** Mark one aligned cell; true when the cell shows a change. */
 function markAlignedCell(
@@ -252,7 +242,7 @@ function insertRemovedCell(
   row: TableRowCells,
   item: { originalIndex: number; currentIndex: number },
 ): void {
-  /* v8 ignore next -- a rendered table row reaching this path always has at least one td/th */
+  /* v8 ignore next -- GFM pads every rendered row to the header width, so a row showing a removed cell always has a td/th to copy */
   const removedCell = row.doc.createElement(row.cells[0]?.tagName ?? "td");
   removedCell.classList.add(
     DIFF_CELL_CLASS,

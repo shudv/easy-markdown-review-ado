@@ -152,8 +152,7 @@ function clearInlineDecorations(root: HTMLElement): void {
   // unwrap the added-word marks back to plain text so a re-decorate is stable.
   root.querySelectorAll(`.${WORD_REMOVED_CLASS}`).forEach((el) => el.remove());
   root.querySelectorAll<HTMLElement>(`.${WORD_ADDED_CLASS}`).forEach((el) => {
-    /* v8 ignore next -- element textContent is never null */
-    el.replaceWith(el.ownerDocument.createTextNode(el.textContent ?? ""));
+    el.replaceWith(el.ownerDocument.createTextNode(el.textContent));
   });
   root
     .querySelectorAll(

@@ -40,7 +40,6 @@ export function decodeGeneratedSource(enc: string): string {
   try {
     return decodeURIComponent(enc);
   } catch {
-    /* v8 ignore next -- decode only throws on malformed input */
     return enc;
   }
 }
@@ -55,7 +54,6 @@ export function addGeneratedSourceButtons(root: HTMLElement): void {
     root
       .querySelectorAll<HTMLElement>(spec.hydratedSelector)
       .forEach((block) => {
-        /* v8 ignore next -- hydration rebuilds block markup before each pass */
         if (block.querySelector(`:scope > .${spec.buttonClass}`)) return;
         if (block.getAttribute(spec.errorAttribute)) return;
         const button = document.createElement("button");

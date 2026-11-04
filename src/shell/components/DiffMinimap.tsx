@@ -78,7 +78,6 @@ export function DiffMinimap({
 
   const measure = React.useCallback(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scrollRef (the reader body) is attached before effects run; defensive guard */
     if (!scroller) return;
     const m = readMetrics(scroller);
     const scRect = scroller.getBoundingClientRect();
@@ -99,7 +98,6 @@ export function DiffMinimap({
 
   const syncScroll = React.useCallback(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scroller is present whenever the scroll listener calling this is attached */
     if (!scroller) return;
     setMetrics(readMetrics(scroller));
   }, [scrollRef]);
@@ -112,7 +110,6 @@ export function DiffMinimap({
   // Follow ArticleView's post-decoration signal, plus scroll + resize.
   React.useEffect(() => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scrollRef is attached before effects run; defensive guard */
     if (!scroller) return;
     let raf = 0;
     const onScroll = () => {
@@ -181,7 +178,6 @@ export function DiffMinimap({
   const jumpTo = (clientY: number) => {
     const track = trackRef.current;
     const scroller = scrollRef.current;
-    /* v8 ignore next -- track + scroller exist whenever the rendered bar's click handler runs */
     if (!track || !scroller) return;
     const rect = track.getBoundingClientRect();
     const fraction = (clientY - rect.top) / rect.height;
@@ -198,7 +194,6 @@ export function DiffMinimap({
   // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
   const onThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const scroller = scrollRef.current;
-    /* v8 ignore next -- scroller exists whenever the rendered thumb is grabbed */
     if (!scroller) return;
     // Tear down any listeners a previous drag left attached (defensive).
     dragCleanupRef.current?.();

@@ -60,17 +60,14 @@ export function RepoPicker({
     selectedName ?? repos.find((r) => r.id === selectedId)?.name;
 
   const openMenu = React.useCallback(() => {
-    const el = triggerRef.current;
-    /* v8 ignore next -- openMenu only runs from the mounted trigger's own handlers */
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      setMenuStyle({
-        position: "fixed",
-        top: Math.round(rect.bottom + 4),
-        left: Math.round(rect.left),
-        minWidth: Math.round(rect.width),
-      });
-    }
+    // Only the mounted trigger's own handlers call this, so the ref is set.
+    const rect = triggerRef.current!.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: Math.round(rect.bottom + 4),
+      left: Math.round(rect.left),
+      minWidth: Math.round(rect.width),
+    });
     setOpen(true);
   }, []);
 
@@ -175,9 +172,8 @@ export function RepoPicker({
       !onLoadMore
     )
       return;
-    const el = listRef.current;
-    /* v8 ignore next -- the scroll handler is bound to the mounted list itself */
-    if (!el) return;
+    // Bound as the list's own onScroll, so the ref is always set here.
+    const el = listRef.current!;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
       loadMoreRequestedRef.current = true;
       onLoadMore();

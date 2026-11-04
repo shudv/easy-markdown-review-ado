@@ -2993,18 +2993,22 @@ function readCodeMetadataChange(
         : languageChanged
           ? "Language changed"
           : "Code options changed",
-    before: languageChanged
-      ? optionsChanged
-        ? `${before.language}; options: ${before.options || "none"}`
-        : before.language
-      : before.options || "none",
-    after: languageChanged
-      ? optionsChanged
-        ? `${after.language}; options: ${after.options || "none"}`
-        : after.language
-      : after.options || "none",
+    before: describeCodeMetadata(before, languageChanged, optionsChanged),
+    after: describeCodeMetadata(after, languageChanged, optionsChanged),
     contentUnchanged: original.textContent === block.textContent,
   };
+}
+
+/** One side of a code-metadata change, showing only the parts that changed. */
+function describeCodeMetadata(
+  meta: RenderedCodeMetadata,
+  languageChanged: boolean,
+  optionsChanged: boolean,
+): string {
+  if (!languageChanged) return meta.options || "none";
+  return optionsChanged
+    ? `${meta.language}; options: ${meta.options || "none"}`
+    : meta.language;
 }
 
 /**

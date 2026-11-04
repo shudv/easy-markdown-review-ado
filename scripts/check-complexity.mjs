@@ -1,19 +1,26 @@
-// Complexity report + ratchet for production source (src/, excluding stories
-// and type declarations).
+// Complexity and size report + ratchet for production source (src/, excluding
+// stories and type declarations).
 //
-// Scores come from two established ESLint rules, so the numbers match what the
-// editor shows:
+// Scores come from established ESLint rules, so the numbers match what the
+// editor shows. Per function:
 //   * cyclomatic — ESLint core `complexity` (independent paths through a function)
 //   * cognitive  — SonarSource `sonarjs/cognitive-complexity` (how hard it reads;
 //                  nesting is penalised)
+//   * lines      — ESLint core `max-lines-per-function` (code lines, excluding
+//                  blank and comment lines; includes nested functions)
+//   * params     — declared parameters, counted from the AST (excluding a
+//                  TypeScript `this` annotation)
+// Per file:
+//   * fileLines  — ESLint core `max-lines` (code lines, excluding blank and
+//                  comment lines)
 //
-// The gate works like the coverage/mutation thresholds, but per function:
-// `complexity-baseline.json` holds the limits for new code plus every existing
-// function that already exceeds them, pinned at its current score. The check
-// fails when
-//   1. a function not in the baseline exceeds a limit,
-//   2. a grandfathered function gets worse than its pinned score, or
-//   3. the baseline is stale (a pinned function improved, was renamed, or was
+// The gate works like the coverage/mutation thresholds, but per function and
+// per file: `complexity-baseline.json` holds the limits for new code plus every
+// existing function (`functions`) or file (`files`) that already exceeds them,
+// pinned at its current score. The check fails when
+//   1. a function or file not in the baseline exceeds a limit,
+//   2. a grandfathered one gets worse than its pinned score, or
+//   3. the baseline is stale (a pinned entry improved, was renamed, or was
 //      removed) — so improvements are locked in and can never silently regress.
 //
 // Usage:
@@ -32,9 +39,38 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const BASELINE_PATH = resolve(repoRoot, "complexity-baseline.json");
 
-export const METRICS = ["cyclomatic", "cognitive"];
+export const METRICS = ["cyclomatic", "cognitive", "lines", "params"];
+export const FILE_METRICS = ["fileLines"];
 const SOURCE_GLOBS = ["src/**/*.{ts,tsx}"];
 const SOURCE_IGNORES = ["src/**/*.stories.tsx", "src/**/*.d.ts"];
+// Shared with eslint.config.mjs so editor warnings count lines the same way.
+export const LINE_COUNT_OPTIONS = { skipBlankLines: true, skipComments: true };
+
+// Which function metric each per-function rule reports, and how to read the
+// score from its message.
+const FUNCTION_RULES = {
+  complexity: { metric: "cyclomatic", pattern: /complexity of (\d+)/ },
+  "sonarjs/cognitive-complexity": {
+    metric: "cognitive",
+    pattern: /from (\d+) to/,
+  },
+  "max-lines-per-function": {
+    metric: "lines",
+    pattern: /too many lines \((\d+)\)/,
+  },
+};
+const FILE_LINES_PATTERN = /too many lines \((\d+)\)/;
+
+/**
+ * Declared parameters, not counting a TypeScript `this` annotation. Counted
+ * from the AST rather than ESLint's `max-params`, which also reports function
+ * type signatures that aren't functions.
+ */
+function countParams(node) {
+  const [first] = node.params;
+  const thisParam = first?.type === "Identifier" && first.name === "this";
+  return node.params.length - (thisParam ? 1 : 0);
+}
 
 // Wrappers that don't change which function a node "is", e.g.
 // `const f = (() => {}) as Handler` or `const f = memo(function Inner() {})`.
@@ -181,6 +217,7 @@ function createNameCollector(store) {
             .filter(Boolean)
             .join(" > "),
           line: node.loc.start.line,
+          params: countParams(node),
           start: owner.range[0],
           end: owner.range[1],
           indexOf,
@@ -226,7 +263,58 @@ export function assignKeys(functions) {
   return functions;
 }
 
-/** Lint the production source and return one record per function. */
+/** Score parsed from a rule message, or NaN when the message doesn't match. */
+function scoreFrom(pattern, message) {
+  return Number(pattern.exec(message.message)?.[1]);
+}
+
+/** Fold one file's lint messages into per-function records. */
+function functionRecords(result, functions, file) {
+  const byKey = new Map(
+    functions.map((fn) => [
+      fn.key,
+      {
+        file,
+        name: fn.key,
+        line: fn.line,
+        ...Object.fromEntries(METRICS.map((metric) => [metric, 0])),
+        params: fn.params ?? 0,
+      },
+    ]),
+  );
+  for (const message of result.messages) {
+    const rule = FUNCTION_RULES[message.ruleId];
+    if (!rule) continue;
+    const score = scoreFrom(rule.pattern, message);
+    const at = functions[0]?.indexOf(message.line, message.column) ?? -1;
+    // Innermost function whose span contains the report position.
+    const owner = functions
+      .filter((fn) => fn.start <= at && at < fn.end)
+      .sort((a, b) => a.end - a.start - (b.end - b.start))[0];
+    if (!owner || Number.isNaN(score)) {
+      throw new Error(
+        `Could not attribute ${message.ruleId} at ${file}:${message.line}:${message.column}`,
+      );
+    }
+    const record = byKey.get(owner.key);
+    record[rule.metric] = Math.max(record[rule.metric], score);
+  }
+  return [...byKey.values()];
+}
+
+/** The file-level record (code lines) from one file's lint messages. */
+function fileRecord(result, file) {
+  const report = result.messages.find((m) => m.ruleId === "max-lines");
+  return {
+    file,
+    fileLines: report ? scoreFrom(FILE_LINES_PATTERN, report) : 0,
+  };
+}
+
+/**
+ * Lint the production source. Returns one record per function and one per
+ * file.
+ */
 export async function measure({
   cwd = repoRoot,
   patterns = SOURCE_GLOBS,
@@ -251,10 +339,15 @@ export async function measure({
           sonarjs,
           emr: { rules: { names: createNameCollector(names) } },
         },
-        // A limit of 0 makes every function report its score.
+        // A limit of 0 makes every function (and file) report its score.
         rules: {
           complexity: ["error", { max: 0 }],
           "sonarjs/cognitive-complexity": ["error", 0],
+          "max-lines-per-function": [
+            "error",
+            { max: 0, ...LINE_COUNT_OPTIONS },
+          ],
+          "max-lines": ["error", { max: 0, ...LINE_COUNT_OPTIONS }],
           "emr/names": "error",
         },
       },
@@ -262,7 +355,8 @@ export async function measure({
   });
   const results = await eslint.lintFiles(patterns);
 
-  const records = [];
+  const functions = [];
+  const files = [];
   for (const result of results) {
     const fatal = result.messages.filter((m) => m.fatal || !m.ruleId);
     if (fatal.length) {
@@ -270,61 +364,54 @@ export async function measure({
         `Failed to parse ${result.filePath}: ${fatal.map((m) => m.message).join("; ")}`,
       );
     }
-    const functions = assignKeys(names.get(result.filePath) ?? []);
     const file = relative(cwd, result.filePath).replaceAll("\\", "/");
-    const byKey = new Map(
-      functions.map((fn) => [
-        fn.key,
-        { file, name: fn.key, line: fn.line, cyclomatic: 0, cognitive: 0 },
-      ]),
-    );
-    for (const message of result.messages) {
-      const metric =
-        message.ruleId === "complexity"
-          ? "cyclomatic"
-          : message.ruleId === "sonarjs/cognitive-complexity"
-            ? "cognitive"
-            : null;
-      if (!metric) continue;
-      const score = Number(
-        (metric === "cyclomatic"
-          ? /complexity of (\d+)/
-          : /from (\d+) to/
-        ).exec(message.message)?.[1],
-      );
-      const at = functions[0]?.indexOf(message.line, message.column) ?? -1;
-      // Innermost function whose span contains the report position.
-      const owner = functions
-        .filter((fn) => fn.start <= at && at < fn.end)
-        .sort((a, b) => a.end - a.start - (b.end - b.start))[0];
-      if (!owner || Number.isNaN(score)) {
-        throw new Error(
-          `Could not attribute ${message.ruleId} at ${file}:${message.line}:${message.column}`,
-        );
-      }
-      const record = byKey.get(owner.key);
-      record[metric] = Math.max(record[metric], score);
-    }
-    records.push(...byKey.values());
+    const named = assignKeys(names.get(result.filePath) ?? []);
+    functions.push(...functionRecords(result, named, file));
+    files.push(fileRecord(result, file));
   }
-  return records.sort(
-    (a, b) => a.file.localeCompare(b.file) || a.line - b.line,
-  );
+  return {
+    functions: functions.sort(
+      (a, b) => a.file.localeCompare(b.file) || a.line - b.line,
+    ),
+    files: files.sort((a, b) => a.file.localeCompare(b.file)),
+  };
 }
 
 export const recordKey = (record) => `${record.file}::${record.name}`;
+const fileKey = (record) => record.file;
 
-/** Compare measurements to the baseline. Pure, so it is unit-testable. */
-export function evaluate(records, baseline) {
-  const { limits, functions: pinned } = baseline;
+/** The two ratcheted sets: per-function scores and per-file scores. */
+const SCOPES = [
+  {
+    pinnedIn: "functions",
+    records: "functions",
+    metrics: METRICS,
+    key: recordKey,
+  },
+  { pinnedIn: "files", records: "files", metrics: FILE_METRICS, key: fileKey },
+];
+
+function assertLimits(limits) {
+  const missing = [...METRICS, ...FILE_METRICS].filter(
+    (metric) => typeof limits?.[metric] !== "number",
+  );
+  if (missing.length) {
+    throw new Error(
+      `complexity-baseline.json limits are missing: ${missing.join(", ")}`,
+    );
+  }
+}
+
+/** Compare one scope's records with its pinned entries. */
+function evaluateScope(records, pinned, limits, { metrics, key: keyOf }) {
   const violations = [];
   const stale = [];
   const seen = new Set();
   for (const record of records) {
-    const key = recordKey(record);
+    const key = keyOf(record);
     const entry = pinned[key];
     if (entry) seen.add(key);
-    for (const metric of METRICS) {
+    for (const metric of metrics) {
       const actual = record[metric];
       const pinnedScore = entry?.[metric];
       const allowed = Math.max(limits[metric], pinnedScore ?? 0);
@@ -349,16 +436,33 @@ export function evaluate(records, baseline) {
 }
 
 /**
- * Build the next baseline. Without `accept`, scores can only go down and new
- * offenders are never added (they stay violations).
+ * Compare measurements (`{ functions, files }`) to the baseline. Pure, so it
+ * is unit-testable.
  */
-export function nextBaseline(records, baseline, { accept = false } = {}) {
-  const { limits, functions: pinned } = baseline;
-  const functions = {};
+export function evaluate(measurement, baseline) {
+  assertLimits(baseline.limits);
+  const violations = [];
+  const stale = [];
+  for (const scope of SCOPES) {
+    const result = evaluateScope(
+      measurement[scope.records] ?? [],
+      baseline[scope.pinnedIn] ?? {},
+      baseline.limits,
+      scope,
+    );
+    violations.push(...result.violations);
+    stale.push(...result.stale);
+  }
+  return { violations, stale };
+}
+
+/** One scope's next pinned entries, sorted by key. */
+function nextScope(records, pinned, limits, { metrics, key: keyOf }, accept) {
+  const entries = {};
   for (const record of records) {
-    const key = recordKey(record);
+    const key = keyOf(record);
     const entry = {};
-    for (const metric of METRICS) {
+    for (const metric of metrics) {
       const actual = record[metric];
       if (actual <= limits[metric]) continue;
       const previous = pinned[key]?.[metric];
@@ -366,14 +470,32 @@ export function nextBaseline(records, baseline, { accept = false } = {}) {
       else if (previous !== undefined)
         entry[metric] = Math.min(previous, actual);
     }
-    if (Object.keys(entry).length) functions[key] = entry;
+    if (Object.keys(entry).length) entries[key] = entry;
   }
-  const sorted = Object.fromEntries(
-    Object.keys(functions)
+  return Object.fromEntries(
+    Object.keys(entries)
       .sort()
-      .map((key) => [key, functions[key]]),
+      .map((key) => [key, entries[key]]),
   );
-  return { ...baseline, functions: sorted };
+}
+
+/**
+ * Build the next baseline. Without `accept`, scores can only go down and new
+ * offenders are never added (they stay violations).
+ */
+export function nextBaseline(measurement, baseline, { accept = false } = {}) {
+  assertLimits(baseline.limits);
+  const next = { ...baseline };
+  for (const scope of SCOPES) {
+    next[scope.pinnedIn] = nextScope(
+      measurement[scope.records] ?? [],
+      baseline[scope.pinnedIn] ?? {},
+      baseline.limits,
+      scope,
+      accept,
+    );
+  }
+  return next;
 }
 
 function percentile(values, p) {
@@ -383,9 +505,10 @@ function percentile(values, p) {
   ];
 }
 
-export function summarize(records, limits) {
+/** Distribution of each metric across a set of records. */
+function metricStats(records, metrics, limits) {
   const stats = {};
-  for (const metric of METRICS) {
+  for (const metric of metrics) {
     const values = records.map((r) => r[metric]);
     stats[metric] = {
       mean: Number(
@@ -398,22 +521,33 @@ export function summarize(records, limits) {
       overLimit: values.filter((v) => v > limits[metric]).length,
     };
   }
+  return stats;
+}
+
+export function summarize({ functions, files }, limits) {
   return {
-    files: new Set(records.map((r) => r.file)).size,
-    functions: records.length,
-    ...stats,
+    files: files.length,
+    functions: functions.length,
+    ...metricStats(functions, METRICS, limits),
+    ...metricStats(files, FILE_METRICS, limits),
   };
 }
 
-function printReport(records, baseline) {
-  const summary = summarize(records, baseline.limits);
+const describeLimits = (limits) =>
+  `cyclomatic ${limits.cyclomatic}, cognitive ${limits.cognitive}, ` +
+  `${limits.lines} lines and ${limits.params} parameters per function, ` +
+  `${limits.fileLines} lines per file`;
+
+function printReport(measurement, baseline) {
+  const { functions, files } = measurement;
+  const summary = summarize(measurement, baseline.limits);
   console.log(
-    `\nComplexity — ${summary.functions} functions in ${summary.files} files with functions` +
-      ` (limits: cyclomatic ${baseline.limits.cyclomatic}, cognitive ${baseline.limits.cognitive})\n`,
+    `\nComplexity — ${summary.functions} functions in ${summary.files} files` +
+      ` (limits: ${describeLimits(baseline.limits)})\n`,
   );
   console.table(
     Object.fromEntries(
-      METRICS.map((m) => [
+      [...METRICS, ...FILE_METRICS].map((m) => [
         m,
         {
           mean: summary[m].mean,
@@ -428,7 +562,7 @@ function printReport(records, baseline) {
   );
   console.log("\nMost complex functions (by cognitive, then cyclomatic):");
   console.table(
-    [...records]
+    [...functions]
       .sort((a, b) => b.cognitive - a.cognitive || b.cyclomatic - a.cyclomatic)
       .slice(0, 15)
       .map((r) => ({
@@ -436,30 +570,48 @@ function printReport(records, baseline) {
         location: `${r.file}:${r.line}`,
         cyclomatic: r.cyclomatic,
         cognitive: r.cognitive,
+        lines: r.lines,
+        params: r.params,
       })),
+  );
+  console.log("\nLargest files (code lines):");
+  console.table(
+    [...files]
+      .sort((a, b) => b.fileLines - a.fileLines)
+      .slice(0, 10)
+      .map((r) => ({ file: r.file, lines: r.fileLines })),
   );
 }
 
+const METRIC_LABELS = {
+  cyclomatic: "cyclomatic complexity",
+  cognitive: "cognitive complexity",
+  lines: "length (code lines)",
+  params: "parameter count",
+  fileLines: "file length (code lines)",
+};
+
 function printGate({ violations, stale }) {
   for (const v of violations) {
+    const label = METRIC_LABELS[v.metric];
     console.error(
       v.pinned
-        ? `✗ ${v.key}: ${v.metric} ${v.actual} exceeds its pinned ${v.allowed}`
-        : `✗ ${v.key}: ${v.metric} ${v.actual} exceeds the limit of ${v.allowed}`,
+        ? `✗ ${v.key}: ${label} ${v.actual} exceeds its pinned ${v.allowed}`
+        : `✗ ${v.key}: ${label} ${v.actual} exceeds the limit of ${v.allowed}`,
     );
   }
   for (const s of stale) {
     console.error(
       s.metric
-        ? `↓ ${s.key}: ${s.metric} improved ${s.pinned} → ${s.actual}; lock it in`
-        : `↓ ${s.key}: pinned function no longer exists (removed or renamed)`,
+        ? `↓ ${s.key}: ${METRIC_LABELS[s.metric]} improved ${s.pinned} → ${s.actual}; lock it in`
+        : `↓ ${s.key}: pinned entry no longer exists (removed or renamed)`,
     );
   }
   if (violations.length) {
     console.error(
-      "\nSplit the function or simplify its branching. If the increase is" +
-        " deliberate, pin it with `npm run complexity:update -- --accept` so it is" +
-        " visible in review.",
+      "\nSplit the function or file, simplify its branching, or group related" +
+        " parameters into an object. If the increase is deliberate, pin it with" +
+        " `npm run complexity:update -- --accept` so it is visible in review.",
     );
   }
   if (stale.length) {
@@ -478,17 +630,47 @@ function writeBaseline(baseline) {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
 }
 
+const pinnedCount = (baseline) =>
+  Object.keys(baseline.functions ?? {}).length +
+  Object.keys(baseline.files ?? {}).length;
+
+function runUpdate(measurement, baseline, accept) {
+  const next = nextBaseline(measurement, baseline, { accept });
+  writeBaseline(next);
+  console.log(
+    `complexity-baseline.json updated: ${pinnedCount(baseline)} → ${pinnedCount(next)} pinned entries.`,
+  );
+  const { violations } = evaluate(measurement, next);
+  if (!violations.length) return 0;
+  printGate({ violations, stale: [] });
+  return 1;
+}
+
+function runCheck(measurement, baseline, gate) {
+  if (gate.violations.length || gate.stale.length) {
+    printGate(gate);
+    return 1;
+  }
+  console.log(
+    `✓ Complexity within budget: ${measurement.functions.length} functions in ` +
+      `${measurement.files.length} files, ${pinnedCount(baseline)} pinned above the limits ` +
+      `(${describeLimits(baseline.limits)}).`,
+  );
+  return 0;
+}
+
 async function main(argv) {
   const baseline = readBaseline();
-  const records = await measure();
+  const measurement = await measure();
 
   if (argv.includes("--json")) {
     console.log(
       JSON.stringify(
         {
-          summary: summarize(records, baseline.limits),
-          gate: evaluate(records, baseline),
-          functions: records,
+          summary: summarize(measurement, baseline.limits),
+          gate: evaluate(measurement, baseline),
+          functions: measurement.functions,
+          files: measurement.files,
         },
         null,
         2,
@@ -498,39 +680,13 @@ async function main(argv) {
   }
 
   if (argv.includes("--update")) {
-    const next = nextBaseline(records, baseline, {
-      accept: argv.includes("--accept"),
-    });
-    writeBaseline(next);
-    const before = Object.keys(baseline.functions).length;
-    const after = Object.keys(next.functions).length;
-    console.log(
-      `complexity-baseline.json updated: ${before} → ${after} pinned functions.`,
-    );
-    const { violations } = evaluate(records, next);
-    if (violations.length) {
-      printGate({ violations, stale: [] });
-      return 1;
-    }
-    return 0;
+    return runUpdate(measurement, baseline, argv.includes("--accept"));
   }
 
-  const gate = evaluate(records, baseline);
-  if (argv.includes("--check")) {
-    const summary = summarize(records, baseline.limits);
-    if (!gate.violations.length && !gate.stale.length) {
-      console.log(
-        `✓ Complexity within budget: ${summary.functions} functions, ` +
-          `${Object.keys(baseline.functions).length} pinned above the limits ` +
-          `(cyclomatic ${baseline.limits.cyclomatic}, cognitive ${baseline.limits.cognitive}).`,
-      );
-      return 0;
-    }
-    printGate(gate);
-    return 1;
-  }
+  const gate = evaluate(measurement, baseline);
+  if (argv.includes("--check")) return runCheck(measurement, baseline, gate);
 
-  printReport(records, baseline);
+  printReport(measurement, baseline);
   const status =
     gate.violations.length || gate.stale.length
       ? `${gate.violations.length} violation(s), ${gate.stale.length} stale baseline entr(ies) — run with --check for details.`
@@ -538,7 +694,6 @@ async function main(argv) {
   console.log(`\n${status}`);
   return 0;
 }
-
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href

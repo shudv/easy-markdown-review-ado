@@ -1,8 +1,251 @@
 {
-  "$comment": "Complexity ratchet, enforced by `npm run complexity:check` (scripts/check-complexity.mjs). New functions must stay within `limits`; functions listed under `functions` predate the gate and are pinned at their measured score — they may only go down. Lower scores with `npm run complexity:update`; raising one requires `npm run complexity:update -- --accept` and is visible in review.",
+  "$comment": "Complexity and size ratchet, enforced by `npm run complexity:check` (scripts/check-complexity.mjs). New functions and files must stay within `limits` (`lines` is code lines per function, `fileLines` code lines per file, both excluding blank and comment lines). Entries under `functions` and `files` predate a limit and are pinned at their measured score — they may only go down. Lower scores with `npm run complexity:update`; raising one requires `npm run complexity:update -- --accept` and is visible in review.",
   "limits": {
-    "cyclomatic": 20,
-    "cognitive": 15
+    "cyclomatic": 15,
+    "cognitive": 15,
+    "lines": 80,
+    "params": 4,
+    "fileLines": 500
   },
-  "functions": {}
+  "functions": {
+    "src/comments/commentMedia.ts::decorateCommentMedia": {
+      "lines": 90
+    },
+    "src/comments/store.ts::makeNewThread": {
+      "params": 6
+    },
+    "src/comments/useThreadSync.ts::useThreadSync": {
+      "lines": 150
+    },
+    "src/comments/useThreadSync.ts::useThreadSync > React.useEffect(callback) #2": {
+      "lines": 122
+    },
+    "src/hub/DocumentsApp.tsx::DocumentsApp": {
+      "lines": 220
+    },
+    "src/hub/DocumentsApp.tsx::RepoPicker": {
+      "lines": 219
+    },
+    "src/hub/DocumentsApp.tsx::useLazyTree": {
+      "lines": 82
+    },
+    "src/hub/DocumentsApp.tsx::useRepoBindings": {
+      "lines": 102
+    },
+    "src/hub/DocumentsHubApp.tsx::DocumentsHubApp": {
+      "lines": 679
+    },
+    "src/hub/DocumentsHubApp.tsx::DocumentsHubApp > React.useEffect(callback)": {
+      "lines": 84
+    },
+    "src/hub/DocumentsHubApp.tsx::buildHubDeepLinkUrl": {
+      "params": 5
+    },
+    "src/hub/documentsHub.helpers.ts::assembleHubDeepLinkUrl": {
+      "params": 6
+    },
+    "src/hub/documentsHub.helpers.ts::buildHubDocUrl": {
+      "params": 5
+    },
+    "src/hub/markdownReader.tsx::MarkdownReader": {
+      "lines": 177
+    },
+    "src/markdown/diffDecorations.ts::clearDecorations": {
+      "lines": 119
+    },
+    "src/markdown/diffDecorations.ts::decorateFrontmatterValue": {
+      "params": 5
+    },
+    "src/markdown/diffDecorations.ts::reconstructEditedBlock": {
+      "params": 7
+    },
+    "src/markdown/diffDecorations.ts::reconstructOriginalBlock": {
+      "params": 5
+    },
+    "src/markdown/diffDecorations.ts::resolveFrontmatterOriginalValue": {
+      "params": 5
+    },
+    "src/markdown/diffRefine.ts::makeChunk": {
+      "params": 5
+    },
+    "src/markdown/diffRefine.ts::refineSpan": {
+      "lines": 105
+    },
+    "src/markdown/docLinks.ts::buildReposFileUrl": {
+      "params": 5
+    },
+    "src/pr-tab/PrTabApp.tsx::PrTabApp": {
+      "lines": 457
+    },
+    "src/pr-tab/PrTabApp.tsx::resolvePrContext": {
+      "lines": 138
+    },
+    "src/shell/PrShell.tsx::PrShell": {
+      "lines": 509
+    },
+    "src/shell/adoCommentApi.helpers.ts::editBlockToRange": {
+      "params": 5
+    },
+    "src/shell/adoCommentApi.ts::buildLineCountsCacheKey": {
+      "params": 5
+    },
+    "src/shell/adoCommentApi.ts::fetchFileDiffs": {
+      "params": 5
+    },
+    "src/shell/adoCommentApi.ts::fetchOriginalLines": {
+      "params": 5
+    },
+    "src/shell/adoGitData.ts::findDocPrHistory": {
+      "lines": 92
+    },
+    "src/shell/adoGitData.ts::listMarkdownLevel": {
+      "lines": 95
+    },
+    "src/shell/components/ArticleView.tsx::ArticleView": {
+      "lines": 424
+    },
+    "src/shell/components/ArticleView.tsx::ArticleView > React.useLayoutEffect(callback)": {
+      "lines": 158
+    },
+    "src/shell/components/Balloon.tsx::Balloon": {
+      "lines": 116
+    },
+    "src/shell/components/CommentFilterMenu.tsx::CommentFilterMenu": {
+      "lines": 120
+    },
+    "src/shell/components/CommentRail.tsx::CommentRail": {
+      "lines": 248
+    },
+    "src/shell/components/CommentRow.tsx::CommentRow": {
+      "lines": 146
+    },
+    "src/shell/components/Composer.tsx::Composer": {
+      "lines": 356
+    },
+    "src/shell/components/DiffMinimap.tsx::DiffMinimap": {
+      "lines": 171
+    },
+    "src/shell/components/DocNav.tsx::DirNavRow": {
+      "lines": 82
+    },
+    "src/shell/components/DocNav.tsx::DocNav": {
+      "lines": 438
+    },
+    "src/shell/components/DocNav.tsx::FileNavRow": {
+      "lines": 98
+    },
+    "src/shell/components/DocNav.tsx::SearchResultsList": {
+      "lines": 105
+    },
+    "src/shell/components/GeneratedSourceModal.tsx::GeneratedSourceModal": {
+      "lines": 132
+    },
+    "src/shell/components/MentionPicker.tsx::MentionPicker": {
+      "lines": 82
+    },
+    "src/shell/components/MentionPicker.tsx::SuggestionRow": {
+      "lines": 95
+    },
+    "src/shell/components/ReaderLoadingShell.tsx::ReaderLoadingShell": {
+      "lines": 89
+    },
+    "src/shell/components/ReaderStatusBar.tsx::IterationPicker": {
+      "lines": 229
+    },
+    "src/shell/components/ReaderStatusBar.tsx::ReaderStatusBar": {
+      "lines": 143
+    },
+    "src/shell/components/ReaderStatusBar.tsx::ReadingPreferencesControls": {
+      "lines": 92
+    },
+    "src/shell/components/diffMinimap.helpers.ts::scrollFromThumbDrag": {
+      "params": 6
+    },
+    "src/shell/components/diffMinimap.helpers.ts::thumbMetrics": {
+      "params": 5
+    },
+    "src/shell/components/useDocSearch.ts::useDocSearch": {
+      "lines": 142
+    },
+    "src/shell/prShell/useCommentPosting.ts::useCommentPosting": {
+      "lines": 115
+    },
+    "src/shell/prShell/useDocNavigation.ts::useDocNavigation": {
+      "lines": 92
+    },
+    "src/shell/prShell/useDocScroll.ts::useDocScroll": {
+      "lines": 89
+    },
+    "src/shell/prShell/useDocumentSource.ts::useDocumentSource": {
+      "lines": 88
+    },
+    "src/shell/prShell/useDraftController.ts::useDraftController": {
+      "lines": 126
+    },
+    "src/shell/prShell/useHistoryLoaders.ts::useHistoryLoaders": {
+      "lines": 191
+    },
+    "src/shell/prShell/usePaneResize.ts::usePaneResize": {
+      "lines": 184
+    },
+    "src/shell/prShell/useRailModel.ts::useRailModel": {
+      "lines": 160
+    },
+    "src/shell/prShell/useReviewHistory.ts::useReviewHistory": {
+      "lines": 83
+    },
+    "src/shell/prShell/useThreadMutations.ts::useThreadMutations": {
+      "lines": 160
+    },
+    "src/shell/prShell/useThreadStore.ts::useThreadStore": {
+      "lines": 120
+    },
+    "src/shell/prShell/useThreadViews.ts::useThreadViews": {
+      "lines": 85
+    }
+  },
+  "files": {
+    "src/comments/fixtures.ts": {
+      "fileLines": 1310
+    },
+    "src/hub/DocumentsApp.tsx": {
+      "fileLines": 1028
+    },
+    "src/hub/DocumentsHubApp.tsx": {
+      "fileLines": 829
+    },
+    "src/markdown/diffDecorations.ts": {
+      "fileLines": 3080
+    },
+    "src/markdown/diffRefine.ts": {
+      "fileLines": 575
+    },
+    "src/pr-tab/PrTabApp.tsx": {
+      "fileLines": 881
+    },
+    "src/shell/PrShell.tsx": {
+      "fileLines": 636
+    },
+    "src/shell/adoCommentApi.helpers.ts": {
+      "fileLines": 532
+    },
+    "src/shell/adoCommentApi.ts": {
+      "fileLines": 612
+    },
+    "src/shell/adoGitData.ts": {
+      "fileLines": 765
+    },
+    "src/shell/components/ArticleView.tsx": {
+      "fileLines": 886
+    },
+    "src/shell/components/DocNav.tsx": {
+      "fileLines": 1343
+    },
+    "src/shell/components/ReaderStatusBar.tsx": {
+      "fileLines": 1228
+    },
+    "src/shell/prShell/derive.ts": {
+      "fileLines": 595
+    }
+  }
 }

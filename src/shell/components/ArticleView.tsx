@@ -415,6 +415,148 @@ function nextClickedThreadId(
   return threadIds[(activeIndex + 1) % threadIds.length]!;
 }
 
+/** Signature of an anchor's identity, for the wrap effect's dependency keys. */
+function anchorSignature(anchor: TextQuoteAnchor): string {
+  return `${anchor.exact}|${anchor.prefix}|${anchor.suffix}|${anchor.line ?? ""}|${anchor.implicit === true}`;
+}
+
+/** True when diff decorations are on and there are changed ranges to show. */
+function hasVisibleDiff(
+  showDiff: boolean,
+  diff: readonly DiffRange[] | undefined,
+): diff is readonly DiffRange[] {
+  return showDiff && !!diff && diff.length > 0;
+}
+
+/**
+ * `dataset[key]` of the focused element's closest `selector` match, when focus
+ * is inside `article` — read before a rewrap so the focus can be restored.
+ */
+function focusedDatasetValue(
+  article: HTMLElement,
+  selector: string,
+  key: string,
+): string | undefined {
+  const active = article.ownerDocument.activeElement;
+  return article.contains(active)
+    ? (active as HTMLElement).closest<HTMLElement>(selector)?.dataset[key]
+    : undefined;
+}
+
+/** Re-focus the highlight / heading link that held focus before a rewrap. */
+function restoreRewrapFocus(
+  article: HTMLElement,
+  focusedThreadId: string | undefined,
+  focusedHeadingLinkId: string | undefined,
+): void {
+  if (focusedThreadId) {
+    article
+      .querySelector<HTMLElement>(
+        `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
+      )
+      ?.focus();
+  }
+  if (focusedHeadingLinkId) {
+    article
+      .querySelector<HTMLElement>(
+        `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
+      )
+      ?.focus({ preventScroll: true });
+  }
+}
+
+interface SelectionBubbleState {
+  top: number;
+  left: number;
+  anchor: TextQuoteAnchor;
+  /** Set when a comment can't be attached to this selection. */
+  block: CommentBlock | null;
+  /** Set when the selection can be linked to. */
+  link: SelectionLinkTarget | null;
+}
+
+/**
+ * Approx selection bubble width (button label + chrome), used to clamp it
+ * horizontally. The explained (blocked) variant carries a sentence and an
+ * action.
+ */
+function selectionBubbleWidth(
+  block: CommentBlock | null,
+  readOnly: boolean,
+  link: SelectionLinkTarget | null,
+): number {
+  if (block) return 320;
+  if (readOnly) return 104;
+  return link ? 170 : 132;
+}
+
+/** Where the selection bubble sits relative to the article wrap. */
+function selectionBubblePosition(
+  rect: DOMRect,
+  wrapRect: DOMRect,
+  bubbleWidth: number,
+): { top: number; left: number } {
+  const desiredTop = rect.top - wrapRect.top - 36;
+  const desiredLeft =
+    rect.left + rect.width / 2 - wrapRect.left - bubbleWidth / 2;
+  return {
+    // Don't render above the article. If selection is at the very top,
+    // tuck the bubble just below it instead of off-screen.
+    /* v8 ignore next -- top-of-article clamp; headless getBoundingClientRect yields zeros */
+    top: desiredTop < 4 ? rect.bottom - wrapRect.top + 8 : desiredTop,
+    // Clamp horizontally so the bubble always fully fits inside wrap.
+    left: Math.max(4, Math.min(desiredLeft, wrapRect.width - bubbleWidth - 4)),
+  };
+}
+
+/** The floating selection bubble, wired to the article's comment/link actions. */
+function ArticleSelectionBubble(props: {
+  bubble: SelectionBubbleState;
+  readOnly: boolean;
+  onCopySelectionLink: ArticleViewProps["onCopySelectionLink"];
+  onSelection: (anchor: TextQuoteAnchor) => void;
+  onDismiss: () => void;
+}): React.ReactElement {
+  const { bubble, readOnly, onCopySelectionLink, onSelection, onDismiss } =
+    props;
+  return (
+    <SelectionBubble
+      top={bubble.top}
+      left={bubble.left}
+      block={
+        bubble.block
+          ? {
+              ...bubble.block,
+              onAction: () => {
+                const action = bubble.block!.onAction;
+                onDismiss();
+                window.getSelection()?.removeAllRanges();
+                action();
+              },
+            }
+          : null
+      }
+      onAddComment={
+        readOnly
+          ? undefined
+          : () => {
+              const a = bubble.anchor;
+              onDismiss();
+              // Collapse selection so the highlight is visible.
+              window.getSelection()?.removeAllRanges();
+              onSelection(a);
+            }
+      }
+      onCopyLink={
+        bubble.link && onCopySelectionLink
+          ? () => onCopySelectionLink(bubble.link!)
+          : undefined
+      }
+      onCopyLinkSettled={onDismiss}
+    />
+  );
+}
+
 export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const {
     pristineHtml,
@@ -452,15 +594,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     setLinkAnnouncementText("");
     window.requestAnimationFrame(() => setLinkAnnouncementText(text));
   }, []);
-  const [bubble, setBubble] = React.useState<{
-    top: number;
-    left: number;
-    anchor: TextQuoteAnchor;
-    /** Set when a comment can't be attached to this selection. */
-    block: CommentBlock | null;
-    /** Set when the selection can be linked to. */
-    link: SelectionLinkTarget | null;
-  } | null>(null);
+  const [bubble, setBubble] = React.useState<SelectionBubbleState | null>(null);
   // Generated block whose Source action was clicked. `original` carries the
   // pre-PR source so the modal can show an internal source-level diff.
   const [generatedSource, setGeneratedSource] =
@@ -484,22 +618,17 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const threadsKey = React.useMemo(
     () =>
       threads
-        .map(
-          (t) =>
-            `${t.id}|${t.status}|${t.anchor.exact}|${t.anchor.prefix}|${t.anchor.suffix}|${t.anchor.line ?? ""}|${t.anchor.implicit === true}`,
-        )
+        .map((t) => `${t.id}|${t.status}|${anchorSignature(t.anchor)}`)
         .join("\n"),
     [threads],
   );
-  const draftKey = draftAnchor
-    ? `${draftAnchor.exact}|${draftAnchor.prefix}|${draftAnchor.suffix}|${draftAnchor.line ?? ""}|${draftAnchor.implicit === true}`
-    : "";
+  const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
   const previousActiveThreadIdRef = React.useRef<string | null>(null);
 
   // Signature so the layout effect re-runs when the diff ranges (or the
   // show/hide toggle) change, without re-running on unrelated renders.
   const diffKey = React.useMemo(() => {
-    if (!showDiff || !diff || diff.length === 0) return "";
+    if (!hasVisibleDiff(showDiff, diff)) return "";
     return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
   }, [diff, showDiff]);
 
@@ -509,23 +638,18 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   React.useLayoutEffect(() => {
     const article = articleRef.current!;
     const wrap = wrapRef.current!;
-    const focusedThreadId = article.contains(
-      article.ownerDocument.activeElement,
-    )
-      ? (
-          article.ownerDocument.activeElement as HTMLElement
-        ).closest<HTMLElement>('.emr-highlight[role="button"]')?.dataset
-          .threadId
-      : undefined;
+    const focusedThreadId = focusedDatasetValue(
+      article,
+      '.emr-highlight[role="button"]',
+      "threadId",
+    );
     // A keyboard user on a heading link button keeps their place when a
     // thread poll / diff / image load re-wraps the article.
-    const focusedHeadingLinkId = article.contains(
-      article.ownerDocument.activeElement,
-    )
-      ? (
-          article.ownerDocument.activeElement as HTMLElement
-        ).closest<HTMLElement>(`.${HEADING_LINK_CLASS}`)?.dataset.headingId
-      : undefined;
+    const focusedHeadingLinkId = focusedDatasetValue(
+      article,
+      `.${HEADING_LINK_CLASS}`,
+      "headingId",
+    );
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
     article.innerHTML = pristineHtml;
@@ -637,7 +761,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     // Applied AFTER the anchor wrap (block source-line attrs intact) and
     // BEFORE measureAll (a deletion marker shifts anchor y-positions).
     // ---------------------------------------------------------------------
-    if (showDiff && diff && diff.length > 0) {
+    if (hasVisibleDiff(showDiff, diff)) {
       decorateDiffRanges(article, diff, {
         renderInline: renderMarkdownSync,
         originalSource,
@@ -648,20 +772,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     // Rewraps create fresh spans, so restore selection without replaying the
     // transient landing cue. The active-thread effect owns that animation.
     syncActiveHighlights(article, activeThreadId, false);
-    if (focusedThreadId) {
-      article
-        .querySelector<HTMLElement>(
-          `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
-        )
-        ?.focus();
-    }
-    if (focusedHeadingLinkId) {
-      article
-        .querySelector<HTMLElement>(
-          `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
-        )
-        ?.focus({ preventScroll: true });
-    }
+    restoreRewrapFocus(article, focusedThreadId, focusedHeadingLinkId);
 
     // ---------------------------------------------------------------------
     // Measure y of every wrapped highlight relative to the article-wrap.
@@ -922,21 +1033,12 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         return;
       }
       // Approx bubble width (button label + chrome). Used to clamp horizontal.
-      // The explained (blocked) variant carries a sentence and an action.
-      const BUBBLE_W = block ? 320 : readOnly ? 104 : link ? 170 : 132;
-      const desiredTop = rect.top - wrapRect.top - 36;
-      const desiredLeft =
-        rect.left + rect.width / 2 - wrapRect.left - BUBBLE_W / 2;
+      const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
       setBubble({
         anchor,
         block,
         link,
-        // Don't render above the article. If selection is at the very top,
-        // tuck the bubble just below it instead of off-screen.
-        /* v8 ignore next -- top-of-article clamp; headless getBoundingClientRect yields zeros */
-        top: desiredTop < 4 ? rect.bottom - wrapRect.top + 8 : desiredTop,
-        // Clamp horizontally so the bubble always fully fits inside wrap.
-        left: Math.max(4, Math.min(desiredLeft, wrapRect.width - BUBBLE_W - 4)),
+        ...selectionBubblePosition(rect, wrapRect, bubbleWidth),
       });
     });
   }, [readOnly, hasSelectionLinks]);
@@ -966,40 +1068,13 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         onPointerOver={onPointerOver}
       />
       {bubble ? (
-        <SelectionBubble
+        <ArticleSelectionBubble
           key={`${bubble.top}:${bubble.left}:${bubble.anchor.exact}`}
-          top={bubble.top}
-          left={bubble.left}
-          block={
-            bubble.block
-              ? {
-                  ...bubble.block,
-                  onAction: () => {
-                    const action = bubble.block!.onAction;
-                    setBubble(null);
-                    window.getSelection()?.removeAllRanges();
-                    action();
-                  },
-                }
-              : null
-          }
-          onAddComment={
-            readOnly
-              ? undefined
-              : () => {
-                  const a = bubble.anchor;
-                  setBubble(null);
-                  // Collapse selection so the highlight is visible.
-                  window.getSelection()?.removeAllRanges();
-                  callbacksRef.current.onSelection(a);
-                }
-          }
-          onCopyLink={
-            bubble.link && onCopySelectionLink
-              ? () => onCopySelectionLink(bubble.link!)
-              : undefined
-          }
-          onCopyLinkSettled={() => setBubble(null)}
+          bubble={bubble}
+          readOnly={readOnly}
+          onCopySelectionLink={onCopySelectionLink}
+          onSelection={(a) => callbacksRef.current.onSelection(a)}
+          onDismiss={() => setBubble(null)}
         />
       ) : null}
       <GeneratedSourceModal

@@ -1107,22 +1107,12 @@ function DirNavRow(
           } as React.CSSProperties
         }
       >
-        <button
-          type="button"
-          className="emr-docnav-twist"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDirToggle();
-          }}
-          aria-label={twist.label}
-          aria-expanded={!isCollapsed}
-          aria-busy={isLoading || undefined}
-          title={twist.title}
-          data-collapsed={isCollapsed ? "true" : undefined}
-          disabled={isLoading}
-        >
-          {isLoading ? <SvgSpinner /> : <SvgCaret />}
-        </button>
+        <DirTwistButton
+          twist={twist}
+          isCollapsed={isCollapsed}
+          isLoading={isLoading}
+          onToggle={onDirToggle}
+        />
         {page ? (
           <WikiPageLabel
             page={page}
@@ -1132,26 +1122,13 @@ function DirNavRow(
             }}
           />
         ) : (
-          <button
-            type="button"
-            className="emr-docnav-label emr-docnav-dir-label"
-            onClick={onDirToggle}
-            title={node.path}
-            disabled={isLoading}
-          >
-            <span
-              className="emr-docnav-file-icon emr-docnav-folder-icon"
-              aria-hidden
-            >
-              <SvgFolder open={!isCollapsed} />
-            </span>
-            <span className="emr-docnav-item-text">{node.displayName}</span>
-            {isLazy && !isLoading ? (
-              <span className="emr-docnav-lazy-hint" aria-hidden>
-                …
-              </span>
-            ) : null}
-          </button>
+          <DirFolderLabel
+            node={node}
+            isLazy={isLazy}
+            isLoading={isLoading}
+            isCollapsed={isCollapsed}
+            onToggle={onDirToggle}
+          />
         )}
       </div>
       <NavChildren
@@ -1161,6 +1138,64 @@ function DirNavRow(
       />
       {isCollapsed ? null : <NavChildren nodes={node.children} item={props} />}
     </div>
+  );
+}
+
+/** A folder row's chevron: expands/collapses (or loads) the folder. */
+function DirTwistButton(props: {
+  twist: { label: string; title: string };
+  isCollapsed: boolean;
+  isLoading: boolean;
+  onToggle: () => void;
+}): React.ReactElement {
+  const { twist, isCollapsed, isLoading, onToggle } = props;
+  return (
+    <button
+      type="button"
+      className="emr-docnav-twist"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-label={twist.label}
+      aria-expanded={!isCollapsed}
+      aria-busy={isLoading || undefined}
+      title={twist.title}
+      data-collapsed={isCollapsed ? "true" : undefined}
+      disabled={isLoading}
+    >
+      {isLoading ? <SvgSpinner /> : <SvgCaret />}
+    </button>
+  );
+}
+
+/** Label of a plain folder row: expands/collapses (or loads) the folder. */
+function DirFolderLabel(props: {
+  node: DirNavNode;
+  isLazy: boolean;
+  isLoading: boolean;
+  isCollapsed: boolean;
+  onToggle: () => void;
+}): React.ReactElement {
+  const { node, isLazy, isLoading, isCollapsed, onToggle } = props;
+  return (
+    <button
+      type="button"
+      className="emr-docnav-label emr-docnav-dir-label"
+      onClick={onToggle}
+      title={node.path}
+      disabled={isLoading}
+    >
+      <span className="emr-docnav-file-icon emr-docnav-folder-icon" aria-hidden>
+        <SvgFolder open={!isCollapsed} />
+      </span>
+      <span className="emr-docnav-item-text">{node.displayName}</span>
+      {isLazy && !isLoading ? (
+        <span className="emr-docnav-lazy-hint" aria-hidden>
+          …
+        </span>
+      ) : null}
+    </button>
   );
 }
 

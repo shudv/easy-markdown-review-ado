@@ -1,13 +1,47 @@
 # OSS mirror sync ledger
 
+## 2026-11-04 Complexity and size ratchet sync
+
+- Public base: `0c7433f` (OSS `1.3.0`, complexity baseline and duplication
+  gate).
+- Previously mirrored product boundary: `4b47a94` (the merged form of
+  `548f291`).
+- New product boundary: `14843f8` (source branch `chore/size-ratchet`, not yet
+  merged; record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.0`. The package version, lockfile root
+  version and Marketplace manifest do not move.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `14843f8`     | Complexity ratchet extended to size: cyclomatic limit 20 → 15 (the 7 functions above it split, nothing pinned for complexity), new limits of 80 code lines and 4 parameters per function and 500 code lines per file, today's offenders pinned in `complexity-baseline.json` (`functions` and a new `files` section), checker tests, ESLint editor warnings, and README docs. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The source change also updates a comment in the private Azure pipeline; the
+  GitHub CI step runs the same `complexity:check` and needs no change.
+- The README keeps its public wording; only the complexity commands and limits
+  are updated.
+- The public `diffDecorations.ts` keeps its shorter `togglePopover` call, so its
+  pinned file length is one line lower (3080) than the source baseline.
+- No dependency changes.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `14843f8` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-10-30 Complexity baseline and duplication gate sync
 
 - Public base: `5c0d730` (OSS `1.3.0`, Azure DevOps wiki compatibility).
 - Previously mirrored product boundary: `02cf7f9` (the merged form of
   `52b3bd9`).
 - New product boundary: `548f291` (source branch
-  `refactor/zero-complexity-baseline`, not yet merged; record the source merge
-  commit here once it lands).
+  `refactor/zero-complexity-baseline`, merged as `4b47a94`).
 - OSS release version: unchanged at `1.3.0`. The package version, lockfile root
   version and Marketplace manifest do not move.
 - Strategy: replay the product tree delta without importing private history.

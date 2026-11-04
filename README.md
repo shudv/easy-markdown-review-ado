@@ -34,7 +34,7 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. Function complexity is [pinned](complexity-baseline.json).
+3. Function complexity and function and file size are [pinned](complexity-baseline.json).
 4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
 5. End-to-end tests covering the Azure DevOps integration boundary.
 6. Visual regression tests to protect the UI.
@@ -61,8 +61,8 @@ Dependencies restore from public npm. The repository disables install scripts in
 | `npm run storybook`         | Browse the UI with fake data at http://localhost:6006              |
 | `npm run dev:ado`           | Open the dev extension in a browser with scoped localhost access   |
 | `npm run build`             | Production build, bundle-size check, and dev-fault exclusion check |
-| `npm run complexity`        | Report per-function cyclomatic and cognitive complexity            |
-| `npm run complexity:update` | Lock in complexity improvements in the baseline                    |
+| `npm run complexity`        | Report per-function and per-file complexity and size               |
+| `npm run complexity:update` | Lock in complexity and size improvements in the baseline           |
 | `npm run e2e`               | Run the Chromium integration suite once                            |
 | `npm run e2e:soak`          | Repeat the Chromium integration suite twice                        |
 
@@ -75,11 +75,14 @@ npm run duplication:check; npm run test:coverage; npm run build
 npm run test:visual:docker
 ```
 
-CI also enforces the per-function complexity limits and pinned scores.
-`complexity:check` fails when a pinned function gets simpler, so the gain is
-recorded: run `npm run complexity:update` and commit the baseline. An intentional
-increase needs `npm run complexity:update -- --accept`, which appears in the PR
-diff.
+CI also enforces per-function and per-file limits, set in
+[`complexity-baseline.json`](complexity-baseline.json): cyclomatic and cognitive
+complexity of 15, 80 code lines and 4 parameters per function, and 500 code
+lines per file (blank and comment lines don't count). Functions and files that
+predate a limit are pinned at their current score. `complexity:check` fails
+when a pinned function or file gets smaller or simpler, so the gain is recorded:
+run `npm run complexity:update` and commit the baseline. An intentional increase
+needs `npm run complexity:update -- --accept`, which appears in the PR diff.
 
 CI also fails on copy-pasted code. `duplication:check` runs
 [jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it

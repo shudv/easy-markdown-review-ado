@@ -11,6 +11,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import noOnlyTests from "eslint-plugin-no-only-tests";
 import sonarjs from "eslint-plugin-sonarjs";
 import complexityBaseline from "./complexity-baseline.json" with { type: "json" };
+import { LINE_COUNT_OPTIONS } from "./scripts/check-complexity.mjs";
 
 const complexityLimits = complexityBaseline.limits;
 
@@ -132,6 +133,27 @@ export default tseslint.config(
       "no-useless-escape": "warn",
       "no-useless-assignment": "warn",
       "preserve-caught-error": "warn",
+    },
+  },
+
+  {
+    // Size budget: editor feedback for the function/file size limits in
+    // complexity-baseline.json, on the same files the ratchet measures.
+    // `npm run complexity:check` enforces them and grandfathers pinned
+    // functions and files, so these stay warnings. (The gate counts only
+    // real functions' parameters; `max-params` also flags function types.)
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.stories.tsx", "src/**/*.d.ts"],
+    rules: {
+      "max-lines-per-function": [
+        "warn",
+        { max: complexityLimits.lines, ...LINE_COUNT_OPTIONS },
+      ],
+      "max-params": ["warn", complexityLimits.params],
+      "max-lines": [
+        "warn",
+        { max: complexityLimits.fileLines, ...LINE_COUNT_OPTIONS },
+      ],
     },
   },
 

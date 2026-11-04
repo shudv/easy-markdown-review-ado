@@ -144,15 +144,16 @@ export function computeBackoffMs(
   return Math.floor(random() * exp);
 }
 
-/**
- * Run `fn` with ret/backoff per the resiliency policy. `fn` receives the
- * 1-based attempt number. The last error is rethrown once attempts are
- * exhausted or the failure is classified non-retryable.
- */
-export async function withRetry<T>(
-  fn: (attempt: number) => Promise<T>,
-  opts: RetryOptions,
-): Promise<T> {
+type ResolvedRetryOptions = Required<
+  Pick<
+    RetryOptions,
+    "mode" | "attempts" | "baseDelayMs" | "maxDelayMs" | "sleep" | "random"
+  >
+> &
+  Pick<RetryOptions, "signal" | "onRetry">;
+
+/** Fill in the policy defaults for any omitted retry options. */
+function resolveRetryOptions(opts: RetryOptions): ResolvedRetryOptions {
   const {
     mode,
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
@@ -165,6 +166,37 @@ export async function withRetry<T>(
   const attempts =
     opts.attempts ??
     (mode === "write" ? DEFAULT_WRITE_ATTEMPTS : DEFAULT_READ_ATTEMPTS);
+  return {
+    mode,
+    attempts,
+    baseDelayMs,
+    maxDelayMs,
+    signal,
+    sleep,
+    random,
+    onRetry,
+  };
+}
+
+/**
+ * Run `fn` with ret/backoff per the resiliency policy. `fn` receives the
+ * 1-based attempt number. The last error is rethrown once attempts are
+ * exhausted or the failure is classified non-retryable.
+ */
+export async function withRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  opts: RetryOptions,
+): Promise<T> {
+  const {
+    mode,
+    attempts,
+    baseDelayMs,
+    maxDelayMs,
+    signal,
+    sleep,
+    random,
+    onRetry,
+  } = resolveRetryOptions(opts);
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {

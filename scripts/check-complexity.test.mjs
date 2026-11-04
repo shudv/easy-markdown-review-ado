@@ -13,21 +13,33 @@ async function measureFixture(files) {
       await mkdir(join(root, "src"), { recursive: true });
       await writeFile(join(root, "src", name), source);
     }
-    const records = await measure({ cwd: root });
-    return Object.fromEntries(records.map((r) => [`${r.file}::${r.name}`, r]));
+    const { functions } = await measure({ cwd: root });
+    return Object.fromEntries(
+      functions.map((r) => [`${r.file}::${r.name}`, r]),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 }
 
-const limits = { cyclomatic: 20, cognitive: 15 };
-const record = (name, cyclomatic, cognitive) => ({
+const limits = {
+  cyclomatic: 20,
+  cognitive: 15,
+  lines: 80,
+  params: 4,
+  fileLines: 500,
+};
+const record = (name, cyclomatic, cognitive, lines = 1, params = 0) => ({
   file: "src/a.ts",
   name,
   line: 1,
   cyclomatic,
   cognitive,
+  lines,
+  params,
 });
+// Function records only, as `measure()` returns them alongside file records.
+const fns = (...records) => ({ functions: records, files: [] });
 
 test("scores each function with ESLint complexity and SonarJS cognitive complexity", async () => {
   const byKey = await measureFixture({
@@ -129,14 +141,14 @@ test("passes when functions are within limits or at their pinned score", () => {
     functions: { "src/a.ts::big": { cyclomatic: 40 } },
   };
   const result = evaluate(
-    [record("small", 20, 15), record("big", 40, 10)],
+    fns(record("small", 20, 15), record("big", 40, 10)),
     baseline,
   );
   assert.deepEqual(result, { violations: [], stale: [] });
 });
 
 test("fails a new function that exceeds a limit", () => {
-  const { violations } = evaluate([record("fresh", 21, 16)], {
+  const { violations } = evaluate(fns(record("fresh", 21, 16)), {
     limits,
     functions: {},
   });
@@ -154,7 +166,7 @@ test("fails a pinned function that gets worse, including a metric that was withi
     limits,
     functions: { "src/a.ts::big": { cyclomatic: 40 } },
   };
-  const { violations } = evaluate([record("big", 41, 16)], baseline);
+  const { violations } = evaluate(fns(record("big", 41, 16)), baseline);
   assert.deepEqual(
     violations.map((v) => [v.metric, v.actual, v.allowed, v.pinned]),
     [
@@ -172,7 +184,7 @@ test("flags improved and missing pinned functions as stale so gains are locked i
       "src/a.ts::gone": { cognitive: 30 },
     },
   };
-  const { violations, stale } = evaluate([record("big", 35, 1)], baseline);
+  const { violations, stale } = evaluate(fns(record("big", 35, 1)), baseline);
   assert.deepEqual(violations, []);
   assert.deepEqual(
     stale.map((s) => [s.key, s.metric, s.actual, s.pinned]),
@@ -198,13 +210,13 @@ test("update only tightens: lowers, drops resolved entries, never adds or raises
     record("worse", 31, 1),
     record("fresh", 25, 1),
   ];
-  const next = nextBaseline(records, baseline);
+  const next = nextBaseline(fns(...records), baseline);
   assert.deepEqual(next.functions, {
     "src/a.ts::lower": { cyclomatic: 35 },
     "src/a.ts::worse": { cyclomatic: 30 },
   });
   assert.deepEqual(
-    evaluate(records, next).violations.map((v) => v.key),
+    evaluate(fns(...records), next).violations.map((v) => v.key),
     ["src/a.ts::worse", "src/a.ts::fresh"],
   );
 });
@@ -215,10 +227,113 @@ test("update --accept pins current scores, including regressions and new offende
     functions: { "src/a.ts::worse": { cyclomatic: 30 } },
   };
   const records = [record("worse", 31, 1), record("fresh", 25, 16)];
-  const next = nextBaseline(records, baseline, { accept: true });
+  const next = nextBaseline(fns(...records), baseline, { accept: true });
   assert.deepEqual(next.functions, {
     "src/a.ts::fresh": { cyclomatic: 25, cognitive: 16 },
     "src/a.ts::worse": { cyclomatic: 31 },
   });
-  assert.deepEqual(evaluate(records, next), { violations: [], stale: [] });
+  assert.deepEqual(evaluate(fns(...records), next), {
+    violations: [],
+    stale: [],
+  });
+});
+
+test("measures code lines and declared parameters per function, and code lines per file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "emr-complexity-"));
+  try {
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(
+      join(root, "src", "a.ts"),
+      [
+        "// header comment",
+        "export function wide(a: number, b: number, c: number, d: number, e: number) {",
+        "  // comment lines and blank lines are not counted",
+        "",
+        "  return a + b + c + d + e;",
+        "}",
+        "export function bound(this: Window, a: number) {",
+        "  return a;",
+        "}",
+        "export type Handler = (a: number, b: number, c: number, d: number, e: number) => void;",
+      ].join("\n"),
+    );
+    const { functions, files } = await measure({ cwd: root });
+    const byName = Object.fromEntries(functions.map((r) => [r.name, r]));
+    assert.deepEqual(Object.keys(byName).sort(), ["bound", "wide"]);
+    assert.deepEqual(
+      { lines: byName.wide.lines, params: byName.wide.params },
+      { lines: 3, params: 5 },
+    );
+    // A TypeScript `this` annotation is not a parameter.
+    assert.equal(byName.bound.params, 1);
+    assert.deepEqual(files, [{ file: "src/a.ts", fileLines: 7 }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("fails long functions and functions with too many parameters", () => {
+  const { violations } = evaluate(fns(record("long", 1, 1, 81, 5)), {
+    limits,
+    functions: {},
+  });
+  assert.deepEqual(
+    violations.map((v) => [v.metric, v.actual, v.allowed]),
+    [
+      ["lines", 81, 80],
+      ["params", 5, 4],
+    ],
+  );
+});
+
+test("ratchets file length like function scores", () => {
+  const baseline = {
+    limits,
+    functions: {},
+    files: {
+      "src/big.ts": { fileLines: 900 },
+      "src/gone.ts": { fileLines: 700 },
+    },
+  };
+  const measurement = {
+    functions: [],
+    files: [
+      { file: "src/big.ts", fileLines: 850 },
+      { file: "src/fresh.ts", fileLines: 501 },
+      { file: "src/small.ts", fileLines: 20 },
+    ],
+  };
+  const { violations, stale } = evaluate(measurement, baseline);
+  assert.deepEqual(
+    violations.map((v) => [v.key, v.metric, v.actual, v.allowed, v.pinned]),
+    [["src/fresh.ts", "fileLines", 501, 500, false]],
+  );
+  assert.deepEqual(
+    stale.map((s) => [s.key, s.metric, s.actual, s.pinned]),
+    [
+      ["src/big.ts", "fileLines", 850, 900],
+      ["src/gone.ts", null, null, null],
+    ],
+  );
+  assert.deepEqual(nextBaseline(measurement, baseline).files, {
+    "src/big.ts": { fileLines: 850 },
+  });
+  assert.deepEqual(
+    nextBaseline(measurement, baseline, { accept: true }).files,
+    {
+      "src/big.ts": { fileLines: 850 },
+      "src/fresh.ts": { fileLines: 501 },
+    },
+  );
+});
+
+test("rejects a baseline with a missing limit instead of silently passing", () => {
+  assert.throws(
+    () =>
+      evaluate(fns(record("a", 1, 1)), {
+        limits: { cyclomatic: 20, cognitive: 15 },
+        functions: {},
+      }),
+    /limits are missing: lines, params, fileLines/,
+  );
 });

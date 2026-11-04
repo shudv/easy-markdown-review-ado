@@ -54,9 +54,9 @@ export interface DocRepo {
    * pending; `true` (or omitted, for back-compat with fixtures /
    * tests / the eager `discoverDocRepos` path) once `recentPr` has
    * been resolved. The Documents shell uses this to delay the
-   * threads load (and the PrShell mount) until routing is known
+   * threads load (and the Shell mount) until routing is known
    * — otherwise the initial render would show LocalOnly threads
-   * which a subsequent re-render couldn't correct because PrShell
+   * which a subsequent re-render couldn't correct because Shell
    * consumes `initialThreads` once at mount.
    */
   detailsLoaded?: boolean;

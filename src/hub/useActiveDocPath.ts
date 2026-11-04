@@ -11,7 +11,7 @@ import type { DocumentsAppProps } from "./documentsAppProps";
 
 /**
  * Track the active document path so the "Link to comment" builder can encode
- * it. Seeded from the deep-link/cache path (or the first file PrShell will
+ * it. Seeded from the deep-link/cache path (or the first file Shell will
  * open), updated as the user navigates, and reset when the repo switches.
  */
 export function useActiveDocPath(
@@ -41,7 +41,7 @@ export function useActiveDocPath(
     }
 
     // Publish the repo's initial/default document to the route exactly once —
-    // PrShell opens it without emitting a selection, so the route's `?path=`
+    // Shell opens it without emitting a selection, so the route's `?path=`
     // would otherwise stay stale (the previous repo's doc) or empty.
     //
     // CRITICAL: this must be RE-EVALUATED as `syntheticPr` streams in, not run

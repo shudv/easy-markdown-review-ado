@@ -1,4 +1,4 @@
-// Draft-persistence glue for the PR shell. Keeps a SINGLE in-progress comment
+// Draft-persistence glue for the Shell. Keeps a SINGLE in-progress comment
 // draft per experience — a new comment or a reply to an existing thread — in
 // localStorage, restored on reload. The shell enforces "one active draft"
 // (opening a second composer while a draft has text prompts a discard dialog);

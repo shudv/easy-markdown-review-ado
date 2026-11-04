@@ -1,6 +1,6 @@
-// CommentApi — minimal persistence boundary the PR shell calls through.
+// CommentApi — minimal persistence boundary the Shell calls through.
 //
-// `PrShell` performs an optimistic dispatch on its local thread reducer,
+// `Shell` performs an optimistic dispatch on its local thread reducer,
 // but it always routes the *mutation* through a CommentApi first so the
 // real-ADO build can persist to the Pull Request Threads service while the
 // standalone dev preview just generates throwaway ids.
@@ -52,7 +52,7 @@ export interface CreatedThreadIds {
 }
 
 /**
- * Optional persistence layer used by PrShell. When undefined, PrShell
+ * Optional persistence layer used by Shell. When undefined, Shell
  * falls back to {@link LocalOnlyCommentApi} which keeps everything in
  * memory and is fine for fixtures + standalone dev preview.
  */
@@ -232,7 +232,7 @@ export function filterByQuery<T>(
 // React context
 //
 // We avoid prop-drilling the CommentApi through Balloon → CommentRow →
-// Composer (and similar paths) by exposing it via context. PrShell sets
+// Composer (and similar paths) by exposing it via context. Shell sets
 // the provider once; descendants pull it with `useCommentApi()` when they
 // need to fire ad-hoc requests (today: mention typeahead inside Composer).
 // ---------------------------------------------------------------------------

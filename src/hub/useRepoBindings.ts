@@ -1,10 +1,10 @@
-// Documents hub: per-repository bindings handed to PrShell (comments, links, history).
+// Documents hub: per-repository bindings handed to Shell (comments, links, history).
 
 import * as React from "react";
 
 import type { CommentThread } from "../types";
-import type { RoutedPrInfo } from "../shell/PrShell";
-import type { DocPrRef } from "../shell/prShellHelpers";
+import type { RoutedPrInfo } from "../shell/Shell";
+import type { DocPrRef } from "../shell/shellHelpers";
 import type { CommentApi } from "../comments/api";
 import type { DocRepo } from "../shell/types";
 import type { FolderLister } from "../shell/wikiOrder";
@@ -12,7 +12,7 @@ import type { DocumentsAppProps } from "./documentsAppProps";
 
 /**
  * Repo-scoped loaders/APIs: curry the active repo id onto the host's
- * `(repoId, …)` callbacks so PrShell's per-path contracts are satisfied
+ * `(repoId, …)` callbacks so Shell's per-path contracts are satisfied
  * without leaking the repo id.
  */
 export function useRepoBindings(
@@ -49,7 +49,7 @@ function useRepoScopedBindings(
 ) {
   const { loadFileSource, commentApiFor } = props;
 
-  // Curry the per-repo source loader so PrShell's `loadFileSource(path)`
+  // Curry the per-repo source loader so Shell's `loadFileSource(path)`
   // contract is satisfied without leaking the repo id.
   const repoScopedLoader = React.useCallback(
     (path: string): Promise<string> => {
@@ -91,7 +91,7 @@ function usePerDocumentBindings(
   selectedRepo: DocRepo | undefined,
   perDocumentMode: boolean,
 ) {
-  // Per-document mode: curry the repo id so PrShell's per-path contracts
+  // Per-document mode: curry the repo id so Shell's per-path contracts
   // (`(path) => …`) are satisfied without leaking it.
   const commentApiForPathBound = React.useMemo<
     ((path: string) => CommentApi | undefined) | undefined
@@ -111,7 +111,7 @@ function usePerDocumentBindings(
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.loadThreadsForPath, selectedRepo]);
 
-  // Per-document mode: curry the repo id so PrShell resolves the routed-PR
+  // Per-document mode: curry the repo id so Shell resolves the routed-PR
   // pill for its selected file.
   const routedPrForPathBound = React.useMemo<
     ((path: string) => RoutedPrInfo | null | undefined) | undefined
@@ -123,7 +123,7 @@ function usePerDocumentBindings(
   }, [perDocumentMode, props.routedPrForPath, selectedRepo]);
 
   // Comment-history stepper: curry the repo id onto the three history loaders
-  // so PrShell's per-path stepper contracts are satisfied.
+  // so Shell's per-path stepper contracts are satisfied.
   const loadDocHistoryBound = React.useMemo<
     ((path: string) => Promise<DocPrRef[]>) | undefined
   >(() => {

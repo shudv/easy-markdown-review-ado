@@ -1,14 +1,14 @@
 // Top-level component for the Markdown Review PR tab in real ADO. Discovers
 // the active PR/project via the SDK, lists the changed `.md` files, loads
 // emr-authored threads, and feeds a PrInfo +
-// loadFileSource closure + thread CommentApi into the shared <PrShell/>.
+// loadFileSource closure + thread CommentApi into the shared <Shell/>.
 
 import * as React from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { PullRequestStatus } from "azure-devops-extension-api/Git";
 
-import { PrShell, type RoutedPrInfo } from "../shell/PrShell";
-import type { ReviewIterationRange } from "../shell/prShellHelpers";
+import { Shell, type RoutedPrInfo } from "../shell/Shell";
+import type { ReviewIterationRange } from "../shell/shellHelpers";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import {
@@ -96,12 +96,12 @@ import {
   SessionRefreshingView,
 } from "./PrTabStatusViews";
 
-// Stable empty array: threads load after mount via PrShell's thread sync, so
+// Stable empty array: threads load after mount via Shell's thread sync, so
 // the shell seeds its reducer with this instead of blocking first paint on the
 // thread fetch. Module-scoped so its identity never changes across renders.
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
 
-// eslint-disable-next-line max-lines-per-function -- PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into PrShell. Logic is extracted to tested modules; the rest is host wiring.
+// eslint-disable-next-line max-lines-per-function -- PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into Shell. Logic is extracted to tested modules; the rest is host wiring.
 export function PrTabApp(): React.ReactElement {
   const [ctx, setCtx] = React.useState<PrContext | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -309,7 +309,7 @@ export function PrTabApp(): React.ReactElement {
 
   // Terminal boot states that never render Markdown still complete boot so a
   // single `app.loaded` event always fires. `markAppReady` is idempotent, so if
-  // the document path renders first (PrShell fires "content"), these no-op.
+  // the document path renders first (Shell fires "content"), these no-op.
   React.useEffect(() => {
     if (error) markAppReady("error");
   }, [error]);
@@ -422,7 +422,7 @@ export function PrTabApp(): React.ReactElement {
     });
   }, [ctx]);
 
-  // Stable closure fetching the latest threads for this PR, used by PrShell's
+  // Stable closure fetching the latest threads for this PR, used by Shell's
   // `useThreadSync` to poll ~30s while visible. Must stay referentially stable.
   const fetchRemoteThreads = React.useCallback(
     async (_signal: AbortSignal) => {
@@ -490,7 +490,7 @@ export function PrTabApp(): React.ReactElement {
     <MentionLinkContext.Provider value={mentionLinks}>
       <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
         <DeepLinkContext.Provider value={buildDeepLink}>
-          <PrShell
+          <Shell
             pr={pr}
             listFolder={listFolder}
             loadFileSource={loadFileSource}

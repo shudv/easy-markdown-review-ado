@@ -12,7 +12,7 @@ import type {
 
 import { trackUserFacingError } from "../telemetry";
 import { withRetry } from "./retry";
-import { isItemNotFoundError } from "./prShellHelpers";
+import { isItemNotFoundError } from "./shellHelpers";
 import type { FolderListing } from "./types";
 import {
   findOrderFile,

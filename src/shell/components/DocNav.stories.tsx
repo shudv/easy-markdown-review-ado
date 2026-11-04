@@ -159,7 +159,7 @@ function Harness(props: HarnessProps): React.ReactElement {
  * A host that simulates ADO streaming nested folder contents: each
  * `onExpandFolder` removes the just-fetched folder from `unloadedFolders` and
  * merges the files + child folders it yields (children may themselves be
- * lazy). This mirrors how DocumentsApp/PrShell fold streamed results back into
+ * lazy). This mirrors how DocumentsApp/Shell fold streamed results back into
  * props, letting us exercise the deep-link auto-expand effect's chaining across
  * levels and its attempt-once guard.
  */

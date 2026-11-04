@@ -7,7 +7,7 @@ import type {
   GitRepository,
   PullRequestStatus,
 } from "azure-devops-extension-api/Git";
-import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
+import { isItemNotFoundError, type DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import type { FileInfo } from "../types";
 import { ORDER_FILE_NAME } from "./wikiOrder";

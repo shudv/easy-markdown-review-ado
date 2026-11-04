@@ -2,8 +2,8 @@
 // hooks that bind the host's repo-scoped loaders onto the active repo.
 
 import type { CommentAuthor, CommentThread } from "../types";
-import type { RoutedPrInfo, DocLinkNavigation } from "../shell/PrShell";
-import type { DocPrRef } from "../shell/prShellHelpers";
+import type { RoutedPrInfo, DocLinkNavigation } from "../shell/Shell";
+import type { DocPrRef } from "../shell/shellHelpers";
 import type { CommentApi } from "../comments/api";
 import type { DeepLinkTarget } from "../shell/deepLink";
 import type { DocRepo, FolderListing } from "../shell/types";
@@ -138,17 +138,17 @@ export interface DocumentsAppProps {
   onSelectRepo?: (repoId: string) => void;
   /**
    * Deep-link seed (`?comment=`): the thread to auto-open on first mount of
-   * the initial repo. Forwarded to PrShell alongside `initialSelectedPath`.
+   * the initial repo. Forwarded to Shell alongside `initialSelectedPath`.
    */
   initialActiveThreadId?: string;
   /**
    * Deep-link seed (`?anchor=`): the heading to scroll to on first mount of
-   * the initial repo. Forwarded to PrShell alongside `initialSelectedPath`.
+   * the initial repo. Forwarded to Shell alongside `initialSelectedPath`.
    */
   initialAnchor?: string;
   /**
    * Deep-link seed (`?text=`): the text to flash on first mount of the
-   * initial repo. Forwarded to PrShell alongside `initialSelectedPath`.
+   * initial repo. Forwarded to Shell alongside `initialSelectedPath`.
    */
   initialTextFragment?: string;
   /**
@@ -167,7 +167,7 @@ export interface DocumentsAppProps {
    * slug into the route's `?anchor=` param. Receives the active repo id.
    */
   onHeadingLinkCopied?: (repoId: string, anchor: string) => void;
-  /** Called after a link to selected text is copied (see PrShell). */
+  /** Called after a link to selected text is copied (see Shell). */
   onTextLinkCopied?: (
     repoId: string,
     text: string,

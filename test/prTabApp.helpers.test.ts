@@ -809,7 +809,7 @@ describe("withTimeout", () => {
   });
 });
 
-// Three PR updates, newest first (PrShell's order): iteration ids 7, 5, 4 —
+// Three PR updates, newest first (Shell's order): iteration ids 7, 5, 4 —
 // ids need not be consecutive, so the mapping must use them, not positions.
 const STOPS = [
   { commitId: null, prId: 9, iterationId: 7, isCurrent: true, readOnly: false },

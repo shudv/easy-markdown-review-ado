@@ -22,10 +22,10 @@ import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages
 
 import { DocumentsApp } from "./DocumentsApp";
 import { AvatarImageContext } from "../shell/components/Avatar";
-import type { RoutedPrInfo } from "../shell/PrShell";
+import type { RoutedPrInfo } from "../shell/Shell";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { buildReposFileUrl } from "../markdown/docLinks";
-import type { DocPrRef } from "../shell/prShellHelpers";
+import type { DocPrRef } from "../shell/shellHelpers";
 import { markAppReady, trackUserFacingError } from "../telemetry";
 import {
   buildPrUrl,
@@ -71,7 +71,7 @@ import {
   withoutKeyPrefix,
 } from "./hubRepoState";
 
-// eslint-disable-next-line max-lines-per-function -- Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one PrShell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host.
+// eslint-disable-next-line max-lines-per-function -- Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one Shell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host.
 export function DocumentsHubApp(): React.ReactElement {
   const [state, setState] = React.useState<DiscoveryState | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
@@ -212,7 +212,7 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // User-initiated refresh: re-run root listing + PR routing in parallel.
   // While in flight, `detailsLoaded` flips back to `false` so DocumentsApp
-  // tears down threads/PrShell and shows a loading state.
+  // tears down threads/Shell and shows a loading state.
   const refreshRepo = React.useCallback(
     async (repoId: string): Promise<void> => {
       const snapshot = stateRef.current;
@@ -463,7 +463,7 @@ export function DocumentsHubApp(): React.ReactElement {
     [state],
   );
 
-  // Cache constructed AdoCommentApi instances per repo so PrShell sees
+  // Cache constructed AdoCommentApi instances per repo so Shell sees
   // a stable identity across renders.
   const apiCacheRef = React.useRef<Map<string, CommentApi>>(new Map());
 
@@ -523,7 +523,7 @@ export function DocumentsHubApp(): React.ReactElement {
       const cached = pathApiCacheRef.current.get(key);
       if (cached) return cached;
       // The routing PR is resolved lazily by loadThreadsForPath. Until it
-      // lands, return undefined so PrShell uses its read-only session stub;
+      // lands, return undefined so Shell uses its read-only session stub;
       // this callback's identity changes when routingPrByPath updates, so the
       // write-capable api is adopted on the next render.
       const pr = routingPrByPath[key];
@@ -622,10 +622,10 @@ export function DocumentsHubApp(): React.ReactElement {
   );
 
   // Boot-time completion for terminal states that never mount DocumentsApp /
-  // PrShell (which would otherwise fire the "content" signal): a discovery
+  // Shell (which would otherwise fire the "content" signal): a discovery
   // error, or a project with no repositories. Without this the boot event would
   // silently never fire for those sessions. Idempotent + no-ops outside a real
-  // boot; if content later renders, PrShell's "content" already won.
+  // boot; if content later renders, Shell's "content" already won.
   const noRepos = !!state && state.repos.length === 0;
   React.useEffect(() => {
     if (error) markAppReady("error");

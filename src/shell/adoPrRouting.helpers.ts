@@ -15,7 +15,7 @@ import type {
 
 import { trackUserFacingError } from "../telemetry";
 import { withRetry } from "./retry";
-import { isItemNotFoundError, type DocPrRef } from "./prShellHelpers";
+import { isItemNotFoundError, type DocPrRef } from "./shellHelpers";
 import {
   buildPrUrl,
   commitIds,
@@ -340,7 +340,7 @@ async function fileCommitIdsPage(
     if (!isItemNotFoundError(err)) {
       trackUserFacingError({
         error: err,
-        source: "PrShell.history",
+        source: "Shell.history",
         operation: "history-commit-load",
         impact: "degraded",
       });
@@ -373,7 +373,7 @@ async function prsMergingCommits(
     );
     trackUserFacingError({
       error: err,
-      source: "PrShell.history",
+      source: "Shell.history",
       operation: "history-pr-load",
       impact: "degraded",
     });

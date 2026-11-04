@@ -40,7 +40,7 @@ export async function loadWikiSubpages(
     console.warn("[wiki] listing subpages failed:", err);
     trackUserFacingError({
       error: err,
-      source: "PrShell.subpages",
+      source: "Shell.subpages",
       operation: "subpages-load",
       impact: "degraded",
     });

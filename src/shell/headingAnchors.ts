@@ -2,7 +2,7 @@
 // (a heading slug from an `#anchor` link or an `?anchor=` deep link).
 //
 // Pure DOM helpers (no React) so the lookup rules are unit-testable in jsdom;
-// PrShell owns when they run.
+// Shell owns when they run.
 
 import { slugifyHeading } from "../markdown/render";
 import { wrapRangeTextNodes } from "../comments/highlight";

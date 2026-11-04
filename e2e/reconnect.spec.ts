@@ -20,7 +20,7 @@
 // The mid-session banner clearing by itself and a plain 401 (token fine) not
 // being mistaken for the window are host-independent (the faults are injected
 // in-app), so they live in Storybook (`Components/SessionNotice`,
-// `Components/PrShell` › `Plain Unauthorized Is Not Reconnecting`) and the
+// `Components/Shell` › `Plain Unauthorized Is Not Reconnecting`) and the
 // `adoSession` unit tests rather than here.
 //
 // Comments are created with a unique marker and removed over REST afterwards

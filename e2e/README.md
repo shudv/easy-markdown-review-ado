@@ -238,7 +238,7 @@ interrupted run.
 Draft persistence across a reload in the PR tab is covered by
 `reconnect.spec.ts` (scenario E). Behaviour that doesn't depend on the host is
 tested lower down instead: the discard guard, triple-click selection and the
-mid-session banner clearing itself run as `Components/PrShell`,
+mid-session banner clearing itself run as `Components/Shell`,
 `Components/ArticleViewSelection` and `Components/SessionNotice` stories in real
 Chromium, and plain 401 handling in the `adoSession` unit tests.
 

@@ -90,7 +90,7 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
   // Return as soon as the Markdown file list is known so the shell can mount
   // and start rendering the first document immediately. Line counts (diffs) and
   // the comment threads are fetched OFF the critical path — diffs by the
-  // component, threads by PrShell's mount-time thread sync — so first paint
+  // component, threads by Shell's mount-time thread sync — so first paint
   // never waits on them.
   const changedMdFiles = changedMarkdownFiles(changes);
   // Diff against the iteration's MERGE BASE (three-dot), not the target

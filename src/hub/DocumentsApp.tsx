@@ -1,6 +1,6 @@
 // DocumentsApp — repo-aware shell for the Documents hub. Renders the same
 // three-pane grid as the PR tab (DocNav | ArticleView | CommentRail) by
-// feeding `PrShell` a synthesized `PrInfo` whose `files` is the repo's doc
+// feeding `Shell` a synthesized `PrInfo` whose `files` is the repo's doc
 // inventory, a repo-scoped `loadFileSource`, and the repo's threads. Loaders
 // are agnostic to fixture-vs-live: standalone passes fixture-backed ones, the
 // real ADO entry passes `GitRestClient`-backed ones.
@@ -8,8 +8,8 @@
 import * as React from "react";
 
 import type { CommentThread, PrInfo } from "../types";
-import { PrShell } from "../shell/PrShell";
-import type { RoutedPrInfo } from "../shell/PrShell";
+import { Shell } from "../shell/Shell";
+import type { RoutedPrInfo } from "../shell/Shell";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { MentionLinkContext } from "../comments/mentionLinks";
 import {
@@ -165,14 +165,14 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
     props.onLoadRepoDetails,
   );
 
-  // Deep-link path (`?path=`). PrShell is keyed by repo id, so it only needs
+  // Deep-link path (`?path=`). Shell is keyed by repo id, so it only needs
   // to seed the *initial* repo's first mount. Once consumed — or once the user
   // switches repos — it's dropped so it can never override later navigation.
-  // NOTE: consumption is latched only once PrShell actually mounts (see the
-  // `prShellMounting` effect in `DocumentsAppBody`), not on this component's
+  // NOTE: consumption is latched only once Shell actually mounts (see the
+  // `shellMounting` effect in `DocumentsAppBody`), not on this component's
   // mount: in paginated mode the initial repo arrives as a content-less
-  // skeleton and PrShell is gated behind its details/threads loading, so
-  // latching on mount here would drop the deep-link path before PrShell ever
+  // skeleton and Shell is gated behind its details/threads loading, so
+  // latching on mount here would drop the deep-link path before Shell ever
   // reads it.
   const initialPathConsumedRef = React.useRef(false);
   const deepLinkSeeds = pickDeepLinkSeeds(
@@ -181,8 +181,8 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   );
   const initialSelectedPathForShell = deepLinkSeeds.initialSelectedPath;
 
-  // Threads are NOT fetched up front and awaited before mounting PrShell.
-  // Instead PrShell mounts as soon as the repo's routing is known and loads its
+  // Threads are NOT fetched up front and awaited before mounting Shell.
+  // Instead Shell mounts as soon as the repo's routing is known and loads its
   // threads via the mount-time thread sync (`fetchRemoteThreads` below, which
   // calls the same `loadThreadsFor`), merging them into the rail when they land.
   // This keeps the Markdown render off the thread-fetch critical path — the
@@ -223,7 +223,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   const { readOnly } = gating;
 
   // Background thread sync for the routed PR. Skipped when the repo has no PR.
-  // PrShell polls this ~30s while visible and merges via `MERGE_REMOTE_THREADS`.
+  // Shell polls this ~30s while visible and merges via `MERGE_REMOTE_THREADS`.
   const fetchRemoteThreads = React.useMemo<
     FetchRemoteThreads | undefined
   >(() => {
@@ -273,7 +273,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   );
 }
 
-// eslint-disable-next-line max-lines-per-function -- Documents hub body: the refresh state plus the single DocNav/ArticleView/CommentRail layout (loading, empty, and PrShell branches) sharing one title slot and header actions. Its data hooks live in their own modules; splitting the JSX would scatter one layout.
+// eslint-disable-next-line max-lines-per-function -- Documents hub body: the refresh state plus the single DocNav/ArticleView/CommentRail layout (loading, empty, and Shell branches) sharing one title slot and header actions. Its data hooks live in their own modules; splitting the JSX would scatter one layout.
 function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
   const {
     appProps: props,
@@ -291,7 +291,7 @@ function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
 
   // Refresh handler: bust the lazy-tree cache for the current repo and
   // delegate to the host (which flips `detailsLoaded` false then true,
-  // remounting PrShell with fresh data).
+  // remounting Shell with fresh data).
   const [refreshingRepoId, setRefreshingRepoId] = React.useState<string | null>(
     null,
   );
@@ -344,20 +344,20 @@ function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
     syntheticPr.files.length,
   );
 
-  // Latch the deep-link path as consumed only after PrShell has had a chance
-  // to read it (`prShellMounting` is true on renders where PrShell is shown).
+  // Latch the deep-link path as consumed only after Shell has had a chance
+  // to read it (`shellMounting` is true on renders where Shell is shown).
   // The ref is read during `DocumentsApp`'s render, so this effect running
   // before the parent's effects in the same commit doesn't change what the
   // next render sees.
-  const prShellMounting = shellTree.prShellMounting;
+  const shellMounting = shellTree.shellMounting;
   React.useEffect(() => {
-    if (prShellMounting) initialPathConsumedRef.current = true;
-  }, [prShellMounting, initialPathConsumedRef]);
+    if (shellMounting) initialPathConsumedRef.current = true;
+  }, [shellMounting, initialPathConsumedRef]);
 
   // Boot-time completion for the no-content terminal: a repo with no Markdown
-  // never mounts PrShell (which would otherwise fire the "content" signal), so
+  // never mounts Shell (which would otherwise fire the "content" signal), so
   // mark boot ready as "empty" here. Idempotent — if a doc later renders,
-  // PrShell's "content" already won.
+  // Shell's "content" already won.
   const isEmptyRepo = shellTree.isEmptyRepo;
   React.useEffect(() => {
     if (isEmptyRepo) markAppReady("empty");
@@ -374,7 +374,7 @@ function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
       <DeepLinkContext.Provider value={body.deepLinkBuilder}>
         <div className="emr-docs-app">
           {/*
-            PrShell mounts as soon as the repo's routing is known — it does NOT
+            Shell mounts as soon as the repo's routing is known — it does NOT
             wait on the thread fetch. Threads stream in via the shell's
             mount-time sync (fetchRemoteThreads) and merge into the rail, so the
             Markdown paints without blocking on comments.
@@ -396,9 +396,9 @@ function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
               repoName={selectedRepo.name}
             />
           ) : (
-            // Key on the repo id so PrShell remounts on repo switch — it holds
+            // Key on the repo id so Shell remounts on repo switch — it holds
             // per-file HTML caches and selected-path state in local hooks.
-            <PrShell
+            <Shell
               key={selectedRepo.id}
               pr={syntheticPr}
               loadFileSource={bindings.repoScopedLoader}

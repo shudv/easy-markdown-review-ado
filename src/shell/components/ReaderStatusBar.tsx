@@ -7,7 +7,7 @@
 //   right — Navigation · Comments · Changes toggles, an "Aa" reading-font /
 //           spacing popover, a text-size slider, Refresh, and Feedback.
 //
-// All state lives with the host (PrShell) and arrives via props; this component
+// All state lives with the host (Shell) and arrives via props; this component
 // owns only the transient font-popover open state.
 
 import * as React from "react";

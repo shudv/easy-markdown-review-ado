@@ -1,6 +1,6 @@
 // Renders the Markdown HTML, then wraps each thread's anchor with a highlight
 // span and measures its Y relative to the article-wrap. Reports Y positions and
-// orphaned thread IDs to PrShell, and shows a floating "Add comment" bubble on
+// orphaned thread IDs to Shell, and shows a floating "Add comment" bubble on
 // text selection.
 
 import * as React from "react";

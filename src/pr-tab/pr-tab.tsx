@@ -46,7 +46,7 @@ if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
 
 // Start the boot-time clock as early as possible so the measurement spans the
 // whole path to first rendered Markdown (SDK handshake + fetches + render), not
-// just the time to kick off React. `markAppReady()` fires later — from PrShell
+// just the time to kick off React. `markAppReady()` fires later — from Shell
 // when the first document renders, or from PrTabApp for empty/error states.
 markBootStart();
 // Tag this boot if it is the reload we triggered to escape the token dead

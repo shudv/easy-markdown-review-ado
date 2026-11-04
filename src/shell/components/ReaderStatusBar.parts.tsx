@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import type { ReviewIterationRange, WordDeltaPart } from "../prShellHelpers";
+import type { ReviewIterationRange, WordDeltaPart } from "../shellHelpers";
 import type { StatusBarVisibility } from "./readerStatusBarModel";
 import type { ReaderStatusBarProps } from "./ReaderStatusBar.types";
 import {

@@ -24,7 +24,7 @@ import {
 } from "../../comments/identityStore";
 import { MentionPicker } from "./MentionPicker";
 import { ComposerBusyContext } from "./composerBusy";
-import { patchIfSet } from "../prShellHelpers";
+import { patchIfSet } from "../shellHelpers";
 
 /**
  * Delay (ms) before the REST search for mention suggestions. The picker opens

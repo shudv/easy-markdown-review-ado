@@ -14,7 +14,7 @@
 // both when building a link and when resolving one, so a link always lands on
 // live document text.
 //
-// Pure DOM helpers (no React), unit-testable in jsdom; PrShell owns when they
+// Pure DOM helpers (no React), unit-testable in jsdom; Shell owns when they
 // run.
 
 import {

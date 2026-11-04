@@ -8,7 +8,7 @@ import {
   resolveReviewIterationRange,
   type HistoryStop,
   type ReviewIterationRange,
-} from "../shell/prShellHelpers";
+} from "../shell/shellHelpers";
 import {
   PATH_LINK_PARAM,
   readAnchorParam,
@@ -26,7 +26,7 @@ interface PullRequestIterationLike {
   commits?: ReadonlyArray<CommitRefLike & { comment?: string }>;
 }
 
-/** Map ADO's chronological PR pushes into PrShell's newest-first stop model. */
+/** Map ADO's chronological PR pushes into Shell's newest-first stop model. */
 export function reviewIterationStops(
   iterations: readonly PullRequestIterationLike[],
   prId: number,
@@ -305,7 +305,7 @@ export interface IterationParams {
 /**
  * The ADO iteration ids for a comparison of PR updates, or `undefined` for
  * "All updates" (the default view, which links leave unstated) or an update
- * this PR doesn't have. `stops` is PrShell's newest-first update list, where
+ * this PR doesn't have. `stops` is Shell's newest-first update list, where
  * update N is `stops[stops.length - N]`.
  */
 export function iterationParamsForRange(

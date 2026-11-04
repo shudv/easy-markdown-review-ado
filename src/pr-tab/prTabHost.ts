@@ -7,8 +7,8 @@ import {
   type IHostNavigationService,
 } from "azure-devops-extension-api";
 
-import type { DocLinkNavigation } from "../shell/PrShell";
-import type { HistoryStop } from "../shell/prShellHelpers";
+import type { DocLinkNavigation } from "../shell/Shell";
+import type { HistoryStop } from "../shell/shellHelpers";
 import { withDeepLinkTarget } from "../shell/deepLink";
 import { buildReposFileUrl } from "../markdown/docLinks";
 import { buildHubDocUrl } from "../hub/documentsHub.helpers";

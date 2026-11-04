@@ -3,7 +3,7 @@
 // container owns state/effects and delegates derivations to these functions.
 
 import type { FileInfo, PrInfo } from "../types";
-import type { RoutedPrInfo } from "../shell/PrShell";
+import type { RoutedPrInfo } from "../shell/Shell";
 import type { DocRepo, FolderListing } from "../shell/types";
 import type { MentionLinkResolution } from "../comments/mentionLinks";
 import { normalizeFolderPath } from "../shell/components/folderTree";
@@ -90,7 +90,7 @@ export function pickSelectedRepo(
 }
 
 /**
- * Build the `PrInfo` PrShell expects (it only renders `files`; the other
+ * Build the `PrInfo` Shell expects (it only renders `files`; the other
  * fields are set for a readable DevTools breadcrumb). `files` comes from
  * the cached `lazyTree.files` so expansion + search visibly grow the tree.
  */
@@ -127,9 +127,9 @@ export function buildRoutedPr(repo: DocRepo | undefined): RoutedPrInfo | null {
 interface CommentGating {
   /** No routing PR to route repo-level comments through. */
   readOnly: boolean;
-  /** Effective read-only flag handed to PrShell. */
+  /** Effective read-only flag handed to Shell. */
   shellReadOnly: boolean;
-  /** Effective read-only banner message handed to PrShell. */
+  /** Effective read-only banner message handed to Shell. */
   shellReadOnlyMessage: string | undefined;
 }
 
@@ -183,14 +183,14 @@ interface ShellTreeState {
   /**
    * A repo whose content has loaded but holds no markdown at all (no root
    * files and no subfolders to expand). Drives the friendly "No documents"
-   * empty state instead of mounting PrShell on an empty file list.
+   * empty state instead of mounting Shell on an empty file list.
    */
   isEmptyRepo: boolean;
   /**
-   * True on renders where PrShell is actually shown (the repo's routing has
+   * True on renders where Shell is actually shown (the repo's routing has
    * resolved and the repo isn't empty).
    */
-  prShellMounting: boolean;
+  shellMounting: boolean;
 }
 
 export function resolveShellTree(
@@ -206,11 +206,11 @@ export function resolveShellTree(
   return {
     unloadedFolders,
     isEmptyRepo,
-    prShellMounting: loaded && !isEmptyRepo,
+    shellMounting: loaded && !isEmptyRepo,
   };
 }
 
-/** Deep-link seeds forwarded to PrShell on the initial repo's first mount. */
+/** Deep-link seeds forwarded to Shell on the initial repo's first mount. */
 export interface DeepLinkSeeds {
   initialSelectedPath?: string;
   initialActiveThreadId?: string;

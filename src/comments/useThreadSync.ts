@@ -305,7 +305,7 @@ function startThreadPolling(
   );
 
   // Kick off the initial load. If the tab is hidden at mount we still do
-  // one fetch so PrShell has data when the user comes back; the follow-up
+  // one fetch so Shell has data when the user comes back; the follow-up
   // poll is armed only once visible.
   runFetch(session);
 

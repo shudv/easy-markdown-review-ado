@@ -239,7 +239,7 @@ describe("resolveShellTree", () => {
     expect(resolveShellTree(repo(), tree, 0)).toEqual({
       unloadedFolders: ["docs"],
       isEmptyRepo: false,
-      prShellMounting: true,
+      shellMounting: true,
     });
   });
 
@@ -249,7 +249,7 @@ describe("resolveShellTree", () => {
     ).toEqual({
       unloadedFolders: ["x"],
       isEmptyRepo: false,
-      prShellMounting: true,
+      shellMounting: true,
     });
   });
 
@@ -257,7 +257,7 @@ describe("resolveShellTree", () => {
     expect(resolveShellTree(repo(), undefined, 0)).toEqual({
       unloadedFolders: [],
       isEmptyRepo: true,
-      prShellMounting: false,
+      shellMounting: false,
     });
   });
 
@@ -267,12 +267,12 @@ describe("resolveShellTree", () => {
     ).toEqual({
       unloadedFolders: [],
       isEmptyRepo: false,
-      prShellMounting: false,
+      shellMounting: false,
     });
   });
 
   it("mounts when the repo has files", () => {
-    expect(resolveShellTree(repo(), undefined, 2).prShellMounting).toBe(true);
+    expect(resolveShellTree(repo(), undefined, 2).shellMounting).toBe(true);
   });
 });
 

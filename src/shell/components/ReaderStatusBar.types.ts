@@ -1,6 +1,6 @@
 // Public prop and option types of the reader status bar.
 
-import type { ReviewIterationRange, WordCountDelta } from "../prShellHelpers";
+import type { ReviewIterationRange, WordCountDelta } from "../shellHelpers";
 import type { ReaderActivity } from "./readerActivity";
 
 export interface ReaderStatusBarProps {
@@ -92,7 +92,7 @@ export interface ReaderStatusBarProps {
 }
 
 export interface ReaderIterationOption {
-  /** Index used by PrShell's newest-first `historyStops` array. */
+  /** Index used by Shell's newest-first `historyStops` array. */
   stopIndex: number;
   /** Chronological display position (oldest = 1). */
   number: number;

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderMarkdownSync } from "../src/markdown/render";
 import { decorateDiffRanges } from "../src/markdown/diffDecorations";
 import { refineDiffRanges } from "../src/markdown/diffRefine";
-import { sourceDiffRanges } from "../src/shell/prShellHelpers";
+import { sourceDiffRanges } from "../src/shell/shellHelpers";
 
 // End-to-end diff quality: each case feeds an original and a current Markdown
 // source through the production pipeline — the line diff, block refinement,

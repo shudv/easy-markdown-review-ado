@@ -11,7 +11,7 @@ import {
   type ReviewIterationRange,
   type WordCountDelta,
   type WordDeltaPart,
-} from "../prShellHelpers";
+} from "../shellHelpers";
 
 export interface StatusBarVisibilityInput {
   wordCount?: number;

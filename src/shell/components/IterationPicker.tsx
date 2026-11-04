@@ -8,7 +8,7 @@ import {
   oneReviewUpdate,
   resolveReviewIterationRange,
   type ReviewIterationRange,
-} from "../prShellHelpers";
+} from "../shellHelpers";
 import {
   baseCommitTitle,
   iterationOptionClassName,

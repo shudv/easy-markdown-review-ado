@@ -3,7 +3,7 @@
 
 import type { GitPullRequest } from "azure-devops-extension-api/Git";
 
-import type { HistoryStop } from "../shell/prShellHelpers";
+import type { HistoryStop } from "../shell/shellHelpers";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import { initialsOf } from "../hub/documentsHub.helpers";
 import type { CommentAuthor, DiffRange, FileInfo } from "../types";

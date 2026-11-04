@@ -19,7 +19,7 @@ import type { CommentThread, FileInfo } from "../types";
 import { trackUserFacingError } from "../telemetry";
 import { adoThreadToLocal } from "./adoCommentApi";
 import { withRetry } from "./retry";
-import type { DocPrRef } from "./prShellHelpers";
+import type { DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import {
   createAlmSearchClient,
@@ -350,7 +350,7 @@ export async function loadThreadsForRoutedPr(
     );
     trackUserFacingError({
       error: err,
-      source: "PrShell.comments",
+      source: "Shell.comments",
       operation: "routed-comments-load",
       impact: "degraded",
     });
@@ -625,7 +625,7 @@ export async function loadThreadsForRepo(
     );
     trackUserFacingError({
       error: err,
-      source: "PrShell.comments",
+      source: "Shell.comments",
       operation: "repository-comments-load",
       impact: "degraded",
     });

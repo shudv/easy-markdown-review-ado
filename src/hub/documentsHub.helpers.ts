@@ -3,6 +3,7 @@
 // container resolves the host-specific inputs (extension context, host name)
 // and delegates the actual formatting / URL assembly to these functions.
 
+import { HUB_CONTRIBUTION_ID } from "../menu/contributionIds";
 import {
   TARGET_LINK_PARAMS,
   withDeepLinkTarget,
@@ -55,7 +56,7 @@ export function buildHubDocUrl(
   if (!orgUrl || !projectName) return undefined;
   const base = `${orgUrl.replace(/\/+$/, "")}/${encodeURIComponent(
     projectName,
-  )}/_apps/hub/${ext.publisherId}.${ext.extensionId}.documents-hub`;
+  )}/_apps/hub/${ext.publisherId}.${ext.extensionId}.${HUB_CONTRIBUTION_ID}`;
   let url: URL;
   try {
     url = new URL(base);

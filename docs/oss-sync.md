@@ -4,7 +4,7 @@
 
 - Public base: `b965581` (#29).
 - Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
-- New product boundary: `0987b33` (source branch `chore/strict-lint-tiers`; not
+- New product boundary: `1c1ed97` (source branch `chore/strict-lint-tiers`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
@@ -21,6 +21,7 @@
 | `157b8be`     | Spell check becomes a blocking gate: `cspell` and `@cspell/dict-en-gb` dev dependencies, a `spell:check` script run in CI and on staged files in the pre-commit hook, and HTML/CSS/Node dictionaries enabled for all file types.                                                                                                                                                                                                                                                                                   |
 | `8f2ffe4`     | Marketplace manifest link keys (`getstarted`, `privacypolicy`) accepted by the spell check.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `0987b33`     | PR mention search skips results without a numeric id (no `!undefined` suggestions); the match-and-map logic moves to the tested `matchPullRequestSuggestions` helper.                                                                                                                                                                                                                                                                                                                                              |
+| `1c1ed97`     | Hub deep links use `HUB_CONTRIBUTION_ID` instead of a hard-coded `.documents-hub`, so the manifest-consistency test now guards runtime code; the orphan-only knip entry is removed.                                                                                                                                                                                                                                                                                                                                |
 
 ### Public-specific adaptations retained
 
@@ -33,7 +34,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `0987b33` and
+Compare the next source product tree against the merged form of `1c1ed97` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

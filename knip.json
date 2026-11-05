@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    "src/menu/contributionIds.ts",
     "test/**/*.test.{ts,tsx}",
     "src/**/*.stories.tsx",
     "e2e/**/*.spec.ts",

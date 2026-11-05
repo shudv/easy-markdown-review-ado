@@ -4,7 +4,7 @@
 
 - Public base: `b965581` (#29).
 - Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
-- New product boundary: `15ae078` (source branch `chore/strict-lint-tiers`; not
+- New product boundary: `2edded2` (source branch `chore/strict-lint-tiers`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
@@ -15,6 +15,7 @@
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `1a37bc0`     | Three tiers of ESLint rules enforced as errors (stricter `typescript-eslint` including `strict-boolean-expressions` and `no-unnecessary-condition`, React Compiler rules, SonarJS, `regexp`, `@eslint-react`, `jsx-a11y-x`, `no-unsanitized`, `@vitest/eslint-plugin`) with every violation fixed and 65 documented exceptions; emoji shortcodes no longer resolve `Object.prototype` members; the Mermaid/math source dialog moves focus in and back; RepoPicker sends one page-one query after closing a filter. |
 | `15ae078`     | `@vitest/eslint-plugin` pinned to `1.6.27` (1.6.28 requires TypeScript 6).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `2edded2`     | Unused, TypeScript 6-deprecated `baseUrl` dropped from `tsconfig.json`; `.vscode/settings.json` points VS Code at the workspace TypeScript.                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### Public-specific adaptations retained
 
@@ -26,7 +27,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `15ae078` and
+Compare the next source product tree against the merged form of `2edded2` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import * as React from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -15,7 +15,7 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 afterEach(() => {
-  if (root) React.act(() => root!.unmount());
+  if (root) act(() => root!.unmount());
   root = null;
   container?.remove();
   container = null;
@@ -26,14 +26,14 @@ function mount(
   scope: "pr" | "hub",
   options: {
     hideDocNav?: boolean;
-    titleSlot?: React.ReactNode;
-    headerActions?: React.ReactNode;
+    titleSlot?: ReactNode;
+    headerActions?: ReactNode;
   } = {},
 ): HTMLElement {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  React.act(() => {
+  act(() => {
     root!.render(
       <ReaderLoadingShell
         scope={scope}
@@ -143,7 +143,7 @@ describe("ReaderLoadingShell", () => {
       shell.querySelector(".emr-docnav-header.emr-skel-header"),
     ).toBeNull();
 
-    React.act(() => root!.unmount());
+    act(() => root!.unmount());
     root = null;
     container!.remove();
     container = null;

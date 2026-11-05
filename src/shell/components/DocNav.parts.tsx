@@ -1,6 +1,6 @@
 // Leaf pieces of DocNav rows: chevrons, labels, and comment badges.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 import { type NavHeading, type DirNavNode, basename } from "./DocNav.model";
 import { SvgCaret, SvgFolder, SvgSpinner } from "./DocNav.icons";
@@ -11,7 +11,7 @@ export function HeadingTwist(
     collapsed: boolean;
     onToggle: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { collapsed, onToggle } = props;
   return (
     <button
@@ -36,7 +36,7 @@ export function HeadingCommentBadge(
   props: Readonly<{
     heading: NavHeading;
   }>,
-): React.ReactElement | null {
+): ReactElement | null {
   const { heading } = props;
   if (heading.openComments > 0) {
     return (
@@ -82,7 +82,7 @@ export function DirTwistButton(
     isLoading: boolean;
     onToggle: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { twist, isCollapsed, isLoading, onToggle } = props;
   return (
     <button
@@ -113,7 +113,7 @@ export function DirFolderLabel(
     isCollapsed: boolean;
     onToggle: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { node, isLazy, isLoading, isCollapsed, onToggle } = props;
   return (
     <button
@@ -142,7 +142,7 @@ export function WikiPageLabel(
     page: NonNullable<DirNavNode["page"]>;
     onOpen: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { page, onOpen } = props;
   return (
     <button

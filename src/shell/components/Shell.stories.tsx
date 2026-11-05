@@ -1,5 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  useEffect,
+  useState,
+} from "react";
 import {
   expect,
   fireEvent,
@@ -2649,13 +2655,11 @@ export const RangeChangesLoadFailure: Story = {
 };
 
 /** Re-renders Shell with one more PR update on `emr-story-push`. */
-function NewPushHarness(
-  props: React.ComponentProps<typeof Shell>,
-): React.ReactElement {
-  const [stops, setStops] = React.useState<
+function NewPushHarness(props: ComponentProps<typeof Shell>): ReactElement {
+  const [stops, setStops] = useState<
     NonNullable<typeof props.reviewIterationStops>
   >(props.reviewIterationStops!.slice(1));
-  React.useEffect(() => {
+  useEffect(() => {
     const onPush = () => setStops(props.reviewIterationStops!);
     window.addEventListener("emr-story-push", onPush);
     return () => window.removeEventListener("emr-story-push", onPush);
@@ -2726,7 +2730,7 @@ export const DocumentsRoutingPending: Story = {
     commentApiForPath: () => undefined,
   },
   render: (args) => {
-    const [resolution, setResolution] = React.useState<
+    const [resolution, setResolution] = useState<
       RoutedPrInfo | null | undefined
     >(undefined);
     return (
@@ -4638,7 +4642,7 @@ const PR_TAB_LINK: DeepLinkBuilder = (target) =>
     : undefined;
 
 function withHostLinks(builder: DeepLinkBuilder) {
-  return (Story: React.ComponentType) => (
+  return (Story: ComponentType) => (
     <DeepLinkContext.Provider value={builder}>
       <Story />
     </DeepLinkContext.Provider>

@@ -1,7 +1,7 @@
 // Presentational pieces of the CommentRail: the read-only banner, the draft
 // balloon, and the collapsible cross-file tray chrome.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { CommentAuthor, TextQuoteAnchor } from "../../types";
 import { Composer } from "./Composer";
 import { DRAFT_ID } from "./CommentRail.helpers";
@@ -10,7 +10,7 @@ export function RailReadOnlyBanner(
   props: Readonly<{
     message: string | undefined;
   }>,
-): React.ReactElement {
+): ReactElement {
   return (
     <div className="emr-rail-readonly-banner" role="status">
       {props.message ??
@@ -29,7 +29,7 @@ export function RailDraftBalloon(
     onSubmitDraft: (body: string) => void;
     onCancelDraft: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const {
     draftAnchor,
     currentUser,
@@ -75,9 +75,9 @@ export function RailCollapsibleTray(
     count: number;
     expanded: boolean;
     onToggle: () => void;
-    children: React.ReactNode;
+    children: ReactNode;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { title, count, expanded, onToggle, children } = props;
   return (
     <div className="emr-rail-section emr-rail-section--general">
@@ -106,7 +106,7 @@ export function RailCollapsibleTray(
   );
 }
 
-function SvgChevronRight(): React.ReactElement {
+function SvgChevronRight(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"

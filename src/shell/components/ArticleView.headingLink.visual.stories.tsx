@@ -12,7 +12,7 @@
 // Screenshotted by visual/curated.visual.spec.ts.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { type ReactElement, type ReactNode, useLayoutEffect } from "react";
 import { fn, waitFor } from "storybook/test";
 
 import type { DiffRange } from "../../types";
@@ -46,9 +46,9 @@ function ThemeFrame({
   children,
 }: {
   theme?: "dark";
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);

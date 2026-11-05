@@ -3,8 +3,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +38,7 @@ function Harness(props: {
   const source = useDocumentSource(props.selectedPath, props.loadFileSource);
   const missingDocRef = source.handleMissingDocRef;
   // Publish after commit, before the hook's passive load effect reads the ref.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     doc = source;
     missingDocRef.current = () => "unexpected";
   });
@@ -51,7 +50,7 @@ async function show(
   loadFileSource: (path: string) => Promise<string>,
 ): Promise<void> {
   await act(async () => {
-    root.render(React.createElement(Harness, { selectedPath, loadFileSource }));
+    root.render(createElement(Harness, { selectedPath, loadFileSource }));
   });
   // Let the load and the Markdown render settle.
   await act(async () => {

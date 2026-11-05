@@ -92,20 +92,26 @@ longer needs.
 Every lint rule is an error; there are no warnings to ignore. Beyond the
 complexity and size limits, lint enforces:
 
-| Area               | Rules                                                                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Types and nullness | `typescript-eslint` recommended type-checked, plus `strict-boolean-expressions`, `no-unnecessary-condition`, `switch-exhaustiveness-check`, `prefer-nullish-coalescing` and `no-deprecated` |
-| React              | `react-hooks` including the React Compiler rules (`refs`, `purity`, `set-state-in-effect`, …), `@eslint-react` and read-only props                                                          |
-| Accessibility      | `jsx-a11y-x` strict                                                                                                                                                                         |
-| Security           | `no-unsanitized`: every `innerHTML`-style sink in shipped code is sanitized or documented                                                                                                   |
-| Correctness        | SonarJS recommended, `eslint-plugin-regexp` (including catastrophic backtracking), selected core rules                                                                                      |
-| Tests              | `@vitest/eslint-plugin` recommended: every test asserts and async assertions are awaited                                                                                                    |
+| Area               | Rules                                                                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Types and nullness | `typescript-eslint` recommended type-checked, plus `strict-boolean-expressions`, `no-unnecessary-condition`, `switch-exhaustiveness-check`, `prefer-nullish-coalescing` and `no-deprecated`                                                      |
+| React              | `react-hooks` including the React Compiler rules (`refs`, `purity`, `set-state-in-effect`, …), `@eslint-react`, read-only props, and named React imports (`import { useState, type ReactElement } from "react"`; no `React.x`), stories included |
+| Accessibility      | `jsx-a11y-x` strict                                                                                                                                                                                                                              |
+| Security           | `no-unsanitized`: every `innerHTML`-style sink in shipped code is sanitized or documented                                                                                                                                                        |
+| Correctness        | SonarJS recommended, `eslint-plugin-regexp` (including catastrophic backtracking), selected core rules                                                                                                                                           |
+| Tests              | `@vitest/eslint-plugin` recommended: every test asserts and async assertions are awaited                                                                                                                                                         |
 
 CI also fails on copy-pasted code. `duplication:check` runs
 [jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it
 finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
 lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
 above 3%. Extract a shared helper or fixture rather than raising a threshold.
+
+Spelling is checked in the editor by the recommended Code Spell Checker
+extensions, configured in [`cspell.json`](cspell.json). US and British English
+are both accepted. Fix a misspelling rather than accepting it. Add a genuine
+project term (a product name, an API identifier) to `words`, and test-only
+strings to the `test/**` override.
 
 Code that genuinely can't be reached or tested may be left out of coverage with
 `/* v8 ignore next -- <why it can't be reached or tested> */` (or a

@@ -5,7 +5,15 @@
 
 /* eslint-disable max-lines -- Holds only the Shell component, itself a documented exception, plus its imports; everything else lives in shell/. */
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { IdentityStoreContext } from "../comments/identityStore";
 import { ArticleView, type AnchorLayout } from "./components/ArticleView";
@@ -66,11 +74,11 @@ import { TooNarrowNotice } from "./shell/TooNarrowNotice";
 export type { DocLinkNavigation, RoutedPrInfo } from "./shell/types";
 
 // eslint-disable-next-line max-lines-per-function -- Reader root: composes the single-purpose hooks in shell/ and the nav, article and rail panes. It barely branches; the length is the wiring list itself.
-export function Shell(props: Readonly<ShellProps>): React.ReactElement {
+export function Shell(props: Readonly<ShellProps>): ReactElement {
   const { pr, loadFileSource, initialThreads, currentUser } = props;
 
   // ---- state ----
-  const [selectedPath, setSelectedPath] = React.useState<string>(() =>
+  const [selectedPath, setSelectedPath] = useState<string>(() =>
     pickInitialPath(props.initialSelectedPath, pr.files),
   );
   // Effective CommentApi, routed-PR pill and shared identity store for the
@@ -92,8 +100,8 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
 
   // Latest selected path for the visibility-aware poller (so its fetch closure
   // stays stable while always targeting the current document).
-  const selectedPathRef = React.useRef(selectedPath);
-  React.useEffect(() => {
+  const selectedPathRef = useRef(selectedPath);
+  useEffect(() => {
     selectedPathRef.current = selectedPath;
   }, [selectedPath]);
   const toggles = useReaderToggles();
@@ -106,9 +114,7 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
     readerPrefs,
     prefs.setReaderPrefs,
   );
-  const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
-    null,
-  );
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // The routed-PR pill is redundant in the PR tab (comments obviously belong to
   // the current PR), so suppress it there.
@@ -171,7 +177,7 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
 
   const doc = useDocumentSource(selectedPath, loadFileSource);
   const { htmlByPath, renderVersion } = doc;
-  const [navigationActivities, setNavigationActivities] = React.useState<
+  const [navigationActivities, setNavigationActivities] = useState<
     readonly ReaderActivity[]
   >([]);
 
@@ -195,12 +201,12 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
   // -------------------------------------------------------------------------
   // Anchor layout (Y positions) — reported by ArticleView via callback.
   // -------------------------------------------------------------------------
-  const [anchorLayout, setAnchorLayout] = React.useState<AnchorLayout>(() => ({
+  const [anchorLayout, setAnchorLayout] = useState<AnchorLayout>(() => ({
     yByThreadId: new Map(),
     orphanedThreadIds: [],
   }));
 
-  const onAnchorsResolved = React.useCallback(
+  const onAnchorsResolved = useCallback(
     (layout: AnchorLayout, dY: number | null) => {
       setAnchorLayout(layout);
       setDraftY(dY);
@@ -289,12 +295,12 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
   // -------------------------------------------------------------------------
   // Refs for components that need to measure the article
   // -------------------------------------------------------------------------
-  const articleWrapRef = React.useRef<HTMLDivElement | null>(null);
-  const bodyRef = React.useRef<HTMLDivElement | null>(null);
+  const articleWrapRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   // ArticleView renders the single `.emr-article-wrap`; read it from the DOM
   // after each render rather than threading a ref through.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     articleWrapRef.current = document.querySelector(".emr-article-wrap");
   }, [renderVersion, anchorLayout]);
 
@@ -314,7 +320,7 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
     activeStorageKeyRef: scroll.activeStorageKeyRef,
   });
   const { historicalLoading } = article;
-  const readerActivities = React.useMemo(
+  const readerActivities = useMemo(
     () =>
       buildReaderActivities({
         navigationActivities,
@@ -369,7 +375,7 @@ export function Shell(props: Readonly<ShellProps>): React.ReactElement {
   });
   const { commentsAvailable, activeReadOnly, activeRoutedPr } = access;
   // Read by the nav-resize drag handlers, after this commit.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     commentsAvailableRef.current = commentsAvailable;
   }, [commentsAvailableRef, commentsAvailable]);
   const tooNarrow = useTooNarrow(

@@ -9,13 +9,19 @@
 // URL. With no resolver (Storybook / standalone / data URLs) the avatarUrl is
 // used directly.
 
-import * as React from "react";
+import {
+  createContext,
+  type ReactElement,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import type { CommentAuthor } from "../../types";
 
 /** Resolves an ADO avatar URL to a directly-renderable URL (e.g. a blob URL). */
 export type AvatarImageResolver = (url: string) => Promise<string | undefined>;
 
-export const AvatarImageContext = React.createContext<
+export const AvatarImageContext = createContext<
   AvatarImageResolver | undefined
 >(undefined);
 
@@ -35,27 +41,25 @@ function hueFor(id: string): number {
 export function Avatar({
   author,
   size = "md",
-}: Readonly<AvatarProps>): React.ReactElement {
-  const resolveImage = React.useContext(AvatarImageContext);
+}: Readonly<AvatarProps>): ReactElement {
+  const resolveImage = useContext(AvatarImageContext);
   const { avatarUrl } = author;
   const hasUrl = avatarUrl !== undefined && avatarUrl !== "";
   // No resolver: render the URL directly (Storybook / standalone / data URL).
   const directSrc = hasUrl && !resolveImage ? avatarUrl : undefined;
-  const [resolvedSrc, setResolvedSrc] = React.useState<string | undefined>(
-    directSrc,
-  );
+  const [resolvedSrc, setResolvedSrc] = useState<string | undefined>(directSrc);
   // Fall back to initials if the resolved photo fails to load.
-  const [photoFailed, setPhotoFailed] = React.useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
   // A new photo source resets the failure and adopts the direct URL (or clears
   // it) right away; a resolver's local URL arrives asynchronously below.
-  const [source, setSource] = React.useState({ avatarUrl, resolveImage });
+  const [source, setSource] = useState({ avatarUrl, resolveImage });
   if (source.avatarUrl !== avatarUrl || source.resolveImage !== resolveImage) {
     setSource({ avatarUrl, resolveImage });
     setPhotoFailed(false);
     if (!hasUrl || !resolveImage) setResolvedSrc(directSrc);
   }
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!hasUrl || !resolveImage) return;
     // Real host: fetch the photo with auth and adopt the local URL it returns.
     let cancelled = false;

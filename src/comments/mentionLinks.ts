@@ -10,7 +10,13 @@
 // later hydration can upgrade them. User mentions are intentionally left
 // non-navigable — only work-item and PR mentions get web URLs.
 
-import * as React from "react";
+import {
+  createContext,
+  type DependencyList,
+  type RefObject,
+  useContext,
+  useLayoutEffect,
+} from "react";
 
 import { parseMentionUrl } from "./mentions";
 
@@ -39,8 +45,9 @@ export interface MentionLinkResolution {
  * `null` means "no context available" — components fall back to a no-op
  * (mentions stay unnavigable rather than crashing the render).
  */
-export const MentionLinkContext =
-  React.createContext<MentionLinkResolution | null>(null);
+export const MentionLinkContext = createContext<MentionLinkResolution | null>(
+  null,
+);
 
 /**
  * Walk `root` and upgrade every work-item / pull-request mention link to a
@@ -117,16 +124,16 @@ function buildMentionWebUrl(
  * whenever the dependency list changes. Pulls context from the nearest
  * `MentionLinkContext` provider.
  *
- * Use `React.useLayoutEffect` so the hydrated href is visible before the
+ * Use `useLayoutEffect` so the hydrated href is visible before the
  * browser paints — otherwise a fast click immediately after render would
  * find the placeholder `mention://` URL.
  */
 export function useMentionLinkHydration(
-  ref: React.RefObject<HTMLElement | null>,
-  deps: React.DependencyList,
+  ref: RefObject<HTMLElement | null>,
+  deps: DependencyList,
 ): void {
-  const ctx = React.useContext(MentionLinkContext);
-  React.useLayoutEffect(() => {
+  const ctx = useContext(MentionLinkContext);
+  useLayoutEffect(() => {
     hydrateMentionLinks(ref.current, ctx);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [ctx, ...deps]);

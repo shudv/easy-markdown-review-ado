@@ -1,20 +1,20 @@
 // Popover focus/inert and Escape handling shared by status-bar popovers.
 
-import * as React from "react";
+import { type RefObject, useCallback, useLayoutEffect, useRef } from "react";
 
 export function useInertPopover(open: boolean): {
-  triggerRef: React.RefObject<HTMLButtonElement>;
-  popoverRef: React.RefObject<HTMLDivElement>;
+  triggerRef: RefObject<HTMLButtonElement>;
+  popoverRef: RefObject<HTMLDivElement>;
   restoreFocusAfterClose: () => void;
 } {
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const popoverRef = React.useRef<HTMLDivElement>(null);
-  const restoreFocusRef = React.useRef(false);
-  const restoreFocusAfterClose = React.useCallback(() => {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
+  const restoreFocusAfterClose = useCallback(() => {
     restoreFocusRef.current = true;
   }, []);
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     popoverRef.current!.inert = !open;
     if (!open && restoreFocusRef.current) {
       restoreFocusRef.current = false;

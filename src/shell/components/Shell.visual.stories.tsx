@@ -10,7 +10,7 @@
 // Shell.stories.tsx; keep this one static.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useLayoutEffect } from "react";
 import { expect, waitFor } from "storybook/test";
 
 import { FIXTURE_AUTHORS } from "../../comments/fixtures";
@@ -654,7 +654,7 @@ export const CommentAnchorDiffCollision: Story = {
 export const Dark: Story = {
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const el = document.documentElement;
         const prev = el.getAttribute("data-emr-theme");
         el.setAttribute("data-emr-theme", "dark");
@@ -694,7 +694,7 @@ export const CommentAnchorDiffCollisionDark: Story = {
 export const HighContrastDark: Story = {
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const el = document.documentElement;
         const prev = el.getAttribute("data-emr-theme");
         el.setAttribute("data-emr-theme", "hc-dark");
@@ -737,7 +737,7 @@ export const CommentAnchorDiffCollisionHighContrastLight: Story = {
   ...CommentAnchorDiffCollision,
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const element = document.documentElement;
         const previousTheme = element.getAttribute("data-emr-theme");
         element.setAttribute("data-emr-theme", "hc-light");

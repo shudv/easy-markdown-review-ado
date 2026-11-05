@@ -10,7 +10,6 @@
 import "../shell/styles.scss";
 
 import * as SDK from "azure-devops-extension-sdk";
-import * as React from "react";
 import { createRoot } from "react-dom/client";
 
 import { PrTabApp } from "./PrTabApp";

@@ -6,7 +6,14 @@
 // are unit-testable in jsdom (the shell only renders in the iframe/storybook
 // harness).
 
-import * as React from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from "react";
 
 import {
   clearDraft,
@@ -51,32 +58,32 @@ export function useDraftPersistence(
 ): DraftPersistence {
   const { scope, activeDraft, onRestore } = opts;
 
-  const writer = React.useMemo(
+  const writer = useMemo(
     () => (scope ? createThrottledDraftWriter(scope) : null),
     [scope],
   );
 
-  const activeDraftRef = React.useRef(activeDraft);
+  const activeDraftRef = useRef(activeDraft);
   // Layout effect: runs before any passive effect in the same commit, so a
   // composer emitting its text from a mount effect already sees the new target.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     activeDraftRef.current = activeDraft;
   });
-  const snapshotRef = React.useRef("");
+  const snapshotRef = useRef("");
 
   // Bump on restore/clear so a mounted composer re-reads `initialBody` from the
   // snapshot at the right moment (the value itself is read live during render).
-  const [, forceSeed] = React.useReducer((n: number) => n + 1, 0);
+  const [, forceSeed] = useReducer((n: number) => n + 1, 0);
 
   // Restore once on mount. The stored draft may target a different file than
   // the one on screen; we adopt it regardless so its lock is live and its
   // composer re-opens when the user navigates to (or is already on) its file.
-  const restoredRef = React.useRef(false);
-  const onRestoreRef = React.useRef(onRestore);
-  React.useLayoutEffect(() => {
+  const restoredRef = useRef(false);
+  const onRestoreRef = useRef(onRestore);
+  useLayoutEffect(() => {
     onRestoreRef.current = onRestore;
   });
-  React.useEffect(() => {
+  useEffect(() => {
     if (!scope || restoredRef.current) return;
     restoredRef.current = true;
     const stored = loadDraft(scope);
@@ -95,11 +102,11 @@ export function useDraftPersistence(
 
   // Flush a pending write on unmount so the last keystrokes survive a soft
   // teardown (host navigation away from the shell).
-  React.useEffect(() => {
+  useEffect(() => {
     return () => writer?.flush();
   }, [writer]);
 
-  const handleChange = React.useCallback(
+  const handleChange = useCallback(
     (body: string) => {
       snapshotRef.current = body;
       if (!scope || !writer) return;
@@ -122,14 +129,14 @@ export function useDraftPersistence(
     [scope, writer],
   );
 
-  const clear = React.useCallback(() => {
+  const clear = useCallback(() => {
     snapshotRef.current = "";
     forceSeed();
     writer?.cancel();
     if (scope) clearDraft(scope);
   }, [scope, writer]);
 
-  const getSnapshot = React.useCallback(() => snapshotRef.current, []);
+  const getSnapshot = useCallback(() => snapshotRef.current, []);
 
   // eslint-disable-next-line react-hooks/refs -- `initialBody` is a deliberate live read of the latest composer text: keystrokes must not re-render the shell, and restore/clear call `forceSeed` to re-render exactly when a mounting composer must see a new seed.
   return { initialBody: snapshotRef.current, handleChange, clear, getSnapshot };

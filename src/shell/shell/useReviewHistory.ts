@@ -1,6 +1,6 @@
 // Shell: the comment-history stepper / PR-update comparison state.
 
-import * as React from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { ChangeType, CommentThread } from "../../types";
 import { trackUserFacingError } from "../../telemetry";
@@ -55,21 +55,18 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
   const { completedPrHistoryEnabled, nativeIterationMode, nativeUpdateCount } =
     historyModes(opts);
   // Per-path review-history stops and the active stop index.
-  const [historyByPath, setHistoryByPath] = React.useState<
+  const [historyByPath, setHistoryByPath] = useState<
     Record<string, DocPrRef[]>
   >({});
-  const [completedHistoryStopIndex, setCompletedHistoryStopIndex] =
-    React.useState(0);
-  const [iterationRange, setIterationRange] =
-    React.useState<ReviewIterationRange>(
-      () =>
-        opts.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
-    );
+  const [completedHistoryStopIndex, setCompletedHistoryStopIndex] = useState(0);
+  const [iterationRange, setIterationRange] = useState<ReviewIterationRange>(
+    () => opts.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
+  );
 
   const docHistory = completedPrHistoryEnabled
     ? (historyByPath[selectedPath] ?? EMPTY_DOC_HISTORY)
     : EMPTY_DOC_HISTORY;
-  const completedPrHistoryStops = React.useMemo(
+  const completedPrHistoryStops = useMemo(
     () => buildHistoryStops(effectiveRoutedPr?.prId ?? null, docHistory),
     [effectiveRoutedPr, docHistory],
   );
@@ -87,11 +84,11 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
   // value; the callback is read through a ref so an inline host callback
   // doesn't re-fire it on every render.
   const onIterationRangeChange = opts.onIterationRangeChange;
-  const onIterationRangeChangeRef = React.useRef(onIterationRangeChange);
-  React.useLayoutEffect(() => {
+  const onIterationRangeChangeRef = useRef(onIterationRangeChange);
+  useLayoutEffect(() => {
     onIterationRangeChangeRef.current = onIterationRangeChange;
   });
-  React.useEffect(() => {
+  useEffect(() => {
     if (reportedRangeKey === null) return;
     onIterationRangeChangeRef.current?.(
       resolvedIterationRange.isAllChanges ? null : resolvedIterationRange.range,
@@ -130,10 +127,10 @@ function useRangeChanges(args: {
   // Which files the compared updates touch, so the file list can mark them and
   // dim the rest. Cached per comparison; a failed load just leaves the
   // PR-wide indicators in place.
-  const [rangeChangesByKey, setRangeChangesByKey] = React.useState<
+  const [rangeChangesByKey, setRangeChangesByKey] = useState<
     Partial<Record<string, Readonly<Record<string, ChangeType>>>>
   >({});
-  React.useEffect(() => {
+  useEffect(() => {
     if (
       !loadRangeChanges ||
       rangeChangesKey === null ||

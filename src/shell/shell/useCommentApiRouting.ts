@@ -1,6 +1,6 @@
 // Shell: comment API, routed-PR pill and identity store per document.
 
-import * as React from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { LocalOnlyCommentApi, type CommentApi } from "../../comments/api";
 import {
@@ -43,7 +43,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   // session-local stub so standalone dev still works. The per-document cache
   // lives alongside it; the effective `commentApi` is resolved from
   // `selectedPath` further below.
-  const routingRef = React.useRef<ApiRouting>({
+  const routingRef = useRef<ApiRouting>({
     stable: null,
     perPath: new Map(),
   });
@@ -54,10 +54,8 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   // so `@<GUID>` user mentions resolve consistently (ADO-style). The resolver
   // reads the latest effective CommentApi via a ref so a per-document API swap
   // still resolves; the store is created once and provided to the subtree.
-  const resolveIdentitiesRef = React.useRef<IdentityResolver | undefined>(
-    undefined,
-  );
-  const [identityStore] = React.useState(
+  const resolveIdentitiesRef = useRef<IdentityResolver | undefined>(undefined);
+  const [identityStore] = useState(
     // eslint-disable-next-line react-hooks/refs -- the store calls this resolver only when it flushes on a microtask, so the ref is read after render, never during it.
     () =>
       new IdentityStore((ids) =>
@@ -70,7 +68,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   // Effective CommentApi. In per-document mode it's resolved (and cached) from
   // the selected file so each document writes to its own housing PR; otherwise
   // it's the single stable instance from props / the local fallback.
-  const { commentApi, perDocNoWriteTarget } = React.useMemo(
+  const { commentApi, perDocNoWriteTarget } = useMemo(
     // eslint-disable-next-line react-hooks/refs -- the per-path cache is a mutable instance cache, not render state; memoised on path/resolver only, so a newly supplied host API applies from the next path change, as before.
     () => resolveApi(routingRef.current, commentApiForPath, selectedPath),
     [commentApiForPath, selectedPath],
@@ -78,7 +76,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
 
   // Effective routed-PR pill. Per-document mode resolves it from the selected
   // file (its own routing PR); otherwise the single `routedPr` prop is used.
-  const routedPrResolution = React.useMemo<RoutedPrInfo | null | undefined>(
+  const routedPrResolution = useMemo<RoutedPrInfo | null | undefined>(
     () => (routedPrForPath ? routedPrForPath(selectedPath) : routedPr),
     [routedPrForPath, selectedPath, routedPr],
   );
@@ -86,7 +84,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   // Keep the identity resolver pointed at the current effective CommentApi.
   // The store only calls it from a microtask queued by an effect, so it always
   // runs after this commit's layout effects.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     resolveIdentitiesRef.current = commentApi.resolveIdentities
       ? (ids) => commentApi.resolveIdentities!(ids)
       : undefined;

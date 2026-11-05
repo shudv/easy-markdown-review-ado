@@ -1,9 +1,9 @@
-import React, {
+import {
+  type ReactElement,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type ReactElement,
 } from "react";
 import type { ReaderActivity } from "../shellHelpers";
 

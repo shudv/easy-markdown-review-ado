@@ -1,6 +1,6 @@
 // Documents hub: the lazily loaded file tree per repository.
 
-import * as React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FileInfo } from "../types";
 import type { DocRepo, FolderListing } from "../shell/types";
@@ -24,7 +24,7 @@ export function useLazyTree(
   selectedRepo: DocRepo | undefined,
   onExpandFolder: DocumentsAppProps["onExpandFolder"],
 ) {
-  const [lazyTreeByRepo, setLazyTreeByRepo] = React.useState<
+  const [lazyTreeByRepo, setLazyTreeByRepo] = useState<
     Map<string, LazyTreeState>
   >(() => {
     const m = new Map<string, LazyTreeState>();
@@ -43,7 +43,7 @@ export function useLazyTree(
   // Adjusted during render whenever the `selectedRepo` object changes (not on
   // every render: a refresh deletes the entry and must re-seed from the
   // refreshed repo object, not the stale one).
-  const [seededFor, setSeededFor] = React.useState(selectedRepo);
+  const [seededFor, setSeededFor] = useState(selectedRepo);
   if (seededFor !== selectedRepo) {
     setSeededFor(selectedRepo);
     if (
@@ -65,7 +65,7 @@ export function useLazyTree(
 
   // Lazy folder expansion handler: returns the raw payload to the DocNav and
   // merges the result into the per-repo `lazyTreeByRepo` entry.
-  const handleExpandFolder = React.useCallback(
+  const handleExpandFolder = useCallback(
     async (
       path: string,
     ): Promise<{ files: FileInfo[]; folders: string[] } | null> => {
@@ -117,9 +117,9 @@ function useRootAutoExpand(
   onExpandFolder: DocumentsAppProps["onExpandFolder"],
   handleExpandFolder: (path: string) => Promise<unknown>,
 ): void {
-  const autoExpandedFoldersRef = React.useRef<Set<string>>(new Set());
-  const autoExpandUsedRef = React.useRef<Map<string, number>>(new Map());
-  React.useEffect(() => {
+  const autoExpandedFoldersRef = useRef<Set<string>>(new Set());
+  const autoExpandUsedRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
     if (!selectedRepo || !onExpandFolder) return;
     if (selectedRepo.detailsLoaded === false) return;
     const tree = lazyTree;

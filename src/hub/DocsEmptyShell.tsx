@@ -1,6 +1,6 @@
 // Documents hub: the empty-state shell shown when a project has no repositories.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { SvgRepo } from "./hubIcons";
 
@@ -14,10 +14,10 @@ export function DocsEmptyShell({
   headerActions,
   repoName,
 }: Readonly<{
-  titleSlot?: React.ReactNode;
-  headerActions?: React.ReactNode;
+  titleSlot?: ReactNode;
+  headerActions?: ReactNode;
   repoName: string;
-}>): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-app emr-docs-empty-shell">
       <div className="emr-grid">

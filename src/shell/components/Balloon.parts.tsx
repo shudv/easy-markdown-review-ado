@@ -1,7 +1,7 @@
 // Reply area at the foot of a Balloon: a compact "@mention or reply" trigger
 // that expands into the full reply Composer.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 import type { CommentAuthor } from "../../types";
 import { Composer } from "./Composer";
 
@@ -16,7 +16,7 @@ export function BalloonReplyZone(
     onRequestReply?: (threadId: string) => void;
     onCancelReply?: (threadId: string) => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const {
     threadId,
     replyOpen,

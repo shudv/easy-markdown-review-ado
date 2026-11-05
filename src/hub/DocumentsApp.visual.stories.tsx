@@ -9,7 +9,7 @@
 // this story static; interactive hub behaviour is covered by unit tests.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useLayoutEffect } from "react";
 import { expect, waitFor, within } from "storybook/test";
 
 import { FIXTURE_AUTHORS } from "../comments/fixtures";
@@ -211,7 +211,7 @@ export const NoCompletedPullRequest: Story = {
 export const HighContrastDark: Story = {
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const root = document.documentElement;
         const previous = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "hc-dark");

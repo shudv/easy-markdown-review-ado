@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import type { ComponentType } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AdoSessionMonitor } from "../adoSession";
@@ -33,7 +33,7 @@ const meta = {
   title: "Components/SessionNotice",
   component: SessionNotice,
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: ComponentType) => (
       <div className="emr-app" style={{ width: 640 }}>
         <Story />
       </div>

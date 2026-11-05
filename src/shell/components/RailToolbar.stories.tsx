@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useEffect, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { RailToolbar } from "./RailToolbar";
@@ -223,8 +223,8 @@ export const SearchPreopen: Story = {
 /** A query set externally while collapsed re-opens the search field. */
 export const ExternalQueryReopens: Story = {
   render: (args) => {
-    const [query, setQuery] = React.useState("");
-    React.useEffect(() => {
+    const [query, setQuery] = useState("");
+    useEffect(() => {
       const id = setTimeout(() => setQuery("external"), 0);
       return () => clearTimeout(id);
     }, []);

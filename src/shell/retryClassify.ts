@@ -5,7 +5,7 @@
 //      identical request cannot change (bad request, not found, conflict…).
 //      These never retry.
 //   2. Otherwise, is it *retryable*? — transient by nature (connection
-//      failure, throttling, gateway/backentd blips) OR unclassifiable. Per our
+//      failure, throttling, gateway/backend blips) OR unclassifiable. Per our
 //      resiliency policy we **retry by default**, so anything we can't prove
 //      terminal is treated as retryable.
 //

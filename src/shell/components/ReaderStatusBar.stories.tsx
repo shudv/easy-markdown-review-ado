@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useLayoutEffect,
+  useState,
+} from "react";
 import {
   expect,
   fireEvent,
@@ -85,11 +90,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 function ControlledReaderStatusBar(
-  props: React.ComponentProps<typeof ReaderStatusBar>,
-): React.ReactElement {
-  const [iterationRange, setIterationRange] = React.useState(
-    props.iterationRange,
-  );
+  props: ComponentProps<typeof ReaderStatusBar>,
+): ReactElement {
+  const [iterationRange, setIterationRange] = useState(props.iterationRange);
   return (
     <ReaderStatusBar
       {...props}
@@ -103,10 +106,10 @@ function ControlledReaderStatusBar(
 }
 
 function ControlledCommentStatusBar(
-  props: React.ComponentProps<typeof ReaderStatusBar>,
-): React.ReactElement {
-  const [showComments, setShowComments] = React.useState(props.showComments);
-  const [activeCommentThreadId, setActiveCommentThreadId] = React.useState(
+  props: ComponentProps<typeof ReaderStatusBar>,
+): ReactElement {
+  const [showComments, setShowComments] = useState(props.showComments);
+  const [activeCommentThreadId, setActiveCommentThreadId] = useState(
     props.activeCommentThreadId ?? null,
   );
   return (
@@ -746,7 +749,7 @@ export const IterationRangeHighContrast: Story = {
   args: IterationRange.args,
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const root = document.documentElement;
         const previousTheme = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "hc-light");

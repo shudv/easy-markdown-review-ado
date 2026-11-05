@@ -5,7 +5,7 @@
 // colours in a real browser (Storybook Chromium) — no pixel baseline needed.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { type ReactElement, type ReactNode, useLayoutEffect } from "react";
 import { expect, fn, waitFor } from "storybook/test";
 
 import { renderMarkdownSync } from "../../markdown/render";
@@ -31,9 +31,9 @@ function HcFrame({
   children,
 }: {
   theme: EmrTheme;
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     // Capture the markdown-sheet state too, so it's restored alongside the

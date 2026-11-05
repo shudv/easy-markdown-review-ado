@@ -1,6 +1,6 @@
 // Status-bar reading preferences: the "Aa" font/spacing popover and text size.
 
-import * as React from "react";
+import type { CSSProperties, ReactElement, RefObject } from "react";
 
 import {
   clampReaderPct,
@@ -37,7 +37,7 @@ function PercentSlider({
   min = READER_PERCENT_MIN,
   max = READER_PERCENT_MAX,
   showDefaultMarker = true,
-}: Readonly<PercentSliderProps>): React.ReactElement {
+}: Readonly<PercentSliderProps>): ReactElement {
   const displayValue = Math.max(min, Math.min(max, value));
   const progress = ((displayValue - min) / (max - min)) * 100;
   const defaultPosition = ((100 - min) / (max - min)) * 100;
@@ -46,7 +46,7 @@ function PercentSlider({
   const style = {
     "--emr-percent-progress": `${progress}%`,
     "--emr-percent-default-position": `${defaultPosition}%`,
-  } as React.CSSProperties;
+  } as CSSProperties;
 
   return (
     <div
@@ -104,9 +104,9 @@ function PercentSlider({
 // eslint-disable-next-line max-lines-per-function -- Reading preferences popover: font, size, spacing and width controls bound to one preferences object.
 export function ReadingPreferencesControls(
   props: Readonly<{
-    rootRef: React.RefObject<HTMLDivElement>;
-    triggerRef: React.RefObject<HTMLButtonElement>;
-    popoverRef: React.RefObject<HTMLDivElement>;
+    rootRef: RefObject<HTMLDivElement>;
+    triggerRef: RefObject<HTMLButtonElement>;
+    popoverRef: RefObject<HTMLDivElement>;
     open: boolean;
     onToggleOpen: () => void;
     availableFonts: readonly (typeof READER_FONTS)[number][];
@@ -118,7 +118,7 @@ export function ReadingPreferencesControls(
     spacingPct: number;
     onSpacingChange: (spacingPct: number) => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const {
     rootRef,
     triggerRef,

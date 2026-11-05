@@ -1,6 +1,6 @@
 // Folder collapse state of the DocNav file tree, persisted per file-list shape.
 
-import * as React from "react";
+import { useCallback, useState } from "react";
 
 import { readCollapsedDirs, writeCollapsedDirs } from "./navStorage";
 import { pathAncestors } from "./DocNav.model";
@@ -38,14 +38,14 @@ export function useCollapsedDirs(
   folderStorageKey: string,
   selectedPath: string,
 ): { collapsedDirs: Set<string>; toggleDir: (dirPath: string) => void } {
-  const [collapsedDirs, setCollapsedDirs] = React.useState<Set<string>>(() =>
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
     revealAncestors(
       readCollapsedDirs(folderStorageKey),
       selectedPath,
       folderStorageKey,
     ),
   );
-  const [source, setSource] = React.useState({
+  const [source, setSource] = useState({
     folderStorageKey,
     selectedPath,
   });
@@ -61,7 +61,7 @@ export function useCollapsedDirs(
     setCollapsedDirs(revealAncestors(base, selectedPath, folderStorageKey));
   }
 
-  const toggleDir = React.useCallback(
+  const toggleDir = useCallback(
     (dirPath: string) => {
       setCollapsedDirs((curr) => {
         const next = new Set(curr);

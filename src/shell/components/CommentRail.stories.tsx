@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { Comment, CommentThread, ThreadStatus } from "../../types";
@@ -187,7 +187,7 @@ export const OrphanedFileTray: Story = {
 export const SearchExpandsAllSections: Story = {
   args: { orphanedFileThreads: ORPHANED_FILE },
   render: (args) => {
-    const [query, setQuery] = React.useState("note");
+    const [query, setQuery] = useState("note");
     return (
       <CommentRail
         {...args}
@@ -280,7 +280,7 @@ export const OnlyThisFileUnwired: Story = {
  */
 export const CyclerAutoExpandsTray: Story = {
   render: (args) => {
-    const [active, setActive] = React.useState<string | null>(null);
+    const [active, setActive] = useState<string | null>(null);
     return (
       <>
         <button type="button" onClick={() => setActive("g1")}>

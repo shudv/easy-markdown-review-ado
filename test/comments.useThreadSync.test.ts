@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement, type ReactElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,7 +66,7 @@ function Harness(
   const { onControls } = props;
   // Publish the latest controls after every commit so tests read the
   // committed `refreshNow` / `isRefreshing` once `act` returns.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     onControls(controls);
   });
   return null;
@@ -79,8 +78,8 @@ let root: Root | null = null;
 function harnessElement(
   opts: HarnessOpts,
   handle: HarnessHandle,
-): React.ReactElement {
-  return React.createElement(Harness, {
+): ReactElement {
+  return createElement(Harness, {
     ...opts,
     onControls: (controls) => {
       handle.controls = controls;

@@ -1,6 +1,6 @@
 // Shell toasts, session notice and draft-guard dialog.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 import { DraftGuardDialog } from "../components/DraftGuardDialog";
 import { SessionNotice } from "../components/SessionNotice";
@@ -27,9 +27,7 @@ interface ShellNoticesProps {
  * reconnect notice, the replaced-missing-document toast, and the draft-guard
  * discard prompt.
  */
-export function ShellNotices(
-  props: Readonly<ShellNoticesProps>,
-): React.ReactElement {
+export function ShellNotices(props: Readonly<ShellNoticesProps>): ReactElement {
   const { persistError, missingDoc, draftGuard } = props;
   return (
     <>

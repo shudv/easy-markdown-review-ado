@@ -1,5 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -23,7 +29,7 @@ const meta = {
   parameters: { layout: "fullscreen" },
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const root = document.documentElement;
         const previous = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "dark");
@@ -154,10 +160,10 @@ export const ReadOnlyRemovedWordsOfferNoLink: Story = {
  * hydration settles.
  */
 function UnmountOnThemeFlip(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [mounted, setMounted] = React.useState(true);
-  React.useEffect(() => {
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [mounted, setMounted] = useState(true);
+  useEffect(() => {
     const observer = new MutationObserver(() =>
       flushSync(() => setMounted(false)),
     );

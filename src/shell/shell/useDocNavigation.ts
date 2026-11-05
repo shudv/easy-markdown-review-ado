@@ -1,6 +1,12 @@
 // Shell: opening documents and scrolling to their pending deep-link target.
 
-import * as React from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -30,10 +36,8 @@ interface DocNavigationOptions {
   setActiveThreadId: (threadId: string | null) => void;
   setMissingDoc: (doc: { missing: string; shown: string } | null) => void;
   setLoading: (loading: boolean) => void;
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>;
-  handleMissingDocRef: React.MutableRefObject<
-    (missing: string) => MissingDocOutcome
-  >;
+  dismissEmptyDraftRef: MutableRefObject<() => void>;
+  handleMissingDocRef: MutableRefObject<(missing: string) => MissingDocOutcome>;
   scrollDocToHash: ScrollDocToHash;
 }
 
@@ -61,15 +65,15 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // heading's). Plus text to flash once it renders (the `?text=` deep link
   // seeded at mount), with the heading as its fallback.
   const initial = initialDeepLinkTargets(opts);
-  const pendingScrollHashRef = React.useRef<string | null>(initial.hash);
-  const pendingHashIsDeepLinkRef = React.useRef(initial.hash !== null);
-  const pendingTextRef = React.useRef<string | null>(initial.text);
+  const pendingScrollHashRef = useRef<string | null>(initial.hash);
+  const pendingHashIsDeepLinkRef = useRef(initial.hash !== null);
+  const pendingTextRef = useRef<string | null>(initial.text);
 
   // Open a document in THIS reader (shared by the nav and in-document link
   // clicks): select it, drop the active thread, tear down an empty draft, and
   // report the change up so the host can reflect it in the route. A deep-link
   // heading still waiting on the previous document no longer applies.
-  const selectDocPath = React.useCallback(
+  const selectDocPath = useCallback(
     (path: string) => {
       pendingScrollHashRef.current = null;
       pendingHashIsDeepLinkRef.current = false;
@@ -98,7 +102,7 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // Only the async document-load failure path calls it, always after commit,
   // so it is kept current from a layout effect.
   const { handleMissingDocRef } = opts;
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     handleMissingDocRef.current = (missing) =>
       replaceMissingDoc(missing, opts, {
         pendingScrollHashRef,
@@ -112,7 +116,7 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // (a PR file, or anywhere in the hub), open the Documents hub (Markdown
   // outside the PR), or hand a non-Markdown file to ADO's native Files view.
   // Returns true when consumed; external links return false and fall through.
-  const handleDocLink = React.useCallback(
+  const handleDocLink = useCallback(
     (href: string): boolean => {
       const action = routeDocLink(resolveDocLink(selectedPath, href), {
         isHub,
@@ -160,9 +164,9 @@ function initialDeepLinkTargets(opts: DocNavigationOptions): {
 }
 
 interface PendingTargetRefs {
-  pendingScrollHashRef: React.MutableRefObject<string | null>;
-  pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
-  pendingTextRef: React.MutableRefObject<string | null>;
+  pendingScrollHashRef: MutableRefObject<string | null>;
+  pendingHashIsDeepLinkRef: MutableRefObject<boolean>;
+  pendingTextRef: MutableRefObject<string | null>;
 }
 
 /** `handleMissingDocRef`'s body: open a replacement for a missing document. */
@@ -208,9 +212,9 @@ interface PendingDocScrollOptions {
   articleReady: boolean;
   selectedPath: string;
   activePristineHtml: string;
-  pendingScrollHashRef: React.MutableRefObject<string | null>;
-  pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
-  pendingTextRef: React.MutableRefObject<string | null>;
+  pendingScrollHashRef: MutableRefObject<string | null>;
+  pendingHashIsDeepLinkRef: MutableRefObject<boolean>;
+  pendingTextRef: MutableRefObject<string | null>;
   scrollDocToHash: ScrollDocToHash;
   scrollDocToText: ScrollDocToText;
 }
@@ -231,7 +235,7 @@ export function usePendingDocScroll(opts: PendingDocScrollOptions): void {
     scrollDocToHash,
     scrollDocToText,
   } = opts;
-  React.useEffect(() => {
+  useEffect(() => {
     if (!articleReady) return;
     const text = pendingTextRef.current;
     if (text !== null && text !== "") {

@@ -1,8 +1,7 @@
 // Shared jsdom harness for the Shell hook tests: mounts a hook in a real
 // React root so its effects, state and callbacks run as they do in the shell.
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { vi } from "vitest";
 
@@ -34,7 +33,7 @@ export async function mountHook<P, R>(
   }
   const rerender = async (next: P): Promise<void> => {
     await act(async () => {
-      root.render(React.createElement(Harness, { hookProps: next }));
+      root.render(createElement(Harness, { hookProps: next }));
     });
   };
   await rerender(props);

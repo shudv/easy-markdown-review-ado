@@ -1,6 +1,6 @@
 // Presentational pieces of the GeneratedSourceModal header and code pane.
 
-import * as React from "react";
+import { Fragment, type ReactElement } from "react";
 
 import {
   diffCharacters,
@@ -16,7 +16,7 @@ export function GeneratedSourceIdentity(
   props: Readonly<{
     kind: GeneratedSourceKind;
   }>,
-): React.ReactElement {
+): ReactElement {
   const isMath = props.kind === "math";
   return (
     <div className="emr-generated-source-identity">
@@ -47,7 +47,7 @@ export function GeneratedSourceViewControls(
     onToggleBefore: () => void;
     onToggleChanges: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { beforeShown, changesShown, onToggleBefore, onToggleChanges } = props;
   const changesLabel = changesShown
     ? "Hide source changes"
@@ -101,20 +101,20 @@ export function GeneratedSourceDiff(
     original: string;
     current: string;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { kind, original, current } = props;
   const diff = kind === "math" ? diffCharacters : diffWords;
   return (
     <code className="emr-generated-source-code-diff">
       {diff(original, current).map((op, i) => (
         // eslint-disable-next-line @eslint-react/no-array-index-key -- Diff ops are a positional sequence recomputed wholesale from the two strings; runs have no identity beyond their position (values can repeat).
-        <React.Fragment key={i}>{renderDiffOp(op)}</React.Fragment>
+        <Fragment key={i}>{renderDiffOp(op)}</Fragment>
       ))}
     </code>
   );
 }
 
-function renderDiffOp(op: WordDiffOp): React.ReactElement {
+function renderDiffOp(op: WordDiffOp): ReactElement {
   if (op.kind === "added") {
     return <ins className={WORD_ADDED_CLASS}>{op.value}</ins>;
   }

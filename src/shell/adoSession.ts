@@ -24,7 +24,7 @@
 // SDK-free: the host token reader and host reload are injected by the entry
 // points via `configure`, keeping this deterministically unit-testable.
 
-import * as React from "react";
+import { useSyncExternalStore } from "react";
 
 import { events, track, trackUserFacingError } from "../telemetry";
 import {
@@ -343,7 +343,7 @@ export const adoSession = new AdoSessionMonitor();
 export function useAdoSession(
   monitor: AdoSessionMonitor = adoSession,
 ): AdoSessionSnapshot {
-  return React.useSyncExternalStore(monitor.subscribe, monitor.getSnapshot);
+  return useSyncExternalStore(monitor.subscribe, monitor.getSnapshot);
 }
 
 // ---------------------------------------------------------------------------

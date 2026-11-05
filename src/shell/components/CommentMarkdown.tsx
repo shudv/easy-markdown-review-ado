@@ -4,7 +4,7 @@
 // pipeline pass) and comment bodies don't change after creation in most
 // cases.
 
-import * as React from "react";
+import { type ReactElement, useLayoutEffect, useMemo, useRef } from "react";
 import { decorateCommentMedia } from "../../comments/commentMedia";
 import { hydrateMath } from "../../markdown/mathHydrate";
 import { renderMarkdownSync } from "../../markdown/render";
@@ -16,9 +16,9 @@ interface Props {
   body: string;
 }
 
-export function CommentMarkdown({ body }: Readonly<Props>): React.ReactElement {
-  const html = React.useMemo(() => renderMarkdownSync(body), [body]);
-  const ref = React.useRef<HTMLDivElement | null>(null);
+export function CommentMarkdown({ body }: Readonly<Props>): ReactElement {
+  const html = useMemo(() => renderMarkdownSync(body), [body]);
+  const ref = useRef<HTMLDivElement | null>(null);
   // Rewrite `mention://workitem/...` / `mention://pullrequest/...` href
   // placeholders to real ADO web URLs once the surrounding app has
   // provided org/project context via `MentionLinkContext`.
@@ -26,7 +26,7 @@ export function CommentMarkdown({ body }: Readonly<Props>): React.ReactElement {
   // Fill `@<GUID>` user mentions with the person's display name from the shared
   // identity store (resolving unknown ids lazily).
   useUserMentionHydration(ref, [html]);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const root = ref.current;
     /* v8 ignore next -- the div below renders unconditionally and React attaches its ref before layout effects run */
     if (!root) return;

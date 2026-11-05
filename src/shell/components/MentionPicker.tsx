@@ -3,7 +3,12 @@
 // owns query/suggestions/selectedIndex state and drives keyboard nav via props
 // so it can intercept keys before the textarea sees them.
 
-import * as React from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useEffect,
+  useRef,
+} from "react";
 
 import type { MentionKind, MentionSuggestion } from "../../comments/mentions";
 import { Avatar } from "./Avatar";
@@ -27,7 +32,7 @@ export interface MentionPickerProps {
 // eslint-disable-next-line max-lines-per-function -- Mention typeahead: suggestion list, highlighted row and keyboard selection for one ARIA listbox.
 export function MentionPicker(
   props: Readonly<MentionPickerProps>,
-): React.ReactElement {
+): ReactElement {
   const {
     kind,
     query,
@@ -43,8 +48,8 @@ export function MentionPicker(
   } = props;
 
   // Scroll the selected row into view when it changes (for arrow-key nav).
-  const listRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
     const list = listRef.current!;
     const sel = list.querySelector<HTMLElement>(
       `[data-mp-index="${selectedIndex}"]`,
@@ -54,7 +59,7 @@ export function MentionPicker(
 
   // Close on outside click. We don't close on textarea focus loss — the parent
   // handles that via its own state.
-  React.useEffect(() => {
+  useEffect(() => {
     function onDocMouseDown(e: MouseEvent): void {
       const root = listRef.current!;
       if (!root.contains(e.target as Node)) onCancel();
@@ -64,7 +69,7 @@ export function MentionPicker(
       document.removeEventListener("mousedown", onDocMouseDown, true);
   }, [onCancel]);
 
-  const style: React.CSSProperties = {
+  const style: CSSProperties = {
     position: "fixed",
     top,
     left,
@@ -130,7 +135,7 @@ function SuggestionRow({
   suggestion,
 }: Readonly<{
   suggestion: MentionSuggestion;
-}>): React.ReactElement {
+}>): ReactElement {
   switch (suggestion.kind) {
     case "user":
       return (

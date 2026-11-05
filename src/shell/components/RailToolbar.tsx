@@ -7,7 +7,7 @@
 // earlier PRs), right steps newer (toward the live Current head). Self-contained
 // — owns its search open/close state and the small inline icon set it renders.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
 import { PlusIcon } from "./icons";
@@ -65,10 +65,10 @@ type RailToolbarProps = Readonly<{
   /** Start a file-scoped comment without a visible text anchor. */
   onAddComment?: () => void;
   /** Optional extra controls appended at the right end of the toolbar. */
-  headerActions?: React.ReactNode;
+  headerActions?: ReactNode;
 }>;
 
-export function RailToolbar(props: RailToolbarProps): React.ReactElement {
+export function RailToolbar(props: RailToolbarProps): ReactElement {
   const {
     commentQuery,
     onCommentQueryChange,

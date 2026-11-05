@@ -6,8 +6,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,7 +52,7 @@ function Harness(props: {
 }): null {
   const { handle: resultRef } = props;
   const search = useDocSearch(props.files, props.onSearchFiles);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     resultRef.current = search;
   });
   return null;
@@ -74,7 +73,7 @@ function mount(props: {
   root = createRoot(container);
   const handle: Handle = { current: null };
   act(() => {
-    root!.render(React.createElement(Harness, { ...props, handle }));
+    root!.render(createElement(Harness, { ...props, handle }));
   });
   return handle;
 }

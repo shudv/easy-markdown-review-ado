@@ -1,5 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type Ref,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { FileInfo } from "../../types";
@@ -41,8 +49,8 @@ const THREAD_COUNTS: Record<string, number> = { "docs/api/guide.md": 2 };
 /** The rendered-article DOM the DocNav reads headings out of. Exercises the
  *  highlight tallying (open/resolved/draft/dup/no-id), a heading without an
  *  id, a heading outside a section, and a couple of collapsed sections. */
-function Article(): React.ReactElement {
-  const tall: React.CSSProperties = { minHeight: 260 };
+function Article(): ReactElement {
+  const tall: CSSProperties = { minHeight: 260 };
   return (
     <>
       <section className="emr-section" data-section-id="intro" style={tall}>
@@ -102,22 +110,22 @@ interface HarnessProps {
   detachScroller?: boolean;
 }
 
-function Harness(props: HarnessProps): React.ReactElement {
-  const scrollRef = React.useRef<HTMLElement | null>(null);
-  const articleWrapRef = React.useRef<HTMLDivElement | null>(null);
-  const [selectedPath, setSelectedPath] = React.useState(
+function Harness(props: HarnessProps): ReactElement {
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const articleWrapRef = useRef<HTMLDivElement | null>(null);
+  const [selectedPath, setSelectedPath] = useState(
     props.initialSelected ?? SELECTED,
   );
   // The real app bumps `version` once the article content has loaded; do the
   // same so DocNav re-reads the headings after the article is in the DOM.
-  const [version, setVersion] = React.useState(0);
+  const [version, setVersion] = useState(0);
 
   const handleSelect = (path: string): void => {
     props.onSelectPath(path);
     setSelectedPath(path);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     setVersion(1);
   }, []);
 
@@ -140,11 +148,7 @@ function Harness(props: HarnessProps): React.ReactElement {
         showOutline={props.showOutline}
       />
       <main
-        ref={
-          props.detachScroller
-            ? undefined
-            : (scrollRef as React.Ref<HTMLElement>)
-        }
+        ref={props.detachScroller ? undefined : (scrollRef as Ref<HTMLElement>)}
         style={{ overflow: "auto", height: 300, flex: 1 }}
       >
         <div ref={articleWrapRef} className="emr-article-wrap">
@@ -168,15 +172,15 @@ function LazyHostHarness(props: {
   initialUnloaded: string[];
   expansions: Record<string, { files: FileInfo[]; folders: string[] }>;
   onExpand: (path: string) => void;
-}): React.ReactElement {
-  const scrollRef = React.useRef<HTMLElement | null>(null);
-  const articleWrapRef = React.useRef<HTMLDivElement | null>(null);
-  const [files, setFiles] = React.useState<FileInfo[]>([]);
-  const [unloadedFolders, setUnloadedFolders] = React.useState<string[]>(
+}): ReactElement {
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const articleWrapRef = useRef<HTMLDivElement | null>(null);
+  const [files, setFiles] = useState<FileInfo[]>([]);
+  const [unloadedFolders, setUnloadedFolders] = useState<string[]>(
     props.initialUnloaded,
   );
 
-  const onExpandFolder = React.useCallback(
+  const onExpandFolder = useCallback(
     async (path: string) => {
       props.onExpand(path);
       const yielded = props.expansions[path] ?? { files: [], folders: [] };
@@ -205,7 +209,7 @@ function LazyHostHarness(props: {
         unloadedFolders={unloadedFolders}
         onExpandFolder={onExpandFolder}
       />
-      <main ref={scrollRef as React.Ref<HTMLElement>} style={{ flex: 1 }}>
+      <main ref={scrollRef as Ref<HTMLElement>} style={{ flex: 1 }}>
         <div ref={articleWrapRef} className="emr-article-wrap" />
       </main>
     </div>

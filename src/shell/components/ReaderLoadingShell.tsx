@@ -1,8 +1,4 @@
-import React, {
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import type { DraftScope } from "../draftStorage";
 import { ReaderActivityIndicator } from "./readerActivity";

@@ -5,8 +5,14 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import {
+  act,
+  createElement,
+  type ReactElement,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -67,13 +73,11 @@ let handle: Handle;
 function Harness(props: {
   scope?: DraftScope;
   initialTarget?: DraftTarget | null;
-}): React.ReactElement {
-  const [activeDraft, setTarget] = React.useState<DraftTarget | null>(
+}): ReactElement {
+  const [activeDraft, setTarget] = useState<DraftTarget | null>(
     props.initialTarget ?? null,
   );
-  const restoredRef = React.useRef<
-    Array<{ target: DraftTarget; body: string }>
-  >([]);
+  const restoredRef = useRef<Array<{ target: DraftTarget; body: string }>>([]);
   const api = useDraftPersistence({
     scope: props.scope,
     activeDraft,
@@ -82,10 +86,10 @@ function Harness(props: {
       setTarget(target);
     },
   });
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     handle = { api, setTarget, restored: restoredRef.current };
   }, [api]);
-  return React.createElement("div", null, api.initialBody);
+  return createElement("div", null, api.initialBody);
 }
 
 let container: HTMLDivElement | null = null;
@@ -99,7 +103,7 @@ function mount(props: {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root!.render(React.createElement(Harness, props));
+    root!.render(createElement(Harness, props));
   });
 }
 

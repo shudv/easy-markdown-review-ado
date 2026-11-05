@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  useState,
+} from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import {
@@ -22,7 +27,7 @@ const failingApi: CommentApi = Object.assign(new LocalOnlyCommentApi(), {
 });
 
 function withApi(api: CommentApi) {
-  return (Story: React.ComponentType) => (
+  return (Story: ComponentType) => (
     <CommentApiProvider value={api}>
       <div
         style={{
@@ -238,7 +243,7 @@ export const SearchFailure: Story = {
  */
 export const BusyWhileSending: Story = {
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: ComponentType) => (
       <ComposerBusyContext.Provider value={true}>
         <Story />
       </ComposerBusyContext.Provider>
@@ -381,9 +386,9 @@ const unmountSearch = Object.assign(new LocalOnlyCommentApi(), {
 });
 
 function ClosableComposer(
-  props: React.ComponentProps<typeof Composer>,
-): React.ReactElement {
-  const [open, setOpen] = React.useState(true);
+  props: ComponentProps<typeof Composer>,
+): ReactElement {
+  const [open, setOpen] = useState(true);
   return (
     <>
       <button type="button" onClick={() => setOpen(false)}>

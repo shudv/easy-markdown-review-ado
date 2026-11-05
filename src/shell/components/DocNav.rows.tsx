@@ -1,6 +1,6 @@
 // Recursive DocNav tree rows: folder, file, and heading rows.
 
-import * as React from "react";
+import { type CSSProperties, type ReactElement, useContext } from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -46,9 +46,7 @@ interface NavTreeItemProps {
   onExpandLazyDir: (path: string) => void;
 }
 
-export function NavTreeItem(
-  props: Readonly<NavTreeItemProps>,
-): React.ReactElement {
+export function NavTreeItem(props: Readonly<NavTreeItemProps>): ReactElement {
   const { node, ...rowProps } = props;
 
   if (node.kind === "dir") return <DirNavRow {...props} node={node} />;
@@ -76,7 +74,7 @@ type HeadingNavNode = Extract<NavNode, { kind: "heading" }>;
 
 function HeadingNavRow(
   props: NavTreeItemProps & { node: HeadingNavNode },
-): React.ReactElement {
+): ReactElement {
   const {
     node,
     depth,
@@ -101,8 +99,8 @@ function HeadingNavRow(
         data-nav-id={h.id}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         {hasChildren ? (
@@ -144,7 +142,7 @@ function HeadingNavRow(
 // eslint-disable-next-line max-lines-per-function -- Folder row in the navigation tree: twist button, label, badges and ARIA treeitem attributes for one row.
 function DirNavRow(
   props: NavTreeItemProps & { node: DirNavNode },
-): React.ReactElement {
+): ReactElement {
   const {
     node,
     depth,
@@ -189,8 +187,8 @@ function DirNavRow(
         className={rowClass}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         <DirTwistButton
@@ -234,7 +232,7 @@ function NavChildren(
     item: NavTreeItemProps;
     className?: string;
   }>,
-): React.ReactElement | null {
+): ReactElement | null {
   const { nodes, item, className = "emr-docnav-children" } = props;
   if (nodes.length === 0) return null;
   return (
@@ -265,7 +263,7 @@ interface FileNavRowProps extends Omit<NavTreeItemProps, "node"> {
 }
 
 // eslint-disable-next-line max-lines-per-function -- File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row.
-function FileNavRow(props: Readonly<FileNavRowProps>): React.ReactElement {
+function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
   const {
     file,
     openComments,
@@ -282,8 +280,8 @@ function FileNavRow(props: Readonly<FileNavRowProps>): React.ReactElement {
     onToggleDir,
     onExpandLazyDir,
   } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const change = fileChangeView(file, React.useContext(RangeChangesContext));
+  const showChangeIndicators = useContext(ChangeIndicatorContext);
+  const change = fileChangeView(file, useContext(RangeChangesContext));
   // Single selection: the file row lights up only when no heading is
   // active (user is at the top of the current file). Everything else \u2014
   // "this file is loaded" \u2014 is implicit from which row carries its
@@ -308,8 +306,8 @@ function FileNavRow(props: Readonly<FileNavRowProps>): React.ReactElement {
         data-change-type={change.changeType}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         {/* The change-type icon is the leading affordance and fills the twist

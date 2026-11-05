@@ -1,6 +1,15 @@
 // Documents hub: the repository dropdown (search, listbox and keyboard navigation).
 
-import * as React from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { DocRepo } from "../shell/types";
 import { SearchIcon } from "../shell/components/icons";
@@ -44,23 +53,23 @@ export function RepoPicker({
   loading?: boolean;
   onLoadMore?: () => void | Promise<void>;
   onFilter?: (keyword: string) => void | Promise<void>;
-}>): React.ReactElement {
-  const [open, setOpen] = React.useState(false);
-  const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({});
+}>): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   // Local mirror of the filter text so typing is instant; the server query is
   // debounced off this value.
-  const [filterText, setFilterText] = React.useState(filter);
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  const listRef = React.useRef<HTMLDivElement>(null);
-  const filterInputRef = React.useRef<HTMLInputElement>(null);
-  const optionElsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
-  const loadMoreRequestedRef = React.useRef(false);
+  const [filterText, setFilterText] = useState(filter);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
+  const optionElsRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const loadMoreRequestedRef = useRef(false);
 
   const triggerName =
     selectedName ?? repos.find((r) => r.id === selectedId)?.name;
 
-  const openMenu = React.useCallback(() => {
+  const openMenu = useCallback(() => {
     // Only the mounted trigger's own handlers call this, so the ref is set.
     const rect = triggerRef.current!.getBoundingClientRect();
     setMenuStyle({
@@ -72,13 +81,13 @@ export function RepoPicker({
     setOpen(true);
   }, []);
 
-  const close = React.useCallback((refocus = true) => {
+  const close = useCallback((refocus = true) => {
     setOpen(false);
     if (refocus) triggerRef.current?.focus();
   }, []);
 
   // When opening: focus the filter box (paginated) or the selected option.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return;
     if (paginated) {
       filterInputRef.current?.focus();
@@ -94,11 +103,11 @@ export function RepoPicker({
 
   // Debounce the keyword filter: re-query 250ms after the last keystroke so a
   // burst of typing makes a single server round-trip.
-  const onFilterRef = React.useRef(onFilter);
-  React.useEffect(() => {
+  const onFilterRef = useRef(onFilter);
+  useEffect(() => {
     onFilterRef.current = onFilter;
   }, [onFilter]);
-  React.useEffect(() => {
+  useEffect(() => {
     // Closed: the close effect below sends the single page-one re-query.
     if (!paginated || !open) return;
     if (filterText === filter) return; // already in sync (e.g. external reset)
@@ -115,19 +124,19 @@ export function RepoPicker({
   // was actually applied (avoids a needless round-trip on a plain open/close).
   // The local reset is adjusted during render on each open/close transition
   // (and on mount, via the `null` seed), matching the effect below.
-  const [prevOpen, setPrevOpen] = React.useState<boolean | null>(null);
+  const [prevOpen, setPrevOpen] = useState<boolean | null>(null);
   if (prevOpen !== open) {
     setPrevOpen(open);
     if (!open && filterText !== "") setFilterText("");
   }
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) return;
     if (paginated && filter !== "") void onFilterRef.current?.("");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to open/close transitions, not to filter or paging changes
   }, [open]);
 
   // Dismiss on outside pointer, scroll (outside the menu) or resize while open.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
       const t = e.target as Node;
@@ -155,7 +164,7 @@ export function RepoPicker({
     };
   }, [open]);
 
-  const choose = React.useCallback(
+  const choose = useCallback(
     (repoId: string) => {
       onSelect(repoId);
       close();
@@ -163,14 +172,14 @@ export function RepoPicker({
     [onSelect, close],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!loading) loadMoreRequestedRef.current = false;
   }, [loading]);
 
   // Infinite scroll: when the results list nears its bottom, ask for the next
   // page. The ref closes the gap before the parent's loading prop re-renders,
   // when several scroll events can otherwise start the same page repeatedly.
-  const onListScroll = React.useCallback(() => {
+  const onListScroll = useCallback(() => {
     if (
       !paginated ||
       !hasMore ||
@@ -187,7 +196,7 @@ export function RepoPicker({
     }
   }, [paginated, hasMore, loading, onLoadMore]);
 
-  const onMenuKeyDown = (e: React.KeyboardEvent) => {
+  const onMenuKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
       close();
@@ -290,10 +299,10 @@ function RepoFilter({
   filterText,
   setFilterText,
 }: Readonly<{
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement>;
   filterText: string;
   setFilterText: (text: string) => void;
-}>): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-docnav-repo-filter">
       <SearchIcon size={14} className="emr-docnav-repo-filter-glyph" />
@@ -318,7 +327,7 @@ function renderRepoListStatus(
   loading: boolean,
   count: number,
   filterText: string,
-): React.ReactElement | null {
+): ReactElement | null {
   if (paginated) return renderRepoPageStatus(loading, count, filterText);
   return count === 0 ? (
     <div className="emr-docnav-repo-status">
@@ -331,7 +340,7 @@ function renderRepoPageStatus(
   loading: boolean,
   count: number,
   filterText: string,
-): React.ReactElement {
+): ReactElement {
   return (
     <div
       className="emr-docnav-repo-status emr-docnav-repo-page-status"
@@ -350,7 +359,7 @@ function renderRepoPageStatus(
   );
 }
 
-function SvgChevron(): React.ReactElement {
+function SvgChevron(): ReactElement {
   return (
     <svg
       className="emr-docnav-repo-chevron"
@@ -367,7 +376,7 @@ function SvgChevron(): React.ReactElement {
   );
 }
 
-function SvgCheck(): React.ReactElement {
+function SvgCheck(): ReactElement {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
       <path

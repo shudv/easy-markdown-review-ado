@@ -1,13 +1,13 @@
 // Shell's "more room needed" notice for too-narrow frames.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 /**
  * Graceful degradation notice — hidden until `.is-too-narrow` (set by the
  * frame ResizeObserver), when it replaces the reader columns so the layout
  * never crushes the prose.
  */
-export function TooNarrowNotice(): React.ReactElement {
+export function TooNarrowNotice(): ReactElement {
   return (
     <div className="emr-too-narrow" role="status">
       <div className="emr-too-narrow-card">

@@ -1,6 +1,6 @@
 // Status-bar control groups: navigation, comparison, comments, refresh.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 import type { ReviewIterationRange, WordDeltaPart } from "../shellHelpers";
 import type { StatusBarVisibility } from "./readerStatusBarModel";
@@ -29,7 +29,7 @@ function OutlineToggle(
     shown: boolean;
     onToggle: (() => void) | undefined;
   }>,
-): React.ReactElement | null {
+): ReactElement | null {
   const { navToggleable, navShown, shown, onToggle } = props;
   if (!navToggleable || !navShown || !onToggle) return null;
   return (
@@ -60,7 +60,7 @@ function CommentStepper({
   threadIds,
   activeThreadId,
   onCycle,
-}: Readonly<CommentStepperProps>): React.ReactElement {
+}: Readonly<CommentStepperProps>): ReactElement {
   const total = threadIds.length;
   const activeIndex = hasText(activeThreadId)
     ? threadIds.indexOf(activeThreadId)
@@ -127,7 +127,7 @@ function WordStatus({
   wordCount: number | undefined;
   hasCount: boolean;
   deltaParts: readonly WordDeltaPart[];
-}>): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-statusbar-status">
       {hasCount ? (
@@ -168,7 +168,7 @@ function ContextControls(
     changesShown: boolean;
     onToggleChanges: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { changesAvailable, changesShown, onToggleChanges } = props;
   return (
     <div className="emr-statusbar-context-controls">
@@ -207,7 +207,7 @@ export function StatusBarLeft({
 }: Readonly<{
   props: ReaderStatusBarProps;
   visibility: StatusBarVisibility;
-}>): React.ReactElement {
+}>): ReactElement {
   const { navToggleable, showNav } = props;
   const { hasCount, deltaParts, showIterationPicker, showContextControls } =
     visibility;
@@ -263,7 +263,7 @@ function ResolvedPullRequestBadge({
   pullRequest,
 }: {
   pullRequest: ReaderStatusBarProps["resolvedPullRequest"];
-}): React.ReactElement | null {
+}): ReactElement | null {
   if (!pullRequest) return null;
   const label = `Latest completed PR for this file: #${pullRequest.prId} ${pullRequest.title}`;
   const content = (
@@ -301,7 +301,7 @@ export function CommentControls({
 }: Readonly<{
   props: ReaderStatusBarProps;
   showCommentStepper: boolean;
-}>): React.ReactElement {
+}>): ReactElement {
   const { showComments } = props;
   return (
     <>
@@ -341,7 +341,7 @@ export function RefreshFeedbackControls({
     ReaderStatusBarProps,
     "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref"
   >
->): React.ReactElement | null {
+>): ReactElement | null {
   if (!onRefresh && !hasText(feedbackHref)) return null;
   const label = refreshLabel ?? "Refresh";
   return (

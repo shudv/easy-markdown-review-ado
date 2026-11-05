@@ -2,8 +2,7 @@
 // and identity resolution, the per-document first thread load, the
 // historical thread view — plus the draft-guard notice's file label.
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -142,7 +141,7 @@ describe("ShellNotices", () => {
     });
     await act(async () => {
       root.render(
-        React.createElement(ShellNotices, {
+        createElement(ShellNotices, {
           persistError: null,
           onDismissPersistError: vi.fn(),
           reloadAllowed: true,

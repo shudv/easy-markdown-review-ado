@@ -1,6 +1,6 @@
 // Shell: the shown article (live or historical) and its load state.
 
-import * as React from "react";
+import { type MutableRefObject, useLayoutEffect, useMemo } from "react";
 
 import type { DiffRange, FileInfo } from "../../types";
 import type { DocumentImageResolver } from "../../markdown/documentImages";
@@ -28,7 +28,7 @@ interface ActiveArticleOptions {
   historicalAbsentByKey: Record<string, true>;
   listFolder: FolderLister | undefined;
   resolveDocumentImage: DocumentImageResolver | undefined;
-  activeStorageKeyRef: React.MutableRefObject<string>;
+  activeStorageKeyRef: MutableRefObject<string>;
 }
 
 /**
@@ -43,7 +43,7 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
   // A file added or removed wholesale in the PR has no meaningful "what
   // changed" story — every line is the same colour — so we suppress the diff
   // layer and its toggle for those and just show the clean document.
-  const currentFileChangeType = React.useMemo(
+  const currentFileChangeType = useMemo(
     () => files.find((f) => f.path === selectedPath)?.changeType,
     [files, selectedPath],
   );
@@ -67,12 +67,12 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
   });
   // Read only by the scroll helpers' rAF callbacks, which run after commit.
   const { activeStorageKeyRef } = opts;
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     activeStorageKeyRef.current = activeStorageKey;
   });
 
   const resolveDocumentImage = opts.resolveDocumentImage;
-  const activeDocumentImageResolver = React.useMemo(
+  const activeDocumentImageResolver = useMemo(
     () =>
       bindRepositoryImageResolver(
         resolveDocumentImage,

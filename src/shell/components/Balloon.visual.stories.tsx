@@ -5,7 +5,7 @@
 // Screenshotted by visual/curated.visual.spec.ts. Static, no interaction.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import type { ReactElement } from "react";
 import { fn, waitFor } from "storybook/test";
 
 import { CommentApiProvider } from "../../comments/api";
@@ -62,7 +62,7 @@ const SHARED = {
 };
 
 /** Renders the three status variants side by side in one deterministic frame. */
-function Gallery(): React.ReactElement {
+function Gallery(): ReactElement {
   return (
     <CommentApiProvider value={api}>
       <div

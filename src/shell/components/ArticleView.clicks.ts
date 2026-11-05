@@ -3,7 +3,7 @@
 // target in order; a handler returns true when it consumed the click.
 // ---------------------------------------------------------------------------
 
-import type * as React from "react";
+import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { persistSectionState } from "./navStorage";
 import { events, track } from "../../telemetry";
 import {
@@ -25,7 +25,7 @@ import {
  * through to the browser's default handling.
  */
 export function handleDocLinkClick(
-  e: React.MouseEvent,
+  e: ReactMouseEvent,
   target: HTMLElement,
   onDocLink: ((href: string) => boolean) | undefined,
 ): boolean {
@@ -40,7 +40,7 @@ export function handleDocLinkClick(
 
 /** 0) Generated-content Source affordance — open diagram/equation source. */
 export function handleGeneratedSourceClick(
-  e: React.MouseEvent,
+  e: ReactMouseEvent,
   target: HTMLElement,
   setGeneratedSource: (view: GeneratedSourceView) => void,
 ): boolean {
@@ -69,7 +69,7 @@ export function handleGeneratedSourceClick(
 
 /** 1) Heading link — copy a shareable link to this section. */
 export function handleHeadingLinkClick(
-  e: React.MouseEvent,
+  e: ReactMouseEvent,
   target: HTMLElement,
   onCopyHeadingLink: ((headingId: string) => Promise<boolean>) | undefined,
   setLinkAnnouncement: (text: string) => void,
@@ -93,7 +93,7 @@ export function handleHeadingLinkClick(
 export function handleSectionToggleClick(
   target: HTMLElement,
   storageKey: string,
-  wrapRef: React.RefObject<HTMLDivElement | null>,
+  wrapRef: RefObject<HTMLDivElement | null>,
 ): boolean {
   const sectionToggle = target.closest<HTMLButtonElement>(
     ".emr-section-toggle",

@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -482,7 +481,7 @@ describe("useAdoSession", () => {
     }
     const el = document.createElement("div");
     const root = createRoot(el);
-    act(() => root.render(React.createElement(Probe)));
+    act(() => root.render(createElement(Probe)));
     act(() => {
       m.report(refreshing(), "poll");
     });
@@ -498,7 +497,7 @@ describe("useAdoSession", () => {
       return null;
     }
     const root = createRoot(document.createElement("div"));
-    act(() => root.render(React.createElement(Probe)));
+    act(() => root.render(createElement(Probe)));
     expect(state).toBe(adoSession.getSnapshot().state);
     act(() => root.unmount());
   });

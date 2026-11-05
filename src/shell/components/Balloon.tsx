@@ -5,7 +5,7 @@
 // ADO, which lets you keep discussing a resolved thread without reopening it.
 // Positioning is the parent's job — it passes `topPx`.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef } from "react";
 import type { CommentThread, CommentAuthor, ReactionKind } from "../../types";
 import { isResolvedLike } from "../../types";
 import {
@@ -70,7 +70,7 @@ interface BalloonProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
-export function Balloon(props: Readonly<BalloonProps>): React.ReactElement {
+export function Balloon(props: Readonly<BalloonProps>): ReactElement {
   const {
     thread,
     topPx,
@@ -98,8 +98,8 @@ export function Balloon(props: Readonly<BalloonProps>): React.ReactElement {
     onCancelReply,
   } = props;
 
-  const ref = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
     if (!ref.current || !onHeightChange) return;
     const el = ref.current;
     onHeightChange(thread.id, el.getBoundingClientRect().height);

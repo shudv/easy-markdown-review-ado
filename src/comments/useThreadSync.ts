@@ -24,7 +24,13 @@
 //     failure streak — production saw one long-lived tab emit a 401 every 30s
 //     for 88 hours.
 
-import * as React from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { CommentThread } from "../types";
 import { trackUserFacingError } from "../telemetry";
@@ -128,15 +134,15 @@ export interface ThreadSyncControls {
 
 /** Refs shared between the hook and its polling session. */
 interface ThreadSyncRefs {
-  fetchRef: React.MutableRefObject<UseThreadSyncOptions["fetchThreads"]>;
-  onThreadsRef: React.MutableRefObject<UseThreadSyncOptions["onThreads"]>;
-  onErrorRef: React.MutableRefObject<UseThreadSyncOptions["onError"]>;
-  subscribeRecoveredRef: React.MutableRefObject<
+  fetchRef: MutableRefObject<UseThreadSyncOptions["fetchThreads"]>;
+  onThreadsRef: MutableRefObject<UseThreadSyncOptions["onThreads"]>;
+  onErrorRef: MutableRefObject<UseThreadSyncOptions["onError"]>;
+  subscribeRecoveredRef: MutableRefObject<
     UseThreadSyncOptions["subscribeRecovered"]
   >;
-  generationRef: React.MutableRefObject<number>;
-  inFlightRef: React.MutableRefObject<AbortController | null>;
-  refreshNowRef: React.MutableRefObject<() => void>;
+  generationRef: MutableRefObject<number>;
+  inFlightRef: MutableRefObject<AbortController | null>;
+  refreshNowRef: MutableRefObject<() => void>;
 }
 
 /** Mutable state of one polling session (one run of the polling effect). */
@@ -334,14 +340,14 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
     maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
   } = opts;
 
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Refs let the listeners see the latest callbacks without
   // re-subscribing every render.
-  const fetchRef = React.useRef(fetchThreads);
-  const onThreadsRef = React.useRef(onThreads);
-  const onErrorRef = React.useRef(onError);
-  React.useEffect(() => {
+  const fetchRef = useRef(fetchThreads);
+  const onThreadsRef = useRef(onThreads);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
     fetchRef.current = fetchThreads;
     onThreadsRef.current = onThreads;
     onErrorRef.current = onError;
@@ -350,8 +356,8 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   // subscribe function, so its identity must not restart polling. Synced in an
   // effect declared before the polling effect so a new session sees it.
   const subscribeRecovered = opts.subscribeRecovered;
-  const subscribeRecoveredRef = React.useRef(subscribeRecovered);
-  React.useEffect(() => {
+  const subscribeRecoveredRef = useRef(subscribeRecovered);
+  useEffect(() => {
     subscribeRecoveredRef.current = subscribeRecovered;
   }, [subscribeRecovered]);
 
@@ -359,12 +365,12 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   // Responses from older generations are discarded so a slow request
   // begun before a tab-hide can't overwrite state after a fresh
   // request finishes.
-  const generationRef = React.useRef(0);
-  const inFlightRef = React.useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
+  const inFlightRef = useRef<AbortController | null>(null);
   // No-op until the first polling session installs its trigger.
-  const refreshNowRef = React.useRef<() => void>(() => {});
+  const refreshNowRef = useRef<() => void>(() => {});
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!enabled) return;
     return startThreadPolling(
       {
@@ -380,7 +386,7 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
     );
   }, [enabled, intervalMs, maxBackoffMs]);
 
-  const refreshNow = React.useCallback(() => {
+  const refreshNow = useCallback(() => {
     refreshNowRef.current();
   }, []);
 

@@ -1,7 +1,7 @@
 // The floating selection bubble `ArticleView` shows above a text selection:
 // its state, placement, link target, and the wired-up bubble element.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 import type { TextQuoteAnchor } from "../../types";
 import { SelectionBubble } from "./SelectionBubble";
 import { buildTextFragment, serializeTextFragment } from "../textFragment";
@@ -81,7 +81,7 @@ export function ArticleSelectionBubble(
     onSelection: (anchor: TextQuoteAnchor) => void;
     onDismiss: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { bubble, readOnly, onCopySelectionLink, onSelection, onDismiss } =
     props;
   return (

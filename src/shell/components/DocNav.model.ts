@@ -1,6 +1,6 @@
 // Shared DocNav model: node/heading types, row contexts, and pure helpers.
 
-import * as React from "react";
+import { createContext } from "react";
 
 import type { ChangeType, FileInfo } from "../../types";
 
@@ -10,7 +10,7 @@ import type { ChangeType, FileInfo } from "../../types";
  * without drilling the flag through the recursive `NavTreeItem` tree. Defaults
  * to `true` so any renderer used outside a Provider keeps the PR-tab behaviour.
  */
-export const ChangeIndicatorContext = React.createContext<boolean>(true);
+export const ChangeIndicatorContext = createContext<boolean>(true);
 
 /** Files a comparison of PR updates touches; see `DocNavProps.rangeChanges`. */
 export interface RangeChanges {
@@ -21,9 +21,9 @@ export interface RangeChanges {
 }
 
 /** The active `RangeChanges`, read by the nested file-row renderers. */
-export const RangeChangesContext = React.createContext<
-  RangeChanges | undefined
->(undefined);
+export const RangeChangesContext = createContext<RangeChanges | undefined>(
+  undefined,
+);
 
 /**
  * How a file row presents its change: within the selected updates when a

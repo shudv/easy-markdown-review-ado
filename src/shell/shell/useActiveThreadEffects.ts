@@ -1,18 +1,24 @@
 // Shell: document-level effects that follow the active comment thread.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useEffect,
+  useRef,
+} from "react";
 
 import type { ThreadState } from "../../comments/store";
 import { events, track } from "../../telemetry";
 import type { AnchorLayout } from "../components/ArticleView";
 import { clearIfSet, isCommentUiClickTarget } from "../shellHelpers";
 
-type SetActiveThreadId = React.Dispatch<React.SetStateAction<string | null>>;
+type SetActiveThreadId = Dispatch<SetStateAction<string | null>>;
 
 interface ActiveThreadEffectsOptions {
   activeThreadId: string | null;
   setActiveThreadId: SetActiveThreadId;
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>;
+  dismissEmptyDraftRef: MutableRefObject<() => void>;
   initialActiveThreadId: string | undefined;
   onActiveThreadChange: ((threadId: string | null) => void) | undefined;
   selectedPath: string;
@@ -36,12 +42,12 @@ export function useActiveThreadEffects(opts: ActiveThreadEffectsOptions): void {
 
 function useDismissActiveThread(
   setActiveThreadId: SetActiveThreadId,
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>,
+  dismissEmptyDraftRef: MutableRefObject<() => void>,
 ): void {
   // ESC clears the active thread and dismisses an *empty* draft from anywhere
   // outside a text editor. A draft holding text is preserved (users must cancel
   // it explicitly). (Composer has its own ESC handler that stops propagation.)
-  React.useEffect(() => {
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       const target = e.target as HTMLElement | null;
@@ -56,7 +62,7 @@ function useDismissActiveThread(
   // Clicking outside a highlight, balloon, or selection bubble dismisses the
   // active thread and any *empty* draft — the priority-stacked layout is
   // strictly transient. A draft with text survives a stray click.
-  React.useEffect(() => {
+  useEffect(() => {
     function onClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       // A target that its own click handler removed from the DOM (e.g. a
@@ -77,7 +83,7 @@ function useRailFollow(activeThreadId: string | null): void {
   // OWN scroll (the rail scrolls independently of the document now). The
   // document is scrolled to the anchor by the selection handlers. One effect
   // centralises rail-follow for every activation path (click, cycle, deep link).
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeThreadId === null || activeThreadId === "") return;
     const escaped = CSS.escape(activeThreadId);
     let cancelled = false;
@@ -116,10 +122,10 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
   // the article may not have wrapped its highlights yet. Re-runs as the
   // document and thread set settle; once the anchor exists we activate +
   // center it and clear the seed so later navigation isn't hijacked.
-  const pendingActiveThreadIdRef = React.useRef<string | undefined>(
+  const pendingActiveThreadIdRef = useRef<string | undefined>(
     initialActiveThreadId,
   );
-  React.useEffect(() => {
+  useEffect(() => {
     // Latch the seed only when present. Hosts that gate the prop (e.g. the
     // Documents hub clears it after the first mount so it can't hijack later
     // navigation) flip it back to `undefined` on the next re-render — which
@@ -131,7 +137,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
       pendingActiveThreadIdRef.current = initialActiveThreadId;
     }
   }, [initialActiveThreadId]);
-  React.useEffect(() => {
+  useEffect(() => {
     const tid = pendingActiveThreadIdRef.current;
     if (tid === undefined || tid === "") return;
     // One rAF lets React commit the current document + the highlight-wrapping
@@ -195,8 +201,8 @@ function useReportActiveThread(
   // initial `activeThreadId`) so mount doesn't clobber a freshly-read deep
   // link with an empty param; only genuine changes (deep-link consumption,
   // selection, or clear) propagate.
-  const lastReportedThreadRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
+  const lastReportedThreadRef = useRef<string | null>(null);
+  useEffect(() => {
     if (!onActiveThreadChange) return;
     if (activeThreadId === lastReportedThreadRef.current) return;
     lastReportedThreadRef.current = activeThreadId;

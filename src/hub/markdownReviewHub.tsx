@@ -22,7 +22,7 @@
 import "../shell/styles.scss";
 import "./markdownReviewHub.scss";
 
-import * as React from "react";
+import { type ReactElement, useCallback } from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { createRoot } from "react-dom/client";
 import {
@@ -63,7 +63,7 @@ function HubReader({
 }: Readonly<{
   config: ReaderConfig;
   onBack: () => void;
-}>): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-hub__reader">
       <div className="emr-hub__bar">
@@ -89,8 +89,8 @@ function HubApp({
   config: ReaderConfig | null;
   filesUrl: string | null;
   navService: IHostNavigationService;
-}>): React.ReactElement {
-  const onBack = React.useCallback(() => {
+}>): ReactElement {
+  const onBack = useCallback(() => {
     if (filesUrl !== null && filesUrl !== "") navService.navigate(filesUrl);
     else navService.reload();
   }, [filesUrl, navService]);

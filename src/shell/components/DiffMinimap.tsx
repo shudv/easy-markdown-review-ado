@@ -10,7 +10,16 @@
 // active. Reads the already-decorated article DOM out of the scroll container.
 // Pure geometry lives in `./diffMinimap.helpers`.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   classifyDiffElement,
@@ -27,7 +36,7 @@ import {
 
 interface DiffMinimapProps {
   /** The reader's scroll container whose decorated diffs we chart. */
-  scrollRef: React.RefObject<HTMLElement | null>;
+  scrollRef: RefObject<HTMLElement | null>;
   /** Bumped when the article HTML / diff decorations change → remeasure. */
   version: number;
   /**
@@ -67,17 +76,17 @@ export function DiffMinimap({
   scrollRef,
   version,
   showDiff,
-}: Readonly<DiffMinimapProps>): React.ReactElement | null {
-  const [markers, setMarkers] = React.useState<DiffMarker[]>([]);
-  const [metrics, setMetrics] = React.useState<Metrics>({
+}: Readonly<DiffMinimapProps>): ReactElement | null {
+  const [markers, setMarkers] = useState<DiffMarker[]>([]);
+  const [metrics, setMetrics] = useState<Metrics>({
     scrollTop: 0,
     clientHeight: 0,
     scrollHeight: 0,
   });
-  const [scrollable, setScrollable] = React.useState(false);
-  const trackRef = React.useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
 
-  const measure = React.useCallback(() => {
+  const measure = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const m = readMetrics(scroller);
@@ -97,19 +106,19 @@ export function DiffMinimap({
     setScrollable(m.scrollHeight > m.clientHeight + 1);
   }, [scrollRef, showDiff]);
 
-  const syncScroll = React.useCallback(() => {
+  const syncScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     setMetrics(readMetrics(scroller));
   }, [scrollRef]);
 
   // Remeasure whenever the document / diff decorations / toggle change.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     measure();
   }, [measure, version]);
 
   // Follow ArticleView's post-decoration signal, plus scroll + resize.
-  React.useEffect(() => {
+  useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     let raf = 0;
@@ -151,8 +160,8 @@ export function DiffMinimap({
   // an unmount mid-drag can run it even if `pointerup`/`pointercancel` never
   // fire (otherwise the listeners would leak and keep closing over a stale
   // scroller).
-  const dragCleanupRef = React.useRef<(() => void) | null>(null);
-  React.useEffect(
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(
     () => () => {
       dragCleanupRef.current?.();
       dragCleanupRef.current = null;
@@ -193,7 +202,7 @@ export function DiffMinimap({
   };
 
   // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
-  const onThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onThumbPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     // Tear down any listeners a previous drag left attached (defensive).

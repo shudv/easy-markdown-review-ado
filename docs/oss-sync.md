@@ -4,7 +4,7 @@
 
 - Public base: `b965581` (#29).
 - Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
-- New product boundary: `2edded2` (source branch `chore/strict-lint-tiers`; not
+- New product boundary: `5ae3107` (source branch `chore/strict-lint-tiers`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
@@ -16,6 +16,8 @@
 | `1a37bc0`     | Three tiers of ESLint rules enforced as errors (stricter `typescript-eslint` including `strict-boolean-expressions` and `no-unnecessary-condition`, React Compiler rules, SonarJS, `regexp`, `@eslint-react`, `jsx-a11y-x`, `no-unsanitized`, `@vitest/eslint-plugin`) with every violation fixed and 65 documented exceptions; emoji shortcodes no longer resolve `Object.prototype` members; the Mermaid/math source dialog moves focus in and back; RepoPicker sends one page-one query after closing a filter. |
 | `15ae078`     | `@vitest/eslint-plugin` pinned to `1.6.27` (1.6.28 requires TypeScript 6).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `2edded2`     | Unused, TypeScript 6-deprecated `baseUrl` dropped from `tsconfig.json`; `.vscode/settings.json` points VS Code at the workspace TypeScript.                                                                                                                                                                                                                                                                                                                                                                        |
+| `599af9d`     | React imported by name (`import { useState, type ReactElement } from "react"`) with the automatic JSX runtime (`jsx: react-jsx`); DOM-clashing React types aliased (`ReactMouseEvent`); a `no-restricted-syntax` rule bans `import * as React` and `React.x`, stories included.                                                                                                                                                                                                                                    |
+| `5ae3107`     | `cspell.json` and recommended Code Spell Checker extensions (US and British English, project vocabulary, test-only fixture words); the "backentd" typo and the "replyable"/"repliable" inconsistency fixed.                                                                                                                                                                                                                                                                                                        |
 
 ### Public-specific adaptations retained
 
@@ -27,7 +29,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `2edded2` and
+Compare the next source product tree against the merged form of `5ae3107` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

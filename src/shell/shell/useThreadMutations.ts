@@ -1,6 +1,6 @@
 // Shell: thread status, edit, delete and reaction actions.
 
-import * as React from "react";
+import { type Dispatch, type SetStateAction, useCallback } from "react";
 
 import type { CommentAuthor, ReactionKind } from "../../types";
 import type { CommentApi } from "../../comments/api";
@@ -12,11 +12,11 @@ import type { PersistWith } from "./useCommentWrites";
 interface ThreadMutationsOptions {
   commentApi: CommentApi;
   persistWith: PersistWith;
-  dispatch: React.Dispatch<ThreadAction>;
+  dispatch: Dispatch<ThreadAction>;
   currentUser: CommentAuthor;
   /** May lack a thread a stale rail callback still names. */
   threadsById: Partial<ThreadState["threadsById"]>;
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveThreadId: Dispatch<SetStateAction<string | null>>;
 }
 
 /**
@@ -33,7 +33,7 @@ export function useThreadMutations(opts: ThreadMutationsOptions) {
 /** Thread status changes: resolve, reopen, mark pending and close. */
 function useStatusMutations(opts: ThreadMutationsOptions) {
   const { commentApi, persistWith, dispatch } = opts;
-  const onResolve = React.useCallback(
+  const onResolve = useCallback(
     (tid: string) => {
       void (async () => {
         const ok = await persistWith("Resolve thread", () =>
@@ -47,7 +47,7 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
     [commentApi, persistWith, dispatch],
   );
 
-  const onReopen = React.useCallback(
+  const onReopen = useCallback(
     (tid: string) => {
       void (async () => {
         const ok = await persistWith("Reopen thread", () =>
@@ -63,7 +63,7 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
 
   // Mark a thread as pending — a lightweight "revisit later" state that keeps
   // it open (still counted, still shown) but visually distinct.
-  const onMarkPending = React.useCallback(
+  const onMarkPending = useCallback(
     (tid: string) => {
       void (async () => {
         const ok = await persistWith("Mark thread pending", () =>
@@ -79,7 +79,7 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
 
   // Close a thread — a terminal state (folded away with resolved) for threads
   // that are done but weren't a code-fix resolution.
-  const onCloseThread = React.useCallback(
+  const onCloseThread = useCallback(
     (tid: string) => {
       void (async () => {
         const ok = await persistWith("Close thread", () =>
@@ -99,7 +99,7 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
 /** Comment edits and single-comment deletes. */
 function useCommentMutations(opts: ThreadMutationsOptions) {
   const { commentApi, persistWith, dispatch, setActiveThreadId } = opts;
-  const onEditComment = React.useCallback(
+  const onEditComment = useCallback(
     async (
       threadId: string,
       commentId: string,
@@ -123,7 +123,7 @@ function useCommentMutations(opts: ThreadMutationsOptions) {
     [commentApi, persistWith, dispatch],
   );
 
-  const onDeleteComment = React.useCallback(
+  const onDeleteComment = useCallback(
     (threadId: string, commentId: string) => {
       void (async () => {
         const ok = await persistWith("Delete comment", () =>
@@ -152,7 +152,7 @@ function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
     threadsById,
     setActiveThreadId,
   } = opts;
-  const onDeleteThread = React.useCallback(
+  const onDeleteThread = useCallback(
     (threadId: string) => {
       const thread = threadsById[threadId]!;
       void (async () => {
@@ -174,7 +174,7 @@ function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
     [threadsById, commentApi, persistWith, dispatch, setActiveThreadId],
   );
 
-  const onToggleReaction = React.useCallback(
+  const onToggleReaction = useCallback(
     (threadId: string, commentId: string, kind: ReactionKind) => {
       // Decide add vs remove before dispatch so persistence hits the right endpoint.
       const thread = threadsById[threadId];

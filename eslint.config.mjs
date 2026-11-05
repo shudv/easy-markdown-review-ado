@@ -27,6 +27,29 @@ const TYPED = [
 ];
 const JSX = ["src/**/*.tsx", "test/**/*.tsx"];
 const UNIT_TESTS = ["test/**/*.{ts,tsx}"];
+// Stories and Storybook config get only the React import rule below, not the
+// type-aware rule set.
+const STORIES = ["**/*.stories.tsx", ".storybook/**/*.{ts,tsx}"];
+
+// React is imported by name (`import { useState, type ReactElement } from
+// "react"`), never as a namespace or default object, and JSX uses the
+// automatic runtime. React types that share a DOM name are aliased, e.g.
+// `type MouseEvent as ReactMouseEvent`.
+const REACT_NAMED_IMPORTS = [
+  "error",
+  {
+    selector:
+      "ImportDeclaration[source.value='react'] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)",
+    message:
+      'Import React APIs and types by name: `import { useState, type ReactElement } from "react"`.',
+  },
+  {
+    selector:
+      ":matches(MemberExpression, JSXMemberExpression)[object.name='React'], TSQualifiedName[left.name='React']",
+    message:
+      "Use the named import instead of `React.x` (alias DOM-clashing types, e.g. `type MouseEvent as ReactMouseEvent`).",
+  },
+];
 
 // @eslint-react re-implements several React Compiler rules that
 // eslint-plugin-react-hooks already enforces; keep the official ones.
@@ -48,7 +71,7 @@ const LIMITS = {
 };
 const CODE_LINES_ONLY = { skipBlankLines: true, skipComments: true };
 
-export default tseslint.config(
+const config = tseslint.config(
   {
     // An `eslint-disable` the code no longer needs is an error, so documented
     // exceptions can't outlive the problem they excuse.
@@ -71,8 +94,7 @@ export default tseslint.config(
       "storybook-static/**",
       "node_modules/**",
       "**/*.d.ts",
-      "**/*.stories.tsx",
-      ".storybook/**",
+
       "*.config.{js,cjs,mjs,ts}",
       "webpack.config.cjs",
       "scripts/**",
@@ -81,7 +103,7 @@ export default tseslint.config(
 
   // Base JS + type-aware TS recommendations, applied only to the typed
   // source/test/e2e files below.
-  js.configs.recommended,
+  { ...js.configs.recommended, files: TYPED },
   ...tseslint.configs.recommendedTypeChecked.map((c) => ({
     ...c,
     files: [
@@ -123,6 +145,8 @@ export default tseslint.config(
       // No stray console in shipped code — the codebase already annotates the
       // intentional ones with `// eslint-disable-next-line no-console`.
       "no-console": ["error", { allow: ["warn", "error"] }],
+
+      "no-restricted-syntax": REACT_NAMED_IMPORTS,
 
       // A stray `.only` silently disables the 100% coverage gate. Hard-fail.
       "no-only-tests/no-only-tests": "error",
@@ -391,3 +415,18 @@ export default tseslint.config(
     },
   },
 );
+
+// Every block that targets source files skips stories; stories get a light,
+// non-type-aware block with just the React import rule.
+export default [
+  ...config.map((block) =>
+    block.files
+      ? { ...block, ignores: [...(block.ignores ?? []), ...STORIES] }
+      : block,
+  ),
+  {
+    files: STORIES,
+    languageOptions: { parser: tseslint.parser },
+    rules: { "no-restricted-syntax": REACT_NAMED_IMPORTS },
+  },
+];

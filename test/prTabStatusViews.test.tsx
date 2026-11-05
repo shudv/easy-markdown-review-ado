@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import * as React from "react";
+import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -18,22 +18,22 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 afterEach(() => {
-  if (root) React.act(() => root!.unmount());
+  if (root) act(() => root!.unmount());
   root = null;
   container?.remove();
   container = null;
 });
 
-function mount(element: React.ReactElement): HTMLDivElement {
+function mount(element: ReactElement): HTMLDivElement {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  React.act(() => root!.render(element));
+  act(() => root!.render(element));
   return container;
 }
 
 function click(el: Element | null): void {
-  React.act(() => {
+  act(() => {
     el!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }

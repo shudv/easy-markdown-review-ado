@@ -3,7 +3,7 @@
 // comment also carries thread-level actions (Resolve / Delete thread). All
 // mutations are delegated upward so the reducer stays the source of truth.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 import type {
   Comment,
   CommentAuthor,
@@ -66,9 +66,7 @@ interface CommentRowProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Single comment: author line, body or edit mode, reactions and actions menu share edit state. Hooks and parts are already split out.
-export function CommentRow(
-  props: Readonly<CommentRowProps>,
-): React.ReactElement {
+export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
   const {
     threadId,
     comment,

@@ -1,7 +1,13 @@
 // Sub-components + state hook for the SelectionBubble, split out so the
 // bubble itself stays a thin layout of its optional controls.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   LINK_RESULT_MS,
   selectionLinkButtonClass,
@@ -19,13 +25,13 @@ export function useSelectionCopyLink(
   onCopyLink: (() => Promise<boolean>) | undefined,
   onCopyLinkSettled: (() => void) | undefined,
 ): { linkState: SelectionLinkState; copyLink: (() => void) | undefined } {
-  const [linkState, setLinkState] = React.useState<SelectionLinkState>("idle");
-  const settledRef = React.useRef(onCopyLinkSettled);
-  React.useLayoutEffect(() => {
+  const [linkState, setLinkState] = useState<SelectionLinkState>("idle");
+  const settledRef = useRef(onCopyLinkSettled);
+  useLayoutEffect(() => {
     settledRef.current = onCopyLinkSettled;
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (linkState !== "copied" && linkState !== "failed") return;
     const timer = window.setTimeout(
       () => settledRef.current?.(),
@@ -57,7 +63,7 @@ export function BlockedSelectionBubble(
     left: number;
     block: { message: string; actionLabel: string; onAction: () => void };
   }>,
-): React.ReactElement {
+): ReactElement {
   const { top, left, block } = props;
   return (
     // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- Event-stopper: mousedown is only prevented so clicking the bubble keeps the text selection; the button inside is the interactive control.
@@ -85,7 +91,7 @@ export function SelectionLinkButton(
     alone: boolean;
     onClick: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { linkState, linkResult, alone, onClick } = props;
   const linkText = linkResult ?? (alone ? "Copy link" : null);
   return (

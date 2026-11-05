@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { CommentApiProvider } from "../../comments/api";
@@ -44,9 +44,7 @@ const meta = {
     // state so the stories can open/close it via the real request/cancel
     // callbacks (the shell owns this state in production).
     (Story, ctx) => {
-      const [replyOpen, setReplyOpen] = React.useState(
-        ctx.args.replyOpen ?? false,
-      );
+      const [replyOpen, setReplyOpen] = useState(ctx.args.replyOpen ?? false);
       return (
         <CommentApiProvider value={api}>
           <div style={{ position: "relative", width: 360, minHeight: 320 }}>
@@ -171,7 +169,7 @@ export const Orphaned: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Was anchored to:")).toBeTruthy();
     await expect(canvas.getByText(/the quick brown fox/)).toBeTruthy();
-    // Still replyable (only the in-doc highlight is gone).
+    // Still repliable (only the in-doc highlight is gone).
     await expect(canvas.getByText("@mention or reply")).toBeTruthy();
   },
 };

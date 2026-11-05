@@ -9,7 +9,13 @@
 // file; how that config is obtained (URL query params for the hub) is the
 // caller's concern.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import {
   GitVersionOptions,
@@ -135,12 +141,12 @@ export function MarkdownReader({
   config,
 }: Readonly<{
   config: ReaderConfig;
-}>): React.ReactElement {
-  const [resolved, setResolved] = React.useState<ResolvedReader | null>(null);
-  const [user, setUser] = React.useState<CommentAuthor | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+}>): ReactElement {
+  const [resolved, setResolved] = useState<ResolvedReader | null>(null);
+  const [user, setUser] = useState<CommentAuthor | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     void (async () => {
       try {
         const gitClient = sharedGitClient();
@@ -205,14 +211,14 @@ export function MarkdownReader({
     })();
   }, [config]);
 
-  const loadFileSource = React.useCallback(
+  const loadFileSource = useCallback(
     (_path: string): Promise<string> => {
       if (!resolved) return Promise.reject(new Error("Reader not ready"));
       return fetchReaderFileContent(resolved);
     },
     [resolved],
   );
-  const resolveDocumentImage = React.useCallback(
+  const resolveDocumentImage = useCallback(
     async (
       _documentPath: string,
       repositoryPath: string,
@@ -237,7 +243,7 @@ export function MarkdownReader({
     [resolved],
   );
 
-  const commentApi = React.useMemo<CommentApi | undefined>(() => {
+  const commentApi = useMemo<CommentApi | undefined>(() => {
     if (!resolved?.pr) return undefined;
     return new AdoCommentApi({
       repositoryId: resolved.config.repositoryId,
@@ -246,7 +252,7 @@ export function MarkdownReader({
     });
   }, [resolved]);
 
-  const fetchRemoteThreads = React.useMemo<
+  const fetchRemoteThreads = useMemo<
     ((signal: AbortSignal) => Promise<CommentThread[]>) | undefined
   >(() => {
     if (!resolved?.pr) return undefined;
@@ -273,7 +279,7 @@ export function MarkdownReader({
   // Shell (whose "content"/"error" signal covers the success + render-failure
   // paths). Without this a data-load failure here would drop the boot event.
   // Idempotent + no-ops outside a real boot.
-  React.useEffect(() => {
+  useEffect(() => {
     if (error !== null && error !== "") markAppReady("error");
   }, [error]);
 

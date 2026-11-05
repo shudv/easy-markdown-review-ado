@@ -1,6 +1,6 @@
 // Header of the document navigation rail: title or search box + toggle.
 
-import * as React from "react";
+import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { SearchIcon } from "./icons";
 import { SvgX } from "./DocNav.icons";
@@ -16,16 +16,14 @@ interface DocNavHeaderProps {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   closeSearch: () => void;
-  searchInputRef: React.RefObject<HTMLInputElement>;
+  searchInputRef: RefObject<HTMLInputElement>;
   /** Offer the search toggle (enough documents, or a search in progress). */
   showSearchToggle: boolean;
-  titleSlot?: React.ReactNode;
-  headerActions?: React.ReactNode;
+  titleSlot?: ReactNode;
+  headerActions?: ReactNode;
 }
 
-export function DocNavHeader(
-  props: Readonly<DocNavHeaderProps>,
-): React.ReactElement {
+export function DocNavHeader(props: Readonly<DocNavHeaderProps>): ReactElement {
   const {
     searchQuery,
     setSearchQuery,
@@ -85,7 +83,7 @@ function SearchToggleButton(
     closeSearch: () => void;
     setSearchOpen: (open: boolean) => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { searchOpen, closeSearch, setSearchOpen } = props;
   return (
     <button

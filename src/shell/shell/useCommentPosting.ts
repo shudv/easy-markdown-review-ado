@@ -1,6 +1,11 @@
 // Shell: posting new comments and replies.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useCallback,
+} from "react";
 
 import type {
   CommentAuthor,
@@ -22,21 +27,21 @@ import type { PersistWith } from "./useCommentWrites";
 interface CommentPostingOptions {
   commentApi: CommentApi;
   persistWith: PersistWith;
-  dispatch: React.Dispatch<ThreadAction>;
+  dispatch: Dispatch<ThreadAction>;
   currentUser: CommentAuthor;
   identityStore: IdentityStore;
   selectedPath: string;
   sourceByPath: Record<string, string>;
   draftAnchor: TextQuoteAnchor | null;
-  activeDraftRef: React.MutableRefObject<DraftTarget | null>;
+  activeDraftRef: MutableRefObject<DraftTarget | null>;
   draft: DraftPersistence;
   isStillPostedDraft: (
     postedTarget: DraftTarget | null,
     body: string,
   ) => boolean;
-  setActiveDraft: React.Dispatch<React.SetStateAction<DraftTarget | null>>;
-  setDraftY: React.Dispatch<React.SetStateAction<number | null>>;
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveDraft: Dispatch<SetStateAction<DraftTarget | null>>;
+  setDraftY: Dispatch<SetStateAction<number | null>>;
+  setActiveThreadId: Dispatch<SetStateAction<string | null>>;
 }
 
 /** Posting the open composer: a new comment thread or a reply. */
@@ -64,7 +69,7 @@ function useSubmitDraft(opts: CommentPostingOptions) {
     setDraftY,
     setActiveThreadId,
   } = opts;
-  return React.useCallback(
+  return useCallback(
     (body: string) => {
       // Anchor against the SAME source that produced the currently rendered
       // article so the comment can be located in it.
@@ -140,7 +145,7 @@ function useReply(opts: CommentPostingOptions) {
     isStillPostedDraft,
     setActiveDraft,
   } = opts;
-  return React.useCallback(
+  return useCallback(
     (threadId: string, body: string) => {
       const postedTarget = activeDraftRef.current;
       void (async () => {

@@ -2,7 +2,7 @@
 // Before selects the historical version; Changes independently annotates the
 // current source and is hidden while Before is active.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 
 import { hydrateMath } from "../../markdown/mathHydrate";
 import { hydrateMermaid } from "../../markdown/mermaidHydrate";
@@ -29,10 +29,10 @@ interface GeneratedSourceModalProps {
 // eslint-disable-next-line max-lines-per-function -- Generated-source dialog: header, view toggle and source/diff panes share the dialog state and focus handling.
 export function GeneratedSourceModal(
   props: Readonly<GeneratedSourceModalProps>,
-): React.ReactElement | null {
+): ReactElement | null {
   const { kind = "mermaid", source, originalSource, onClose } = props;
-  const previewRef = React.useRef<HTMLDivElement | null>(null);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const hasDiff =
     source !== null && originalSource != null && originalSource !== source;
   const {
@@ -49,7 +49,7 @@ export function GeneratedSourceModal(
   // Move focus into the dialog when it opens and give it back to whatever
   // opened it (the article's "Source" button) when it closes.
   const isOpen = source !== null;
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) return;
     // `activeElement` is at least <body> while a document is loaded.
     const opener = document.activeElement as HTMLElement;
@@ -58,7 +58,7 @@ export function GeneratedSourceModal(
   }, [isOpen]);
 
   // Close on Escape.
-  React.useEffect(() => {
+  useEffect(() => {
     if (source === null) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -71,7 +71,7 @@ export function GeneratedSourceModal(
   }, [source, onClose]);
 
   // Render the selected version in the preview pane.
-  React.useEffect(() => {
+  useEffect(() => {
     const el = previewRef.current;
     if (!el || selectedSource === null) return;
     const encoded = encodeURIComponent(selectedSource);
@@ -203,10 +203,10 @@ function useGeneratedSourceViewState(
   kind: string,
   source: string | null,
 ) {
-  const [copied, setCopied] = React.useState(false);
-  const [beforeShown, setBeforeShown] = React.useState(false);
-  const [changesShown, setChangesShown] = React.useState(hasDiff);
-  const [shown, setShown] = React.useState({ hasDiff, kind, source });
+  const [copied, setCopied] = useState(false);
+  const [beforeShown, setBeforeShown] = useState(false);
+  const [changesShown, setChangesShown] = useState(hasDiff);
+  const [shown, setShown] = useState({ hasDiff, kind, source });
   if (
     shown.hasDiff !== hasDiff ||
     shown.kind !== kind ||

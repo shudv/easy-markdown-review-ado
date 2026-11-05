@@ -1,6 +1,6 @@
 // Shell: loading and rendering the selected document.
 
-import * as React from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { renderMarkdown } from "../../markdown/render";
 import { markAppReady, trackUserFacingError } from "../../telemetry";
@@ -17,19 +17,15 @@ export function useDocumentSource(
   loadFileSource: (path: string) => Promise<string>,
 ) {
   // Per-file rendered HTML cache.
-  const [htmlByPath, setHtmlByPath] = React.useState<Record<string, string>>(
-    {},
-  );
+  const [htmlByPath, setHtmlByPath] = useState<Record<string, string>>({});
   // Per-file committed Markdown source cache; used to anchor comments against
   // the exact source that produced the rendered article.
-  const [sourceByPath, setSourceByPath] = React.useState<
-    Record<string, string>
-  >({});
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [sourceByPath, setSourceByPath] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Documents hub: a remembered or linked document that's no longer in the
   // repo (renamed / deleted) was swapped for another one; tell the reader.
-  const [missingDoc, setMissingDoc] = React.useState<{
+  const [missingDoc, setMissingDoc] = useState<{
     missing: string;
     shown: string;
   } | null>(null);
@@ -37,12 +33,12 @@ export function useDocumentSource(
   // commit (by `useDocNavigation`, which owns the deep-link refs it resets), so
   // the load effect's async failure path can call it without depending on the
   // file list.
-  const handleMissingDocRef = React.useRef<
-    (missing: string) => MissingDocOutcome
-  >(null!);
-  const [renderVersion, setRenderVersion] = React.useState(0);
+  const handleMissingDocRef = useRef<(missing: string) => MissingDocOutcome>(
+    null!,
+  );
+  const [renderVersion, setRenderVersion] = useState(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedPath) return;
     if (htmlByPath[selectedPath]) {
       // A cache hit shows the cached document, so drop any error or spinner
@@ -119,8 +115,8 @@ function useBootReadySignal(
   selectedPath: string,
   error: string | null,
 ): void {
-  const bootReadyFiredRef = React.useRef(false);
-  React.useEffect(() => {
+  const bootReadyFiredRef = useRef(false);
+  useEffect(() => {
     if (bootReadyFiredRef.current) return;
     const hasRenderedHtmlForSelected =
       !!selectedPath &&

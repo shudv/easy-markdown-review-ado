@@ -20,7 +20,7 @@
 // the URL read/write helpers, and the React context plumbing. The host wiring
 // that constructs the base URL lives in the (SDK-coupled) app shells.
 
-import * as React from "react";
+import { createContext, useContext } from "react";
 
 /**
  * Query-string parameter that carries the linked thread id on a surface URL,
@@ -75,13 +75,11 @@ export type DeepLinkBuilder = (target: DeepLinkTarget) => string | undefined;
  * React context carrying the active surface's link builder. `null` means "no
  * shareable URL available" — link affordances are then hidden.
  */
-export const DeepLinkContext = React.createContext<DeepLinkBuilder | null>(
-  null,
-);
+export const DeepLinkContext = createContext<DeepLinkBuilder | null>(null);
 
 /** Read the nearest `DeepLinkContext` builder (or `null`). */
 export function useDeepLink(): DeepLinkBuilder | null {
-  return React.useContext(DeepLinkContext);
+  return useContext(DeepLinkContext);
 }
 
 /** The `{ param: value }` pairs a target writes into a URL. */

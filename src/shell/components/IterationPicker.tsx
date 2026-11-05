@@ -1,6 +1,12 @@
 // Status-bar picker for comparing pull-request updates.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   allReviewIterations,
@@ -58,7 +64,7 @@ function IterationStepButton({
   label: string | null;
   range: ReviewIterationRange | null;
   onStep: (range: ReviewIterationRange) => void;
-}>): React.ReactElement {
+}>): ReactElement {
   const word = direction === "left" ? "Previous" : "Next";
   const edge = direction === "left" ? "First" : "Last";
   // `label` comes from reviewRangeLabel, which never returns "".
@@ -86,11 +92,11 @@ export function IterationPicker({
   baseCommit,
   range,
   onChange,
-}: Readonly<IterationPickerProps>): React.ReactElement {
-  const rootRef = React.useRef<HTMLDivElement>(null);
-  const listRef = React.useRef<HTMLDivElement>(null);
-  const anchorUpdateRef = React.useRef<number | null>(null);
-  const [open, setOpen] = React.useState(false);
+}: Readonly<IterationPickerProps>): ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const anchorUpdateRef = useRef<number | null>(null);
+  const [open, setOpen] = useState(false);
   const { triggerRef, popoverRef, restoreFocusAfterClose } =
     useInertPopover(open);
   const {
@@ -107,7 +113,7 @@ export function IterationPicker({
     triggerTitle,
   } = iterationPickerModel(options, range);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current!.contains(event.target as Node)) setOpen(false);
@@ -126,7 +132,7 @@ export function IterationPicker({
   // On open, bring the current selection into view: the list is newest-first,
   // so the first selected row is the comparison's newest update. A long PR
   // would otherwise open scrolled away from where the reviewer is.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const list = listRef.current!;
     const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');

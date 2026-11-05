@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,7 +17,7 @@ import { SvgRefresh } from "../src/hub/hubIcons";
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-type PickerProps = React.ComponentProps<typeof RepoPicker>;
+type PickerProps = ComponentProps<typeof RepoPicker>;
 
 let container: HTMLDivElement;
 let root: Root;

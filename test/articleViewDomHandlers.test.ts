@@ -4,7 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import type * as React from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -56,7 +56,7 @@ describe("handleHeadingLinkClick", () => {
     const preventDefault = vi.fn();
     const announce = vi.fn();
     const consumed = handleHeadingLinkClick(
-      { preventDefault } as unknown as React.MouseEvent,
+      { preventDefault } as unknown as ReactMouseEvent,
       root.querySelector("button")!,
       undefined,
       announce,
@@ -84,7 +84,7 @@ describe("generated-source affordance", () => {
     const preventDefault = vi.fn();
     const open = vi.fn();
     const consumed = handleGeneratedSourceClick(
-      { preventDefault } as unknown as React.MouseEvent,
+      { preventDefault } as unknown as ReactMouseEvent,
       root.querySelector("button")!,
       open,
     );

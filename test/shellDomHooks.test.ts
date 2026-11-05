@@ -2,7 +2,10 @@
 // rail-follow and document scrolling, links leaving the reader, pane resizing
 // and the too-narrow check — mounted in jsdom with a manual frame queue.
 
-import type * as React from "react";
+import type {
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   afterEach,
   beforeAll,
@@ -170,7 +173,7 @@ describe("usePaneResize", () => {
       clientX: 0,
       pointerId: 1,
       currentTarget: { setPointerCapture: () => {} },
-    } as unknown as React.PointerEvent<HTMLDivElement>;
+    } as unknown as ReactPointerEvent<HTMLDivElement>;
     current.onNavResizeStart(pointer);
     current.onNavResizeMove({ ...pointer, clientX: 40 });
     current.onCommentResizeStart(pointer);
@@ -182,7 +185,7 @@ describe("usePaneResize", () => {
 describe("useTooNarrow", () => {
   it("stays usable while the reader frame is unmounted", async () => {
     const { current } = await mount(
-      (frame: React.MutableRefObject<HTMLDivElement | null>) =>
+      (frame: MutableRefObject<HTMLDivElement | null>) =>
         useTooNarrow(frame, false, true, DEFAULT_READER_PREFS),
       { current: null },
     );

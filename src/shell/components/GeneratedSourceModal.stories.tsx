@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -52,7 +52,7 @@ export const Closed: Story = {
 export const MovesFocusInAndBack: Story = {
   args: { source: null },
   render: function Render(args) {
-    const [source, setSource] = React.useState<string | null>(null);
+    const [source, setSource] = useState<string | null>(null);
     return (
       <>
         <button type="button" onClick={() => setSource(SOURCE)}>

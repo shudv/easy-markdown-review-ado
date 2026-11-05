@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { CommentFilterMenu } from "./CommentFilterMenu";

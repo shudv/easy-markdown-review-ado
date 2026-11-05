@@ -2,7 +2,7 @@
 // tools (⋯ toggle, like button / pill), and the ⋯ popover with its menu items
 // and delete confirmation. All mutations are callbacks supplied by the row.
 
-import * as React from "react";
+import type { ReactElement, ReactNode, RefObject } from "react";
 import type { Comment, ThreadStatus } from "../../types";
 import {
   commentLinkLabel,
@@ -15,7 +15,7 @@ export function CommentRowMeta(
   props: Readonly<{
     comment: Comment;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { comment } = props;
   return (
     <div className="emr-comment-meta">
@@ -37,11 +37,11 @@ export function CommentRowMeta(
 
 export function CommentMenuToggle(
   props: Readonly<{
-    buttonRef: React.RefObject<HTMLButtonElement>;
+    buttonRef: RefObject<HTMLButtonElement>;
     open: boolean;
     onToggle: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { buttonRef, open, onToggle } = props;
   return (
     <button
@@ -67,7 +67,7 @@ export function CommentLikeButton(
   props: Readonly<{
     onLike: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { onLike } = props;
   return (
     <button
@@ -100,7 +100,7 @@ export function CommentLikePill(
     canReact: boolean;
     onLike: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { likedByMe, likeCount, likeTooltip, canReact, onLike } = props;
   return (
     <button
@@ -150,13 +150,13 @@ interface CommentMenuState {
 /** The ⋯ popover: the action list, or the delete confirmation step. */
 export function CommentRowMenu(
   props: Readonly<{
-    menuRef: React.RefObject<HTMLDivElement>;
+    menuRef: RefObject<HTMLDivElement>;
     confirm: ConfirmMode;
     setConfirm: (mode: ConfirmMode) => void;
     state: CommentMenuState;
     actions: CommentMenuActions;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { menuRef, confirm, setConfirm, state, actions } = props;
   return (
     // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/interactive-supports-focus -- onClick is only an event stopper (keeps menu clicks from selecting the thread); keyboard focus lives on the native role="menuitem" buttons inside, and Escape closes via useCommentRowMenu
@@ -193,7 +193,7 @@ function CommentMenuItems(
     actions: CommentMenuActions;
     setConfirm: (mode: ConfirmMode) => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { state, actions, setConfirm } = props;
   return (
     <>
@@ -241,7 +241,7 @@ function CommentThreadStatusItems(
     threadStatus: ThreadStatus;
     actions: CommentMenuActions;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { isTerminal, threadStatus, actions } = props;
   if (isTerminal) {
     return (
@@ -289,7 +289,7 @@ function CommentDeleteItem(
     canDelete: boolean;
     setConfirm: (mode: ConfirmMode) => void;
   }>,
-): React.ReactElement | null {
+): ReactElement | null {
   const { isFirst, canDeleteThread, canDelete, setConfirm } = props;
   if (isFirst && canDeleteThread) {
     return (
@@ -316,12 +316,12 @@ function CommentDeleteItem(
 
 function CommentMenuItem(
   props: Readonly<{
-    icon: React.ReactNode;
+    icon: ReactNode;
     label: string;
     onClick: () => void;
     danger?: boolean;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { icon, label, onClick, danger } = props;
   return (
     <button
@@ -342,7 +342,7 @@ function CommentDeleteConfirm(
     onCancel: () => void;
     onConfirm: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { confirm, onCancel, onConfirm } = props;
   return (
     <div className="emr-popover-confirm">
@@ -373,7 +373,7 @@ const iconStrokeProps = {
   strokeLinejoin: "round" as const,
 };
 
-function SvgMore(): React.ReactElement {
+function SvgMore(): ReactElement {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
       <circle cx="5" cy="12" r="1.5" fill="currentColor" />
@@ -383,7 +383,7 @@ function SvgMore(): React.ReactElement {
   );
 }
 
-function SvgLink(): React.ReactElement {
+function SvgLink(): ReactElement {
   // Lucide "link".
   return (
     <svg
@@ -399,7 +399,7 @@ function SvgLink(): React.ReactElement {
   );
 }
 
-function SvgPencil(): React.ReactElement {
+function SvgPencil(): ReactElement {
   // Lucide "pencil".
   return (
     <svg
@@ -415,7 +415,7 @@ function SvgPencil(): React.ReactElement {
   );
 }
 
-function SvgTrash(): React.ReactElement {
+function SvgTrash(): ReactElement {
   // Lucide "trash-2".
   return (
     <svg
@@ -434,7 +434,7 @@ function SvgTrash(): React.ReactElement {
   );
 }
 
-function SvgCheck(): React.ReactElement {
+function SvgCheck(): ReactElement {
   // Lucide "check".
   return (
     <svg
@@ -449,7 +449,7 @@ function SvgCheck(): React.ReactElement {
   );
 }
 
-function SvgUndo(): React.ReactElement {
+function SvgUndo(): ReactElement {
   // Lucide "rotate-ccw".
   return (
     <svg
@@ -465,7 +465,7 @@ function SvgUndo(): React.ReactElement {
   );
 }
 
-function SvgClock(): React.ReactElement {
+function SvgClock(): ReactElement {
   // Lucide "clock".
   return (
     <svg
@@ -481,7 +481,7 @@ function SvgClock(): React.ReactElement {
   );
 }
 
-function SvgArchive(): React.ReactElement {
+function SvgArchive(): ReactElement {
   // Lucide "archive".
   return (
     <svg

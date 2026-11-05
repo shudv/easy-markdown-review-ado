@@ -2,7 +2,7 @@
 // properties, the app/pane class names and visibility, and the rail/status-bar
 // controls. Split from `derive.ts`; unit-tested directly like it.
 
-import type * as React from "react";
+import type { CSSProperties } from "react";
 
 import type { ReaderIterationOption } from "../components/ReaderStatusBar";
 import {
@@ -18,7 +18,7 @@ import type { RoutedPrInfo } from "./types";
  */
 export function readerStyleFor(readerPrefs: ReaderPrefs): {
   readerFont: ReturnType<typeof resolveReaderFont>;
-  readerStyle: React.CSSProperties;
+  readerStyle: CSSProperties;
 } {
   const readerFont = resolveReaderFont(readerPrefs.fontId);
   const readerSpacing = readerSpacingValues(readerPrefs);
@@ -31,7 +31,7 @@ export function readerStyleFor(readerPrefs: ReaderPrefs): {
     "--emr-reader-paragraph-spacing": `${readerSpacing.paragraphSpacingPx}px`,
     "--emr-nav-scale": String(widthScale(readerPrefs.navWidthPct)),
     "--emr-rail-scale": String(widthScale(readerPrefs.commentWidthPct)),
-  } as React.CSSProperties;
+  } as CSSProperties;
   return { readerFont, readerStyle };
 }
 

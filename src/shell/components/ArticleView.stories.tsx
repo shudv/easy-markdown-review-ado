@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useEffect,
+  useState,
+} from "react";
 import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
@@ -196,12 +201,10 @@ const EXACT_OVERLAPPING_THREADS: CommentThread[] = [
 ];
 
 function OverlappingAnchorArticle(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
-    null,
-  );
-  const [currentSource, setCurrentSource] = React.useState<string>();
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [currentSource, setCurrentSource] = useState<string>();
   return (
     <>
       <button type="button" onClick={() => setCurrentSource(SOURCE)}>
@@ -1293,10 +1296,10 @@ export const SelectionLinkBlocked: Story = {
 
 /** Re-renders its ArticleView with a changed thread set on `emr-story-rewrap`. */
 function RewrapHarness(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [threads, setThreads] = React.useState(props.threads);
-  React.useEffect(() => {
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [threads, setThreads] = useState(props.threads);
+  useEffect(() => {
     const onRewrap = () => setThreads((current) => current.slice(1));
     window.addEventListener("emr-story-rewrap", onRewrap);
     return () => window.removeEventListener("emr-story-rewrap", onRewrap);

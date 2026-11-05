@@ -15,7 +15,15 @@
 // Rendering never blocks on the network: a GUID shows immediately and the name
 // swaps in when known.
 
-import * as React from "react";
+import {
+  createContext,
+  type DependencyList,
+  type RefObject,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
 
 import { normalizeIdentityGuid } from "./mentions";
 
@@ -150,12 +158,10 @@ export class IdentityStore {
  * Context carrying the shared IdentityStore. `null` means "no store" — consumers
  * fall back to showing the raw GUID (never crash).
  */
-export const IdentityStoreContext = React.createContext<IdentityStore | null>(
-  null,
-);
+export const IdentityStoreContext = createContext<IdentityStore | null>(null);
 
 export function useIdentityStore(): IdentityStore | null {
-  return React.useContext(IdentityStoreContext);
+  return useContext(IdentityStoreContext);
 }
 
 /**
@@ -200,12 +206,12 @@ export function hydrateUserMentions(
  * given deps change. Uses `useLayoutEffect` so names are visible before paint.
  */
 export function useUserMentionHydration(
-  ref: React.RefObject<HTMLElement | null>,
-  deps: React.DependencyList,
+  ref: RefObject<HTMLElement | null>,
+  deps: DependencyList,
 ): void {
   const store = useIdentityStore();
   const version = useIdentityVersion(store);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     hydrateUserMentions(ref.current, store);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [store, version, ...deps]);
@@ -216,13 +222,13 @@ export function useUserMentionHydration(
  * resolve. Returns the current version (or 0 when there's no store).
  */
 export function useIdentityVersion(store: IdentityStore | null): number {
-  const subscribe = React.useCallback(
+  const subscribe = useCallback(
     (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
     [store],
   );
-  const getSnapshot = React.useCallback(
+  const getSnapshot = useCallback(
     () => (store ? store.getVersion() : 0),
     [store],
   );
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

@@ -3,7 +3,13 @@
 // emr-authored threads, and feeds a PrInfo +
 // loadFileSource closure + thread CommentApi into the shared <Shell/>.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { PullRequestStatus } from "azure-devops-extension-api/Git";
 
@@ -103,19 +109,19 @@ import {
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
 
 // eslint-disable-next-line max-lines-per-function -- PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into Shell. Logic is extracted to tested modules; the rest is host wiring.
-export function PrTabApp(): React.ReactElement {
-  const [ctx, setCtx] = React.useState<PrContext | null>(null);
-  const [user, setUser] = React.useState<CommentAuthor | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+export function PrTabApp(): ReactElement {
+  const [ctx, setCtx] = useState<PrContext | null>(null);
+  const [user, setUser] = useState<CommentAuthor | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // Bumped by the boot error's "Try again" to re-run context resolution. A
   // transient auth blip (a 401 on the first git call, most common on the legacy
   // {org}.visualstudio.com host) clears on a fresh attempt with a warm token.
-  const [bootAttempt, setBootAttempt] = React.useState(0);
+  const [bootAttempt, setBootAttempt] = useState(0);
   // Set when a boot failure is the token dead-window (see adoAuthToken.ts): the
   // host is serving an ADO-expired token, so only a re-mint (auto at the AAD
   // `exp`, or a host reload) can heal it. Kept distinct from `error` so the UI
   // shows an accurate "refreshing" state instead of a raw TF400813.
-  const [refreshing, setRefreshing] = React.useState<{
+  const [refreshing, setRefreshing] = useState<{
     state: AdoGrantState;
     recoverAtMs?: number;
     /** An automatic host reload is allowed (see `claimAutoReload`). */
@@ -123,28 +129,28 @@ export function PrTabApp(): React.ReactElement {
   } | null>(null);
   // How many auto-retries we've scheduled for the current refreshing spell, so
   // `planSessionRefreshRetry` can bound them before falling back to manual.
-  const [refreshAttempt, setRefreshAttempt] = React.useState(0);
+  const [refreshAttempt, setRefreshAttempt] = useState(0);
   // Deep-link targets from the route (`?path=`, `?comment=`, `?anchor=`), read
   // once at startup. `null` until read, so the shell mounts on the right file.
-  const [routeSeed, setRouteSeed] = React.useState<PrTabRouteSeed | null>(null);
+  const [routeSeed, setRouteSeed] = useState<PrTabRouteSeed | null>(null);
   // The document on screen — encoded into shared links so they open the same
   // file. Seeded from the route (or the first changed file) once known.
-  const [activeDocPath, setActiveDocPath] = React.useState("");
+  const [activeDocPath, setActiveDocPath] = useState("");
   // The compared PR updates as ADO iteration ids, for shared links and the
   // address bar. `undefined` = "All updates" (left out of links).
-  const [activeIterationParams, setActiveIterationParams] = React.useState<
+  const [activeIterationParams, setActiveIterationParams] = useState<
     IterationParams | undefined
   >(undefined);
   // Per-file diff data, fetched OFF the critical path (see the effect below).
   // Starts empty so the shell renders Markdown immediately; diff decorations
   // fill in when this resolves.
-  const [diffsByFile, setDiffsByFile] = React.useState<
-    Record<string, DiffRange[]>
-  >({});
-  const [originalSourcesByFile, setOriginalSourcesByFile] = React.useState<
+  const [diffsByFile, setDiffsByFile] = useState<Record<string, DiffRange[]>>(
+    {},
+  );
+  const [originalSourcesByFile, setOriginalSourcesByFile] = useState<
     Record<string, string>
   >({});
-  React.useEffect(() => {
+  useEffect(() => {
     void (async () => {
       setError(null);
       setRefreshing(null);
@@ -229,7 +235,7 @@ export function PrTabApp(): React.ReactElement {
   //     which escapes the dead window about 3 times in 4 in production;
   //   - the AAD-`exp` timer from `planSessionRefreshRetry`, as a backstop.
   // Bounded; once exhausted the user falls back to the manual "Reload page".
-  React.useEffect(() => {
+  useEffect(() => {
     if (!refreshing) return;
     const retryBoot = (): void => {
       markBootAuthWaitEnd();
@@ -280,7 +286,7 @@ export function PrTabApp(): React.ReactElement {
   // Non-blocking diff fetch: once the file list is known, pull diff ranges and
   // original source. Failure degrades to "no diff data" without touching the
   // rendered Markdown.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!ctx) return;
     const { repositoryId, projectId, baseCommit, targetCommit } = ctx;
     // Only MODIFIED files can be diffed in one batch: added/deleted/renamed
@@ -319,14 +325,14 @@ export function PrTabApp(): React.ReactElement {
   // Terminal boot states that never render Markdown still complete boot so a
   // single `app.loaded` event always fires. `markAppReady` is idempotent, so if
   // the document path renders first (Shell fires "content"), these no-op.
-  React.useEffect(() => {
+  useEffect(() => {
     if (error !== null && error !== "") markAppReady("error");
   }, [error]);
-  React.useEffect(() => {
+  useEffect(() => {
     if (ctx?.changedMdFiles.length === 0) markAppReady("empty");
   }, [ctx]);
 
-  const loadFileSource = React.useCallback(
+  const loadFileSource = useCallback(
     async (path: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
       return fetchFileContent(ctx, path);
@@ -336,7 +342,7 @@ export function PrTabApp(): React.ReactElement {
 
   // The PR's web URL. ADO's PR REST payload carries no `_links.web`, so it is
   // assembled from the PR's org/project/repo/id (see `buildPrWebUrl`).
-  const prWebUrl = React.useMemo(
+  const prWebUrl = useMemo(
     () =>
       ctx
         ? buildPrWebUrl(ctx.pr, {
@@ -354,7 +360,7 @@ export function PrTabApp(): React.ReactElement {
   // (`iteration` / `base`, unless All updates), and the target. Null when the
   // PR URL or extension identity can't be resolved — the link affordances are
   // then hidden rather than copying a dead iframe URL.
-  const buildDeepLink = React.useMemo<DeepLinkBuilder | null>(() => {
+  const buildDeepLink = useMemo<DeepLinkBuilder | null>(() => {
     const ext = readExtensionIdentity();
     const base = ext
       ? buildPrTabDocUrl(prWebUrl, ext, activeDocPath, activeIterationParams)
@@ -364,7 +370,7 @@ export function PrTabApp(): React.ReactElement {
 
   // `[[_TOSP_]]` subpage tables list the page's folder as this PR has it —
   // or, for an earlier PR update, as that update had it.
-  const listFolder = React.useMemo<FolderLister | undefined>(() => {
+  const listFolder = useMemo<FolderLister | undefined>(() => {
     // Typed required, but the ADO REST payload omits it on some PRs.
     const prRefs:
       | { lastMergeSourceCommit?: { commitId?: string } }
@@ -389,7 +395,7 @@ export function PrTabApp(): React.ReactElement {
   // Which Markdown files a comparison of PR updates touches, so the file list
   // can mark them: ADO's iteration changes for the newer update compared to
   // the older one (0 = the PR base), paged.
-  const loadRangeChanges = React.useCallback(
+  const loadRangeChanges = useCallback(
     async (range: ReviewIterationRange) => {
       if (!ctx) throw new Error("PR context not loaded yet");
       const params = iterationParamsForRange(range, ctx.reviewIterationStops);
@@ -399,7 +405,7 @@ export function PrTabApp(): React.ReactElement {
     [ctx],
   );
 
-  const loadFileSourceAt = React.useCallback(
+  const loadFileSourceAt = useCallback(
     async (path: string, commitId: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
       return fetchFileContentAtCommit(ctx, path, commitId);
@@ -407,7 +413,7 @@ export function PrTabApp(): React.ReactElement {
     [ctx],
   );
 
-  const resolveDocumentImage = React.useCallback(
+  const resolveDocumentImage = useCallback(
     async (
       documentPath: string,
       repositoryPath: string,
@@ -426,7 +432,7 @@ export function PrTabApp(): React.ReactElement {
     [ctx],
   );
 
-  const commentApi = React.useMemo(() => {
+  const commentApi = useMemo(() => {
     if (!ctx) return undefined;
     return new AdoCommentApi({
       repositoryId: ctx.repositoryId,
@@ -437,7 +443,7 @@ export function PrTabApp(): React.ReactElement {
 
   // Stable closure fetching the latest threads for this PR, used by Shell's
   // `useThreadSync` to poll ~30s while visible. Must stay referentially stable.
-  const fetchRemoteThreads = React.useCallback(
+  const fetchRemoteThreads = useCallback(
     async (_signal: AbortSignal) => {
       if (!ctx) return [];
       return loadAdoThreads(ctx.repositoryId, ctx.pullRequestId, ctx.projectId);

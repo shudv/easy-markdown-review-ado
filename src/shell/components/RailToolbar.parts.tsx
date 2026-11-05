@@ -1,7 +1,15 @@
 // Sub-components + search-state hook for the RailToolbar, plus the small
 // inline icon set they render.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type ReactElement,
+  type RefObject,
+  type SetStateAction,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { CommentFilterMenu } from "./CommentFilterMenu";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
@@ -40,15 +48,15 @@ interface RoutedPrLabel {
  */
 export function useRailSearchOpen(commentQuery: string): {
   searchOpen: boolean;
-  setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  inputRef: React.RefObject<HTMLInputElement>;
+  setSearchOpen: Dispatch<SetStateAction<boolean>>;
+  inputRef: RefObject<HTMLInputElement>;
 } {
   // Start expanded if a query is already set (e.g. preserved across mounts).
-  const [searchOpen, setSearchOpen] = React.useState(commentQuery.length > 0);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(commentQuery.length > 0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus on open (layout effect so focus lands before paint).
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
@@ -62,12 +70,12 @@ export function useRailSearchOpen(commentQuery: string): {
 /** The inline search field that replaces the toolbar's lead label. */
 export function RailSearchInput(
   props: Readonly<{
-    inputRef: React.RefObject<HTMLInputElement>;
+    inputRef: RefObject<HTMLInputElement>;
     commentQuery: string;
     onCommentQueryChange: (q: string) => void;
     setSearchOpen: (open: boolean) => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { inputRef, commentQuery, onCommentQueryChange, setSearchOpen } = props;
   return (
     <input
@@ -107,7 +115,7 @@ export function RailToolbarTitle(
     onOnlyThisFileChange: (next: boolean) => void;
     allResolved: boolean;
   }>,
-): React.ReactElement {
+): ReactElement {
   const {
     filterCounts,
     filterMode,
@@ -151,7 +159,7 @@ export function RailSearchToggle(
     searchOpen: boolean;
     onClick: () => void;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { searchOpen, onClick } = props;
   return (
     <button
@@ -176,7 +184,7 @@ export function RailVersionRow(
     pr: RoutedPrLabel | undefined;
     historyNav: HistoryNav | undefined;
   }>,
-): React.ReactElement {
+): ReactElement {
   const { pr, historyNav } = props;
   const modifier = pr ? `is-${pr.status}` : "is-history-only";
   return (
@@ -213,9 +221,7 @@ export function RailVersionRow(
   );
 }
 
-function RailVersionPr(
-  props: Readonly<{ pr: RoutedPrLabel }>,
-): React.ReactElement {
+function RailVersionPr(props: Readonly<{ pr: RoutedPrLabel }>): ReactElement {
   const { pr } = props;
   return (
     <span
@@ -251,7 +257,7 @@ const iconStrokeProps = {
   strokeLinejoin: "round" as const,
 };
 
-function SvgX(): React.ReactElement {
+function SvgX(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -266,7 +272,7 @@ function SvgX(): React.ReactElement {
   );
 }
 
-function SvgChevronLeft(): React.ReactElement {
+function SvgChevronLeft(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -280,7 +286,7 @@ function SvgChevronLeft(): React.ReactElement {
   );
 }
 
-function SvgChevronRight(): React.ReactElement {
+function SvgChevronRight(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -294,7 +300,7 @@ function SvgChevronRight(): React.ReactElement {
   );
 }
 
-function SvgCheckCircle(): React.ReactElement {
+function SvgCheckCircle(): ReactElement {
   // Compact circular check — replaces the wordy "All comments resolved" pill so
   // the header stays tight and the right-hand controls don't shift. The label
   // lives in the title/aria-label instead.

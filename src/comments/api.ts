@@ -14,7 +14,7 @@
 //   - Errors from the remote write can be surfaced inline without leaving
 //     stale optimistic state behind.
 
-import * as React from "react";
+import { createContext, useContext } from "react";
 
 import type {
   MentionedIdentity,
@@ -237,7 +237,7 @@ export function filterByQuery<T>(
 // need to fire ad-hoc requests (today: mention typeahead inside Composer).
 // ---------------------------------------------------------------------------
 
-const CommentApiContext = React.createContext<CommentApi | null>(null);
+const CommentApiContext = createContext<CommentApi | null>(null);
 
 export const CommentApiProvider = CommentApiContext.Provider;
 
@@ -246,7 +246,7 @@ export const CommentApiProvider = CommentApiContext.Provider;
  * misuse is loud rather than silent.
  */
 export function useCommentApi(): CommentApi {
-  const api = React.useContext(CommentApiContext);
+  const api = useContext(CommentApiContext);
   if (!api) {
     throw new Error(
       "useCommentApi must be used inside <CommentApiProvider value={...}>",

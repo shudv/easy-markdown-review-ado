@@ -1,6 +1,6 @@
 // Flat DocNav search-results list shown while the file finder is active.
 
-import * as React from "react";
+import { type ReactElement, useContext } from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -57,7 +57,7 @@ interface SearchResultsListProps {
 // eslint-disable-next-line max-lines-per-function -- Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list.
 export function SearchResultsList(
   props: Readonly<SearchResultsListProps>,
-): React.ReactElement {
+): ReactElement {
   const {
     results,
     loading,
@@ -67,8 +67,8 @@ export function SearchResultsList(
     threadCountsByPath,
     onSelectFile,
   } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const rangeChanges = React.useContext(RangeChangesContext);
+  const showChangeIndicators = useContext(ChangeIndicatorContext);
+  const rangeChanges = useContext(RangeChangesContext);
   const banner = unavailable ? (
     <div
       className="emr-docnav-search-unavailable"

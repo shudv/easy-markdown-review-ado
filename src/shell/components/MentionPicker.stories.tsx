@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import type { ComponentType, ReactElement } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { MentionSuggestion } from "../../comments/mentions";
@@ -134,7 +134,7 @@ const PHOTO =
   );
 
 function withResolver(resolve: AvatarImageResolver) {
-  return function Decorator(Story: React.ComponentType): React.ReactElement {
+  return function Decorator(Story: ComponentType): ReactElement {
     return (
       <AvatarImageContext.Provider value={resolve}>
         <Story />

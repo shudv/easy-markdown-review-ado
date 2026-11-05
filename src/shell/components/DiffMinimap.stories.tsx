@@ -1,5 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  createRef,
+  type ReactElement,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { expect, waitFor, within } from "storybook/test";
 
 import { DiffMinimap } from "./DiffMinimap";
@@ -55,10 +61,10 @@ function Reader({
   spec?: BlockSpec[];
   /** Height of the scrollable content the blocks are positioned within. */
   contentHeight?: number;
-}): React.ReactElement {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [version, setVersion] = React.useState(0);
-  React.useEffect(() => setVersion(1), []);
+}): ReactElement {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => setVersion(1), []);
 
   const blocks = spec ? (
     <>
@@ -159,7 +165,7 @@ const meta = {
   // so these args are placeholders only — present to satisfy the required-props
   // type on the meta.
   args: {
-    scrollRef: React.createRef<HTMLElement>(),
+    scrollRef: createRef<HTMLElement>(),
     version: 0,
     showDiff: true,
   },
@@ -444,9 +450,9 @@ function DetachableReader({
   initiallyMounted,
 }: {
   initiallyMounted: boolean;
-}): React.ReactElement {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = React.useState(initiallyMounted);
+}): ReactElement {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(initiallyMounted);
   return (
     <div style={{ position: "relative", width: 420, height: 360 }}>
       {mounted ? (

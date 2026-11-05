@@ -1,6 +1,6 @@
 // Shell: detects a reader frame too narrow for its columns.
 
-import * as React from "react";
+import { type MutableRefObject, useLayoutEffect, useState } from "react";
 
 import { readerMinWidth, type ReaderPrefs } from "../readerPrefs";
 
@@ -11,13 +11,13 @@ import { readerMinWidth, type ReaderPrefs } from "../readerPrefs";
  * their legacy shrink-and-scroll behaviour, so they never trip this.
  */
 export function useTooNarrow(
-  bodyFrameRef: React.MutableRefObject<HTMLDivElement | null>,
+  bodyFrameRef: MutableRefObject<HTMLDivElement | null>,
   hideDocNav: boolean | undefined,
   commentsAvailable: boolean,
   readerPrefs: ReaderPrefs,
 ): boolean {
-  const [tooNarrow, setTooNarrow] = React.useState(false);
-  React.useLayoutEffect(() => {
+  const [tooNarrow, setTooNarrow] = useState(false);
+  useLayoutEffect(() => {
     // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
     // never disable the reader.
     if (hideDocNav) {

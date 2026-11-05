@@ -8,7 +8,15 @@
 // no animation, and no Mermaid (KaTeX is deterministic and covered here).
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { expect, fn, waitFor } from "storybook/test";
 
 import type { CommentThread, DiffRange } from "../../types";
@@ -164,9 +172,9 @@ function ThemeFrame({
 }: {
   theme?: "dark" | "hc-light" | "hc-dark";
   width?: number;
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
@@ -477,7 +485,7 @@ const LEGACY_DIFF_FIXTURE_CSS = `
   .minimal-diff-comparison .legacy-diff-washes .emr-rendered .emr-diff-source-only { width: min(100%, 720px); max-width: none; }
 `;
 
-function MinimalDiffComparison(): React.ReactElement {
+function MinimalDiffComparison(): ReactElement {
   const articleProps = {
     pristineHtml: renderMarkdownSync(MINIMAL_DIFF_COMPARISON_SOURCE),
     documentPath: "/minimal-diff-comparison.md",
@@ -492,7 +500,7 @@ function MinimalDiffComparison(): React.ReactElement {
     onAnchorsResolved: fn(),
     onHighlightClick: fn(),
     onSelection: fn(),
-  } satisfies React.ComponentProps<typeof ArticleView>;
+  } satisfies ComponentProps<typeof ArticleView>;
 
   return (
     <ThemeFrame width={1280}>
@@ -629,10 +637,10 @@ export const MediaDiffDark: Story = {
 };
 
 function OriginalSourceRewrapArticle(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [originalSource, setOriginalSource] = React.useState<string>();
-  React.useEffect(() => setOriginalSource(SOURCE), []);
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [originalSource, setOriginalSource] = useState<string>();
+  useEffect(() => setOriginalSource(SOURCE), []);
   return (
     <div data-original-source-ready={originalSource !== undefined}>
       <ArticleView {...props} originalSource={originalSource} />
@@ -2283,7 +2291,7 @@ async function prepareEquationGallery(
 
 function equationGalleryDecorator(
   theme?: "dark" | "hc-light" | "hc-dark",
-): (Story: React.ComponentType) => React.ReactElement {
+): (Story: ComponentType) => ReactElement {
   return (Story) => (
     <ThemeFrame theme={theme} width={760}>
       <div className="equation-gallery-frame">
@@ -2475,7 +2483,7 @@ async function prepareTooltipEdges(canvasElement: HTMLElement): Promise<void> {
 
 function tooltipEdgeDecorator(
   theme?: "dark" | "hc-light" | "hc-dark",
-): (Story: React.ComponentType) => React.ReactElement {
+): (Story: ComponentType) => ReactElement {
   return (Story) => (
     <ThemeFrame theme={theme} width={360}>
       <Story />

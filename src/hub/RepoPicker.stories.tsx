@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { type ReactElement, useCallback, useState } from "react";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
 
 import type { DocRepo } from "../shell/types";
@@ -17,11 +17,11 @@ const allRepos: DocRepo[] = Array.from({ length: 24 }, (_, index) => ({
 
 const loadMore = fn();
 
-function PaginatedPicker(): React.ReactElement {
-  const [repos, setRepos] = React.useState(() => allRepos.slice(0, 16));
-  const [loading, setLoading] = React.useState(false);
+function PaginatedPicker(): ReactElement {
+  const [repos, setRepos] = useState(() => allRepos.slice(0, 16));
+  const [loading, setLoading] = useState(false);
 
-  const handleLoadMore = React.useCallback(() => {
+  const handleLoadMore = useCallback(() => {
     loadMore();
     setLoading(true);
     window.setTimeout(() => {
@@ -114,9 +114,9 @@ export const StablePagination: Story = {
 const filterCalls = fn();
 
 /** A paginated host that applies `onFilter` like DocumentsHubApp does. */
-function FilteringPicker(): React.ReactElement {
-  const [filter, setFilter] = React.useState("");
-  const handleFilter = React.useCallback((text: string) => {
+function FilteringPicker(): ReactElement {
+  const [filter, setFilter] = useState("");
+  const handleFilter = useCallback((text: string) => {
     filterCalls(text);
     setFilter(text);
   }, []);

@@ -5,7 +5,7 @@
 // it. Shows the draft's file + a text snippet so they know exactly what's at
 // stake.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef } from "react";
 
 interface DraftGuardDialogProps {
   /** File the existing draft lives in (basename shown to the user). */
@@ -20,16 +20,16 @@ interface DraftGuardDialogProps {
 
 export function DraftGuardDialog(
   props: Readonly<DraftGuardDialogProps>,
-): React.ReactElement {
+): ReactElement {
   const { fileName, snippet, onDiscard, onKeepEditing } = props;
 
-  const keepRef = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
+  const keepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
     keepRef.current?.focus();
   }, []);
 
   // Escape keeps the draft (the safe default).
-  React.useEffect(() => {
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();

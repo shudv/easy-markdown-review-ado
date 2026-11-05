@@ -1,6 +1,14 @@
 // Shell: the comment thread store and its remote sync.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import type { CommentAuthor, CommentThread } from "../../types";
 import {
@@ -20,7 +28,7 @@ interface ThreadStoreOptions {
   currentUser: CommentAuthor;
   identityStore: IdentityStore;
   selectedPath: string;
-  selectedPathRef: React.MutableRefObject<string>;
+  selectedPathRef: MutableRefObject<string>;
   fetchRemoteThreads:
     | ((signal: AbortSignal) => Promise<CommentThread[]>)
     | undefined;
@@ -42,25 +50,25 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     loadThreadsForPath,
     onRefreshFiles,
   } = opts;
-  const [threadState, dispatch] = React.useReducer(
+  const [threadState, dispatch] = useReducer(
     threadReducer,
     initialThreadState(opts.initialThreads),
   );
   useIdentitySeeding(threadState, currentUser, identityStore);
 
   // Background remote-thread sync; merges snapshots preserving optimistic writes.
-  const onRemoteThreads = React.useCallback((threads: CommentThread[]) => {
+  const onRemoteThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
   }, []);
   // A PR-wide snapshot (`fetchRemoteThreads`) holds every thread, so it lets a
   // `?comment=` deep link tell "not loaded yet" from "doesn't exist". A
   // per-document snapshot can't: it only covers whichever file was open.
-  const [prThreadSnapshots, setPrThreadSnapshots] = React.useState(0);
-  const onPrThreads = React.useCallback((threads: CommentThread[]) => {
+  const [prThreadSnapshots, setPrThreadSnapshots] = useState(0);
+  const onPrThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
     setPrThreadSnapshots((n) => n + 1);
   }, []);
-  const noopFetch = React.useCallback(
+  const noopFetch = useCallback(
     /* v8 ignore next -- useThreadSync never calls fetchThreads while enabled is false */
     (_signal: AbortSignal): Promise<CommentThread[]> => Promise.resolve([]),
     [],
@@ -68,7 +76,7 @@ export function useThreadStore(opts: ThreadStoreOptions) {
   // Per-document mode: poll the *currently selected* document's threads. The
   // closure reads `selectedPathRef` so its identity stays stable across file
   // switches while always targeting the active document.
-  const perPathFetch = React.useCallback(
+  const perPathFetch = useCallback(
     (_signal: AbortSignal): Promise<CommentThread[]> =>
       loadThreadsForPath!(selectedPathRef.current),
     [loadThreadsForPath, selectedPathRef],
@@ -117,7 +125,7 @@ function useIdentitySeeding(
   // ids (people who aren't participants) are prefetched in one batch so their
   // names resolve on load, rather than flashing a raw GUID until each pill
   // happens to render.
-  React.useEffect(() => {
+  useEffect(() => {
     const people: Array<{
       id: string;
       displayName?: string;
@@ -151,8 +159,8 @@ function useUnifiedRefresh(
   // so the toolbar stays "refreshing" until BOTH settle — otherwise the button
   // re-enables the moment the poll finishes and a slow file reload could be
   // fired again while the first is still running.
-  const [fileRefreshInFlight, setFileRefreshInFlight] = React.useState(false);
-  const handleRefresh = React.useCallback(() => {
+  const [fileRefreshInFlight, setFileRefreshInFlight] = useState(false);
+  const handleRefresh = useCallback(() => {
     // `refreshNow` is a safe no-op when thread sync is disabled, so no guard.
     threadSync.refreshNow();
     track(events.commentsRefreshed());
@@ -182,12 +190,12 @@ function useUnifiedRefresh(
 function useFirstThreadLoad(
   loadThreadsForPath: ((path: string) => Promise<CommentThread[]>) | undefined,
   selectedPath: string,
-  dispatch: React.Dispatch<ThreadAction>,
+  dispatch: Dispatch<ThreadAction>,
 ): void {
   // Per-document mode: load the selected file's threads the first time it's
   // opened (the poller above keeps the active file fresh thereafter).
-  const loadedThreadPathsRef = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
+  const loadedThreadPathsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
     if (!loadThreadsForPath || !selectedPath) return;
     if (loadedThreadPathsRef.current.has(selectedPath)) return;
     loadedThreadPathsRef.current.add(selectedPath);

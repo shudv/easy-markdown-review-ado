@@ -1,12 +1,12 @@
 // Inline SVGs for the document navigation rail.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 // ---------------------------------------------------------------------------
 // Inline SVGs (no external icon dep). Stroke matches our other custom icons.
 // ---------------------------------------------------------------------------
 
-export function SvgCaret(): React.ReactElement {
+export function SvgCaret(): ReactElement {
   // Chevron rotated via CSS from the button's `data-collapsed` attribute.
   return (
     <svg
@@ -25,9 +25,7 @@ export function SvgCaret(): React.ReactElement {
   );
 }
 
-export function SvgFolder(
-  props: Readonly<{ open: boolean }>,
-): React.ReactElement {
+export function SvgFolder(props: Readonly<{ open: boolean }>): ReactElement {
   // Open / closed glyph picked on `open`.
   if (props.open) {
     return (
@@ -62,7 +60,7 @@ export function SvgFolder(
   );
 }
 
-export function SvgSpinner(): React.ReactElement {
+export function SvgSpinner(): ReactElement {
   // CSS-animated stroke spinner; the rotation is driven by the
   // `.emr-docnav-spinner` keyframe in styles.scss.
   return (
@@ -82,7 +80,7 @@ export function SvgSpinner(): React.ReactElement {
   );
 }
 
-export function SvgInfo(): React.ReactElement {
+export function SvgInfo(): ReactElement {
   return (
     <svg
       width="12"
@@ -102,7 +100,7 @@ export function SvgInfo(): React.ReactElement {
   );
 }
 
-export function SvgX(): React.ReactElement {
+export function SvgX(): ReactElement {
   return (
     <svg
       width="12"

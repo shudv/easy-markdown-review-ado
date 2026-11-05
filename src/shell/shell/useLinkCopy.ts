@@ -1,6 +1,6 @@
 // Shell: "copy link" actions for headings and selected text.
 
-import * as React from "react";
+import { useMemo } from "react";
 
 import { copyText } from "../../comments/clipboard";
 import { events, track, trackUserFacingError } from "../../telemetry";
@@ -27,7 +27,7 @@ export function useLinkCopy(
   // host can build a shareable surface URL. On success the host is told so it
   // can mirror the anchor into the page URL, as ADO's own preview does.
   const buildDeepLink = useDeepLink();
-  const onCopyHeadingLink = React.useMemo(() => {
+  const onCopyHeadingLink = useMemo(() => {
     if (!buildDeepLink) return undefined;
     return async (anchor: string): Promise<boolean> => {
       const url = buildDeepLink({ kind: "heading", anchor });
@@ -52,7 +52,7 @@ export function useLinkCopy(
 
   // "Copy link to selection" (the selection bubble's link action): links the
   // quoted text, with its section heading as a fallback.
-  const onCopySelectionLink = React.useMemo(() => {
+  const onCopySelectionLink = useMemo(() => {
     if (!buildDeepLink) return undefined;
     return async ({ text, anchor }: SelectionLinkTarget): Promise<boolean> => {
       const url = buildDeepLink({ kind: "text", text, anchor });

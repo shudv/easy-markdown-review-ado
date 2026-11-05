@@ -1,6 +1,6 @@
 // Shell: the comment rail's filtered trays, cycle order and counts.
 
-import * as React from "react";
+import { useCallback, useMemo } from "react";
 
 import type { CommentThread } from "../../types";
 import { isResolvedLike } from "../../types";
@@ -63,11 +63,11 @@ function useRailVisibility(opts: RailModelOptions) {
     commentFilter,
     currentUserId,
   } = opts;
-  const orphanedSet = React.useMemo(
+  const orphanedSet = useMemo(
     () => new Set(anchorLayout.orphanedThreadIds),
     [anchorLayout],
   );
-  const hiddenSet = React.useMemo(() => {
+  const hiddenSet = useMemo(() => {
     const s = new Set<string>();
     // Search spans all statuses; otherwise the selected filter applies. The
     // same rule covers current-file, General, and orphaned-file sections.
@@ -113,19 +113,19 @@ function useFilteredTrays(opts: RailModelOptions): FilteredTrays {
   // ---- Comment search ----
   // Search spans every rail section and status. Article highlights use the
   // same matching rule, so the prose and rail always show the same result set.
-  const matchesQuery = React.useCallback(
+  const matchesQuery = useCallback(
     (t: CommentThread): boolean => threadMatchesQuery(t, commentQuery),
     [commentQuery],
   );
-  const filteredCurrentThreads = React.useMemo(
+  const filteredCurrentThreads = useMemo(
     () => currentThreadsRaw.filter(matchesQuery),
     [currentThreadsRaw, matchesQuery],
   );
-  const filteredGeneralThreads = React.useMemo(
+  const filteredGeneralThreads = useMemo(
     () => generalThreads.filter(matchesQuery),
     [generalThreads, matchesQuery],
   );
-  const filteredOrphanedFileThreads = React.useMemo(
+  const filteredOrphanedFileThreads = useMemo(
     () => orphanedFileThreads.filter(matchesQuery),
     [orphanedFileThreads, matchesQuery],
   );
@@ -150,7 +150,7 @@ function useCommentCycle(
     filteredGeneralThreads,
     filteredOrphanedFileThreads,
   } = trays;
-  return React.useMemo(
+  return useMemo(
     () =>
       buildRailModel({
         currentThreads: filteredCurrentThreads,
@@ -190,7 +190,7 @@ function useRailCounts(opts: RailModelOptions) {
     currentUserId,
   } = opts;
   // Counts for the search summary line.
-  const totalCommentCount = React.useMemo(() => {
+  const totalCommentCount = useMemo(() => {
     let n = 0;
     for (const t of [
       ...currentThreadsRaw,
@@ -204,7 +204,7 @@ function useRailCounts(opts: RailModelOptions) {
 
   // Number of current threads that are resolved/wontFix/closed. Drives the
   // rail header's "all resolved" celebration.
-  const resolvedThreadCount = React.useMemo(() => {
+  const resolvedThreadCount = useMemo(() => {
     let n = 0;
     for (const t of currentThreadsRaw) {
       if (isResolvedLike(t.status)) n += 1;
@@ -214,7 +214,7 @@ function useRailCounts(opts: RailModelOptions) {
 
   // Number of current threads still open (not resolved/wontFix/closed). When
   // this reaches zero on a file that had comments, the rail header celebrates.
-  const openThreadCount = React.useMemo(() => {
+  const openThreadCount = useMemo(() => {
     let n = 0;
     for (const t of currentThreadsRaw) {
       if (!isResolvedLike(t.status)) n += 1;
@@ -224,7 +224,7 @@ function useRailCounts(opts: RailModelOptions) {
 
   // Live per-bucket counts backing the rail's comment filter menu, tallied
   // across every tray the rail surfaces (current file + General + orphaned).
-  const filterCounts = React.useMemo<CommentFilterCounts>(
+  const filterCounts = useMemo<CommentFilterCounts>(
     () =>
       countCommentFilters(
         onlyThisFile

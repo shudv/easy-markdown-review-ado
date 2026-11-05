@@ -4,7 +4,7 @@
 // update where the text no longer exists in the latest version), it explains
 // why and offers a way forward instead. Read-only surfaces show only the link.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 import { selectionLinkResultLabel } from "./SelectionBubble.helpers";
 import {
   BlockedSelectionBubble,
@@ -32,7 +32,7 @@ interface SelectionBubbleProps {
 
 export function SelectionBubble(
   props: Readonly<SelectionBubbleProps>,
-): React.ReactElement {
+): ReactElement {
   const { top, left, onAddComment, onCopyLink, onCopyLinkSettled, block } =
     props;
   const { linkState, copyLink } = useSelectionCopyLink(

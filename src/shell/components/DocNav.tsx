@@ -14,7 +14,18 @@
 // chevrons mirror the doc `<section>` collapse state; file-row chevrons are
 // nav-only (they fold the TOC without touching the doc).
 
-import * as React from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
@@ -48,8 +59,8 @@ import { SearchResultsList } from "./DocNav.search";
 export type { RangeChanges } from "./DocNav.model";
 
 interface DocNavProps {
-  articleWrapRef: React.RefObject<HTMLDivElement | null>;
-  scrollRef: React.RefObject<HTMLElement | null>;
+  articleWrapRef: RefObject<HTMLDivElement | null>;
+  scrollRef: RefObject<HTMLElement | null>;
   /** Bumped on article HTML change so we recompute. */
   version: number;
   /** Every file in the PR — drives the top-level nodes. */
@@ -105,12 +116,12 @@ interface DocNavProps {
    * Optional replacement for the static "Documents" rail title. The Documents
    * hub uses this to render an inline repo picker.
    */
-  titleSlot?: React.ReactNode;
+  titleSlot?: ReactNode;
   /**
    * Optional extra header controls next to the search button (e.g. the
    * Documents hub's "refresh repo" button).
    */
-  headerActions?: React.ReactNode;
+  headerActions?: ReactNode;
   /**
    * Whether to show per-file change-type indicators (the A/M/D glyph) on file
    * rows. True in a PR context, where files carry real change semantics
@@ -136,9 +147,7 @@ const ACTIVE_MARGIN = 24; // px from top before a heading is "active"
 const MAX_TREE_LEVEL = 4; // headings deeper than H4 are not shown in the nav
 
 // eslint-disable-next-line max-lines-per-function -- Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules.
-export function DocNav(
-  props: Readonly<DocNavProps>,
-): React.ReactElement | null {
+export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   const {
     articleWrapRef,
     scrollRef,
@@ -165,19 +174,16 @@ export function DocNav(
   const storageKey = selectedPath;
 
   // Captured headings (id, text, level, top position).
-  const [headings, setHeadings] = React.useState<NavHeading[]>([]);
-  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [headings, setHeadings] = useState<NavHeading[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   // Section ids whose doc section is currently collapsed. Drives both the
   // chevron orientation in the nav AND whether to render descendant items.
-  const [collapsedIds, setCollapsedIds] = React.useState<Set<string>>(
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
     () => new Set(),
   );
   // Folder paths the user manually collapsed in the file tree (default: all
   // expanded). Persisted per-paths-signature in sessionStorage.
-  const folderStorageKey = React.useMemo(
-    () => buildFolderStorageKey(files),
-    [files],
-  );
+  const folderStorageKey = useMemo(() => buildFolderStorageKey(files), [files]);
   const { collapsedDirs, toggleDir } = useCollapsedDirs(
     folderStorageKey,
     selectedPath,
@@ -194,16 +200,14 @@ export function DocNav(
   // `unloadedFolders` with leading-slash paths (`/docs`); without this
   // normalization `lazyDirSet.has(dirNode.path)` would miss and the folder
   // would render as a non-expandable empty row.
-  const lazyDirSet = React.useMemo(
+  const lazyDirSet = useMemo(
     () => new Set<string>((unloadedFolders ?? []).map(normalizeFolderPath)),
     [unloadedFolders],
   );
-  const [loadingDirs, setLoadingDirs] = React.useState<Set<string>>(
-    () => new Set(),
-  );
-  const inFlightDirsRef = React.useRef<Set<string>>(new Set());
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(() => new Set());
+  const inFlightDirsRef = useRef<Set<string>>(new Set());
 
-  const expandLazyDir = React.useCallback(
+  const expandLazyDir = useCallback(
     (dirPath: string) => {
       if (!onExpandFolder) return;
       if (inFlightDirsRef.current.has(dirPath)) return;
@@ -245,7 +249,7 @@ export function DocNav(
     searchResults,
   } = useDocSearch(files, onSearchFiles);
 
-  const navigationActivities = React.useMemo<readonly ReaderActivity[]>(() => {
+  const navigationActivities = useMemo<readonly ReaderActivity[]>(() => {
     const activities: ReaderActivity[] = [];
     if (loadingDirs.size > 0) {
       activities.push({
@@ -266,18 +270,18 @@ export function DocNav(
     }
     return activities;
   }, [loadingDirs, remoteLoading, trimmedQuery]);
-  React.useEffect(() => {
+  useEffect(() => {
     onActivitiesChange?.(navigationActivities);
     return () => onActivitiesChange?.([]);
   }, [navigationActivities, onActivitiesChange]);
 
   // After a manual click we suppress scroll-spy briefly so the smooth
   // scroll animation doesn't keep flipping `activeId` until it lands.
-  const spyLockUntilRef = React.useRef<number>(0);
+  const spyLockUntilRef = useRef<number>(0);
 
   // Ref to the list container so we can auto-scroll the active item into
   // view (long docs would otherwise hide it behind the rail's overflow).
-  const listRef = React.useRef<HTMLElement | null>(null);
+  const listRef = useRef<HTMLElement | null>(null);
 
   // -----------------------------------------------------------------------
   // Read the heading list out of the rendered DOM on each article re-render
@@ -286,7 +290,7 @@ export function DocNav(
   // re-triggered by `emr-sections-changed` so resolving a comment refreshes
   // counts without bumping `version`.
   // -----------------------------------------------------------------------
-  const readHeadings = React.useCallback(() => {
+  const readHeadings = useCallback(() => {
     const wrap = articleWrapRef.current;
     if (!wrap) {
       setHeadings([]);
@@ -345,7 +349,7 @@ export function DocNav(
     setCollapsedIds(collapsed);
   }, [articleWrapRef]);
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     // Initial read covers the case where the wrap pass already completed
     // before our listener attached.
     readHeadings();
@@ -365,7 +369,7 @@ export function DocNav(
   // Scroll-spy: find the last heading whose top has scrolled past a small
   // margin from the viewport top. Listens on the body scroller.
   // -----------------------------------------------------------------------
-  React.useEffect(() => {
+  useEffect(() => {
     const scroller = scrollRef.current;
     const wrap = articleWrapRef.current;
     if (!scroller || !wrap || headings.length === 0) return;
@@ -401,7 +405,7 @@ export function DocNav(
   // -----------------------------------------------------------------------
   // Keep the active nav item visible inside the rail's scroll container.
   // -----------------------------------------------------------------------
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeId === null || activeId === "") return;
     const list = listRef.current!;
     const item = list.querySelector<HTMLElement>(
@@ -421,7 +425,7 @@ export function DocNav(
   // -----------------------------------------------------------------------
   // Smooth-scroll to a heading on click.
   // -----------------------------------------------------------------------
-  const scrollTo = React.useCallback(
+  const scrollTo = useCallback(
     (id: string) => {
       const scroller = scrollRef.current!;
       const wrap = articleWrapRef.current!;
@@ -462,7 +466,7 @@ export function DocNav(
   // Toggle a single section's collapsed state, mirroring the doc section so
   // nav-collapse and doc-collapse stay in lockstep.
   // -----------------------------------------------------------------------
-  const toggleSection = React.useCallback(
+  const toggleSection = useCallback(
     (id: string) => {
       const wrap = articleWrapRef.current!;
       const section = wrap.querySelector<HTMLElement>(
@@ -485,7 +489,7 @@ export function DocNav(
   // reader has the outline turned off.
   // -----------------------------------------------------------------------
   const outlineShown = showOutline !== false;
-  const headingTree = React.useMemo<NavNode[]>(() => {
+  const headingTree = useMemo<NavNode[]>(() => {
     if (!outlineShown) return [];
     const filtered = headings.filter((h) => h.level <= MAX_TREE_LEVEL);
     const roots: NavNode[] = [];
@@ -513,7 +517,7 @@ export function DocNav(
   // folder/file tree from `files`, then decorate each file with its
   // open-comment count and (for the selected file) the heading tree.
   // -----------------------------------------------------------------------
-  const tree = React.useMemo<NavNode[]>(() => {
+  const tree = useMemo<NavNode[]>(() => {
     const builtTree = buildFolderTree<FileInfo>(files, {
       extraFolders: unloadedFolders,
       folderOrders,
@@ -570,8 +574,8 @@ export function DocNav(
   // Each ancestor is attempted at most once (tracked in `autoExpandedRef`) so a
   // folder that stays lazy after its fetch doesn't get re-fetched on every
   // `lazyDirSet` change.
-  const autoExpandedRef = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
+  const autoExpandedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
     if (!selectedPath) return;
     for (const dir of pathAncestors(selectedPath)) {
       if (lazyDirSet.has(dir) && !autoExpandedRef.current.has(dir)) {
@@ -585,7 +589,7 @@ export function DocNav(
   // File-row click: produce a single active state on the row. Switch files
   // for a different path; scroll back to top for the same path.
   // -----------------------------------------------------------------------
-  const onSelectFile = React.useCallback(
+  const onSelectFile = useCallback(
     (path: string) => {
       // Suppress scroll-spy briefly so the scroll back to top doesn't blip a
       // heading active state on the way up.
@@ -623,10 +627,7 @@ export function DocNav(
             headerActions={headerActions}
           />
 
-          <nav
-            className="emr-docnav-list"
-            ref={listRef as React.Ref<HTMLElement>}
-          >
+          <nav className="emr-docnav-list" ref={listRef as Ref<HTMLElement>}>
             {isSearching ? (
               <SearchResultsList
                 results={searchResults}

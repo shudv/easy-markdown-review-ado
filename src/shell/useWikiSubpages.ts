@@ -4,7 +4,7 @@
 // are cached per document version. Detection uses the rendered HTML, so only a
 // real subpages box triggers a listing.
 
-import * as React from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   fillSubpagesMacros,
@@ -31,14 +31,14 @@ export interface WikiSubpagesInput {
 export function useWikiSubpages(input: WikiSubpagesInput): string {
   const { html, documentPath, listFolder } = input;
   const atCommit = subpagesCommit(input.historical, input.commitId);
-  const [byVersion, setByVersion] = React.useState<
+  const [byVersion, setByVersion] = useState<
     Partial<Record<string, SubpagesState>>
   >({});
   // Read when a listing starts, so a host passing a fresh callback doesn't
   // re-list.
-  const listFolderRef = React.useRef(listFolder);
+  const listFolderRef = useRef(listFolder);
   // Layout effect: runs before the listing effect below in the same commit.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     listFolderRef.current = listFolder;
   });
 
@@ -46,7 +46,7 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
   const canList = listFolder !== undefined && atCommit !== null;
   const needsListing =
     canList && hasSubpagesMacro(html) && byVersion[key] === undefined;
-  React.useEffect(() => {
+  useEffect(() => {
     if (!needsListing) return;
     // `canList` rules out a null commit here.
     const atCommitId = atCommit as string | undefined;
@@ -65,5 +65,5 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
   const state: SubpagesState = canList
     ? (byVersion[key] ?? "loading")
     : "unavailable";
-  return React.useMemo(() => fillSubpagesMacros(html, state), [html, state]);
+  return useMemo(() => fillSubpagesMacros(html, state), [html, state]);
 }

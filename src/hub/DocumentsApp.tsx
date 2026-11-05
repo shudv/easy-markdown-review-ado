@@ -5,7 +5,14 @@
 // are agnostic to fixture-vs-live: standalone passes fixture-backed ones, the
 // real ADO entry passes `GitRestClient`-backed ones.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { CommentThread, PrInfo } from "../types";
 import { Shell } from "../shell/Shell";
@@ -61,7 +68,7 @@ function renderDocNavTitleSlot(
   props: DocumentsAppProps,
   selectedRepo: DocRepo,
   onSelect: (repoId: string) => void,
-): React.ReactElement {
+): ReactElement {
   const { repos } = props;
   const paginated = !!props.onFilterRepos;
   if (paginated || repos.length > 1) {
@@ -91,7 +98,7 @@ function renderDocNavTitleSlot(
 function renderRefreshButton(
   refreshing: boolean,
   onRefresh: () => Promise<void>,
-): React.ReactElement {
+): ReactElement {
   return (
     <button
       type="button"
@@ -108,7 +115,7 @@ function renderRefreshButton(
   );
 }
 
-function renderNoRepositories(): React.ReactElement {
+function renderNoRepositories(): ReactElement {
   return (
     <div className="emr-error">
       <h2>No repositories</h2>
@@ -155,7 +162,7 @@ interface DocumentsAppBodyProps {
   deepLinkBuilder: DeepLinkBuilder | null;
 }
 
-export function DocumentsApp(props: AppProps): React.ReactElement {
+export function DocumentsApp(props: AppProps): ReactElement {
   const { repos, loadThreadsFor, onSearchFiles } = props;
 
   // Per-document "transparent PR" mode is enabled when the host supplies a
@@ -180,7 +187,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
   // skeleton and Shell is gated behind its details/threads loading, so
   // latching on mount here would drop the deep-link path before Shell ever
   // reads it.
-  const initialPathConsumedRef = React.useRef(false);
+  const initialPathConsumedRef = useRef(false);
   const deepLinkSeeds = pickDeepLinkSeeds(
     // eslint-disable-next-line react-hooks/refs -- one-shot latch set when Shell mounts; it must not trigger a re-render, since Shell only reads the seed on its first mount.
     !initialPathConsumedRef.current && selectedRepoId === initialRepoId,
@@ -199,7 +206,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
 
   // Repo-scoped search callback. Returns `undefined` (DocNav local-only
   // filter) when no `onSearchFiles` is wired; otherwise curries the repo id.
-  const handleSearchFiles = React.useMemo<SearchFilesBound | undefined>(() => {
+  const handleSearchFiles = useMemo<SearchFilesBound | undefined>(() => {
     if (!selectedRepo || !onSearchFiles) return undefined;
     const repoIdAtBind = selectedRepo.id;
     return (query: string, signal?: AbortSignal) =>
@@ -207,7 +214,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
   }, [selectedRepo, onSearchFiles]);
 
   const { lazyTree } = tree;
-  const syntheticPr: PrInfo | null = React.useMemo(
+  const syntheticPr: PrInfo | null = useMemo(
     () => (selectedRepo ? buildSyntheticPr(selectedRepo, lazyTree) : null),
     [selectedRepo, lazyTree],
   );
@@ -221,7 +228,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
 
   const bindings = useRepoBindings(props, selectedRepo, perDocumentMode);
 
-  const routedPr = React.useMemo<RoutedPrInfo | null>(
+  const routedPr = useMemo<RoutedPrInfo | null>(
     () => buildRoutedPr(selectedRepo),
     [selectedRepo],
   );
@@ -231,9 +238,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
 
   // Background thread sync for the routed PR. Skipped when the repo has no PR.
   // Shell polls this ~30s while visible and merges via `MERGE_REMOTE_THREADS`.
-  const fetchRemoteThreads = React.useMemo<
-    FetchRemoteThreads | undefined
-  >(() => {
+  const fetchRemoteThreads = useMemo<FetchRemoteThreads | undefined>(() => {
     if (!selectedRepo || readOnly) return undefined;
     const repoIdAtBind = selectedRepo.id;
     return async (_signal: AbortSignal) => loadThreadsFor(repoIdAtBind);
@@ -244,7 +249,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
   // the host can't build a shareable URL (standalone). Declared before the
   // early return below so the hook order is stable across renders.
   const buildDeepLinkFor = props.buildDeepLink;
-  const deepLinkBuilder = React.useMemo<DeepLinkBuilder | null>(
+  const deepLinkBuilder = useMemo<DeepLinkBuilder | null>(
     () =>
       buildDeepLinkFor
         ? (target: DeepLinkTarget) =>
@@ -281,9 +286,7 @@ export function DocumentsApp(props: AppProps): React.ReactElement {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Documents hub body: the refresh state plus the single DocNav/ArticleView/CommentRail layout (loading, empty, and Shell branches) sharing one title slot and header actions. Its data hooks live in their own modules; splitting the JSX would scatter one layout.
-function DocumentsAppBody(
-  body: Readonly<DocumentsAppBodyProps>,
-): React.ReactElement {
+function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
   const {
     appProps: props,
     perDocumentMode,
@@ -301,10 +304,8 @@ function DocumentsAppBody(
   // Refresh handler: bust the lazy-tree cache for the current repo and
   // delegate to the host (which flips `detailsLoaded` false then true,
   // remounting Shell with fresh data).
-  const [refreshingRepoId, setRefreshingRepoId] = React.useState<string | null>(
-    null,
-  );
-  const handleRefresh = React.useCallback(async () => {
+  const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
+  const handleRefresh = useCallback(async () => {
     if (!onRefreshRepo) return;
     // Re-mirror the host's ADO theme on manual refresh — some ADO chromes
     // don't broadcast live theme changes to loaded contributions. Only
@@ -359,7 +360,7 @@ function DocumentsAppBody(
   // before the parent's effects in the same commit doesn't change what the
   // next render sees.
   const shellMounting = shellTree.shellMounting;
-  React.useEffect(() => {
+  useEffect(() => {
     if (shellMounting) initialPathConsumedRef.current = true;
   }, [shellMounting, initialPathConsumedRef]);
 
@@ -368,7 +369,7 @@ function DocumentsAppBody(
   // mark boot ready as "empty" here. Idempotent — if a doc later renders,
   // Shell's "content" already won.
   const isEmptyRepo = shellTree.isEmptyRepo;
-  React.useEffect(() => {
+  useEffect(() => {
     if (isEmptyRepo) markAppReady("empty");
   }, [isEmptyRepo]);
 

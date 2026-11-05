@@ -1,6 +1,6 @@
 // Shell: the thread sets shown for the selected document.
 
-import * as React from "react";
+import { useMemo } from "react";
 
 import type { CommentThread, FileInfo } from "../../types";
 import { isResolvedLike } from "../../types";
@@ -46,7 +46,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     commentFilter,
     currentUserId,
   } = opts;
-  const allThreadsForFile = React.useMemo(
+  const allThreadsForFile = useMemo(
     () => selectThreadsByFile(threadState, selectedPath),
     [threadState, selectedPath],
   );
@@ -54,7 +54,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // The writable "Current" head's threads for this file (from the live reducer
   // state / poller). When the stepper is parked on a historical stop we show
   // that PR's threads instead — read-only, loaded on demand and cached by id.
-  const currentThreadsRaw = React.useMemo(() => {
+  const currentThreadsRaw = useMemo(() => {
     if (viewingHistorical && !nativeIterationMode) {
       return activeStopPrId != null
         ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStopPrId}`] ??
@@ -73,7 +73,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
 
   // General PR-level ("Overview") comments — not tied to any file. Suppressed
   // in the hub (single-file, latest-master context — see `isHub`).
-  const generalThreads = React.useMemo(
+  const generalThreads = useMemo(
     () => (isHub ? EMPTY_THREADS : selectGeneralThreads(threadState)),
     [threadState, isHub],
   );
@@ -85,7 +85,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // comments on files that ARE still in the PR belong to those files and show
   // when the reader opens them, never here. Suppressed in the hub (`isHub`):
   // there's no change-set to leave, and its file list is a partial lazy tree.
-  const orphanedFileThreads = React.useMemo(
+  const orphanedFileThreads = useMemo(
     () => (isHub ? EMPTY_THREADS : threadsOutsideFiles(threadState, files)),
     [threadState, files, isHub],
   );
@@ -93,7 +93,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // Threads passed to ArticleView for anchoring: only those matching the
   // active comment filter (all / active / resolved / mine) are highlighted in
   // the prose, so the article and the rail always agree on what's shown.
-  const visibleForArticle = React.useMemo(() => {
+  const visibleForArticle = useMemo(() => {
     const out: CommentThread[] = [];
     for (const t of currentThreadsRaw) {
       if (
@@ -110,7 +110,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     return out;
   }, [currentThreadsRaw, commentQuery, commentFilter, currentUserId]);
 
-  const threadCountsByPath: Record<string, number> = React.useMemo(
+  const threadCountsByPath: Record<string, number> = useMemo(
     () => openThreadCountsByPath(threadState),
     [threadState],
   );

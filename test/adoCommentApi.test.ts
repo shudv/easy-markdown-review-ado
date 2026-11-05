@@ -21,6 +21,7 @@ import {
   parseIdentitiesResponse,
   pathsRequiringOriginalSource,
   pickerAvatarUrl,
+  matchPullRequestSuggestions,
   prStatusLabel,
   readMentionsProp,
   readProp,
@@ -170,6 +171,76 @@ describe("prStatusLabel", () => {
     expect(prStatusLabel(undefined)).toBe("active");
     expect(prStatusLabel(PR_STATUS.Active as never)).toBe("active");
     expect(prStatusLabel(PR_STATUS.NotSet as never)).toBe("active");
+  });
+});
+
+describe("matchPullRequestSuggestions", () => {
+  const pr = (pullRequestId: number | undefined, title?: string) => ({
+    pullRequestId,
+    title,
+    status: PR_STATUS.Active as never,
+    repository: { name: "docs" } as never,
+  });
+
+  it("matches a numeric query by exact id, regardless of title", () => {
+    const ids = matchPullRequestSuggestions(
+      [pr(41, "Other"), pr(42, "Unrelated"), pr(420, "Also other")],
+      "42",
+    ).map((s) => s.id);
+    expect(ids).toEqual(["42"]);
+  });
+
+  it("matches titles case-insensitively, including digits in a title", () => {
+    const ids = matchPullRequestSuggestions(
+      [pr(1, "Fix API v42 docs"), pr(2, "Polish the API"), pr(3, "Unrelated")],
+      "api",
+    ).map((s) => s.id);
+    expect(ids).toEqual(["1", "2"]);
+    expect(
+      matchPullRequestSuggestions([pr(7, "Bump to v42")], "42").map(
+        (s) => s.id,
+      ),
+    ).toEqual(["7"]);
+  });
+
+  it("skips entries without a numeric id instead of suggesting `undefined`", () => {
+    const suggestions = matchPullRequestSuggestions(
+      [pr(undefined, "Docs refresh"), pr(6), pr(5, "Docs cleanup")],
+      "docs",
+    );
+    expect(suggestions.map((s) => s.id)).toEqual(["5"]);
+  });
+
+  it("returns at most 10 suggestions, in input order", () => {
+    const prs = Array.from({ length: 12 }, (_, i) => pr(i + 1, "Docs"));
+    const ids = matchPullRequestSuggestions(prs, "docs").map((s) => s.id);
+    expect(ids).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+  });
+
+  it("maps fields, defaulting a missing title and repository", () => {
+    expect(matchPullRequestSuggestions([pr(9, "Docs")], "docs")).toEqual([
+      {
+        kind: "pullrequest",
+        id: "9",
+        title: "Docs",
+        status: "active",
+        repository: "docs",
+      },
+    ]);
+    expect(
+      matchPullRequestSuggestions(
+        [{ pullRequestId: 8, status: PR_STATUS.Completed as never }],
+        "8",
+      ),
+    ).toEqual([
+      {
+        kind: "pullrequest",
+        id: "8",
+        title: "(untitled PR)",
+        status: "completed",
+        repository: undefined,
+      },
+    ]);
   });
 });
 

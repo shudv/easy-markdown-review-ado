@@ -64,10 +64,10 @@ import {
   buildWorkItemWiql,
   buildIdentitiesUrl,
   initialsOf,
+  matchPullRequestSuggestions,
   normalizeIdentityGuid,
   parseIdentitiesResponse,
   pickerAvatarUrl,
-  prStatusLabel,
   reactionClientMethod,
   toAdoStatusValue,
   PROP_ANCHOR,
@@ -507,21 +507,7 @@ export class AdoCommentApi implements CommentApi {
           client.getPullRequestsByProject(project, criteria, undefined, 0, 50),
         { mode: "read", attempts: 2, label: "searchPullRequests" },
       );
-      const lower = trimmed.toLowerCase();
-      const matches = prs.filter((p) => {
-        if (numeric !== null && p.pullRequestId === numeric) return true;
-        const t = (p.title ?? "").toLowerCase();
-        return t.includes(lower);
-      });
-      return matches.slice(0, 10).map(
-        (p): PullRequestSuggestion => ({
-          kind: "pullrequest",
-          id: String(p.pullRequestId),
-          title: p.title ?? "(untitled PR)",
-          status: prStatusLabel(p.status),
-          repository: p.repository?.name,
-        }),
-      );
+      return matchPullRequestSuggestions(prs, trimmed);
     } catch (err) {
       console.warn("[adoCommentApi] searchPullRequests failed:", err);
       trackUserFacingError({

@@ -9,6 +9,7 @@ import type {
 } from "azure-devops-extension-api/Git";
 import type {
   CommentPosition,
+  GitPullRequest,
   GitPullRequestCommentThread,
   Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
@@ -25,6 +26,7 @@ import { identityAvatarUrl } from "./adoGitData.helpers";
 import {
   mergeMentionIdentities,
   normalizeIdentityGuid,
+  type PullRequestSuggestion,
 } from "../comments/mentions";
 
 // The file-diff helpers live in `./adoFileDiffs.helpers`; re-exported here so
@@ -166,6 +168,35 @@ export function prStatusLabel(
   if (status === PR_STATUS_COMPLETED) return "completed";
   if (status === PR_STATUS_ABANDONED) return "abandoned";
   return "active";
+}
+
+/**
+ * PR mention suggestions from a page of PRs: an exact id match for a numeric
+ * query, otherwise a case-insensitive title match, at most 10. ADO's typings
+ * don't guarantee `pullRequestId`; an entry without one can't be mentioned,
+ * so it is skipped rather than suggested as `!undefined`.
+ */
+export function matchPullRequestSuggestions(
+  prs: readonly Partial<GitPullRequest>[],
+  query: string,
+): PullRequestSuggestion[] {
+  const trimmed = query.trim();
+  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  const lower = trimmed.toLowerCase();
+  return prs
+    .filter((p): p is Partial<GitPullRequest> & { pullRequestId: number } => {
+      if (typeof p.pullRequestId !== "number") return false;
+      if (p.pullRequestId === numeric) return true;
+      return (p.title ?? "").toLowerCase().includes(lower);
+    })
+    .slice(0, 10)
+    .map((p) => ({
+      kind: "pullrequest",
+      id: String(p.pullRequestId),
+      title: p.title ?? "(untitled PR)",
+      status: prStatusLabel(p.status),
+      repository: p.repository?.name,
+    }));
 }
 
 // Thread/comment conversion. Numeric literals stand in for SDK enum values so

@@ -35,13 +35,13 @@ const DIFF_INSERT = 1;
  */
 export function tokenizeWords(text: string): string[] {
   // In order: a single CJK ideograph/kana (those scripts don't separate words
-  // with spaces, so a whole sentence would otherwise be one "word"); a run of
-  // other word chars (letters/digits/underscore); a line break on its own; a
-  // run of horizontal whitespace; or any other single char. Keeping line
-  // breaks apart from indentation stops a code re-indent from striking and
-  // re-adding the newline itself.
+  // with spaces, so a whole sentence would otherwise be one "word") or a lone
+  // `\n`; a run of other word chars (letters/digits/underscore); a `\r` or
+  // `\r\n` line break; a run of horizontal whitespace; or any other single
+  // char. Keeping line breaks apart from indentation stops a code re-indent
+  // from striking and re-adding the newline itself.
   const matches = text.match(
-    /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}]|(?:(?![\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}])[\p{L}\p{N}_])+|\r\n?|\n|[^\S\r\n]+|[^\p{L}\p{N}_\s]/gu,
+    /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\n]|(?:(?![\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}])[\p{L}\p{N}_])+|\r\n?|[^\S\r\n]+|[^\p{L}\p{N}_\s]/gu,
   );
   return matches ?? [];
 }
@@ -130,13 +130,13 @@ export const LINE_WHITESPACE = /^[^\S\r\n]+$/;
 function narrowWhitespaceSwaps(ops: readonly WordDiffOp[]): WordDiffOp[] {
   const out: WordDiffOp[] = [];
   const push = (kind: WordDiffOp["kind"], value: string): void => {
-    const last = out[out.length - 1];
+    const last = out.length > 0 ? out[out.length - 1] : undefined;
     if (last?.kind === kind) last.value += value;
     else out.push({ kind, value });
   };
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]!;
-    const next = ops[i + 1];
+    const next = i + 1 < ops.length ? ops[i + 1] : undefined;
     if (
       op.kind === "removed" &&
       next?.kind === "added" &&

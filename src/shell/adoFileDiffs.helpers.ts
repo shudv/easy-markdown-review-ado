@@ -4,7 +4,7 @@
 // injected (structurally typed) so this module stays loadable under Node
 // without the `azure-devops-extension-{api,sdk}` AMD bundles.
 
-import type { GitRestClient } from "azure-devops-extension-api/Git";
+import type { FileDiff, GitRestClient } from "azure-devops-extension-api/Git";
 
 import type { DiffRange } from "../types";
 import { trackUserFacingError } from "../telemetry";
@@ -277,7 +277,8 @@ export async function loadFileDiffs(
   }
 
   const gitClient = getGitClient();
-  const diffs = await withRetry(
+  // The REST client returns the parsed body as-is, which can be empty.
+  const diffs = await withRetry<FileDiff[] | null | undefined>(
     () =>
       gitClient.getFileDiffs(
         {
@@ -405,7 +406,7 @@ function readLineCountsCache(key: string): Record<string, FileDiffInfo> | null {
   try {
     if (typeof sessionStorage === "undefined") return null;
     const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
+    if (raw === null || raw === "") return null;
     const parsed = JSON.parse(raw) as Record<string, FileDiffInfo>;
     return parsed;
   } catch {

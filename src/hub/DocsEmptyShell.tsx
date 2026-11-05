@@ -13,11 +13,11 @@ export function DocsEmptyShell({
   titleSlot,
   headerActions,
   repoName,
-}: {
+}: Readonly<{
   titleSlot?: React.ReactNode;
   headerActions?: React.ReactNode;
   repoName: string;
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <div className="emr-app emr-docs-empty-shell">
       <div className="emr-grid">

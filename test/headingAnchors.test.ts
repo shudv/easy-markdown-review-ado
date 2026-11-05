@@ -182,7 +182,7 @@ describe("revealAnchorTarget", () => {
       host.querySelector(".emr-section")!.hasAttribute("data-collapsed"),
     ).toBe(false);
     // Nothing to persist for a section without an id.
-    expect(sessionStorage.length).toBe(0);
+    expect(sessionStorage).toHaveLength(0);
   });
 });
 

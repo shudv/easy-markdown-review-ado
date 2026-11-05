@@ -35,24 +35,28 @@ function hueFor(id: string): number {
 export function Avatar({
   author,
   size = "md",
-}: AvatarProps): React.ReactElement {
+}: Readonly<AvatarProps>): React.ReactElement {
   const resolveImage = React.useContext(AvatarImageContext);
   const { avatarUrl } = author;
-  const [resolvedSrc, setResolvedSrc] = React.useState<string | undefined>();
+  const hasUrl = avatarUrl !== undefined && avatarUrl !== "";
+  // No resolver: render the URL directly (Storybook / standalone / data URL).
+  const directSrc = hasUrl && !resolveImage ? avatarUrl : undefined;
+  const [resolvedSrc, setResolvedSrc] = React.useState<string | undefined>(
+    directSrc,
+  );
   // Fall back to initials if the resolved photo fails to load.
   const [photoFailed, setPhotoFailed] = React.useState(false);
+  // A new photo source resets the failure and adopts the direct URL (or clears
+  // it) right away; a resolver's local URL arrives asynchronously below.
+  const [source, setSource] = React.useState({ avatarUrl, resolveImage });
+  if (source.avatarUrl !== avatarUrl || source.resolveImage !== resolveImage) {
+    setSource({ avatarUrl, resolveImage });
+    setPhotoFailed(false);
+    if (!hasUrl || !resolveImage) setResolvedSrc(directSrc);
+  }
 
   React.useEffect(() => {
-    setPhotoFailed(false);
-    if (!avatarUrl) {
-      setResolvedSrc(undefined);
-      return;
-    }
-    // No resolver: render the URL directly (Storybook / standalone / data URL).
-    if (!resolveImage) {
-      setResolvedSrc(avatarUrl);
-      return;
-    }
+    if (!hasUrl || !resolveImage) return;
     // Real host: fetch the photo with auth and adopt the local URL it returns.
     let cancelled = false;
     void resolveImage(avatarUrl).then((url) => {
@@ -62,7 +66,7 @@ export function Avatar({
     return () => {
       cancelled = true;
     };
-  }, [avatarUrl, resolveImage]);
+  }, [avatarUrl, hasUrl, resolveImage]);
 
   const hue = hueFor(author.id);
   const bg = `hsl(${hue}, 55%, 42%)`;

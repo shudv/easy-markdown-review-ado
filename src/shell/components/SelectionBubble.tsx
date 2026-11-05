@@ -31,7 +31,7 @@ interface SelectionBubbleProps {
 }
 
 export function SelectionBubble(
-  props: SelectionBubbleProps,
+  props: Readonly<SelectionBubbleProps>,
 ): React.ReactElement {
   const { top, left, onAddComment, onCopyLink, onCopyLinkSettled, block } =
     props;
@@ -47,6 +47,7 @@ export function SelectionBubble(
   const linkResult = selectionLinkResultLabel(linkState);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- Event-stopper: mousedown is only prevented so clicking the bubble keeps the text selection; the buttons inside are the interactive controls.
     <div
       className="emr-selection-bubble"
       style={{ top, left }}

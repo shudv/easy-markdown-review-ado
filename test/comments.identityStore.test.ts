@@ -56,7 +56,11 @@ describe("IdentityStore — ensure / resolve", () => {
     await Promise.resolve(); // let the microtask flush run
     await Promise.resolve();
     expect(resolver).toHaveBeenCalledTimes(1);
-    expect(resolver.mock.calls[0]![0].sort()).toEqual(["id1", "id2", "id3"]);
+    expect([...resolver.mock.calls[0]![0]].sort()).toEqual([
+      "id1",
+      "id2",
+      "id3",
+    ]);
     expect(s.get("id1")?.displayName).toBe("Name id1");
     expect(s.get("id3")?.displayName).toBe("Name id3");
   });

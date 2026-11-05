@@ -64,7 +64,7 @@ export interface ActiveTrigger {
   query: string;
 }
 
-const TRIGGER_CHARS: Record<string, MentionKind> = {
+const TRIGGER_CHARS: Partial<Record<string, MentionKind>> = {
   "@": "user",
   "#": "workitem",
   "!": "pullrequest",
@@ -87,10 +87,10 @@ export function detectActiveTrigger(
   const start = Math.max(0, caret - MAX_LOOKBACK);
   for (let i = caret - 1; i >= start; i--) {
     const ch = text[i]!;
-    if (TRIGGER_CHARS[ch]) {
+    const kind = TRIGGER_CHARS[ch];
+    if (kind !== undefined) {
       const prev = i === 0 ? "" : text[i - 1]!;
       if (i !== 0 && !/\s/.test(prev)) return null;
-      const kind = TRIGGER_CHARS[ch]!;
       return {
         kind,
         char: ch,
@@ -129,7 +129,7 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
         type: suggestion.workItemType,
         state: suggestion.state,
       });
-      if (suggestion.stateColor)
+      if (suggestion.stateColor !== undefined && suggestion.stateColor !== "")
         params.set("stateColor", suggestion.stateColor);
       return `[${escapeLabel(label)}](mention://workitem/${encodeURIComponent(
         suggestion.id,
@@ -138,7 +138,8 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
     case "pullrequest": {
       const label = `!${suggestion.id} ${suggestion.title}`;
       const params = new URLSearchParams({ status: suggestion.status });
-      if (suggestion.repository) params.set("repo", suggestion.repository);
+      if (suggestion.repository !== undefined && suggestion.repository !== "")
+        params.set("repo", suggestion.repository);
       return `[${escapeLabel(label)}](mention://pullrequest/${encodeURIComponent(
         suggestion.id,
       )}?${params.toString()}) `;
@@ -224,12 +225,13 @@ function isStandaloneMention(
   length: number,
 ): boolean {
   const before = at === 0 ? "" : text[at - 1]!;
-  const after = text[at + length];
+  const afterIndex = at + length;
   const leftOk = at === 0 || /\s/.test(before);
   // Boundary rules consistent with `detectActiveTrigger`, which allows
   // `[\w.-]` inside mention text: don't encode when the token is followed
   // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
-  const rightOk = after === undefined || !/[\w.-]/.test(after);
+  const rightOk =
+    afterIndex >= text.length || !/[\w.-]/.test(text[afterIndex]!);
   return leftOk && rightOk;
 }
 
@@ -281,7 +283,7 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
  * would otherwise be treated as raw HTML and dropped by our sanitizer).
  */
 export const USER_MENTION_RE =
-  /@<([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})>/g;
+  /@<([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/gi;
 
 /**
  * Rewrite native `@<GUID>` user mentions in raw Markdown into our existing
@@ -318,7 +320,7 @@ const USER_MENTION_LINK_RE = /mention:\/\/user\/([^)\s"']+)/g;
 export function normalizeIdentityGuid(
   raw: string | undefined,
 ): string | undefined {
-  if (!raw) return undefined;
+  if (raw === undefined || raw === "") return undefined;
   const dashed =
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(raw);
   if (dashed) return dashed[0].toLowerCase();
@@ -385,7 +387,7 @@ export function collectMentionIdentities(
     const key = id.toLowerCase();
     if (seen.has(key)) continue;
     const info = lookup(id);
-    if (!info?.displayName) continue;
+    if (info === undefined || info.displayName === "") continue;
     seen.add(key);
     out.push({ id, displayName: info.displayName, avatarUrl: info.avatarUrl });
   }

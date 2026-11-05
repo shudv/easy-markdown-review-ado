@@ -15,6 +15,10 @@ import {
 } from "../shellHelpers";
 import { historicalContentKeys } from "./derive";
 
+function isNonEmpty(s: string | null | undefined): s is string {
+  return s != null && s !== "";
+}
+
 interface HistoryLoadersOptions {
   selectedPath: string;
   completedPrHistoryEnabled: boolean;
@@ -200,10 +204,10 @@ function useHistoricalLoadTargets(
   const { historicalContentKey, baselineCommitId, baselineContentKey } = keys;
   return React.useMemo(() => {
     const targets = new Map<string, string>();
-    if (historicalContentKey && activeCommitId) {
+    if (isNonEmpty(historicalContentKey) && isNonEmpty(activeCommitId)) {
       targets.set(historicalContentKey, activeCommitId);
     }
-    if (baselineContentKey && baselineCommitId) {
+    if (isNonEmpty(baselineContentKey) && isNonEmpty(baselineCommitId)) {
       targets.set(baselineContentKey, baselineCommitId);
     }
     return [...targets].map(([key, commitId]) => ({ key, commitId }));
@@ -216,10 +220,10 @@ function useHistoricalLoadTargets(
 }
 
 interface HistoricalContentCaches {
-  historicalErrorByKey: Record<string, string>;
-  historicalAbsentByKey: Record<string, true>;
-  historicalHtmlByKey: Record<string, string>;
-  historicalSourceByKey: Record<string, string>;
+  historicalErrorByKey: Partial<Record<string, string>>;
+  historicalAbsentByKey: Partial<Record<string, true>>;
+  historicalHtmlByKey: Partial<Record<string, string>>;
+  historicalSourceByKey: Partial<Record<string, string>>;
 }
 
 interface HistoricalContentSetters {
@@ -357,7 +361,7 @@ function useHistoricalThreadsLoad(args: {
   activeHistoricalPrId: number | null;
   loadThreadsForPr: HistoryLoadersOptions["loadThreadsForPr"];
   selectedPath: string;
-  historicalThreadsByKey: Record<string, CommentThread[]>;
+  historicalThreadsByKey: Partial<Record<string, CommentThread[]>>;
   setHistoricalThreadsByKey: React.Dispatch<
     React.SetStateAction<Record<string, CommentThread[]>>
   >;
@@ -372,7 +376,7 @@ function useHistoricalThreadsLoad(args: {
   React.useEffect(() => {
     if (activeHistoricalPrId == null || !loadThreadsForPr) return;
     const key = `${selectedPath}\u0000${activeHistoricalPrId}`;
-    if (historicalThreadsByKey[key]) return;
+    if (historicalThreadsByKey[key] !== undefined) return;
     let cancelled = false;
     loadThreadsForPr(activeHistoricalPrId, selectedPath)
       .then((threads) => {

@@ -44,7 +44,7 @@ function rangeOverText(root: Element, from: string, to: string): Range {
 }
 
 const whitespaceOnly = (spans: HTMLSpanElement[]): HTMLSpanElement[] =>
-  spans.filter((s) => !(s.textContent ?? "").trim());
+  spans.filter((s) => s.textContent.trim() === "");
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -71,7 +71,7 @@ describe("large selection highlight wrapping", () => {
     expect(whitespaceOnly(spans)).toHaveLength(0);
     // Table structure is preserved — no cells lost, no stray spans hoisted
     // into <tr>/<table> (every highlight span lives inside a cell).
-    expect(root.querySelectorAll("th,td").length).toBe(cellsBefore);
+    expect(root.querySelectorAll("th,td")).toHaveLength(cellsBefore);
     for (const s of spans) {
       expect(
         s.closest("td, th"),

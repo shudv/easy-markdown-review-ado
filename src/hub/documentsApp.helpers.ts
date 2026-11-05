@@ -173,7 +173,10 @@ export function buildMentionLinks(
   projectName: string | undefined,
   defaultRepoName: string | undefined,
 ): MentionLinkResolution | null {
-  return orgUrl && projectName
+  return orgUrl !== undefined &&
+    orgUrl !== "" &&
+    projectName !== undefined &&
+    projectName !== ""
     ? { orgUrl, projectName, defaultRepoName }
     : null;
 }

@@ -328,9 +328,10 @@ describe("AdoSessionMonitor — held writes", () => {
     const err = refreshing();
     const attempt = vi.fn(() => Promise.reject(err));
     const write = m.holdWrite(attempt, 30_000);
-    const assertion = expect(write).rejects.toBe(err);
-    await vi.advanceTimersByTimeAsync(30_000);
-    await assertion;
+    await Promise.all([
+      expect(write).rejects.toBe(err),
+      vi.advanceTimersByTimeAsync(30_000),
+    ]);
     expect(attempt).toHaveBeenCalledOnce();
     expect(m.getSnapshot().heldWrites).toBe(0);
   });

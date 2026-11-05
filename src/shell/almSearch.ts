@@ -265,7 +265,7 @@ export function createAlmSearchClient(opts: {
   orgName?: string;
   getToken?: () => Promise<string>;
 }): AlmSearchClientResult {
-  if (!opts.orgName || !opts.getToken) {
+  if (opts.orgName === undefined || opts.orgName === "" || !opts.getToken) {
     return {
       ok: false,
       reason: "no-config",

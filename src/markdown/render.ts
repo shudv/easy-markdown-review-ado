@@ -37,7 +37,7 @@ const remarkCodeMetadata: Plugin = () => {
         data?: { hProperties?: Record<string, unknown> };
       };
       const meta = code.meta?.trim();
-      if (!meta) return;
+      if (meta === undefined || meta === "") return;
       const data = (code.data ??= {});
       const properties = (data.hProperties ??= {});
       properties["dataCodeMeta"] = meta;
@@ -55,7 +55,7 @@ const rehypeSourcePositions: Plugin<[], Root> = () => {
     visit(tree, "element", (node: Element) => {
       const position = node.position;
       if (!position) return;
-      const properties = (node.properties ??= {});
+      const properties = node.properties;
       properties["dataSourceLine"] = position.start.line;
       properties["dataSourceEndLine"] = position.end.line;
     });
@@ -77,7 +77,7 @@ function mentionStateDot(parsed: ParsedMentionUrl): ElementContent {
     properties: {
       className: dotClass,
       ariaHidden: "true",
-      ...(safeColor ? { style: `background:${safeColor}` } : {}),
+      ...(safeColor !== null ? { style: `background:${safeColor}` } : {}),
     },
     children: [],
   };
@@ -98,13 +98,13 @@ const rehypeMentions: Plugin<[], Root> = () => {
   return (tree) => {
     visit(tree, "element", (node: Element) => {
       if (node.tagName !== "a") return;
-      const href = node.properties?.href;
+      const href = node.properties.href;
       // Raw-HTML anchors such as `<a id="top">` pass rehypeSafeHtml without one.
       if (typeof href !== "string") return;
       const parsed = parseMentionUrl(href);
       if (!parsed) return;
 
-      const props = (node.properties ??= {});
+      const props = node.properties;
       const navigable =
         parsed.kind === "workitem" || parsed.kind === "pullrequest";
 
@@ -168,8 +168,8 @@ const rehypeAlerts: Plugin<[], Root> = () => {
       );
       if (!first) return;
       const kind = stripAlertMarker(first);
-      if (!kind) return;
-      const properties = (node.properties ??= {});
+      if (kind === null) return;
+      const properties = node.properties;
       properties.className = ["markdown-alert", `markdown-alert-${kind}`];
       properties.dataAlertKind = kind;
       const title: Element = {
@@ -198,7 +198,7 @@ const rehypeAlerts: Plugin<[], Root> = () => {
  */
 export function sanitizeCssColor(raw: string): string | null {
   const value = raw.trim().replace(/^#/, "");
-  if (!/^[0-9a-fA-F]+$/.test(value)) return null;
+  if (!/^[0-9a-f]+$/i.test(value)) return null;
   if (![3, 4, 6, 8].includes(value.length)) return null;
   return `#${value.toLowerCase()}`;
 }
@@ -295,7 +295,7 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => {
       body: ElementContent[],
     ): Element {
       const id = mintId(extractHastText(heading));
-      const headingProps = (heading.properties ??= {});
+      const headingProps = heading.properties;
       // Top-level headings only come from Markdown syntax (rehypeSafeHtml
       // drops raw-HTML headings), so none carries an id before this point.
       headingProps.id = id;

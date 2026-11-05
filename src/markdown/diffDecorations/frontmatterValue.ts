@@ -36,8 +36,8 @@ export function decorateFrontmatterValue(
   // diff against an empty string — every word reads as added (green).
   let originalText = "";
   if (kind === "modified") {
-    const key = el.querySelector(".emr-frontmatter-key")?.textContent?.trim();
-    if (!key) return false;
+    const key = el.querySelector(".emr-frontmatter-key")?.textContent.trim();
+    if (key === undefined || key === "") return false;
     const resolved = resolveFrontmatterOriginalValue(
       key,
       modifiedText,

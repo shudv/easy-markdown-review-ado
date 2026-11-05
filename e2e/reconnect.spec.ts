@@ -391,7 +391,7 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
             (e) =>
               e.name === "app.loaded" &&
               e.properties?.readyReason === "content" &&
-              e.properties?.bootHadHiddenInterval === true,
+              e.properties.bootHadHiddenInterval === true,
           ),
       )
       .toBe(true);

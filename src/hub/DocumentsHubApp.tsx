@@ -112,11 +112,13 @@ export function DocumentsHubApp(): React.ReactElement {
   // load would never complete. Assigning during render is the React-documented
   // pattern for mirroring state into a ref for downstream callbacks.
   const stateRef = React.useRef<DiscoveryState | null>(null);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror must be set during render: child effects call loadDetailsFor before this component's effects run (see CRITICAL above).
   stateRef.current = state;
 
   // Mirror of the picker view so the (stable-identity) load-more / filter
   // handlers read the latest token + filter without re-subscribing.
   const pickerRef = React.useRef<PickerState>(picker);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror set during render, like stateRef, so handlers invoked from child effects never see a stale picker.
   pickerRef.current = picker;
   // Monotonic id stamped on each filter request so a slow earlier query can't
   // clobber the results of a newer keystroke (last-write-wins by sequence).
@@ -125,6 +127,7 @@ export function DocumentsHubApp(): React.ReactElement {
   // Mirror of routing resolutions so the async resolver (stable identity)
   // reads the latest cache without re-subscribing.
   const routingPrByPathRef = React.useRef(routingPrByPath);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror set during render, like stateRef, so the resolver invoked from child effects reads the current cache.
   routingPrByPathRef.current = routingPrByPath;
 
   // Per-(repo, path) comment-API + in-flight caches for per-document routing.
@@ -389,17 +392,18 @@ export function DocumentsHubApp(): React.ReactElement {
       const snapshot = stateRef.current;
       const repo = snapshot?.repos.find((item) => item.id === repoId);
       if (!snapshot || !repo) return undefined;
-      const versionDescriptor = atCommitId
-        ? {
-            version: atCommitId,
-            versionType: GitVersionType.Commit,
-            versionOptions: GitVersionOptions.None,
-          }
-        : {
-            version: repo.defaultBranch,
-            versionType: GitVersionType.Branch,
-            versionOptions: GitVersionOptions.None,
-          };
+      const versionDescriptor =
+        atCommitId !== undefined && atCommitId !== ""
+          ? {
+              version: atCommitId,
+              versionType: GitVersionType.Commit,
+              versionOptions: GitVersionOptions.None,
+            }
+          : {
+              version: repo.defaultBranch,
+              versionType: GitVersionType.Branch,
+              versionOptions: GitVersionOptions.None,
+            };
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: repoId,
         project: snapshot.projectId,
@@ -575,7 +579,8 @@ export function DocumentsHubApp(): React.ReactElement {
       const rawRepo = stateRef.current?.rawRepoById.get(repoId);
       return {
         prId: pr.pullRequestId,
-        title: pr.title ?? `PR #${pr.pullRequestId}`,
+        // `title` is typed required but can be absent from the ADO REST payload.
+        title: (pr.title as string | undefined) ?? `PR #${pr.pullRequestId}`,
         status: "completed",
         url: rawRepo ? buildPrUrl(rawRepo, pr.pullRequestId) : undefined,
       };
@@ -628,11 +633,11 @@ export function DocumentsHubApp(): React.ReactElement {
   // boot; if content later renders, Shell's "content" already won.
   const noRepos = !!state && state.repos.length === 0;
   React.useEffect(() => {
-    if (error) markAppReady("error");
+    if (error !== null && error !== "") markAppReady("error");
     else if (noRepos) markAppReady("empty");
   }, [error, noRepos]);
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <div className="emr-error">
         <h2>Couldn't load Documents</h2>
@@ -746,7 +751,7 @@ export function DocumentsHubApp(): React.ReactElement {
           // builds. An empty value removes the param when nothing is active;
           // an active comment supersedes any heading or text target.
           void setRouteQuery(
-            threadId
+            threadId !== null && threadId !== ""
               ? {
                   [COMMENT_LINK_PARAM]: threadId,
                   [ANCHOR_LINK_PARAM]: "",

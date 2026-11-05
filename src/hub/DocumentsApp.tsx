@@ -122,6 +122,12 @@ type SearchFilesBound = (
   signal?: AbortSignal,
 ) => Promise<FileSearchOutcome>;
 type FetchRemoteThreads = (signal: AbortSignal) => Promise<CommentThread[]>;
+type AppProps = Readonly<DocumentsAppProps>;
+
+/** The first repo's id, or `""` when the list is empty. */
+function firstRepoId(repos: readonly DocRepo[]): string {
+  return repos.length > 0 ? repos[0]!.id : "";
+}
 
 /**
  * Everything `DocumentsApp` resolves before its "No repositories" early
@@ -149,7 +155,7 @@ interface DocumentsAppBodyProps {
   deepLinkBuilder: DeepLinkBuilder | null;
 }
 
-export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
+export function DocumentsApp(props: AppProps): React.ReactElement {
   const { repos, loadThreadsFor, onSearchFiles } = props;
 
   // Per-document "transparent PR" mode is enabled when the host supplies a
@@ -157,7 +163,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // housing PR; the repo-level routing PR / read-only gating is bypassed.
   const perDocumentMode = !!props.loadThreadsForPath;
 
-  const initialRepoId = props.initialRepoId ?? repos[0]?.id ?? "";
+  const initialRepoId = props.initialRepoId ?? firstRepoId(repos);
   const { selectedRepoId, selectedRepo, handleSelectRepo } = useSelectedRepo(
     repos,
     initialRepoId,
@@ -176,6 +182,7 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
   // reads it.
   const initialPathConsumedRef = React.useRef(false);
   const deepLinkSeeds = pickDeepLinkSeeds(
+    // eslint-disable-next-line react-hooks/refs -- one-shot latch set when Shell mounts; it must not trigger a re-render, since Shell only reads the seed on its first mount.
     !initialPathConsumedRef.current && selectedRepoId === initialRepoId,
     props,
   );
@@ -274,7 +281,9 @@ export function DocumentsApp(props: DocumentsAppProps): React.ReactElement {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Documents hub body: the refresh state plus the single DocNav/ArticleView/CommentRail layout (loading, empty, and Shell branches) sharing one title slot and header actions. Its data hooks live in their own modules; splitting the JSX would scatter one layout.
-function DocumentsAppBody(body: DocumentsAppBodyProps): React.ReactElement {
+function DocumentsAppBody(
+  body: Readonly<DocumentsAppBodyProps>,
+): React.ReactElement {
   const {
     appProps: props,
     perDocumentMode,

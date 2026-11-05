@@ -44,7 +44,9 @@ declare global {
 /** Record the text of every `execCommand("copy")` / `clipboard.writeText`. */
 async function recordCopies(context: BrowserContext): Promise<void> {
   await context.addInitScript(() => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the app under test still uses execCommand("copy") as its clipboard fallback, so the spy must wrap it to observe copies
     const exec = document.execCommand.bind(document);
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- replaces the app's execCommand("copy") fallback with a recording wrapper (see above)
     document.execCommand = (command: string, ...rest: unknown[]) => {
       if (command === "copy") {
         const el = document.activeElement as HTMLTextAreaElement | null;
@@ -52,8 +54,9 @@ async function recordCopies(context: BrowserContext): Promise<void> {
       }
       return (exec as (...args: unknown[]) => boolean)(command, ...rest);
     };
-    const clip = navigator.clipboard;
-    if (clip?.writeText) {
+    // navigator.clipboard is undefined at runtime in insecure contexts.
+    const clip = navigator.clipboard as Clipboard | undefined;
+    if (clip?.writeText !== undefined) {
       const write = clip.writeText.bind(clip);
       clip.writeText = async (text: string) => {
         await write(text);
@@ -167,7 +170,7 @@ async function landingCue(
       while (scroller) {
         const { overflowY } = getComputedStyle(scroller);
         if (
-          /(auto|scroll)/.test(overflowY) &&
+          /auto|scroll/.test(overflowY) &&
           scroller.scrollHeight > scroller.clientHeight
         ) {
           break;
@@ -346,7 +349,7 @@ test.describe("Selection links (real ADO host)", () => {
               sel.removeAllRanges();
               sel.addRange(range);
               el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-              return { live, removed: del.textContent ?? "" };
+              return { live, removed: del.textContent };
             })
             .catch(() => null);
           return picked !== null && (await bubble.isVisible());

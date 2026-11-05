@@ -78,7 +78,7 @@ describe("mergeMarkers", () => {
       { top: 0.1, height: 0.02, kind: "added" },
     ];
     const merged = mergeMarkers(marks, 0.02);
-    expect(merged[0]!.top).toBe(0.1);
+    expect(merged[0]).toEqual({ top: 0.1, height: 0.02, kind: "added" });
     expect(merged).toHaveLength(2);
   });
 });

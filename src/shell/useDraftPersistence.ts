@@ -57,7 +57,11 @@ export function useDraftPersistence(
   );
 
   const activeDraftRef = React.useRef(activeDraft);
-  activeDraftRef.current = activeDraft;
+  // Layout effect: runs before any passive effect in the same commit, so a
+  // composer emitting its text from a mount effect already sees the new target.
+  React.useLayoutEffect(() => {
+    activeDraftRef.current = activeDraft;
+  });
   const snapshotRef = React.useRef("");
 
   // Bump on restore/clear so a mounted composer re-reads `initialBody` from the
@@ -69,7 +73,9 @@ export function useDraftPersistence(
   // composer re-opens when the user navigates to (or is already on) its file.
   const restoredRef = React.useRef(false);
   const onRestoreRef = React.useRef(onRestore);
-  onRestoreRef.current = onRestore;
+  React.useLayoutEffect(() => {
+    onRestoreRef.current = onRestore;
+  });
   React.useEffect(() => {
     if (!scope || restoredRef.current) return;
     restoredRef.current = true;
@@ -125,10 +131,6 @@ export function useDraftPersistence(
 
   const getSnapshot = React.useCallback(() => snapshotRef.current, []);
 
-  return {
-    initialBody: snapshotRef.current,
-    handleChange,
-    clear,
-    getSnapshot,
-  };
+  // eslint-disable-next-line react-hooks/refs -- `initialBody` is a deliberate live read of the latest composer text: keystrokes must not re-render the shell, and restore/clear call `forceSeed` to re-render exactly when a mounting composer must see a new seed.
+  return { initialBody: snapshotRef.current, handleChange, clear, getSnapshot };
 }

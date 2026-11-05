@@ -61,7 +61,9 @@ export function createOneDsSink(
 
     const channelConfig: IChannelConfiguration = {
       // Route to a custom collector if one was provided at build time.
-      ...(config.endpoint ? { overrideEndpointUrl: config.endpoint } : {}),
+      ...(config.endpoint !== undefined && config.endpoint !== ""
+        ? { overrideEndpointUrl: config.endpoint }
+        : {}),
     };
 
     const coreConfig: IExtendedConfiguration = {
@@ -119,11 +121,15 @@ export function createOneDsSink(
           stack,
           // Structured, privacy-safe failure discriminators (added so a
           // TF400813/401 is diagnosable in the backend without a live repro).
-          ...(shape.name ? { errorName: shape.name } : {}),
+          ...(shape.name !== undefined && shape.name !== ""
+            ? { errorName: shape.name }
+            : {}),
           ...(shape.httpStatus !== undefined
             ? { httpStatus: shape.httpStatus }
             : {}),
-          ...(shape.adoErrorCode ? { adoErrorCode: shape.adoErrorCode } : {}),
+          ...(shape.adoErrorCode !== undefined && shape.adoErrorCode !== ""
+            ? { adoErrorCode: shape.adoErrorCode }
+            : {}),
           severity: info.severity ?? "error",
           source: info.source,
           handled: info.handled ?? true,

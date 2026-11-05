@@ -67,8 +67,14 @@ const htmlOutputs = new Map<string, string>();
 for (const plugin of webpackConfig.plugins) {
   if (plugin.constructor.name !== "HtmlWebpackPlugin") continue;
   const opts = plugin.userOptions ?? plugin.options ?? {};
-  if (opts.filename && opts.chunks?.[0]) {
-    htmlOutputs.set(opts.filename, opts.chunks[0]);
+  const chunk = opts.chunks?.[0];
+  if (
+    opts.filename !== undefined &&
+    opts.filename !== "" &&
+    chunk !== undefined &&
+    chunk !== ""
+  ) {
+    htmlOutputs.set(opts.filename, chunk);
   }
 }
 

@@ -32,7 +32,7 @@ export function RepoPicker({
   loading = false,
   onLoadMore,
   onFilter,
-}: {
+}: Readonly<{
   repos: DocRepo[];
   selectedId: string;
   /** Display name for the trigger; the selected repo may be outside the view. */
@@ -44,7 +44,7 @@ export function RepoPicker({
   loading?: boolean;
   onLoadMore?: () => void | Promise<void>;
   onFilter?: (keyword: string) => void | Promise<void>;
-}): React.ReactElement {
+}>): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({});
   // Local mirror of the filter text so typing is instant; the server query is
@@ -54,7 +54,7 @@ export function RepoPicker({
   const menuRef = React.useRef<HTMLDivElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const filterInputRef = React.useRef<HTMLInputElement>(null);
-  const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const optionElsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
   const loadMoreRequestedRef = React.useRef(false);
 
   const triggerName =
@@ -88,31 +88,40 @@ export function RepoPicker({
       0,
       repos.findIndex((r) => r.id === selectedId),
     );
-    optionRefs.current[idx]?.focus();
+    optionElsRef.current[idx]?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- focus only on open; re-focusing on every repos change would fight the user
   }, [open]);
 
   // Debounce the keyword filter: re-query 250ms after the last keystroke so a
   // burst of typing makes a single server round-trip.
   const onFilterRef = React.useRef(onFilter);
-  onFilterRef.current = onFilter;
   React.useEffect(() => {
-    if (!paginated) return;
+    onFilterRef.current = onFilter;
+  }, [onFilter]);
+  React.useEffect(() => {
+    // Closed: the close effect below sends the single page-one re-query.
+    if (!paginated || !open) return;
     if (filterText === filter) return; // already in sync (e.g. external reset)
     const handle = window.setTimeout(() => {
       void onFilterRef.current?.(filterText);
     }, 250);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filter` is omitted on purpose: the debounce follows local input only
-  }, [filterText, paginated]);
+  }, [filterText, paginated, open]);
 
   // Match native ADO: clear the keyword filter whenever the picker closes, so
   // reopening always starts from the full, unfiltered list. Resets the local
   // input immediately and tells the host to re-query page one when a filter
   // was actually applied (avoids a needless round-trip on a plain open/close).
+  // The local reset is adjusted during render on each open/close transition
+  // (and on mount, via the `null` seed), matching the effect below.
+  const [prevOpen, setPrevOpen] = React.useState<boolean | null>(null);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (!open && filterText !== "") setFilterText("");
+  }
   React.useEffect(() => {
     if (open) return;
-    if (filterText !== "") setFilterText("");
     if (paginated && filter !== "") void onFilterRef.current?.("");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to open/close transitions, not to filter or paging changes
   }, [open]);
@@ -184,13 +193,13 @@ export function RepoPicker({
       close();
       return;
     }
-    const current = optionRefs.current.findIndex(
+    const current = optionElsRef.current.findIndex(
       (el) => el === document.activeElement,
     );
     const target = menuFocusTarget(e.key, current, repos.length);
     if (target === undefined) return;
     e.preventDefault();
-    optionRefs.current[target]?.focus();
+    optionElsRef.current[target]?.focus();
   };
 
   return (
@@ -218,6 +227,7 @@ export function RepoPicker({
         <SvgChevron />
       </button>
       {open ? (
+        // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- delegated key handler: focus lives on the filter input and option buttons, and their Escape/arrow keys bubble here.
         <div
           ref={menuRef}
           className={`emr-docnav-repo-menu${paginated ? " is-paginated" : ""}`}
@@ -225,9 +235,13 @@ export function RepoPicker({
           style={menuStyle}
           onKeyDown={onMenuKeyDown}
         >
-          {paginated
-            ? renderRepoFilter(filterInputRef, filterText, setFilterText)
-            : null}
+          {paginated ? (
+            <RepoFilter
+              inputRef={filterInputRef}
+              filterText={filterText}
+              setFilterText={setFilterText}
+            />
+          ) : null}
           <div
             ref={listRef}
             className="emr-docnav-repo-list"
@@ -241,7 +255,7 @@ export function RepoPicker({
                 <button
                   key={r.id}
                   ref={(el) => {
-                    optionRefs.current[i] = el;
+                    optionElsRef.current[i] = el;
                   }}
                   type="button"
                   role="option"
@@ -271,11 +285,15 @@ export function RepoPicker({
 }
 
 /** Keyword filter box shown atop the paginated repo picker menu. */
-function renderRepoFilter(
-  inputRef: React.RefObject<HTMLInputElement>,
-  filterText: string,
-  setFilterText: (text: string) => void,
-): React.ReactElement {
+function RepoFilter({
+  inputRef,
+  filterText,
+  setFilterText,
+}: Readonly<{
+  inputRef: React.RefObject<HTMLInputElement>;
+  filterText: string;
+  setFilterText: (text: string) => void;
+}>): React.ReactElement {
   return (
     <div className="emr-docnav-repo-filter">
       <SearchIcon size={14} className="emr-docnav-repo-filter-glyph" />

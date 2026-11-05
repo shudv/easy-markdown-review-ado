@@ -172,7 +172,8 @@ function audit(
   const result: Audit = { lost: [], misplaced: [] };
   doc.lines.forEach((line, i) => {
     const token = /\bt\d+\b/.exec(line)?.[0];
-    if (!token) return;
+    // A match is always at least two characters, so only "no match" skips.
+    if (token === undefined) return;
     const node = tokenNode(root, token);
     expect(node, `${doc.name}: ${token} rendered`).not.toBeNull();
     const isChanged = i + 1 >= changed[0] && i + 1 <= changed[1];
@@ -283,7 +284,7 @@ describe("diff ownership regressions", () => {
     });
 
     const continuation = Array.from(root.querySelectorAll("p")).find((p) =>
-      p.textContent?.startsWith("You can use"),
+      p.textContent.startsWith("You can use"),
     )!;
     expect(continuation.dataset.diffKind).toBe("added");
     expect(continuation.querySelector(".emr-diff-line-wash")).not.toBeNull();

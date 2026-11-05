@@ -74,10 +74,13 @@ export default async function globalSetup(): Promise<void> {
     !/'unsafe-eval'/.test(scriptSrc);
 
   if (!csp || !scriptAllowsSelfOnly) {
+    const got = csp
+      ? `Content-Security-Policy: ${csp}`
+      : "no Content-Security-Policy header";
     throw new Error(
       "e2e: the dev server is not running in STRICT verification mode.\n" +
         `  expected a Content-Security-Policy with "script-src 'self'" (no inline/eval) at ${url}\n` +
-        `  got: ${csp ? `Content-Security-Policy: ${csp}` : "no Content-Security-Policy header"}\n` +
+        `  got: ${got}\n` +
         "Restart the dev server in strict mode (it mirrors the ADO host CSP):\n" +
         "  npm run dev:verify\n" +
         "(plain `npm run dev:https` is not accepted for e2e — it doesn't enforce the production security posture.)",

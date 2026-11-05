@@ -29,7 +29,7 @@ export function repairSequenceSemicolons(src: string): string | null {
     if (split < 0) continue;
     const text = line.slice(split);
     const escaped = text.replace(SEMICOLON_RE, (match, entity?: string) =>
-      entity ? match : "#59;",
+      entity !== undefined ? match : "#59;",
     );
     if (escaped !== text) {
       lines[i] = line.slice(0, split) + escaped;
@@ -44,7 +44,7 @@ export function repairSequenceSemicolons(src: string): string | null {
 const SEMICOLON_RE = /(#\w+|&#?\w+)?;(?=.*\S)/g;
 
 // Messages: `Alice->>Bob: text`, `A-)B: text`, `A<<->>B: text`, …
-const MESSAGE_ARROW_RE = /(?:<<)?-{1,2}(?:>>|>|x|\))/;
+const MESSAGE_ARROW_RE = /(?:<<)?-{1,2}(?:>>|[)>x])/;
 const NOTE_RE = /^\s*note\s+(?:left of|right of|over)\b[^:]*:/i;
 const BLOCK_RE =
   /^\s*(?:alt|else|opt|loop|par|and|critical|option|break|box)\b/i;

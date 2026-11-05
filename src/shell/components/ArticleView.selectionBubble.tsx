@@ -71,15 +71,17 @@ export function selectionBubblePosition(
 }
 
 /** The floating selection bubble, wired to the article's comment/link actions. */
-export function ArticleSelectionBubble(props: {
-  bubble: SelectionBubbleState;
-  readOnly: boolean;
-  onCopySelectionLink:
-    | ((target: SelectionLinkTarget) => Promise<boolean>)
-    | undefined;
-  onSelection: (anchor: TextQuoteAnchor) => void;
-  onDismiss: () => void;
-}): React.ReactElement {
+export function ArticleSelectionBubble(
+  props: Readonly<{
+    bubble: SelectionBubbleState;
+    readOnly: boolean;
+    onCopySelectionLink:
+      | ((target: SelectionLinkTarget) => Promise<boolean>)
+      | undefined;
+    onSelection: (anchor: TextQuoteAnchor) => void;
+    onDismiss: () => void;
+  }>,
+): React.ReactElement {
   const { bubble, readOnly, onCopySelectionLink, onSelection, onDismiss } =
     props;
   return (

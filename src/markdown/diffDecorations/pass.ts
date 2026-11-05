@@ -200,7 +200,7 @@ export function applyLineWash(block: HTMLElement): boolean {
     nodes.some(
       (node) =>
         node instanceof Element &&
-        (node.matches(media) || node.querySelector(media)),
+        (node.matches(media) || node.querySelector(media) !== null),
     )
   ) {
     return false;

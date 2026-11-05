@@ -49,7 +49,7 @@ async function loadLocalReaderFont(
 
 // eslint-disable-next-line max-lines-per-function -- Status bar: composes its regions (comparison, comments, reading preferences, refresh) from ReaderStatusBar.parts.
 export function ReaderStatusBar(
-  props: ReaderStatusBarProps,
+  props: Readonly<ReaderStatusBarProps>,
 ): React.ReactElement {
   const {
     wordCount,
@@ -88,7 +88,7 @@ export function ReaderStatusBar(
   }, [availableFontIds]);
   const [detectedFonts, setDetectedFonts] = React.useState<
     readonly (typeof READER_FONTS)[number][]
-  >(() => READER_FONTS.filter((font) => !font.localFamily));
+  >(() => READER_FONTS.filter((font) => font.localFamily === undefined));
   const availableFonts = overriddenFonts ?? detectedFonts;
   const effectiveFontId = availableFonts.some((font) => font.id === fontId)
     ? fontId

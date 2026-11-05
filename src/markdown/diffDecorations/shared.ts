@@ -61,7 +61,7 @@ export function isImageOnlyBlock(el: HTMLElement): boolean {
   return (
     el.tagName === "P" &&
     el.querySelector("img") !== null &&
-    el.textContent?.trim() === ""
+    el.textContent.trim() === ""
   );
 }
 

@@ -577,6 +577,10 @@ async function stabilize(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+function isNonEmpty(s: string | undefined): s is string {
+  return s !== undefined && s !== "";
+}
+
 function storyRoot(page: Page): Locator {
   return page.locator("#storybook-root");
 }
@@ -584,15 +588,15 @@ function storyRoot(page: Page): Locator {
 for (const shot of SHOTS) {
   // Focused (clipped) shots reuse a story's (title, name) but crop to a
   // control, so fold the clip selector into the slug to keep baselines unique.
-  const slugSource = shot.clip
+  const slugSource = isNonEmpty(shot.clip)
     ? `${shot.title}-${shot.name}-${shot.clip}`
     : `${shot.title}-${shot.name}`;
   const slug = slugSource
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
+    .replace(/^-|-$/g, "");
 
-  const label = shot.clip
+  const label = isNonEmpty(shot.clip)
     ? `${shot.title} / ${shot.name} [${shot.clip}]`
     : `${shot.title} / ${shot.name}`;
   test(`visual — ${label}`, async ({ page }) => {
@@ -613,7 +617,7 @@ for (const shot of SHOTS) {
       await page.locator(selector).first().waitFor({ state: "visible" });
     }
     await stabilize(page);
-    if (shot.hover) {
+    if (isNonEmpty(shot.hover)) {
       const hovered = page.locator(shot.hover).first();
       await hovered.hover();
       if (shot.hoverEffect === "tooltip") {
@@ -636,7 +640,9 @@ for (const shot of SHOTS) {
       }
     }
 
-    const target = shot.clip ? page.locator(shot.clip) : storyRoot(page);
+    const target = isNonEmpty(shot.clip)
+      ? page.locator(shot.clip)
+      : storyRoot(page);
     await expect(target).toHaveScreenshot(`${slug}.png`);
   });
 }

@@ -87,7 +87,8 @@ function versionDescriptorFor(
 }
 
 function stripRefsHeads(ref: string | undefined): string {
-  if (!ref) return "";
+  // `defaultBranch` comes from the ADO REST repository payload.
+  if (ref == null || ref === "") return "";
   return ref.replace(/^refs\/heads\//, "");
 }
 
@@ -132,9 +133,9 @@ function initialsOf(name: string): string {
 // eslint-disable-next-line max-lines-per-function -- Hub reader container: connects file loading, history and routing to Shell. Mostly prop wiring with little branching.
 export function MarkdownReader({
   config,
-}: {
+}: Readonly<{
   config: ReaderConfig;
-}): React.ReactElement {
+}>): React.ReactElement {
   const [resolved, setResolved] = React.useState<ResolvedReader | null>(null);
   const [user, setUser] = React.useState<CommentAuthor | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -218,13 +219,14 @@ export function MarkdownReader({
       atCommitId?: string,
     ): Promise<string | undefined> => {
       if (!resolved) return undefined;
-      const versionDescriptor = atCommitId
-        ? {
-            version: atCommitId,
-            versionType: GitVersionType.Commit,
-            versionOptions: GitVersionOptions.None,
-          }
-        : versionDescriptorFor(resolved.config.version, resolved.rawRepo);
+      const versionDescriptor =
+        atCommitId !== undefined && atCommitId !== ""
+          ? {
+              version: atCommitId,
+              versionType: GitVersionType.Commit,
+              versionOptions: GitVersionOptions.None,
+            }
+          : versionDescriptorFor(resolved.config.version, resolved.rawRepo);
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: resolved.config.repositoryId,
         project: resolved.config.project,
@@ -261,6 +263,7 @@ export function MarkdownReader({
         cfg.project,
         prByRepo,
       );
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the signal can abort during the awaited load; TS wrongly keeps the narrowing from the pre-await check.
       if (signal.aborted) throw abortError();
       return all.filter((t) => t.filePath === cfg.path);
     };
@@ -271,10 +274,10 @@ export function MarkdownReader({
   // paths). Without this a data-load failure here would drop the boot event.
   // Idempotent + no-ops outside a real boot.
   React.useEffect(() => {
-    if (error) markAppReady("error");
+    if (error !== null && error !== "") markAppReady("error");
   }, [error]);
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <div className="emr-error" role="alert">
         <h2>Couldn’t open Markdown Review</h2>

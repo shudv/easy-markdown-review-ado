@@ -168,7 +168,9 @@ export async function detectAvailableReaderFonts(
 ): Promise<readonly ReaderFont[]> {
   const availability = await Promise.all(
     READER_FONTS.map(async (font) => {
-      if (!font.localFamily) return true;
+      if (font.localFamily === undefined || font.localFamily === "") {
+        return true;
+      }
       try {
         return await loadLocal(font.localFamily, font.id);
       } catch {
@@ -293,7 +295,9 @@ export function dragReopensPane(inwardPx: number): boolean {
 
 /** Coerce an unknown parsed value into a valid `ReaderPrefs` (never throws). */
 export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
-  if (!value || typeof value !== "object") return { ...DEFAULT_READER_PREFS };
+  if (value === null || typeof value !== "object") {
+    return { ...DEFAULT_READER_PREFS };
+  }
   const v = value as Partial<Record<keyof ReaderPrefs, unknown>>;
   const fontId =
     typeof v.fontId === "string" && READER_FONTS.some((f) => f.id === v.fontId)
@@ -349,7 +353,7 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
 function readStored(key: string): unknown {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
+    return raw !== null && raw !== "" ? JSON.parse(raw) : null;
   } catch {
     return null;
   }

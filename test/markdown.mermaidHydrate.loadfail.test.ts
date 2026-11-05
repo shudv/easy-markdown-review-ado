@@ -41,8 +41,7 @@ describe("hydrateMermaid — library load failure", () => {
       // Not hydrated — the fallback stays in place for a retry/readability.
       expect(el.getAttribute("data-hydrated")).toBeNull();
     }
-    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
       error: expect.objectContaining({
         message: expect.stringContaining("error when mocking a module"),
         cause: expect.objectContaining({ message: "chunk load failed" }),

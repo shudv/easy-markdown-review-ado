@@ -332,7 +332,7 @@ describe("with diff decorations (added + removed words)", () => {
     for (let n = walker.nextNode(); n; n = walker.nextNode())
       nodes.push(n as Text);
     const from = nodes.find((n) => n.data.includes(fromText))!;
-    const to = nodes.findLast((n) => n.data.includes(toText))!;
+    const to = nodes.filter((n) => n.data.includes(toText)).pop()!;
     const range = document.createRange();
     range.setStart(from, from.data.indexOf(fromText));
     range.setEnd(to, to.data.indexOf(toText) + toText.length);

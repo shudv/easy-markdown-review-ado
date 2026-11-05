@@ -19,6 +19,20 @@ import {
 } from "./documentsHub.helpers";
 
 /**
+ * The host's current query params. The SDK types them as always present, but
+ * the host can resolve nothing, so treat a missing bag as empty.
+ */
+async function queryParamsOf(
+  nav: IHostNavigationService,
+): Promise<Record<string, string>> {
+  const params = (await nav.getQueryParams()) as
+    | Record<string, string>
+    | null
+    | undefined;
+  return params ?? {};
+}
+
+/**
  * Read the hub's current query parameters (e.g. the `?path=` deep-link).
  * Best-effort: returns `{}` when the navigation service is unavailable.
  */
@@ -27,7 +41,7 @@ export async function readRouteParams(): Promise<Record<string, string>> {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
-    return (await nav.getQueryParams()) ?? {};
+    return await queryParamsOf(nav);
   } catch {
     return {};
   }
@@ -69,7 +83,7 @@ export async function setRouteQuery(
     );
     const next =
       typeof updates === "function"
-        ? updates((await nav.getQueryParams()) ?? {})
+        ? updates(await queryParamsOf(nav))
         : updates;
     nav.setQueryParams(next);
   } catch {
@@ -103,8 +117,10 @@ export function buildHubDeepLinkUrl(
  */
 export function resolveOrgUrl(): string {
   try {
-    const host = SDK.getHost();
-    if (host?.name) return `https://dev.azure.com/${host.name}`;
+    // `getHost()` is typed non-null but is undefined until SDK init completes.
+    const host = SDK.getHost() as SDK.IHostContext | undefined;
+    const name = host?.name;
+    if (name != null && name !== "") return `https://dev.azure.com/${name}`;
   } catch {
     // Falls through to the referrer-based heuristic.
   }

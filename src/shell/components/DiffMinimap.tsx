@@ -67,7 +67,7 @@ export function DiffMinimap({
   scrollRef,
   version,
   showDiff,
-}: DiffMinimapProps): React.ReactElement | null {
+}: Readonly<DiffMinimapProps>): React.ReactElement | null {
   const [markers, setMarkers] = React.useState<DiffMarker[]>([]);
   const [metrics, setMetrics] = React.useState<Metrics>({
     scrollTop: 0,
@@ -256,6 +256,7 @@ export function DiffMinimap({
         two-tone blob. Ticks are pointer-events:none, so the thumb underneath
         still receives drags.
       */}
+      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only (keeps a thumb click from paging the track) inside the aria-hidden ruler, a pointer aid whose keyboard equivalent is the scroll container's native scrolling */}
       <div
         className="emr-diff-ruler-thumb"
         style={{ top: `${thumb.topPx}px`, height: `${thumb.heightPx}px` }}
@@ -264,6 +265,7 @@ export function DiffMinimap({
       />
       {markers.map((m, i) => (
         <div
+          // eslint-disable-next-line @eslint-react/no-array-index-key -- ticks are stateless, identity-free positions recomputed wholesale on every measure; index keys update nodes in place so the is-active opacity transition survives a re-measure
           key={i}
           className={
             `emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}` +

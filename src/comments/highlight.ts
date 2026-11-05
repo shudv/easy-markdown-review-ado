@@ -27,7 +27,8 @@ export function wrapRangeWithHighlight(
     const span = document.createElement("span");
     span.className = opts.className;
     span.dataset.threadId = opts.threadId;
-    if (opts.background) span.style.backgroundColor = opts.background;
+    if (opts.background !== undefined && opts.background !== "")
+      span.style.backgroundColor = opts.background;
     return span;
   });
 }

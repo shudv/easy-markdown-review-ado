@@ -8,6 +8,7 @@ import type {
   PullRequestStatus,
 } from "azure-devops-extension-api/Git";
 import type {
+  CommentPosition,
   GitPullRequestCommentThread,
   Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
@@ -60,7 +61,7 @@ export function buildIdentitiesUrl(
   orgName: string | undefined,
   ids: readonly string[],
 ): string | null {
-  if (!orgName) return null;
+  if (orgName === undefined || orgName === "") return null;
   const clean = [
     ...new Set(ids.map((i) => i.trim().toLowerCase()).filter(Boolean)),
   ];
@@ -90,7 +91,7 @@ export function parseIdentitiesResponse(
     // ADO returns a `null` slot for any requested id it can't resolve (e.g. a
     // cross-tenant AAD guest queried by its object id). Skip those — a single
     // null must NOT crash the whole batch and drop the ids that DID resolve.
-    if (!entity || typeof entity !== "object") continue;
+    if (entity === null || typeof entity !== "object") continue;
     const e = entity as {
       id?: unknown;
       providerDisplayName?: unknown;
@@ -105,7 +106,8 @@ export function parseIdentitiesResponse(
   }
   for (const raw of requestedIds) {
     const name = byId.get(raw.trim().toLowerCase());
-    if (name) out[raw] = { displayName: name };
+    // `byId` only ever stores non-empty names, so a hit is always non-empty.
+    if (name !== undefined) out[raw] = { displayName: name };
   }
   return out;
 }
@@ -161,14 +163,9 @@ const PR_STATUS_COMPLETED = 3 as PullRequestStatus;
 export function prStatusLabel(
   status: PullRequestStatus | undefined,
 ): "active" | "completed" | "abandoned" {
-  switch (status) {
-    case PR_STATUS_COMPLETED:
-      return "completed";
-    case PR_STATUS_ABANDONED:
-      return "abandoned";
-    default:
-      return "active";
-  }
+  if (status === PR_STATUS_COMPLETED) return "completed";
+  if (status === PR_STATUS_ABANDONED) return "abandoned";
+  return "active";
 }
 
 // Thread/comment conversion. Numeric literals stand in for SDK enum values so
@@ -217,7 +214,11 @@ export function readMentionsProp(properties: unknown): MentionedIdentity[] {
   if (!Array.isArray(parsed)) return [];
   const out: MentionedIdentity[] = [];
   for (const e of parsed) {
-    const r = e as { id?: unknown; displayName?: unknown; avatarUrl?: unknown };
+    const r = e as {
+      id?: unknown;
+      displayName?: unknown;
+      avatarUrl?: unknown;
+    } | null;
     if (typeof r?.id !== "string" || typeof r.displayName !== "string")
       continue;
     out.push({
@@ -243,6 +244,7 @@ export function fromAdoStatus(s: number | undefined): ThreadStatus {
       return "pending";
     case 1 /* Active */:
     case 0 /* Unknown */:
+    case undefined:
     default:
       return "active";
   }
@@ -329,7 +331,7 @@ export function reactionClientMethod(
  * naked or wrapped.
  */
 export function readProp(properties: unknown, key: string): unknown {
-  if (!properties || typeof properties !== "object") return undefined;
+  if (properties === null || typeof properties !== "object") return undefined;
   const p = (properties as Record<string, unknown>)[key];
   if (p == null) return undefined;
   if (typeof p === "object" && "$value" in (p as object)) {
@@ -356,9 +358,48 @@ export function pickerAvatarUrl(
   rawImage: string | undefined,
   selfImageUrl: string | undefined,
 ): string | undefined {
-  if (!rawImage) return undefined;
+  if (rawImage === undefined || rawImage === "") return undefined;
   return identityAvatarUrl({ id, imageUrl: selfImageUrl });
 }
+
+// ---------------------------------------------------------------------------
+// Honest wire shapes for thread REST payloads
+//
+// The SDK typings mark every field required, but ADO omits several in
+// practice: PR-level threads have no `threadContext`, left-side-only comments
+// have no `rightFileStart`, un-liked comments have no `usersLiked`, and so on.
+// These views make the fields we defensively read optional so the guards are
+// type-checked. SDK objects stay assignable to them.
+// ---------------------------------------------------------------------------
+
+/** ADO `CommentThreadContext` as actually returned over REST. */
+interface AdoThreadContextWire {
+  filePath?: string;
+  leftFileStart?: CommentPosition;
+  leftFileEnd?: CommentPosition;
+  rightFileStart?: CommentPosition;
+  rightFileEnd?: CommentPosition;
+}
+
+/** ADO `Comment` as actually returned over REST. */
+export type AdoCommentWire = Omit<
+  AdoComment,
+  "content" | "lastContentUpdatedDate" | "publishedDate" | "usersLiked"
+> & {
+  content?: string;
+  lastContentUpdatedDate?: Date;
+  publishedDate?: Date;
+  usersLiked?: AdoComment["usersLiked"];
+};
+
+/** ADO `GitPullRequestCommentThread` as actually returned over REST. */
+export type AdoThreadWire = Omit<
+  GitPullRequestCommentThread,
+  "comments" | "threadContext"
+> & {
+  comments?: AdoCommentWire[];
+  threadContext?: AdoThreadContextWire;
+};
 
 function authorFromAdo(a: AdoComment["author"] | undefined): CommentAuthor {
   const displayName = a?.displayName ?? "Unknown";
@@ -400,7 +441,7 @@ export function editedAtOf(
   return new Date(lastContentUpdatedDate).toISOString();
 }
 
-function adoCommentToLocal(c: AdoComment): Comment {
+function adoCommentToLocal(c: AdoCommentWire): Comment {
   const id = String(c.id);
   const createdAt = (c.publishedDate ?? new Date()).toString();
   // ADO stamps `lastContentUpdatedDate` on creation too (it equals
@@ -439,9 +480,7 @@ function adoCommentToLocal(c: AdoComment): Comment {
  * personal-MSA orgs where the by-id identities endpoint returns null. Ids are
  * normalized to the dashed GUID so they key the same as the rendered pills.
  */
-export function collectThreadIdentities(
-  t: GitPullRequestCommentThread,
-): MentionedIdentity[] {
+export function collectThreadIdentities(t: AdoThreadWire): MentionedIdentity[] {
   const map = (t as { identities?: Record<string, unknown> }).identities;
   if (!map || typeof map !== "object") return [];
   const out: MentionedIdentity[] = [];
@@ -471,9 +510,7 @@ export function collectThreadIdentities(
  * diff-anchored (synthesize a line anchor via the `data-source-line` bridge),
  * (3) general PR-level comments (no file/line; shown in the general tray).
  */
-export function adoThreadToLocal(
-  t: GitPullRequestCommentThread,
-): CommentThread | null {
+export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
   if (t.isDeleted) return null;
 
   // Drop ADO system/auto threads (votes, reviewer changes, status updates,
@@ -543,9 +580,7 @@ export function adoThreadToLocal(
  * `undefined` when the thread isn't ours or the anchor is malformed (so the
  * caller treats it as a native thread and the comment isn't silently lost).
  */
-function readExtensionAnchor(
-  t: GitPullRequestCommentThread,
-): TextQuoteAnchor | undefined {
+function readExtensionAnchor(t: AdoThreadWire): TextQuoteAnchor | undefined {
   const schema = readProp(t.properties, PROP_SCHEMA);
   const anchorJson = readProp(t.properties, PROP_ANCHOR);
   if (schema !== SCHEMA_VERSION || typeof anchorJson !== "string") {
@@ -560,7 +595,7 @@ function readExtensionAnchor(
 
 /** Synthesize a line anchor for a native diff-anchored thread. */
 function nativeDiffLineAnchor(
-  ctx: GitPullRequestCommentThread["threadContext"] | undefined,
+  ctx: AdoThreadContextWire | undefined,
 ): TextQuoteAnchor {
   const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
   if (typeof startLine !== "number" || startLine <= 0) {

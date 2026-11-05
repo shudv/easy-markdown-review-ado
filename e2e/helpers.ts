@@ -171,7 +171,9 @@ export async function selectRepoInPicker(
     .poll(
       () => {
         const repo = repoParam(page);
-        return Boolean(repo && (!switching || repo !== previousRepo));
+        return (
+          repo !== null && repo !== "" && (!switching || repo !== previousRepo)
+        );
       },
       {
         timeout: 10_000,
@@ -382,7 +384,7 @@ export async function openDraftComposerBySelection(
           },
           { minNodeLen, selLen },
         );
-        return await bubble.isVisible().catch(() => false);
+        return bubble.isVisible().catch(() => false);
       },
       {
         timeout: 30_000,

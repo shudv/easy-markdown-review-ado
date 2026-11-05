@@ -55,7 +55,7 @@ export function handleGeneratedSourceClick(
   const block = sourceBtn.closest<HTMLElement>(spec.hostSelector);
   const enc = block?.getAttribute(spec.sourceAttribute);
   const original = block?.dataset.diffOriginal ?? null;
-  if (enc) {
+  if (enc != null && enc !== "") {
     const source = decodeGeneratedSource(enc);
     setGeneratedSource({ kind: spec.kind, source, original });
     track(
@@ -134,7 +134,8 @@ export function nextClickedThreadId(
   while (highlight && article?.contains(highlight)) {
     const threadId = highlight.dataset.threadId;
     if (
-      threadId &&
+      threadId !== undefined &&
+      threadId !== "" &&
       threadId !== DRAFT_THREAD_ID &&
       !threadIds.includes(threadId)
     ) {

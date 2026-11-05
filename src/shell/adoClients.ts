@@ -60,12 +60,14 @@ function createClient<T>(clientClass: {
 
 /** The page's Git REST client (base URL resolved once). */
 export function sharedGitClient(): GitRestClient {
-  return (git ??= createClient(GitRestClient));
+  git ??= createClient(GitRestClient);
+  return git;
 }
 
 /** The page's Work Item Tracking REST client (base URL resolved once). */
 export function sharedWorkItemClient(): WorkItemTrackingRestClient {
-  return (workItems ??= createClient(WorkItemTrackingRestClient));
+  workItems ??= createClient(WorkItemTrackingRestClient);
+  return workItems;
 }
 
 /**

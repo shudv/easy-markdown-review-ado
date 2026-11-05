@@ -139,7 +139,7 @@ export function chunkMarkdownLines(
 
   lines.forEach((line, index) => {
     const lineNumber = firstLine + index;
-    if (fence) {
+    if (fence !== null) {
       current!.push(line);
       if (line.trim().startsWith(fence)) {
         fence = null;

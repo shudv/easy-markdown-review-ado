@@ -7,7 +7,7 @@
 // @vitest-environment jsdom
 
 import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -51,7 +51,11 @@ function Harness(props: {
   ) => Promise<FileSearchOutcome>;
   handle: Handle;
 }): null {
-  props.handle.current = useDocSearch(props.files, props.onSearchFiles);
+  const { handle: resultRef } = props;
+  const search = useDocSearch(props.files, props.onSearchFiles);
+  React.useLayoutEffect(() => {
+    resultRef.current = search;
+  });
   return null;
 }
 

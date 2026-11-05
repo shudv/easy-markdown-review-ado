@@ -25,7 +25,9 @@ interface ArticleColumnProps {
  * middle + rail swap to a subtle skeleton while the next file streams in. The
  * nav rail is a left sibling.
  */
-export function ArticleColumn(props: ArticleColumnProps): React.ReactElement {
+export function ArticleColumn(
+  props: Readonly<ArticleColumnProps>,
+): React.ReactElement {
   return (
     <div className={`emr-grid${props.hideDocNav ? " emr-grid--no-nav" : ""}`}>
       <ArticleColumnContent {...props} />
@@ -33,9 +35,11 @@ export function ArticleColumn(props: ArticleColumnProps): React.ReactElement {
   );
 }
 
-function ArticleColumnContent(props: ArticleColumnProps): React.ReactNode {
+function ArticleColumnContent(
+  props: Readonly<ArticleColumnProps>,
+): React.ReactNode {
   const { selectedPath, absentNotice } = props;
-  if (props.error) {
+  if (props.error !== null && props.error !== "") {
     return (
       <div className="emr-article-wrap">
         <div className="emr-error">
@@ -70,7 +74,10 @@ function ArticleColumnContent(props: ArticleColumnProps): React.ReactNode {
       </div>
     );
   }
-  if (props.historicalLoadError) {
+  if (
+    props.historicalLoadError !== undefined &&
+    props.historicalLoadError !== ""
+  ) {
     return (
       <div className="emr-article-wrap">
         <div className="emr-error">

@@ -56,7 +56,7 @@ interface SearchResultsListProps {
 
 // eslint-disable-next-line max-lines-per-function -- Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list.
 export function SearchResultsList(
-  props: SearchResultsListProps,
+  props: Readonly<SearchResultsListProps>,
 ): React.ReactElement {
   const {
     results,
@@ -110,6 +110,7 @@ export function SearchResultsList(
           .replace(/\/[^/]*$/, "");
         const openComments = threadCountsByPath[file.path] ?? 0;
         const change = fileChangeView(file, rangeChanges);
+        const note = change.note ?? "";
         return (
           <div
             key={`search:${file.path}`}
@@ -124,7 +125,7 @@ export function SearchResultsList(
               type="button"
               className="emr-docnav-label emr-docnav-search-label"
               onClick={() => onSelectFile(file.path)}
-              title={file.path + (change.note ? ` \u2014 ${change.note}` : "")}
+              title={file.path + (note !== "" ? ` \u2014 ${note}` : "")}
             >
               {showChangeIndicators ? (
                 <span
@@ -135,8 +136,8 @@ export function SearchResultsList(
                 </span>
               ) : null}
               <span className="emr-docnav-search-name">{fileName}</span>
-              {change.note ? (
-                <span className="emr-sr-only">{` (${change.note})`}</span>
+              {note !== "" ? (
+                <span className="emr-sr-only">{` (${note})`}</span>
               ) : null}
               {parentPath ? (
                 <span className="emr-docnav-search-path" title={parentPath}>

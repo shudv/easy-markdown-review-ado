@@ -201,13 +201,13 @@ export function alignTableColumns(
       : { kind: "equal", originalIndex, currentIndex };
   });
   for (const originalIndex of unmatchedOriginal) {
-    const nextMappedOriginal = [...currentByOriginal.keys()]
-      .filter((index) => index > originalIndex)
-      .sort((a, b) => a - b)[0];
+    const laterMapped = [...currentByOriginal.keys()].filter(
+      (index) => index > originalIndex,
+    );
     const currentIndex =
-      nextMappedOriginal == null
+      laterMapped.length === 0
         ? current.length
-        : currentByOriginal.get(nextMappedOriginal)!;
+        : currentByOriginal.get(Math.min(...laterMapped))!;
     const insertionIndex = alignment.findIndex(
       (item) => item.currentIndex >= currentIndex,
     );

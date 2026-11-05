@@ -177,7 +177,7 @@ export async function routingPrForDoc(
   // 2. The PR that merged that commit (its last-merge commit). When the file
   //    landed via a direct push the commit has no PR and we drop to the
   //    fallback below.
-  if (commitId) {
+  if (commitId !== null && commitId !== "") {
     const pr = await prMergingCommit(read, commitId);
     if (pr) return pr;
   }

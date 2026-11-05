@@ -71,9 +71,10 @@ function element(
   return {
     type: "element",
     tagName,
-    properties: className
-      ? { ...properties, className: [className] }
-      : properties,
+    properties:
+      className !== null
+        ? { ...properties, className: [className] }
+        : properties,
     children,
   };
 }
@@ -116,8 +117,8 @@ function tocList(entries: readonly TocEntry[]): Element {
       frames.pop();
     }
     const item = element("li", null, [link(`#${entry.id}`, entry.text)]);
-    const top = frames[frames.length - 1];
-    if (top && top.level === entry.level) {
+    const top = frames.length > 0 ? frames[frames.length - 1] : undefined;
+    if (top?.level === entry.level) {
       top.list.children.push(item);
       top.last = item;
     } else if (top) {
@@ -151,7 +152,9 @@ export const rehypeWikiMacros: Plugin<[], Root> = () => {
   return (tree) => {
     const macros: Element[] = [];
     visit(tree, "element", (node: Element) => {
-      if (node.properties.dataWikiMacro) macros.push(node);
+      // Only remarkWikiMacros sets this (to a non-empty kind); rehypeSafeHtml
+      // drops `data-wiki-macro` from raw HTML.
+      if (typeof node.properties.dataWikiMacro === "string") macros.push(node);
     });
     if (macros.length === 0) return;
     let headings: TocEntry[] | null = null;
@@ -198,6 +201,7 @@ export function hasSubpagesMacro(html: string): boolean {
 export function fillSubpagesMacros(html: string, state: SubpagesState): string {
   if (!hasSubpagesMacro(html)) return html;
   const template = document.createElement("template");
+  // eslint-disable-next-line no-unsanitized/property -- html is renderMarkdown output (sanitized by rehypeSafeHtml + rehypeSanitizeUrls), parsed in an inert <template>
   template.innerHTML = html;
   const doc = template.content.ownerDocument;
   for (const nav of template.content.querySelectorAll(SUBPAGES_SELECTOR)) {

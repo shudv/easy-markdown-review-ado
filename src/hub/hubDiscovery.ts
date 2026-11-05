@@ -92,7 +92,8 @@ async function resolveInitialRepoId(
   union: RepoUnion,
 ): Promise<string> {
   let resolvedRepoId = firstPage.repos[0]?.id ?? "";
-  if (preferredId) {
+  // May come from the last-visited localStorage cache, which can hold `null`.
+  if (preferredId != null && preferredId !== "") {
     if (union.repos.some((r) => r.id === preferredId)) {
       resolvedRepoId = preferredId;
     } else {
@@ -186,7 +187,7 @@ export async function discoverHub(
   // user-driven changes), so returning to `/` would fall back to the
   // first repo + default document instead of where the user last was.
   writeLastRepo(project.id, resolvedRepoId);
-  if (route.initialSelectedPath) {
+  if (route.initialSelectedPath != null && route.initialSelectedPath !== "") {
     writeLastPath(project.id, resolvedRepoId, route.initialSelectedPath);
   }
 

@@ -110,3 +110,51 @@ export const StablePagination: Story = {
     expect(loadMore).toHaveBeenCalledTimes(1);
   },
 };
+
+const filterCalls = fn();
+
+/** A paginated host that applies `onFilter` like DocumentsHubApp does. */
+function FilteringPicker(): React.ReactElement {
+  const [filter, setFilter] = React.useState("");
+  const handleFilter = React.useCallback((text: string) => {
+    filterCalls(text);
+    setFilter(text);
+  }, []);
+  return (
+    <div style={{ width: 260 }}>
+      <RepoPicker
+        repos={allRepos}
+        selectedId={allRepos[0]!.id}
+        selectedName={allRepos[0]!.name}
+        onSelect={fn()}
+        paginated
+        filter={filter}
+        onFilter={handleFilter}
+      />
+    </div>
+  );
+}
+
+/** Closing after a filter re-queries page one exactly once. */
+export const FilterResetsOnceOnClose: Story = {
+  render: () => <FilteringPicker />,
+  beforeEach: () => filterCalls.mockClear(),
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      canvasElement.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!,
+    );
+    const input = await waitFor(() => {
+      const el = document.querySelector<HTMLInputElement>(
+        ".emr-docnav-repo-filter-input",
+      );
+      if (!el) throw new Error("filter input not shown");
+      return el;
+    });
+    await userEvent.type(input, "rep");
+    await waitFor(() => expect(filterCalls).toHaveBeenCalledWith("rep"));
+    await userEvent.keyboard("{Escape}");
+    // Longer than the 250 ms debounce, so a stray second re-query would land.
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    expect(filterCalls.mock.calls).toEqual([["rep"], [""]]);
+  },
+};

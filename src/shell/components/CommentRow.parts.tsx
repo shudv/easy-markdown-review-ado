@@ -11,16 +11,18 @@ import {
 } from "./CommentRow.helpers";
 import type { ConfirmMode } from "./CommentRow.hooks";
 
-export function CommentRowMeta(props: {
-  comment: Comment;
-}): React.ReactElement {
+export function CommentRowMeta(
+  props: Readonly<{
+    comment: Comment;
+  }>,
+): React.ReactElement {
   const { comment } = props;
   return (
     <div className="emr-comment-meta">
       <span className="name">{comment.author.displayName}</span>
       <span className="emr-comment-meta-time">
         <span className="date">{formatFullTime(comment.createdAt)}</span>
-        {comment.updatedAt ? (
+        {comment.updatedAt !== undefined && comment.updatedAt !== "" ? (
           <span
             className="emr-comment-edited"
             title={`Edited ${formatFullTime(comment.updatedAt)}`}
@@ -33,11 +35,13 @@ export function CommentRowMeta(props: {
   );
 }
 
-export function CommentMenuToggle(props: {
-  buttonRef: React.RefObject<HTMLButtonElement>;
-  open: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
+export function CommentMenuToggle(
+  props: Readonly<{
+    buttonRef: React.RefObject<HTMLButtonElement>;
+    open: boolean;
+    onToggle: () => void;
+  }>,
+): React.ReactElement {
   const { buttonRef, open, onToggle } = props;
   return (
     <button
@@ -59,9 +63,11 @@ export function CommentMenuToggle(props: {
 }
 
 /** Hover-revealed like button, shown while nobody has reacted yet. */
-export function CommentLikeButton(props: {
-  onLike: () => void;
-}): React.ReactElement {
+export function CommentLikeButton(
+  props: Readonly<{
+    onLike: () => void;
+  }>,
+): React.ReactElement {
   const { onLike } = props;
   return (
     <button
@@ -86,13 +92,15 @@ export function CommentLikeButton(props: {
  * Always-visible like pill when at least one person has reacted. Conveys info
  * (count) so it should not be hover-gated.
  */
-export function CommentLikePill(props: {
-  likedByMe: boolean;
-  likeCount: number;
-  likeTooltip: string;
-  canReact: boolean;
-  onLike: () => void;
-}): React.ReactElement {
+export function CommentLikePill(
+  props: Readonly<{
+    likedByMe: boolean;
+    likeCount: number;
+    likeTooltip: string;
+    canReact: boolean;
+    onLike: () => void;
+  }>,
+): React.ReactElement {
   const { likedByMe, likeCount, likeTooltip, canReact, onLike } = props;
   return (
     <button
@@ -140,15 +148,18 @@ interface CommentMenuState {
 }
 
 /** The ⋯ popover: the action list, or the delete confirmation step. */
-export function CommentRowMenu(props: {
-  menuRef: React.RefObject<HTMLDivElement>;
-  confirm: ConfirmMode;
-  setConfirm: (mode: ConfirmMode) => void;
-  state: CommentMenuState;
-  actions: CommentMenuActions;
-}): React.ReactElement {
+export function CommentRowMenu(
+  props: Readonly<{
+    menuRef: React.RefObject<HTMLDivElement>;
+    confirm: ConfirmMode;
+    setConfirm: (mode: ConfirmMode) => void;
+    state: CommentMenuState;
+    actions: CommentMenuActions;
+  }>,
+): React.ReactElement {
   const { menuRef, confirm, setConfirm, state, actions } = props;
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/interactive-supports-focus -- onClick is only an event stopper (keeps menu clicks from selecting the thread); keyboard focus lives on the native role="menuitem" buttons inside, and Escape closes via useCommentRowMenu
     <div
       ref={menuRef}
       className="emr-popover"
@@ -176,11 +187,13 @@ export function CommentRowMenu(props: {
   );
 }
 
-function CommentMenuItems(props: {
-  state: CommentMenuState;
-  actions: CommentMenuActions;
-  setConfirm: (mode: ConfirmMode) => void;
-}): React.ReactElement {
+function CommentMenuItems(
+  props: Readonly<{
+    state: CommentMenuState;
+    actions: CommentMenuActions;
+    setConfirm: (mode: ConfirmMode) => void;
+  }>,
+): React.ReactElement {
   const { state, actions, setConfirm } = props;
   return (
     <>
@@ -222,11 +235,13 @@ function CommentMenuItems(props: {
  * thread can be marked pending; a pending thread can be marked active again —
  * both reuse reopen, which sets status active.
  */
-function CommentThreadStatusItems(props: {
-  isTerminal: boolean;
-  threadStatus: ThreadStatus;
-  actions: CommentMenuActions;
-}): React.ReactElement {
+function CommentThreadStatusItems(
+  props: Readonly<{
+    isTerminal: boolean;
+    threadStatus: ThreadStatus;
+    actions: CommentMenuActions;
+  }>,
+): React.ReactElement {
   const { isTerminal, threadStatus, actions } = props;
   if (isTerminal) {
     return (
@@ -267,12 +282,14 @@ function CommentThreadStatusItems(props: {
 }
 
 /** Delete thread (first comment) or delete comment (own later reply). */
-function CommentDeleteItem(props: {
-  isFirst: boolean;
-  canDeleteThread: boolean;
-  canDelete: boolean;
-  setConfirm: (mode: ConfirmMode) => void;
-}): React.ReactElement | null {
+function CommentDeleteItem(
+  props: Readonly<{
+    isFirst: boolean;
+    canDeleteThread: boolean;
+    canDelete: boolean;
+    setConfirm: (mode: ConfirmMode) => void;
+  }>,
+): React.ReactElement | null {
   const { isFirst, canDeleteThread, canDelete, setConfirm } = props;
   if (isFirst && canDeleteThread) {
     return (
@@ -297,12 +314,14 @@ function CommentDeleteItem(props: {
   return null;
 }
 
-function CommentMenuItem(props: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}): React.ReactElement {
+function CommentMenuItem(
+  props: Readonly<{
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+  }>,
+): React.ReactElement {
   const { icon, label, onClick, danger } = props;
   return (
     <button
@@ -317,11 +336,13 @@ function CommentMenuItem(props: {
   );
 }
 
-function CommentDeleteConfirm(props: {
-  confirm: "comment" | "thread";
-  onCancel: () => void;
-  onConfirm: () => void;
-}): React.ReactElement {
+function CommentDeleteConfirm(
+  props: Readonly<{
+    confirm: "comment" | "thread";
+    onCancel: () => void;
+    onConfirm: () => void;
+  }>,
+): React.ReactElement {
   const { confirm, onCancel, onConfirm } = props;
   return (
     <div className="emr-popover-confirm">

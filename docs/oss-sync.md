@@ -1,13 +1,43 @@
 # OSS mirror sync ledger
 
+## 2026-11-05 Strict lint tiers sync
+
+- Public base: `b965581` (#29).
+- Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
+- New product boundary: `15ae078` (source branch `chore/strict-lint-tiers`; not
+  yet merged, record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.0`.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `1a37bc0`     | Three tiers of ESLint rules enforced as errors (stricter `typescript-eslint` including `strict-boolean-expressions` and `no-unnecessary-condition`, React Compiler rules, SonarJS, `regexp`, `@eslint-react`, `jsx-a11y-x`, `no-unsanitized`, `@vitest/eslint-plugin`) with every violation fixed and 65 documented exceptions; emoji shortcodes no longer resolve `Object.prototype` members; the Mermaid/math source dialog moves focus in and back; RepoPicker sends one page-one query after closing a filter. |
+| `15ae078`     | `@vitest/eslint-plugin` pinned to `1.6.27` (1.6.28 requires TypeScript 6).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The README keeps its public wording; it gains the enforced-rules table and
+  the updated lint guardrail line.
+- The public lock adds only the five new ESLint plugins and their dependencies,
+  with public npm URLs; no existing package version changes.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `15ae078` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-04 Size cleanup, ESLint complexity gate, lint warnings as errors, coverage-ignore audit, doc fixes, v1 telemetry retirement and Shell rename sync
 
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
 - New product boundary: `5e3935e` (source branch `refactor/clear-size-baseline`,
-  which also carries `14843f8`; not yet merged, record the source merge commit
-  here once it lands).
+  which also carries `14843f8`), merged in the source as `f7870cb` and on
+  public `main` as `b965581` (#29).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
 
@@ -41,9 +71,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `b871f9e` and
-integrate the delta on the latest public `main`. Preserve the adaptations and
-exclusions below, and record validation in the sync PR.
+Superseded by the sync above.
 
 ## 2026-11-04 Complexity and size ratchet sync
 

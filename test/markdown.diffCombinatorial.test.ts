@@ -38,7 +38,7 @@ function renderCase(
   const target = root.querySelector<HTMLElement>(
     context === "paragraph" ? "p" : "tbody td",
   )!;
-  const currentText = target.textContent ?? "";
+  const currentText = target.textContent;
   decorateDiffRanges(
     root,
     [
@@ -235,7 +235,7 @@ const sharedCases: SharedInlineCase[] = [
     mode: "metadata",
     assert: (root) => {
       expect(root.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-      expect(root.querySelectorAll("a")[1]?.getAttribute("href")).toBe(
+      expect(root.querySelectorAll("a")[1]!.getAttribute("href")).toBe(
         "https://example.com/stable",
       );
     },
@@ -249,7 +249,7 @@ const sharedCases: SharedInlineCase[] = [
     mode: "metadata",
     assert: (root) => {
       expect(root.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-      expect(root.querySelectorAll("img")[1]?.getAttribute("src")).toBe(
+      expect(root.querySelectorAll("img")[1]!.getAttribute("src")).toBe(
         "https://example.com/stable.png",
       );
     },
@@ -271,34 +271,28 @@ const sharedCases: SharedInlineCase[] = [
 describe.each<InlineContext>(["paragraph", "table-cell"])(
   "shared inline semantics in %s",
   (context) => {
-    for (const scenario of sharedCases) {
-      it(scenario.name, () => {
-        const rendered = renderCase(
-          context,
-          scenario.current,
-          scenario.original,
-        );
-        scenario.assert(rendered.root, rendered.target);
-        const hasInlineSignal = Array.from(
-          rendered.target.querySelectorAll(
-            `.${WORD_ADDED_CLASS}, .${WORD_REMOVED_CLASS}, .${DIFF_FORMAT_CLASS}`,
-          ),
-        ).some((element) => element.closest(`.${DIFF_METADATA_CLASS}`) == null);
-        const hasMetadataSignal =
-          rendered.root.querySelector(`.${DIFF_METADATA_CLASS}`) != null;
-        expect(hasInlineSignal).toBe(scenario.mode !== "metadata");
-        expect(hasMetadataSignal).toBe(scenario.mode !== "inline");
-        if (context === "table-cell") {
-          expect(
-            rendered.target.classList.contains(DIFF_CELL_INLINE_CLASS),
-          ).toBe(scenario.mode !== "metadata");
-          expect(
-            rendered.target.classList.contains(DIFF_CELL_METADATA_CLASS),
-          ).toBe(scenario.mode !== "inline");
-        }
-        expectPreciseAndClear(context, rendered);
-      });
-    }
+    it.each(sharedCases)("$name", (scenario) => {
+      const rendered = renderCase(context, scenario.current, scenario.original);
+      scenario.assert(rendered.root, rendered.target);
+      const hasInlineSignal = Array.from(
+        rendered.target.querySelectorAll(
+          `.${WORD_ADDED_CLASS}, .${WORD_REMOVED_CLASS}, .${DIFF_FORMAT_CLASS}`,
+        ),
+      ).some((element) => element.closest(`.${DIFF_METADATA_CLASS}`) == null);
+      const hasMetadataSignal =
+        rendered.root.querySelector(`.${DIFF_METADATA_CLASS}`) != null;
+      expect(hasInlineSignal).toBe(scenario.mode !== "metadata");
+      expect(hasMetadataSignal).toBe(scenario.mode !== "inline");
+      // Cell classes only ever apply to table cells; a paragraph never has them.
+      const isCell = context === "table-cell";
+      expect(rendered.target.classList.contains(DIFF_CELL_INLINE_CLASS)).toBe(
+        isCell && scenario.mode !== "metadata",
+      );
+      expect(rendered.target.classList.contains(DIFF_CELL_METADATA_CLASS)).toBe(
+        isCell && scenario.mode !== "inline",
+      );
+      expectPreciseAndClear(context, rendered);
+    });
   },
 );
 

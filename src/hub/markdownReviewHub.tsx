@@ -60,10 +60,10 @@ function basename(path: string): string {
 function HubReader({
   config,
   onBack,
-}: {
+}: Readonly<{
   config: ReaderConfig;
   onBack: () => void;
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <div className="emr-hub__reader">
       <div className="emr-hub__bar">
@@ -85,13 +85,13 @@ function HubApp({
   config,
   filesUrl,
   navService,
-}: {
+}: Readonly<{
   config: ReaderConfig | null;
   filesUrl: string | null;
   navService: IHostNavigationService;
-}): React.ReactElement {
+}>): React.ReactElement {
   const onBack = React.useCallback(() => {
-    if (filesUrl) navService.navigate(filesUrl);
+    if (filesUrl !== null && filesUrl !== "") navService.navigate(filesUrl);
     else navService.reload();
   }, [filesUrl, navService]);
 
@@ -109,7 +109,8 @@ function HubApp({
  * a GUID), so it's only built when the menu action passed `repositoryName`.
  */
 function buildFilesUrl(org: string, config: ReaderConfig): string | null {
-  if (!config.repositoryName) return null;
+  if (config.repositoryName === undefined || config.repositoryName === "")
+    return null;
   const params = new URLSearchParams({ path: config.path });
   return `/${encodeURIComponent(org)}/${encodeURIComponent(
     config.project,

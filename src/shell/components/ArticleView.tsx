@@ -130,7 +130,9 @@ interface ArticleViewProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree.
-export function ArticleView(props: ArticleViewProps): React.ReactElement {
+export function ArticleView(
+  props: Readonly<ArticleViewProps>,
+): React.ReactElement {
   const {
     pristineHtml,
     documentPath,
@@ -161,7 +163,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const mentionCtx = React.useContext(MentionLinkContext);
   // Polite announcement for the heading link button's copy outcome (the
   // button's own label change is not reliably announced).
-  const [linkAnnouncement, setLinkAnnouncementText] = React.useState("");
+  const [linkAnnouncementText, setLinkAnnouncementText] = React.useState("");
   const setLinkAnnouncement = React.useCallback((text: string) => {
     // Clear first so repeating the same outcome is announced again.
     setLinkAnnouncementText("");
@@ -173,19 +175,23 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   const [generatedSource, setGeneratedSource] =
     React.useState<GeneratedSourceView | null>(null);
 
-  // Keep stable refs so the layout effect's dep array can stay simple.
+  // Keep stable refs so the layout effect's dep array can stay simple. Synced
+  // in a layout effect declared before the wrap pass, so that pass (and every
+  // later event handler) reads this render's callbacks.
   const callbacksRef = React.useRef({
     onAnchorsResolved,
     onHighlightClick,
     onSelection,
     commentBlocker,
   });
-  callbacksRef.current = {
-    onAnchorsResolved,
-    onHighlightClick,
-    onSelection,
-    commentBlocker,
-  };
+  React.useLayoutEffect(() => {
+    callbacksRef.current = {
+      onAnchorsResolved,
+      onHighlightClick,
+      onSelection,
+      commentBlocker,
+    };
+  });
 
   // Build a stable signature so the wrap effect only re-runs when anchors change.
   const threadsKey = React.useMemo(
@@ -225,6 +231,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     );
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
+    // eslint-disable-next-line no-unsanitized/property -- pristineHtml is the output of renderMarkdown (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); fillSubpagesMacros only adds DOM-built nodes
     article.innerHTML = pristineHtml;
 
     // Upgrade mention placeholder hrefs to real ADO web URLs before wrapping.
@@ -443,7 +450,9 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     const threadId = highlight?.dataset.threadId;
     syncHoveredHighlights(
       article,
-      threadId && threadId !== DRAFT_THREAD_ID ? threadId : null,
+      threadId !== undefined && threadId !== "" && threadId !== DRAFT_THREAD_ID
+        ? threadId
+        : null,
     );
   }, []);
 
@@ -516,6 +525,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
 
   return (
     <div className="emr-article-wrap" ref={wrapRef}>
+      {/* eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- event-delegation container for rendered document content: its keyboard targets are the native section/heading-link buttons and the tabIndex'd role="button" highlights, whose Enter/Space this onKeyDown/onKeyUp handles */}
       <div
         ref={articleRef}
         className="markdown-body emr-rendered"
@@ -544,7 +554,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       />
       {hasHeadingLinks ? (
         <span className="emr-sr-only" role="status" aria-live="polite">
-          {linkAnnouncement}
+          {linkAnnouncementText}
         </span>
       ) : null}
     </div>

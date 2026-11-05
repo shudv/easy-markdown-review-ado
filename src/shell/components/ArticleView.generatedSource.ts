@@ -55,7 +55,8 @@ export function addGeneratedSourceButtons(root: HTMLElement): void {
       .querySelectorAll<HTMLElement>(spec.hydratedSelector)
       .forEach((block) => {
         if (block.querySelector(`:scope > .${spec.buttonClass}`)) return;
-        if (block.getAttribute(spec.errorAttribute)) return;
+        const error = block.getAttribute(spec.errorAttribute);
+        if (error !== null && error !== "") return;
         const button = document.createElement("button");
         button.type = "button";
         button.className = spec.buttonClass;

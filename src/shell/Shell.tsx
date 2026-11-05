@@ -66,7 +66,7 @@ import { TooNarrowNotice } from "./shell/TooNarrowNotice";
 export type { DocLinkNavigation, RoutedPrInfo } from "./shell/types";
 
 // eslint-disable-next-line max-lines-per-function -- Reader root: composes the single-purpose hooks in shell/ and the nav, article and rail panes. It barely branches; the length is the wiring list itself.
-export function Shell(props: ShellProps): React.ReactElement {
+export function Shell(props: Readonly<ShellProps>): React.ReactElement {
   const { pr, loadFileSource, initialThreads, currentUser } = props;
 
   // ---- state ----
@@ -102,7 +102,10 @@ export function Shell(props: ShellProps): React.ReactElement {
   // this surface: PR tab vs Documents hub).
   const prefs = useReaderPrefs(props.draftScope);
   const { readerPrefs } = prefs;
-  const resize = usePaneResize(readerPrefs, prefs.setReaderPrefs);
+  const { bodyFrameRef, commentsAvailableRef, ...resize } = usePaneResize(
+    readerPrefs,
+    prefs.setReaderPrefs,
+  );
   const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
     null,
   );
@@ -192,10 +195,10 @@ export function Shell(props: ShellProps): React.ReactElement {
   // -------------------------------------------------------------------------
   // Anchor layout (Y positions) — reported by ArticleView via callback.
   // -------------------------------------------------------------------------
-  const [anchorLayout, setAnchorLayout] = React.useState<AnchorLayout>({
+  const [anchorLayout, setAnchorLayout] = React.useState<AnchorLayout>(() => ({
     yByThreadId: new Map(),
     orphanedThreadIds: [],
-  });
+  }));
 
   const onAnchorsResolved = React.useCallback(
     (layout: AnchorLayout, dY: number | null) => {
@@ -365,9 +368,12 @@ export function Shell(props: ShellProps): React.ReactElement {
     effectiveReadOnlyMessage,
   });
   const { commentsAvailable, activeReadOnly, activeRoutedPr } = access;
-  resize.commentsAvailableRef.current = commentsAvailable;
+  // Read by the nav-resize drag handlers, after this commit.
+  React.useLayoutEffect(() => {
+    commentsAvailableRef.current = commentsAvailable;
+  }, [commentsAvailableRef, commentsAvailable]);
   const tooNarrow = useTooNarrow(
-    resize.bodyFrameRef,
+    bodyFrameRef,
     props.hideDocNav,
     commentsAvailable,
     readerPrefs,
@@ -452,7 +458,7 @@ export function Shell(props: ShellProps): React.ReactElement {
             onKeepExistingDraft={drafts.onKeepExistingDraft}
           />
 
-          <div ref={resize.bodyFrameRef} className={layout.bodyFrameClassName}>
+          <div ref={bodyFrameRef} className={layout.bodyFrameClassName}>
             <NavPane
               shown={layout.navToggleable}
               onResizeStart={resize.onNavResizeStart}

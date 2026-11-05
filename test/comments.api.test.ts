@@ -16,7 +16,7 @@ describe("filterByQuery", () => {
 
   it("returns the first 8 items when the query is empty", () => {
     expect(filterByQuery(items, "", keys).length).toBeLessThanOrEqual(8);
-    expect(filterByQuery(items, "   ", keys).length).toBe(items.length);
+    expect(filterByQuery(items, "   ", keys)).toHaveLength(items.length);
   });
 
   it("matches case-insensitively across all key fields", () => {
@@ -56,7 +56,7 @@ describe("filterByQuery", () => {
       name: `match-${i}`,
       tags: "",
     }));
-    expect(filterByQuery(many, "match", (r) => [r.name]).length).toBe(8);
+    expect(filterByQuery(many, "match", (r) => [r.name])).toHaveLength(8);
   });
 
   it("returns an empty array when nothing matches", () => {

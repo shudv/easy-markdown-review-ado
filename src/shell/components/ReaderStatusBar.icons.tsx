@@ -68,9 +68,9 @@ export function IconCaret(): React.ReactElement {
 
 export function IconChevron({
   direction,
-}: {
+}: Readonly<{
   direction: "left" | "right";
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <svg
       className="emr-statusbar-iteration-chevron"
@@ -145,9 +145,11 @@ export function IconPullRequest(): React.ReactElement {
 }
 
 /** Frame shared by the 1.7-weight, round-jointed status-bar icons. */
-function RoundStrokeSvg(props: {
-  children: React.ReactNode;
-}): React.ReactElement {
+function RoundStrokeSvg(
+  props: Readonly<{
+    children: React.ReactNode;
+  }>,
+): React.ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"

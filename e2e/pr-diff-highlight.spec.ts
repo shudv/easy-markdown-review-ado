@@ -137,11 +137,11 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     const removedTexts = () =>
       article
         .locator(".emr-diff-deleted-marker")
-        .evaluateAll((markers) => markers.map((m) => m.textContent ?? ""));
+        .evaluateAll((markers) => markers.map((m) => m.textContent));
     const marks = (scope: Locator, kind: "added" | "removed") =>
       scope.locator(`.emr-word-${kind}`).evaluateAll((els) =>
         els
-          .map((el) => el.textContent ?? "")
+          .map((el) => el.textContent)
           .join(" ")
           .replace(/\s+/g, " ")
           .trim(),

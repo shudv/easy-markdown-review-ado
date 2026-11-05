@@ -135,6 +135,7 @@ function useDraftRequests(opts: DraftRequestsOptions) {
   // holds text, in which case prompt to discard it first. An empty existing
   // draft is silently replaced (nothing to lose).
   const activeDraftRef = React.useRef(activeDraft);
+  // eslint-disable-next-line react-hooks/refs -- latest-value ref read by the stable requestDraft/dismiss/post callbacks; written in render so a callback fired by a child's layout effect or handler in this commit already sees this render's draft.
   activeDraftRef.current = activeDraft;
   const requestDraft = React.useCallback(
     (target: DraftTarget) => {
@@ -162,6 +163,7 @@ function useDraftRequests(opts: DraftRequestsOptions) {
   // Assigned on every render below (before any handler can fire), so the
   // `null!` seed is never actually called.
   const dismissEmptyDraftRef = React.useRef<() => void>(null!);
+  // eslint-disable-next-line react-hooks/refs -- latest-value ref for stable document listeners and callbacks; written in render so the `null!` seed is never observable, even from a child's layout effect on mount.
   dismissEmptyDraftRef.current = () => {
     // Never discard text the user has typed — only tear down a bare composer
     // (a selection with no reply/comment written yet).

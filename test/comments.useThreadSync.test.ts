@@ -5,7 +5,7 @@
 // @vitest-environment jsdom
 
 import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,10 +46,15 @@ interface HarnessOpts {
 // Exposed via the harness so tests can inspect / call `refreshNow`.
 interface HarnessHandle {
   controls: ReturnType<typeof useThreadSync> | null;
-  rerenderCount: number;
 }
 
-function Harness(props: HarnessOpts & { handle: HarnessHandle }): null {
+function Harness(
+  props: Readonly<
+    HarnessOpts & {
+      onControls: (controls: ReturnType<typeof useThreadSync>) => void;
+    }
+  >,
+): null {
   const controls = useThreadSync({
     enabled: props.enabled,
     fetchThreads: props.fetchThreads,
@@ -59,21 +64,37 @@ function Harness(props: HarnessOpts & { handle: HarnessHandle }): null {
     maxBackoffMs: props.maxBackoffMs,
     subscribeRecovered: props.subscribeRecovered,
   });
-  props.handle.controls = controls;
-  props.handle.rerenderCount += 1;
+  const { onControls } = props;
+  // Publish the latest controls after every commit so tests read the
+  // committed `refreshNow` / `isRefreshing` once `act` returns.
+  React.useLayoutEffect(() => {
+    onControls(controls);
+  });
   return null;
 }
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
+function harnessElement(
+  opts: HarnessOpts,
+  handle: HarnessHandle,
+): React.ReactElement {
+  return React.createElement(Harness, {
+    ...opts,
+    onControls: (controls) => {
+      handle.controls = controls;
+    },
+  });
+}
+
 function mount(opts: HarnessOpts): HarnessHandle {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  const handle: HarnessHandle = { controls: null, rerenderCount: 0 };
+  const handle: HarnessHandle = { controls: null };
   act(() => {
-    root!.render(React.createElement(Harness, { ...opts, handle }));
+    root!.render(harnessElement(opts, handle));
   });
   return handle;
 }
@@ -128,6 +149,14 @@ async function flush(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
   });
+}
+
+// Advance fake time and let the resulting fetch settle.
+async function tick(ms: number): Promise<void> {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+  });
+  await flush();
 }
 
 beforeEach(() => {
@@ -317,7 +346,7 @@ describe("useThreadSync — visibility transitions", () => {
     const d = defer<CommentThread[]>();
     let firstSignal: AbortSignal | null = null;
     const fetchThreads = vi.fn(async (signal: AbortSignal) => {
-      if (!firstSignal) firstSignal = signal;
+      firstSignal ??= signal;
       return d.promise;
     });
     const onThreads = vi.fn();
@@ -462,14 +491,6 @@ describe("useThreadSync — error handling", () => {
 });
 
 describe("useThreadSync — failure backoff", () => {
-  // Advance fake time and let the resulting fetch settle.
-  async function tick(ms: number): Promise<void> {
-    await act(async () => {
-      vi.advanceTimersByTime(ms);
-    });
-    await flush();
-  }
-
   const authError = () =>
     Object.assign(new Error("TF400813: not authorized"), { status: 401 });
 
@@ -754,13 +775,6 @@ describe("nextPollDelayMs", () => {
 });
 
 describe("useThreadSync — early resume on recovery", () => {
-  async function tick(ms: number): Promise<void> {
-    await act(async () => {
-      vi.advanceTimersByTime(ms);
-    });
-    await flush();
-  }
-
   function recoverySignal() {
     const listeners = new Set<() => void>();
     return {
@@ -894,7 +908,7 @@ describe("useThreadSync — unmount cleanup", () => {
 describe("useThreadSync — torn-down and stale sessions", () => {
   function rerender(handle: HarnessHandle, opts: HarnessOpts): void {
     act(() => {
-      root!.render(React.createElement(Harness, { ...opts, handle }));
+      root!.render(harnessElement(opts, handle));
     });
   }
 

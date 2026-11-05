@@ -31,14 +31,15 @@ export function useLinkCopy(
     if (!buildDeepLink) return undefined;
     return async (anchor: string): Promise<boolean> => {
       const url = buildDeepLink({ kind: "heading", anchor });
-      const ok = url ? await copyText(url) : false;
+      const hasUrl = url !== undefined && url !== "";
+      const ok = hasUrl ? await copyText(url) : false;
       if (ok) {
         track(events.linkCopied({ target: "heading" }));
         onHeadingLinkCopied?.(anchor);
       } else {
         trackUserFacingError({
           error: new Error(
-            url ? "Heading link copy failed" : "Heading link unavailable",
+            hasUrl ? "Heading link copy failed" : "Heading link unavailable",
           ),
           source: "Shell.copyHeadingLink",
           operation: "heading-link-copy",
@@ -55,14 +56,15 @@ export function useLinkCopy(
     if (!buildDeepLink) return undefined;
     return async ({ text, anchor }: SelectionLinkTarget): Promise<boolean> => {
       const url = buildDeepLink({ kind: "text", text, anchor });
-      const ok = url ? await copyText(url) : false;
+      const hasUrl = url !== undefined && url !== "";
+      const ok = hasUrl ? await copyText(url) : false;
       if (ok) {
         track(events.linkCopied({ target: "text" }));
         onTextLinkCopied?.(text, anchor);
       } else {
         trackUserFacingError({
           error: new Error(
-            url ? "Text link copy failed" : "Text link unavailable",
+            hasUrl ? "Text link copy failed" : "Text link unavailable",
           ),
           source: "Shell.copySelectionLink",
           operation: "text-link-copy",

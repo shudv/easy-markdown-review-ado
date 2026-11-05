@@ -36,7 +36,7 @@ export function reconstructOriginalBlock(
   );
   if (exact) return exact.originalText!;
 
-  if (!originalSource) return null;
+  if (originalSource === undefined || originalSource === "") return null;
   const sourceLines = originalLines ?? originalSource.split(/\r\n|\r|\n/);
 
   if (overlapping.length === 1) {
@@ -238,7 +238,10 @@ function currentLineAt(
   currentLines: readonly string[],
   line: number,
 ): string[] | null {
-  const current = currentLines[line - 1];
+  const current =
+    line >= 1 && line <= currentLines.length
+      ? currentLines[line - 1]
+      : undefined;
   return current == null ? null : [current];
 }
 

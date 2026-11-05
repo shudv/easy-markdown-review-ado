@@ -27,11 +27,13 @@ interface ShellNoticesProps {
  * reconnect notice, the replaced-missing-document toast, and the draft-guard
  * discard prompt.
  */
-export function ShellNotices(props: ShellNoticesProps): React.ReactElement {
+export function ShellNotices(
+  props: Readonly<ShellNoticesProps>,
+): React.ReactElement {
   const { persistError, missingDoc, draftGuard } = props;
   return (
     <>
-      {persistError ? (
+      {persistError !== null && persistError !== "" ? (
         <div className="emr-toast emr-toast--error" role="alert">
           <span className="emr-toast-icon" aria-hidden="true">
             ⚠

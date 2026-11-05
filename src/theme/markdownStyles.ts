@@ -23,9 +23,9 @@ let currentDark: boolean | null = null;
  */
 export function setMarkdownDark(isDark: boolean): void {
   if (typeof document === "undefined") return;
-  if (currentDark === isDark && styleEl && styleEl.isConnected) return;
+  if (currentDark === isDark && styleEl?.isConnected) return;
 
-  if (!styleEl || !styleEl.isConnected) {
+  if (!styleEl?.isConnected) {
     styleEl = document.createElement("style");
     styleEl.setAttribute("data-emr-markdown-theme", "");
     document.head.appendChild(styleEl);

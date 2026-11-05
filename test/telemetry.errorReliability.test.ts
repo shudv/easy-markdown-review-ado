@@ -165,7 +165,8 @@ describe("unhandled rejection reasons with no primitive conversion", () => {
     rejectWith(reason);
 
     const [info] = sink.exceptionCalls as { properties?: object }[];
-    expect(info?.properties ?? {}).not.toHaveProperty("rejectionType");
+    expect(info).toBeDefined();
+    expect(info.properties ?? {}).not.toHaveProperty("rejectionType");
   });
 });
 

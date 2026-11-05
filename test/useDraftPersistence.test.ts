@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 
 import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -82,7 +82,9 @@ function Harness(props: {
       setTarget(target);
     },
   });
-  handle = { api, setTarget, restored: restoredRef.current };
+  React.useLayoutEffect(() => {
+    handle = { api, setTarget, restored: restoredRef.current };
+  }, [api]);
   return React.createElement("div", null, api.initialBody);
 }
 
@@ -119,7 +121,7 @@ describe("persistence disabled (no scope)", () => {
   it("never touches storage", () => {
     mount({ initialTarget: NEW_TARGET });
     act(() => handle.api.handleChange("typed"));
-    expect(window.localStorage.length).toBe(0);
+    expect(window.localStorage).toHaveLength(0);
     expect(handle.api.getSnapshot()).toBe("typed");
   });
 });

@@ -6,11 +6,11 @@ import * as React from "react";
 export function SessionRefreshingView({
   autoReload,
   onReload,
-}: {
+}: Readonly<{
   /** An automatic host reload is pending, so no manual action is offered. */
   autoReload: boolean;
   onReload: () => void;
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <div className="emr-error" role="status">
       <h2>Reconnecting to Azure DevOps…</h2>
@@ -37,10 +37,10 @@ export function SessionRefreshingView({
 export function BootErrorView({
   error,
   onRetry,
-}: {
+}: Readonly<{
   error: string;
   onRetry: () => void;
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <div className="emr-error">
       <h2>Something went wrong</h2>

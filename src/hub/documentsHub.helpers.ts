@@ -20,7 +20,8 @@ export function initialsOf(name: string): string {
 
 /** Render an unknown thrown value into a human-readable error string. */
 export function formatError(err: unknown): string {
-  if (err instanceof Error) return err.stack || err.message;
+  if (err instanceof Error)
+    return err.stack != null && err.stack !== "" ? err.stack : err.message;
   if (typeof err === "object" && err !== null)
     return JSON.stringify(err, null, 2);
   return String(err);
@@ -82,7 +83,7 @@ export function assembleHubDeepLinkUrl(
   target: DeepLinkTarget,
 ): string | undefined {
   const url = buildHubDocUrl(doc, ext);
-  if (!url) return undefined;
+  if (url === undefined || url === "") return undefined;
   return withDeepLinkTarget(url, target);
 }
 
@@ -106,7 +107,10 @@ export function routeUpdatesForPath(
   const currentPath = (current.path ?? "").replace(/^\/+/, "");
   // A link without `?repo=` names the hub's default repo, so only a different
   // explicit repo counts as a move.
-  const otherRepo = !!current.repo && current.repo !== repoId;
+  const otherRepo =
+    current.repo !== undefined &&
+    current.repo !== "" &&
+    current.repo !== repoId;
   if (otherRepo || currentPath !== bare) {
     for (const param of TARGET_LINK_PARAMS) updates[param] = "";
   }

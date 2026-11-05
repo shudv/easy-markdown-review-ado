@@ -74,7 +74,7 @@ export async function hydrateMath(
   for (const element of placeholders) {
     const encoded = element.dataset.mathSrc;
     // An empty `data-math-src` has nothing to render; keep its fallback.
-    if (!encoded) continue;
+    if (encoded === undefined || encoded === "") continue;
     let source: string;
     try {
       source = decodeURIComponent(encoded);
@@ -95,6 +95,7 @@ export async function hydrateMath(
       element.removeAttribute("data-math-error");
       element.dataset.hydrated = "true";
       const template = document.createElement("template");
+      // eslint-disable-next-line no-unsanitized/property -- KaTeX renderToString with trust: false escapes all source text and refuses \href/\url/\html* commands, so its markup is inert
       template.innerHTML = html;
       const fallback = element.querySelector(":scope > .emr-math-fallback");
       if (fallback) fallback.replaceWith(template.content);

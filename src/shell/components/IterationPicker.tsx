@@ -53,24 +53,25 @@ function IterationStepButton({
   label,
   range,
   onStep,
-}: {
+}: Readonly<{
   direction: "left" | "right";
   label: string | null;
   range: ReviewIterationRange | null;
   onStep: (range: ReviewIterationRange) => void;
-}): React.ReactElement {
+}>): React.ReactElement {
   const word = direction === "left" ? "Previous" : "Next";
   const edge = direction === "left" ? "First" : "Last";
+  // `label` comes from reviewRangeLabel, which never returns "".
   return (
     <button
       type="button"
       className="emr-statusbar-iteration-step"
       aria-label={
-        label
+        label !== null
           ? `${word} comparison: ${label}`
           : `No ${word.toLowerCase()} comparison`
       }
-      title={label ? `${word}: ${label}` : `${edge} comparison`}
+      title={label !== null ? `${word}: ${label}` : `${edge} comparison`}
       disabled={!range}
       onClick={range ? () => onStep(range) : undefined}
     >
@@ -85,7 +86,7 @@ export function IterationPicker({
   baseCommit,
   range,
   onChange,
-}: IterationPickerProps): React.ReactElement {
+}: Readonly<IterationPickerProps>): React.ReactElement {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const anchorUpdateRef = React.useRef<number | null>(null);
@@ -300,7 +301,7 @@ export function IterationPicker({
                 <span className="emr-statusbar-iteration-title">
                   {option.title}
                 </span>
-                {age ? (
+                {age !== null ? (
                   <time
                     className="emr-statusbar-iteration-date"
                     dateTime={new Date(option.dateMs!).toISOString()}

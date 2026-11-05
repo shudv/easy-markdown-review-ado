@@ -200,6 +200,7 @@ function buildDeletedMarker(
   if (renderInline && removedMarkdown) {
     body = document.createElement("div");
     body.className = "emr-diff-deleted-body markdown-body";
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
     body.innerHTML = renderInline(removedMarkdown);
   } else {
     body = document.createElement("pre");
@@ -233,18 +234,17 @@ function buildDeletedTableRows(
   anchors: readonly HTMLElement[],
   renderInline: (md: string) => string,
 ): DeletedTableRows | null {
-  if (!range.deletedContent) return null;
+  if (range.deletedContent == null || range.deletedContent === "") return null;
   const markdown = range.deletedContent.replace(/\n+$/, "");
   const lines = markdown.split(/\r\n|\r|\n/);
   const columnCount = deletedTableColumnCount(lines);
   if (columnCount == null) return null;
 
   const referenceRow = deletedRowReference(range, anchor, anchors);
-  const parent = referenceRow?.parentElement;
+  if (!referenceRow) return null;
+  const parent = referenceRow.parentElement;
   if (
-    !referenceRow ||
-    !parent ||
-    parent.tagName !== "TBODY" ||
+    parent?.tagName !== "TBODY" ||
     referenceRow.children.length !== columnCount
   ) {
     return null;
@@ -315,6 +315,7 @@ function renderDeletedTableRows(
 ): HTMLTableRowElement[] | null {
   const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
   const scratch = document.createElement("div");
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   scratch.innerHTML = renderInline(
     [lines[0]!, delimiter, ...lines.slice(1)].join("\n"),
   );
@@ -327,10 +328,10 @@ function renderDeletedTableRows(
     for (const attribute of Array.from(header.attributes)) {
       cell.setAttribute(attribute.name, attribute.value);
     }
-    cell.innerHTML = header.innerHTML;
+    cell.append(...Array.from(header.childNodes));
     header.replaceWith(cell);
   }
-  const body = table.tBodies[0] ?? table.createTBody();
+  const body = table.tBodies.item(0) ?? table.createTBody();
   body.prepend(headerRow);
   const removedRows = Array.from(body.rows);
   for (const row of removedRows) {

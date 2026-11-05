@@ -38,7 +38,7 @@ export function readerStyleFor(readerPrefs: ReaderPrefs): {
 export function feedbackHrefFor(
   feedbackEmail: string | undefined,
 ): string | undefined {
-  return feedbackEmail
+  return feedbackEmail !== undefined && feedbackEmail !== ""
     ? `mailto:${feedbackEmail}?subject=${encodeURIComponent(
         "Markdown Review — bug report / feedback",
       )}`

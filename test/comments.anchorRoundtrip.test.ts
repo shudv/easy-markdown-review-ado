@@ -128,57 +128,51 @@ describe("round-trip (A) preview selection → source line/column for ADO", () =
     root = mountArticle(source);
   });
 
-  it("maps a plain-paragraph selection to its true source line", () => {
-    const anchor = selectAndCapture(root, "several ways");
+  // The last two are the fragile cases: the rendered text does NOT appear
+  // verbatim in the Markdown source because inline syntax sits inside/around
+  // the selection (e.g. the source has backticks around "code span", so the
+  // DOM text isn't a verbatim source substring).
+  it.each([
+    {
+      name: "a plain-paragraph selection to its true source line",
+      needle: "several ways",
+      line: 3,
+    },
+    {
+      name: "a table-header cell selection to the header's source line",
+      needle: "Mechanism",
+      line: 5,
+    },
+    {
+      name: "a table-body cell selection to that row's source line",
+      needle: "GDPR DSR",
+      line: 8,
+    },
+    {
+      name: "a heading selection to the heading's source line",
+      needle: "Planner/Todo Service",
+      line: 1,
+    },
+    {
+      name: "a link-text selection to the link's source line",
+      needle: "official docs",
+      line: 12,
+    },
+    {
+      name: "a bold-word selection to its source line (spans ** markers)",
+      needle: "bold text",
+      line: 10,
+    },
+    {
+      name: "a selection crossing a code span to its source line",
+      needle: "code span",
+      line: 10,
+    },
+  ])("maps $name", ({ needle, line }) => {
+    const anchor = selectAndCapture(root, needle);
     expect(anchor).not.toBeNull();
     const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(3);
-  });
-
-  it("maps a table-header cell selection to the header's source line", () => {
-    const anchor = selectAndCapture(root, "Mechanism");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(5);
-  });
-
-  it("maps a table-body cell selection to that row's source line", () => {
-    const anchor = selectAndCapture(root, "GDPR DSR");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(8);
-  });
-
-  it("maps a heading selection to the heading's source line", () => {
-    const anchor = selectAndCapture(root, "Planner/Todo Service");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(1);
-  });
-
-  it("maps a link-text selection to the link's source line", () => {
-    const anchor = selectAndCapture(root, "official docs");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(12);
-  });
-
-  // These are the fragile cases: the rendered text does NOT appear verbatim in
-  // the Markdown source because inline syntax sits inside/around the selection.
-  it("maps a bold-word selection to its source line (spans ** markers)", () => {
-    const anchor = selectAndCapture(root, "bold text");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(10);
-  });
-
-  it("maps a selection crossing a code span to its source line", () => {
-    // "text and a code span inline" in DOM; source has backticks around
-    // "code span", so the DOM text isn't a verbatim source substring.
-    const anchor = selectAndCapture(root, "code span");
-    expect(anchor).not.toBeNull();
-    const located = withSourceLocation(anchor!, source);
-    expect(located.line).toBe(10);
+    expect(located.line).toBe(line);
   });
 
   // The genuinely fragile case: the selection CROSSES an inline element

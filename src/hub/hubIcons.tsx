@@ -3,7 +3,9 @@
 
 import * as React from "react";
 
-export function SvgRefresh(props: { spinning?: boolean }): React.ReactElement {
+export function SvgRefresh(
+  props: Readonly<{ spinning?: boolean }>,
+): React.ReactElement {
   return (
     <svg
       className={`emr-icon ${props.spinning ? "is-spinning" : ""}`}

@@ -37,7 +37,7 @@ function PercentSlider({
   min = READER_PERCENT_MIN,
   max = READER_PERCENT_MAX,
   showDefaultMarker = true,
-}: PercentSliderProps): React.ReactElement {
+}: Readonly<PercentSliderProps>): React.ReactElement {
   const displayValue = Math.max(min, Math.min(max, value));
   const progress = ((displayValue - min) / (max - min)) * 100;
   const defaultPosition = ((100 - min) / (max - min)) * 100;
@@ -102,48 +102,58 @@ function PercentSlider({
 
 /** The "Aa" reading-preferences popover plus the text-size slider. */
 // eslint-disable-next-line max-lines-per-function -- Reading preferences popover: font, size, spacing and width controls bound to one preferences object.
-export function ReadingPreferencesControls(props: {
-  rootRef: React.RefObject<HTMLDivElement>;
-  triggerRef: React.RefObject<HTMLButtonElement>;
-  popoverRef: React.RefObject<HTMLDivElement>;
-  open: boolean;
-  onToggleOpen: () => void;
-  availableFonts: readonly (typeof READER_FONTS)[number][];
-  effectiveFontId: string;
-  hasAlternativeFonts: boolean;
-  onFontChange: (fontId: string) => void;
-  sizePct: number;
-  onSizeChange: (sizePct: number) => void;
-  spacingPct: number;
-  onSpacingChange: (spacingPct: number) => void;
-}): React.ReactElement {
+export function ReadingPreferencesControls(
+  props: Readonly<{
+    rootRef: React.RefObject<HTMLDivElement>;
+    triggerRef: React.RefObject<HTMLButtonElement>;
+    popoverRef: React.RefObject<HTMLDivElement>;
+    open: boolean;
+    onToggleOpen: () => void;
+    availableFonts: readonly (typeof READER_FONTS)[number][];
+    effectiveFontId: string;
+    hasAlternativeFonts: boolean;
+    onFontChange: (fontId: string) => void;
+    sizePct: number;
+    onSizeChange: (sizePct: number) => void;
+    spacingPct: number;
+    onSpacingChange: (spacingPct: number) => void;
+  }>,
+): React.ReactElement {
   const {
+    rootRef,
+    triggerRef,
+    popoverRef,
     open,
+    onToggleOpen,
+    availableFonts,
+    effectiveFontId,
     hasAlternativeFonts,
     onFontChange,
+    sizePct,
+    onSizeChange,
     spacingPct,
     onSpacingChange,
   } = props;
   return (
     <div className="emr-statusbar-control-group">
       <div
-        ref={props.rootRef}
+        ref={rootRef}
         className={`emr-statusbar-type${open ? " is-open" : ""}`}
       >
         <button
-          ref={props.triggerRef}
+          ref={triggerRef}
           type="button"
           className="emr-statusbar-btn"
           aria-haspopup="true"
           aria-expanded={open}
           title="Reading preferences"
-          onClick={props.onToggleOpen}
+          onClick={onToggleOpen}
         >
           <span className="emr-statusbar-aa">Aa</span>
           <IconCaret />
         </button>
         <div
-          ref={props.popoverRef}
+          ref={popoverRef}
           className="emr-statusbar-pop"
           role="group"
           aria-label="Reading preferences"
@@ -153,12 +163,12 @@ export function ReadingPreferencesControls(props: {
             <>
               <div className="emr-statusbar-pop-label">Reading font</div>
               <div className="emr-statusbar-fontlist">
-                {props.availableFonts.map((font) => (
+                {availableFonts.map((font) => (
                   <button
                     key={font.id}
                     type="button"
                     className={`emr-statusbar-font ${fontClass(font.id)}`}
-                    aria-pressed={font.id === props.effectiveFontId}
+                    aria-pressed={font.id === effectiveFontId}
                     onClick={() => onFontChange(font.id)}
                   >
                     <span>{font.name}</span>
@@ -189,8 +199,8 @@ export function ReadingPreferencesControls(props: {
 
       <PercentSlider
         label="Text size"
-        value={props.sizePct}
-        onChange={props.onSizeChange}
+        value={sizePct}
+        onChange={onSizeChange}
       />
     </div>
   );

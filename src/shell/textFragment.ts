@@ -121,6 +121,11 @@ function keyIndex(text: string): KeyIndex {
 
 const matchKey = (text: string): string => keyIndex(text).key;
 
+/** Whether an optional fragment piece is present and non-empty. */
+function hasPiece(piece: string | undefined): piece is string {
+  return piece !== undefined && piece !== "";
+}
+
 /** Flat-text [start, end) of the first match of `fragment`, or null. */
 function matchFragment(
   { key, at }: KeyIndex,
@@ -128,9 +133,9 @@ function matchFragment(
 ): { start: number; end: number } | null {
   const startKey = matchKey(fragment.start);
   if (!startKey) return null;
-  const endKey = fragment.end ? matchKey(fragment.end) : "";
-  const prefixKey = fragment.prefix ? matchKey(fragment.prefix) : "";
-  const suffixKey = fragment.suffix ? matchKey(fragment.suffix) : "";
+  const endKey = hasPiece(fragment.end) ? matchKey(fragment.end) : "";
+  const prefixKey = hasPiece(fragment.prefix) ? matchKey(fragment.prefix) : "";
+  const suffixKey = hasPiece(fragment.suffix) ? matchKey(fragment.suffix) : "";
   for (
     let i = key.indexOf(startKey);
     i >= 0;
@@ -298,7 +303,7 @@ export function buildTextFragment(
       ...(suffix ? { suffix } : {}),
     };
     const hit = matchFragment(index, fragment);
-    if (hit && hit.start === own.start && hit.end === own.end) break;
+    if (hit?.start === own.start && hit.end === own.end) break;
   }
   return fragment;
 }
@@ -315,10 +320,14 @@ function encodePiece(piece: string): string {
 /** Serialize to the `[prefix-,]start[,end][,-suffix]` link value. */
 export function serializeTextFragment(fragment: TextFragment): string {
   const parts: string[] = [];
-  if (fragment.prefix) parts.push(`${encodePiece(fragment.prefix)}-`);
+  if (hasPiece(fragment.prefix)) {
+    parts.push(`${encodePiece(fragment.prefix)}-`);
+  }
   parts.push(encodePiece(fragment.start));
-  if (fragment.end) parts.push(encodePiece(fragment.end));
-  if (fragment.suffix) parts.push(`-${encodePiece(fragment.suffix)}`);
+  if (hasPiece(fragment.end)) parts.push(encodePiece(fragment.end));
+  if (hasPiece(fragment.suffix)) {
+    parts.push(`-${encodePiece(fragment.suffix)}`);
+  }
   return parts.join(",");
 }
 
@@ -359,10 +368,10 @@ function decodeTextFragment(
 ): TextFragment | null {
   const decode = (piece: string): string => decodeURIComponent(piece).trim();
   const start = decode(parts[0]!);
-  const end = parts[1] !== undefined ? decode(parts[1]) : undefined;
+  const end = parts.length > 1 ? decode(parts[1]!) : undefined;
   if (!start || end === "") return null;
   const fragment: TextFragment = { start };
-  if (end) fragment.end = end;
+  if (end !== undefined) fragment.end = end;
   const p = prefix !== undefined ? decode(prefix) : "";
   const s = suffix !== undefined ? decode(suffix) : "";
   if (p) fragment.prefix = p;

@@ -142,8 +142,8 @@ export function mergeMarkers(
   const sorted = [...markers].sort((a, b) => a.top - b.top);
   const out: DiffMarker[] = [];
   for (const m of sorted) {
-    const prev = out[out.length - 1];
-    if (prev && prev.kind === m.kind && m.top <= prev.top + prev.height + gap) {
+    const prev = out.length > 0 ? out[out.length - 1] : undefined;
+    if (prev?.kind === m.kind && m.top <= prev.top + prev.height + gap) {
       const bottom = Math.max(prev.top + prev.height, m.top + m.height);
       prev.height = bottom - prev.top;
     } else {

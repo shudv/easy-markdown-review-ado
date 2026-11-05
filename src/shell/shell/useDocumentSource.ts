@@ -33,9 +33,10 @@ export function useDocumentSource(
     missing: string;
     shown: string;
   } | null>(null);
-  // Decides what a "not found" document load means — assigned every render
-  // (by `useDocNavigation`, after the deep-link refs it resets), so the load
-  // effect can call it without depending on the file list.
+  // Decides what a "not found" document load means — re-assigned after every
+  // commit (by `useDocNavigation`, which owns the deep-link refs it resets), so
+  // the load effect's async failure path can call it without depending on the
+  // file list.
   const handleMissingDocRef = React.useRef<
     (missing: string) => MissingDocOutcome
   >(null!);
@@ -46,6 +47,7 @@ export function useDocumentSource(
     if (htmlByPath[selectedPath]) {
       // A cache hit shows the cached document, so drop any error or spinner
       // left over from a file that failed or was still loading.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a cache hit must clear the previous file's spinner/error and bump renderVersion (which deep-link consumers key on) in the same pass as the load branch below; deriving them would change that cadence.
       setLoading(false);
       setError(null);
       setRenderVersion((v) => v + 1);
@@ -58,6 +60,7 @@ export function useDocumentSource(
       .then(async (source) => {
         if (cancelled) return;
         const html = await renderMarkdown(source);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the effect cleanup can cancel during the awaited render; TS wrongly keeps the narrowing from the pre-await check.
         if (cancelled) return;
         setSourceByPath((prev) => ({ ...prev, [selectedPath]: source }));
         setHtmlByPath((prev) => ({ ...prev, [selectedPath]: html }));
@@ -125,7 +128,7 @@ function useBootReadySignal(
     if (hasRenderedHtmlForSelected) {
       bootReadyFiredRef.current = true;
       markAppReady("content");
-    } else if (error) {
+    } else if (error !== null && error !== "") {
       bootReadyFiredRef.current = true;
       markAppReady("error");
     }

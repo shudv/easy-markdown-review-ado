@@ -34,7 +34,7 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. Function complexity and function and file size are [capped by lint](eslint.config.mjs), with any exception documented next to the code.
+3. [Strict type-aware lint](eslint.config.mjs) with no warnings: complexity and size caps, strict boolean and null checks, React Compiler rules, accessibility, HTML-sink and regex safety, and test-validity rules, with any exception documented next to the code.
 4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
 5. End-to-end tests covering the Azure DevOps integration boundary.
 6. Visual regression tests to protect the UI.
@@ -88,6 +88,18 @@ export function Big() { … }
 Use `/* eslint-disable max-lines -- <reason> */` at the top of a long file. Lint
 fails on any `eslint-disable` without a `-- <reason>`, and on one the code no
 longer needs.
+
+Every lint rule is an error; there are no warnings to ignore. Beyond the
+complexity and size limits, lint enforces:
+
+| Area               | Rules                                                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Types and nullness | `typescript-eslint` recommended type-checked, plus `strict-boolean-expressions`, `no-unnecessary-condition`, `switch-exhaustiveness-check`, `prefer-nullish-coalescing` and `no-deprecated` |
+| React              | `react-hooks` including the React Compiler rules (`refs`, `purity`, `set-state-in-effect`, …), `@eslint-react` and read-only props                                                          |
+| Accessibility      | `jsx-a11y-x` strict                                                                                                                                                                         |
+| Security           | `no-unsanitized`: every `innerHTML`-style sink in shipped code is sanitized or documented                                                                                                   |
+| Correctness        | SonarJS recommended, `eslint-plugin-regexp` (including catastrophic backtracking), selected core rules                                                                                      |
+| Tests              | `@vitest/eslint-plugin` recommended: every test asserts and async assertions are awaited                                                                                                    |
 
 CI also fails on copy-pasted code. `duplication:check` runs
 [jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it

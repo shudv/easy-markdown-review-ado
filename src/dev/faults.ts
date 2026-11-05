@@ -58,7 +58,7 @@ export interface FaultDeps {
 export function readFaults(storage: StorageLike): FaultConfig {
   try {
     const raw = storage.getItem(FAULTS_STORAGE_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    const parsed: unknown = raw !== null && raw !== "" ? JSON.parse(raw) : null;
     return typeof parsed === "object" && parsed !== null
       ? (parsed as FaultConfig)
       : {};
@@ -165,7 +165,9 @@ export function createFaultyFetch(
     const url = requestUrl(input);
     if (!isAdoApiUrl(url)) return original(input, init);
     const cfg = readFaults(deps.storage);
-    if (cfg.slowApiMs) {
+    // `?? 0` folds a JSON `null` into "off", like the old truthiness check.
+    const slowApiMs = cfg.slowApiMs ?? 0;
+    if (slowApiMs !== 0 && !Number.isNaN(slowApiMs)) {
       if (cfg.slowApiRemaining !== undefined) {
         const { slowApiMs: _ms, slowApiRemaining: left, ...rest } = cfg;
         writeFaults(
@@ -173,7 +175,7 @@ export function createFaultyFetch(
           left > 1 ? { ...cfg, slowApiRemaining: left - 1 } : rest,
         );
       }
-      await deps.sleep(cfg.slowApiMs);
+      await deps.sleep(slowApiMs);
     }
     if (cfg.failNextWrite && requestMethod(input, init) !== "GET") {
       const { failNextWrite: _used, ...rest } = cfg;

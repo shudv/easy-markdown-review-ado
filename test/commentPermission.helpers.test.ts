@@ -44,6 +44,7 @@ describe("isAzureDevOpsOrgUrl", () => {
   });
 
   it("rejects non-https schemes (no token over http)", () => {
+    // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// org URL is rejected
     expect(isAzureDevOpsOrgUrl("http://dev.azure.com/myorg")).toBe(false);
   });
 

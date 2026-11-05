@@ -52,9 +52,9 @@ export function applyLinkTargetIndicators(
 ): void {
   const links = Array.from(root.querySelectorAll<HTMLAnchorElement>("a"));
   for (const change of changes) {
-    const link = links[change.index];
     /* v8 ignore next -- indexes come from readLinkTargets on this same target, and the word/format marks added since never add or remove anchors */
-    if (!link) continue;
+    if (change.index >= links.length) continue;
+    const link = links[change.index];
     const indicator = document.createElement("span");
     indicator.className = `${DIFF_METADATA_CLASS} emr-diff-metadata--link`;
     indicator.classList.toggle("is-warning", change.hostChanged);
@@ -215,7 +215,10 @@ function codeMetadata(pre: Element): RenderedCodeMetadata | null {
     .find((name) => name.startsWith("language-"))
     ?.slice("language-".length);
   return {
-    language: languageClass || "plain text",
+    language:
+      languageClass === undefined || languageClass === ""
+        ? "plain text"
+        : languageClass,
     options:
       pre.getAttribute("data-code-meta") ??
       code.getAttribute("data-code-meta") ??
@@ -227,7 +230,7 @@ function imageDescription(image: Element): string {
   const src = image.getAttribute("src") ?? "no source";
   const alt = image.getAttribute("alt") ?? "no alt text";
   const title = image.getAttribute("title");
-  return title
+  return title !== null && title !== ""
     ? `${src} (alt: ${alt}; title: ${title})`
     : `${src} (alt: ${alt})`;
 }

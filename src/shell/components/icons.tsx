@@ -14,10 +14,15 @@ const strokeProps = {
 };
 
 function iconClassName(className: string | undefined): string {
-  return className ? `emr-ui-icon ${className}` : "emr-ui-icon";
+  return className !== undefined && className !== ""
+    ? `emr-ui-icon ${className}`
+    : "emr-ui-icon";
 }
 
-export function SearchIcon({ size = 16, className }: IconProps): ReactElement {
+export function SearchIcon({
+  size = 16,
+  className,
+}: Readonly<IconProps>): ReactElement {
   return (
     <svg
       className={iconClassName(className)}
@@ -34,7 +39,10 @@ export function SearchIcon({ size = 16, className }: IconProps): ReactElement {
   );
 }
 
-export function PlusIcon({ size = 16, className }: IconProps): ReactElement {
+export function PlusIcon({
+  size = 16,
+  className,
+}: Readonly<IconProps>): ReactElement {
   return (
     <svg
       className={iconClassName(className)}

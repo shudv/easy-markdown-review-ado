@@ -131,9 +131,9 @@ function useSearchBox(
   React.useLayoutEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
-  React.useEffect(() => {
-    if (searchQuery && !searchOpen) setSearchOpen(true);
-  }, [searchQuery, searchOpen]);
+  // Re-open if the query gets set externally while collapsed (adjusted during
+  // render so the collapsed state never paints with a query set).
+  if (searchQuery && !searchOpen) setSearchOpen(true);
   const closeSearch = React.useCallback(() => {
     setSearchQuery("");
     setSearchOpen(false);
@@ -156,6 +156,7 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
   React.useEffect(() => {
     if (!onSearchFiles) return;
     if (trimmedQuery.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect owns the external debounced, abortable Code Search request; its loading/result state is reset and set in the same step that cancels or starts that request.
       setRemoteHits({ query: "", files: [] });
       setRemoteLoading(false);
       return;

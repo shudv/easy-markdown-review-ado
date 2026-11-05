@@ -219,7 +219,9 @@ export const events = {
       name: EVENT.SearchPerformed,
       properties: {
         succeeded: p.succeeded,
-        ...(p.failureReason ? { failureReason: p.failureReason } : {}),
+        ...(p.failureReason !== undefined && p.failureReason !== ""
+          ? { failureReason: p.failureReason }
+          : {}),
       },
       // Query *length* only — never the query string.
       measurements: { queryLength: p.queryLength, resultCount: p.resultCount },
@@ -249,7 +251,7 @@ export const events = {
     return {
       name: EVENT.AuthFailure,
       properties: {
-        ...(p.api ? { api: p.api } : {}),
+        ...(p.api !== undefined && p.api !== "" ? { api: p.api } : {}),
         ...(p.legacyHost !== undefined ? { legacyHost: p.legacyHost } : {}),
         ...(p.fedAuthRedirect !== undefined
           ? { fedAuthRedirect: p.fedAuthRedirect }
@@ -309,7 +311,9 @@ export const events = {
       properties: {
         phase: p.phase,
         trigger: p.trigger,
-        ...(p.grantState ? { grantState: p.grantState } : {}),
+        ...(p.grantState !== undefined && p.grantState !== ""
+          ? { grantState: p.grantState }
+          : {}),
         ...(p.outcome ? { outcome: p.outcome } : {}),
       },
       measurements,

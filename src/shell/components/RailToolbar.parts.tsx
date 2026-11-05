@@ -52,21 +52,22 @@ export function useRailSearchOpen(commentQuery: string): {
     if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
-  // Re-open if the query gets set externally while collapsed.
-  React.useEffect(() => {
-    if (commentQuery && !searchOpen) setSearchOpen(true);
-  }, [commentQuery, searchOpen]);
+  // Re-open if the query gets set externally while collapsed (adjusted during
+  // render so the collapsed state never paints with a query set).
+  if (commentQuery && !searchOpen) setSearchOpen(true);
 
   return { searchOpen, setSearchOpen, inputRef };
 }
 
 /** The inline search field that replaces the toolbar's lead label. */
-export function RailSearchInput(props: {
-  inputRef: React.RefObject<HTMLInputElement>;
-  commentQuery: string;
-  onCommentQueryChange: (q: string) => void;
-  setSearchOpen: (open: boolean) => void;
-}): React.ReactElement {
+export function RailSearchInput(
+  props: Readonly<{
+    inputRef: React.RefObject<HTMLInputElement>;
+    commentQuery: string;
+    onCommentQueryChange: (q: string) => void;
+    setSearchOpen: (open: boolean) => void;
+  }>,
+): React.ReactElement {
   const { inputRef, commentQuery, onCommentQueryChange, setSearchOpen } = props;
   return (
     <input
@@ -97,14 +98,16 @@ export function RailSearchInput(props: {
  * The "Comments" label — or the filter dropdown once there's anything to
  * filter — followed by the all-resolved celebration badge.
  */
-export function RailToolbarTitle(props: {
-  filterCounts: CommentFilterCounts;
-  filterMode: CommentFilterMode;
-  onFilterModeChange: (mode: CommentFilterMode) => void;
-  onlyThisFile: boolean;
-  onOnlyThisFileChange: (next: boolean) => void;
-  allResolved: boolean;
-}): React.ReactElement {
+export function RailToolbarTitle(
+  props: Readonly<{
+    filterCounts: CommentFilterCounts;
+    filterMode: CommentFilterMode;
+    onFilterModeChange: (mode: CommentFilterMode) => void;
+    onlyThisFile: boolean;
+    onOnlyThisFileChange: (next: boolean) => void;
+    allResolved: boolean;
+  }>,
+): React.ReactElement {
   const {
     filterCounts,
     filterMode,
@@ -143,10 +146,12 @@ export function RailToolbarTitle(props: {
 }
 
 /** Search open/close toggle in the toolbar's pinned action region. */
-export function RailSearchToggle(props: {
-  searchOpen: boolean;
-  onClick: () => void;
-}): React.ReactElement {
+export function RailSearchToggle(
+  props: Readonly<{
+    searchOpen: boolean;
+    onClick: () => void;
+  }>,
+): React.ReactElement {
   const { searchOpen, onClick } = props;
   return (
     <button
@@ -166,14 +171,17 @@ export function RailSearchToggle(props: {
  * Row 2: the routed PR (when shown) flanked by the comment-history chevrons
  * (when there's history to step through).
  */
-export function RailVersionRow(props: {
-  pr: RoutedPrLabel | undefined;
-  historyNav: HistoryNav | undefined;
-}): React.ReactElement {
+export function RailVersionRow(
+  props: Readonly<{
+    pr: RoutedPrLabel | undefined;
+    historyNav: HistoryNav | undefined;
+  }>,
+): React.ReactElement {
   const { pr, historyNav } = props;
+  const modifier = pr ? `is-${pr.status}` : "is-history-only";
   return (
     <div
-      className={`emr-rail-version${pr ? ` is-${pr.status}` : " is-history-only"}`}
+      className={`emr-rail-version ${modifier}`}
       aria-label={pr ? undefined : "Comment history"}
     >
       {historyNav ? (
@@ -205,14 +213,16 @@ export function RailVersionRow(props: {
   );
 }
 
-function RailVersionPr(props: { pr: RoutedPrLabel }): React.ReactElement {
+function RailVersionPr(
+  props: Readonly<{ pr: RoutedPrLabel }>,
+): React.ReactElement {
   const { pr } = props;
   return (
     <span
       className="emr-rail-version-pr"
       title={`Routes to PR #${pr.prId}: ${pr.title}`}
     >
-      {pr.url ? (
+      {pr.url !== undefined && pr.url !== "" ? (
         <a
           className="emr-rail-title-pr-link emr-rail-version-num"
           href={pr.url}

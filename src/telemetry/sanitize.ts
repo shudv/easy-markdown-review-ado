@@ -74,10 +74,13 @@ const WHITESPACE_RE = /\s/;
 // Hostname / domain shape (e.g. `example.com`) — caught even without a slash.
 const DOMAIN_LIKE_RE = /[a-z0-9-]+\.[a-z]{2,}/i;
 // Property keys must be simple identifiers (dotted/camel allowed).
-const VALID_KEY_RE = /^[a-zA-Z][a-zA-Z0-9._]*$/;
+const VALID_KEY_RE = /^[a-z][\w.]*$/i;
+
+/** A property value that survived sanitization. */
+type SafeValue = string | number | boolean;
 
 export interface SanitizeResult {
-  clean: Record<string, string | number | boolean>;
+  clean: Record<string, SafeValue>;
   /** Keys that were dropped, for dev-time diagnostics. Never sent. */
   dropped: string[];
 }
@@ -89,7 +92,7 @@ function keyLooksSafe(key: string): boolean {
   return !DENY_KEY_SUBSTRINGS.some((bad) => lower.includes(bad));
 }
 
-function valueLooksSafe(value: unknown): value is string | number | boolean {
+function valueLooksSafe(value: unknown): value is SafeValue {
   if (typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value === "string") {
@@ -110,7 +113,7 @@ function valueLooksSafe(value: unknown): value is string | number | boolean {
 export function sanitizeProperties(
   props: Record<string, unknown> | undefined,
 ): SanitizeResult {
-  const clean: Record<string, string | number | boolean> = {};
+  const clean: Record<string, SafeValue> = {};
   const dropped: string[] = [];
   if (!props) return { clean, dropped };
 
@@ -152,7 +155,7 @@ export function sanitizeMeasurements(
 // address embedded in a path is not partially rewritten.
 const EMAIL_GLOBAL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
 const URL_GLOBAL_RE = /\b(?:https?|file):\/\/[^\s)]+/gi;
-const WIN_PATH_RE = /[A-Za-z]:\\[^\s:*?"<>|]+/g;
+const WIN_PATH_RE = /[a-z]:\\[^\s:*?"<>|]+/gi;
 const POSIX_PATH_RE = /(?:\/[\w.@-]+){2,}/g;
 
 /**

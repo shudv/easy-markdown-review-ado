@@ -29,7 +29,7 @@ describe("FixtureCommentApi", () => {
       someUser.id.toUpperCase(),
       "not-a-real-id",
     ]);
-    expect(resolved[someUser.id]?.displayName).toBe(someUser.displayName);
+    expect(resolved[someUser.id]!.displayName).toBe(someUser.displayName);
     expect(resolved["not-a-real-id"]).toBeUndefined();
 
     // A single requested id must resolve to exactly ONE author.

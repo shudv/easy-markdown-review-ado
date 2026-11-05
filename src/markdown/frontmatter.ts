@@ -84,13 +84,19 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
 
     // Indented `- item` continues the most recent block-list key, extending
     // that entry's source span to cover the item line.
-    const listItem = /^[ \t]+-[ \t]+(.*)$/.exec(line);
+    // The capture starts at the first non-blank char so `[ \t]+` and the
+    // capture never compete for whitespace (no polynomial backtracking).
+    const listItem = /^[ \t]+-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
+      line,
+    );
     if (listItem && current) {
       appendListItem(current, listItem[1]!, sourceLine);
       continue;
     }
 
-    const kv = /^([^:\s][^:]*):[ \t]*(.*)$/.exec(line);
+    const kv = /^([^:\s][^:]*):[ \t]*((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
+      line,
+    );
     if (!kv) continue;
     const key = kv[1]!.trim();
     const rawValue = kv[2]!.trim();
@@ -164,7 +170,7 @@ export function frontmatterValuesForKey(
 export function parseFrontmatterListItems(fragment: string): string[] {
   const items: string[] = [];
   for (const line of fragment.split(/\r?\n/)) {
-    const m = /^[ \t]*-[ \t]+(.*)$/.exec(line);
+    const m = /^[ \t]*-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
     if (!m) continue;
     const value = unquote(m[1]!.trim());
     if (value !== "") items.push(value);

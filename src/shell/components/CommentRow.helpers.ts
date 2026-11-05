@@ -42,7 +42,8 @@ export function summarizeLikes(
   reactions: Comment["reactions"],
   currentUserId: string,
 ): LikeSummary {
-  const likeReaction = (reactions ?? []).find((r) => r.kind === "like");
+  // `like` is the only ReactionKind, so the first reaction is the like.
+  const likeReaction = reactions?.[0];
   const likeUsers = likeReaction?.users ?? [];
   return {
     likedByMe: likeUsers.some((u) => u.id === currentUserId),

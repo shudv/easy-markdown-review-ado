@@ -45,7 +45,7 @@ function useDismissActiveThread(
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       const target = e.target as HTMLElement | null;
-      if (target && target.matches("textarea, input")) return;
+      if (target?.matches("textarea, input")) return;
       setActiveThreadId(clearIfSet);
       dismissEmptyDraftRef.current();
     }
@@ -78,7 +78,7 @@ function useRailFollow(activeThreadId: string | null): void {
   // document is scrolled to the anchor by the selection handlers. One effect
   // centralises rail-follow for every activation path (click, cycle, deep link).
   React.useEffect(() => {
-    if (!activeThreadId) return;
+    if (activeThreadId === null || activeThreadId === "") return;
     const escaped = CSS.escape(activeThreadId);
     let cancelled = false;
     // rAF #1 lets React commit the list; rAF #2 lets layout settle.
@@ -127,13 +127,13 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
     // Overwriting the ref with that `undefined` would drop the deep link and
     // the thread would never auto-open. So we never clear it from props; the
     // consumption effect below clears it once the anchor is found.
-    if (initialActiveThreadId) {
+    if (initialActiveThreadId !== undefined && initialActiveThreadId !== "") {
       pendingActiveThreadIdRef.current = initialActiveThreadId;
     }
   }, [initialActiveThreadId]);
   React.useEffect(() => {
     const tid = pendingActiveThreadIdRef.current;
-    if (!tid) return;
+    if (tid === undefined || tid === "") return;
     // One rAF lets React commit the current document + the highlight-wrapping
     // layout effect run, so the anchor (or balloon) is queryable. Cleanup
     // cancels the frame, so a superseded run never reaches its callback.
@@ -155,7 +155,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
       // snapshot has arrived without it, the thread doesn't exist (deleted,
       // or a bad link): record that once and stop waiting.
       if (!target) {
-        if (prThreadSnapshots > 0 && !threadState.threadsById[tid]) {
+        if (prThreadSnapshots > 0 && !(tid in threadState.threadsById)) {
           pendingActiveThreadIdRef.current = undefined;
           track(events.linkOpened({ target: "comment", found: false }));
         }

@@ -4,7 +4,7 @@
 // @vitest-environment jsdom
 
 import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,8 +36,13 @@ function Harness(props: {
   selectedPath: string;
   loadFileSource: (path: string) => Promise<string>;
 }): null {
-  doc = useDocumentSource(props.selectedPath, props.loadFileSource);
-  doc.handleMissingDocRef.current = () => "unexpected";
+  const source = useDocumentSource(props.selectedPath, props.loadFileSource);
+  const missingDocRef = source.handleMissingDocRef;
+  // Publish after commit, before the hook's passive load effect reads the ref.
+  React.useLayoutEffect(() => {
+    doc = source;
+    missingDocRef.current = () => "unexpected";
+  });
   return null;
 }
 

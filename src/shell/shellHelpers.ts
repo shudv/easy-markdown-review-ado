@@ -579,11 +579,15 @@ export function historyChevronTooltip(
       ? "No earlier versions"
       : "Already at the current version";
   }
+  const titleSuffix =
+    target.title !== undefined && target.title !== ""
+      ? `: ${target.title}`
+      : "";
   const where = target.isCurrent
     ? target.prId != null
       ? `current version (PR #${target.prId})`
       : "current version"
-    : `PR #${target.prId}${target.title ? `: ${target.title}` : ""}`;
+    : `PR #${target.prId}${titleSuffix}`;
   const verb = direction === "older" ? "Older" : "Newer";
   return `${verb} version — ${where}`;
 }

@@ -16,7 +16,7 @@ interface Props {
   body: string;
 }
 
-export function CommentMarkdown({ body }: Props): React.ReactElement {
+export function CommentMarkdown({ body }: Readonly<Props>): React.ReactElement {
   const html = React.useMemo(() => renderMarkdownSync(body), [body]);
   const ref = React.useRef<HTMLDivElement | null>(null);
   // Rewrite `mention://workitem/...` / `mention://pullrequest/...` href
@@ -37,6 +37,7 @@ export function CommentMarkdown({ body }: Props): React.ReactElement {
     <div
       ref={ref}
       className="emr-comment-content"
+      // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- html is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src)
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

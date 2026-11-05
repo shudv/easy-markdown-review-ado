@@ -85,6 +85,14 @@ type ActionOf<T extends ThreadAction["type"]> = Extract<
   { type: T }
 >;
 
+/** Look up a thread by id; ids from actions/snapshots may be unknown. */
+function findThread(
+  threadsById: Record<string, CommentThread>,
+  threadId: string,
+): CommentThread | undefined {
+  return threadsById[threadId];
+}
+
 export function threadReducer(
   state: ThreadState,
   action: ThreadAction,
@@ -113,7 +121,8 @@ export function threadReducer(
         status: action.status,
       }));
     case "DELETE_THREAD":
-      if (!state.threadsById[action.threadId]) return state;
+      if (findThread(state.threadsById, action.threadId) === undefined)
+        return state;
       return removeThread(state, action.threadId);
     case "MERGE_REMOTE_THREADS":
       return mergeRemoteThreads(state, action.threads);
@@ -130,7 +139,8 @@ function addThread(
   state: ThreadState,
   action: ActionOf<"ADD_THREAD">,
 ): ThreadState {
-  if (state.threadsById[action.thread.id]) return state;
+  if (findThread(state.threadsById, action.thread.id) !== undefined)
+    return state;
   return {
     threadsById: {
       ...state.threadsById,
@@ -150,8 +160,8 @@ function updateThread(
   threadId: string,
   update: (existing: CommentThread) => CommentThread,
 ): ThreadState {
-  const existing = state.threadsById[threadId];
-  if (!existing) return state;
+  const existing = findThread(state.threadsById, threadId);
+  if (existing === undefined) return state;
   return replaceThread(state, threadId, update(existing));
 }
 
@@ -196,8 +206,8 @@ function deleteComment(
   state: ThreadState,
   action: ActionOf<"DELETE_COMMENT">,
 ): ThreadState {
-  const existing = state.threadsById[action.threadId];
-  if (!existing) return state;
+  const existing = findThread(state.threadsById, action.threadId);
+  if (existing === undefined) return state;
   const remaining = existing.comments.filter((c) => c.id !== action.commentId);
   if (remaining.length === 0) {
     // Deleting the last comment removes the thread entirely.
@@ -229,6 +239,7 @@ function toggleReaction(
   action: ActionOf<"TOGGLE_REACTION">,
 ): Reaction[] {
   const user = { id: action.userId, displayName: action.displayName };
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ReactionKind has a single member today; matching by kind keeps the toggle per-kind once ADO kinds are added.
   const idx = reactions.findIndex((r) => r.kind === action.kind);
   if (idx === -1) {
     // No reaction of this kind yet — add one.
@@ -254,8 +265,8 @@ function mergeRemoteThreads(
   const appended: string[] = [];
   let changed = false;
   for (const incoming of threads) {
-    const existing = nextById[incoming.id];
-    if (!existing) {
+    const existing = findThread(nextById, incoming.id);
+    if (existing === undefined) {
       nextById[incoming.id] = incoming;
       appended.push(incoming.id);
       changed = true;
@@ -316,8 +327,10 @@ function mergeOneThread(
     if (!remote) return local;
     // Compare timestamps numerically — ISO strings with different precision
     // or offsets don't sort chronologically as plain strings.
-    const remoteMs = remote.updatedAt ? Date.parse(remote.updatedAt) : NaN;
-    const localMs = local.updatedAt ? Date.parse(local.updatedAt) : NaN;
+    const remoteMs =
+      remote.updatedAt === undefined ? NaN : Date.parse(remote.updatedAt);
+    const localMs =
+      local.updatedAt === undefined ? NaN : Date.parse(local.updatedAt);
     const remoteNewer =
       Number.isFinite(remoteMs) &&
       (!Number.isFinite(localMs) || remoteMs > localMs);

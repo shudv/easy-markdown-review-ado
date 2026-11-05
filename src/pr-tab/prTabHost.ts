@@ -77,13 +77,13 @@ export async function openDocTarget(
       ext,
     );
     // Carry a `#heading` from the link so the hub opens scrolled to it.
-    if (url && target.hash) {
+    if (url !== undefined && url !== "" && target.hash) {
       url =
         withDeepLinkTarget(url, { kind: "heading", anchor: target.hash }) ??
         url;
     }
   }
-  if (!url) return;
+  if (url === undefined || url === "") return;
   try {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
@@ -117,7 +117,12 @@ export async function readRouteSeed(
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
-    params = (await nav.getQueryParams()) ?? {};
+    // Typed non-null by the SDK, but the host can resolve nothing.
+    const routeParams = (await nav.getQueryParams()) as
+      | Record<string, string>
+      | null
+      | undefined;
+    params = routeParams ?? {};
   } catch {
     /* navigation service unavailable — open without deep-link targets */
   }

@@ -18,9 +18,12 @@
  * @returns `true` if a copy was confirmed, `false` otherwise.
  */
 export async function copyText(text: string): Promise<boolean> {
-  if (navigator.clipboard?.writeText) {
+  // The DOM typings claim `navigator.clipboard` always exists, but browsers
+  // leave it undefined outside secure contexts.
+  const clipboard = navigator.clipboard as Partial<Clipboard> | undefined;
+  if (typeof clipboard?.writeText === "function") {
     try {
-      await navigator.clipboard.writeText(text);
+      await clipboard.writeText(text);
       return true;
     } catch {
       // Blocked by the host iframe's Permissions-Policy — fall through to the
@@ -46,6 +49,7 @@ function legacyCopyText(text: string): boolean {
     textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- ADO's sandboxed iframe blocks the async Clipboard API; execCommand is the only fallback it permits.
     const copied = document.execCommand("copy");
     textarea.remove();
     return copied;

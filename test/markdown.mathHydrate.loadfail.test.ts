@@ -46,8 +46,7 @@ describe("hydrateMath — library load failure", () => {
     expect(element.dataset.mathError).toBe("load-failed");
     // Not hydrated — the fallback stays readable and eligible for a retry.
     expect(element.dataset.hydrated).toBeUndefined();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
       error: expect.anything(),
       source: "Math.hydrate",
       operation: "math-library-load",

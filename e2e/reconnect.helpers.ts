@@ -121,7 +121,8 @@ export function collectTelemetry(page: Page): {
 
 function authHeader(): string {
   const pat = process.env.AZDO_PAT;
-  if (!pat) throw new Error("AZDO_PAT is not set in .env");
+  if (pat === undefined || pat === "")
+    throw new Error("AZDO_PAT is not set in .env");
   return "Basic " + Buffer.from(`:${pat}`, "utf8").toString("base64");
 }
 

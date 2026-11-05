@@ -46,7 +46,9 @@ interface NavTreeItemProps {
   onExpandLazyDir: (path: string) => void;
 }
 
-export function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
+export function NavTreeItem(
+  props: Readonly<NavTreeItemProps>,
+): React.ReactElement {
   const { node, ...rowProps } = props;
 
   if (node.kind === "dir") return <DirNavRow {...props} node={node} />;
@@ -56,7 +58,7 @@ export function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
       <FileNavRow
         file={node.file}
         openComments={node.openComments}
-        children={node.children}
+        childNodes={node.children}
         {...rowProps}
       />
     );
@@ -226,11 +228,13 @@ function DirNavRow(
 }
 
 /** A row's nested items, one level deeper; nothing when there are none. */
-function NavChildren(props: {
-  nodes: readonly NavNode[];
-  item: NavTreeItemProps;
-  className?: string;
-}): React.ReactElement | null {
+function NavChildren(
+  props: Readonly<{
+    nodes: readonly NavNode[];
+    item: NavTreeItemProps;
+    className?: string;
+  }>,
+): React.ReactElement | null {
   const { nodes, item, className = "emr-docnav-children" } = props;
   if (nodes.length === 0) return null;
   return (
@@ -257,15 +261,15 @@ function NavChildren(props: {
 interface FileNavRowProps extends Omit<NavTreeItemProps, "node"> {
   file: FileInfo;
   openComments: number;
-  children: NavNode[];
+  childNodes: NavNode[];
 }
 
 // eslint-disable-next-line max-lines-per-function -- File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row.
-function FileNavRow(props: FileNavRowProps): React.ReactElement {
+function FileNavRow(props: Readonly<FileNavRowProps>): React.ReactElement {
   const {
     file,
     openComments,
-    children,
+    childNodes,
     depth,
     activeId,
     collapsedIds,
@@ -286,11 +290,13 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
   // heading children beneath it.
   const isActive = file.path === selectedPath && activeId === null;
   const fileName = basename(file.path);
-  const renamedFromName = file.renamedFrom ? basename(file.renamedFrom) : null;
+  const renamedFrom = file.renamedFrom ?? "";
+  const renamedFromName = renamedFrom !== "" ? basename(renamedFrom) : "";
+  const note = change.note ?? "";
   const titleText =
-    (file.changeType === "renamed" && renamedFromName
+    (file.changeType === "renamed" && renamedFromName !== ""
       ? `${renamedFromName} \u2192 ${fileName}`
-      : file.path) + (change.note ? ` \u2014 ${change.note}` : "");
+      : file.path) + (note !== "" ? ` \u2014 ${note}` : "");
   return (
     <div className="emr-docnav-branch emr-docnav-file-branch">
       <div
@@ -328,8 +334,8 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
             </span>
           ) : null}
           <span className="emr-docnav-file-name">{fileName}</span>
-          {change.note ? (
-            <span className="emr-sr-only">{` (${change.note})`}</span>
+          {note !== "" ? (
+            <span className="emr-sr-only">{` (${note})`}</span>
           ) : null}
           {openComments > 0 ? (
             <span
@@ -341,9 +347,9 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
           ) : null}
         </button>
       </div>
-      {children.length > 0 ? (
+      {childNodes.length > 0 ? (
         <div className="emr-docnav-children emr-docnav-file-children">
-          {children.map((child) => (
+          {childNodes.map((child) => (
             <NavTreeItem
               key={navNodeKey(child)}
               node={child}

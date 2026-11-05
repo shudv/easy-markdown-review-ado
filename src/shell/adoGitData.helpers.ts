@@ -46,7 +46,7 @@ export function normalizePath(p: string): string {
  * absent; empty string for null/undefined.
  */
 export function stripRefsHeads(ref: string | undefined | null): string {
-  if (!ref) return "";
+  if (ref == null || ref === "") return "";
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
 }
 
@@ -69,7 +69,7 @@ export function editBranchName(
   const slug =
     fileName
       .replace(/\.md$/i, "")
-      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/[^\w.-]+/g, "-")
       // Git refs cannot contain `..` and cannot begin/end with `.`.
       .replace(/\.+/g, ".")
       .replace(/^\.+|\.+$/g, "")
@@ -115,7 +115,9 @@ export function filterReposByName<R extends NamedRepoLike>(
   repos: readonly R[],
   restrictToRepoName: string | undefined,
 ): R[] {
-  if (!restrictToRepoName) return [...repos];
+  if (restrictToRepoName == null || restrictToRepoName === "") {
+    return [...repos];
+  }
   const lc = restrictToRepoName.toLowerCase();
   const narrowed = repos.filter((r) => r.name.toLowerCase() === lc);
   return narrowed.length > 0 ? narrowed : [...repos];
@@ -234,7 +236,7 @@ export function identityAvatarUrl(identity: {
   id: string;
   imageUrl?: string;
 }): string | undefined {
-  if (!identity.imageUrl) return undefined;
+  if (identity.imageUrl == null || identity.imageUrl === "") return undefined;
   let parsed: URL;
   try {
     parsed = new URL(identity.imageUrl);
@@ -259,7 +261,7 @@ export function identityAvatarUrl(identity: {
 // ---------------------------------------------------------------------------
 
 /** Most-recent ordering key: prefer closedDate when set, else creationDate. */
-export function prDate(pr: GitPullRequest): number {
+export function prDate(pr: { closedDate?: Date; creationDate?: Date }): number {
   const closed = pr.closedDate ? new Date(pr.closedDate).getTime() : 0;
   const created = pr.creationDate ? new Date(pr.creationDate).getTime() : 0;
   return Math.max(closed, created);
@@ -336,11 +338,11 @@ export function selectRoutingPrFromQuery(
  * back to this order.
  */
 export function commitIds(
-  commits: ReadonlyArray<{ commitId?: string }> | undefined | null,
+  commits: ReadonlyArray<{ commitId?: string | null }> | undefined | null,
 ): string[] {
   const out: string[] = [];
   for (const c of commits ?? []) {
-    if (c.commitId) out.push(c.commitId);
+    if (c.commitId != null && c.commitId !== "") out.push(c.commitId);
   }
   return out;
 }
@@ -392,7 +394,7 @@ export function selectRoutingPrsFromQuery(
  * without a numeric id are skipped. Order is preserved (most recent first).
  */
 export function docPrRefsFromHistory(
-  prs: readonly GitPullRequest[],
+  prs: readonly Partial<GitPullRequest>[],
   buildUrl: (prId: number) => string | undefined,
 ): DocPrRef[] {
   const out: DocPrRef[] = [];
@@ -416,12 +418,15 @@ export function docPrRefsFromHistory(
  * against. Skips entries without an `item.path`; tolerates a missing list.
  */
 export function changedPathsFromEntries(
-  entries: ReadonlyArray<{ item?: { path?: string } }> | undefined | null,
+  entries:
+    | ReadonlyArray<{ item?: { path?: string | null } | null }>
+    | undefined
+    | null,
 ): string[] {
   const paths: string[] = [];
   for (const entry of entries ?? []) {
     const p = entry.item?.path;
-    if (p) paths.push(normalizePath(p).toLowerCase());
+    if (p != null && p !== "") paths.push(normalizePath(p).toLowerCase());
   }
   return paths;
 }
@@ -475,9 +480,7 @@ export async function runWithConcurrency<T, R>(
   let cursor = 0;
 
   async function pump(): Promise<void> {
-    while (true) {
-      const idx = cursor++;
-      if (idx >= items.length) return;
+    for (let idx = cursor++; idx < items.length; idx = cursor++) {
       results[idx] = await worker(items[idx]!);
     }
   }
@@ -522,7 +525,8 @@ export function repoSkeleton(repo: GitRepository): DocRepo {
  * mapped to `undefined` so an empty box requests the unfiltered first page.
  */
 export function normalizeRepoFilter(filter?: string): string | undefined {
-  return filter?.trim() || undefined;
+  const trimmed = filter?.trim();
+  return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
 
 /**

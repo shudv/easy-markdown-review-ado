@@ -17,14 +17,14 @@ import {
 export function SessionNotice({
   monitor = adoSession,
   reloadAllowed = true,
-}: {
+}: Readonly<{
   monitor?: AdoSessionMonitor;
   /**
    * False while the user has unsaved work a reload would drop (an open inline
    * edit — new comments and replies are kept as drafts).
    */
   reloadAllowed?: boolean;
-}): React.ReactElement | null {
+}>): React.ReactElement | null {
   const session = useAdoSession(monitor);
   if (session.state !== "refreshing") return null;
   return (

@@ -14,7 +14,8 @@ interface ThreadMutationsOptions {
   persistWith: PersistWith;
   dispatch: React.Dispatch<ThreadAction>;
   currentUser: CommentAuthor;
-  threadsById: ThreadState["threadsById"];
+  /** May lack a thread a stale rail callback still names. */
+  threadsById: Partial<ThreadState["threadsById"]>;
   setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
@@ -181,6 +182,7 @@ function useThreadDeleteAndReaction(opts: ThreadMutationsOptions) {
       const hadIt =
         comment?.reactions?.some(
           (r) =>
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ReactionKind has a single member today; matching by kind keeps the toggle per-kind once ADO kinds are added.
             r.kind === kind && r.users.some((u) => u.id === currentUser.id),
         ) ?? false;
       const add = !hadIt;

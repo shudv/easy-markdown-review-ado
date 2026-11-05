@@ -131,7 +131,7 @@ function makeMark(
   text: string,
 ): HTMLElement {
   const el = doc.createElement(tag);
-  el.className = /^\s*[\r\n]\s*$/.test(text)
+  el.className = /^[^\S\r\n]*[\r\n]\s*$/.test(text)
     ? `${className} ${WORD_LINE_BREAK_CLASS}`
     : className;
   el.textContent = text;

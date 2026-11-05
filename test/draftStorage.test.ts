@@ -122,18 +122,12 @@ describe("save / load / clear round-trip", () => {
 });
 
 describe("loadDraft validation", () => {
-  it("rejects malformed JSON", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), "{not json");
-    expect(loadDraft("pr")).toBeNull();
-  });
-
-  it("rejects a non-object payload", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), '"a string"');
-    expect(loadDraft("pr")).toBeNull();
-  });
-
-  it("rejects a null payload", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), "null");
+  it.each([
+    ["malformed JSON", "{not json"],
+    ["a non-object payload", '"a string"'],
+    ["a null payload", "null"],
+  ])("rejects %s", (_label, raw) => {
+    window.localStorage.setItem(draftStorageKey("pr"), raw);
     expect(loadDraft("pr")).toBeNull();
   });
 

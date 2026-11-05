@@ -60,7 +60,7 @@ export function findAnchorTarget(
   // Only reslug anchors carrying text our slugger keeps (ASCII letters and
   // digits): anything else — punctuation, CJK, Cyrillic — slugs to the generic
   // "section" fallback and would match an unrelated heading.
-  if (/[A-Za-z0-9]/.test(decoded)) candidates.push(slugifyHeading(decoded));
+  if (/[a-z0-9]/i.test(decoded)) candidates.push(slugifyHeading(decoded));
   for (const id of new Set(candidates)) {
     const hit = findLiveId(root, id);
     if (hit) return hit;
@@ -93,7 +93,9 @@ export function revealAnchorTarget(
         toggle.title = "Collapse section";
       }
       const sid = section.dataset.sectionId;
-      if (sid) persistSectionState(storageKey, sid, false);
+      if (sid !== undefined && sid !== "") {
+        persistSectionState(storageKey, sid, false);
+      }
       changed = true;
     }
     section =

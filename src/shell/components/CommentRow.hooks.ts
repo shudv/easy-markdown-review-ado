@@ -128,7 +128,8 @@ export function useCommentLinkCopy(threadId: string) {
     // resolves to a boolean (never rejects), so a host iframe blocking the
     // async Clipboard API can't surface as an unhandled rejection — and we only
     // claim success when a copy is actually confirmed.
-    const copied = url ? copyText(url) : Promise.resolve(false);
+    const hasUrl = url !== undefined && url !== "";
+    const copied = hasUrl ? copyText(url) : Promise.resolve(false);
     void copied.then((ok) => {
       setLinkState(ok ? "copied" : "failed");
       if (ok) {
@@ -136,7 +137,7 @@ export function useCommentLinkCopy(threadId: string) {
       } else {
         trackUserFacingError({
           error: new Error(
-            url ? "Comment link copy failed" : "Comment link unavailable",
+            hasUrl ? "Comment link copy failed" : "Comment link unavailable",
           ),
           source: "CommentRow.copyLink",
           operation: "comment-link-copy",

@@ -64,7 +64,7 @@ export function hydrateMentionLinks(
     if (!parsed) return;
 
     const url = buildMentionWebUrl(parsed, ctx);
-    if (!url) return;
+    if (url === undefined || url === "") return;
     a.setAttribute("href", url);
     // New context so the user keeps their place; rel matches sanitize-urls.
     a.setAttribute("target", "_blank");

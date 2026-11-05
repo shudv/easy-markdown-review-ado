@@ -76,7 +76,7 @@ export class IdentityStore {
   ): void {
     let changed = false;
     for (const e of entries) {
-      if (!e.displayName) continue;
+      if (e.displayName === undefined || e.displayName === "") continue;
       const key = norm(e.id);
       if (!key || this.map.has(key)) continue;
       this.map.set(key, {
@@ -116,8 +116,14 @@ export class IdentityStore {
     try {
       const resolved = await this.resolver!(ids);
       let changed = false;
-      for (const [id, info] of Object.entries(resolved)) {
-        if (!info?.displayName) continue;
+      // Resolved entries come from ADO identity REST responses, so treat them
+      // as possibly missing or partial despite the resolver's declared type.
+      const entries = Object.entries(resolved) as [
+        string,
+        Partial<IdentityInfo> | null | undefined,
+      ][];
+      for (const [id, info] of entries) {
+        if (info?.displayName == null || info.displayName === "") continue;
         this.map.set(norm(id), {
           displayName: info.displayName,
           avatarUrl: info.avatarUrl,
@@ -171,7 +177,7 @@ export function hydrateUserMentions(
   const unresolved: string[] = [];
   pills.forEach((el) => {
     const id = el.getAttribute("data-mention-id");
-    if (!id) return;
+    if (id === null || id === "") return;
     const info = store.get(id);
     if (info) {
       const label = `@${info.displayName}`;

@@ -22,7 +22,9 @@ interface NavPaneProps {
  * survives toggling (the document reclaims the freed width). Single-file
  * panels drop it entirely.
  */
-export function NavPane(props: NavPaneProps): React.ReactElement | null {
+export function NavPane(
+  props: Readonly<NavPaneProps>,
+): React.ReactElement | null {
   if (!props.shown) return null;
   return (
     <div className="emr-body__nav">

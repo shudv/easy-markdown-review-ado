@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -44,6 +45,36 @@ export const Closed: Story = {
     await expect(
       canvasElement.querySelector(".emr-generated-source-modal"),
     ).toBeNull();
+  },
+};
+
+/** Opening moves focus into the dialog; closing gives it back to the opener. */
+export const MovesFocusInAndBack: Story = {
+  args: { source: null },
+  render: function Render(args) {
+    const [source, setSource] = React.useState<string | null>(null);
+    return (
+      <>
+        <button type="button" onClick={() => setSource(SOURCE)}>
+          Source
+        </button>
+        <GeneratedSourceModal
+          {...args}
+          source={source}
+          onClose={() => setSource(null)}
+        />
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const opener = canvas.getByRole("button", { name: "Source" });
+    await userEvent.click(opener);
+    await expect(document.activeElement).toBe(
+      canvasElement.querySelector(".emr-generated-source-modal"),
+    );
+    await userEvent.keyboard("{Escape}");
+    await expect(document.activeElement).toBe(opener);
   },
 };
 

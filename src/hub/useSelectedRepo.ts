@@ -22,20 +22,22 @@ export function useSelectedRepo(
   const [selectedRepoId, setSelectedRepoId] =
     React.useState<string>(initialRepoId);
 
-  // Resolve the active repo from the accumulated `repos` union. Cached in a ref
-  // so that when the picker's *view* is narrowed by a server-side filter — which
-  // can momentarily drop the selected repo out of the visible list — the open
-  // document doesn't snap to `repos[0]`. The selected repo only changes when the
-  // user actually picks a new one.
-  const selectedRepoRef = React.useRef<DocRepo | undefined>(undefined);
-  const selectedRepo = React.useMemo(() => {
-    selectedRepoRef.current = pickSelectedRepo(
-      repos,
-      selectedRepoId,
-      selectedRepoRef.current,
-    );
-    return selectedRepoRef.current;
-  }, [repos, selectedRepoId]);
+  // Resolve the active repo from the accumulated `repos` union. The last
+  // resolution is kept in state so that when the picker's *view* is narrowed by
+  // a server-side filter — which can momentarily drop the selected repo out of
+  // the visible list — the open document doesn't snap to `repos[0]`. The
+  // selected repo only changes when the user actually picks a new one.
+  // Re-resolved during render whenever `repos` or the selected id changes.
+  const [resolution, setResolution] = React.useState(() => ({
+    repos,
+    repoId: selectedRepoId,
+    repo: pickSelectedRepo(repos, selectedRepoId, undefined),
+  }));
+  let selectedRepo = resolution.repo;
+  if (resolution.repos !== repos || resolution.repoId !== selectedRepoId) {
+    selectedRepo = pickSelectedRepo(repos, selectedRepoId, resolution.repo);
+    setResolution({ repos, repoId: selectedRepoId, repo: selectedRepo });
+  }
 
   const handleSelectRepo = React.useCallback(
     (repoId: string) => {

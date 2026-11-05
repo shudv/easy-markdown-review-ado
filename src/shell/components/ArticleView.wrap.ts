@@ -46,14 +46,14 @@ export function restoreRewrapFocus(
   focusedThreadId: string | undefined,
   focusedHeadingLinkId: string | undefined,
 ): void {
-  if (focusedThreadId) {
+  if (focusedThreadId !== undefined && focusedThreadId !== "") {
     article
       .querySelector<HTMLElement>(
         `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
       )
       ?.focus();
   }
-  if (focusedHeadingLinkId) {
+  if (focusedHeadingLinkId !== undefined && focusedHeadingLinkId !== "") {
     article
       .querySelector<HTMLElement>(
         `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
@@ -79,7 +79,7 @@ function hydrateSection(
   // sits where ADO's native preview shows its anchor glyph. Icon-only (no
   // text node), so it never leaks into anchoring, outline labels, or the
   // heading's accessible name below.
-  if (heading?.id && hasHeadingLinks) {
+  if (heading != null && heading.id !== "" && hasHeadingLinks) {
     heading.setAttribute("aria-label", heading.textContent.trim());
     heading.append(createHeadingLinkButton(article.ownerDocument, heading.id));
   }
@@ -90,7 +90,7 @@ function hydrateSection(
     return;
   }
   const sid = s.dataset.sectionId;
-  if (sid && readSectionState(storageKey, sid)) {
+  if (sid !== undefined && sid !== "" && readSectionState(storageKey, sid)) {
     s.setAttribute("data-collapsed", "true");
   } else {
     s.removeAttribute("data-collapsed");
@@ -193,7 +193,7 @@ export function measureAnchorYs(
   );
   highlights.forEach((el) => {
     const tid = el.dataset.threadId;
-    if (!tid || seen.has(tid)) return;
+    if (tid === undefined || tid === "" || seen.has(tid)) return;
     seen.add(tid);
     const rect = el.getBoundingClientRect();
     let y: number;

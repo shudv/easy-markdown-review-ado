@@ -70,7 +70,7 @@ interface BalloonProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
-export function Balloon(props: BalloonProps): React.ReactElement {
+export function Balloon(props: Readonly<BalloonProps>): React.ReactElement {
   const {
     thread,
     topPx,
@@ -140,6 +140,7 @@ export function Balloon(props: BalloonProps): React.ReactElement {
     thread.comments.every((comment) => comment.author.id === currentUser.id);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- pointer shortcut only: the card hosts its own buttons and composer (a role="button" here would nest interactive controls), and keyboard users select an anchored thread via its role="button" highlight in the article
     <div
       ref={ref}
       className={className}

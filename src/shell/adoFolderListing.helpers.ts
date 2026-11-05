@@ -50,7 +50,10 @@ export async function listMarkdownLevel(
   scopePath: string,
   options: ListLevelOptions = {},
 ): Promise<FolderListing> {
-  if (!repo.defaultBranch && !options.atCommitId) {
+  if (
+    !repo.defaultBranch &&
+    (options.atCommitId === undefined || options.atCommitId === "")
+  ) {
     return { files: [], folders: [] };
   }
   const read: LevelRead = {
@@ -70,7 +73,7 @@ export async function listMarkdownLevel(
   const listing = projectMarkdownLevel(items, scopePath);
   // An Azure DevOps wiki folder orders its pages with a `.order` file.
   const orderPath = findOrderFile(items, scopePath);
-  if (orderPath) {
+  if (orderPath !== undefined && orderPath !== "") {
     const order = await readOrderFile(read, orderPath);
     if (order !== undefined) listing.order = order;
   }
@@ -87,7 +90,7 @@ function levelVersion(
   repo: ListedRepo,
   atCommitId: string | undefined,
 ): GitVersionDescriptor {
-  return atCommitId
+  return atCommitId !== undefined && atCommitId !== ""
     ? {
         version: atCommitId,
         versionType: 2 /* GitVersionType.Commit */,

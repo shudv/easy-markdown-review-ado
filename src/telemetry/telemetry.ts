@@ -43,6 +43,7 @@ function makeSessionId(): string {
   if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
     return cryptoObj.randomUUID();
   }
+  // eslint-disable-next-line sonarjs/pseudo-random -- fallback only when crypto.randomUUID is unavailable; the id merely groups telemetry events and grants nothing.
   return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 

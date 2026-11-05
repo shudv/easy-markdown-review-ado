@@ -279,9 +279,7 @@ export class AdoSessionMonitor {
         this.recover("remint");
         return;
       }
-      if (spell.adoExpMs === undefined) {
-        spell.adoExpMs = readAdoTokenExpiry(token).adoExpMs;
-      }
+      spell.adoExpMs ??= readAdoTokenExpiry(token).adoExpMs;
     }
     const age = this.now() - spell.startedAtMs;
     this.schedule(

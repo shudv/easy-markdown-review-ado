@@ -242,10 +242,10 @@ describe("loadWithRepositoryHint", () => {
     const prRequest = new Promise<typeof pr>((r) => (resolvePr = r));
     const load = vi.fn(async (id: string) => `changes@${id}`);
     const result = loadWithRepositoryHint(prRequest, "repo", load);
-    expect(load).toHaveBeenCalledWith("repo");
+    expect(load).toHaveBeenCalledExactlyOnceWith("repo");
     resolvePr(pr);
     await expect(result).resolves.toEqual({ pr, changes: "changes@repo" });
-    expect(load).toHaveBeenCalledOnce();
+    expect(load).toHaveBeenCalledExactlyOnceWith("repo");
   });
 
   it("reloads from the PR's repository when the hint names another", async () => {
@@ -710,10 +710,13 @@ describe("withTimeout", () => {
         "x",
         vis.clock,
       );
-      const assertion = expect(result).rejects.toThrow(/Timeout after 15000ms/);
-      vis.set(true);
-      await vi.advanceTimersByTimeAsync(15_000);
-      await assertion;
+      await Promise.all([
+        expect(result).rejects.toThrow(/Timeout after 15000ms/),
+        (async () => {
+          vis.set(true);
+          await vi.advanceTimersByTimeAsync(15_000);
+        })(),
+      ]);
     });
 
     it("ignores repeated visible signals without restarting the budget", async () => {
@@ -762,10 +765,13 @@ describe("withTimeout", () => {
       const vis = fakeVisibility(true);
       const late = deferred<string>();
       const lateOk = withTimeout(late.promise, 100, "x", vis.clock);
-      const okAssertion = expect(lateOk).rejects.toThrow(/Timeout/);
-      await vi.advanceTimersByTimeAsync(100);
-      late.resolve("too late");
-      await okAssertion;
+      await Promise.all([
+        expect(lateOk).rejects.toThrow(/Timeout/),
+        (async () => {
+          await vi.advanceTimersByTimeAsync(100);
+          late.resolve("too late");
+        })(),
+      ]);
 
       let rejectLate!: (e: unknown) => void;
       const lateErr = withTimeout(
@@ -774,10 +780,13 @@ describe("withTimeout", () => {
         "y",
         vis.clock,
       );
-      const errAssertion = expect(lateErr).rejects.toThrow(/Timeout/);
-      await vi.advanceTimersByTimeAsync(100);
-      rejectLate(new Error("too late"));
-      await errAssertion;
+      await Promise.all([
+        expect(lateErr).rejects.toThrow(/Timeout/),
+        (async () => {
+          await vi.advanceTimersByTimeAsync(100);
+          rejectLate(new Error("too late"));
+        })(),
+      ]);
     });
 
     it("uses the document's visibility by default", async () => {

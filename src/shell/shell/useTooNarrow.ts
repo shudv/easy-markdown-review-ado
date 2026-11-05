@@ -21,6 +21,7 @@ export function useTooNarrow(
     // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
     // never disable the reader.
     if (hideDocNav) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- single-file mode tears down the ResizeObserver that owns this flag, so the layout effect clears it before paint; deriving it instead would resurface a stale `true` if the frame is absent when the nav returns.
       setTooNarrow(false);
       return;
     }

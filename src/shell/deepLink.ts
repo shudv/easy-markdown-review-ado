@@ -95,7 +95,9 @@ function targetParams(target: DeepLinkTarget): Record<string, string> {
       const anchor = target.anchor?.trim();
       return {
         [TEXT_LINK_PARAM]: target.text.trim(),
-        ...(anchor ? { [ANCHOR_LINK_PARAM]: anchor } : {}),
+        ...(anchor !== undefined && anchor !== ""
+          ? { [ANCHOR_LINK_PARAM]: anchor }
+          : {}),
       };
     }
   }
@@ -160,7 +162,7 @@ export function readCommentParam(params: RouteParams): string | undefined {
  */
 export function readAnchorParam(params: RouteParams): string | undefined {
   const anchor = readTrimmed(params, ANCHOR_LINK_PARAM)?.replace(/^#+/, "");
-  return anchor ? anchor : undefined;
+  return anchor === "" ? undefined : anchor;
 }
 
 /**
@@ -178,5 +180,5 @@ export function readTextParam(params: RouteParams): string | undefined {
  */
 export function readPathParam(params: RouteParams): string | undefined {
   const bare = readTrimmed(params, PATH_LINK_PARAM)?.replace(/^\/+/, "");
-  return bare ? `/${bare}` : undefined;
+  return bare !== undefined && bare !== "" ? `/${bare}` : undefined;
 }

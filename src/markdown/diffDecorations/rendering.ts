@@ -67,8 +67,9 @@ export function renderSource(
   source: string | undefined,
   renderInline: (md: string) => string,
 ): HTMLElement | null {
-  if (!source) return null;
+  if (source === undefined || source === "") return null;
   const container = doc.createElement("div");
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   container.innerHTML = renderInline(source);
   return container;
 }
@@ -208,7 +209,7 @@ function dedentListContent(lines: readonly string[], code: boolean): string[] {
     ...content.map((line) => /^[ \t]*/.exec(line)![0].length),
   );
   // An indented (unfenced) code block keeps its own four-space indent.
-  if (code && !/^[ \t]*(`{3,}|~{3,})/.test(content.join("\n"))) {
+  if (code && !/^[ \t]*(?:`{3,}|~{3,})/.test(content.join("\n"))) {
     indent = Math.max(0, indent - 4);
   }
   return lines.map((line) => line.slice(indent));
@@ -231,9 +232,10 @@ export function renderOriginalStandalone(
     ? /^\[\^([^\]\s]+)\]:/.exec(source)
     : null;
   if (footnote) source = `[^${footnote[1]}]\n\n${source}`;
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   scratch.innerHTML = renderInline(source);
-  return (
-    (footnote && scratch.querySelector<HTMLElement>("[data-footnotes] ol")) ||
-    scratch
-  );
+  const footnoteList = footnote
+    ? scratch.querySelector<HTMLElement>("[data-footnotes] ol")
+    : null;
+  return footnoteList ?? scratch;
 }

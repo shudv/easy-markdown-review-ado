@@ -32,12 +32,15 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
   const { html, documentPath, listFolder } = input;
   const atCommit = subpagesCommit(input.historical, input.commitId);
   const [byVersion, setByVersion] = React.useState<
-    Record<string, SubpagesState>
+    Partial<Record<string, SubpagesState>>
   >({});
   // Read when a listing starts, so a host passing a fresh callback doesn't
   // re-list.
   const listFolderRef = React.useRef(listFolder);
-  listFolderRef.current = listFolder;
+  // Layout effect: runs before the listing effect below in the same commit.
+  React.useLayoutEffect(() => {
+    listFolderRef.current = listFolder;
+  });
 
   const key = `${documentPath}\u0000${atCommit ?? ""}`;
   const canList = listFolder !== undefined && atCommit !== null;

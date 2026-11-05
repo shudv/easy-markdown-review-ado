@@ -27,7 +27,7 @@ interface RailPaneProps {
  * inside, so the rail's scroll position survives the load. Its own left-border
  * handle (full reader only) drag-resizes it live, INDEPENDENTLY of the nav.
  */
-export function RailPane(props: RailPaneProps): React.ReactElement {
+export function RailPane(props: Readonly<RailPaneProps>): React.ReactElement {
   return (
     <div className="emr-rail">
       <div className="emr-rail-scroll">

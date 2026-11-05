@@ -105,7 +105,7 @@ export function resolveDocLink(
     kind: "repo-file",
     path,
     hash,
-    isMarkdown: /\.(md|markdown)$/i.test(path),
+    isMarkdown: /\.(?:md|markdown)$/i.test(path),
   };
 }
 
@@ -129,7 +129,9 @@ export function buildReposFileUrl(
   version?: string,
 ): string {
   const params = new URLSearchParams({ path });
-  if (version) params.set("version", version);
+  if (version !== undefined && version !== "") {
+    params.set("version", version);
+  }
   const base = orgUrl.replace(/\/+$/, "");
   return `${base}/${encodeURIComponent(project)}/_git/${encodeURIComponent(
     repoName,

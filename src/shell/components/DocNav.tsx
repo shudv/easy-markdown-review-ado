@@ -27,12 +27,8 @@ import {
   type FileNode,
   type TreeNode,
 } from "./folderTree";
-import {
-  buildFolderStorageKey,
-  persistSectionState,
-  readCollapsedDirs,
-  writeCollapsedDirs,
-} from "./navStorage";
+import { buildFolderStorageKey, persistSectionState } from "./navStorage";
+import { useCollapsedDirs } from "./DocNav.collapsedDirs";
 import { useDocSearch } from "./useDocSearch";
 import {
   ChangeIndicatorContext,
@@ -140,7 +136,9 @@ const ACTIVE_MARGIN = 24; // px from top before a heading is "active"
 const MAX_TREE_LEVEL = 4; // headings deeper than H4 are not shown in the nav
 
 // eslint-disable-next-line max-lines-per-function -- Navigation pane: tree, search and outline share selection, expansion and keyboard state. Rows, header, search and model are in DocNav.* modules.
-export function DocNav(props: DocNavProps): React.ReactElement | null {
+export function DocNav(
+  props: Readonly<DocNavProps>,
+): React.ReactElement | null {
   const {
     articleWrapRef,
     scrollRef,
@@ -180,13 +178,10 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     () => buildFolderStorageKey(files),
     [files],
   );
-  const [collapsedDirs, setCollapsedDirs] = React.useState<Set<string>>(() =>
-    readCollapsedDirs(folderStorageKey),
+  const { collapsedDirs, toggleDir } = useCollapsedDirs(
+    folderStorageKey,
+    selectedPath,
   );
-  // Reset folder collapse state whenever the file list changes shape.
-  React.useEffect(() => {
-    setCollapsedDirs(readCollapsedDirs(folderStorageKey));
-  }, [folderStorageKey]);
 
   // -----------------------------------------------------------------------
   // Lazy folder expansion. Holds the set of folder paths whose fetch is
@@ -313,7 +308,14 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
           const seen = new Set<string>();
           highlights.forEach((el) => {
             const tid = el.dataset.threadId;
-            if (!tid || tid === "__draft__" || seen.has(tid)) return;
+            if (
+              tid === undefined ||
+              tid === "" ||
+              tid === "__draft__" ||
+              seen.has(tid)
+            ) {
+              return;
+            }
             seen.add(tid);
             totalComments += 1;
             if (!el.classList.contains("is-resolved")) openComments += 1;
@@ -338,7 +340,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
       .querySelectorAll<HTMLElement>('.emr-section[data-collapsed="true"]')
       .forEach((s) => {
         const sid = s.dataset.sectionId;
-        if (sid) collapsed.add(sid);
+        if (sid !== undefined && sid !== "") collapsed.add(sid);
       });
     setCollapsedIds(collapsed);
   }, [articleWrapRef]);
@@ -400,7 +402,7 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
   // Keep the active nav item visible inside the rail's scroll container.
   // -----------------------------------------------------------------------
   React.useEffect(() => {
-    if (!activeId) return;
+    if (activeId === null || activeId === "") return;
     const list = listRef.current!;
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
@@ -561,30 +563,9 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
     threadCountsByPath,
   ]);
 
-  // Auto-expand every ancestor folder of the selected file so the active row
-  // stays visible after a navigation.
-  React.useEffect(() => {
-    if (!selectedPath) return;
-    const ancestors = pathAncestors(selectedPath);
-    if (ancestors.length === 0) return;
-    setCollapsedDirs((curr) => {
-      let changed = false;
-      const next = new Set(curr);
-      for (const dir of ancestors) {
-        if (next.has(dir)) {
-          next.delete(dir);
-          changed = true;
-        }
-      }
-      if (!changed) return curr;
-      writeCollapsedDirs(folderStorageKey, next);
-      return next;
-    });
-  }, [selectedPath, folderStorageKey]);
-
   // Deep-link reveal: lazily fetch any *unenumerated* ancestor folder of the
   // selected file so a deep-linked path surfaces in the tree (the un-collapse
-  // effect above only helps folders already in `files`). Re-runs as each
+  // in `useCollapsedDirs` only helps folders already in `files`). Re-runs as each
   // level's contents stream in via `lazyDirSet`, expanding the next level down.
   // Each ancestor is attempted at most once (tracked in `autoExpandedRef`) so a
   // folder that stays lazy after its fetch doesn't get re-fetched on every
@@ -599,19 +580,6 @@ export function DocNav(props: DocNavProps): React.ReactElement | null {
       }
     }
   }, [selectedPath, lazyDirSet, expandLazyDir]);
-
-  const toggleDir = React.useCallback(
-    (dirPath: string) => {
-      setCollapsedDirs((curr) => {
-        const next = new Set(curr);
-        if (next.has(dirPath)) next.delete(dirPath);
-        else next.add(dirPath);
-        writeCollapsedDirs(folderStorageKey, next);
-        return next;
-      });
-    },
-    [folderStorageKey],
-  );
 
   // -----------------------------------------------------------------------
   // File-row click: produce a single active state on the row. Switch files

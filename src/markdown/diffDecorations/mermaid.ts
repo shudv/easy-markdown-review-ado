@@ -36,7 +36,10 @@ export function decorateMermaidBlock(
     start,
     end,
   );
-  const originalSource = originalBlock ? stripMermaidFence(originalBlock) : "";
+  const originalSource =
+    originalBlock !== null && originalBlock !== ""
+      ? stripMermaidFence(originalBlock)
+      : "";
   if (originalSource) el.dataset.diffOriginal = originalSource;
   pass.decorated++;
 }

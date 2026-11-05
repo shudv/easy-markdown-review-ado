@@ -6,7 +6,7 @@
 // both here.
 
 import { describe, it, expect } from "vitest";
-import type { Root, Element } from "hast";
+import type { Root, Element, Properties } from "hast";
 import { renderMarkdown } from "../src/markdown/render";
 import { rehypeSanitizeUrls } from "../src/markdown/sanitize-urls";
 
@@ -21,7 +21,10 @@ function sanitizeElement(el: Element): Element {
 }
 
 function relTokens(el: Element): string[] {
-  const rel = el.properties?.rel;
+  // Widened to hast's generic property value: `rel` is declared `string[]`,
+  // but this helper must also report a non-array value the sanitizer under
+  // test might emit.
+  const rel = el.properties.rel as Properties[string];
   const raw = Array.isArray(rel)
     ? rel.map(String).join(" ")
     : String(rel ?? "");
@@ -242,7 +245,7 @@ describe("renderMarkdown — security", () => {
         properties: { href: "https://example.com", target: "" },
         children: [],
       });
-      expect(out.properties?.rel).toBeUndefined();
+      expect(out.properties.rel).toBeUndefined();
     });
 
     it("hardens rel on an href-less anchor that still opens a new context", () => {
@@ -270,7 +273,7 @@ describe("renderMarkdown — security", () => {
         children: [],
       });
       expect(out.properties).not.toHaveProperty("dataEmrBlockedScheme");
-      expect(out.properties?.srcset).toBeUndefined();
+      expect(out.properties.srcset).toBeUndefined();
     });
   });
 });

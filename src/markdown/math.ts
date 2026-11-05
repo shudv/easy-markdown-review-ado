@@ -12,16 +12,16 @@ import { SKIP, visit } from "unist-util-visit";
 import { extractHastText } from "./hast-text";
 
 function classesOf(element: Element): string[] {
-  const classes = element.properties?.className;
+  const classes = element.properties.className;
   return Array.isArray(classes) ? classes.map(String) : [];
 }
 
 function sourceProperties(element: Element): Record<string, unknown> {
   return {
-    ...(element.properties?.dataSourceLine != null
+    ...(element.properties.dataSourceLine != null
       ? { dataSourceLine: element.properties.dataSourceLine }
       : {}),
-    ...(element.properties?.dataSourceEndLine != null
+    ...(element.properties.dataSourceEndLine != null
       ? { dataSourceEndLine: element.properties.dataSourceEndLine }
       : {}),
   };

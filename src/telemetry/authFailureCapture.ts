@@ -31,7 +31,7 @@ export function isLegacyHost(url: string): boolean {
 // A path segment that's a numeric id or a GUID — dropped so the API area never
 // carries an identifier.
 const ID_SEGMENT_RE =
-  /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  /^(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 // The SECOND `_apis` segment is kept only when it's a known ADO controller
 // name. Otherwise it can be a user-defined project / repo / resource NAME
@@ -67,18 +67,15 @@ const SAFE_SUBAREAS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
  */
 export function apiAreaOf(url: string): string | undefined {
   const m = /\/_apis\/([^?#]*)/.exec(url);
-  if (!m || !m[1]) return undefined;
+  if (m === null || m[1] === "") return undefined;
   const segs = m[1].split("/").filter((s) => s);
   const first = segs[0]?.toLowerCase();
   if (!first || ID_SEGMENT_RE.test(first)) return undefined;
-  const secondRaw = segs[1];
-  const second = secondRaw?.toLowerCase();
-  if (
-    second &&
-    !ID_SEGMENT_RE.test(secondRaw) &&
-    SAFE_SUBAREAS.get(first)?.has(second)
-  ) {
-    return `${first}.${second}`;
+  // Segments are non-empty (filtered above), so a defined one is truthy.
+  const secondRaw = segs.length > 1 ? segs[1] : undefined;
+  if (secondRaw !== undefined && !ID_SEGMENT_RE.test(secondRaw)) {
+    const second = secondRaw.toLowerCase();
+    if (SAFE_SUBAREAS.get(first)?.has(second)) return `${first}.${second}`;
   }
   return first;
 }

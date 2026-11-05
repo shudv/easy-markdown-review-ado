@@ -35,7 +35,9 @@ export function repositoryImageMimeType(path: string): string {
   const extension = Object.keys(IMAGE_MIME_TYPES).find((candidate) =>
     normalized.endsWith(candidate),
   );
-  return extension ? IMAGE_MIME_TYPES[extension]! : "application/octet-stream";
+  return extension !== undefined
+    ? IMAGE_MIME_TYPES[extension]!
+    : "application/octet-stream";
 }
 
 export function resolveRepositoryImagePath(
@@ -71,7 +73,8 @@ export function hydrateDocumentImages(
       documentPath,
       image.getAttribute("src")!,
     );
-    if (!repositoryPath) continue;
+    // Never "": a resolved URL's pathname always starts with "/".
+    if (repositoryPath === null) continue;
 
     const frame = document.createElement("span");
     frame.className = "emr-repo-image-frame is-loading";
@@ -126,7 +129,7 @@ export function hydrateDocumentImages(
     });
     const settle = (objectUrl: string | undefined, error?: unknown) => {
       if (disposed) return;
-      if (objectUrl) {
+      if (objectUrl !== undefined && objectUrl !== "") {
         image.src = objectUrl;
       } else {
         showError(error ?? new Error("Repository image not available"));

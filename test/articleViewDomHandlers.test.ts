@@ -121,7 +121,7 @@ describe("handleSectionToggleClick", () => {
     handleSectionToggleClick(toggle, "doc.md", { current: wrap });
     expect(root.querySelector("section")!.dataset.collapsed).toBe("true");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(sessionStorage.length).toBe(0);
+    expect(sessionStorage).toHaveLength(0);
     expect(changed).toHaveBeenCalledTimes(1);
   });
 });

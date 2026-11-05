@@ -168,8 +168,9 @@ export function syncHostTheme(): () => void {
 
   if (typeof MutationObserver !== "undefined") {
     const observer = new MutationObserver(evaluate);
-    if (document.body) {
-      observer.observe(document.body, {
+    const body = documentBody();
+    if (body !== null) {
+      observer.observe(body, {
         attributes: true,
         attributeFilter: ["class", "style"],
       });
@@ -188,11 +189,19 @@ export function syncHostTheme(): () => void {
 }
 
 /**
+ * `document.body`, typed honestly: the DOM typings say it always exists, but it
+ * is `null` until the parser reaches `<body>` (and in detached documents).
+ */
+function documentBody(): HTMLElement | null {
+  return document.body as HTMLElement | null;
+}
+
+/**
  * True if the host background reads as dark (Rec.709 luminance < 50%). Falls
  * back to light outside a DOM context or when no background is resolvable.
  */
 function isHostDark(): boolean {
-  if (typeof document === "undefined" || !document.body) return false;
+  if (typeof document === "undefined" || documentBody() === null) return false;
   if (typeof getComputedStyle !== "function") return false;
   try {
     const cs = getComputedStyle(document.body);
@@ -213,7 +222,7 @@ function isHostDark(): boolean {
  * back to false outside a DOM context or when the value can't be read.
  */
 function isAdoHighContrast(): boolean {
-  if (typeof document === "undefined" || !document.body) return false;
+  if (typeof document === "undefined" || documentBody() === null) return false;
   if (typeof getComputedStyle !== "function") return false;
   try {
     const primary = getComputedStyle(document.body).getPropertyValue(

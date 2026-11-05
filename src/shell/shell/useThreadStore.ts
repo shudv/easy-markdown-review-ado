@@ -68,18 +68,20 @@ export function useThreadStore(opts: ThreadStoreOptions) {
   // Per-document mode: poll the *currently selected* document's threads. The
   // closure reads `selectedPathRef` so its identity stays stable across file
   // switches while always targeting the active document.
-  const perPathFetch = React.useMemo(
-    () =>
-      loadThreadsForPath
-        ? (_signal: AbortSignal): Promise<CommentThread[]> =>
-            loadThreadsForPath(selectedPathRef.current)
-        : undefined,
+  const perPathFetch = React.useCallback(
+    (_signal: AbortSignal): Promise<CommentThread[]> =>
+      loadThreadsForPath!(selectedPathRef.current),
     [loadThreadsForPath, selectedPathRef],
   );
-  const effectiveFetch = opts.fetchRemoteThreads ?? perPathFetch;
+  // Branch on the loaders themselves rather than on `perPathFetch`, which only
+  // reads its ref when the poller calls it.
+  const hasRemoteFetch =
+    opts.fetchRemoteThreads !== undefined || loadThreadsForPath !== undefined;
   const threadSync = useThreadSync({
-    enabled: !!effectiveFetch,
-    fetchThreads: effectiveFetch ?? noopFetch,
+    enabled: hasRemoteFetch,
+    fetchThreads:
+      opts.fetchRemoteThreads ??
+      (loadThreadsForPath ? perPathFetch : noopFetch),
     onThreads: opts.fetchRemoteThreads ? onPrThreads : onRemoteThreads,
     intervalMs: opts.threadSyncIntervalMs,
     // Resume polling the moment the ADO session is re-minted.
@@ -90,7 +92,7 @@ export function useThreadStore(opts: ThreadStoreOptions) {
   // — replacing the separate per-header refresh buttons. Gated on comment
   // refreshability, which every reader surface has; hosts that also expose a
   // file reload pass `onRefreshFiles` to fold it into the same click.
-  const canRefreshComments = !!effectiveFetch;
+  const canRefreshComments = hasRemoteFetch;
   const refresh = useUnifiedRefresh(threadSync, onRefreshFiles);
   useFirstThreadLoad(loadThreadsForPath, selectedPath, dispatch);
 

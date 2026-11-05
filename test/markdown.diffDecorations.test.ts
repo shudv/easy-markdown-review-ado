@@ -36,7 +36,7 @@ function makeRoot(
     const el = document.createElement(b.tag);
     el.setAttribute("data-source-line", String(b.start));
     el.setAttribute("data-source-end-line", String(b.end));
-    if (b.html) el.innerHTML = b.html;
+    if (b.html !== undefined && b.html !== "") el.innerHTML = b.html;
     root.appendChild(el);
   }
   return root;
@@ -256,7 +256,7 @@ describe("decorateDiffRanges", () => {
     ]);
     expect(res.decorated).toBe(1);
     const marked = root.querySelectorAll(`.${DIFF_BLOCK_CLASS}`);
-    expect(marked.length).toBe(1);
+    expect(marked).toHaveLength(1);
     expect(marked[0].getAttribute("data-source-line")).toBe("20");
   });
 
@@ -1325,7 +1325,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const blocks = Array.from(root.children) as HTMLElement[];
     expect(
       blocks.map((block) =>
-        block.querySelector(".emr-diff-line-wash")?.textContent?.trim(),
+        block.querySelector(".emr-diff-line-wash")?.textContent.trim(),
       ),
     ).toEqual(["Quality gates", "First changed line.", "Second changed line."]);
     expect(blocks.map((block) => block.dataset.diffGroup)).toEqual([

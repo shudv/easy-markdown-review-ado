@@ -132,17 +132,17 @@ describe("useLazyTree", () => {
   it("is inert without a selected repo", async () => {
     const { result } = run([undefined, vi.fn()]);
     expect(result.current.lazyTree).toBeUndefined();
-    await expect(result.current.handleExpandFolder("/docs")).resolves.toBe(
-      null,
-    );
+    await expect(
+      result.current.handleExpandFolder("/docs"),
+    ).resolves.toBeNull();
   });
 
   it("returns null when no expansion handler is wired", async () => {
     const { result } = run([repo("a", { files: [file("/a.md")] }), undefined]);
     expect(result.current.lazyTree?.files).toEqual([file("/a.md")]);
-    await expect(result.current.handleExpandFolder("/docs")).resolves.toBe(
-      null,
-    );
+    await expect(
+      result.current.handleExpandFolder("/docs"),
+    ).resolves.toBeNull();
   });
 
   it("seeds from the real listing, not the skeleton, and keeps the cache", () => {
@@ -206,7 +206,7 @@ describe("useLazyTree", () => {
     });
     const { result } = run([repo("a", { files: [file("/a.md")] }), onExpand]);
     await act(async () => {
-      await expect(result.current.handleExpandFolder("/x")).resolves.toBe(null);
+      await expect(result.current.handleExpandFolder("/x")).resolves.toBeNull();
     });
     expect(telemetry.trackUserFacingError).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "folder-expand" }),
@@ -358,6 +358,7 @@ describe("useRepoBindings", () => {
     expect(Object.keys(optional)).toHaveLength(9);
   }
 
+  // eslint-disable-next-line vitest/expect-expect -- assertions live in the expectNothingBound() helper
   it("binds nothing optional when the host omits the loaders", () => {
     const props: DocumentsAppProps = {
       repos: [],

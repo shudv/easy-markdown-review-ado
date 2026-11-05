@@ -155,10 +155,7 @@ export function tryInlineWordDiff(
       block,
       originalPlain,
     );
-    if (!contentDiff.handled && !structureChanged && !blockStructureChanged) {
-      return false;
-    }
-    return true;
+    return contentDiff.handled || structureChanged || blockStructureChanged;
   }
   // A reworded item can also have been ticked off or re-marked; the word diff
   // alone would hide that.

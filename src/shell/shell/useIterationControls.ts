@@ -45,6 +45,7 @@ export function useIterationControls(opts: IterationControlsOptions) {
     opts.completedPrHistoryEnabled,
     historyStops,
     opts.clampedStopIndex,
+    // eslint-disable-next-line react-hooks/refs -- buildHistoryNav only wires this into the chevrons' click handlers, so the ref is read on click, never during render.
     (stopIndex) => {
       setCompletedHistoryStopIndex(stopIndex);
       setActiveThreadId(null);
@@ -79,7 +80,12 @@ export function useIterationControls(opts: IterationControlsOptions) {
   // the latest version. Otherwise the selection bubble explains why and
   // offers to extend the comparison to the latest update (same start point).
   const commentBlocker = React.useMemo(() => {
-    if (!nativeIterationMode || !viewingHistorical || !latestHtml) {
+    if (
+      !nativeIterationMode ||
+      !viewingHistorical ||
+      latestHtml === undefined ||
+      latestHtml === ""
+    ) {
       return undefined;
     }
     return (anchor: TextQuoteAnchor) =>

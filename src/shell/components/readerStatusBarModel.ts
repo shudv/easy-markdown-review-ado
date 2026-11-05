@@ -46,11 +46,11 @@ function showsCommentStepper(input: StatusBarVisibilityInput): boolean {
 }
 
 function showsIterationPicker(input: StatusBarVisibilityInput): boolean {
-  return !!(
-    input.iterationCount &&
+  return (
+    input.iterationCount !== undefined &&
     input.iterationCount > 1 &&
     input.hasIterationRange &&
-    input.onIterationRangeChange
+    input.onIterationRangeChange !== undefined
   );
 }
 
@@ -185,7 +185,9 @@ export function iterationPickerModel(
 
 /** Tooltip of the base-commit glyph. */
 export function baseCommitTitle(baseCommit: string | undefined): string {
-  return baseCommit ? `Base commit ${baseCommit.slice(0, 7)}` : "Base commit";
+  return baseCommit !== undefined && baseCommit !== ""
+    ? `Base commit ${baseCommit.slice(0, 7)}`
+    : "Base commit";
 }
 
 /** Range-edge modifier classes for an update row in the picker list. */

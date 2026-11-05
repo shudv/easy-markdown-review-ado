@@ -15,12 +15,12 @@ export function CommentApiScope({
   busy,
   registerEditor,
   children,
-}: {
+}: Readonly<{
   api: CommentApi;
   busy: boolean;
   registerEditor: () => () => void;
   children: React.ReactNode;
-}): React.ReactElement {
+}>): React.ReactElement {
   return (
     <CommentApiProvider value={api}>
       <ComposerBusyContext.Provider value={busy}>

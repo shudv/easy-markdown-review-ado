@@ -5,7 +5,7 @@
 
 function env(name: string, fallback: string): string {
   const v = process.env[name];
-  return v && v.trim() ? v.trim() : fallback;
+  return v !== undefined && v.trim() !== "" ? v.trim() : fallback;
 }
 
 const ORG_URL = env("AZDO_ORG_URL", "https://dev.azure.com/your-org").replace(

@@ -103,6 +103,7 @@ function buildBeforeTableContent(
 ): DocumentFragment {
   const fragment = doc.createDocumentFragment();
   const rendered = doc.createElement("div");
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   rendered.innerHTML = renderInline(markdown);
   if (rendered.querySelector("table")) {
     while (rendered.firstChild) fragment.appendChild(rendered.firstChild);
@@ -122,6 +123,7 @@ function buildBeforeTableContent(
   }
 
   const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   rendered.innerHTML = renderInline(
     [lines[0]!, delimiter, ...lines.slice(1)].join("\n"),
   );
@@ -129,10 +131,10 @@ function buildBeforeTableContent(
   const headerRow = table.querySelector<HTMLTableRowElement>("thead tr")!;
   for (const header of Array.from(headerRow.querySelectorAll("th"))) {
     const cell = doc.createElement("td");
-    cell.innerHTML = header.innerHTML;
+    cell.append(...Array.from(header.childNodes));
     header.replaceWith(cell);
   }
-  const body = table.tBodies[0] ?? table.createTBody();
+  const body = table.tBodies.item(0) ?? table.createTBody();
   body.prepend(headerRow);
   table.tHead?.remove();
   fragment.appendChild(table);

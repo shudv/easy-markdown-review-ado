@@ -226,7 +226,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     );
     await expect(pill).toBeVisible({ timeout: 10_000 });
     await expect(pill).toContainText(displayName);
-    await expect(pill).not.toContainText(/^@?<?[0-9a-fA-F-]{36}>?$/);
+    await expect(pill).not.toContainText(/^@?<?[\da-f-]{36}>?$/i);
 
     // Cancel — never persist to the shared sandbox PR.
     await frame
@@ -251,7 +251,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     // `thread.identities` map is null and the by-id identity endpoint returns
     // null too. Finally delete the comment so the sandbox PR stays clean (runs
     // even if an assertion fails).
-    const GUID_RE = /^@?<?[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}>?$/;
+    const GUID_RE = /^@?<?[\da-f]{8}-[\da-f-]{27}>?$/i;
     // Unique marker so we can find (and later delete) exactly our thread after a
     // full reload, without depending on ordering or other sandbox comments.
     const marker = `emr-e2e-mention-${Date.now()}`;
@@ -284,9 +284,9 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     // Type the marker, then drive the @-picker to mention the configured
     // non-author user. Picking writes the ADO-native `@<GUID>` token.
     await textarea.click();
-    await textarea.type(`${marker} `, { delay: 10 });
-    await textarea.type("@", { delay: 30 });
-    await textarea.type(E2E.mentionQuery, { delay: 60 });
+    await textarea.pressSequentially(`${marker} `, { delay: 10 });
+    await textarea.pressSequentially("@", { delay: 30 });
+    await textarea.pressSequentially(E2E.mentionQuery, { delay: 60 });
 
     const picker = frame.locator(".emr-mention-picker");
     await picker.waitFor({ state: "visible", timeout: 15_000 });
@@ -326,8 +326,8 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const replyBox = posted.locator("textarea.emr-textarea");
     await expect(replyBox).toBeVisible({ timeout: 10_000 });
     await replyBox.click();
-    await replyBox.type(`reply @`, { delay: 30 });
-    await replyBox.type(E2E.mentionQuery, { delay: 60 });
+    await replyBox.pressSequentially(`reply @`, { delay: 30 });
+    await replyBox.pressSequentially(E2E.mentionQuery, { delay: 60 });
     const replyPicker = frame.locator(".emr-mention-picker");
     await replyPicker.waitFor({ state: "visible", timeout: 15_000 });
     await replyPicker

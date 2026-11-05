@@ -45,7 +45,7 @@ export function changedMarkdownFiles(
   const mdEntries: Pick<FileInfo, "path" | "changeType">[] = [];
   for (const e of changes) {
     const path = markdownChangePath(e);
-    if (!path) continue;
+    if (path === undefined) continue;
     mdEntries.push({ path, changeType: mapChangeType(e.changeType) });
   }
   return mdEntries
@@ -72,9 +72,14 @@ export function contentCommitForPath(
   const changeType = ctx.changedMdFiles.find(
     (file) => file.path === path,
   )?.changeType;
+  // Typed required, but the ADO REST payload omits these on some PRs.
+  const pr: {
+    lastMergeTargetCommit?: { commitId?: string };
+    lastMergeSourceCommit?: { commitId?: string };
+  } = ctx.pr;
   return contentCommitForChange(changeType, {
-    baseCommit: ctx.baseCommit ?? ctx.pr.lastMergeTargetCommit?.commitId,
-    targetCommit: ctx.targetCommit ?? ctx.pr.lastMergeSourceCommit?.commitId,
+    baseCommit: ctx.baseCommit ?? pr.lastMergeTargetCommit?.commitId,
+    targetCommit: ctx.targetCommit ?? pr.lastMergeSourceCommit?.commitId,
   });
 }
 

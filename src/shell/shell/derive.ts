@@ -26,8 +26,15 @@ export function pickInitialPath(
   initialSelectedPath: string | undefined,
   files: readonly FileInfo[],
 ): string {
-  return initialSelectedPath ?? files[0]?.path ?? "";
+  return initialSelectedPath ?? (files.length > 0 ? files[0].path : "");
 }
+
+function isNonEmpty(s: string | null | undefined): s is string {
+  return s != null && s !== "";
+}
+
+/** A host-provided loader callback, or `undefined` when the host has none. */
+type OptionalLoader = ((...args: never[]) => unknown) | undefined;
 
 /**
  * In per-document mode a document with no routed PR has nowhere to persist
@@ -94,9 +101,9 @@ export function isSameDraftTarget(
  * completed-PR history (all three loaders) or the PR tab's native updates.
  */
 export function historyModes(opts: {
-  loadDocHistory: unknown;
-  loadThreadsForPr: unknown;
-  loadFileSourceAt: unknown;
+  loadDocHistory: OptionalLoader;
+  loadThreadsForPr: OptionalLoader;
+  loadFileSourceAt: OptionalLoader;
   reviewIterationStops: readonly HistoryStop[] | undefined;
   reviewIterationBaseCommit: string | undefined;
 }): {
@@ -105,16 +112,14 @@ export function historyModes(opts: {
   nativeUpdateCount: number;
 } {
   return {
-    completedPrHistoryEnabled: !!(
-      opts.loadDocHistory &&
-      opts.loadThreadsForPr &&
-      opts.loadFileSourceAt
-    ),
-    nativeIterationMode: !!(
-      opts.reviewIterationStops?.length &&
-      opts.reviewIterationBaseCommit &&
-      opts.loadFileSourceAt
-    ),
+    completedPrHistoryEnabled:
+      opts.loadDocHistory !== undefined &&
+      opts.loadThreadsForPr !== undefined &&
+      opts.loadFileSourceAt !== undefined,
+    nativeIterationMode:
+      (opts.reviewIterationStops?.length ?? 0) > 0 &&
+      isNonEmpty(opts.reviewIterationBaseCommit) &&
+      opts.loadFileSourceAt !== undefined,
     nativeUpdateCount: Math.max(1, opts.reviewIterationStops?.length ?? 1),
   };
 }
@@ -180,16 +185,18 @@ export function resolveHistoryView(opts: {
 /** The file list's "changed in the compared updates" marks, once loaded. */
 export function docNavRangeChangesFor(
   rangeChangesKey: string | null,
-  rangeChangesByKey: Record<string, Readonly<Record<string, ChangeType>>>,
+  rangeChangesByKey: Partial<
+    Record<string, Readonly<Record<string, ChangeType>>>
+  >,
   range: ReviewIterationRange,
   updateCount: number,
 ): { label: string; byPath: Readonly<Record<string, ChangeType>> } | undefined {
-  if (rangeChangesKey === null || !rangeChangesByKey[rangeChangesKey]) {
-    return undefined;
-  }
+  if (rangeChangesKey === null) return undefined;
+  const byPath = rangeChangesByKey[rangeChangesKey];
+  if (byPath === undefined) return undefined;
   return {
     label: reviewRangeLabel(range, updateCount),
-    byPath: rangeChangesByKey[rangeChangesKey],
+    byPath,
   };
 }
 
@@ -215,7 +222,7 @@ export function historicalContentKeys(opts: {
     opts.baselineStop?.commitId ?? opts.reviewIterationBaseCommit;
   return {
     historicalContentKey:
-      opts.viewingHistorical && activeStop.commitId
+      opts.viewingHistorical && isNonEmpty(activeStop.commitId)
         ? `${selectedPath}\u0000${activeStop.commitId}`
         : null,
     baselineCommitId,
@@ -243,20 +250,20 @@ export function historicalStatus(opts: {
   historicalLoadTargets: readonly { key: string }[];
   currentFileChangeType: ChangeType | undefined;
   toUpdate: number;
-  historicalHtmlByKey: Record<string, string>;
-  historicalSourceByKey: Record<string, string>;
-  historicalErrorByKey: Record<string, string>;
-  historicalAbsentByKey: Record<string, true>;
+  historicalHtmlByKey: Partial<Record<string, string>>;
+  historicalSourceByKey: Partial<Record<string, string>>;
+  historicalErrorByKey: Partial<Record<string, string>>;
+  historicalAbsentByKey: Partial<Record<string, true>>;
 }): HistoricalStatus {
   const { historicalContentKey, baselineContentKey } = opts;
-  const historicalHtml = historicalContentKey
+  const historicalHtml = isNonEmpty(historicalContentKey)
     ? opts.historicalHtmlByKey[historicalContentKey]
     : undefined;
   // A historical stop with no recorded merge commit can't load a snapshot
   // (`historicalContentKey` is null), so fall back to the live head content
   // instead of rendering a blank, perpetually-"loading" article.
   const usingHistoricalContent =
-    opts.viewingHistorical && !!historicalContentKey;
+    opts.viewingHistorical && isNonEmpty(historicalContentKey);
   const historicalLoadError = opts.historicalLoadTargets.reduce<
     string | undefined
   >(
@@ -317,7 +324,7 @@ export function activeArticleState(opts: {
   return {
     activePristineHtml,
     activeStorageKey:
-      opts.viewingHistorical && historicalContentKey
+      opts.viewingHistorical && isNonEmpty(historicalContentKey)
         ? historicalContentKey
         : opts.selectedPath,
     // "Rendered" means the article actually shown — when a link opens an

@@ -66,7 +66,9 @@ interface CommentRowProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Single comment: author line, body or edit mode, reactions and actions menu share edit state. Hooks and parts are already split out.
-export function CommentRow(props: CommentRowProps): React.ReactElement {
+export function CommentRow(
+  props: Readonly<CommentRowProps>,
+): React.ReactElement {
   const {
     threadId,
     comment,
@@ -159,6 +161,7 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
           <CommentRowMeta comment={comment} />
 
           {interactive && !edit.editing ? (
+            // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks on the comment tools from bubbling to the balloon's select-thread handler; it has no action of its own
             <div
               className="emr-comment-tools"
               onClick={(e) => e.stopPropagation()}
@@ -218,10 +221,12 @@ export function CommentRow(props: CommentRowProps): React.ReactElement {
         </div>
 
         {edit.editing ? (
+          // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks in the edit composer from bubbling to the balloon's select-thread handler; it has no action of its own
           <div onClick={(e) => e.stopPropagation()}>
             <Composer
               initial={comment.bodyMarkdown}
               submitLabel="Save"
+              // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the edit composer only mounts after the user picks "Edit comment", so focus moves to the text they asked to edit
               autoFocus
               onChange={edit.onChange}
               onSubmit={edit.onSubmit}

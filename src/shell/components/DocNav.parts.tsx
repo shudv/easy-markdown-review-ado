@@ -6,10 +6,12 @@ import { type NavHeading, type DirNavNode, basename } from "./DocNav.model";
 import { SvgCaret, SvgFolder, SvgSpinner } from "./DocNav.icons";
 
 /** A heading row's chevron: folds the doc section + nav children. */
-export function HeadingTwist(props: {
-  collapsed: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
+export function HeadingTwist(
+  props: Readonly<{
+    collapsed: boolean;
+    onToggle: () => void;
+  }>,
+): React.ReactElement {
   const { collapsed, onToggle } = props;
   return (
     <button
@@ -30,9 +32,11 @@ export function HeadingTwist(props: {
 }
 
 /** Open-comment badge, else a resolved-comment badge; nothing when neither. */
-export function HeadingCommentBadge(props: {
-  heading: NavHeading;
-}): React.ReactElement | null {
+export function HeadingCommentBadge(
+  props: Readonly<{
+    heading: NavHeading;
+  }>,
+): React.ReactElement | null {
   const { heading } = props;
   if (heading.openComments > 0) {
     return (
@@ -71,12 +75,14 @@ export function dirTwistText(
 }
 
 /** A folder row's chevron: expands/collapses (or loads) the folder. */
-export function DirTwistButton(props: {
-  twist: { label: string; title: string };
-  isCollapsed: boolean;
-  isLoading: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
+export function DirTwistButton(
+  props: Readonly<{
+    twist: { label: string; title: string };
+    isCollapsed: boolean;
+    isLoading: boolean;
+    onToggle: () => void;
+  }>,
+): React.ReactElement {
   const { twist, isCollapsed, isLoading, onToggle } = props;
   return (
     <button
@@ -99,13 +105,15 @@ export function DirTwistButton(props: {
 }
 
 /** Label of a plain folder row: expands/collapses (or loads) the folder. */
-export function DirFolderLabel(props: {
-  node: DirNavNode;
-  isLazy: boolean;
-  isLoading: boolean;
-  isCollapsed: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
+export function DirFolderLabel(
+  props: Readonly<{
+    node: DirNavNode;
+    isLazy: boolean;
+    isLoading: boolean;
+    isCollapsed: boolean;
+    onToggle: () => void;
+  }>,
+): React.ReactElement {
   const { node, isLazy, isLoading, isCollapsed, onToggle } = props;
   return (
     <button
@@ -129,10 +137,12 @@ export function DirFolderLabel(props: {
 }
 
 /** Label of a page-with-subpages row: opens the page; shows its comments. */
-export function WikiPageLabel(props: {
-  page: NonNullable<DirNavNode["page"]>;
-  onOpen: () => void;
-}): React.ReactElement {
+export function WikiPageLabel(
+  props: Readonly<{
+    page: NonNullable<DirNavNode["page"]>;
+    onOpen: () => void;
+  }>,
+): React.ReactElement {
   const { page, onOpen } = props;
   return (
     <button

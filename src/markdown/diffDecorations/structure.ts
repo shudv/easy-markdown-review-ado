@@ -43,9 +43,9 @@ export function applyLeafStructureDiff(
   if (target.tagName !== "LI" || original.tagName !== "LI") return false;
   const markerLabel = listMarkerChangeLabel(original, target);
   const taskChange = checklistStateChange(original, target);
-  if (markerLabel) target.classList.add(DIFF_LIST_MARKER_CLASS);
+  if (markerLabel !== null) target.classList.add(DIFF_LIST_MARKER_CLASS);
   if (taskChange) taskChange.input.classList.add(DIFF_TASK_STATE_CLASS);
-  if (markerLabel) {
+  if (markerLabel !== null) {
     applyDiffTooltip(
       target,
       taskChange

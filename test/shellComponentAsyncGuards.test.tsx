@@ -88,6 +88,18 @@ describe("Avatar", () => {
       "blob:second",
     );
   });
+
+  it("swaps straight to the new author's photo without a resolver", () => {
+    render(<Avatar author={author("first")} />);
+    render(<Avatar author={author("second")} />);
+    expect(container!.querySelector("img")!.getAttribute("src")).toBe(
+      author("second").avatarUrl,
+    );
+
+    render(<Avatar author={{ ...author("third"), avatarUrl: undefined }} />);
+    expect(container!.querySelector("img")).toBeNull();
+    expect(container!.textContent).toBe("TH");
+  });
 });
 
 describe("useCommentLinkCopy", () => {

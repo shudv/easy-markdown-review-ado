@@ -126,7 +126,7 @@ function closingTag(value: string): string | null {
 function openingContainer(value: string): string | null {
   const match = /^\s*<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.exec(value);
   const tagName = match?.[1]?.toLowerCase();
-  return tagName &&
+  return tagName !== undefined &&
     SAFE_HTML_TAGS.has(tagName) &&
     !VOID_HTML_TAGS.has(tagName) &&
     !new RegExp(`<\\/${tagName}\\s*>`, "i").test(value)
@@ -145,7 +145,8 @@ function closeContainer(
   close: string,
   raw: RawNode,
 ): void {
-  const active = state.stack[state.stack.length - 1];
+  const active =
+    state.stack.length > 0 ? state.stack[state.stack.length - 1] : undefined;
   if (active?.element.tagName !== close) return;
   if (raw.position && active.element.position) {
     active.element.position.end = raw.position.end;
@@ -169,7 +170,7 @@ function appendRawFragment(state: TransformState, raw: RawNode): void {
   const container = converted.find(
     (node): node is Element => node.type === "element" && node.tagName === open,
   );
-  if (open && container) {
+  if (open !== null && container !== undefined) {
     state.stack.push({ element: container, parent: state.current });
     state.current = container.children;
   }
@@ -183,7 +184,7 @@ function transformChildren(children: RootContent[]): RootContent[] {
     if (child.type === "raw") {
       const raw = child as RawNode;
       const close = closingTag(raw.value);
-      if (close) closeContainer(state, close, raw);
+      if (close !== null) closeContainer(state, close, raw);
       else appendRawFragment(state, raw);
       continue;
     }

@@ -252,7 +252,7 @@ function decorateModifiedTableRow(
     range?.originalText != null
       ? range.originalText.split(/\r\n|\r|\n/)[start - range.start]
       : undefined;
-  if (!originalRow || !range) return;
+  if (originalRow === undefined || originalRow === "" || !range) return;
   const columnAlignment = el.closest("thead")
     ? undefined
     : resolveTableColumnAlignment(el, range, renderInline);
@@ -322,12 +322,12 @@ function attachOriginalComparison(
     block.start,
     block.end,
   );
-  if (!originalBlock) return;
+  if (originalBlock === null || originalBlock === "") return;
   if (el.classList.contains(DIFF_MATH_CLASS)) {
     const encoded = renderOriginalStandalone(el, originalBlock, renderInline)
       .querySelector<HTMLElement>(".emr-math[data-math-src]")
       ?.getAttribute("data-math-src");
-    if (encoded) {
+    if (encoded != null && encoded !== "") {
       el.dataset.diffOriginal = decodeURIComponent(encoded);
     }
   } else {

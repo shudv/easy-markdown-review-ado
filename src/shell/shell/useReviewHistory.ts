@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import type { ChangeType } from "../../types";
+import type { ChangeType, CommentThread } from "../../types";
 import { trackUserFacingError } from "../../telemetry";
 import {
   allReviewIterations,
@@ -25,8 +25,12 @@ interface ReviewHistoryOptions {
   selectedPath: string;
   effectiveRoutedPr: RoutedPrInfo | undefined;
   loadDocHistory: ((path: string) => Promise<DocPrRef[]>) | undefined;
-  loadThreadsForPr: unknown;
-  loadFileSourceAt: unknown;
+  loadThreadsForPr:
+    | ((prId: number, path: string) => Promise<CommentThread[]>)
+    | undefined;
+  loadFileSourceAt:
+    | ((path: string, commitId: string) => Promise<string>)
+    | undefined;
   reviewIterationStops: readonly HistoryStop[] | undefined;
   reviewIterationBaseCommit: string | undefined;
   initialIterationRange: ReviewIterationRange | undefined;
@@ -82,8 +86,11 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
   // route and shared links (`null` = All updates). Keyed on the comparison's
   // value; the callback is read through a ref so an inline host callback
   // doesn't re-fire it on every render.
-  const onIterationRangeChangeRef = React.useRef(opts.onIterationRangeChange);
-  onIterationRangeChangeRef.current = opts.onIterationRangeChange;
+  const onIterationRangeChange = opts.onIterationRangeChange;
+  const onIterationRangeChangeRef = React.useRef(onIterationRangeChange);
+  React.useLayoutEffect(() => {
+    onIterationRangeChangeRef.current = onIterationRangeChange;
+  });
   React.useEffect(() => {
     if (reportedRangeKey === null) return;
     onIterationRangeChangeRef.current?.(
@@ -124,7 +131,7 @@ function useRangeChanges(args: {
   // dim the rest. Cached per comparison; a failed load just leaves the
   // PR-wide indicators in place.
   const [rangeChangesByKey, setRangeChangesByKey] = React.useState<
-    Record<string, Readonly<Record<string, ChangeType>>>
+    Partial<Record<string, Readonly<Record<string, ChangeType>>>>
   >({});
   React.useEffect(() => {
     if (

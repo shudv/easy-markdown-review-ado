@@ -105,7 +105,7 @@ export function loadDraft(scope: DraftScope): PersistedDraft | null {
   } catch {
     return null;
   }
-  if (!raw) return null;
+  if (raw === null || raw === "") return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -197,8 +197,8 @@ export function createThrottledDraftWriter(
       const elapsed = Date.now() - lastWrite;
       if (elapsed >= intervalMs) {
         write();
-      } else if (timer === null) {
-        timer = setTimeout(write, intervalMs - elapsed);
+      } else {
+        timer ??= setTimeout(write, intervalMs - elapsed);
       }
     },
     flush(): void {

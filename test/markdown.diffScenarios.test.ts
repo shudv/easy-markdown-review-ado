@@ -406,8 +406,8 @@ describe("paragraphs", () => {
     ]);
     const marks = root.querySelectorAll(`.${DIFF_FORMAT_CLASS}`);
     expect(marks).toHaveLength(1);
-    expect(marks[0]?.textContent).toBe("regional rollout");
-    expect(marks[0]?.parentElement?.tagName).toBe("EM");
+    expect(marks[0]!.textContent).toBe("regional rollout");
+    expect(marks[0]!.parentElement?.tagName).toBe("EM");
     expectPreciseAmber(
       marks[0] as HTMLElement,
       "Formatting changed from bold to italic",
@@ -744,10 +744,9 @@ describe("paragraphs", () => {
         originalText: "Read the [guide](https://example.com/legacy).",
       },
     ]);
-    expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Link removed: https://example.com/legacy",
-    );
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Link removed: https://example.com/legacy");
   });
 
   it("bounds long link destinations in the callout", () => {
@@ -783,8 +782,10 @@ describe("paragraphs", () => {
         originalText: "Read the deployment guide.",
       },
     ]);
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
     expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
+      mark!,
       "Bold and link to https://example.com/deploy formatting added",
     );
   });
@@ -819,10 +820,9 @@ describe("paragraphs", () => {
         originalText: "> Definition",
       },
     ]);
-    expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Block changed from quote to paragraph",
-    );
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Block changed from quote to paragraph");
   });
 
   it("shows Before for a low-confidence block-type rewrite", () => {
@@ -860,7 +860,7 @@ describe("unordered lists", () => {
     const marked = items.filter((li) =>
       li.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(marked.length).toBe(1);
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("beta");
   });
 
@@ -976,7 +976,7 @@ describe("ordered lists", () => {
     const marked = Array.from(root.querySelectorAll("li")).filter((li) =>
       li.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(marked.length).toBe(1);
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("two");
   });
 
@@ -1110,7 +1110,7 @@ describe("ordered lists", () => {
     expect(p.querySelector(`.${WORD_ADDED_CLASS}`)).not.toBeNull();
     expect(p.querySelector(`.${WORD_REMOVED_CLASS}`)).not.toBeNull();
     // …and NONE escape to the item level as the blank-line-inducing marks.
-    expect(li2.querySelectorAll(":scope > ins, :scope > del").length).toBe(0);
+    expect(li2.querySelectorAll(":scope > ins, :scope > del")).toHaveLength(0);
     expect(words(li2).added).toContain("v4");
     expect(words(li2).removed).toContain("private");
   });
@@ -1387,7 +1387,7 @@ describe("nested and mixed lists", () => {
     expect(parent.dataset.diffInline).toBe("true");
     expect(child.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
     // One word diff, not two stacked on the child's text.
-    expect(child.querySelectorAll(`.${WORD_ADDED_CLASS}`).length).toBe(1);
+    expect(child.querySelectorAll(`.${WORD_ADDED_CLASS}`)).toHaveLength(1);
   });
 });
 
@@ -1468,8 +1468,12 @@ describe("task lists", () => {
         originalText: "- [x] Confirm release",
       },
     ]);
+    const anchor = root.querySelector<HTMLElement>(
+      ".emr-diff-task-tooltip-anchor",
+    );
+    expect(anchor).not.toBeNull();
     expectPreciseAmber(
-      root.querySelector<HTMLElement>(".emr-diff-task-tooltip-anchor")!,
+      anchor!,
       "Checklist item changed from checked to unchecked",
     );
   });
@@ -1880,10 +1884,9 @@ describe("tables", () => {
       },
     ]);
     const cell = root.querySelectorAll<HTMLElement>("tbody td")[1]!;
-    expectPreciseAmber(
-      cell.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Link added: https://example.com/guide",
-    );
+    const mark = cell.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Link added: https://example.com/guide");
   });
 
   it("changes one table link while leaving a sibling stable", () => {
@@ -1905,7 +1908,7 @@ describe("tables", () => {
     ]);
     const cell = root.querySelector<HTMLElement>("tbody td")!;
     expect(cell.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-    expect(cell.querySelectorAll("a")[1]?.getAttribute("href")).toBe(
+    expect(cell.querySelectorAll("a")[1]!.getAttribute("href")).toBe(
       "https://example.com/stable",
     );
   });
@@ -2025,7 +2028,7 @@ describe("tables", () => {
     ]);
     const cell = root.querySelector<HTMLElement>("tbody td")!;
     expect(cell.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-    expect(cell.querySelectorAll("img")[1]?.getAttribute("src")).toBe(
+    expect(cell.querySelectorAll("img")[1]!.getAttribute("src")).toBe(
       "https://example.com/stable.png",
     );
   });
@@ -2084,6 +2087,7 @@ describe("tables", () => {
     expect(cell.tabIndex).toBe(-1);
   });
 
+  // eslint-disable-next-line vitest/expect-expect -- asserts through the expectPreciseAmber helper, which runs seven expect() checks on the cell
   it("describes multiple unsupported rendered structures", () => {
     const root = render(table);
     const cell = root.querySelector<HTMLElement>("tbody td:nth-child(2)")!;
@@ -2489,7 +2493,7 @@ describe("tables", () => {
     expect(res.decorated).toBe(1);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
     const marked = rows.filter((tr) => tr.classList.contains(DIFF_BLOCK_CLASS));
-    expect(marked.length).toBe(1);
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("theme");
     const markedRow = marked[0] as HTMLElement;
     expect(markedRow.dataset.diffCells).toBeUndefined();
@@ -3434,6 +3438,7 @@ describe("code blocks", () => {
     )!;
     expect(pre.classList.contains(DIFF_INLINE_CLASS)).toBe(false);
     const metadata = pre.querySelector(`.${DIFF_METADATA_CLASS}`);
+    // eslint-disable-next-line vitest/valid-expect -- vitest's expect(value, message) overload: the rendered <pre> HTML is the failure message
     expect(metadata, pre.outerHTML).not.toBeNull();
     expect(metadata?.textContent).toContain("Before bash");
     expect(root.querySelector(".emr-diff-before-trigger")).not.toBeNull();

@@ -70,6 +70,6 @@ describe("normalizeRepoFilter", () => {
   it("maps blank/undefined to undefined (unfiltered first page)", () => {
     expect(normalizeRepoFilter("   ")).toBeUndefined();
     expect(normalizeRepoFilter("")).toBeUndefined();
-    expect(normalizeRepoFilter(undefined)).toBeUndefined();
+    expect(normalizeRepoFilter()).toBeUndefined();
   });
 });

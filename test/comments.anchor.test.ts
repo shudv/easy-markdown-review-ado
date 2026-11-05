@@ -885,40 +885,29 @@ describe("resolveAnchor graded scoring (kills scoring math mutants)", () => {
   // the resolved start offset.
   const text = "aaaTARGETbbbcccTARGETdddeeeTARGETfff";
 
-  it("selects the occurrence with the strongest combined overlap (the middle one)", () => {
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+  // "prefix only": the suffix is absent from the document, so the winner is
+  // driven purely by the trailing-prefix score. "suffix only" is the mirror.
+  it.each([
+    {
+      name: "selects the occurrence with the strongest combined overlap (the middle one)",
       prefix: "Zccc",
       suffix: "dddZ",
-    });
-    expect(range).not.toBeNull();
-    // Middle "TARGET" starts at index 15 within the single text node.
-    expect(range!.startOffset).toBe(15);
-  });
-
-  it("lets a strong prefix overlap alone decide the winner", () => {
-    // Only the prefix distinguishes candidates; the suffix is absent from the
-    // document, so the winner is driven purely by the trailing-prefix score.
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+    },
+    {
+      name: "lets a strong prefix overlap alone decide the winner",
       prefix: "Zccc",
       suffix: "NOPE",
-    });
-    expect(range).not.toBeNull();
-    expect(range!.startOffset).toBe(15);
-  });
-
-  it("lets a strong suffix overlap alone decide the winner", () => {
-    // Mirror of the above: only the leading-suffix score separates candidates.
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+    },
+    {
+      name: "lets a strong suffix overlap alone decide the winner",
       prefix: "NOPE",
       suffix: "dddZ",
-    });
+    },
+  ])("$name", ({ prefix, suffix }) => {
+    const root = makeArticle(`<p>${text}</p>`);
+    const range = resolveAnchor(root, { exact: "TARGET", prefix, suffix });
     expect(range).not.toBeNull();
+    // Middle "TARGET" starts at index 15 within the single text node.
     expect(range!.startOffset).toBe(15);
   });
 });

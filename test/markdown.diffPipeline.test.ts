@@ -37,10 +37,15 @@ function diffMarkText(node: HTMLElement): string | null {
   return null;
 }
 
+/** Whether an optional dataset value is present and non-empty. */
+function hasText(value: string | undefined): value is string {
+  return value !== undefined && value !== "";
+}
+
 /** Whether `node` is a nested block summarized on its own line. */
 function isNestedBlock(node: HTMLElement): boolean {
   if (node.dataset.summarized === "self") return false;
-  if (node.dataset.diffKind) return true;
+  if (hasText(node.dataset.diffKind)) return true;
   return (
     ["UL", "OL", "TABLE", "PRE"].includes(node.tagName) &&
     node.hasAttribute("data-source-line")
@@ -56,7 +61,9 @@ function annotate(node: Node): string {
   if (isNestedBlock(node)) return "";
   const inner = Array.from(node.childNodes).map(annotate).join("");
   const tip = node.dataset.diffTooltip;
-  return tip && node.dataset.summarized !== "self" ? `⟨${tip}⟩${inner}` : inner;
+  return hasText(tip) && node.dataset.summarized !== "self"
+    ? `⟨${tip}⟩${inner}`
+    : inner;
 }
 
 function summarize(root: HTMLElement): string[] {
@@ -71,14 +78,16 @@ function summarize(root: HTMLElement): string[] {
       out.push("source-only");
       return;
     }
-    if (el.dataset.diffKind) {
+    if (hasText(el.dataset.diffKind)) {
       el.dataset.summarized = "self";
       const flags = [
         el.dataset.diffInline === "true" ? "inline" : "",
         el.dataset.diffCells === "true" ? "cells" : "",
         el.dataset.diffLineWash === "true" ? "wash" : "",
       ].filter(Boolean);
-      const tip = el.dataset.diffTooltip ? ` ⟨${el.dataset.diffTooltip}⟩` : "";
+      const tip = hasText(el.dataset.diffTooltip)
+        ? ` ⟨${el.dataset.diffTooltip}⟩`
+        : "";
       const text = annotate(el).replace(/\s+/g, " ").trim();
       delete el.dataset.summarized;
       out.push(
@@ -1231,9 +1240,7 @@ describe("pipeline pins", () => {
     ],
   ];
 
-  for (const [name, original, current, expected] of cases) {
-    it(name, () => {
-      expect(view(original, current)).toEqual(expected);
-    });
-  }
+  it.each(cases)("%s", (_name, original, current, expected) => {
+    expect(view(original, current)).toEqual(expected);
+  });
 });

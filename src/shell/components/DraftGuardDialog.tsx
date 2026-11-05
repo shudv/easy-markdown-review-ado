@@ -19,7 +19,7 @@ interface DraftGuardDialogProps {
 }
 
 export function DraftGuardDialog(
-  props: DraftGuardDialogProps,
+  props: Readonly<DraftGuardDialogProps>,
 ): React.ReactElement {
   const { fileName, snippet, onDiscard, onKeepEditing } = props;
 
@@ -41,6 +41,7 @@ export function DraftGuardDialog(
   }, [onKeepEditing]);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- modal backdrop: a click outside the card keeps the draft; the keyboard path is Escape (document keydown above) and the focused "Keep editing" button
     <div
       className="emr-draft-guard-overlay"
       role="dialog"

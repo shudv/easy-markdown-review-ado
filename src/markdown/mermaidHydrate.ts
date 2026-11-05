@@ -50,7 +50,7 @@ function getMermaid(): Promise<MermaidApi> {
     const mod = await importWithChunkRetry();
     // A CommonJS-interop namespace exposes the API without a `default`.
     const api: MermaidApi =
-      (mod as { default: MermaidApi }).default ??
+      (mod as { default?: MermaidApi }).default ??
       (mod as unknown as MermaidApi);
     return api;
   })().catch((error: unknown) => {
@@ -112,7 +112,8 @@ export function isDiagramSyntaxError(err: unknown): boolean {
   return (
     name === "UnknownDiagramError" ||
     (typeof message === "string" &&
-      /^(?:Parse error|Lexical error)\b|No diagram type detected/.test(message))
+      (/^(?:Parse error|Lexical error)\b/.test(message) ||
+        message.includes("No diagram type detected")))
   );
 }
 
@@ -140,6 +141,7 @@ function paint(
   el.setAttribute("data-hydrated", "true");
   el.setAttribute("data-mermaid-theme", theme);
   el.setAttribute("data-mermaid-font", fontFamily);
+  // eslint-disable-next-line no-unsanitized/property -- svg comes from mermaid.render under securityLevel "strict", which DOMPurify-sanitizes the diagram markup
   el.innerHTML = svg;
   // Let the reader's text-size control scale the whole diagram. Capture the
   // diagram's natural width (the viewBox's 3rd value) into a custom prop the
@@ -148,7 +150,7 @@ function paint(
   // AND their text uniformly, so both track the reading size.
   const svgEl = el.querySelector<SVGSVGElement>("svg")!;
   const viewBox = svgEl.getAttribute("viewBox");
-  if (viewBox) {
+  if (viewBox !== null && viewBox !== "") {
     el.style.setProperty(
       "--emr-diagram-natural-w",
       `${viewBox.split(" ")[2]}px`,
@@ -169,7 +171,7 @@ interface HydrationPass {
 /** A placeholder's decoded `data-mermaid-src`, or `null` if absent/malformed. */
 function decodedSource(el: HTMLElement): string | null {
   const enc = el.getAttribute("data-mermaid-src");
-  if (!enc) return null;
+  if (enc === null || enc === "") return null;
   try {
     return decodeURIComponent(enc);
   } catch {
@@ -210,7 +212,7 @@ async function recoverFailedRender(
   const repaired = isDiagramSyntaxError(err)
     ? repairSequenceSemicolons(src)
     : null;
-  if (repaired) {
+  if (repaired !== null) {
     try {
       const { svg } = await renderWithChunkRetry(pass.api, repaired);
       paint(el, svg, pass.theme, pass.fontFamily);

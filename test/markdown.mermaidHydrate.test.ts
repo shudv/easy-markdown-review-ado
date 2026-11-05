@@ -317,8 +317,7 @@ describe("hydrateMermaid — transient chunk failures", () => {
     expect(mermaid.render).toHaveBeenCalledTimes(3);
     expect(el.getAttribute("data-mermaid-error")).toBe("render-failed");
     expect(el.innerHTML).toContain("emr-mermaid-fallback");
-    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         error: expect.objectContaining({ name: "ChunkLoadError" }),
         operation: "diagram-render",
@@ -405,7 +404,7 @@ describe("hydrateMermaid — author syntax errors", () => {
     expect(el.getAttribute("data-mermaid-error")).toBe("render-failed");
     expect(el.innerHTML).toContain("emr-mermaid-fallback");
     expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
-    expect(trackMock).toHaveBeenCalledWith({
+    expect(trackMock).toHaveBeenCalledExactlyOnceWith({
       name: "diagram.renderIssue",
       properties: { outcome: "syntax-error" },
     });

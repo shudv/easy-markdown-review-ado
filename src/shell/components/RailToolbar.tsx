@@ -22,7 +22,7 @@ import {
 
 export type { HistoryNav } from "./RailToolbar.parts";
 
-interface RailToolbarProps {
+type RailToolbarProps = Readonly<{
   commentQuery: string;
   onCommentQueryChange: (q: string) => void;
   /**
@@ -66,7 +66,7 @@ interface RailToolbarProps {
   onAddComment?: () => void;
   /** Optional extra controls appended at the right end of the toolbar. */
   headerActions?: React.ReactNode;
-}
+}>;
 
 export function RailToolbar(props: RailToolbarProps): React.ReactElement {
   const {

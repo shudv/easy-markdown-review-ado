@@ -347,9 +347,13 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
     onErrorRef.current = onError;
   }, [fetchThreads, onThreads, onError]);
   // Read once per polling session (the effect below); a host passes a stable
-  // subscribe function, so its identity must not restart polling.
-  const subscribeRecoveredRef = React.useRef(opts.subscribeRecovered);
-  subscribeRecoveredRef.current = opts.subscribeRecovered;
+  // subscribe function, so its identity must not restart polling. Synced in an
+  // effect declared before the polling effect so a new session sees it.
+  const subscribeRecovered = opts.subscribeRecovered;
+  const subscribeRecoveredRef = React.useRef(subscribeRecovered);
+  React.useEffect(() => {
+    subscribeRecoveredRef.current = subscribeRecovered;
+  }, [subscribeRecovered]);
 
   // Generation counter increments on each visibility loss / unmount.
   // Responses from older generations are discarded so a slow request

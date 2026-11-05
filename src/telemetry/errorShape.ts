@@ -93,7 +93,7 @@ export function describeError(error: unknown): ErrorShape {
   const shape: ErrorShape = { message: messageOf(error) };
   if (error instanceof Error) {
     if (error.name) shape.name = error.name;
-    if (error.stack) shape.stack = error.stack;
+    if (error.stack != null && error.stack !== "") shape.stack = error.stack;
   }
   const status = httpStatusOf(error);
   if (status !== undefined) shape.httpStatus = status;

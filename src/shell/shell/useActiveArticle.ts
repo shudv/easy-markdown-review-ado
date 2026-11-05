@@ -65,7 +65,11 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
     commitId: activeStop.commitId,
     listFolder: opts.listFolder,
   });
-  opts.activeStorageKeyRef.current = activeStorageKey;
+  // Read only by the scroll helpers' rAF callbacks, which run after commit.
+  const { activeStorageKeyRef } = opts;
+  React.useLayoutEffect(() => {
+    activeStorageKeyRef.current = activeStorageKey;
+  });
 
   const resolveDocumentImage = opts.resolveDocumentImage;
   const activeDocumentImageResolver = React.useMemo(

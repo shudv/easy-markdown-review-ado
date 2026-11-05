@@ -40,20 +40,25 @@ export function useLazyTree(
   // Seed an entry the first time we see a repo with loaded content; existing
   // entries are the cache. Skeletons (`detailsLoaded === false`) are skipped so
   // the entry is first created from the real listing, not the empty skeleton.
-  React.useEffect(() => {
-    if (!selectedRepo) return;
-    if (selectedRepo.detailsLoaded === false) return;
-    setLazyTreeByRepo((curr) => {
-      if (curr.has(selectedRepo.id)) return curr;
-      const next = new Map(curr);
+  // Adjusted during render whenever the `selectedRepo` object changes (not on
+  // every render: a refresh deletes the entry and must re-seed from the
+  // refreshed repo object, not the stale one).
+  const [seededFor, setSeededFor] = React.useState(selectedRepo);
+  if (seededFor !== selectedRepo) {
+    setSeededFor(selectedRepo);
+    if (
+      selectedRepo &&
+      selectedRepo.detailsLoaded !== false &&
+      !lazyTreeByRepo.has(selectedRepo.id)
+    ) {
+      const next = new Map(lazyTreeByRepo);
       next.set(selectedRepo.id, seedLazyTree(selectedRepo));
-      return next;
-    });
-  }, [selectedRepo]);
+      setLazyTreeByRepo(next);
+    }
+  }
 
-  // The cached entry for the active repo (undefined for the one render right
-  // after a new repo is selected, before the seeding effect lands — read
-  // sites fall back to `selectedRepo.files`).
+  // The cached entry for the active repo (falls back to `selectedRepo.files`
+  // at read sites while a repo has no entry yet, e.g. a skeleton or mid-refresh).
   const lazyTree = selectedRepo
     ? lazyTreeByRepo.get(selectedRepo.id)
     : undefined;

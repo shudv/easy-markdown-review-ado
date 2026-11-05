@@ -62,6 +62,7 @@ function renderTableSourceTexts(
 ): string[] {
   const scratch = document.createElement("div");
   return splitTableRow(row).map((source) => {
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
     scratch.innerHTML = renderInline(source);
     const content = scratch.querySelector("p") ?? scratch;
     return content.textContent.trim();
@@ -148,6 +149,7 @@ function renderOriginalTableCells(
   const signatures: string[] = [];
   const rendered: HTMLElement[] = [];
   const texts = splitTableRow(originalRow).map((source) => {
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
     scratch.innerHTML = renderInline(source);
     const content = scratch.querySelector("p") ?? scratch;
     signatures.push(tableCellStructureSignature(content));

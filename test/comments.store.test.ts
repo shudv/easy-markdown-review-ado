@@ -114,7 +114,7 @@ describe("threadReducer ADD_REPLY", () => {
       createdAt: "2024-01-02T00:00:00.000Z",
     };
     s = threadReducer(s, { type: "ADD_REPLY", threadId: "t1", comment: reply });
-    expect(s.threadsById.t1?.comments.map((c) => c.id)).toEqual([
+    expect(s.threadsById.t1!.comments.map((c) => c.id)).toEqual([
       "t1-c1",
       "t1-c2",
     ]);
@@ -836,7 +836,10 @@ describe("threadReducer MERGE_REMOTE_THREADS — reaction sync", () => {
     },
   ];
 
-  it.each(cases)("$name", ({ local, remote, outcome }) => {
+  const merge = (
+    local: Reaction[] | undefined,
+    remote: Reaction[] | undefined,
+  ): { state: ThreadState; next: ThreadState } => {
     const state = initialThreadState([
       buildThread("t1", "docs/a.md", [commentWith(local)]),
     ]);
@@ -844,11 +847,23 @@ describe("threadReducer MERGE_REMOTE_THREADS — reaction sync", () => {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1", "docs/a.md", [commentWith(remote)])],
     });
-    if (outcome === "unchanged") {
+    return { state, next };
+  };
+
+  it.each(cases.filter((c) => c.outcome === "unchanged"))(
+    "$name",
+    ({ local, remote }) => {
+      const { state, next } = merge(local, remote);
       expect(next).toBe(state);
-    } else {
+    },
+  );
+
+  it.each(cases.filter((c) => c.outcome === "adopt"))(
+    "$name",
+    ({ local, remote }) => {
+      const { state, next } = merge(local, remote);
       expect(next).not.toBe(state);
       expect(next.threadsById.t1!.comments[0]!.reactions).toEqual(remote);
-    }
-  });
+    },
+  );
 });

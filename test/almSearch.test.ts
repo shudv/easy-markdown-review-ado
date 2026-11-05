@@ -364,11 +364,11 @@ describe("createAlmSearchClient", () => {
       orgName: "org",
       getToken: async () => "TOK",
     });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.source).toBe("rest");
-      expect(r.client).toBeInstanceOf(AlmSearchRestClient);
-    }
+    expect(r).toEqual({
+      ok: true,
+      source: "rest",
+      client: expect.any(AlmSearchRestClient),
+    });
   });
 });
 

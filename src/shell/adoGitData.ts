@@ -131,7 +131,8 @@ export async function fetchRepoById(
 ): Promise<{ repo: DocRepo; raw: GitRepository } | null> {
   const gitClient = sharedGitClient();
   try {
-    const raw = await withRetry(
+    // The REST client hands back the parsed body as-is, which can be empty.
+    const raw = await withRetry<GitRepository | null | undefined>(
       () => gitClient.getRepository(repoId, projectId),
       { mode: "read", label: "fetchRepoById.getRepository" },
     );
@@ -217,9 +218,13 @@ export async function refreshRepoDiscovery(
  * shape used by the picker + the routed-PR pill. Returns `null` when
  * there's no PR (so callers can assign the result directly).
  */
+/** A REST `GitPullRequest`: ADO omits `title` / `createdBy` on some payloads. */
+type GitPullRequestWire = Omit<GitPullRequest, "title" | "createdBy"> &
+  Partial<Pick<GitPullRequest, "title" | "createdBy">>;
+
 function prMetaFromGitPr(
   repo: GitRepository,
-  pr: GitPullRequest | null,
+  pr: GitPullRequestWire | null,
 ): DocRepo["recentPr"] {
   if (!pr) return null;
   return {
@@ -376,17 +381,18 @@ export async function fetchRepoFileContent(
   // Default: the live tip of the default branch (today's document). When a
   // commit id is supplied (the comment-history stepper viewing the document as
   // it was at a PR's merge commit), pin the read to that immutable commit.
-  const versionDescriptor = atCommitId
-    ? {
-        version: atCommitId,
-        versionType: GitVersionType.Commit,
-        versionOptions: GitVersionOptions.None,
-      }
-    : {
-        version: repo.defaultBranch,
-        versionType: GitVersionType.Branch,
-        versionOptions: GitVersionOptions.None,
-      };
+  const versionDescriptor =
+    atCommitId !== undefined && atCommitId !== ""
+      ? {
+          version: atCommitId,
+          versionType: GitVersionType.Commit,
+          versionOptions: GitVersionOptions.None,
+        }
+      : {
+          version: repo.defaultBranch,
+          versionType: GitVersionType.Branch,
+          versionOptions: GitVersionOptions.None,
+        };
   const ab = await withRetry(
     () =>
       gitClient.getItemContent(
@@ -433,7 +439,7 @@ function getOrCreateAlmClient(): AlmSearchClient | null {
   if (_almClient) return _almClient;
   if (_almUnavailable) return null;
   const orgName = getOrgName();
-  if (!orgName) {
+  if (orgName === undefined) {
     _almUnavailable = { reason: "no-config", message: "no host name" };
     return null;
   }
@@ -527,8 +533,10 @@ export async function searchRepoFiles(
  */
 function getOrgName(): string | undefined {
   try {
-    const host = SDK.getHost();
-    return host?.name || undefined;
+    // `getHost` throws (caught below) before `init`; once ready it returns the
+    // handshake's host context. A blank name counts as "no org".
+    const name = SDK.getHost().name;
+    return name === "" ? undefined : name;
   } catch {
     return undefined;
   }

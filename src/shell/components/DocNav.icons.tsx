@@ -25,7 +25,9 @@ export function SvgCaret(): React.ReactElement {
   );
 }
 
-export function SvgFolder(props: { open: boolean }): React.ReactElement {
+export function SvgFolder(
+  props: Readonly<{ open: boolean }>,
+): React.ReactElement {
   // Open / closed glyph picked on `open`.
   if (props.open) {
     return (

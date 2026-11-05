@@ -89,7 +89,7 @@ function decorateImage(
       if (isDisposed()) return;
       resolving = false;
       resolutionError = error;
-      if (objectUrl) {
+      if (objectUrl !== undefined && objectUrl !== "") {
         image.src = objectUrl;
       } else settleIfComplete();
     };
@@ -116,7 +116,7 @@ function decorateAttachmentLinks(root: HTMLElement): void {
     link.classList.add("emr-comment-attachment");
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    const label = link.textContent?.trim() || "Attachment";
+    const label = link.textContent.trim() || "Attachment";
     link.setAttribute("aria-label", `${label} (attachment, opens in new tab)`);
     link.title = "Open attachment in a new tab";
   }

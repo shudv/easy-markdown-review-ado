@@ -25,11 +25,15 @@ import {
   GitRestClient,
   CommentThreadStatus,
   PullRequestStatus,
+  type GitPullRequest,
   type GitPullRequestCommentThread,
   type GitPullRequestSearchCriteria,
   type Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
-import type { WorkItem } from "azure-devops-extension-api/WorkItemTracking";
+import type {
+  WorkItem,
+  WorkItemQueryResult,
+} from "azure-devops-extension-api/WorkItemTracking";
 import {
   IdentityServiceIds,
   type IIdentity,
@@ -70,6 +74,8 @@ import {
   PROP_MENTIONS,
   PROP_SCHEMA,
   SCHEMA_VERSION,
+  type AdoCommentWire,
+  type AdoThreadWire,
 } from "./adoCommentApi.helpers";
 import {
   loadFileDiffs,
@@ -87,13 +93,20 @@ export type { FileDiffInfo };
 // Status mapping
 // ---------------------------------------------------------------------------
 
+/** `s`, or `undefined` when it is missing or empty. */
+function nonEmpty(s: string | undefined): string | undefined {
+  return s === undefined || s === "" ? undefined : s;
+}
+
 /**
  * Resolve the org name from the SDK host context. Returns `undefined` outside
  * the ADO iframe (tests, dev preview), so identity resolution skips the network.
  */
 function getOrgName(): string | undefined {
   try {
-    return SDK.getHost()?.name || undefined;
+    // `getHost` throws (caught below) before `init`; once ready it returns the
+    // handshake's host context.
+    return nonEmpty(SDK.getHost().name);
   } catch {
     return undefined;
   }
@@ -107,7 +120,7 @@ function getOrgName(): string | undefined {
  */
 function currentUserImageUrl(): string | undefined {
   try {
-    return (SDK.getUser() as { imageUrl?: string }).imageUrl || undefined;
+    return nonEmpty((SDK.getUser() as { imageUrl?: string }).imageUrl);
   } catch {
     return undefined;
   }
@@ -211,7 +224,7 @@ export class AdoCommentApi implements CommentApi {
           : {}),
       },
     };
-    const created = await this.write("createThread", () =>
+    const created: AdoThreadWire = await this.write("createThread", () =>
       this.client().createThread(
         threadInput as GitPullRequestCommentThread,
         repositoryId,
@@ -219,7 +232,7 @@ export class AdoCommentApi implements CommentApi {
         project,
       ),
     );
-    const firstComment = created.comments?.[0];
+    const firstComment: AdoCommentWire | undefined = created.comments?.[0];
     if (!firstComment) {
       throw new Error("ADO createThread returned no comments");
     }
@@ -237,7 +250,7 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ commentId: string; createdAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    const created = await this.write("addReply", () =>
+    const created: AdoCommentWire = await this.write("addReply", () =>
       this.client().createComment(
         buildReplyComment(bodyMarkdown) as AdoComment,
         repositoryId,
@@ -264,7 +277,7 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ updatedAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
-    const updated = await this.write("editComment", () =>
+    const updated: AdoCommentWire = await this.write("editComment", () =>
       this.client().updateComment(
         { content: bodyMarkdown } as AdoComment,
         repositoryId,
@@ -310,11 +323,10 @@ export class AdoCommentApi implements CommentApi {
   async toggleReaction(
     threadId: string,
     commentId: string,
-    kind: ReactionKind,
+    // ADO PR comments only support `like`, the only `ReactionKind` we model.
+    _kind: ReactionKind,
     add: boolean,
   ): Promise<void> {
-    // ADO PR comments only support `like`; this is the only kind we model.
-    if (kind !== "like") return;
     const { repositoryId, pullRequestId, project } = this.ctx;
     // add → createLike, remove → deleteLike (locked by `reactionClientMethod`).
     const method = reactionClientMethod(add);
@@ -378,7 +390,7 @@ export class AdoCommentApi implements CommentApi {
       // id). `searchIdentitiesAsync` is a name/email typeahead and can't be
       // queried by GUID, so a persisted `@<GUID>` mention only resolves here.
       const url = buildIdentitiesUrl(getOrgName(), ids);
-      if (!url) return empty;
+      if (url === null) return empty;
       const res = await withRetry(
         async () => {
           // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
@@ -420,7 +432,7 @@ export class AdoCommentApi implements CommentApi {
     try {
       const client = sharedWorkItemClient();
       const wiql = buildWorkItemWiql(trimmed);
-      const result = await withRetry(
+      const result: Partial<WorkItemQueryResult> = await withRetry(
         () =>
           client.queryByWiql(
             { query: wiql },
@@ -436,7 +448,7 @@ export class AdoCommentApi implements CommentApi {
         .filter((id): id is number => typeof id === "number")
         .slice(0, 10);
       if (ids.length === 0) return [];
-      const items = await withRetry(
+      const items: Partial<WorkItem>[] = await withRetry(
         () =>
           client.getWorkItems(ids, project, [
             "System.Id",
@@ -447,11 +459,11 @@ export class AdoCommentApi implements CommentApi {
         { mode: "read", attempts: 2, label: "searchWorkItems.getWorkItems" },
       );
       // Preserve WIQL ordering.
-      const byId = new Map<number, WorkItem>();
+      const byId = new Map<number, Partial<WorkItem>>();
       for (const w of items) {
         if (typeof w.id === "number") byId.set(w.id, w);
       }
-      const ordered: WorkItem[] = [];
+      const ordered: Partial<WorkItem>[] = [];
       for (const id of ids) {
         const w = byId.get(id);
         if (w) ordered.push(w);
@@ -490,7 +502,7 @@ export class AdoCommentApi implements CommentApi {
       const criteria: GitPullRequestSearchCriteria = {
         status: PullRequestStatus.Active,
       } as GitPullRequestSearchCriteria;
-      const prs = await withRetry(
+      const prs: Partial<GitPullRequest>[] = await withRetry(
         () =>
           client.getPullRequestsByProject(project, criteria, undefined, 0, 50),
         { mode: "read", attempts: 2, label: "searchPullRequests" },
@@ -598,7 +610,7 @@ function stringField(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function toWorkItemSuggestion(w: WorkItem): WorkItemSuggestion {
+function toWorkItemSuggestion(w: Partial<WorkItem>): WorkItemSuggestion {
   const fields = (w.fields ?? {}) as Record<string, unknown>;
   const id = w.id ?? Number(fields["System.Id"] ?? 0);
   const title = stringField(fields["System.Title"], "");

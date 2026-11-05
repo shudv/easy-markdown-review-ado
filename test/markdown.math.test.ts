@@ -16,7 +16,7 @@ describe("renderMarkdown — mathematical notation", () => {
 
     expect(root.querySelector(".emr-math--inline")).not.toBeNull();
     expect(root.querySelector(".katex")).toBeNull();
-    expect(html).toMatch(/<p\b[^>]*data-source-line="1"/);
+    expect(html).toMatch(/<p\b[^>]+data-source-line="1"/);
 
     await hydrateMath(root);
     expect(root.querySelector(".katex")).not.toBeNull();

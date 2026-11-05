@@ -67,6 +67,7 @@ import {
   buildPrWebUrl,
   iterationParamsForRange,
   diffableFilePaths,
+  hasText,
   prTabRoutePath,
   type IterationParams,
   type PrTabRouteSeed,
@@ -178,7 +179,10 @@ export function PrTabApp(): React.ReactElement {
           context.reviewIterationStops,
         );
         setActiveDocPath(
-          seed.selectedPath ?? context.changedMdFiles[0]?.path ?? "",
+          seed.selectedPath ??
+            (context.changedMdFiles.length > 0
+              ? context.changedMdFiles[0]!.path
+              : ""),
         );
         setRouteSeed(seed);
         setRefreshAttempt(0);
@@ -284,7 +288,12 @@ export function PrTabApp(): React.ReactElement {
     // fails the WHOLE request if any param path is missing at a version, which
     // would blank every file's diff (see diffableFilePaths).
     const diffPaths = diffableFilePaths(ctx.changedMdFiles);
-    if (!baseCommit || !targetCommit || diffPaths.length === 0) return;
+    if (
+      !hasText(baseCommit) ||
+      !hasText(targetCommit) ||
+      diffPaths.length === 0
+    )
+      return;
     let cancelled = false;
     void fetchFileDiffs(
       { repositoryId, project: projectId, baseCommit, targetCommit },
@@ -311,10 +320,10 @@ export function PrTabApp(): React.ReactElement {
   // single `app.loaded` event always fires. `markAppReady` is idempotent, so if
   // the document path renders first (Shell fires "content"), these no-op.
   React.useEffect(() => {
-    if (error) markAppReady("error");
+    if (error !== null && error !== "") markAppReady("error");
   }, [error]);
   React.useEffect(() => {
-    if (ctx && ctx.changedMdFiles.length === 0) markAppReady("empty");
+    if (ctx?.changedMdFiles.length === 0) markAppReady("empty");
   }, [ctx]);
 
   const loadFileSource = React.useCallback(
@@ -350,15 +359,19 @@ export function PrTabApp(): React.ReactElement {
     const base = ext
       ? buildPrTabDocUrl(prWebUrl, ext, activeDocPath, activeIterationParams)
       : undefined;
-    return base ? (target) => withDeepLinkTarget(base, target) : null;
+    return hasText(base) ? (target) => withDeepLinkTarget(base, target) : null;
   }, [prWebUrl, activeDocPath, activeIterationParams]);
 
   // `[[_TOSP_]]` subpage tables list the page's folder as this PR has it —
   // or, for an earlier PR update, as that update had it.
   const listFolder = React.useMemo<FolderLister | undefined>(() => {
+    // Typed required, but the ADO REST payload omits it on some PRs.
+    const prRefs:
+      | { lastMergeSourceCommit?: { commitId?: string } }
+      | undefined = ctx?.pr;
     const commitId =
-      ctx?.targetCommit ?? ctx?.pr.lastMergeSourceCommit?.commitId;
-    if (!ctx || !commitId) return undefined;
+      ctx?.targetCommit ?? prRefs?.lastMergeSourceCommit?.commitId;
+    if (!ctx || !hasText(commitId)) return undefined;
     const repo = {
       id: ctx.repositoryId,
       name: ctx.repositoryName,
@@ -441,7 +454,7 @@ export function PrTabApp(): React.ReactElement {
     );
   }
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <BootErrorView
         error={error}
@@ -454,10 +467,14 @@ export function PrTabApp(): React.ReactElement {
     return <ReaderLoadingShell scope="pr" ariaLabel="Loading pull request" />;
   }
 
+  // `title` / `createdBy` are typed required but can be absent from the REST
+  // payload.
+  const prTitle = (ctx.pr.title as string | undefined) ?? "(untitled PR)";
+  const createdBy = ctx.pr.createdBy as { displayName?: string } | undefined;
   const pr: PrInfo = {
     prId: ctx.pullRequestId,
-    title: ctx.pr.title ?? "(untitled PR)",
-    authorName: ctx.pr.createdBy?.displayName ?? "unknown",
+    title: prTitle,
+    authorName: createdBy?.displayName ?? "unknown",
     files: ctx.changedMdFiles,
   };
 
@@ -466,7 +483,7 @@ export function PrTabApp(): React.ReactElement {
   // rail keeps the UX consistent with the Documents-hub case.
   const routedPr: RoutedPrInfo = {
     prId: ctx.pullRequestId,
-    title: ctx.pr.title ?? "(untitled PR)",
+    title: prTitle,
     status:
       ctx.pr.status === PullRequestStatus.Completed ? "completed" : "active",
     url: prWebUrl,
@@ -539,7 +556,7 @@ export function PrTabApp(): React.ReactElement {
             }}
             onActiveThreadChange={(threadId) => {
               void writeRouteParams(
-                threadId
+                threadId !== null && threadId !== ""
                   ? {
                       [PATH_LINK_PARAM]: routePath,
                       [COMMENT_LINK_PARAM]: threadId,

@@ -6,9 +6,11 @@ import type { CommentAuthor, TextQuoteAnchor } from "../../types";
 import { Composer } from "./Composer";
 import { DRAFT_ID } from "./CommentRail.helpers";
 
-export function RailReadOnlyBanner(props: {
-  message: string | undefined;
-}): React.ReactElement {
+export function RailReadOnlyBanner(
+  props: Readonly<{
+    message: string | undefined;
+  }>,
+): React.ReactElement {
   return (
     <div className="emr-rail-readonly-banner" role="status">
       {props.message ??
@@ -18,14 +20,16 @@ export function RailReadOnlyBanner(props: {
 }
 
 /** The in-progress new-comment balloon, positioned among anchored threads. */
-export function RailDraftBalloon(props: {
-  draftAnchor: TextQuoteAnchor;
-  currentUser: CommentAuthor;
-  draftInitialBody?: string;
-  onDraftChange?: (body: string) => void;
-  onSubmitDraft: (body: string) => void;
-  onCancelDraft: () => void;
-}): React.ReactElement {
+export function RailDraftBalloon(
+  props: Readonly<{
+    draftAnchor: TextQuoteAnchor;
+    currentUser: CommentAuthor;
+    draftInitialBody?: string;
+    onDraftChange?: (body: string) => void;
+    onSubmitDraft: (body: string) => void;
+    onCancelDraft: () => void;
+  }>,
+): React.ReactElement {
   const {
     draftAnchor,
     currentUser,
@@ -50,6 +54,7 @@ export function RailDraftBalloon(props: {
       <Composer
         submitLabel="Comment"
         placeholder={`Comment as ${currentUser.displayName}…`}
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the draft balloon only mounts once the user starts a comment (Add comment / selection bubble), so focus moves to where they are about to type
         autoFocus
         initial={draftInitialBody}
         onChange={onDraftChange}
@@ -64,13 +69,15 @@ export function RailDraftBalloon(props: {
  * A collapsible PR-wide tray (General comments / comments on removed files):
  * a toggle header with a twisty + count, and the body while expanded.
  */
-export function RailCollapsibleTray(props: {
-  title: string;
-  count: number;
-  expanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
+export function RailCollapsibleTray(
+  props: Readonly<{
+    title: string;
+    count: number;
+    expanded: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+  }>,
+): React.ReactElement {
   const { title, count, expanded, onToggle, children } = props;
   return (
     <div className="emr-rail-section emr-rail-section--general">

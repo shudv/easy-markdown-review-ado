@@ -58,18 +58,12 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // Heading to scroll to once the selected document renders: a cross-document
   // `#anchor` link, or the `?anchor=` deep link seeded at mount (a `?comment=`
   // link wins when both are present — the thread's own scroll would fight the
-  // heading's).
-  const pendingScrollHashRef = React.useRef<string | null>(
-    opts.initialActiveThreadId ? null : (opts.initialAnchor ?? null),
-  );
-  const pendingHashIsDeepLinkRef = React.useRef(
-    pendingScrollHashRef.current !== null,
-  );
-  // Text to flash once the selected document renders (the `?text=` deep link
-  // seeded at mount); the heading above is its fallback.
-  const pendingTextRef = React.useRef<string | null>(
-    opts.initialActiveThreadId ? null : (opts.initialTextFragment ?? null),
-  );
+  // heading's). Plus text to flash once it renders (the `?text=` deep link
+  // seeded at mount), with the heading as its fallback.
+  const initial = initialDeepLinkTargets(opts);
+  const pendingScrollHashRef = React.useRef<string | null>(initial.hash);
+  const pendingHashIsDeepLinkRef = React.useRef(initial.hash !== null);
+  const pendingTextRef = React.useRef<string | null>(initial.text);
 
   // Open a document in THIS reader (shared by the nav and in-document link
   // clicks): select it, drop the active thread, tear down an empty draft, and
@@ -101,12 +95,17 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // is an expected state, not a failure: open the repo's first other document
   // instead — reporting it up so the route and the remembered path move on —
   // and say what happened. Elsewhere (the PR tab) it stays an error.
-  opts.handleMissingDocRef.current = (missing) =>
-    replaceMissingDoc(missing, opts, {
-      pendingScrollHashRef,
-      pendingHashIsDeepLinkRef,
-      pendingTextRef,
-    });
+  // Only the async document-load failure path calls it, always after commit,
+  // so it is kept current from a layout effect.
+  const { handleMissingDocRef } = opts;
+  React.useLayoutEffect(() => {
+    handleMissingDocRef.current = (missing) =>
+      replaceMissingDoc(missing, opts, {
+        pendingScrollHashRef,
+        pendingHashIsDeepLinkRef,
+        pendingTextRef,
+      });
+  });
 
   // A relative in-document link was clicked. Resolve it against the open file
   // and route it (see `routeDocLink`): scroll (in-page / self), select in place
@@ -145,6 +144,21 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   };
 }
 
+/** The `?anchor=` / `?text=` deep-link targets seeded at mount. */
+function initialDeepLinkTargets(opts: DocNavigationOptions): {
+  hash: string | null;
+  text: string | null;
+} {
+  const commentLinkWins =
+    opts.initialActiveThreadId !== undefined &&
+    opts.initialActiveThreadId !== "";
+  if (commentLinkWins) return { hash: null, text: null };
+  return {
+    hash: opts.initialAnchor ?? null,
+    text: opts.initialTextFragment ?? null,
+  };
+}
+
 interface PendingTargetRefs {
   pendingScrollHashRef: React.MutableRefObject<string | null>;
   pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
@@ -162,7 +176,7 @@ function replaceMissingDoc(
   // than bouncing between missing documents.
   if (opts.missingDoc?.shown === missing) return "expected";
   const next = opts.files.find((f) => f.path !== missing)?.path;
-  if (!next) return "expected";
+  if (next === undefined || next === "") return "expected";
   // A deep-link heading/text targeted the missing document; drop it.
   pending.pendingScrollHashRef.current = null;
   pending.pendingHashIsDeepLinkRef.current = false;
@@ -220,19 +234,20 @@ export function usePendingDocScroll(opts: PendingDocScrollOptions): void {
   React.useEffect(() => {
     if (!articleReady) return;
     const text = pendingTextRef.current;
-    if (text) {
+    if (text !== null && text !== "") {
       pendingTextRef.current = null;
       const fallback = pendingScrollHashRef.current;
       pendingScrollHashRef.current = null;
       pendingHashIsDeepLinkRef.current = false;
       scrollDocToText(text, (found) => {
         track(events.linkOpened({ target: "text", found }));
-        if (!found && fallback) scrollDocToHash(fallback, { hold: true });
+        if (!found && fallback !== null && fallback !== "")
+          scrollDocToHash(fallback, { hold: true });
       });
       return;
     }
     const hash = pendingScrollHashRef.current;
-    if (!hash) return;
+    if (hash === null || hash === "") return;
     pendingScrollHashRef.current = null;
     const fromDeepLink = pendingHashIsDeepLinkRef.current;
     pendingHashIsDeepLinkRef.current = false;

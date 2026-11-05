@@ -298,7 +298,8 @@ function clusterRanges(
 ): PlacedRange[][] {
   const clusters: PlacedRange[][] = [];
   for (const item of placed) {
-    const cluster = clusters[clusters.length - 1];
+    const cluster =
+      clusters.length > 0 ? clusters[clusters.length - 1] : undefined;
     const last = cluster?.[cluster.length - 1];
     if (last && allBlank(current.lines, last.end + 1, item.start - 1)) {
       cluster!.push(item);

@@ -42,6 +42,7 @@ describe("isAdoPullRequestAttachmentUrl", () => {
     ).toBe(false);
     expect(
       isAdoPullRequestAttachmentUrl(
+        // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// attachment URL is rejected
         "http://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
       ),
     ).toBe(false);

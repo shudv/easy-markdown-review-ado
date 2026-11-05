@@ -360,11 +360,11 @@ describe("buildHistoryStops", () => {
 
   it("preserves url, date, and null commit on historical stops", () => {
     const stops = buildHistoryStops(null, [
-      ref(7, { url: "http://x/7", dateMs: 123, commitId: null }),
+      ref(7, { url: "https://x/7", dateMs: 123, commitId: null }),
     ]);
     expect(stops[1]).toMatchObject({
       prId: 7,
-      url: "http://x/7",
+      url: "https://x/7",
       dateMs: 123,
       commitId: null,
     });

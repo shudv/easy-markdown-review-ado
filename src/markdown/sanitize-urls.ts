@@ -129,7 +129,7 @@ export const rehypeSanitizeUrls: Plugin<[], Root> = () => {
   return (tree) => {
     visit(tree, "element", (node: Element) => {
       const tag = node.tagName;
-      const props = (node.properties ??= {});
+      const props = node.properties;
 
       if (tag === "a") {
         sanitizeAnchor(props);

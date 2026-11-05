@@ -17,7 +17,7 @@ export interface RangeChanges {
   /** e.g. "Update 4 → 5". */
   label: string;
   /** Change type within the comparison, keyed by repo path. */
-  byPath: Readonly<Record<string, ChangeType>>;
+  byPath: Readonly<Partial<Record<string, ChangeType>>>;
 }
 
 /** The active `RangeChanges`, read by the nested file-row renderers. */
@@ -35,7 +35,7 @@ export function fileChangeView(
 ): { changeType: ChangeType; unchanged: boolean; note?: string } {
   if (!rangeChanges) return { changeType: file.changeType, unchanged: false };
   const inRange = rangeChanges.byPath[file.path];
-  return inRange
+  return inRange !== undefined
     ? { changeType: inRange, unchanged: false }
     : {
         changeType: file.changeType,

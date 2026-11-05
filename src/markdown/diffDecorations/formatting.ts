@@ -122,7 +122,7 @@ function formattingChangeRanges(
     .sort((a, b) => a.start - b.start || a.end - b.end);
   const merged: Array<{ start: number; end: number }> = [];
   for (const range of sorted) {
-    const previous = merged[merged.length - 1];
+    const previous = merged.length > 0 ? merged[merged.length - 1] : undefined;
     if (previous && range.start <= previous.end) {
       previous.end = Math.max(previous.end, range.end);
     } else {
@@ -255,14 +255,15 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
   const ranges: ExplainedTextRange[] = [];
   let modified = "";
   const push = (kind: WordDiffOp["kind"], value: string): void => {
-    const last = operations[operations.length - 1];
+    const last =
+      operations.length > 0 ? operations[operations.length - 1] : undefined;
     if (last?.kind === kind) last.value += value;
     else operations.push({ kind, value });
     if (kind !== "removed") modified += value;
   };
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]!;
-    const next = ops[i + 1];
+    const next = i + 1 < ops.length ? ops[i + 1] : undefined;
     if (
       op.kind === "removed" &&
       next?.kind === "added" &&

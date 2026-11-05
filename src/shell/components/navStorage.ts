@@ -58,7 +58,7 @@ export function buildFolderStorageKey(
 export function readCollapsedDirs(key: string): Set<string> {
   try {
     const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
-    if (!raw) return new Set();
+    if (raw === null || raw === "") return new Set();
     const arr: unknown = JSON.parse(raw);
     return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
   } catch {

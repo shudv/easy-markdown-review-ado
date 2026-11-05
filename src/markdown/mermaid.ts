@@ -78,7 +78,7 @@ export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => {
       // Code fences emerge from the rehype pipeline with their className as a
       // string array (e.g. ["language-mermaid"]); a bare string never reaches
       // here, so we only need the array case.
-      const cls = codeChild.properties?.className;
+      const cls = codeChild.properties.className;
       const classList = Array.isArray(cls) ? cls.map(String) : [];
       if (!classList.includes("language-mermaid")) return;
 
@@ -96,10 +96,10 @@ export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => {
           // Carry the source-line span (stamped on the original <pre> by
           // rehypeSourcePositions, which runs before us) onto the placeholder
           // so the diff decorator can tell when the diagram changed in a PR.
-          ...(node.properties?.dataSourceLine != null
+          ...(node.properties.dataSourceLine != null
             ? { dataSourceLine: node.properties.dataSourceLine }
             : {}),
-          ...(node.properties?.dataSourceEndLine != null
+          ...(node.properties.dataSourceEndLine != null
             ? { dataSourceEndLine: node.properties.dataSourceEndLine }
             : {}),
         },

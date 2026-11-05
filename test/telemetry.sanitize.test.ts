@@ -37,7 +37,7 @@ describe("sanitizeProperties", () => {
       searchQuery: "design",
     });
     expect(clean).toEqual({});
-    expect(dropped.sort()).toEqual(
+    expect([...dropped].sort()).toEqual(
       [
         "authorEmail",
         "commentBody",
@@ -56,7 +56,7 @@ describe("sanitizeProperties", () => {
       note: "two words", // whitespace
     });
     expect(clean).toEqual({});
-    expect(dropped.sort()).toEqual(["kind", "note", "ref"].sort());
+    expect([...dropped].sort()).toEqual(["kind", "note", "ref"].sort());
   });
 
   it("drops over-long string values", () => {
@@ -75,7 +75,7 @@ describe("sanitizeProperties", () => {
     });
     expect(clean).toEqual({});
     // null/undefined are skipped (not 'dropped'); invalid keys are dropped.
-    expect(dropped.sort()).toEqual(["1leading", "weird key"].sort());
+    expect([...dropped].sort()).toEqual(["1leading", "weird key"].sort());
   });
 
   it("returns empty for undefined input", () => {

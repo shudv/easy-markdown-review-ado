@@ -21,7 +21,7 @@ interface PaneReopenGrabbersProps {
  * (full reader), pinned to the frame's edge.
  */
 export function PaneReopenGrabbers(
-  props: PaneReopenGrabbersProps,
+  props: Readonly<PaneReopenGrabbersProps>,
 ): React.ReactElement {
   return (
     <>

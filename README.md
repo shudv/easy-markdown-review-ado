@@ -68,7 +68,8 @@ Before opening a PR, run:
 
 ```pwsh
 npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run duplication:check; npm run test:coverage
+npm run depcruise; npm run duplication:check; npm run spell:check
+npm run test:coverage
 npm run build
 npm run test:visual:docker
 ```
@@ -107,11 +108,12 @@ finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
 lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
 above 3%. Extract a shared helper or fixture rather than raising a threshold.
 
-Spelling is checked in the editor by the recommended Code Spell Checker
-extensions, configured in [`cspell.json`](cspell.json). US and British English
-are both accepted. Fix a misspelling rather than accepting it. Add a genuine
-project term (a product name, an API identifier) to `words`, and test-only
-strings to the `test/**` override.
+`spell:check` runs [cspell](https://cspell.org) with
+[`cspell.json`](cspell.json): in CI, on staged files in the pre-commit hook,
+and in the editor through the recommended Code Spell Checker extensions. US and
+British English are both accepted. Fix a misspelling rather than accepting it.
+Add a genuine project term (a product name, an API identifier) to `words`, and
+test-only strings to the `test/**` override.
 
 Code that genuinely can't be reached or tested may be left out of coverage with
 `/* v8 ignore next -- <why it can't be reached or tested> */` (or a

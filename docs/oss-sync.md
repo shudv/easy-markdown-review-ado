@@ -4,7 +4,7 @@
 
 - Public base: `b965581` (#29).
 - Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
-- New product boundary: `5ae3107` (source branch `chore/strict-lint-tiers`; not
+- New product boundary: `8f2ffe4` (source branch `chore/strict-lint-tiers`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
@@ -17,19 +17,22 @@
 | `15ae078`     | `@vitest/eslint-plugin` pinned to `1.6.27` (1.6.28 requires TypeScript 6).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `2edded2`     | Unused, TypeScript 6-deprecated `baseUrl` dropped from `tsconfig.json`; `.vscode/settings.json` points VS Code at the workspace TypeScript.                                                                                                                                                                                                                                                                                                                                                                        |
 | `599af9d`     | React imported by name (`import { useState, type ReactElement } from "react"`) with the automatic JSX runtime (`jsx: react-jsx`); DOM-clashing React types aliased (`ReactMouseEvent`); a `no-restricted-syntax` rule bans `import * as React` and `React.x`, stories included.                                                                                                                                                                                                                                    |
-| `5ae3107`     | `cspell.json` and recommended Code Spell Checker extensions (US and British English, project vocabulary, test-only fixture words); the "backentd" typo and the "replyable"/"repliable" inconsistency fixed.                                                                                                                                                                                                                                                                                                        |
+| `5ae3107`     | `cspell.json` and recommended Code Spell Checker extensions (US and British English, project vocabulary, test-only fixture words); two misspellings fixed.                                                                                                                                                                                                                                                                                                                                                         |
+| `157b8be`     | Spell check becomes a blocking gate: `cspell` and `@cspell/dict-en-gb` dev dependencies, a `spell:check` script run in CI and on staged files in the pre-commit hook, and HTML/CSS/Node dictionaries enabled for all file types.                                                                                                                                                                                                                                                                                   |
+| `8f2ffe4`     | Marketplace manifest link keys (`getstarted`, `privacypolicy`) accepted by the spell check.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### Public-specific adaptations retained
 
 - Keep all adaptations and exclusions from the earlier syncs below.
 - The README keeps its public wording; it gains the enforced-rules table and
   the updated lint guardrail line.
-- The public lock adds only the five new ESLint plugins and their dependencies,
-  with public npm URLs; no existing package version changes.
+- The public lock adds only the five new ESLint plugins, `cspell` and their
+  dependencies, with public npm URLs, plus patch bumps of two transitive
+  dependencies.
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `5ae3107` and
+Compare the next source product tree against the merged form of `8f2ffe4` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

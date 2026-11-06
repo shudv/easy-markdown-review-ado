@@ -68,7 +68,13 @@ export function rejectionTypeOf(reason: unknown): string {
 }
 
 function onUnhandledRejection(event: PromiseRejectionEvent): void {
-  if (isClaimed(event.reason)) return;
+  // A claimed rejection is handled by its owner: neither report it nor let
+  // the browser log it as uncaught.
+  if (isClaimed(event.reason)) {
+    event.preventDefault();
+
+    return;
+  }
 
   // Must never throw: an exception here escapes to `window.onerror` and hides
   // the real rejection. The old `new Error(String(reason))` did exactly that

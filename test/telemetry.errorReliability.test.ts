@@ -40,10 +40,16 @@ const timingEnvironment: BootTimingEnvironment = {
   subscribeVisibilityChange: () => () => {},
 };
 
-function rejectWith(reason: unknown): void {
-  const event = new Event("unhandledrejection") as PromiseRejectionEvent;
+function rejectWith(reason: unknown): Event {
+  // Cancelable, like the browser's real PromiseRejectionEvent.
+  const event = new Event("unhandledrejection", {
+    cancelable: true,
+  }) as PromiseRejectionEvent;
+
   Object.defineProperty(event, "reason", { value: reason });
   window.dispatchEvent(event);
+
+  return event;
 }
 
 describe("error reliability denominator", () => {
@@ -195,12 +201,13 @@ describe("claimed unhandled rejections", () => {
   // that fails, so the global net must neither report nor end boot.
   it("skips a claimed rejection entirely, and reports it again once released", () => {
     const release = claimUnhandledRejections((r) => r === "owned");
-    rejectWith("owned");
+    // Handled by its owner, so the browser mustn't log it as uncaught either.
+    expect(rejectWith("owned").defaultPrevented).toBe(true);
     expect(sink.exceptionCalls).toHaveLength(0);
     expect(sink.eventCalls).toHaveLength(0);
 
     release();
-    rejectWith("owned");
+    expect(rejectWith("owned").defaultPrevented).toBe(false);
     expect(sink.exceptionCalls).toHaveLength(1);
   });
 

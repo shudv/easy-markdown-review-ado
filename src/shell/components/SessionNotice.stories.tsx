@@ -6,10 +6,15 @@ import { AdoSessionMonitor } from "../adoSession";
 import { SessionRefreshingError } from "../adoAuthToken";
 import { SessionNotice } from "./SessionNotice";
 
-/** A monitor already in a dead-window spell, optionally with held writes. */
+/**
+ * A monitor already in a dead-window spell found by the background poll,
+ * surfaced as if the user refreshed (unless `quiet`), optionally with held
+ * writes.
+ */
 function refreshingMonitor(opts: {
   reloadHost?: () => void;
   heldWrites?: number;
+  quiet?: boolean;
 }): AdoSessionMonitor {
   const monitor = new AdoSessionMonitor();
   if (opts.reloadHost) monitor.configure({ reloadHost: opts.reloadHost });
@@ -17,6 +22,7 @@ function refreshingMonitor(opts: {
     new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
     "poll",
   );
+  if (opts.quiet !== true) monitor.surface("refresh");
 
   for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
     void monitor
@@ -52,6 +58,27 @@ export const Live: Story = {
   args: { monitor: new AdoSessionMonitor() },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+  },
+};
+
+/**
+ * A spell the background poll found on its own stays quiet; the notice appears
+ * only once the user waits on the session (here: a manual refresh).
+ */
+export const QuietUntilUserWaits: Story = {
+  args: { monitor: refreshingMonitor({ reloadHost: fn(), quiet: true }) },
+  play: async ({ args, canvasElement }) => {
+    await expect(args.monitor!.getSnapshot().state).toBe("refreshing");
+    await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+    args.monitor!.claimPollFailure(
+      new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
+      true,
+    );
+    await waitFor(() =>
+      expect(within(canvasElement).getByRole("status").textContent).toContain(
+        "this usually fixes itself",
+      ),
+    );
   },
 };
 

@@ -54,6 +54,7 @@ import type {
 } from "../comments/mentions";
 import { withRetry } from "./retry";
 import { withAdoSessionRefreshDetection } from "./adoAuthToken";
+import { FailureStreaks } from "./failureStreaks";
 import { adoSession } from "./adoSession";
 import { readHostToken } from "./adoSessionSdk";
 import {
@@ -130,16 +131,20 @@ function currentUserImageUrl(): string | undefined {
 // Public: load all emr threads for a PR
 // ---------------------------------------------------------------------------
 
-export async function loadAdoThreads(
+/**
+ * Read a PR's raw threads, with the token dead window classified inside the
+ * retry so it isn't spent on futile 401s (`SessionRefreshingError` is
+ * non-retryable), and so pollers can pause until its `recoverAtMs` instead of
+ * re-polling every 30s. The shared session monitor learns about the spell (and
+ * its end) from here. Rejects on failure — callers decide how to degrade.
+ */
+export async function readPrThreads(
   repositoryId: string,
   pullRequestId: number,
   project: string,
-): Promise<CommentThread[]> {
+  label: string,
+): Promise<GitPullRequestCommentThread[]> {
   const gitClient = sharedGitClient();
-  // Classify the token dead window inside the retry so it isn't spent on
-  // futile 401s (`SessionRefreshingError` is non-retryable), and so the poller
-  // can pause until its `recoverAtMs` instead of re-polling every 30s. The
-  // shared session monitor learns about the spell (and its end) from here.
   let raw: GitPullRequestCommentThread[];
   const startedAt = Date.now();
 
@@ -150,7 +155,7 @@ export async function loadAdoThreads(
           () => gitClient.getThreads(repositoryId, pullRequestId, project),
           readHostToken,
         ),
-      { mode: "read", label: "loadAdoThreads.getThreads" },
+      { mode: "read", label },
     );
   } catch (err) {
     adoSession.report(err, "poll");
@@ -158,6 +163,22 @@ export async function loadAdoThreads(
   }
 
   adoSession.noteSuccess(startedAt);
+
+  return raw;
+}
+
+export async function loadAdoThreads(
+  repositoryId: string,
+  pullRequestId: number,
+  project: string,
+): Promise<CommentThread[]> {
+  const raw = await readPrThreads(
+    repositoryId,
+    pullRequestId,
+    project,
+    "loadAdoThreads.getThreads",
+  );
+
   const out: CommentThread[] = [];
 
   for (const t of raw) {
@@ -179,6 +200,8 @@ export interface AdoCommentApiContext {
 }
 
 export class AdoCommentApi implements CommentApi {
+  private readonly searchFailures = new FailureStreaks();
+
   constructor(private readonly ctx: AdoCommentApiContext) {}
 
   private client(): GitRestClient {
@@ -371,7 +394,7 @@ export class AdoCommentApi implements CommentApi {
     const trimmed = query.trim();
     if (trimmed.length === 0) return [];
 
-    try {
+    return this.mentionSearch("user-search", "searchUsers", async () => {
       const svc = await SDK.getService<IVssIdentityService>(
         IdentityServiceIds.IdentityService,
       );
@@ -384,17 +407,7 @@ export class AdoCommentApi implements CommentApi {
       const selfImageUrl = currentUserImageUrl();
 
       return results.slice(0, 10).map((r) => toUserSuggestion(r, selfImageUrl));
-    } catch (err) {
-      console.warn("[adoCommentApi] searchUsers failed:", err);
-      trackUserFacingError({
-        error: err,
-        source: "Composer.mentions",
-        operation: "user-search",
-        impact: "degraded",
-      });
-
-      return [];
-    }
+    });
   }
 
   async resolveIdentities(
@@ -457,66 +470,60 @@ export class AdoCommentApi implements CommentApi {
     if (trimmed.length === 0) return [];
     const { project } = this.ctx;
 
-    try {
-      const client = sharedWorkItemClient();
-      const wiql = buildWorkItemWiql(trimmed);
+    return this.mentionSearch(
+      "work-item-search",
+      "searchWorkItems",
+      async () => {
+        const client = sharedWorkItemClient();
+        const wiql = buildWorkItemWiql(trimmed);
 
-      const result: Partial<WorkItemQueryResult> = await withRetry(
-        () =>
-          client.queryByWiql(
-            { query: wiql },
-            project,
-            undefined,
-            undefined,
-            10,
-          ),
-        { mode: "read", attempts: 2, label: "searchWorkItems.queryByWiql" },
-      );
+        const result: Partial<WorkItemQueryResult> = await withRetry(
+          () =>
+            client.queryByWiql(
+              { query: wiql },
+              project,
+              undefined,
+              undefined,
+              10,
+            ),
+          { mode: "read", attempts: 2, label: "searchWorkItems.queryByWiql" },
+        );
 
-      const ids = (result.workItems ?? [])
-        .map((w) => w.id)
-        .filter((id): id is number => typeof id === "number")
-        .slice(0, 10);
+        const ids = (result.workItems ?? [])
+          .map((w) => w.id)
+          .filter((id): id is number => typeof id === "number")
+          .slice(0, 10);
 
-      if (ids.length === 0) return [];
+        if (ids.length === 0) return [];
 
-      const items: Partial<WorkItem>[] = await withRetry(
-        () =>
-          client.getWorkItems(ids, project, [
-            "System.Id",
-            "System.Title",
-            "System.WorkItemType",
-            "System.State",
-          ]),
-        { mode: "read", attempts: 2, label: "searchWorkItems.getWorkItems" },
-      );
+        const items: Partial<WorkItem>[] = await withRetry(
+          () =>
+            client.getWorkItems(ids, project, [
+              "System.Id",
+              "System.Title",
+              "System.WorkItemType",
+              "System.State",
+            ]),
+          { mode: "read", attempts: 2, label: "searchWorkItems.getWorkItems" },
+        );
 
-      // Preserve WIQL ordering.
-      const byId = new Map<number, Partial<WorkItem>>();
+        // Preserve WIQL ordering.
+        const byId = new Map<number, Partial<WorkItem>>();
 
-      for (const w of items) {
-        if (typeof w.id === "number") byId.set(w.id, w);
-      }
+        for (const w of items) {
+          if (typeof w.id === "number") byId.set(w.id, w);
+        }
 
-      const ordered: Partial<WorkItem>[] = [];
+        const ordered: Partial<WorkItem>[] = [];
 
-      for (const id of ids) {
-        const w = byId.get(id);
-        if (w) ordered.push(w);
-      }
+        for (const id of ids) {
+          const w = byId.get(id);
+          if (w) ordered.push(w);
+        }
 
-      return ordered.map(toWorkItemSuggestion);
-    } catch (err) {
-      console.warn("[adoCommentApi] searchWorkItems failed:", err);
-      trackUserFacingError({
-        error: err,
-        source: "Composer.mentions",
-        operation: "work-item-search",
-        impact: "degraded",
-      });
-
-      return [];
-    }
+        return ordered.map(toWorkItemSuggestion);
+      },
+    );
   }
 
   async searchPullRequests(query: string): Promise<PullRequestSuggestion[]> {
@@ -531,33 +538,64 @@ export class AdoCommentApi implements CommentApi {
     if (numeric === null && trimmed.length < 2) return [];
     const { project } = this.ctx;
 
+    return this.mentionSearch(
+      "pull-request-search",
+      "searchPullRequests",
+      async () => {
+        const client = this.client();
+
+        // ADO's `getPullRequestsByProject` doesn't accept a `title` filter
+        // server-side, so we pull a small page of the latest active PRs
+        // and filter by title client-side. This mirrors what the in-line
+        // PR picker in the native comments UI does — the typeahead in
+        // real ADO is also client-filtered against a recent window.
+        const criteria: GitPullRequestSearchCriteria = {
+          status: PullRequestStatus.Active,
+        } as GitPullRequestSearchCriteria;
+
+        const prs: Partial<GitPullRequest>[] = await withRetry(
+          () =>
+            client.getPullRequestsByProject(
+              project,
+              criteria,
+              undefined,
+              0,
+              50,
+            ),
+          { mode: "read", attempts: 2, label: "searchPullRequests" },
+        );
+
+        return matchPullRequestSuggestions(prs, trimmed);
+      },
+    );
+  }
+
+  /**
+   * Run a mention typeahead lookup. Best-effort: a failure shows "No matches"
+   * and is reported once per failure streak — the typeahead re-runs on every
+   * keystroke, so a service that keeps failing must not report each one.
+   */
+  private async mentionSearch<T>(
+    operation: string,
+    label: string,
+    run: () => Promise<T[]>,
+  ): Promise<T[]> {
     try {
-      const client = this.client();
+      const out = await run();
+      this.searchFailures.succeed(operation);
 
-      // ADO's `getPullRequestsByProject` doesn't accept a `title` filter
-      // server-side, so we pull a small page of the latest active PRs
-      // and filter by title client-side. This mirrors what the in-line
-      // PR picker in the native comments UI does — the typeahead in
-      // real ADO is also client-filtered against a recent window.
-      const criteria: GitPullRequestSearchCriteria = {
-        status: PullRequestStatus.Active,
-      } as GitPullRequestSearchCriteria;
-
-      const prs: Partial<GitPullRequest>[] = await withRetry(
-        () =>
-          client.getPullRequestsByProject(project, criteria, undefined, 0, 50),
-        { mode: "read", attempts: 2, label: "searchPullRequests" },
-      );
-
-      return matchPullRequestSuggestions(prs, trimmed);
+      return out;
     } catch (err) {
-      console.warn("[adoCommentApi] searchPullRequests failed:", err);
-      trackUserFacingError({
-        error: err,
-        source: "Composer.mentions",
-        operation: "pull-request-search",
-        impact: "degraded",
-      });
+      console.warn(`[adoCommentApi] ${label} failed:`, err);
+
+      if (this.searchFailures.fail(operation)) {
+        trackUserFacingError({
+          error: err,
+          source: "Composer.mentions",
+          operation,
+          impact: "degraded",
+        });
+      }
 
       return [];
     }

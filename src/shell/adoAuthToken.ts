@@ -10,6 +10,9 @@
 // the anonymous identity (`aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`) with
 // `TF400813`, and — this is the sting — re-calling `SDK.getAccessToken()` just
 // returns the SAME cached token, so a tight retry loop can never heal it.
+// (`getAccessToken` is a pass-through to the host's cache, which checks only the
+// AAD `exp`. Tracked upstream: Developer Community 11084050, and
+// azure-devops-extension-sdk PR #137.)
 //
 // This module decodes those two expiries so callers can tell a genuinely
 // transient blip (retry helps) apart from the dead window (retry is futile —

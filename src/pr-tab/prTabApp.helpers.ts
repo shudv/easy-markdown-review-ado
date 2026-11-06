@@ -571,6 +571,15 @@ const DOCUMENT_VISIBILITY: VisibilityClock = {
   },
 };
 
+/** {@link withTimeout}'s budget ran out before the wrapped call settled. */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TimeoutError";
+    Object.setPrototypeOf(this, TimeoutError.prototype);
+  }
+}
+
 /**
  * Wrap a promise with a hard timeout so a misbehaving SDK/REST call surfaces
  * as a concrete error in the loading UI rather than spinning forever.
@@ -611,7 +620,11 @@ export function withTimeout<T>(
       timer = setTimeout(
         () => {
           finish();
-          reject(new Error(`Timeout after ${ms}ms while waiting for ${label}`));
+          reject(
+            new TimeoutError(
+              `Timeout after ${ms}ms while waiting for ${label}`,
+            ),
+          );
         },
         Math.max(0, remainingMs),
       );
@@ -643,4 +656,21 @@ export function withTimeout<T>(
       },
     );
   });
+}
+
+/**
+ * Run `attempt` (a {@link withTimeout}-bounded call) and, if it hangs past its
+ * budget, issue it once more. A hung read is usually a stuck connection a
+ * fresh request gets past: production saw the PR lookup time out at boot with
+ * nothing else wrong, blocking the tab. Other failures are not retried here.
+ * The hung request can't be cancelled, so this is for idempotent reads only.
+ */
+export async function retryOnTimeout<T>(attempt: () => Promise<T>): Promise<T> {
+  try {
+    return await attempt();
+  } catch (err) {
+    if (!(err instanceof TimeoutError)) throw err;
+
+    return attempt();
+  }
 }

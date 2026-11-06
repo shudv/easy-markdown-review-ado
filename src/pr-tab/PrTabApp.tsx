@@ -62,6 +62,7 @@ import {
   BOOT_AUTO_RELOAD_AFTER_MS,
   adoSession,
   autoReloadAllowed,
+  autoReloadRecentlyTried,
   claimAutoReload,
   sessionStorageOrUndefined,
 } from "../shell/adoSession";
@@ -127,6 +128,8 @@ export function PrTabApp(): ReactElement {
     recoverAtMs?: number;
     /** An automatic host reload is allowed (see `claimAutoReload`). */
     autoReload: boolean;
+    /** This window already survived an automatic reload. */
+    reloadTried: boolean;
   } | null>(null);
 
   // How many auto-retries we've scheduled for the current refreshing spell, so
@@ -208,18 +211,19 @@ export function PrTabApp(): ReactElement {
 
         if (refresh) {
           console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
-          trackUserFacingError({
-            error: refresh,
-            source: "PrTabApp.context",
-            operation: "session-refresh",
-            impact: "degraded",
-          });
+          // Reported as user-facing only if no automatic reload takes over (see
+          // the recovery effect): a reload that gets the user in is measured on
+          // the next load (`afterAutoReload`), not as a failure of this one.
           adoSession.report(refresh, "boot");
           markBootAuthWaitStart();
           setRefreshing({
             state: refresh.grantState,
             recoverAtMs: refresh.recoverAtMs,
             autoReload: autoReloadAllowed(
+              sessionStorageOrUndefined(),
+              Date.now(),
+            ),
+            reloadTried: autoReloadRecentlyTried(
               sessionStorageOrUndefined(),
               Date.now(),
             ),
@@ -250,6 +254,10 @@ export function PrTabApp(): ReactElement {
   // Bounded; once exhausted the user falls back to the manual "Reload page".
   useEffect(() => {
     if (!refreshing) return;
+
+    // No automatic reload to take over (cooldown, refused, or stalled): the
+    // user is now waiting on the window. Idempotent per spell.
+    if (!refreshing.autoReload) adoSession.surface("boot");
 
     const retryBoot = (): void => {
       markBootAuthWaitEnd();
@@ -294,6 +302,7 @@ export function PrTabApp(): ReactElement {
       // Auto-recovery exhausted — leave the manual "Reload page" action. Fire
       // the (idempotent) boot event so this terminal state is still measured
       // rather than looking like an infinite hang.
+      adoSession.surface("boot");
       markAppReady("error");
     }
 
@@ -496,6 +505,8 @@ export function PrTabApp(): ReactElement {
     return (
       <SessionRefreshingView
         autoReload={refreshing.autoReload}
+        reloadTried={refreshing.reloadTried}
+        recoverAtMs={refreshing.recoverAtMs}
         onReload={() => void adoSession.reloadHost("user")}
       />
     );

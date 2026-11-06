@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 
 import { PrTabApp } from "./PrTabApp";
 import { orchestrateBoot } from "../shell/boot";
+import { initWithHandshakeRetry } from "../shell/sdkHandshake";
 import { configureAdoSession } from "../shell/adoSessionSdk";
 import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
@@ -84,7 +85,10 @@ void orchestrateBoot({
   // and swaps our markdown stylesheet (and chrome palette via cascade) to
   // match. The MutationObserver inside syncHostTheme keeps us in sync if
   // the user toggles their ADO theme without reloading.
-  init: () => SDK.init({ loaded: false, applyTheme: true }),
+  init: () =>
+    initWithHandshakeRetry({
+      init: () => SDK.init({ loaded: false, applyTheme: true }),
+    }),
   ready: async () => {
     await SDK.ready();
     markBootPhase("sdk-ready");

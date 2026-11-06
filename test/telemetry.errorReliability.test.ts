@@ -9,6 +9,7 @@ import {
 } from "../src/telemetry/bootTiming";
 import {
   __uninstallGlobalErrorHandlersForTests,
+  claimUnhandledRejections,
   installGlobalErrorHandlers,
   rejectionTypeOf,
 } from "../src/telemetry/errorHandlers";
@@ -38,6 +39,12 @@ const timingEnvironment: BootTimingEnvironment = {
   isVisible: () => true,
   subscribeVisibilityChange: () => () => {},
 };
+
+function rejectWith(reason: unknown): void {
+  const event = new Event("unhandledrejection") as PromiseRejectionEvent;
+  Object.defineProperty(event, "reason", { value: reason });
+  window.dispatchEvent(event);
+}
 
 describe("error reliability denominator", () => {
   let sink: ReturnType<typeof fakeSink>;
@@ -98,12 +105,6 @@ describe("error reliability denominator", () => {
 
 describe("unhandled rejection reasons with no primitive conversion", () => {
   let sink: ReturnType<typeof fakeSink>;
-
-  function rejectWith(reason: unknown): void {
-    const event = new Event("unhandledrejection") as PromiseRejectionEvent;
-    Object.defineProperty(event, "reason", { value: reason });
-    window.dispatchEvent(event);
-  }
 
   beforeEach(() => {
     sink = fakeSink();
@@ -169,6 +170,55 @@ describe("unhandled rejection reasons with no primitive conversion", () => {
     const [info] = sink.exceptionCalls as { properties?: object }[];
     expect(info).toBeDefined();
     expect(info.properties ?? {}).not.toHaveProperty("rejectionType");
+  });
+});
+
+describe("claimed unhandled rejections", () => {
+  let sink: ReturnType<typeof fakeSink>;
+
+  beforeEach(() => {
+    sink = fakeSink();
+    __resetTelemetryForTests(sink);
+    __resetBootTimingForTests();
+    __uninstallGlobalErrorHandlersForTests();
+    markBootStart(timingEnvironment);
+    installGlobalErrorHandlers();
+  });
+
+  afterEach(() => {
+    __uninstallGlobalErrorHandlersForTests();
+    __resetBootTimingForTests();
+    __resetTelemetryForTests();
+  });
+
+  // The owner recovers (e.g. re-sends the SDK handshake) and reports only if
+  // that fails, so the global net must neither report nor end boot.
+  it("skips a claimed rejection entirely, and reports it again once released", () => {
+    const release = claimUnhandledRejections((r) => r === "owned");
+    rejectWith("owned");
+    expect(sink.exceptionCalls).toHaveLength(0);
+    expect(sink.eventCalls).toHaveLength(0);
+
+    release();
+    rejectWith("owned");
+    expect(sink.exceptionCalls).toHaveLength(1);
+  });
+
+  it("still reports rejections the claim doesn't recognise", () => {
+    const release = claimUnhandledRejections((r) => r === "owned");
+    rejectWith("other");
+    expect(sink.exceptionCalls).toHaveLength(1);
+    release();
+  });
+
+  it("never lets a throwing predicate hide a rejection", () => {
+    const release = claimUnhandledRejections(() => {
+      throw new Error("bad predicate");
+    });
+
+    rejectWith("anything");
+    expect(sink.exceptionCalls).toHaveLength(1);
+    release();
   });
 });
 

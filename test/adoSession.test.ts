@@ -19,6 +19,7 @@ import {
   adoSession,
   AUTO_RELOAD_RESULT_WINDOW_MS,
   autoReloadAllowed,
+  autoReloadRecentlyTried,
   claimAutoReload,
   followsRecentAutoReload,
   sessionStorageOrUndefined,
@@ -93,6 +94,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(T0);
   trackMock.mockClear();
+  trackUserFacingErrorMock.mockClear();
 });
 
 afterEach(() => {
@@ -314,15 +316,28 @@ describe("AdoSessionMonitor — held writes", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(m.getSnapshot()).toMatchObject({
       state: "refreshing",
+      surfaced: true,
       heldWrites: 1,
     });
     expect(attempt).toHaveBeenCalledOnce();
+    // The user is waiting on this write: one degradation, not a failure.
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        source: "AdoSession",
+        operation: "comment-write",
+        impact: "degraded",
+      }),
+    );
 
     current = FRESH;
     await vi.advanceTimersByTimeAsync(SESSION_POLL_MS);
     await expect(write).resolves.toBe("posted");
     expect(attempt).toHaveBeenCalledTimes(2);
-    expect(m.getSnapshot()).toMatchObject({ state: "live", heldWrites: 0 });
+    expect(m.getSnapshot()).toMatchObject({
+      state: "live",
+      surfaced: false,
+      heldWrites: 0,
+    });
     expect(eventsNamed("end")[0]!.measurements.heldWrites).toBe(1);
   });
 
@@ -366,6 +381,89 @@ describe("AdoSessionMonitor — held writes", () => {
     await expect(write).rejects.toBe(second);
     expect(attempt).toHaveBeenCalledTimes(2);
     expect(m.getSnapshot().state).toBe("refreshing");
+  });
+});
+
+describe("AdoSessionMonitor — surfacing to the user", () => {
+  // Production: ~690 poll-detected spells a week, only ~20 with a held write;
+  // reporting each one on detection cost ~8 points of ACE for no visible harm.
+  it("keeps a spell found by the background poll quiet", () => {
+    const m = new AdoSessionMonitor();
+    m.report(refreshing(), "poll");
+    expect(m.getSnapshot()).toMatchObject({
+      state: "refreshing",
+      surfaced: false,
+    });
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["boot", "session-refresh"],
+    ["refresh", "comments-refresh"],
+    ["write", "comment-write"],
+  ] as const)(
+    "surfaces a %s wait once per spell as a %s degradation",
+    (reason, operation) => {
+      const m = new AdoSessionMonitor();
+      const err = refreshing();
+      m.report(err, "poll");
+      m.surface(reason);
+      m.surface("refresh");
+      expect(m.getSnapshot().surfaced).toBe(true);
+      expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
+        error: err,
+        source: "AdoSession",
+        operation,
+        impact: "degraded",
+      });
+    },
+  );
+
+  it("clears on recovery, so the next spell can surface again", () => {
+    const m = new AdoSessionMonitor();
+    m.report(refreshing(), "poll");
+    m.surface("refresh");
+    m.noteSuccess(Date.now());
+    expect(m.getSnapshot()).toMatchObject({ state: "live", surfaced: false });
+
+    m.report(refreshing(), "poll");
+    m.surface("refresh");
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a surface request while live", () => {
+    const m = new AdoSessionMonitor();
+    m.surface("refresh");
+    expect(m.getSnapshot().surfaced).toBe(false);
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+  });
+
+  describe("claimPollFailure", () => {
+    it("leaves any other failure to the poller", () => {
+      const m = new AdoSessionMonitor();
+      expect(m.claimPollFailure(new Error("TF400893"), true)).toBe(false);
+      expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    });
+
+    it("owns a dead-window failure, quietly while nobody waits", () => {
+      const m = new AdoSessionMonitor();
+      const err = refreshing();
+      m.report(err, "poll");
+      expect(m.claimPollFailure(err, false)).toBe(true);
+      expect(m.getSnapshot().surfaced).toBe(false);
+      expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    });
+
+    it("surfaces it once the user waits on a refresh", () => {
+      const m = new AdoSessionMonitor();
+      const err = refreshing();
+      m.report(err, "poll");
+      expect(m.claimPollFailure(err, true)).toBe(true);
+      expect(m.getSnapshot().surfaced).toBe(true);
+      expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ operation: "comments-refresh" }),
+      );
+    });
   });
 });
 
@@ -591,6 +689,44 @@ describe("autoReloadAllowed", () => {
       autoReloadAllowed(storage, 1_000 + AUTO_RELOAD_COOLDOWN_MS - 1),
     ).toBe(false);
     expect(autoReloadAllowed(undefined, 1)).toBe(false);
+  });
+});
+
+describe("autoReloadRecentlyTried", () => {
+  function storageWith(value?: string) {
+    return {
+      getItem: (k: string) =>
+        k === AUTO_RELOAD_STORAGE_KEY ? (value ?? null) : null,
+      setItem: () => {},
+    };
+  }
+
+  it("is true only within the cooldown after a recorded reload", () => {
+    const s = storageWith("5000");
+    expect(autoReloadRecentlyTried(s, 5_000)).toBe(true);
+    expect(
+      autoReloadRecentlyTried(s, 5_000 + AUTO_RELOAD_COOLDOWN_MS - 1),
+    ).toBe(true);
+    expect(autoReloadRecentlyTried(s, 5_000 + AUTO_RELOAD_COOLDOWN_MS)).toBe(
+      false,
+    );
+  });
+
+  it("is false with no reload, a clock that went backwards, or no storage", () => {
+    expect(autoReloadRecentlyTried(storageWith(), 5_000)).toBe(false);
+    expect(autoReloadRecentlyTried(storageWith("5000"), 4_999)).toBe(false);
+    expect(autoReloadRecentlyTried(undefined, 5_000)).toBe(false);
+  });
+
+  it("is false where reading storage throws", () => {
+    const throwing = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {},
+    };
+
+    expect(autoReloadRecentlyTried(throwing, 5_000)).toBe(false);
   });
 });
 

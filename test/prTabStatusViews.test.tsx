@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BootErrorView,
+  DEAD_WINDOW_ISSUE_URL,
   NoMarkdownFilesView,
   SessionRefreshingView,
+  reconnectEta,
 } from "../src/pr-tab/PrTabStatusViews";
 
 (
@@ -67,6 +69,77 @@ describe("SessionRefreshingView", () => {
     expect(button?.textContent).toBe("Reload page");
     click(button);
     expect(onReload).toHaveBeenCalledTimes(1);
+    expectIssueLink(el);
+  });
+
+  // Production: users stuck in a window that survives reloads clicked
+  // "Reload page" every few seconds (25 times in 8 minutes for one user), each
+  // landing back in the same window as a new failed session.
+  describe("once the window survived an automatic reload", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("explains why, says when it continues, and offers no reload", () => {
+      vi.useFakeTimers();
+
+      const el = mount(
+        <SessionRefreshingView
+          autoReload={false}
+          reloadTried
+          recoverAtMs={Date.now() + 4.5 * 60_000}
+          onReload={vi.fn()}
+        />,
+      );
+
+      expect(el.textContent).toContain(
+        "Azure DevOps is still giving this tab an expired sign-in, so reloading won't help. It will continue by itself within about 5 minutes.",
+      );
+      expect(el.querySelector("button")).toBeNull();
+      expectIssueLink(el);
+    });
+
+    it("keeps the estimate current while it waits", () => {
+      vi.useFakeTimers();
+
+      const el = mount(
+        <SessionRefreshingView
+          autoReload={false}
+          reloadTried
+          recoverAtMs={Date.now() + 4.5 * 60_000}
+          onReload={vi.fn()}
+        />,
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(2 * 60_000);
+      });
+      expect(el.textContent).toContain("within about 3 minutes");
+    });
+  });
+});
+
+function expectIssueLink(el: HTMLElement): void {
+  const link = el.querySelector("a");
+  expect(link?.textContent).toBe("Why this happens (known Azure DevOps issue)");
+  expect(link?.getAttribute("href")).toBe(DEAD_WINDOW_ISSUE_URL);
+  expect(link?.getAttribute("target")).toBe("_blank");
+  expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+}
+
+describe("reconnectEta", () => {
+  const now = 1_000_000;
+
+  it.each<[string, number | undefined, string]>([
+    ["no known recovery time", undefined, "within a few minutes"],
+    ["a recovery time already past", now - 5_000, "within a minute"],
+    ["under a minute away", now + 40_000, "within a minute"],
+    ["exactly a minute away", now + 60_000, "within a minute"],
+    [
+      "several minutes away, rounded up",
+      now + 3 * 60_000 + 1,
+      "within about 4 minutes",
+    ],
+  ])("phrases %s", (_label, recoverAtMs, expected) => {
+    expect(reconnectEta(recoverAtMs, now)).toBe(expected);
   });
 });
 

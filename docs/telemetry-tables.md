@@ -1,29 +1,15 @@
-# Telemetry tables (thematic model)
+# Telemetry tables
 
 Every event goes to one of two thematic tables. The original per-event tables
 (`comment_created`, `app_exception`, …) were retired on 2026-11-04 and receive
 no new rows.
 
-Code: [src/telemetry/eventTables.ts](../src/telemetry/eventTables.ts) (routing),
-[src/telemetry/sinks/oneDsSink.ts](../src/telemetry/sinks/oneDsSink.ts) (emission),
-[src/telemetry/events.ts](../src/telemetry/events.ts) (event-name catalog).
-Tests: [test/telemetry.eventTables.test.ts](../test/telemetry.eventTables.test.ts).
-Privacy model: [docs/threat-model.md §7](./threat-model.md).
+Code: [src/telemetry/eventTables.ts](../src/telemetry/eventTables.ts) (routing
+and why), [src/telemetry/sinks/oneDsSink.ts](../src/telemetry/sinks/oneDsSink.ts)
+(emission), [src/telemetry/events.ts](../src/telemetry/events.ts) (event-name
+catalog). Privacy model: [docs/threat-model.md §7](./threat-model.md).
 
-## Problem
-
-In 1DS/Aria the **event name becomes the destination Kusto table**. The original
-design used a distinct name per event (`comment.created`, `comment.replied`,
-`app.loaded`, `auth.failure`, `app.exception`, …), so every signal landed in its
-own table. Answering even a basic product question then required a `union`
-across a dozen tables, and adding an event silently created a new table that no
-dashboard knew about.
-
-## Design: two thematic tables
-
-Events are routed by a single axis — **deliberate user action vs. app/system
-observation** — because that is what determines _who_ queries the data (product
-vs. engineering/on-call) and _how_ (funnels/adoption vs. rates/percentiles).
+## Tables
 
 | Table         | Contains                                       | Typical consumer      |
 | ------------- | ---------------------------------------------- | --------------------- |
@@ -59,7 +45,8 @@ table; `name` inside the payload is the specific event.
 - `app.loaded` — boot/performance (`bootTimeMs`, `activeBootTimeMs`,
   `hiddenTimeMs`, `authRefreshWaitMs`, phase durations, `readyReason`,
   `bootHadHiddenInterval`; `afterAutoReload` when this load is the automatic
-  host reload triggered to escape the token dead window)
+  host reload triggered to escape the token dead window — with
+  `authRefreshWaitMs == 0` it got the user straight in)
 - `auth.failure` — reliability; ADO call returned 401/403 (`status`, `api`, header booleans)
 - `auth.sessionRefresh` — one token dead-window spell, `phase` `start`/`end`
   (`trigger` `boot`|`poll`|`write`, `grantState`, end `outcome`
@@ -70,7 +57,10 @@ table; `name` inside the payload is the specific event.
   parse as written (`outcome` `repaired` = rendered after an automatic fix such
   as escaping `;` in sequence-diagram text, `syntax-error` = left as readable
   source). Once per diagram per page load; never counted in `app.exception`.
-- `app.exception` — errors; handled/uncaught exceptions (`message`, `stack`, `errorName`, `httpStatus`, `handled`, …)
+- `app.exception` — one user-facing failure (see [`app.exception` rows](#appexception-rows)):
+  `message`, `stack`, `errorName`, `httpStatus`, `handled`, `source`,
+  `operation`, `impact`, and `rejectionType` for an unhandled rejection whose
+  reason isn't an `Error` (e.g. `object:null-prototype`)
 
 Routing rule ([eventTables.ts](../src/telemetry/eventTables.ts)): everything is
 `Engagement` **except** an explicit diagnostics allow-list. So a newly added
@@ -117,136 +107,60 @@ visible throughout the sleep. Such cases remain visible through the raw total
 and should be treated as suspended-session outliers rather than silently
 clamped.
 
-### Reliability contract
+### `app.exception` rows
 
-`app.exception` is the reliability numerator. A handled failure is emitted when
-the user sees a terminal error, a requested command fails, or a visible feature
-degrades to a fallback. Every such row carries:
+`app.exception` is the reliability numerator: a row means the user saw a
+terminal error, a requested command failed, or a visible feature degraded to a
+fallback. Columns specific to it:
 
 - `impact = "blocking"`: the primary view cannot proceed;
 - `impact = "action-failed"`: an explicit user command did not complete;
 - `impact = "degraded"`: the main view remains usable but a visible secondary
   capability is missing.
 - `operation`: a stable, PII-free operation id suitable for grouping.
+- `source`: the emitting module (`ThreadSync.poll`, `AdoSession`, …).
 
-The contract covers SDK/app boot, PR/hub/reader discovery, document and comment
-loads, history, repository navigation/refresh/paging/filtering, comment writes,
+Covered: SDK/app boot, PR/hub/reader discovery, document and comment loads,
+history, repository navigation/refresh/paging/filtering, comment writes,
 mention and Code Search service failures, Mermaid rendering, extension-managed
 repository/ADO attachment images, and failed copy/navigation commands.
 
-Expected capability states do **not** count against reliability: Code Search not
-installed/not configured, repositories with no completed routing PR, permission
-denial correctly surfaced as read-only, caller cancellation/stale requests, and
-best-effort identity/avatar enrichment. Arbitrary user-authored external image
-URLs are content health, not extension reliability. So are author Mermaid
-syntax errors (`diagram.renderIssue`), and a Documents-hub document that no
-longer exists (a stale `?path=` link or remembered path after a rename/delete
-— the hub opens another document and says so).
+Not rows (expected states, not failures): Code Search not installed/not
+configured, repositories with no completed routing PR, permission denial
+surfaced as read-only, caller cancellation/stale requests, best-effort
+identity/avatar enrichment, and an ADO token dead window nobody waited on.
+Content health is not extension reliability either: arbitrary user-authored
+external image URLs, author Mermaid syntax errors (`diagram.renderIssue`), and
+a Documents-hub document that no longer exists (a stale `?path=` link or
+remembered path after a rename/delete — the hub opens another document and
+says so).
 
-Reading the exception counts:
-
-- `ThreadSync.poll` reports once per **failure streak**, not per poll: the
-  comment poller pauses during a token dead window and backs other failures off
-  from 30s to 5 min.
-- Boot timeouts (`Timeout after 15000ms`) count only visible time, so a tab
-  opened in the background doesn't time out.
-- Mermaid chunk loads retry after 1s and 3s, and a failure is reported once per
-  diagram per page load.
-- Unhandled rejections with a non-`Error` reason carry a `rejectionType`
-  property (e.g. `object:null-prototype`).
-
-### Living with the token dead window
-
-The ADO host's embedded grant can expire before its cached AAD token, so for a
-few minutes every ADO call is rejected with `401 + TF400813`. The iframe cannot
-make the host mint a fresh token (`SDK.getAccessToken()` is a
-pass-through to the host's cache, which checks only the AAD `exp`; tracked
-upstream in Developer Community 11084050 and SDK PR #137). Poll bursts end a
-median 4.4 min after they start, well before the ~10 min AAD `exp`, so the host
-usually re-mints early. `shell/adoSession.ts` exploits that:
-
-- **One shared state.** Any confirmed `SessionRefreshingError` (boot, comment
-  poll, write) starts a spell; a successful ADO call or a fresh token ends it.
-- **Early resume.** While refreshing, the host token is re-read every 10s (a
-  postMessage, not a network call); boot retries and the poller resumes the
-  moment it is live, instead of waiting for the AAD `exp`.
-- **Boot auto-reload.** If boot hits the window and no fresh token arrives
-  within 4s, the HOST page is reloaded once (guarded to one per 10 min via
-  `sessionStorage`). From 45 days of follow-up loads, a reload within 20s got
-  the user straight in 74% of the time (vs ~7% per 30s of waiting); the rest
-  land back in the window — likely because the host's sign-in cache survives
-  the reload — and fall back to early resume. The user sees only
-  "Reconnecting to Azure DevOps… This only takes a moment."
-- **Held writes.** A rejected comment write waits (up to 12 min) for the
-  session, then is retried once — safe, as a 401 is refused before any handler
-  runs. Composers are disabled while any write is in flight, so nothing posts
-  twice. A notice ("Reconnecting to Azure DevOps — this usually fixes itself
-  within a few minutes") appears as soon as a background poll detects the
-  window; "Reload page" is offered only as a quiet link, since it helps ~3 in 4
-  times and costs the reader their place.
-- **Measured.** `auth.sessionRefresh` records each spell's timing and outcome:
-
-```kusto
-diagnostics
-| where name == "auth.sessionRefresh" and phase == "end"
-| summarize spells = count(), p50Sec = percentile(durationSec, 50),
-            p90Sec = percentile(durationSec, 90),
-            p50BeforeExp = percentile(secsBeforeExpAtEnd, 50)
-  by trigger, outcome
-```
-
-and `app.loaded.afterAutoReload` shows whether the automatic reload worked
-(`authRefreshWaitMs == 0` = it got the user straight in):
-
-```kusto
-diagnostics
-| where name == "app.loaded" and column_ifexists("afterAutoReload", false) == true
-| summarize loads = count(),
-            straightIn = countif(authRefreshWaitMs == 0 and readyReason != "error")
-| extend successPct = round(100.0 * straightIn / loads, 1)
-```
-
-## Alarms
-
-Investigate immediately if either fires:
-
-```kusto
-// Reload loop: more than one automatic reload for the same client within 10 min.
-diagnostics
-| where EventInfo_Time > ago(1d) and name == "app.loaded" and column_ifexists("afterAutoReload", false) == true
-| summarize reloads = count() by PipelineInfo_ClientIp, DeviceInfo_BrowserVersion, bin(EventInfo_Time, 10m)
-| where reloads > 1;
-// Duplicate posts: the same session posting the same-length comment twice within 30s.
-engagement
-| where EventInfo_Time > ago(1d) and name in ("comment.created", "comment.replied")
-| order by sessionId asc, EventInfo_Time asc
-| where sessionId == prev(sessionId) and name == prev(name) and bodyLength == prev(bodyLength)
-    and datetime_diff('second', EventInfo_Time, prev(EventInfo_Time)) <= 30
-| summarize likelyDuplicates = count(), sessions = dcount(sessionId)
-```
-
-## Assessment: is two tables enough?
-
-Yes for this app. The split is clean — all current events fall unambiguously into
-one theme, and the shared context columns are identical across both.
-
-The one event worth a second look is **`app.exception`**: it carries the widest
-schema (`message`/`stack`) and those are the highest PII-risk columns. Some teams
-isolate an **`Exceptions`** table so error free-text can have its own
-access-control/retention. We deliberately keep it in `Diagnostics` for now
-(lower volume, and `Diagnostics | where name == "app.exception"` is a fine errors
-view). If that changes, splitting is a **one-line change**: remove
-`EVENT.AppException` from the `DIAGNOSTIC_EVENTS` set, add an `Exceptions` entry
-to `TELEMETRY_TABLE`, and give it a `tableFor` branch. No call-site or emission
-changes.
+Repeating failures (pollers, typeaheads, retried loads) emit one row per
+failure streak rather than per attempt, so measure reliability in sessions,
+not rows.
 
 ## Querying
+
+**Production cohort.** Old `0.x` builds that are still installed report
+`environment == "production"`, and their behaviour (and error volume) no
+longer reflects the shipped code. Product and reliability queries filter them
+out by `extensionVersion`:
+
+```kusto
+| where not(extensionVersion startswith "0.")
+```
+
+An empty `extensionVersion` (a failure before the SDK handshake completed) is
+kept on purpose. The production extension itself shipped as `0.0.1` until
+2026-10-26, so drop the filter for trends earlier than that. To judge a change,
+slice by release rather than filtering (see the last query).
 
 User actions by day:
 
 ```kusto
 engagement
 | where environment == "production" and EventInfo_Time > ago(7d)
+| where not(extensionVersion startswith "0.")
 | summarize count() by name, bin(EventInfo_Time, 1d)
 ```
 
@@ -275,7 +189,8 @@ diagnostics
 let WindowStart = ago(30d);
 let Prod = diagnostics
 | where EventInfo_Time between (WindowStart .. now())
-| where environment == "production";
+| where environment == "production"
+| where not(extensionVersion startswith "0.");
 let Loaded = Prod
 | where name == "app.loaded"
 | project Day=bin(EventInfo_Time, 1d), sessionId
@@ -292,4 +207,20 @@ Loaded
 | extend ACE=100.0 * (TotalSessions - ErrorSessions) / TotalSessions
 | project Day, ACE, TotalSessions, ErrorSessions
 | order by Day asc
+```
+
+```kusto
+// ACE by release: a change shows up on its version's line, while older
+// installs keep reporting the old behaviour.
+diagnostics
+| where EventInfo_Time > ago(14d) and environment == "production"
+| where name in ("app.loaded", "app.exception")
+| where not(extensionVersion startswith "0.")
+| summarize Start = min(EventInfo_Time), HasError = countif(name == "app.exception") > 0,
+            Version = take_anyif(extract(@"^(\d+\.\d+)", 1, extensionVersion), isnotempty(extensionVersion))
+  by sessionId
+| summarize Sessions = count(), ErrorSessions = countif(HasError) by Day = bin(Start, 1d), Version
+| extend ACE = 100.0 * (Sessions - ErrorSessions) / Sessions
+| project Day, Version, ACE, Sessions
+| render timechart
 ```

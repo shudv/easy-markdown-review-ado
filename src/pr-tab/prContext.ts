@@ -24,6 +24,7 @@ import {
   pickPullRequestId,
   rangeChangeTypes,
   reviewIterationStops as mapReviewIterationStops,
+  retryOnTimeout,
   selectDiffCommits,
   withTimeout,
   type IterationParams,
@@ -154,21 +155,25 @@ function requestPullRequest(
   // a timed-out-but-still-in-flight call stack up with its retries. Bounding
   // the entire `withRetry` instead means retries only fire on SETTLED
   // rejections (a real 4xx/5xx — no dangling request), while a genuinely hung
-  // call still fails once after 15s rather than spinning forever.
-  return withTimeout(
-    withRetry(
-      () =>
-        withAdoSessionRefreshDetection(
-          () => gitClient.getPullRequestById(pullRequestId, projectId),
-          readHostToken,
-        ),
-      {
-        mode: "read",
-        label: "getPullRequestById",
-      },
+  // call fails after 15s. That hung call is then re-issued once
+  // (`retryOnTimeout`): one dangling read is a fair price for not blocking the
+  // tab on a stuck connection.
+  return retryOnTimeout(() =>
+    withTimeout(
+      withRetry(
+        () =>
+          withAdoSessionRefreshDetection(
+            () => gitClient.getPullRequestById(pullRequestId, projectId),
+            readHostToken,
+          ),
+        {
+          mode: "read",
+          label: "getPullRequestById",
+        },
+      ),
+      15_000,
+      `getPullRequestById(${pullRequestId}, ${projectId})`,
     ),
-    15_000,
-    `getPullRequestById(${pullRequestId}, ${projectId})`,
   );
 }
 

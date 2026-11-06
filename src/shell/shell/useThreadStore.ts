@@ -102,6 +102,8 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     intervalMs: opts.threadSyncIntervalMs,
     // Resume polling the moment the ADO session is re-minted.
     subscribeRecovered: adoSession.onRecovered,
+    // The dead window is the session monitor's to show and report.
+    claimFailure: adoSession.claimPollFailure,
   });
 
   // Unified data refresh surfaced on the reading toolbar: pull a fresh comment

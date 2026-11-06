@@ -1,11 +1,40 @@
 # OSS mirror sync ledger
 
+## 2026-11-06 Reliability (ACE) sync
+
+- Public base: `c26d0d8` (#31).
+- Previously mirrored product boundary: `1c1ed97` (source merge `32c7b5c`).
+- New product boundary: `fb1cc3f` (source branch `fix/ace-reliability`; not yet
+  merged, record the source merge commit here once it lands).
+- OSS release version: `1.3.1` (package, root lockfile metadata, and Marketplace
+  manifest updated together).
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `4fcfddf`     | The ADO token dead window is surfaced (notice plus one user-facing report) only when the user waits on it — a held write, a manual refresh, or a boot no automatic reload takes over; the PR tab reloads the host after 1s instead of 4s and, once a window has survived a reload, explains why and gives an ETA with a link to the public SDK issue instead of offering a futile "Reload page"; the comment poller reports background failures from the second in a row; Documents-hub routed comments detect the dead window and let failures reach the poller; a refused SDK handshake is re-sent; the PR lookup is re-issued once after a timeout; mention typeaheads report once per failure streak; `docs/telemetry-tables.md` covers only the tables and their contents. |
+| `fb1cc3f`     | A claimed unhandled rejection is also cancelled, so the browser doesn't log it as uncaught.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The public feedback contact in `PrTabApp.tsx` is unchanged; the replayed
+  edits don't touch it.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `fb1cc3f` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-05 Strict lint tiers sync
 
 - Public base: `b965581` (#29).
 - Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
-- New product boundary: `1c1ed97` (source branch `chore/strict-lint-tiers`; not
-  yet merged, record the source merge commit here once it lands).
+- New product boundary: `1c1ed97` (source branch `chore/strict-lint-tiers`),
+  merged in the source as `32c7b5c` and on public `main` as `c26d0d8` (#31).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
 

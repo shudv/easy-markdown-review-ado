@@ -6,6 +6,34 @@ import { markAppReady } from "./bootTiming";
 import { trackException } from "./telemetry";
 
 let installed = false;
+const claimedRejections = new Set<(reason: unknown) => boolean>();
+
+/**
+ * Let a caller own rejections it recognises — ones a library leaves unhandled
+ * but the caller recovers from (and reports itself if recovery fails). The
+ * global handler skips a claimed rejection entirely. Returns the release.
+ */
+export function claimUnhandledRejections(
+  predicate: (reason: unknown) => boolean,
+): () => void {
+  claimedRejections.add(predicate);
+
+  return () => {
+    claimedRejections.delete(predicate);
+  };
+}
+
+function isClaimed(reason: unknown): boolean {
+  for (const predicate of claimedRejections) {
+    try {
+      if (predicate(reason)) return true;
+    } catch {
+      /* a faulty predicate must not hide the rejection */
+    }
+  }
+
+  return false;
+}
 
 function onError(event: ErrorEvent): void {
   trackException({
@@ -40,6 +68,14 @@ export function rejectionTypeOf(reason: unknown): string {
 }
 
 function onUnhandledRejection(event: PromiseRejectionEvent): void {
+  // A claimed rejection is handled by its owner: neither report it nor let
+  // the browser log it as uncaught.
+  if (isClaimed(event.reason)) {
+    event.preventDefault();
+
+    return;
+  }
+
   // Must never throw: an exception here escapes to `window.onerror` and hides
   // the real rejection. The old `new Error(String(reason))` did exactly that
   // for reasons with no primitive conversion ("Cannot convert object to

@@ -20,6 +20,11 @@
 //     401 is rejected at the auth layer before any handler runs.
 //   - Diagnostics: one `auth.sessionRefresh` start/end pair per spell with the
 //     token timing, so the re-mint behaviour is measurable.
+//   - Quiet until it matters: a spell found by the background comment poll
+//     stays invisible (in production ~97% of them ended with no user action
+//     at all). It is `surfaced` — the notice shows and ONE user-facing error is
+//     reported for the spell — only once the user waits on the session: a held
+//     write, a manual refresh, or a boot that can't escape by reloading.
 //
 // SDK-free: the host token reader and host reload are injected by the entry
 // points via `configure`, keeping this deterministically unit-testable.
@@ -37,6 +42,11 @@ type AdoSessionState = "live" | "refreshing";
 
 export interface AdoSessionSnapshot {
   state: AdoSessionState;
+  /**
+   * The user is waiting on the current spell (see {@link SessionSurfaceReason}),
+   * so it is shown to them. Always false while live.
+   */
+  surfaced: boolean;
   /** Comment writes currently waiting for the session to come back. */
   heldWrites: number;
   /** Whether a host-page reload is available (wired by the entry point). */
@@ -44,6 +54,19 @@ export interface AdoSessionSnapshot {
 }
 
 export type SessionSpellTrigger = "boot" | "poll" | "write";
+
+/**
+ * Why the user is now waiting on a spell. Each maps to the reliability
+ * `operation` whose capability the spell is holding up.
+ */
+export type SessionSurfaceReason = "boot" | "refresh" | "write";
+
+const SURFACE_OPERATION: Record<SessionSurfaceReason, string> = {
+  boot: "session-refresh",
+  refresh: "comments-refresh",
+  write: "comment-write",
+};
+
 type SpellOutcome =
   | "remint"
   | "success"
@@ -72,6 +95,8 @@ export const HELD_WRITE_MAX_WAIT_MS = 12 * 60_000;
 
 interface Spell {
   trigger: SessionSpellTrigger;
+  /** The rejection that opened the spell (reported if it is surfaced). */
+  error: Error;
   startedAtMs: number;
   grantState: string;
   /** AAD `exp` of the rejected token (when the spell must end at the latest). */
@@ -84,6 +109,7 @@ interface Spell {
 
 const LIVE: AdoSessionSnapshot = {
   state: "live",
+  surfaced: false,
   heldWrites: 0,
   canReload: false,
 };
@@ -138,6 +164,7 @@ export class AdoSessionMonitor {
     const startedAtMs = this.now();
     this.spell = {
       trigger,
+      error: err,
       startedAtMs,
       grantState: err.grantState,
       expMs: err.recoverAtMs,
@@ -157,6 +184,35 @@ export class AdoSessionMonitor {
 
     return true;
   }
+
+  /**
+   * The user is now waiting on the current spell: show it, and report it as a
+   * user-facing degradation — once per spell, whatever surfaces it first. A
+   * no-op while live, so a late caller can't surface an already-ended spell.
+   */
+  surface(reason: SessionSurfaceReason): void {
+    const spell = this.spell;
+    if (!spell || this.snapshot.surfaced) return;
+    this.update({ surfaced: true });
+    trackUserFacingError({
+      error: spell.error,
+      source: "AdoSession",
+      operation: SURFACE_OPERATION[reason],
+      impact: "degraded",
+    });
+  }
+
+  /**
+   * Thread-sync failure policy (see `useThreadSync`'s `claimFailure`): a
+   * dead-window rejection belongs to this monitor, which surfaces it only when
+   * the user is waiting for the result. Anything else is left to the poller.
+   */
+  claimPollFailure = (err: unknown, userWaiting: boolean): boolean => {
+    if (!isSessionRefreshingError(err)) return false;
+    if (userWaiting) this.surface("refresh");
+
+    return true;
+  };
 
   /**
    * An ADO call succeeded: the session is demonstrably usable. Only counts
@@ -191,6 +247,16 @@ export class AdoSessionMonitor {
    * Run a write; if the dead window rejects it, hold it until the session is
    * live again (up to `maxWaitMs`) and retry once. Any other failure — or a
    * second rejection, or a hold that times out — rethrows the error.
+   *
+   * Alarm — the retry must never post twice; investigate if this finds any:
+   *
+   *     engagement
+   *     | where EventInfo_Time > ago(1d) and name in ("comment.created", "comment.replied")
+   *     | order by sessionId asc, EventInfo_Time asc
+   *     | where sessionId == prev(sessionId) and name == prev(name)
+   *         and bodyLength == prev(bodyLength)
+   *         and datetime_diff('second', EventInfo_Time, prev(EventInfo_Time)) <= 30
+   *     | summarize likelyDuplicates = count(), sessions = dcount(sessionId)
    */
   async holdWrite<T>(
     attempt: () => Promise<T>,
@@ -204,6 +270,7 @@ export class AdoSessionMonitor {
       return result;
     } catch (err) {
       if (!this.report(err, "write")) throw err;
+      this.surface("write");
       this.update({ heldWrites: this.snapshot.heldWrites + 1 });
       let live: boolean;
 
@@ -349,7 +416,7 @@ export class AdoSessionMonitor {
       this.timer = null;
     }
 
-    this.update({ state: "live" });
+    this.update({ state: "live", surfaced: false });
     for (const waiter of [...this.waiters]) waiter();
     for (const listener of [...this.recoveredListeners]) listener();
   }
@@ -375,19 +442,32 @@ export function useAdoSession(
 // ---------------------------------------------------------------------------
 
 /**
- * How long boot waits for an early re-mint before reloading the host page. A
- * host reload escaped the dead window about 3 times in 4 in production (74% of
- * reloads within 20s loaded straight in, vs ~7% per 30s of waiting), while
- * waiting it out took minutes and about half of the users gave up. The other
- * quarter land back in the window, so this happens at most once per cooldown.
+ * How long boot shows "Reconnecting…" before reloading the host page. Waiting
+ * in place almost never helps at boot: in production only ~7% of boot spells
+ * recovered without a reload, and those took minutes, while users who reloaded
+ * or left did so a median 3s in — so the old 4s grace mostly lost them. A host
+ * reload escapes the window about 2–3 times in 4; the rest land back in it, so
+ * this happens at most once per cooldown. The second only lets the screen
+ * render instead of flashing.
  */
-export const BOOT_AUTO_RELOAD_AFTER_MS = 4_000;
+export const BOOT_AUTO_RELOAD_AFTER_MS = 1_000;
 /**
  * If the page is still here this long after the automatic reload was
  * requested, the reload didn't happen — offer the manual action instead.
  */
 export const AUTO_RELOAD_STALL_MS = 10_000;
-/** At most one automatic host reload per this window, to rule out loops. */
+/**
+ * At most one automatic host reload per this window, to rule out loops.
+ *
+ * Alarm — investigate if this ever returns rows (a reload loop):
+ *
+ *     diagnostics
+ *     | where EventInfo_Time > ago(1d) and name == "app.loaded"
+ *         and column_ifexists("afterAutoReload", false) == true
+ *     | summarize reloads = count()
+ *         by PipelineInfo_ClientIp, DeviceInfo_BrowserVersion, bin(EventInfo_Time, 10m)
+ *     | where reloads > 1
+ */
 export const AUTO_RELOAD_COOLDOWN_MS = 10 * 60_000;
 export const AUTO_RELOAD_STORAGE_KEY = "emr.sessionAutoReloadAt";
 
@@ -459,6 +539,29 @@ export function autoReloadAllowed(
     const last = lastAutoReloadAt(storage);
 
     return last === null || nowMs - last >= cooldownMs;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Did an automatic host reload happen within the cooldown — so a page that is
+ * back in the dead window has already survived one? The host then keeps
+ * serving the same dead token across reloads (production: one user reloaded
+ * 25 times in 8 minutes, each landing back in the same window), so offering
+ * another reload only makes things worse.
+ */
+export function autoReloadRecentlyTried(
+  storage: StorageLike | undefined,
+  nowMs: number,
+  cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
+): boolean {
+  if (!storage) return false;
+
+  try {
+    const last = lastAutoReloadAt(storage);
+
+    return last !== null && nowMs >= last && nowMs - last < cooldownMs;
   } catch {
     return false;
   }

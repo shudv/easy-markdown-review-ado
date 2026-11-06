@@ -1,10 +1,11 @@
 // Non-blocking notice shown while the ADO token dead window is in effect (see
-// shell/adoSession.ts). It appears as soon as any request confirms the spell —
-// usually the background comment poll — so the user learns about it before
-// posting. Plain language only: the window normally clears by itself, so the
-// reload is offered as a quiet link, not the main action (it helps about 3 in
-// 4 times and costs the reader their place). While changes are waiting to be
-// saved, or an inline edit is open, the link is hidden: a reload would drop them.
+// shell/adoSession.ts) AND the user is waiting on it — a held write or a
+// manual refresh. A spell the background comment poll finds on its own stays
+// quiet: most end by themselves before the user needs the session. Plain
+// language only: the window normally clears by itself, so the reload is
+// offered as a quiet link, not the main action (it helps about 3 in 4 times
+// and costs the reader their place). While changes are waiting to be saved,
+// or an inline edit is open, the link is hidden: a reload would drop them.
 
 import type { ReactElement } from "react";
 
@@ -26,7 +27,8 @@ export function SessionNotice({
   reloadAllowed?: boolean;
 }>): ReactElement | null {
   const session = useAdoSession(monitor);
-  if (session.state !== "refreshing") return null;
+  // Only a refreshing spell can be surfaced; recovery clears it.
+  if (!session.surfaced) return null;
 
   return (
     <div className="emr-toast emr-toast--info" role="status">

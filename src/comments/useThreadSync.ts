@@ -22,7 +22,12 @@
 //     session was re-minted), which resumes polling immediately.
 //   - Errors go to `onError` every time, but are reported to telemetry once per
 //     failure streak — production saw one long-lived tab emit a 401 every 30s
-//     for 88 hours.
+//     for 88 hours. A background poll reports only once the streak reaches
+//     {@link BACKGROUND_REPORT_STREAK}: a lone failed poll is invisible (the
+//     next one heals it) and was most of the reported network blips. A failure
+//     the user is waiting on — a manual `refreshNow`, or before any snapshot
+//     has loaded — reports at once. A host may `claimFailure` to own the
+//     reporting of failures it understands better (the ADO dead window).
 
 import {
   type MutableRefObject,
@@ -44,6 +49,8 @@ const DEFAULT_MAX_BACKOFF_MS = 5 * 60_000;
 export const MAX_RECOVER_WAIT_MS = 11 * 60_000;
 /** Grace added after `recoverAtMs` so the host has re-minted before we ask. */
 export const RECOVER_BUFFER_MS = 2_000;
+/** Consecutive background-poll failures before the streak is reported. */
+const BACKGROUND_REPORT_STREAK = 2;
 
 /** The `recoverAtMs` hint carried by an error, when it has a finite one. */
 function recoverAtMsOf(err: unknown): number | undefined {
@@ -125,6 +132,12 @@ export interface UseThreadSyncOptions {
    * than waiting out the backoff.
    */
   subscribeRecovered?: (listener: () => void) => () => void;
+  /**
+   * Optional host policy for a failed fetch. Return true to take ownership of
+   * the user-facing report (the hook still backs off and calls `onError`).
+   * `userWaiting` is true for a manual refresh or before any snapshot loaded.
+   */
+  claimFailure?: (err: unknown, userWaiting: boolean) => boolean;
 }
 
 export interface ThreadSyncControls {
@@ -145,6 +158,7 @@ interface ThreadSyncRefs {
   subscribeRecoveredRef: MutableRefObject<
     UseThreadSyncOptions["subscribeRecovered"]
   >;
+  claimFailureRef: MutableRefObject<UseThreadSyncOptions["claimFailure"]>;
   generationRef: MutableRefObject<number>;
   inFlightRef: MutableRefObject<AbortController | null>;
   refreshNowRef: MutableRefObject<() => void>;
@@ -161,6 +175,10 @@ interface PollSession {
   // Consecutive failed polls; 0 while healthy. Drives backoff and the
   // once-per-streak telemetry.
   failureStreak: number;
+  // The current failure streak has been reported (or claimed by the host).
+  streakReported: boolean;
+  // A snapshot has landed in this session, so the user has comments on screen.
+  hasLoaded: boolean;
   // Wall-clock time the next automatic poll is due. Kept while hidden so a
   // reveal mid-backoff resumes the wait instead of polling immediately.
   nextDueAtMs: number | null;
@@ -193,7 +211,11 @@ function scheduleNext(session: PollSession, delayMs: number): void {
   }
 }
 
-function handleFetchFailure(session: PollSession, err: unknown): void {
+function handleFetchFailure(
+  session: PollSession,
+  err: unknown,
+  manual: boolean,
+): void {
   session.failureStreak += 1;
   scheduleNext(
     session,
@@ -205,15 +227,7 @@ function handleFetchFailure(session: PollSession, err: unknown): void {
       maxBackoffMs: session.maxBackoffMs,
     }),
   );
-
-  if (session.failureStreak === 1) {
-    trackUserFacingError({
-      error: err,
-      source: "ThreadSync.poll",
-      operation: "comments-refresh",
-      impact: "degraded",
-    });
-  }
+  reportFailure(session, err, manual);
 
   (
     session.refs.onErrorRef.current ??
@@ -221,7 +235,28 @@ function handleFetchFailure(session: PollSession, err: unknown): void {
   )(err);
 }
 
-function runFetch(session: PollSession): void {
+// Once per streak, and only once it is user-visible (see the header). A
+// claimed failure is the host's to report; it is offered every failure since
+// the user may only start waiting partway through the streak.
+function reportFailure(
+  session: PollSession,
+  err: unknown,
+  manual: boolean,
+): void {
+  const userWaiting = manual || !session.hasLoaded;
+  if (session.refs.claimFailureRef.current?.(err, userWaiting) === true) return;
+  if (session.streakReported) return;
+  if (!userWaiting && session.failureStreak < BACKGROUND_REPORT_STREAK) return;
+  session.streakReported = true;
+  trackUserFacingError({
+    error: err,
+    source: "ThreadSync.poll",
+    operation: "comments-refresh",
+    impact: "degraded",
+  });
+}
+
+function runFetch(session: PollSession, manual = false): void {
   const { refs } = session;
   // refreshNowRef still targets this session after `enabled` turns off.
   if (session.cancelled) return;
@@ -241,12 +276,14 @@ function runFetch(session: PollSession): void {
       // drops results from cancelled sessions and aborted requests too.
       if (myGeneration !== refs.generationRef.current) return;
       session.failureStreak = 0;
+      session.streakReported = false;
+      session.hasLoaded = true;
       scheduleNext(session, session.intervalMs);
       refs.onThreadsRef.current(threads);
     })
     .catch((err: unknown) => {
       if (myGeneration !== refs.generationRef.current) return;
-      handleFetchFailure(session, err);
+      handleFetchFailure(session, err, manual);
     })
     .finally(() => {
       if (refs.inFlightRef.current === controller) {
@@ -308,10 +345,12 @@ function startThreadPolling(
     cancelled: false,
     timerId: null,
     failureStreak: 0,
+    streakReported: false,
+    hasLoaded: false,
     nextDueAtMs: null,
   };
 
-  refs.refreshNowRef.current = () => runFetch(session);
+  refs.refreshNowRef.current = () => runFetch(session, true);
 
   const onVisibilityChange = (): void => handleVisibilityChange(session);
 
@@ -373,6 +412,11 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
   useEffect(() => {
     subscribeRecoveredRef.current = subscribeRecovered;
   }, [subscribeRecovered]);
+  const claimFailure = opts.claimFailure;
+  const claimFailureRef = useRef(claimFailure);
+  useEffect(() => {
+    claimFailureRef.current = claimFailure;
+  }, [claimFailure]);
 
   // Generation counter increments on each visibility loss / unmount.
   // Responses from older generations are discarded so a slow request
@@ -392,6 +436,7 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
         onThreadsRef,
         onErrorRef,
         subscribeRecoveredRef,
+        claimFailureRef,
         generationRef,
         inFlightRef,
         refreshNowRef,

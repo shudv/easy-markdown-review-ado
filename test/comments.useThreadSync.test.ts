@@ -41,6 +41,7 @@ interface HarnessOpts {
   intervalMs?: number;
   maxBackoffMs?: number;
   subscribeRecovered?: (listener: () => void) => () => void;
+  claimFailure?: (err: unknown, userWaiting: boolean) => boolean;
 }
 
 // Exposed via the harness so tests can inspect / call `refreshNow`.
@@ -63,6 +64,7 @@ function Harness(
     intervalMs: props.intervalMs,
     maxBackoffMs: props.maxBackoffMs,
     subscribeRecovered: props.subscribeRecovered,
+    claimFailure: props.claimFailure,
   });
 
   const { onControls } = props;
@@ -579,9 +581,136 @@ describe("useThreadSync — failure backoff", () => {
     await tick(1_000);
     expect(fetchThreads).toHaveBeenCalledTimes(4);
 
+    // A new background streak reports on its second failure, not its first.
     fail = true;
     await tick(1_000);
+    expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+    await tick(1_000);
     expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+  });
+
+  // Production: lone `TF400893` network blips on a background poll were
+  // reported although the next poll healed them and nothing was visible.
+  it("does not report a lone background failure the next poll heals", async () => {
+    vi.useFakeTimers();
+    let fail = false;
+
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      if (fail) throw new Error("TF400893: Unable to contact the server.");
+
+      return [];
+    });
+
+    mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 1_000,
+    });
+    await flush();
+    fail = true;
+    await tick(1_000);
+    fail = false;
+    await tick(1_000);
+    expect(fetchThreads).toHaveBeenCalledTimes(3);
+    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed manual refresh at once, even mid-healthy", async () => {
+    vi.useFakeTimers();
+    let fail = false;
+
+    const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+      if (fail) throw authError();
+
+      return [];
+    });
+
+    const handle = mount({
+      enabled: true,
+      fetchThreads,
+      onThreads: vi.fn(),
+      onError: vi.fn(),
+      intervalMs: 60_000,
+    });
+
+    await flush();
+    fail = true;
+    await act(async () => {
+      handle.controls!.refreshNow();
+    });
+    await flush();
+    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+  });
+
+  describe("claimFailure", () => {
+    const deadWindow = () =>
+      new SessionRefreshingError("refreshing", Date.now() + 4 * 60_000);
+
+    it("lets the host own a failure it claims, and says whether the user waits", async () => {
+      vi.useFakeTimers();
+      let fail = false;
+
+      const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
+        if (fail) throw deadWindow();
+
+        return [];
+      });
+
+      const claimFailure = vi.fn(() => true);
+
+      const handle = mount({
+        enabled: true,
+        fetchThreads,
+        onThreads: vi.fn(),
+        onError: vi.fn(),
+        intervalMs: 1_000,
+        claimFailure,
+      });
+
+      await flush();
+
+      // Background: offered on every failure, never reported here.
+      fail = true;
+      await tick(1_000);
+      await tick(5 * 60_000);
+      expect(claimFailure).toHaveBeenCalledTimes(2);
+      expect(claimFailure).toHaveBeenLastCalledWith(
+        expect.any(SessionRefreshingError),
+        false,
+      );
+
+      // The user starts waiting partway through the streak.
+      await act(async () => {
+        handle.controls!.refreshNow();
+      });
+      await flush();
+      expect(claimFailure).toHaveBeenLastCalledWith(
+        expect.any(SessionRefreshingError),
+        true,
+      );
+      expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    });
+
+    it("treats a failure before anything has loaded as one the user waits on", async () => {
+      const claimFailure = vi.fn(() => false);
+      const boom = new Error("boom");
+
+      mount({
+        enabled: true,
+        fetchThreads: vi.fn(async () => {
+          throw boom;
+        }),
+        onThreads: vi.fn(),
+        onError: vi.fn(),
+        claimFailure,
+      });
+      await flush();
+      expect(claimFailure).toHaveBeenCalledWith(boom, true);
+      // Not claimed → the poller reports it as usual.
+      expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+    });
   });
 
   it("pauses until recoverAtMs for a session-refreshing error, then resumes", async () => {

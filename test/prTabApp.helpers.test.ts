@@ -22,6 +22,8 @@ import {
   reviewIterationStops,
   selectDiffCommits,
   withTimeout,
+  retryOnTimeout,
+  TimeoutError,
   type VisibilityClock,
 } from "../src/pr-tab/prTabApp.helpers";
 
@@ -623,9 +625,11 @@ describe("withTimeout", () => {
 
   it("rejects with a labelled timeout error when the promise is too slow", async () => {
     const never = new Promise<string>(() => {});
-    await expect(withTimeout(never, 5, "loading PR")).rejects.toThrow(
+    const result = withTimeout(never, 5, "loading PR");
+    await expect(result).rejects.toThrow(
       /Timeout after 5ms while waiting for loading PR/,
     );
+    await expect(result).rejects.toBeInstanceOf(TimeoutError);
   });
 
   describe("only counts visible time", () => {
@@ -838,6 +842,64 @@ describe("withTimeout", () => {
         });
       }
     });
+  });
+});
+
+describe("retryOnTimeout", () => {
+  const timeout = () =>
+    new TimeoutError(
+      "Timeout after 15000ms while waiting for getPullRequestById",
+    );
+
+  it("returns the first attempt's result without retrying", async () => {
+    const attempt = vi.fn(async () => "pr");
+    await expect(retryOnTimeout(attempt)).resolves.toBe("pr");
+    expect(attempt).toHaveBeenCalledOnce();
+  });
+
+  // Production: the boot PR lookup hung past 15s with nothing else wrong and
+  // blocked the tab (9 sessions a week).
+  it("re-issues a hung call once and returns the second result", async () => {
+    const attempt = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(timeout())
+      .mockResolvedValueOnce("pr");
+
+    await expect(retryOnTimeout(attempt)).resolves.toBe("pr");
+    expect(attempt).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after the second timeout", async () => {
+    const second = timeout();
+
+    const attempt = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(timeout())
+      .mockRejectedValueOnce(second);
+
+    await expect(retryOnTimeout(attempt)).rejects.toBe(second);
+    expect(attempt).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry any other failure", async () => {
+    const notFound = Object.assign(new Error("TF401180"), { status: 404 });
+    const attempt = vi.fn(() => Promise.reject(notFound));
+    await expect(retryOnTimeout(attempt)).rejects.toBe(notFound);
+    expect(attempt).toHaveBeenCalledOnce();
+  });
+
+  it("recognises withTimeout's own timeout", async () => {
+    let attempts = 0;
+
+    await expect(
+      retryOnTimeout(() => {
+        attempts += 1;
+
+        return attempts === 1
+          ? withTimeout(new Promise<string>(() => {}), 1, "x")
+          : Promise.resolve("ok");
+      }),
+    ).resolves.toBe("ok");
   });
 });
 

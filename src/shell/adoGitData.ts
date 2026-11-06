@@ -2,8 +2,10 @@
 // so the panel host stays focused on composition. Concerns: discover repos +
 // their root markdown, resolve the routing PR per repo, list a folder's
 // markdown on demand, filename search via ALM Code Search, and fetch file
-// content + emr-tagged threads. All methods degrade gracefully \u2014 a repo that
-// fails to enumerate is logged and dropped rather than killing the caller.
+// content + emr-tagged threads. Discovery degrades gracefully — a repo that
+// fails to enumerate is logged and dropped rather than killing the caller —
+// while thread reads reject so the poller / loader that owns the user-facing
+// state also owns the report.
 
 import * as SDK from "azure-devops-extension-sdk";
 import {
@@ -17,7 +19,7 @@ import {
 
 import type { CommentThread, FileInfo } from "../types";
 import { trackUserFacingError } from "../telemetry";
-import { adoThreadToLocal } from "./adoCommentApi";
+import { adoThreadToLocal, readPrThreads } from "./adoCommentApi";
 import { withRetry } from "./retry";
 import type { DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
@@ -340,8 +342,11 @@ export function loadDocPrHistory(
  * anchored to `docPath`. Used by the Documents hub's per-document comment
  * routing: a document's comments live on the completed PR that last changed
  * it, so we read that PR's threads and filter to the ones for this file
- * (dropping unrelated other-file and general PR threads). Degrades to `[]` on
- * any failure so a transient read error doesn't break the rail.
+ * (dropping unrelated other-file and general PR threads).
+ *
+ * Rejects on failure, like the PR tab's `loadAdoThreads`: the caller owns the
+ * report. Swallowing it here made every failed 30s poll look like a fresh
+ * success-then-failure, so one token dead window reported 45 times.
  */
 export async function loadThreadsForRoutedPr(
   repoId: string,
@@ -349,40 +354,26 @@ export async function loadThreadsForRoutedPr(
   pullRequestId: number,
   docPath: string,
 ): Promise<CommentThread[]> {
-  const gitClient = sharedGitClient();
   const wanted = normalizePath(docPath).toLowerCase();
 
-  try {
-    const raw = await withRetry(
-      () => gitClient.getThreads(repoId, pullRequestId, projectId),
-      { mode: "read", label: "loadThreadsForRoutedPr.getThreads" },
-    );
+  const raw = await readPrThreads(
+    repoId,
+    pullRequestId,
+    projectId,
+    "loadThreadsForRoutedPr.getThreads",
+  );
 
-    const out: CommentThread[] = [];
+  const out: CommentThread[] = [];
 
-    for (const t of raw) {
-      const local = adoThreadToLocal(t);
+  for (const t of raw) {
+    const local = adoThreadToLocal(t);
 
-      if (local && normalizePath(local.filePath).toLowerCase() === wanted) {
-        out.push(local);
-      }
+    if (local && normalizePath(local.filePath).toLowerCase() === wanted) {
+      out.push(local);
     }
-
-    return out;
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getThreads failed for repo ${repoId}, PR ${pullRequestId}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "Shell.comments",
-      operation: "routed-comments-load",
-      impact: "degraded",
-    });
-
-    return [];
   }
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------

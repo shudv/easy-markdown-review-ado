@@ -7,10 +7,10 @@
 //      screen / in a restorable draft;
 //   2. nothing is saved twice — verified against ADO itself over REST.
 //
-// Scenarios (see docs/telemetry-tables.md "Living with the dead window"):
+// Scenarios (the dead-window handling is documented in src/shell/adoSession.ts):
 //   A  open during the token dead window, the automatic reload escapes it
-//   B  open during the window, the reload doesn't help: no reload loop, the
-//      tab recovers on its own
+//   B  open during the window, the reload doesn't help: no reload loop, no
+//      futile "Reload page", and the tab recovers on its own
 //   D  a comment, then an edit of it, made during the window are held, then
 //      each is saved once
 //   E  a typed reply survives "Reload page" and is then saved once
@@ -196,13 +196,17 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
     await expect(frame.getByText("This only takes a moment.")).toBeVisible({
       timeout: 45_000,
     });
-    // After the one automatic reload lands back in the window, the user gets
-    // the calm "wait" screen with a manual option — no further reloads.
-    await expect(
-      frame.getByText("This usually fixes itself within a few minutes."),
-    ).toBeVisible({ timeout: 45_000 });
+    // After the one automatic reload lands back in the window, the user is told
+    // why and that it continues by itself — with no reload button, since the
+    // window survives reloads — and no further reloads happen.
+    await expect(frame.getByText(/so reloading won't help/)).toBeVisible({
+      timeout: 45_000,
+    });
     await expect(
       frame.getByRole("button", { name: "Reload page" }),
+    ).toHaveCount(0);
+    await expect(
+      frame.getByRole("link", { name: /Why this happens/ }),
     ).toBeVisible();
 
     await expect(frame.locator(".markdown-body").first()).toBeVisible({

@@ -27,7 +27,10 @@ export {
   markAppReady,
 } from "./bootTiming";
 export type { BootPhase, BootTimingEnvironment } from "./bootTiming";
-export { installGlobalErrorHandlers } from "./errorHandlers";
+export {
+  claimUnhandledRejections,
+  installGlobalErrorHandlers,
+} from "./errorHandlers";
 export { installAuthFailureCapture } from "./authFailureCapture";
 export { ErrorBoundary } from "./ErrorBoundary";
 export type {

@@ -12,7 +12,7 @@
 //   Engagement  — deliberate user actions (comments, threads, file opens, search)
 //   Diagnostics — app/system observations (boot timing, auth failures, exceptions)
 //
-// See docs/telemetry-tables.md for the full design and KQL examples.
+// See docs/telemetry-tables.md for the tables' contents and KQL examples.
 //
 // This logic lives here (a pure, unit-tested module) rather than inline in the
 // coverage-excluded sink so the routing contract is actually covered by tests.
@@ -36,9 +36,12 @@ export type TelemetryTable =
  * newly added user-action event routes to Engagement by default (fail-safe for
  * the common case) and only diagnostics need to be listed explicitly.
  *
- * To split exceptions into their own table later, remove `EVENT.AppException`
- * from here and give it its own `TELEMETRY_TABLE` entry + `tableFor` branch —
- * a one-line change, no call-site or schema churn.
+ * `app.exception` stays here deliberately even though its `message`/`stack`
+ * are the highest PII-risk columns: its volume is low and a `name` filter is a
+ * fine errors view. If error free text ever needs its own access control or
+ * retention, split it out: remove `EVENT.AppException` from here and give it
+ * its own `TELEMETRY_TABLE` entry + `tableFor` branch — a one-line change, no
+ * call-site or schema churn.
  */
 const DIAGNOSTIC_EVENTS: ReadonlySet<string> = new Set([
   EVENT.AppLoaded,

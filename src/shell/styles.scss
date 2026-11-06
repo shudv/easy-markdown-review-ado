@@ -4067,6 +4067,15 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
       background: #005ba1;
     }
   }
+
+  .emr-error-link {
+    color: var(--emr-accent);
+
+    &:focus-visible {
+      outline: 2px solid var(--emr-accent);
+      outline-offset: 2px;
+    }
+  }
 }
 
 // Comparing PR updates on a file that doesn't exist at the newer update (the

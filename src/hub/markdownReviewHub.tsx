@@ -34,6 +34,7 @@ import { MarkdownReader, type ReaderConfig } from "./markdownReader";
 import { DocumentsHubApp } from "./DocumentsHubApp";
 import { parseHubQuery } from "../shell/hubQuery";
 import { orchestrateBoot } from "../shell/boot";
+import { initWithHandshakeRetry } from "../shell/sdkHandshake";
 import { configureAdoSession } from "../shell/adoSessionSdk";
 import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
@@ -151,7 +152,10 @@ async function boot(): Promise<void> {
   installGlobalErrorHandlers();
   installAuthFailureCapture();
   await orchestrateBoot({
-    init: () => SDK.init({ loaded: false, applyTheme: true }),
+    init: () =>
+      initWithHandshakeRetry({
+        init: () => SDK.init({ loaded: false, applyTheme: true }),
+      }),
     ready: async () => {
       await SDK.ready();
       markBootPhase("sdk-ready");

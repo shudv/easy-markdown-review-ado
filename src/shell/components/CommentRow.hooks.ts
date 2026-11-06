@@ -73,8 +73,10 @@ export function useCommentRowMenu() {
   // Close menu on outside click / Escape.
   useEffect(() => {
     if (!menuOpen) return;
+
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
+
       if (
         menuRef.current &&
         target &&
@@ -86,6 +88,7 @@ export function useCommentRowMenu() {
         setConfirm(null);
       }
     }
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -93,8 +96,10 @@ export function useCommentRowMenu() {
         setConfirm(null);
       }
     }
+
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
@@ -132,6 +137,7 @@ export function useCommentLinkCopy(threadId: string) {
     const copied = hasUrl ? copyText(url) : Promise.resolve(false);
     void copied.then((ok) => {
       setLinkState(ok ? "copied" : "failed");
+
       if (ok) {
         track(events.linkCopied({ target: "comment" }));
       } else {
@@ -144,6 +150,7 @@ export function useCommentLinkCopy(threadId: string) {
           impact: "action-failed",
         });
       }
+
       window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
     });
   };

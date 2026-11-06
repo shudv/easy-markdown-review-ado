@@ -17,6 +17,7 @@ function refreshingMonitor(opts: {
     new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
     "poll",
   );
+
   for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
     void monitor
       .holdWrite(() =>
@@ -26,6 +27,7 @@ function refreshingMonitor(opts: {
       )
       .catch(() => {});
   }
+
   return monitor;
 }
 

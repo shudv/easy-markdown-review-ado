@@ -58,6 +58,7 @@ describe("listingFailureOutcome", () => {
   const notFound = Object.assign(new Error("TF401174: item not found"), {
     status: 404,
   });
+
   const forbidden = Object.assign(new Error("Forbidden"), { status: 403 });
 
   it("treats a missing folder as an empty listing when allowed", () => {
@@ -126,6 +127,7 @@ describe("projectMarkdownLevel", () => {
       { path: "/docs", isFolder: true },
       { path: "/docs/a.md", isFolder: false },
     ];
+
     const { files, folders } = projectMarkdownLevel(items, "/docs");
     // `/docs` (the scope) must not appear as a subfolder of itself.
     expect(folders).not.toContain("/docs");
@@ -139,6 +141,7 @@ describe("projectMarkdownLevel", () => {
       { path: "/lower.md", isFolder: false },
       { path: "/image.png", isFolder: false },
     ];
+
     const { files } = projectMarkdownLevel(items, "/");
     expect(files.map((f) => f.path).sort()).toEqual(
       ["/README.MD", "/Notes.Md", "/lower.md"].sort(),
@@ -153,6 +156,7 @@ describe("projectMarkdownLevel", () => {
       { path: "/b.md", isFolder: false },
       { path: "/a.md", isFolder: false },
     ];
+
     const { files, folders } = projectMarkdownLevel(items, "/");
     expect(folders).toEqual(["/a-folder", "/z-folder"]);
     expect(files.map((f) => f.path)).toEqual(["/a.md", "/b.md"]);
@@ -170,6 +174,7 @@ describe("projectMarkdownLevel", () => {
       [{ path: "/x.md", isFolder: false }],
       "/",
     );
+
     expect(files[0]).toEqual({
       path: "/x.md",
       changeType: "modified",
@@ -370,6 +375,7 @@ describe("prDate", () => {
       creationDate: baseCreate,
       closedDate: baseClosed,
     } as never);
+
     expect(v).toBe(baseClosed.getTime());
   });
 
@@ -415,6 +421,7 @@ describe("selectRoutingPr", () => {
       pr(1, ACTIVE, { creationDate: "2024-03-01T00:00:00Z" }),
       pr(2, ABANDONED, { closedDate: "2024-04-01T00:00:00Z" }),
     ];
+
     expect(selectRoutingPr(prs)).toBeNull();
   });
 
@@ -425,6 +432,7 @@ describe("selectRoutingPr", () => {
       // Older, completed — the routing target.
       pr(11, COMPLETED, { closedDate: "2024-05-01T00:00:00Z" }),
     ];
+
     expect(selectRoutingPr(prs)?.pullRequestId).toBe(11);
   });
 
@@ -434,6 +442,7 @@ describe("selectRoutingPr", () => {
       pr(21, COMPLETED, { closedDate: "2024-03-20T00:00:00Z" }),
       pr(22, COMPLETED, { closedDate: "2024-02-10T00:00:00Z" }),
     ];
+
     expect(selectRoutingPr(prs)?.pullRequestId).toBe(21);
   });
 
@@ -442,6 +451,7 @@ describe("selectRoutingPr", () => {
       pr(30, COMPLETED, { creationDate: "2024-07-01T00:00:00Z" }),
       pr(31, COMPLETED, { closedDate: "2024-06-15T00:00:00Z" }),
     ];
+
     // 30 has no closedDate so it sorts by creationDate (Jul 1), which beats
     // 31's closedDate (Jun 15).
     expect(selectRoutingPr(prs)?.pullRequestId).toBe(30);
@@ -503,6 +513,7 @@ describe("selectRoutingPrFromQuery", () => {
     const results = [
       { other: [closedPr(1, COMPLETED, "2024-05-01T00:00:00Z")] },
     ];
+
     expect(selectRoutingPrFromQuery(results, SHA)).toBeNull();
   });
 
@@ -510,6 +521,7 @@ describe("selectRoutingPrFromQuery", () => {
     const results = [
       { [SHA]: [closedPr(7, COMPLETED, "2024-05-01T00:00:00Z")] },
     ];
+
     expect(selectRoutingPrFromQuery(results, SHA)?.pullRequestId).toBe(7);
   });
 
@@ -522,6 +534,7 @@ describe("selectRoutingPrFromQuery", () => {
         ],
       },
     ];
+
     expect(selectRoutingPrFromQuery(results, SHA)?.pullRequestId).toBe(9);
   });
 
@@ -535,6 +548,7 @@ describe("selectRoutingPrFromQuery", () => {
       {},
       { [SHA]: [closedPr(5, COMPLETED, "2024-05-01T00:00:00Z")] },
     ];
+
     // The matching PR lives in the second query, which is ignored.
     expect(selectRoutingPrFromQuery(results, SHA)).toBeNull();
   });
@@ -584,6 +598,7 @@ describe("selectRoutingPrsFromQuery", () => {
         c3: [closedPr(30, COMPLETED, "2024-04-01T00:00:00Z")],
       },
     ];
+
     expect(
       selectRoutingPrsFromQuery(results, ["c1", "c2", "c3"]).map(
         (p) => p.pullRequestId,
@@ -599,6 +614,7 @@ describe("selectRoutingPrsFromQuery", () => {
         c3: [closedPr(20, COMPLETED, "2024-05-01T00:00:00Z")],
       },
     ];
+
     expect(
       selectRoutingPrsFromQuery(results, ["c1", "c2", "c3"]).map(
         (p) => p.pullRequestId,
@@ -613,6 +629,7 @@ describe("selectRoutingPrsFromQuery", () => {
         c2: [closedPr(20, COMPLETED, "2024-05-01T00:00:00Z")],
       },
     ];
+
     expect(
       selectRoutingPrsFromQuery(results, ["c1", "c2"]).map(
         (p) => p.pullRequestId,
@@ -629,6 +646,7 @@ describe("selectRoutingPrsFromQuery", () => {
         ],
       },
     ];
+
     expect(
       selectRoutingPrsFromQuery(results, ["c1"]).map((p) => p.pullRequestId),
     ).toEqual([11, 10]);
@@ -641,6 +659,7 @@ describe("selectRoutingPrsFromQuery", () => {
         c2: [closedPr(20, COMPLETED, "2024-05-01T00:00:00Z")],
       },
     ];
+
     expect(
       selectRoutingPrsFromQuery(results, ["c1", "c2"]).map(
         (p) => p.pullRequestId,
@@ -665,6 +684,7 @@ describe("docPrRefsFromHistory", () => {
         extra.closedDate !== undefined ? new Date(extra.closedDate) : undefined,
     } as never;
   }
+
   const url = (id: number) => `https://repo/pr/${id}`;
 
   it("returns [] for an empty list", () => {
@@ -687,6 +707,7 @@ describe("docPrRefsFromHistory", () => {
       ],
       url,
     );
+
     expect(refs).toEqual([
       {
         prId: 10,
@@ -719,6 +740,7 @@ describe("docPrRefsFromHistory", () => {
       [{ title: "orphan" } as never, pr(5, { title: "keep" })],
       url,
     );
+
     expect(refs.map((r) => r.prId)).toEqual([5]);
   });
 });
@@ -776,6 +798,7 @@ describe("runWithConcurrency", () => {
       await Promise.resolve();
       await Promise.resolve();
       inFlight--;
+
       return null;
     });
     expect(max).toBeLessThanOrEqual(3);
@@ -803,6 +826,7 @@ describe("changedPathsFromEntries", () => {
       { item: { path: "/Docs/API/V1.md" } },
       { item: { path: "/docs/guide/" } },
     ]);
+
     expect(out).toEqual(["/docs/api/v1.md", "/docs/guide"]);
   });
 
@@ -813,6 +837,7 @@ describe("changedPathsFromEntries", () => {
       { item: {} },
       { item: { path: "" } },
     ]);
+
     expect(out).toEqual(["/keep.md"]);
   });
 });

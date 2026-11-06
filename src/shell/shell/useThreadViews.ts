@@ -46,6 +46,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     commentFilter,
     currentUserId,
   } = opts;
+
   const allThreadsForFile = useMemo(
     () => selectThreadsByFile(threadState, selectedPath),
     [threadState, selectedPath],
@@ -61,6 +62,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
             EMPTY_THREADS)
         : EMPTY_THREADS;
     }
+
     return allThreadsForFile;
   }, [
     viewingHistorical,
@@ -95,6 +97,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
   // the prose, so the article and the rail always agree on what's shown.
   const visibleForArticle = useMemo(() => {
     const out: CommentThread[] = [];
+
     for (const t of currentThreadsRaw) {
       if (
         threadVisibleForCommentView(
@@ -107,6 +110,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
         out.push(t);
       }
     }
+
     return out;
   }, [currentThreadsRaw, commentQuery, commentFilter, currentUserId]);
 
@@ -131,6 +135,7 @@ function threadsOutsideFiles(
 ): CommentThread[] {
   const inPr = new Set(files.map((f) => f.path));
   const out: CommentThread[] = [];
+
   for (const id of threadState.order) {
     const t = threadState.threadsById[id];
     // General/Overview threads have their own tray (an empty filePath always
@@ -139,6 +144,7 @@ function threadsOutsideFiles(
     if (inPr.has(t.filePath)) continue;
     out.push(t);
   }
+
   return out;
 }
 
@@ -147,10 +153,12 @@ function openThreadCountsByPath(
   threadState: ThreadState,
 ): Record<string, number> {
   const out: Record<string, number> = {};
+
   for (const id of threadState.order) {
     const t = threadState.threadsById[id];
     if (isResolvedLike(t.status)) continue;
     out[t.filePath] = (out[t.filePath] ?? 0) + 1;
   }
+
   return out;
 }

@@ -20,6 +20,7 @@ function mountArticle(md: string): HTMLElement {
   root.className = "markdown-body emr-rendered";
   root.innerHTML = renderMarkdownSync(md);
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -30,12 +31,14 @@ function findTextNodeAt(
 ): { node: Text; offset: number } {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let n: Node | null = walker.nextNode();
+
   while (n) {
     const t = n as Text;
     const idx = t.data.indexOf(needle);
     if (idx >= 0) return { node: t, offset: idx };
     n = walker.nextNode();
   }
+
   throw new Error(`text "${needle}" not found in a single text node`);
 }
 
@@ -51,6 +54,7 @@ function selectAndCapture(
   const sel = window.getSelection()!;
   sel.removeAllRanges();
   sel.addRange(range);
+
   return captureAnchorFromSelection(root);
 }
 
@@ -72,8 +76,10 @@ function selectFlatRange(
   let acc = "";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   let n: Node | null = walker.nextNode();
+
   while (n) {
     const t = n as Text;
+
     if (t.data.length > 0) {
       runs.push({
         node: t,
@@ -82,19 +88,24 @@ function selectFlatRange(
       });
       acc += t.data;
     }
+
     n = walker.nextNode();
   }
+
   const startFlat = acc.indexOf(wanted);
   if (startFlat < 0) throw new Error(`flat text "${wanted}" not found`);
   const endFlat = startFlat + wanted.length;
+
   const locate = (flat: number) => {
     for (const r of runs) {
       if (flat >= r.start && flat <= r.end) {
         return { node: r.node, offset: flat - r.start };
       }
     }
+
     throw new Error("offset out of range");
   };
+
   const s = locate(startFlat);
   const e = locate(endFlat);
   const range = document.createRange();
@@ -103,6 +114,7 @@ function selectFlatRange(
   const sel = window.getSelection()!;
   sel.removeAllRanges();
   sel.addRange(range);
+
   return captureAnchorFromSelection(root);
 }
 
@@ -203,6 +215,7 @@ describe("round-trip (B) anchor → preview DOM resolution", () => {
       "",
       "Another paragraph mentioning gamma again for ambiguity.",
     ].join("\n");
+
     const root = mountArticle(source);
 
     const anchor = selectAndCapture(root, "beta gamma");

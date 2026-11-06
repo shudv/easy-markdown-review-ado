@@ -36,13 +36,16 @@ interface RailModelOptions {
 export function useRailModel(opts: RailModelOptions) {
   const { orphanedSet, hiddenSet } = useRailVisibility(opts);
   const trays = useFilteredTrays(opts);
+
   const commentCycleThreadIds = useCommentCycle(
     opts,
     trays,
     hiddenSet,
     orphanedSet,
   );
+
   const counts = useRailCounts(opts);
+
   return {
     orphanedSet,
     hiddenSet,
@@ -63,12 +66,15 @@ function useRailVisibility(opts: RailModelOptions) {
     commentFilter,
     currentUserId,
   } = opts;
+
   const orphanedSet = useMemo(
     () => new Set(anchorLayout.orphanedThreadIds),
     [anchorLayout],
   );
+
   const hiddenSet = useMemo(() => {
     const s = new Set<string>();
+
     // Search spans all statuses; otherwise the selected filter applies. The
     // same rule covers current-file, General, and orphaned-file sections.
     for (const section of [
@@ -84,10 +90,12 @@ function useRailVisibility(opts: RailModelOptions) {
             commentFilter,
             currentUserId,
           )
-        )
+        ) {
           s.add(t.id);
+        }
       }
     }
+
     return s;
   }, [
     currentThreadsRaw,
@@ -97,6 +105,7 @@ function useRailVisibility(opts: RailModelOptions) {
     commentFilter,
     currentUserId,
   ]);
+
   return { orphanedSet, hiddenSet };
 }
 
@@ -110,6 +119,7 @@ interface FilteredTrays {
 function useFilteredTrays(opts: RailModelOptions): FilteredTrays {
   const { currentThreadsRaw, generalThreads, orphanedFileThreads } = opts;
   const { commentQuery } = opts;
+
   // ---- Comment search ----
   // Search spans every rail section and status. Article highlights use the
   // same matching rule, so the prose and rail always show the same result set.
@@ -117,18 +127,22 @@ function useFilteredTrays(opts: RailModelOptions): FilteredTrays {
     (t: CommentThread): boolean => threadMatchesQuery(t, commentQuery),
     [commentQuery],
   );
+
   const filteredCurrentThreads = useMemo(
     () => currentThreadsRaw.filter(matchesQuery),
     [currentThreadsRaw, matchesQuery],
   );
+
   const filteredGeneralThreads = useMemo(
     () => generalThreads.filter(matchesQuery),
     [generalThreads, matchesQuery],
   );
+
   const filteredOrphanedFileThreads = useMemo(
     () => orphanedFileThreads.filter(matchesQuery),
     [orphanedFileThreads, matchesQuery],
   );
+
   return {
     filteredCurrentThreads,
     filteredGeneralThreads,
@@ -145,11 +159,13 @@ function useCommentCycle(
 ): string[] {
   const { anchorLayout, onlyThisFile, activeReadOnly, activeDraft, draftY } =
     opts;
+
   const {
     filteredCurrentThreads,
     filteredGeneralThreads,
     filteredOrphanedFileThreads,
   } = trays;
+
   return useMemo(
     () =>
       buildRailModel({
@@ -189,9 +205,11 @@ function useRailCounts(opts: RailModelOptions) {
     onlyThisFile,
     currentUserId,
   } = opts;
+
   // Counts for the search summary line.
   const totalCommentCount = useMemo(() => {
     let n = 0;
+
     for (const t of [
       ...currentThreadsRaw,
       ...generalThreads,
@@ -199,6 +217,7 @@ function useRailCounts(opts: RailModelOptions) {
     ]) {
       n += t.comments.length;
     }
+
     return n;
   }, [currentThreadsRaw, generalThreads, orphanedFileThreads]);
 
@@ -206,9 +225,11 @@ function useRailCounts(opts: RailModelOptions) {
   // rail header's "all resolved" celebration.
   const resolvedThreadCount = useMemo(() => {
     let n = 0;
+
     for (const t of currentThreadsRaw) {
       if (isResolvedLike(t.status)) n += 1;
     }
+
     return n;
   }, [currentThreadsRaw]);
 
@@ -216,9 +237,11 @@ function useRailCounts(opts: RailModelOptions) {
   // this reaches zero on a file that had comments, the rail header celebrates.
   const openThreadCount = useMemo(() => {
     let n = 0;
+
     for (const t of currentThreadsRaw) {
       if (!isResolvedLike(t.status)) n += 1;
     }
+
     return n;
   }, [currentThreadsRaw]);
 

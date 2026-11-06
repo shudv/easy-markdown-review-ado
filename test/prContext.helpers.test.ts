@@ -51,6 +51,7 @@ describe("contentCommitForPath", () => {
     { path: "/a.md", changeType: "modified", linesAdded: 0, linesDeleted: 0 },
     { path: "/b.md", changeType: "deleted", linesAdded: 0, linesDeleted: 0 },
   ];
+
   const pr = {
     lastMergeTargetCommit: { commitId: "pr-target" },
     lastMergeSourceCommit: { commitId: "pr-source" },
@@ -63,6 +64,7 @@ describe("contentCommitForPath", () => {
       targetCommit: "target",
       pr,
     };
+
     expect(contentCommitForPath(ctx, "/a.md")).toBe("target");
     expect(contentCommitForPath(ctx, "/b.md")).toBe("base");
     expect(contentCommitForPath(ctx, "/unknown.md")).toBe("target");
@@ -79,6 +81,7 @@ describe("contentCommitForPath", () => {
       changedMdFiles: files,
       pr: {} as typeof pr,
     };
+
     expect(contentCommitForPath(ctx, "/a.md")).toBeUndefined();
     expect(contentCommitForPath(ctx, "/b.md")).toBeUndefined();
   });
@@ -107,6 +110,7 @@ describe("commentAuthorFromUser", () => {
       displayName: "Ada Lovelace",
       imageUrl: "https://dev.azure.com/org/_api/_common/identityImage?id=u1",
     };
+
     expect(commentAuthorFromUser(user)).toEqual({
       id: "u1",
       displayName: "Ada Lovelace",

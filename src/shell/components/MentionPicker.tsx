@@ -51,9 +51,11 @@ export function MentionPicker(
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const list = listRef.current!;
+
     const sel = list.querySelector<HTMLElement>(
       `[data-mp-index="${selectedIndex}"]`,
     );
+
     if (sel) sel.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
@@ -64,7 +66,9 @@ export function MentionPicker(
       const root = listRef.current!;
       if (!root.contains(e.target as Node)) onCancel();
     }
+
     document.addEventListener("mousedown", onDocMouseDown, true);
+
     return () =>
       document.removeEventListener("mousedown", onDocMouseDown, true);
   }, [onCancel]);
@@ -110,10 +114,9 @@ export function MentionPicker(
               role="option"
               aria-selected={i === selectedIndex}
               data-mp-index={i}
-              className={
-                "emr-mention-picker-row" +
-                (i === selectedIndex ? " is-selected" : "")
-              }
+              className={`emr-mention-picker-row${
+                i === selectedIndex ? " is-selected" : ""
+              }`}
               onMouseEnter={() => onSelectedIndexChange(i)}
               onClick={() => onSelect(s)}
             >
@@ -208,9 +211,7 @@ function SuggestionRow({
             </span>
             <span className="emr-mention-picker-secondary">
               <span
-                className={
-                  "emr-mention-state-dot emr-pr-state-" + suggestion.status
-                }
+                className={`emr-mention-state-dot emr-pr-state-${suggestion.status}`}
                 aria-hidden="true"
               />
               {prStatusLabel(suggestion.status)}
@@ -240,6 +241,7 @@ function workItemGlyph(type: string): string {
   if (t.includes("story") || t.includes("scenario")) return "S";
   if (t.includes("feature")) return "F";
   if (t.includes("epic")) return "E";
+
   return type.charAt(0).toUpperCase();
 }
 

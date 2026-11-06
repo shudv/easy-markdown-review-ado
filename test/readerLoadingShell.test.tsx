@@ -44,6 +44,7 @@ function mount(
       />,
     );
   });
+
   return container.querySelector<HTMLElement>(".emr-app")!;
 }
 

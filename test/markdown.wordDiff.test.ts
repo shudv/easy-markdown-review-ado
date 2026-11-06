@@ -126,6 +126,7 @@ describe("diffWords", () => {
 
   it("merges adjacent runs of the same kind", () => {
     const ops = diffWords("a b c", "a x y c");
+
     // No two consecutive ops share a kind.
     for (let i = 1; i < ops.length; i++) {
       expect(ops[i]!.kind).not.toBe(ops[i - 1]!.kind);
@@ -159,6 +160,7 @@ describe("diffWords", () => {
       "review of files here.",
       "review of files everywhere.",
     );
+
     const added = ops.find((o) => o.kind === "added");
     const removed = ops.find((o) => o.kind === "removed");
     expect(added?.value).toContain("everywhere");
@@ -256,16 +258,21 @@ describe("diffWords", () => {
 
   it("keeps both sides reconstructable across many random edits", () => {
     let seed = 7;
+
     const random = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
+
       return seed / 2147483648;
     };
+
     const vocabulary = ["a", "b", "cat", "cats", " ", " ", "\n", ".", "我"];
+
     const text = (length: number) =>
       Array.from(
         { length },
         () => vocabulary[Math.floor(random() * vocabulary.length)],
       ).join("");
+
     for (let run = 0; run < 400; run++) {
       const original = text(Math.floor(random() * 12));
       const modified = text(Math.floor(random() * 12));
@@ -273,6 +280,7 @@ describe("diffWords", () => {
       expect(join(ops, ["equal", "removed"])).toBe(original);
       expect(join(ops, ["equal", "added"])).toBe(modified);
       expect(ops.every((op) => op.value.length > 0)).toBe(true);
+
       for (let i = 1; i < ops.length; i++) {
         expect(ops[i]!.kind).not.toBe(ops[i - 1]!.kind);
       }
@@ -331,6 +339,7 @@ describe("unchangedRatio", () => {
       { kind: "equal", value: "aaaaaa" }, // 6
       { kind: "added", value: "bbbb" }, // 4
     ]);
+
     expect(ratio).toBeCloseTo(0.6, 5);
   });
 
@@ -340,6 +349,7 @@ describe("unchangedRatio", () => {
       { kind: "equal", value: "ab" }, // 2
       { kind: "removed", value: "cd" }, // 2 (ignored)
     ]);
+
     expect(ratio).toBeCloseTo(1, 5);
   });
 
@@ -351,6 +361,7 @@ describe("unchangedRatio", () => {
       { kind: "removed", value: "look for a stack trace" }, // ignored
       { kind: "added", value: "check the network tab" }, // 21
     ]);
+
     // 34 / (34 + 21) ≈ 0.62 — comfortably above a 0.3 inline threshold.
     expect(ratio).toBeGreaterThan(0.5);
   });

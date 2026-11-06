@@ -13,10 +13,12 @@ import {
 /** The text a list item shows itself, before any nested list or child block. */
 export function leadText(item: HTMLElement): string {
   let lead = "";
+
   for (const child of Array.from(inlineProseTarget(item).childNodes)) {
     if (child instanceof HTMLElement && isChildBlock(child)) break;
     lead += child.textContent;
   }
+
   return lead;
 }
 
@@ -29,6 +31,7 @@ export function explainLeadText(item: HTMLElement, label: string): void {
   const lead = leadText(item);
   const start = lead.length - lead.trimStart().length;
   const end = lead.trimEnd().length;
+
   if (end > start) {
     wrapFormattingRanges(inlineProseTarget(item), [{ start, end, label }]);
   } else {
@@ -45,6 +48,7 @@ export function applyLeafStructureDiff(
   const taskChange = checklistStateChange(original, target);
   if (markerLabel !== null) target.classList.add(DIFF_LIST_MARKER_CLASS);
   if (taskChange) taskChange.input.classList.add(DIFF_TASK_STATE_CLASS);
+
   if (markerLabel !== null) {
     applyDiffTooltip(
       target,
@@ -52,8 +56,10 @@ export function applyLeafStructureDiff(
         ? `List item changed: ${markerLabel}; ${taskChange.label}`
         : `List marker changed from ${markerLabel.slice("marker ".length)}`,
     );
+
     return true;
   }
+
   if (!taskChange) return false;
   const currentTask = taskChange.input;
   const wrapper = currentTask.ownerDocument.createElement("span");
@@ -64,6 +70,7 @@ export function applyLeafStructureDiff(
     wrapper,
     `Checklist item changed from ${taskChange.label.slice("checklist item ".length)}`,
   );
+
   return true;
 }
 
@@ -82,10 +89,12 @@ function listMarkerChangeLabel(
 ): string | null {
   const originalList = original.parentElement?.tagName;
   const currentList = target.parentElement?.tagName;
+
   const markerChanged =
     isListTag(originalList) &&
     isListTag(currentList) &&
     originalList !== currentList;
+
   return markerChanged
     ? `marker ${listKindName(originalList)} to ${listKindName(currentList)}`
     : null;
@@ -103,9 +112,11 @@ function checklistStateChange(
   const originalTask = original.querySelector<HTMLInputElement>(
     ':scope input[type="checkbox"]',
   );
+
   const currentTask = target.querySelector<HTMLInputElement>(
     ':scope input[type="checkbox"]',
   );
+
   if (
     originalTask == null ||
     currentTask == null ||
@@ -113,6 +124,7 @@ function checklistStateChange(
   ) {
     return null;
   }
+
   return {
     input: currentTask,
     label: `checklist item ${checkedName(originalTask)} to ${checkedName(currentTask)}`,
@@ -125,15 +137,18 @@ export function applyBlockStructureDiff(
   text: string,
 ): boolean {
   if (original.tagName === target.tagName || text.length === 0) return false;
+
   const describeBlock = (tag: string): string => {
     const heading = /^H([1-6])$/.exec(tag);
     if (heading) return `heading level ${heading[1]}`;
+
     return {
       BLOCKQUOTE: "quote",
       LI: "list item",
       P: "paragraph",
     }[tag]!;
   };
+
   wrapFormattingRanges(target, [
     {
       start: 0,
@@ -141,5 +156,6 @@ export function applyBlockStructureDiff(
       label: `Block changed from ${describeBlock(original.tagName)} to ${describeBlock(target.tagName)}`,
     },
   ]);
+
   return true;
 }

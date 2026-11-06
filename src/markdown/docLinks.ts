@@ -46,6 +46,7 @@ function decodeSafe(value: string): string {
 function dirSegments(path: string): string[] {
   const segments = path.split("/").filter(Boolean);
   segments.pop(); // drop the filename, leaving its containing folder
+
   return segments;
 }
 
@@ -56,15 +57,19 @@ function dirSegments(path: string): string[] {
  */
 function resolveRepoPath(currentPath: string, rel: string): string {
   const out = rel.startsWith("/") ? [] : dirSegments(currentPath);
+
   for (const segment of rel.split("/")) {
     if (segment === "" || segment === ".") continue;
+
     if (segment === "..") {
       out.pop();
       continue;
     }
+
     out.push(segment);
   }
-  return "/" + out.join("/");
+
+  return `/${out.join("/")}`;
 }
 
 /**
@@ -76,10 +81,12 @@ export function resolveDocLink(
   rawHref: string,
 ): DocLinkTarget {
   const href = rawHref.trim();
+
   // Empty, scheme-qualified, or protocol-relative → not an in-repo doc link.
   if (!href || SCHEME_RE.test(href) || href.startsWith("//")) {
     return { kind: "external" };
   }
+
   // Pure in-page fragment.
   if (href.startsWith("#")) return { kind: "anchor", hash: href.slice(1) };
 
@@ -87,10 +94,12 @@ export function resolveDocLink(
   let pathPart = href;
   let hash = "";
   const hashIdx = pathPart.indexOf("#");
+
   if (hashIdx >= 0) {
     hash = pathPart.slice(hashIdx + 1);
     pathPart = pathPart.slice(0, hashIdx);
   }
+
   const queryIdx = pathPart.indexOf("?");
   if (queryIdx >= 0) pathPart = pathPart.slice(0, queryIdx);
 
@@ -101,6 +110,7 @@ export function resolveDocLink(
   }
 
   const path = resolveRepoPath(currentPath, decodeSafe(pathPart));
+
   return {
     kind: "repo-file",
     path,
@@ -129,10 +139,13 @@ export function buildReposFileUrl(
   version?: string,
 ): string {
   const params = new URLSearchParams({ path });
+
   if (version !== undefined && version !== "") {
     params.set("version", version);
   }
+
   const base = orgUrl.replace(/\/+$/, "");
+
   return `${base}/${encodeURIComponent(project)}/_git/${encodeURIComponent(
     repoName,
   )}?${params.toString()}`;
@@ -141,6 +154,7 @@ export function buildReposFileUrl(
 /** Case-insensitive, leading-slash-insensitive repo path equality. */
 export function samePath(a: string, b: string): boolean {
   const norm = (p: string) => p.replace(/^\/+/, "").toLowerCase();
+
   return norm(a) === norm(b);
 }
 
@@ -179,11 +193,14 @@ export function routeDocLink(
   if (target.kind === "external") return { type: "external" };
   if (target.kind === "anchor") return { type: "scroll", hash: target.hash };
   if (!target.isMarkdown) return { type: "open-file", path: target.path };
+
   if (samePath(target.path, ctx.currentPath)) {
     return { type: "scroll", hash: target.hash };
   }
+
   if (ctx.isHub || ctx.isInReader(target.path)) {
     return { type: "select", path: target.path, hash: target.hash };
   }
+
   return { type: "open-hub", path: target.path, hash: target.hash };
 }

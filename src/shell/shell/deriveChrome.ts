@@ -12,6 +12,7 @@ import {
   type ReaderPrefs,
 } from "../readerPrefs";
 import type { RoutedPrInfo } from "./types";
+
 /**
  * The reading font + size scale and spacing, which reach the article through
  * CSS custom properties set on the app root.
@@ -22,6 +23,7 @@ export function readerStyleFor(readerPrefs: ReaderPrefs): {
 } {
   const readerFont = resolveReaderFont(readerPrefs.fontId);
   const readerSpacing = readerSpacingValues(readerPrefs);
+
   const readerStyle = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(readerPrefs.sizePct / 100),
@@ -32,6 +34,7 @@ export function readerStyleFor(readerPrefs: ReaderPrefs): {
     "--emr-nav-scale": String(widthScale(readerPrefs.navWidthPct)),
     "--emr-rail-scale": String(widthScale(readerPrefs.commentWidthPct)),
   } as CSSProperties;
+
   return { readerFont, readerStyle };
 }
 
@@ -70,6 +73,7 @@ export function railChrome(opts: {
 }): { showReadOnlyBanner: boolean; hidePrPill: boolean } {
   const comparingEarlierUpdate =
     opts.nativeIterationMode && opts.viewingHistorical;
+
   return {
     showReadOnlyBanner: !comparingEarlierUpdate,
     hidePrPill:
@@ -101,6 +105,7 @@ export function paneLayout(
   // The rail resize handle and the edge grabbers belong to the full reader
   // only (single-file panels keep fixed panes).
   const railResizable = navToggleable && commentsAvailable;
+
   return {
     navToggleable,
     navHidden,
@@ -131,6 +136,7 @@ export function statusBarExtras(opts: {
   refreshing: boolean;
 } {
   const { activeRoutedPr, nativeIterationMode } = opts;
+
   return {
     resolvedPullRequest:
       opts.documentsMode && activeRoutedPr?.status === "completed"

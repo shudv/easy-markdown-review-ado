@@ -48,6 +48,7 @@ describe("renderMarkdown — mathematical notation", () => {
         "```",
       ].join("\n"),
     );
+
     const root = document.createElement("div");
     root.innerHTML = html;
 
@@ -90,6 +91,7 @@ describe("renderMarkdown — mathematical notation", () => {
     const html = await renderMarkdown(
       String.raw`$\href{javascript:alert(1)}{unsafe}$`,
     );
+
     const root = document.createElement("div");
     root.innerHTML = html;
     await hydrateMath(root);
@@ -187,6 +189,7 @@ describe("rehypeMathPlaceholder — placeholder contract", () => {
   function render(markdown: string): HTMLElement {
     const root = document.createElement("div");
     root.innerHTML = renderMarkdownSync(markdown);
+
     return root;
   }
 
@@ -201,6 +204,7 @@ describe("rehypeMathPlaceholder — placeholder contract", () => {
     const fallback = host.querySelector<HTMLElement>(
       ":scope > pre.emr-math-fallback",
     )!;
+
     expect(fallback).not.toBeNull();
     expect(fallback.querySelector("code")?.textContent).toBe("x^2");
   });
@@ -265,6 +269,7 @@ describe("rehypeMathPlaceholder — non-pipeline input", () => {
       properties: {},
       children: [{ type: "text", value: "x^2" }],
     };
+
     expect(run([pre]).children[0]).toBe(pre);
   });
 

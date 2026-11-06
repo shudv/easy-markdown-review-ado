@@ -44,14 +44,18 @@ export function diffInlineContent(
 ): InlineContentDiffResult {
   const originalText = original.textContent;
   const currentText = target.textContent;
+
   const linkChanges = findLinkTargetChanges(
     readLinkTargets(original),
     readLinkTargets(target),
   );
+
   const imageChanges = findImageMetadataChanges(original, target);
   const metadataChanged = linkChanges.length > 0 || imageChanges.length > 0;
+
   const applyMetadata = (): void => {
     if (linkChanges.length > 0) applyLinkTargetIndicators(target, linkChanges);
+
     if (imageChanges.length > 0) {
       applyImageMetadataIndicators(target, imageChanges);
     }
@@ -62,7 +66,9 @@ export function diffInlineContent(
       target,
       formattingRanges(original),
     );
+
     applyMetadata();
+
     return {
       handled: formattingChanged || metadataChanged,
       formattingChanged,
@@ -72,6 +78,7 @@ export function diffInlineContent(
   }
 
   const operations = diffWords(originalText, currentText);
+
   if (
     options.minimumUnchangedRatio != null &&
     unchangedRatio(operations) < options.minimumUnchangedRatio
@@ -90,11 +97,14 @@ export function diffInlineContent(
     target.tagName === "PRE"
       ? explainWhitespaceSwaps(operations)
       : { operations, ranges: [] };
+
   wrapFormattingRanges(target, swaps.ranges);
   const wordDiff = applyInlineWordDiff(target, swaps.operations);
   applyMetadata();
+
   const inlineApplied =
     wordDiff != null && wordDiff.added + wordDiff.removed > 0;
+
   return {
     handled: inlineApplied || swaps.ranges.length > 0,
     formattingChanged: false,
@@ -123,6 +133,7 @@ export function tryInlineWordDiff(
     originalMarkdown,
     renderInline,
   );
+
   // Compare the ORIGINAL's matching element, not the whole scratch wrapper.
   // Rendering a list-item source (`- foo`) standalone wraps it in a `<ul>`,
   // whose inter-tag whitespace pollutes `scratch.textContent` ("\nfoo\n") and
@@ -130,37 +141,47 @@ export function tryInlineWordDiff(
   // the block (`<li>`, `<p>`, `<h2>`, …) yields the clean text that lines up
   // with the in-document block.
   const matchingOriginal = scratch.querySelector<HTMLElement>(block.tagName);
+
   const semanticOriginal = scratch.querySelector<HTMLElement>(
     "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt",
   );
+
   const originalEl =
     (block.tagName === "PRE" ? matchingOriginal : semanticOriginal) ??
     matchingOriginal ??
     (scratch.firstElementChild as HTMLElement | null) ??
     scratch;
+
   // For a LOOSE list item, diff (and mark) the inner `<p>` on BOTH sides so the
   // whitespace between the `<li>` and its `<p>` never becomes stray word marks.
   const originalProse = inlineProseTarget(originalEl);
   const target = inlineProseTarget(block);
   const originalPlain = originalProse.textContent;
   const modifiedPlain = target.textContent;
+
   const contentDiff = diffInlineContent(originalProse, target, {
     minimumUnchangedRatio: INLINE_MIN_UNCHANGED_RATIO,
   });
+
   if (contentDiff.tooDivergent) return false;
+
   if (originalPlain === modifiedPlain) {
     const structureChanged = applyLeafStructureDiff(originalEl, block);
+
     const blockStructureChanged = applyBlockStructureDiff(
       originalEl,
       block,
       originalPlain,
     );
+
     return contentDiff.handled || structureChanged || blockStructureChanged;
   }
+
   // A reworded item can also have been ticked off or re-marked; the word diff
   // alone would hide that.
   /* v8 ignore next -- differing, not-too-divergent text always yields a word mark or (in code) an explained whitespace swap, since diffWords ops rebuild the target's own text */
   if (!contentDiff.handled) return false;
   applyLeafStructureDiff(originalEl, block);
+
   return true;
 }

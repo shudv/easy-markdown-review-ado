@@ -55,7 +55,9 @@ function useDismissActiveThread(
       setActiveThreadId(clearIfSet);
       dismissEmptyDraftRef.current();
     }
+
     document.addEventListener("keydown", onKey);
+
     return () => document.removeEventListener("keydown", onKey);
   }, [setActiveThreadId, dismissEmptyDraftRef]);
 
@@ -73,7 +75,9 @@ function useDismissActiveThread(
       setActiveThreadId(clearIfSet);
       dismissEmptyDraftRef.current();
     }
+
     document.addEventListener("click", onClick);
+
     return () => document.removeEventListener("click", onClick);
   }, [setActiveThreadId, dismissEmptyDraftRef]);
 }
@@ -101,6 +105,7 @@ function useRailFollow(activeThreadId: string | null): void {
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+
     return () => {
       cancelled = true;
     };
@@ -117,6 +122,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
     renderVersion,
     anchorLayout,
   } = opts;
+
   // Deep-link consumption (`?comment=`). Holds the thread to auto-open until
   // its anchor mounts — the linked document's threads may still be loading, or
   // the article may not have wrapped its highlights yet. Re-runs as the
@@ -125,6 +131,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
   const pendingActiveThreadIdRef = useRef<string | undefined>(
     initialActiveThreadId,
   );
+
   useEffect(() => {
     // Latch the seed only when present. Hosts that gate the prop (e.g. the
     // Documents hub clears it after the first mount so it can't hijack later
@@ -140,6 +147,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
   useEffect(() => {
     const tid = pendingActiveThreadIdRef.current;
     if (tid === undefined || tid === "") return;
+
     // One rAF lets React commit the current document + the highlight-wrapping
     // layout effect run, so the anchor (or balloon) is queryable. Cleanup
     // cancels the frame, so a superseded run never reaches its callback.
@@ -148,6 +156,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
       // it before interpolating into a selector — metacharacters like `"` or
       // `]` would otherwise make `querySelector` throw and break deep linking.
       const escaped = CSS.escape(tid);
+
       const target =
         document.querySelector<HTMLElement>(
           `.markdown-body [data-thread-id="${escaped}"]`,
@@ -155,6 +164,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
         document.querySelector<HTMLElement>(
           `.emr-rail-col .emr-balloon[data-thread-id="${escaped}"]`,
         );
+
       // Not mounted yet — leave the seed pending; a later threads/path change
       // or anchor re-resolution re-runs this effect once the linked document's
       // highlight has been wrapped into the DOM. But once a PR-wide thread
@@ -165,13 +175,16 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
           pendingActiveThreadIdRef.current = undefined;
           track(events.linkOpened({ target: "comment", found: false }));
         }
+
         return;
       }
+
       pendingActiveThreadIdRef.current = undefined;
       setActiveThreadId(tid);
       track(events.linkOpened({ target: "comment", found: true }));
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     });
+
     return () => window.cancelAnimationFrame(handle);
     // `anchorLayout` is the signal that ArticleView has (re)wrapped the
     // highlight spans — `renderVersion`/`threadState` change when the document

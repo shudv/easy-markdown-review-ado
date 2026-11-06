@@ -20,6 +20,7 @@ describe("wrapRangeWithHighlight", () => {
     const r = document.createRange();
     r.setStart(startNode, startOffset);
     r.setEnd(endNode, endOffset);
+
     return r;
   }
 
@@ -30,6 +31,7 @@ describe("wrapRangeWithHighlight", () => {
     const text = p.firstChild as Text;
 
     const range = makeRange(text, 7, text, 12);
+
     const spans = wrapRangeWithHighlight(range, {
       className: "hl",
       threadId: "t-1",
@@ -49,6 +51,7 @@ describe("wrapRangeWithHighlight", () => {
     const text = p.firstChild as Text;
 
     const range = makeRange(text, 0, text, 5);
+
     const [span] = wrapRangeWithHighlight(range, {
       className: "hl",
       threadId: "t-2",
@@ -68,6 +71,7 @@ describe("wrapRangeWithHighlight", () => {
       className: "hl",
       threadId: "t-nobg",
     });
+
     // The `if (opts.background)` guard must not assign anything when omitted.
     expect(span!.style.backgroundColor).toBe("");
   });
@@ -84,6 +88,7 @@ describe("wrapRangeWithHighlight", () => {
       className: "hl",
       threadId: "t-mid",
     });
+
     expect(span!.textContent).toBe("cde");
     // Leading "ab" and trailing "fgh" remain as separate, unwrapped text.
     expect(p.textContent).toBe("abcdefgh");
@@ -105,6 +110,7 @@ describe("wrapRangeWithHighlight", () => {
       className: "hl",
       threadId: "t-head",
     });
+
     expect(span!.textContent).toBe("head");
     expect(span!.previousSibling).toBeNull();
     expect(span!.nextSibling!.textContent).toBe("tail");
@@ -121,6 +127,7 @@ describe("wrapRangeWithHighlight", () => {
       className: "hl",
       threadId: "t-ws",
     });
+
     expect(spans).toEqual([]);
     expect(p.querySelector("span.hl")).toBeNull();
   });
@@ -135,10 +142,12 @@ describe("wrapRangeWithHighlight", () => {
     document.body.appendChild(p);
 
     const range = makeRange(p.firstChild as Text, 0, p.lastChild as Text, 3);
+
     const spans = wrapRangeWithHighlight(range, {
       className: "hl",
       threadId: "t-wsmulti",
     });
+
     expect(spans.map((s) => s.textContent)).toEqual(["one", "two"]);
     expect(p.textContent).toBe("one   two");
   });
@@ -158,6 +167,7 @@ describe("wrapRangeWithHighlight", () => {
       p.lastChild as Text,
       5,
     );
+
     const spans = wrapRangeWithHighlight(range, {
       className: "hl",
       threadId: "t-3",
@@ -177,10 +187,12 @@ describe("wrapRangeWithHighlight", () => {
     const text = p.firstChild as Text;
 
     const range = makeRange(text, 1, text, 1);
+
     const spans = wrapRangeWithHighlight(range, {
       className: "hl",
       threadId: "t-4",
     });
+
     expect(spans).toEqual([]);
   });
 
@@ -200,6 +212,7 @@ describe("wrapRangeWithHighlight", () => {
       p.lastChild as Text,
       3, // " ga"
     );
+
     wrapRangeWithHighlight(range, { className: "hl", threadId: "t-5" });
     expect(p.textContent).toBe("alpha beta gamma");
   });

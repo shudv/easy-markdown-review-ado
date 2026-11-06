@@ -32,6 +32,7 @@ function OutlineToggle(
 ): ReactElement | null {
   const { navToggleable, navShown, shown, onToggle } = props;
   if (!navToggleable || !navShown || !onToggle) return null;
+
   return (
     <button
       type="button"
@@ -62,9 +63,11 @@ function CommentStepper({
   onCycle,
 }: Readonly<CommentStepperProps>): ReactElement {
   const total = threadIds.length;
+
   const activeIndex = hasText(activeThreadId)
     ? threadIds.indexOf(activeThreadId)
     : -1;
+
   const cycle = (direction: -1 | 1) => {
     const nextIndex =
       activeIndex < 0
@@ -72,6 +75,7 @@ function CommentStepper({
           ? total - 1
           : 0
         : (activeIndex + direction + total) % total;
+
     onCycle(threadIds[nextIndex]!);
   };
 
@@ -170,6 +174,7 @@ function ContextControls(
   }>,
 ): ReactElement {
   const { changesAvailable, changesShown, onToggleChanges } = props;
+
   return (
     <div className="emr-statusbar-context-controls">
       {props.showIterationPicker ? (
@@ -209,9 +214,12 @@ export function StatusBarLeft({
   visibility: StatusBarVisibility;
 }>): ReactElement {
   const { navToggleable, showNav } = props;
+
   const { hasCount, deltaParts, showIterationPicker, showContextControls } =
     visibility;
+
   const hasStatus = hasCount || deltaParts.length > 0;
+
   return (
     <div className="emr-statusbar-left">
       {navToggleable ? (
@@ -266,12 +274,14 @@ function ResolvedPullRequestBadge({
 }): ReactElement | null {
   if (!pullRequest) return null;
   const label = `Latest completed PR for this file: #${pullRequest.prId} ${pullRequest.title}`;
+
   const content = (
     <>
       <IconPullRequest />
       <span>PR #{pullRequest.prId}</span>
     </>
   );
+
   return hasText(pullRequest.url) ? (
     <a
       className="emr-statusbar-resolved-pr"
@@ -303,6 +313,7 @@ export function CommentControls({
   showCommentStepper: boolean;
 }>): ReactElement {
   const { showComments } = props;
+
   return (
     <>
       <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
@@ -344,6 +355,7 @@ export function RefreshFeedbackControls({
 >): ReactElement | null {
   if (!onRefresh && !hasText(feedbackHref)) return null;
   const label = refreshLabel ?? "Refresh";
+
   return (
     <>
       <StatusBarSeparator />

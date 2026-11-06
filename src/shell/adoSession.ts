@@ -106,6 +106,7 @@ export class AdoSessionMonitor {
     this.getToken = deps.getToken;
     this.reloadHostFn = deps.reloadHost;
     this.update({ canReload: !!deps.reloadHost });
+
     if (!this.pageHideInstalled) {
       this.pageHideInstalled = true;
       window.addEventListener("pagehide", () => this.notePageHide());
@@ -116,12 +117,14 @@ export class AdoSessionMonitor {
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
+
     return () => this.listeners.delete(listener);
   };
 
   /** Notified each time a refreshing spell ends (the session is usable again). */
   onRecovered = (listener: () => void): (() => void) => {
     this.recoveredListeners.add(listener);
+
     return () => this.recoveredListeners.delete(listener);
   };
 
@@ -151,6 +154,7 @@ export class AdoSessionMonitor {
     );
     this.update({ state: "refreshing" });
     this.schedule(0);
+
     return true;
   }
 
@@ -169,12 +173,14 @@ export class AdoSessionMonitor {
   /** Resolves `true` once live, or `false` after `timeoutMs`. */
   waitUntilLive(timeoutMs: number): Promise<boolean> {
     if (!this.spell) return Promise.resolve(true);
+
     return new Promise<boolean>((resolve) => {
       const done = (live: boolean): void => {
         clearTimeout(timeout);
         this.waiters.delete(onLive);
         resolve(live);
       };
+
       const onLive = (): void => done(true);
       const timeout = setTimeout(() => done(false), timeoutMs);
       this.waiters.add(onLive);
@@ -194,21 +200,26 @@ export class AdoSessionMonitor {
       const startedAt = this.now();
       const result = await attempt();
       this.noteSuccess(startedAt);
+
       return result;
     } catch (err) {
       if (!this.report(err, "write")) throw err;
       this.update({ heldWrites: this.snapshot.heldWrites + 1 });
       let live: boolean;
+
       try {
         live = await this.waitUntilLive(maxWaitMs);
       } finally {
         this.update({ heldWrites: this.snapshot.heldWrites - 1 });
       }
+
       if (!live) throw err;
+
       try {
         const startedAt = this.now();
         const result = await attempt();
         this.noteSuccess(startedAt);
+
         return result;
       } catch (retryErr) {
         this.report(retryErr, "write");
@@ -228,6 +239,7 @@ export class AdoSessionMonitor {
    */
   async reloadHost(by: "auto" | "user"): Promise<boolean> {
     if (!this.reloadHostFn) return false;
+
     try {
       await this.reloadHostFn();
     } catch (error) {
@@ -237,9 +249,12 @@ export class AdoSessionMonitor {
         operation: "host-reload",
         impact: by === "user" ? "action-failed" : "degraded",
       });
+
       return false;
     }
+
     this.reportEnd(by === "auto" ? "reload-auto" : "reload-user");
+
     return true;
   }
 
@@ -266,21 +281,28 @@ export class AdoSessionMonitor {
     // ends) clears that timer, so a spell is always open here.
     const spell = this.spell!;
     let token: string | null;
+
     try {
       token = this.getToken ? await this.getToken() : null;
     } catch {
       token = null;
     }
+
     if (this.spell !== spell) return;
+
     if (token !== null) {
       const { state } = classifyAdoGrant(token, this.now());
+
       // `unknown` = undecodable: never hold the app hostage to a parse miss.
       if (state === "live" || state === "unknown") {
         this.recover("remint");
+
         return;
       }
+
       spell.adoExpMs ??= readAdoTokenExpiry(token).adoExpMs;
     }
+
     const age = this.now() - spell.startedAtMs;
     this.schedule(
       age >= SESSION_SLOW_AFTER_MS ? SESSION_SLOW_POLL_MS : SESSION_POLL_MS,
@@ -321,10 +343,12 @@ export class AdoSessionMonitor {
   private recover(outcome: "remint" | "success"): void {
     this.reportEnd(outcome);
     this.spell = null;
+
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+
     this.update({ state: "live" });
     for (const waiter of [...this.waiters]) waiter();
     for (const listener of [...this.recoveredListeners]) listener();
@@ -380,6 +404,7 @@ export function sessionStorageOrUndefined(): StorageLike | undefined {
 
 function lastAutoReloadAt(storage: StorageLike): number | null {
   const last = Number(storage.getItem(AUTO_RELOAD_STORAGE_KEY));
+
   return Number.isFinite(last) && last > 0 ? last : null;
 }
 
@@ -401,8 +426,10 @@ export function followsRecentAutoReload(
   nowMs: number,
 ): boolean {
   if (!storage) return false;
+
   try {
     const last = lastAutoReloadAt(storage);
+
     if (
       last === null ||
       nowMs < last ||
@@ -411,7 +438,9 @@ export function followsRecentAutoReload(
     ) {
       return false;
     }
+
     storage.setItem(AUTO_RELOAD_SEEN_STORAGE_KEY, String(last));
+
     return true;
   } catch {
     return false;
@@ -425,8 +454,10 @@ export function autoReloadAllowed(
   cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
   if (!storage) return false;
+
   try {
     const last = lastAutoReloadAt(storage);
+
     return last === null || nowMs - last >= cooldownMs;
   } catch {
     return false;
@@ -445,8 +476,10 @@ export function claimAutoReload(
   cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
   if (!autoReloadAllowed(storage, nowMs, cooldownMs)) return false;
+
   try {
     storage!.setItem(AUTO_RELOAD_STORAGE_KEY, String(nowMs));
+
     return storage!.getItem(AUTO_RELOAD_STORAGE_KEY) === String(nowMs);
   } catch {
     return false;

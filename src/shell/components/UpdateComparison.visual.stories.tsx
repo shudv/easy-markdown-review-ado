@@ -62,11 +62,13 @@ function ThemeFrame({
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
     else el.removeAttribute("data-emr-theme");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div style={{ background: "var(--emr-bg)", color: "var(--emr-fg)" }}>
       {children}
@@ -77,6 +79,7 @@ function ThemeFrame({
 function FileList({ theme }: { theme?: "dark" }): ReactElement {
   const scrollRef = useRef<HTMLElement | null>(null);
   const articleWrapRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <ThemeFrame theme={theme}>
       <div style={{ display: "flex", height: 240, width: 320 }}>

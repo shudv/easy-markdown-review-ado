@@ -41,6 +41,7 @@ export function useIterationControls(opts: IterationControlsOptions) {
     setActiveThreadId,
     dismissEmptyDraftRef,
   } = opts;
+
   const historyNav = buildHistoryNav(
     opts.completedPrHistoryEnabled,
     historyStops,
@@ -52,6 +53,7 @@ export function useIterationControls(opts: IterationControlsOptions) {
       dismissEmptyDraftRef.current();
     },
   );
+
   const iterationOptions = useMemo<ReaderIterationOption[]>(
     () =>
       nativeIterationMode
@@ -66,6 +68,7 @@ export function useIterationControls(opts: IterationControlsOptions) {
         : [],
     [historyStops, nativeIterationMode],
   );
+
   const changeIterationRange = useCallback(
     (range: ReviewIterationRange) => {
       setIterationRange(range);
@@ -88,6 +91,7 @@ export function useIterationControls(opts: IterationControlsOptions) {
     ) {
       return undefined;
     }
+
     return (anchor: TextQuoteAnchor) =>
       relocateAnchor(anchor, latestHtml)
         ? null

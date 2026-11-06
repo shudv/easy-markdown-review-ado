@@ -123,6 +123,7 @@ function Reader({
       {blocks}
     </div>
   );
+
   const content = withWrap ? (
     <div className="emr-article-wrap" style={{ position: "relative" }}>
       {inner}
@@ -180,11 +181,14 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const ruler = await waitFor(() => {
       const el = canvasElement.querySelector(".emr-diff-ruler");
       if (!el) throw new Error("scrollbar not rendered yet");
+
       return el as HTMLElement;
     });
+
     // Every hue is charted; the two adjacent adds merged into a single bar.
     await expect(
       canvasElement.querySelectorAll(".emr-diff-ruler-mark--added"),
@@ -195,9 +199,11 @@ export const Default: Story = {
     await expect(
       canvasElement.querySelector(".emr-diff-ruler-mark--deleted"),
     ).toBeTruthy();
+
     const thumb = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-ruler-thumb",
     )!;
+
     await expect(thumb).toBeTruthy();
 
     const scroller = canvas.getByTestId("scroller");
@@ -301,6 +307,7 @@ async function marksOf(root: ParentNode, n: number) {
   return await waitFor(() => {
     const marks = readMarks(root);
     expect(marks).toHaveLength(n);
+
     return marks;
   });
 }
@@ -453,6 +460,7 @@ function DetachableReader({
 }): ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(initiallyMounted);
+
   return (
     <div style={{ position: "relative", width: 420, height: 360 }}>
       {mounted ? (
@@ -489,11 +497,14 @@ export const ScrollerRemovedAfterMount: Story = {
   render: () => <DetachableReader initiallyMounted />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const ruler = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-diff-ruler");
       if (!el) throw new Error("scrollbar not rendered yet");
+
       return el;
     });
+
     const thumb = ruler.querySelector<HTMLElement>(".emr-diff-ruler-thumb")!;
     const scroller = canvas.getByTestId("scroller");
     const thumbTop = thumb.style.top;

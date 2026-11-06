@@ -23,10 +23,12 @@ function orderedNames(
 ): string[] {
   const me: string[] = [];
   const others: string[] = [];
+
   for (const u of users) {
     if (u.id === currentUserId) me.push("You");
     else others.push(u.displayName);
   }
+
   return [...me, ...others];
 }
 
@@ -34,14 +36,17 @@ function orderedNames(
 function joinNames(names: string[], shown: number): string {
   const visible = names.slice(0, shown);
   const hidden = names.length - visible.length;
+
   if (hidden > 0) {
     return `${visible.join(", ")} and ${hidden} other${
       hidden === 1 ? "" : "s"
     }`;
   }
+
   if (visible.length === 1) return visible[0]!;
   if (visible.length === 2) return `${visible[0]} and ${visible[1]}`;
   const head = visible.slice(0, -1).join(", ");
+
   return `${head} and ${visible[visible.length - 1]}`;
 }
 
@@ -59,9 +64,11 @@ export function formatLikeTooltip(
   // character budget (always show at least one name).
   let shown = Math.min(MAX_NAMES, names.length);
   let body = joinNames(names, shown);
+
   while (shown > 1 && body.length > MAX_CHARS) {
     shown -= 1;
     body = joinNames(names, shown);
   }
+
   return `${body}${SUFFIX}`;
 }

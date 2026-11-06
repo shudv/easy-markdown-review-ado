@@ -35,6 +35,7 @@ const HUES = [210, 0, 160, 280, 30, 195, 340, 100, 250, 50];
 function hueFor(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+
   return HUES[h % HUES.length]!;
 }
 
@@ -53,6 +54,7 @@ export function Avatar({
   // A new photo source resets the failure and adopts the direct URL (or clears
   // it) right away; a resolver's local URL arrives asynchronously below.
   const [source, setSource] = useState({ avatarUrl, resolveImage });
+
   if (source.avatarUrl !== avatarUrl || source.resolveImage !== resolveImage) {
     setSource({ avatarUrl, resolveImage });
     setPhotoFailed(false);
@@ -67,6 +69,7 @@ export function Avatar({
       if (cancelled) return;
       setResolvedSrc(url);
     });
+
     return () => {
       cancelled = true;
     };
@@ -76,6 +79,7 @@ export function Avatar({
   const bg = `hsl(${hue}, 55%, 42%)`;
   const cls = size === "sm" ? "emr-avatar sz-sm" : "emr-avatar";
   const showPhoto = Boolean(resolvedSrc) && !photoFailed;
+
   return (
     <span className={cls} style={{ background: bg }} title={author.displayName}>
       {showPhoto ? (

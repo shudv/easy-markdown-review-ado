@@ -7,6 +7,7 @@ const exportToSvgMock = vi.fn();
 function mockLibrary(load: "ok" | "fail"): void {
   vi.doMock("@excalidraw/excalidraw", () => {
     if (load === "fail") throw new Error("library unavailable");
+
     return { exportToSvg: exportToSvgMock };
   });
 }
@@ -18,6 +19,7 @@ async function freshModule(
 ): Promise<ExcalidrawModule> {
   vi.resetModules();
   mockLibrary(load);
+
   return import("../src/markdown/excalidraw");
 }
 
@@ -33,6 +35,7 @@ function readBlob(blob: Blob): Promise<string> {
 function svgElement(): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 480 112");
+
   return svg;
 }
 
@@ -60,6 +63,7 @@ describe("isExcalidrawPath", () => {
 describe("parseExcalidrawScene", () => {
   it("keeps live elements, files, and the canvas colour", async () => {
     const { parseExcalidrawScene } = await freshModule();
+
     const scene = parseExcalidrawScene(
       JSON.stringify({
         type: "excalidraw",
@@ -73,6 +77,7 @@ describe("parseExcalidrawScene", () => {
         files: { img: { id: "img" } },
       }),
     );
+
     expect(scene).toEqual({
       elements: [{ id: "a", isDeleted: false }],
       files: { img: { id: "img" } },
@@ -113,11 +118,13 @@ describe("parseExcalidrawScene", () => {
   ])("rejects %s as a scene error", async (_label, text, message) => {
     const { parseExcalidrawScene, ExcalidrawSceneError } = await freshModule();
     let caught: unknown;
+
     try {
       parseExcalidrawScene(text);
     } catch (error) {
       caught = error;
     }
+
     expect(caught).toBeInstanceOf(ExcalidrawSceneError);
     expect(caught).toMatchObject({ name: "ExcalidrawSceneError", message });
   });
@@ -176,6 +183,7 @@ describe("renderExcalidrawSvgBlob", () => {
   it("rejects a non-scene file before loading the library", async () => {
     const { renderExcalidrawSvgBlob, ExcalidrawSceneError } =
       await freshModule("fail");
+
     await expect(
       renderExcalidrawSvgBlob(new TextEncoder().encode("nope").buffer),
     ).rejects.toBeInstanceOf(ExcalidrawSceneError);

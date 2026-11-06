@@ -23,12 +23,14 @@ export function useDocumentSource(
   const [sourceByPath, setSourceByPath] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   // Documents hub: a remembered or linked document that's no longer in the
   // repo (renamed / deleted) was swapped for another one; tell the reader.
   const [missingDoc, setMissingDoc] = useState<{
     missing: string;
     shown: string;
   } | null>(null);
+
   // Decides what a "not found" document load means — re-assigned after every
   // commit (by `useDocNavigation`, which owns the deep-link refs it resets), so
   // the load effect's async failure path can call it without depending on the
@@ -36,10 +38,12 @@ export function useDocumentSource(
   const handleMissingDocRef = useRef<(missing: string) => MissingDocOutcome>(
     null!,
   );
+
   const [renderVersion, setRenderVersion] = useState(0);
 
   useEffect(() => {
     if (!selectedPath) return;
+
     if (htmlByPath[selectedPath]) {
       // A cache hit shows the cached document, so drop any error or spinner
       // left over from a file that failed or was still loading.
@@ -47,8 +51,10 @@ export function useDocumentSource(
       setLoading(false);
       setError(null);
       setRenderVersion((v) => v + 1);
+
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -65,10 +71,13 @@ export function useDocumentSource(
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+
         const missing = isItemNotFoundError(err)
           ? handleMissingDocRef.current(selectedPath)
           : "unexpected";
+
         if (missing === "replaced") return;
+
         if (missing === "unexpected") {
           trackUserFacingError({
             error: err,
@@ -77,9 +86,11 @@ export function useDocumentSource(
             impact: "blocking",
           });
         }
+
         setError(errorMessage(err));
         setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -118,9 +129,11 @@ function useBootReadySignal(
   const bootReadyFiredRef = useRef(false);
   useEffect(() => {
     if (bootReadyFiredRef.current) return;
+
     const hasRenderedHtmlForSelected =
       !!selectedPath &&
       Object.prototype.hasOwnProperty.call(htmlByPath, selectedPath);
+
     if (hasRenderedHtmlForSelected) {
       bootReadyFiredRef.current = true;
       markAppReady("content");

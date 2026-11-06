@@ -32,10 +32,13 @@ export function insertSourceOnlyMarkers(
 ): void {
   const currentLines = pass.currentLines;
   if (!currentLines) return;
+
   const renderedSpans = markerAnchors.flatMap((element) => {
     const span = readSourceSpan(element);
+
     return span ? [span] : [];
   });
+
   for (const range of pass.changeRanges) {
     if (
       renderedSpans.some((span) =>
@@ -44,15 +47,19 @@ export function insertSourceOnlyMarkers(
     ) {
       continue;
     }
+
     const currentText = currentLines
       .slice(range.start - 1, range.end)
       .join("\n");
+
     if (currentText.trim().length === 0) continue;
+
     const marker = buildSourceOnlyMarker(
       range,
       currentText,
       pass.root.ownerDocument,
     );
+
     insertBeforeAnchor(
       pass.root,
       marker,
@@ -78,12 +85,15 @@ export function insertDeletionMarkers(
   markerAnchors: readonly HTMLElement[],
 ): number {
   let markers = 0;
+
   for (const r of pass.deletedRanges) {
     if (pass.absorbedDeletions.has(r)) continue;
     const anchor = firstBlockAtOrAfter(markerAnchors, r.startLine);
+
     const tableMarker = pass.renderInline
       ? buildDeletedTableRows(r, anchor, markerAnchors, pass.renderInline)
       : null;
+
     if (tableMarker) {
       const { parent, before, rows } = tableMarker;
       for (const row of rows) parent.insertBefore(row, before);
@@ -94,8 +104,10 @@ export function insertDeletionMarkers(
         anchor,
       );
     }
+
     markers++;
   }
+
   return markers;
 }
 
@@ -156,6 +168,7 @@ function buildSourceOnlyMarker(
   }
 
   marker.append(label, source);
+
   return marker;
 }
 
@@ -168,6 +181,7 @@ function firstBlockAtOrAfter(
     const start = numAttr(el, "data-source-line");
     if (start != null && start >= line) return el;
   }
+
   return null;
 }
 
@@ -197,6 +211,7 @@ function buildDeletedMarker(
   // document they came from — not raw `##`/backtick syntax. Falls back to a
   // preformatted plain block when no renderer is supplied (pure jsdom tests).
   let body: HTMLElement;
+
   if (renderInline && removedMarkdown) {
     body = document.createElement("div");
     body.className = "emr-diff-deleted-body markdown-body";
@@ -207,6 +222,7 @@ function buildDeletedMarker(
     body.className = "emr-diff-deleted-body";
     body.textContent = removedMarkdown;
   }
+
   body.hidden = true;
 
   chip.addEventListener("click", () => {
@@ -219,6 +235,7 @@ function buildDeletedMarker(
   marker.appendChild(rail);
   marker.appendChild(chip);
   marker.appendChild(body);
+
   return marker;
 }
 
@@ -243,6 +260,7 @@ function buildDeletedTableRows(
   const referenceRow = deletedRowReference(range, anchor, anchors);
   if (!referenceRow) return null;
   const parent = referenceRow.parentElement;
+
   if (
     parent?.tagName !== "TBODY" ||
     referenceRow.children.length !== columnCount
@@ -257,6 +275,7 @@ function buildDeletedTableRows(
     anchor?.tagName === "TR" && anchor.parentElement === parent
       ? anchor
       : referenceRow.nextSibling;
+
   return { parent, before, rows: removedRows };
 }
 
@@ -267,6 +286,7 @@ function buildDeletedTableRows(
 function deletedTableColumnCount(lines: readonly string[]): number | null {
   const rows = lines.map(splitTableRow);
   const columnCount = rows[0]!.length;
+
   if (
     lines.some((line) => !/^\s*\|.*\|\s*$/.test(line)) ||
     lines.some((line) =>
@@ -277,6 +297,7 @@ function deletedTableColumnCount(lines: readonly string[]): number | null {
   ) {
     return null;
   }
+
   return columnCount;
 }
 
@@ -296,10 +317,13 @@ function deletedRowReference(
         candidate.tagName === "TR" &&
         numAttr(candidate, "data-source-end-line")! < range.startLine,
     );
+
   const previousRowEnd =
     previousRow == null ? null : numAttr(previousRow, "data-source-end-line");
+
   const immediatelyAfterPreviousTable =
     previousRowEnd != null && previousRowEnd + 1 === range.startLine;
+
   return anchor?.tagName === "TR"
     ? anchor
     : immediatelyAfterPreviousTable
@@ -325,20 +349,25 @@ function renderDeletedTableRows(
 
   for (const header of Array.from(headerRow.querySelectorAll("th"))) {
     const cell = document.createElement("td");
+
     for (const attribute of Array.from(header.attributes)) {
       cell.setAttribute(attribute.name, attribute.value);
     }
+
     cell.append(...Array.from(header.childNodes));
     header.replaceWith(cell);
   }
+
   const body = table.tBodies.item(0) ?? table.createTBody();
   body.prepend(headerRow);
   const removedRows = Array.from(body.rows);
+
   for (const row of removedRows) {
     row.className = `${DIFF_DELETED_MARKER_CLASS} emr-diff-deleted-table-row`;
     row.setAttribute("role", "note");
     row.setAttribute("aria-label", "Removed table row");
   }
+
   return removedRows;
 }
 
@@ -354,6 +383,7 @@ function isWithinDeletedDiff(node: Node | null): boolean {
       : node.nodeType === Node.ELEMENT_NODE
         ? (node as Element)
         : node.parentElement;
+
   return (
     el?.closest(
       `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel, .${DIFF_SOURCE_ONLY_CLASS}`,
@@ -376,6 +406,7 @@ export function selectionTouchesDeletedDiff(
   if (isWithinDeletedDiff(anchorNode) || isWithinDeletedDiff(focusNode)) {
     return true;
   }
+
   if (!anchorNode || !focusNode) return false;
 
   // Both endpoints sit outside every marker. The selection still covers a
@@ -385,6 +416,7 @@ export function selectionTouchesDeletedDiff(
   // "Before" panels count only while open: a collapsed (`hidden`) panel sits
   // beside every changed block but contributes no selected text.
   const scope = anchorNode.getRootNode() as ParentNode;
+
   for (const marker of scope.querySelectorAll(
     `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel:not([hidden]), .${DIFF_SOURCE_ONLY_CLASS}`,
   )) {
@@ -392,11 +424,14 @@ export function selectionTouchesDeletedDiff(
       (anchorNode.compareDocumentPosition(marker) &
         Node.DOCUMENT_POSITION_FOLLOWING) !==
       0;
+
     const markerAfterFocus =
       (focusNode.compareDocumentPosition(marker) &
         Node.DOCUMENT_POSITION_FOLLOWING) !==
       0;
+
     if (markerAfterAnchor !== markerAfterFocus) return true;
   }
+
   return false;
 }

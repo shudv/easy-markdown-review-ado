@@ -50,15 +50,19 @@ interface ReviewHistoryOptions {
  */
 export function useReviewHistory(opts: ReviewHistoryOptions) {
   const { selectedPath, effectiveRoutedPr, loadRangeChanges } = opts;
+
   // ---- comment-history stepper ----
   // Only active when the host supplies all three loaders (Documents hub).
   const { completedPrHistoryEnabled, nativeIterationMode, nativeUpdateCount } =
     historyModes(opts);
+
   // Per-path review-history stops and the active stop index.
   const [historyByPath, setHistoryByPath] = useState<
     Record<string, DocPrRef[]>
   >({});
+
   const [completedHistoryStopIndex, setCompletedHistoryStopIndex] = useState(0);
+
   const [iterationRange, setIterationRange] = useState<ReviewIterationRange>(
     () => opts.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
   );
@@ -66,10 +70,12 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
   const docHistory = completedPrHistoryEnabled
     ? (historyByPath[selectedPath] ?? EMPTY_DOC_HISTORY)
     : EMPTY_DOC_HISTORY;
+
   const completedPrHistoryStops = useMemo(
     () => buildHistoryStops(effectiveRoutedPr?.prId ?? null, docHistory),
     [effectiveRoutedPr, docHistory],
   );
+
   const view = resolveHistoryView({
     nativeIterationMode,
     reviewIterationStops: opts.reviewIterationStops,
@@ -77,6 +83,7 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
     iterationRange,
     completedHistoryStopIndex,
   });
+
   const { resolvedIterationRange, reportedRangeKey, rangeChangesKey } = view;
 
   // Report the compared PR updates up so the host can mirror them into the
@@ -124,12 +131,14 @@ function useRangeChanges(args: {
   historyStopCount: number;
 }) {
   const { loadRangeChanges, rangeChangesKey, range, historyStopCount } = args;
+
   // Which files the compared updates touch, so the file list can mark them and
   // dim the rest. Cached per comparison; a failed load just leaves the
   // PR-wide indicators in place.
   const [rangeChangesByKey, setRangeChangesByKey] = useState<
     Partial<Record<string, Readonly<Record<string, ChangeType>>>>
   >({});
+
   useEffect(() => {
     if (
       !loadRangeChanges ||
@@ -138,6 +147,7 @@ function useRangeChanges(args: {
     ) {
       return;
     }
+
     loadRangeChanges(range)
       .then((byPath) =>
         setRangeChangesByKey((prev) => ({
@@ -156,6 +166,7 @@ function useRangeChanges(args: {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value
   }, [loadRangeChanges, rangeChangesKey, rangeChangesByKey]);
+
   return docNavRangeChangesFor(
     rangeChangesKey,
     rangeChangesByKey,

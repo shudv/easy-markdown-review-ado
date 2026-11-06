@@ -13,6 +13,7 @@ export function HeadingTwist(
   }>,
 ): ReactElement {
   const { collapsed, onToggle } = props;
+
   return (
     <button
       type="button"
@@ -38,6 +39,7 @@ export function HeadingCommentBadge(
   }>,
 ): ReactElement | null {
   const { heading } = props;
+
   if (heading.openComments > 0) {
     return (
       <span
@@ -48,6 +50,7 @@ export function HeadingCommentBadge(
       </span>
     );
   }
+
   if (heading.totalComments > 0) {
     return (
       <span
@@ -58,6 +61,7 @@ export function HeadingCommentBadge(
       </span>
     );
   }
+
   return null;
 }
 
@@ -67,10 +71,13 @@ export function dirTwistText(
   noun: "folder" | "subpages",
 ): { label: string; title: string } {
   if (state.loading) return { label: "Loading folder...", title: "Loading…" };
+
   if (state.lazy) {
     return { label: "Load folder", title: "Click to load contents" };
   }
+
   const text = `${state.collapsed ? "Expand" : "Collapse"} ${noun}`;
+
   return { label: text, title: text };
 }
 
@@ -84,6 +91,7 @@ export function DirTwistButton(
   }>,
 ): ReactElement {
   const { twist, isCollapsed, isLoading, onToggle } = props;
+
   return (
     <button
       type="button"
@@ -115,6 +123,7 @@ export function DirFolderLabel(
   }>,
 ): ReactElement {
   const { node, isLazy, isLoading, isCollapsed, onToggle } = props;
+
   return (
     <button
       type="button"
@@ -144,6 +153,7 @@ export function WikiPageLabel(
   }>,
 ): ReactElement {
   const { page, onOpen } = props;
+
   return (
     <button
       type="button"

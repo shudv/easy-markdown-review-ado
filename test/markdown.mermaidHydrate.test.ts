@@ -4,16 +4,14 @@ import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock the `mermaid` module BEFORE importing the SUT so the dynamic
 // `import("mermaid")` inside `hydrateMermaid` resolves to our stub.
-vi.mock("mermaid", () => {
-  return {
-    default: {
-      initialize: vi.fn(),
-      render: vi.fn(async (id: string, src: string) => {
-        return { svg: `<svg data-id="${id}" data-src="${src.length}"></svg>` };
-      }),
-    },
-  };
-});
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async (id: string, src: string) => ({
+      svg: `<svg data-id="${id}" data-src="${src.length}"></svg>`,
+    })),
+  },
+}));
 
 import mermaid from "mermaid";
 import { isChunkLoadError } from "../src/markdown/chunkRetry";
@@ -26,6 +24,7 @@ const trackUserFacingErrorMock = vi.fn();
 const trackMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -260,6 +259,7 @@ function mountDiagram(source: string): HTMLElement {
     `<div class="emr-mermaid" data-mermaid-src="${encodeURIComponent(source)}">` +
     `<pre class="emr-mermaid-fallback">${source}</pre></div>`;
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -364,6 +364,7 @@ describe("hydrateMermaid — author syntax errors", () => {
       if (/:[^\n]*[^#\d]; \w/.test(src)) {
         throw new Error("Parse error on line 2:\nExpecting 'SOLID_ARROW'");
       }
+
       return { svg: `<svg data-id="${id}"></svg>` };
     });
   }
@@ -418,6 +419,7 @@ describe("hydrateMermaid — author syntax errors", () => {
     const runtime = new Error(
       "Cannot read properties of undefined (reading 'x')",
     );
+
     vi.mocked(mermaid.render)
       .mockRejectedValueOnce(new Error("Parse error on line 2"))
       .mockRejectedValueOnce(runtime);
@@ -494,6 +496,7 @@ describe("hydrateMermaid — telemetry dedupe", () => {
     vi.mocked(mermaid.render).mockRejectedValue(
       new Error("Cannot read properties of undefined (reading 'x')"),
     );
+
     try {
       const root = mountDiagram(source);
       await hydrateMermaid(root, "Georgia, serif");

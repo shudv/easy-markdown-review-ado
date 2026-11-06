@@ -33,6 +33,7 @@ export function findLinkTargetChanges(
 ): LinkTargetChange[] {
   if (before.length !== after.length) return [];
   const changes: LinkTargetChange[] = [];
+
   for (let index = 0; index < before.length; index++) {
     if (before[index] !== after[index]) {
       changes.push({
@@ -43,6 +44,7 @@ export function findLinkTargetChanges(
       });
     }
   }
+
   return changes;
 }
 
@@ -51,6 +53,7 @@ export function applyLinkTargetIndicators(
   changes: readonly LinkTargetChange[],
 ): void {
   const links = Array.from(root.querySelectorAll<HTMLAnchorElement>("a"));
+
   for (const change of changes) {
     /* v8 ignore next -- indexes come from readLinkTargets on this same target, and the word/format marks added since never add or remove anchors */
     if (change.index >= links.length) continue;
@@ -82,14 +85,17 @@ export function applyLinkTargetIndicators(
     targetDiff.textContent = change.after;
     applyInlineWordDiff(targetDiff, diffWords(change.before, change.after));
     panel.appendChild(targetDiff);
+
     const setOpen = (open: boolean): void => {
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
+
       if (open) {
         trigger.ownerDocument.defaultView!.requestAnimationFrame(() => {
           positionMetadataPanel(trigger, panel);
         });
       }
     };
+
     panel.addEventListener("toggle", (event) => {
       const state = (event as Event & { newState?: string }).newState;
       setOpen(state === "open");
@@ -98,16 +104,20 @@ export function applyLinkTargetIndicators(
       event.preventDefault();
       event.stopPropagation();
       positionMetadataPanel(trigger, panel);
+
       const popover = panel as unknown as HTMLElement & {
         togglePopover?: (force?: boolean) => boolean;
       };
+
       const hasNativePopover = typeof popover.togglePopover === "function";
       const open = trigger.getAttribute("aria-expanded") !== "true";
+
       if (hasNativePopover) popover.togglePopover(open);
       else {
         indicator.classList.toggle("is-open", open);
         setOpen(open);
       }
+
       if (hasNativePopover) setOpen(open);
     });
     indicator.append(trigger, panel);
@@ -151,6 +161,7 @@ function buildLinkChangeIcon(): SVGElement {
     "M14 11a5 5 0 0 0-7.07 0L4.8 13.12a5 5 0 0 0 7.07 7.07L13 19.07",
   );
   svg.append(first, second);
+
   return svg;
 }
 
@@ -161,8 +172,10 @@ function positionMetadataPanel(trigger: HTMLElement, panel: HTMLElement): void {
   const viewportHeight = view.innerHeight;
   const desiredWidth = Math.min(440, viewportWidth - 16);
   const measuredHeight = panel.getBoundingClientRect().height;
+
   const panelHeight =
     measuredHeight > 0 ? measuredHeight : Math.min(320, viewportHeight - 16);
+
   const maximumTop = Math.max(8, viewportHeight - panelHeight - 8);
   panel.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - desiredWidth - 8))}px`;
   panel.style.top = `${Math.max(8, Math.min(rect.bottom + 6, maximumTop))}px`;
@@ -211,9 +224,11 @@ interface RenderedCodeMetadata {
 function codeMetadata(pre: Element): RenderedCodeMetadata | null {
   const code = pre.querySelector("code");
   if (!code) return null;
+
   const languageClass = Array.from(code.classList)
     .find((name) => name.startsWith("language-"))
     ?.slice("language-".length);
+
   return {
     language:
       languageClass === undefined || languageClass === ""
@@ -230,6 +245,7 @@ function imageDescription(image: Element): string {
   const src = image.getAttribute("src") ?? "no source";
   const alt = image.getAttribute("alt") ?? "no alt text";
   const title = image.getAttribute("title");
+
   return title !== null && title !== ""
     ? `${src} (alt: ${alt}; title: ${title})`
     : `${src} (alt: ${alt})`;
@@ -248,10 +264,13 @@ export function findImageMetadataChanges(
   const before = Array.from(beforeRoot.querySelectorAll("img")).map(
     imageDescription,
   );
+
   const after = Array.from(afterRoot.querySelectorAll("img")).map(
     imageDescription,
   );
+
   if (before.length !== after.length) return [];
+
   return before.flatMap((description, index) =>
     description === after[index]
       ? []
@@ -264,6 +283,7 @@ export function applyImageMetadataIndicators(
   changes: readonly ImageMetadataChange[],
 ): void {
   const images = Array.from(root.querySelectorAll("img"));
+
   for (const change of changes) {
     const image = images[change.index]!;
     applySimpleMetadataIndicator(
@@ -274,6 +294,7 @@ export function applyImageMetadataIndicators(
     );
   }
 }
+
 interface CodeMetadataChange {
   label: string;
   before: string;
@@ -291,16 +312,20 @@ export function readCodeMetadataChange(
     originalMarkdown,
     renderInline,
   );
+
   const original = scratch.querySelector("pre");
   if (!original) return null;
   const before = codeMetadata(original);
   const after = codeMetadata(block);
   if (!before || !after) return null;
+
   if (before.language === after.language && before.options === after.options) {
     return null;
   }
+
   const languageChanged = before.language !== after.language;
   const optionsChanged = before.options !== after.options;
+
   return {
     label:
       languageChanged && optionsChanged
@@ -321,6 +346,7 @@ function describeCodeMetadata(
   optionsChanged: boolean,
 ): string {
   if (!languageChanged) return meta.options || "none";
+
   return optionsChanged
     ? `${meta.language}; options: ${meta.options || "none"}`
     : meta.language;

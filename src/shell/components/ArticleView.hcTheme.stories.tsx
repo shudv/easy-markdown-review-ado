@@ -41,12 +41,14 @@ function HcFrame({
     const prevMarkdownDark = prev ? isDarkTheme(prev as EmrTheme) : false;
     el.setAttribute("data-emr-theme", theme);
     setMarkdownDark(isDarkTheme(theme));
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
       setMarkdownDark(prevMarkdownDark);
     };
   }, [theme]);
+
   return (
     <div
       style={{
@@ -97,17 +99,22 @@ async function assertHcProse(
       const a = canvasElement.querySelector<HTMLAnchorElement>(
         ".emr-rendered.markdown-body a",
       );
+
       if (!a) throw new Error("prose not rendered yet");
+
       return a;
     },
     { timeout: 5000 },
   );
+
   const body = canvasElement.querySelector<HTMLElement>(
     ".emr-rendered.markdown-body",
   )!;
+
   const quote = canvasElement.querySelector<HTMLElement>(
     ".emr-rendered.markdown-body blockquote",
   )!;
+
   expect(getComputedStyle(body).color).toBe(expected.fg);
   expect(getComputedStyle(link).color).toBe(expected.accent);
   // Regression guard: github paints blockquotes a muted grey; HC forces --emr-fg.

@@ -28,6 +28,7 @@ interface NavPaneProps {
  */
 export function NavPane(props: Readonly<NavPaneProps>): ReactElement | null {
   if (!props.shown) return null;
+
   return (
     <div className="emr-body__nav">
       {props.children}

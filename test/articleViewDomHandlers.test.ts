@@ -28,6 +28,7 @@ function fixture(html: string): HTMLDivElement {
   const root = document.createElement("div");
   root.innerHTML = html;
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -53,14 +54,17 @@ describe("handleHeadingLinkClick", () => {
     const root = fixture(
       `<button class="${HEADING_LINK_CLASS}" data-heading-id="intro"></button>`,
     );
+
     const preventDefault = vi.fn();
     const announce = vi.fn();
+
     const consumed = handleHeadingLinkClick(
       { preventDefault } as unknown as ReactMouseEvent,
       root.querySelector("button")!,
       undefined,
       announce,
     );
+
     expect(consumed).toBe(true);
     expect(preventDefault).toHaveBeenCalled();
     expect(announce).not.toHaveBeenCalled();
@@ -72,6 +76,7 @@ describe("generated-source affordance", () => {
     const root = fixture(
       '<div class="emr-mermaid" data-mermaid-src="graph%20TD"></div>',
     );
+
     addGeneratedSourceButtons(root);
     addGeneratedSourceButtons(root);
     expect(root.querySelectorAll(".emr-mermaid-source-btn")).toHaveLength(1);
@@ -81,13 +86,16 @@ describe("generated-source affordance", () => {
     const root = fixture(
       '<div class="emr-mermaid"><button class="emr-mermaid-source-btn"></button></div>',
     );
+
     const preventDefault = vi.fn();
     const open = vi.fn();
+
     const consumed = handleGeneratedSourceClick(
       { preventDefault } as unknown as ReactMouseEvent,
       root.querySelector("button")!,
       open,
     );
+
     expect(consumed).toBe(true);
     expect(preventDefault).toHaveBeenCalled();
     expect(open).not.toHaveBeenCalled();
@@ -99,6 +107,7 @@ describe("handleSectionToggleClick", () => {
     const root = fixture(
       `<button class="emr-section-toggle" aria-label="Collapse section"></button>`,
     );
+
     const toggle = root.querySelector("button")!;
     const wrap = document.createElement("div");
     const changed = vi.fn();
@@ -114,6 +123,7 @@ describe("handleSectionToggleClick", () => {
     const root = fixture(
       `<section class="emr-section"><h2><button class="emr-section-toggle"></button>Title</h2></section>`,
     );
+
     const toggle = root.querySelector("button")!;
     const wrap = document.createElement("div");
     const changed = vi.fn();
@@ -145,6 +155,7 @@ describe("selectionBubblePosition", () => {
       wrapRect,
       132,
     );
+
     expect(pos).toEqual({ top: 164, left: 184 });
   });
 
@@ -154,6 +165,7 @@ describe("selectionBubblePosition", () => {
       wrapRect,
       132,
     );
+
     expect(pos).toEqual({ top: 38, left: 4 });
   });
 });
@@ -161,9 +173,11 @@ describe("selectionBubblePosition", () => {
 describe("hydrateSections", () => {
   it("skips the collapse toggle for a section that has no heading", () => {
     sessionStorage.setItem("emr.section.doc.md.body", "1");
+
     const root = fixture(
       `<section class="emr-section" data-section-id="body"><p>Text</p></section>`,
     );
+
     hydrateSections(root, "doc.md", true);
     const section = root.querySelector("section")!;
     expect(section.dataset.collapsed).toBe("true");
@@ -177,6 +191,7 @@ describe("measureAnchorYs", () => {
       `<section class="emr-section"><h2>Heading</h2><span class="emr-highlight" data-thread-id="t1"></span></section>` +
         `<section class="emr-section"><span class="emr-highlight" data-thread-id="__draft__"></span></section>`,
     );
+
     root.querySelector("h2")!.getBoundingClientRect = () => rect(140);
     const wrap = document.createElement("div");
     wrap.getBoundingClientRect = () => rect(40);

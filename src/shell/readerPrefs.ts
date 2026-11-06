@@ -151,6 +151,7 @@ export const DEFAULT_READER_PREFS: ReaderPrefs = {
 // (`layoutStorageKey`) so hiding a panel or resizing the nav in the PR tab
 // doesn't reshape the Documents hub (and vice versa).
 export const READER_TYPE_KEY = "emr.reader.type";
+
 export function layoutStorageKey(scope: DraftScope): string {
   return `emr.reader.layout.${scope}`;
 }
@@ -171,6 +172,7 @@ export async function detectAvailableReaderFonts(
       if (font.localFamily === undefined || font.localFamily === "") {
         return true;
       }
+
       try {
         return await loadLocal(font.localFamily, font.id);
       } catch {
@@ -178,6 +180,7 @@ export async function detectAvailableReaderFonts(
       }
     }),
   );
+
   return READER_FONTS.filter((_font, index) => availability[index]);
 }
 
@@ -197,6 +200,7 @@ export function snapReaderPct(
   max = READER_PERCENT_MAX,
 ): number {
   const clamped = clampReaderPct(pct, min, max);
+
   return Math.abs(clamped - 100) <= READER_PERCENT_SNAP_RADIUS ? 100 : clamped;
 }
 
@@ -234,11 +238,13 @@ export function readerSpacingValues(
 ): ReaderSpacingValues {
   const spacingDelta = (pct: number) =>
     clampReaderPct(pct, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX) - 100;
+
   const lineDelta = spacingDelta(prefs.lineSpacingPct);
   const paragraphDelta = spacingDelta(prefs.paragraphSpacingPct);
   const letterDelta = spacingDelta(prefs.letterSpacingPct);
   const wordDelta = spacingDelta(prefs.wordSpacingPct);
   const decimal = (value: number) => Number(value.toFixed(4));
+
   return {
     lineHeight: decimal(1.6 + lineDelta * 0.003),
     paragraphSpacingPx: decimal(16 + paragraphDelta * 0.064),
@@ -298,15 +304,19 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
   if (value === null || typeof value !== "object") {
     return { ...DEFAULT_READER_PREFS };
   }
+
   const v = value as Partial<Record<keyof ReaderPrefs, unknown>>;
+
   const fontId =
     typeof v.fontId === "string" && READER_FONTS.some((f) => f.id === v.fontId)
       ? v.fontId
       : DEFAULT_FONT_ID;
+
   const sizePct =
     typeof v.sizePct === "number" && Number.isFinite(v.sizePct)
       ? snapReaderPct(v.sizePct)
       : DEFAULT_SIZE_PCT;
+
   const readSpacingPct = (
     key: keyof Pick<
       ReaderPrefs,
@@ -320,14 +330,17 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
     typeof v[key] === "number" && Number.isFinite(v[key])
       ? snapReaderPct(v[key], READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)
       : fallback;
+
   const navWidthPct =
     typeof v.navWidthPct === "number" && Number.isFinite(v.navWidthPct)
       ? clampNavWidthPct(v.navWidthPct)
       : DEFAULT_NAV_WIDTH_PCT;
+
   const commentWidthPct =
     typeof v.commentWidthPct === "number" && Number.isFinite(v.commentWidthPct)
       ? clampCommentWidthPct(v.commentWidthPct)
       : DEFAULT_COMMENT_WIDTH_PCT;
+
   return {
     fontId,
     sizePct,
@@ -353,6 +366,7 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
 function readStored(key: string): unknown {
   try {
     const raw = localStorage.getItem(key);
+
     return raw !== null && raw !== "" ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -456,8 +470,10 @@ export function maxRailWidthPct(
 ): number {
   const availPx =
     frameWidth - READER_DOC_MIN_W - READER_SCROLLBAR_W - otherRailWidthPx;
+
   // Floor so the resolved pixel width can't round back up over the available
   // space and re-trip the too-narrow guard by a pixel.
   const pct = Math.floor((availPx / READER_NAV_W) * 100);
+
   return Math.max(NAV_WIDTH_MIN_PCT, Math.min(NAV_WIDTH_MAX_PCT, pct));
 }

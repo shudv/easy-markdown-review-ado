@@ -20,16 +20,21 @@ export function useCommentWrites() {
   // Open inline comment editors (see editorRegistry.ts): their text isn't kept
   // as a draft, so the reconnect notice hides "Reload page" while any is open.
   const [openEditors, setOpenEditors] = useState(0);
+
   const registerEditor = useCallback(() => {
     setOpenEditors((n) => n + 1);
+
     return () => setOpenEditors((n) => n - 1);
   }, []);
+
   const persistWith = useCallback(
     async <T>(label: string, op: () => Promise<T>): Promise<T | null> => {
       setWritesInFlight((n) => n + 1);
+
       try {
         const result = await op();
         setPersistError(null);
+
         return result;
       } catch (err) {
         setPersistError(friendlyWriteError(label, err));
@@ -41,6 +46,7 @@ export function useCommentWrites() {
           operation: "comment-write",
           impact: "action-failed",
         });
+
         return null;
       } finally {
         setWritesInFlight((n) => n - 1);
@@ -48,6 +54,7 @@ export function useCommentWrites() {
     },
     [],
   );
+
   return {
     persistError,
     setPersistError,

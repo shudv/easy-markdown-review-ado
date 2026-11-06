@@ -19,6 +19,7 @@ interface ExplainedTextRange {
 }
 
 const INLINE_FORMAT_TAGS = new Set(["STRONG", "EM", "CODE", "DEL", "A"]);
+
 const FORMAT_NAME_BY_TAG: Record<string, string> = {
   A: "link",
   CODE: "inline code",
@@ -30,14 +31,18 @@ const FORMAT_NAME_BY_TAG: Record<string, string> = {
 export function formattingRanges(root: Element): FormattingRange[] {
   const ranges: FormattingRange[] = [];
   let offset = 0;
+
   const visit = (node: Node): void => {
     if (node.nodeType === Node.TEXT_NODE) {
       offset += (node as Text).data.length;
+
       return;
     }
+
     if (!(node instanceof Element)) return;
     const start = offset;
     for (const child of Array.from(node.childNodes)) visit(child);
+
     if (INLINE_FORMAT_TAGS.has(node.tagName) && offset > start) {
       ranges.push({
         tag: node.tagName,
@@ -47,7 +52,9 @@ export function formattingRanges(root: Element): FormattingRange[] {
       });
     }
   };
+
   for (const child of Array.from(root.childNodes)) visit(child);
+
   return ranges;
 }
 
@@ -65,11 +72,13 @@ function capitalize(text: string): string {
 
 function compactTooltipValue(value: string, limit = 96): string {
   const compact = value.replace(/\s+/g, " ").trim();
+
   return compact.length <= limit ? compact : `${compact.slice(0, limit - 1)}…`;
 }
 
 function formatDescription(ranges: readonly FormattingRange[]): string {
   const link = ranges.find((range) => range.tag === "A");
+
   const parts = Array.from(
     new Set(
       ranges
@@ -77,10 +86,13 @@ function formatDescription(ranges: readonly FormattingRange[]): string {
         .map((range) => formattingName(range.tag)),
     ),
   );
+
   if (link) {
     parts.push(`link to ${compactTooltipValue(link.detail!)}`);
   }
+
   if (parts.length < 2) return parts[0]!;
+
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
@@ -92,16 +104,19 @@ function describeFormattingChange(
   const after = formatDescription(afterRanges);
   const beforeLink = beforeRanges.find((range) => range.tag === "A");
   const afterLink = afterRanges.find((range) => range.tag === "A");
+
   if (beforeRanges.length === 0) {
     return afterLink && afterRanges.length === 1
       ? `Link added: ${compactTooltipValue(afterLink.detail!)}`
       : `${capitalize(after)} formatting added`;
   }
+
   if (afterRanges.length === 0) {
     return beforeLink && beforeRanges.length === 1
       ? `Link removed: ${compactTooltipValue(beforeLink.detail!)}`
       : `${capitalize(before)} formatting removed`;
   }
+
   return `Formatting changed from ${before} to ${after}`;
 }
 
@@ -111,24 +126,31 @@ function formattingChangeRanges(
 ): ExplainedTextRange[] {
   const originalKeys = new Set(originalRanges.map(formattingRangeKey));
   const currentKeys = new Set(currentRanges.map(formattingRangeKey));
+
   const removed = originalRanges.filter(
     (range) => !currentKeys.has(formattingRangeKey(range)),
   );
+
   const added = currentRanges.filter(
     (range) => !originalKeys.has(formattingRangeKey(range)),
   );
+
   const sorted = [...removed, ...added]
     .map(({ start, end }) => ({ start, end }))
     .sort((a, b) => a.start - b.start || a.end - b.end);
+
   const merged: Array<{ start: number; end: number }> = [];
+
   for (const range of sorted) {
     const previous = merged.length > 0 ? merged[merged.length - 1] : undefined;
+
     if (previous && range.start <= previous.end) {
       previous.end = Math.max(previous.end, range.end);
     } else {
       merged.push(range);
     }
   }
+
   return merged.map(({ start, end }) => ({
     start,
     end,
@@ -149,17 +171,21 @@ interface TextNodeSpan {
 function collectTextNodeSpans(root: HTMLElement): TextNodeSpan[] {
   const nodes: TextNodeSpan[] = [];
   let offset = 0;
+
   const walker = root.ownerDocument.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT,
   );
+
   let node = walker.nextNode();
+
   while (node) {
     const text = node as Text;
     nodes.push({ node: text, start: offset, end: offset + text.data.length });
     offset += text.data.length;
     node = walker.nextNode();
   }
+
   return nodes;
 }
 
@@ -171,12 +197,15 @@ function wrapTextNodeRanges(
 ): void {
   const fragment = doc.createDocumentFragment();
   let cursor = 0;
+
   for (const range of overlaps) {
     const start = Math.max(range.start, entry.start) - entry.start;
     const end = Math.min(range.end, entry.end) - entry.start;
+
     if (start > cursor) {
       fragment.append(entry.node.data.slice(cursor, start));
     }
+
     const mark = doc.createElement("span");
     mark.className = DIFF_FORMAT_CLASS;
     applyDiffTooltip(mark, range.label);
@@ -184,9 +213,11 @@ function wrapTextNodeRanges(
     fragment.append(mark);
     cursor = end;
   }
+
   if (cursor < entry.node.data.length) {
     fragment.append(entry.node.data.slice(cursor));
   }
+
   entry.node.replaceWith(fragment);
 }
 
@@ -195,13 +226,16 @@ export function wrapFormattingRanges(
   ranges: readonly ExplainedTextRange[],
 ): void {
   const titledAncestors = new Set<HTMLElement>();
+
   for (const entry of collectTextNodeSpans(root)) {
     const overlaps = ranges.filter(
       (range) => range.start < entry.end && entry.start < range.end,
     );
+
     if (overlaps.length === 0) continue;
     const parent = entry.node.parentElement;
     wrapTextNodeRanges(root.ownerDocument, entry, overlaps);
+
     for (const mark of Array.from(
       parent!.querySelectorAll<HTMLElement>(`.${DIFF_FORMAT_CLASS}`),
     )) {
@@ -209,6 +243,7 @@ export function wrapFormattingRanges(
       if (titledAncestor) titledAncestors.add(titledAncestor);
     }
   }
+
   for (const titledAncestor of titledAncestors) {
     suppressNativeTitle(titledAncestor);
   }
@@ -227,6 +262,7 @@ export function applyFormattingDiff(
   const changed = formattingChangeRanges(originalRanges, currentRanges);
   if (changed.length === 0) return false;
   wrapFormattingRanges(target, changed);
+
   return true;
 }
 
@@ -234,6 +270,7 @@ export function applyFormattingDiff(
 function describeWhitespace(run: string): string {
   const tabs = run.split("\t").length - 1;
   const spaces = run.length - tabs;
+
   return [
     spaces > 0 ? `${spaces} space${spaces === 1 ? "" : "s"}` : "",
     tabs > 0 ? `${tabs} tab${tabs === 1 ? "" : "s"}` : "",
@@ -254,16 +291,20 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
   const operations: WordDiffOp[] = [];
   const ranges: ExplainedTextRange[] = [];
   let modified = "";
+
   const push = (kind: WordDiffOp["kind"], value: string): void => {
     const last =
       operations.length > 0 ? operations[operations.length - 1] : undefined;
+
     if (last?.kind === kind) last.value += value;
     else operations.push({ kind, value });
     if (kind !== "removed") modified += value;
   };
+
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]!;
     const next = i + 1 < ops.length ? ops[i + 1] : undefined;
+
     if (
       op.kind === "removed" &&
       next?.kind === "added" &&
@@ -280,7 +321,9 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
       i++;
       continue;
     }
+
     push(op.kind, op.value);
   }
+
   return { operations, ranges };
 }

@@ -26,13 +26,16 @@ import { useInertPopover, handlePopoverEscape } from "./ReaderStatusBar.hooks";
 
 function formatIterationAge(dateMs: number | undefined): string | null {
   if (dateMs === undefined) return null;
+
   const elapsedMinutes = Math.max(
     0,
     Math.floor((Date.now() - dateMs) / 60_000),
   );
+
   if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
   const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) return `${elapsedHours}h ago`;
+
   return `${Math.floor(elapsedHours / 24)}d ago`;
 }
 
@@ -67,6 +70,7 @@ function IterationStepButton({
 }>): ReactElement {
   const word = direction === "left" ? "Previous" : "Next";
   const edge = direction === "left" ? "First" : "Last";
+
   // `label` comes from reviewRangeLabel, which never returns "".
   return (
     <button
@@ -97,8 +101,10 @@ export function IterationPicker({
   const listRef = useRef<HTMLDivElement>(null);
   const anchorUpdateRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
+
   const { triggerRef, popoverRef, restoreFocusAfterClose } =
     useInertPopover(open);
+
   const {
     resolved,
     allChangesSelected,
@@ -115,14 +121,18 @@ export function IterationPicker({
 
   useEffect(() => {
     if (!open) return undefined;
+
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current!.contains(event.target as Node)) setOpen(false);
     };
+
     const onKeyDown = (event: KeyboardEvent) => {
       handlePopoverEscape(event, restoreFocusAfterClose, () => setOpen(false));
     };
+
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
@@ -138,8 +148,10 @@ export function IterationPicker({
     const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
     /* v8 ignore next -- resolveReviewIterationRange clamps toUpdate into 1..updateCount, so either the All updates row or the toUpdate row is always aria-selected */
     if (!selected) return;
+
     const offset =
       selected.getBoundingClientRect().top - list.getBoundingClientRect().top;
+
     list.scrollTop += offset - (list.clientHeight - selected.offsetHeight) / 2;
   }, [open]);
 
@@ -199,6 +211,7 @@ export function IterationPicker({
               ) {
                 anchorUpdateRef.current = resolved.range.toUpdate;
               }
+
               setOpen((value) => !value);
             }}
           >
@@ -274,7 +287,9 @@ export function IterationPicker({
               !allChangesSelected &&
               option.number >= firstSelectedUpdate &&
               option.number <= resolved.range.toUpdate;
+
             const age = formatIterationAge(option.dateMs);
+
             return (
               <button
                 key={option.stopIndex}

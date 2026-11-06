@@ -68,12 +68,15 @@ function decodeSegment(segment: string): string | null {
   if (typeof atob !== "function") return null;
   const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+
   try {
     const binary = atob(padded);
     let out = "";
+
     for (let i = 0; i < binary.length; i++) {
-      out += "%" + binary.charCodeAt(i).toString(16).padStart(2, "0");
+      out += `%${binary.charCodeAt(i).toString(16).padStart(2, "0")}`;
     }
+
     return decodeURIComponent(out);
   } catch {
     return null;
@@ -91,8 +94,10 @@ export function parseJwtPayload(token: string): Record<string, unknown> | null {
   if (parts.length !== 3) return null;
   const json = decodeSegment(parts[1]!);
   if (json === null) return null;
+
   try {
     const parsed: unknown = JSON.parse(json);
+
     if (
       typeof parsed !== "object" ||
       parsed === null ||
@@ -100,6 +105,7 @@ export function parseJwtPayload(token: string): Record<string, unknown> | null {
     ) {
       return null;
     }
+
     return parsed as Record<string, unknown>;
   } catch {
     return null;
@@ -113,13 +119,16 @@ function readAdoExpSeconds(
   const xms = payload["xms_attr"];
   if (typeof xms !== "object" || xms === null) return undefined;
   let earliest: number | undefined;
+
   for (const value of Object.values(xms as Record<string, unknown>)) {
     if (typeof value !== "object" || value === null) continue;
     const adoExp = (value as Record<string, unknown>)["ado_exp"];
+
     if (typeof adoExp === "number" && Number.isFinite(adoExp)) {
       earliest = earliest === undefined ? adoExp : Math.min(earliest, adoExp);
     }
   }
+
   return earliest;
 }
 
@@ -132,11 +141,15 @@ export function readAdoTokenExpiry(token: string): AdoTokenExpiry {
   const payload = parseJwtPayload(token);
   if (!payload) return {};
   const exp = payload["exp"];
+
   const expMs =
     typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : undefined;
+
   const adoExpSeconds = readAdoExpSeconds(payload);
+
   const adoExpMs =
     adoExpSeconds === undefined ? undefined : adoExpSeconds * 1000;
+
   return { expMs, adoExpMs };
 }
 
@@ -188,6 +201,7 @@ export function isAdoAuthError(err: unknown): boolean {
   const status = extractStatus(err);
   if (status === 401 || status === 403) return true;
   let message = "";
+
   if (err instanceof Error) {
     message = err.message;
   } else if (typeof err === "string") {
@@ -196,6 +210,7 @@ export function isAdoAuthError(err: unknown): boolean {
     const raw = (err as { message?: unknown }).message;
     if (typeof raw === "string") message = raw;
   }
+
   return /\bTF400813\b/.test(message);
 }
 
@@ -246,13 +261,16 @@ export async function detectSessionRefreshing(
   if (isSessionRefreshingError(err)) return err;
   if (!isAdoAuthError(err)) return null;
   let token = "";
+
   try {
     token = await getToken();
   } catch {
     /* empty token → classifies as "unknown" (not lapsed) */
   }
+
   const currentTimeMs = typeof nowMs === "function" ? nowMs() : nowMs;
   const { state, recoverAtMs } = classifyAdoGrant(token, currentTimeMs);
+
   return isAdoGrantLapsed(state)
     ? new SessionRefreshingError(state, recoverAtMs)
     : null;
@@ -321,6 +339,8 @@ export function planSessionRefreshRetry(opts: {
     recoverAtMs !== undefined
       ? recoverAtMs + bufferMs - nowMs
       : minDelayMs * 2 ** (attempt - 1);
+
   const delayMs = Math.min(ceilingMs, Math.max(minDelayMs, raw));
+
   return { giveUp: false, delayMs };
 }

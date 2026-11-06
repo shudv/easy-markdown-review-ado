@@ -59,6 +59,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     },
     [revealComments, setActiveThreadId],
   );
+
   const draft = useDraftPersistence({
     scope: opts.draftScope,
     activeDraft,
@@ -69,6 +70,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     activeDraft,
     selectedPath,
   );
+
   const requests = useDraftRequests({
     ...opts,
     draft,
@@ -77,6 +79,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     setDraftGuard,
     setDraftY,
   });
+
   const resolutions = useDraftResolutions({
     ...opts,
     draft,
@@ -142,19 +145,24 @@ function useDraftRequests(opts: DraftRequestsOptions) {
   const activeDraftRef = useRef(activeDraft);
   // eslint-disable-next-line react-hooks/refs -- latest-value ref read by the stable requestDraft/dismiss/post callbacks; written in render so a callback fired by a child's layout effect or handler in this commit already sees this render's draft.
   activeDraftRef.current = activeDraft;
+
   const requestDraft = useCallback(
     (target: DraftTarget) => {
       const current = activeDraftRef.current;
       const isSame = isSameDraftTarget(current, target);
+
       if (current === null || isSame || draft.getSnapshot().trim() === "") {
         if (!isSame) draft.clear();
         setActiveDraft(target);
         revealComments();
+
         if (target.threadId !== NEW_DRAFT_THREAD_ID) {
           setActiveThreadId(target.threadId);
         }
+
         return;
       }
+
       setDraftGuard({
         requested: target,
         existingPath: current.path,
@@ -163,11 +171,13 @@ function useDraftRequests(opts: DraftRequestsOptions) {
     },
     [draft, revealComments, setActiveThreadId, setActiveDraft, setDraftGuard],
   );
+
   // Stable ref for the document-level ESC / outside-click handlers so they can
   // dismiss an *empty* draft without re-subscribing on every draft change.
   // Assigned on every render below (before any handler can fire), so the
   // `null!` seed is never actually called.
   const dismissEmptyDraftRef = useRef<() => void>(null!);
+
   // eslint-disable-next-line react-hooks/refs -- latest-value ref for stable document listeners and callbacks; written in render so the `null!` seed is never observable, even from a child's layout effect on mount.
   dismissEmptyDraftRef.current = () => {
     // Never discard text the user has typed — only tear down a bare composer
@@ -225,6 +235,7 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
     setDraftGuard,
     setDraftY,
   } = opts;
+
   const onCancelReply = useCallback(() => {
     draft.clear();
     setActiveDraft(null);
@@ -239,9 +250,11 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
     setDraftY(null);
     setActiveDraft(g.requested);
     revealComments();
+
     if (g.requested.threadId !== NEW_DRAFT_THREAD_ID) {
       setActiveThreadId(g.requested.threadId);
     }
+
     setDraftGuard(null);
   }, [
     draft,
@@ -252,6 +265,7 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
     setDraftGuard,
     setDraftY,
   ]);
+
   const onKeepExistingDraft = useCallback(
     () => setDraftGuard(null),
     [setDraftGuard],

@@ -27,16 +27,21 @@ export async function mountHook<P, R>(
   document.body.appendChild(container);
   const root = createRoot(container);
   const latest: { value?: R } = {};
+
   function Harness(harnessProps: { hookProps: P }): null {
     latest.value = useHook(harnessProps.hookProps);
+
     return null;
   }
+
   const rerender = async (next: P): Promise<void> => {
     await act(async () => {
       root.render(createElement(Harness, { hookProps: next }));
     });
   };
+
   await rerender(props);
+
   return {
     get current() {
       return latest.value as R;
@@ -63,6 +68,7 @@ export async function mountTracked<P, R>(
 ): Promise<MountedHook<P, R>> {
   const hook = await mountHook(useHook, props);
   onUnmountAll(hook.unmount);
+
   return hook;
 }
 
@@ -88,10 +94,12 @@ export interface Deferred<T> {
 export function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -102,18 +110,22 @@ export function deferred<T>(): Deferred<T> {
 export function manualFrames(): { flush: () => void; restore: () => void } {
   let queue = new Map<number, FrameRequestCallback>();
   let next = 1;
+
   const request = vi
     .spyOn(window, "requestAnimationFrame")
     .mockImplementation((cb: FrameRequestCallback): number => {
       const handle = next++;
       queue.set(handle, cb);
+
       return handle;
     });
+
   const cancel = vi
     .spyOn(window, "cancelAnimationFrame")
     .mockImplementation((handle: number): void => {
       queue.delete(handle);
     });
+
   return {
     flush: () => {
       const due = queue;
@@ -134,6 +146,7 @@ export function ensureCssEscape(): void {
   const g = globalThis as unknown as {
     CSS?: { escape?: (s: string) => string };
   };
+
   if (g.CSS?.escape) return;
   g.CSS = { ...g.CSS, escape: (s: string) => s };
 }
@@ -154,6 +167,7 @@ export function withHeldRender<
     ...actual,
     renderMarkdown: async (md: string) => {
       if (md === HELD_SOURCE && heldRender.gate) await heldRender.gate.promise;
+
       return actual.renderMarkdown(md);
     },
   };
@@ -179,5 +193,6 @@ export function stubCommentApi() {
     searchWorkItems: vi.fn(),
     searchPullRequests: vi.fn(),
   };
+
   return api satisfies CommentApi;
 }

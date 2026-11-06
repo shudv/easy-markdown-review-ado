@@ -35,6 +35,7 @@ export function DocNavHeader(props: Readonly<DocNavHeaderProps>): ReactElement {
     titleSlot,
     headerActions,
   } = props;
+
   return (
     <div className="emr-docnav-header">
       {searchOpen ? (
@@ -85,6 +86,7 @@ function SearchToggleButton(
   }>,
 ): ReactElement {
   const { searchOpen, closeSearch, setSearchOpen } = props;
+
   return (
     <button
       type="button"

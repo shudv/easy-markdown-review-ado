@@ -92,12 +92,14 @@ async function resolveInitialRepoId(
   union: RepoUnion,
 ): Promise<string> {
   let resolvedRepoId = firstPage.repos[0]?.id ?? "";
+
   // May come from the last-visited localStorage cache, which can hold `null`.
   if (preferredId != null && preferredId !== "") {
     if (union.repos.some((r) => r.id === preferredId)) {
       resolvedRepoId = preferredId;
     } else {
       const fetched = await fetchRepoById(projectId, preferredId);
+
       if (fetched) {
         union.repos.unshift(fetched.repo);
         union.rawRepoById.set(fetched.repo.id, fetched.raw);
@@ -105,6 +107,7 @@ async function resolveInitialRepoId(
       }
     }
   }
+
   return resolvedRepoId;
 }
 
@@ -123,15 +126,18 @@ function resolveInitialRoute(
   routeParams: Record<string, string>,
 ): InitialRoute {
   const routedPath = routeParams.path;
+
   // The route stores a slash-free path (`docs/x.md`) to match ADO's
   // Files URLs; downstream code expects the repo-rooted form. A deep link
   // wins; otherwise reopen the repo's last-visited document, if any.
   const initialSelectedPath = routedPath
     ? `/${routedPath.replace(/^\/+/, "")}`
     : readLastPath(projectId, resolvedRepoId);
+
   const initialActiveThreadId = readCommentParam(routeParams);
   const initialAnchor = readAnchorParam(routeParams);
   const initialTextFragment = readTextParam(routeParams);
+
   return {
     initialSelectedPath,
     initialActiveThreadId,
@@ -160,24 +166,29 @@ export async function discoverHub(
   // choose. The first page (plus the user + route params) is all we need
   // to render; the rest stream in as the user scrolls or filters.
   log("fetching first repo page + route params");
+
   const [firstPage, routeParams] = await Promise.all([
     fetchRepoPage(project.id, { top: REPO_PAGE_SIZE }),
     readRouteParams(),
   ]);
+
   log(`first page: ${firstPage.repos.length} repo(s)`);
 
   const union: RepoUnion = {
     repos: [...firstPage.repos],
     rawRepoById: new Map(firstPage.rawRepoById),
   };
+
   const routedRepoId = routeParams.repo;
   const lastRepoId = readLastRepo(project.id);
+
   const resolvedRepoId = await resolveInitialRepoId(
     project.id,
     routedRepoId || lastRepoId,
     firstPage,
     union,
   );
+
   const route = resolveInitialRoute(project.id, resolvedRepoId, routeParams);
 
   // Seed the cache from wherever we landed so a later root-URL visit
@@ -187,6 +198,7 @@ export async function discoverHub(
   // user-driven changes), so returning to `/` would fall back to the
   // first repo + default document instead of where the user last was.
   writeLastRepo(project.id, resolvedRepoId);
+
   if (route.initialSelectedPath != null && route.initialSelectedPath !== "") {
     writeLastPath(project.id, resolvedRepoId, route.initialSelectedPath);
   }

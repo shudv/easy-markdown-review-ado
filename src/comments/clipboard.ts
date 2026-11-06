@@ -21,15 +21,18 @@ export async function copyText(text: string): Promise<boolean> {
   // The DOM typings claim `navigator.clipboard` always exists, but browsers
   // leave it undefined outside secure contexts.
   const clipboard = navigator.clipboard as Partial<Clipboard> | undefined;
+
   if (typeof clipboard?.writeText === "function") {
     try {
       await clipboard.writeText(text);
+
       return true;
     } catch {
       // Blocked by the host iframe's Permissions-Policy — fall through to the
       // legacy command, which the sandbox still permits.
     }
   }
+
   return legacyCopyText(text);
 }
 
@@ -52,6 +55,7 @@ function legacyCopyText(text: string): boolean {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- ADO's sandboxed iframe blocks the async Clipboard API; execCommand is the only fallback it permits.
     const copied = document.execCommand("copy");
     textarea.remove();
+
     return copied;
   } catch {
     return false;

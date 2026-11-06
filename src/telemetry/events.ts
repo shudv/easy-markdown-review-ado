@@ -138,10 +138,12 @@ function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
 
 function appLoadedMeasurements(p: AppLoadedPayload): TelemetryMeasurements {
   const measurements: TelemetryMeasurements = { bootTimeMs: p.bootTimeMs };
+
   for (const key of OPTIONAL_BOOT_MEASUREMENTS) {
     const value = p[key];
     if (value !== undefined) measurements[key] = value;
   }
+
   return measurements;
 }
 
@@ -296,6 +298,7 @@ export const events = {
     heldWrites?: number;
   }): TelemetryEvent {
     const measurements: Record<string, number> = {};
+
     for (const key of [
       "secsUntilExpAtStart",
       "secsSinceAdoExpAtStart",
@@ -306,6 +309,7 @@ export const events = {
       const value = p[key];
       if (value !== undefined) measurements[key] = Math.round(value);
     }
+
     return {
       name: EVENT.AuthSessionRefresh,
       properties: {

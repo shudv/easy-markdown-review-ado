@@ -21,6 +21,7 @@ export function useRepoBindings(
   perDocumentMode: boolean,
 ) {
   const repoBindings = useRepoScopedBindings(props, selectedRepo);
+
   const perDocumentBindings = usePerDocumentBindings(
     props,
     selectedRepo,
@@ -32,6 +33,7 @@ export function useRepoBindings(
     const fn = props.onListSubpageFolder;
     if (!fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (folderPath, atCommitId) => fn(repoId, folderPath, atCommitId);
   }, [props.onListSubpageFolder, selectedRepo]);
 
@@ -54,10 +56,12 @@ function useRepoScopedBindings(
   const repoScopedLoader = useCallback(
     (path: string): Promise<string> => {
       if (!selectedRepo) return Promise.reject(new Error("No repo selected"));
+
       return loadFileSource(selectedRepo.id, path);
     },
     [selectedRepo, loadFileSource],
   );
+
   const resolveDocumentImageBound = useMemo<
     | ((
         documentPath: string,
@@ -69,6 +73,7 @@ function useRepoScopedBindings(
     const resolveImage = props.resolveDocumentImage;
     if (!selectedRepo || !resolveImage) return undefined;
     const repoId = selectedRepo.id;
+
     return (
       documentPath: string,
       repositoryPath: string,
@@ -79,6 +84,7 @@ function useRepoScopedBindings(
 
   const commentApi = useMemo<CommentApi | undefined>(() => {
     if (!selectedRepo || !commentApiFor) return undefined;
+
     return commentApiFor(selectedRepo.id);
   }, [selectedRepo, commentApiFor]);
 
@@ -99,6 +105,7 @@ function usePerDocumentBindings(
     const fn = props.commentApiForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.commentApiForPath, selectedRepo]);
 
@@ -108,6 +115,7 @@ function usePerDocumentBindings(
     const fn = props.loadThreadsForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.loadThreadsForPath, selectedRepo]);
 
@@ -119,6 +127,7 @@ function usePerDocumentBindings(
     const fn = props.routedPrForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.routedPrForPath, selectedRepo]);
 
@@ -130,6 +139,7 @@ function usePerDocumentBindings(
     const fn = props.loadDocHistory;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.loadDocHistory, selectedRepo]);
 
@@ -139,6 +149,7 @@ function usePerDocumentBindings(
     const fn = props.loadThreadsForPr;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (prId: number, path: string) => fn(repoId, prId, path);
   }, [perDocumentMode, props.loadThreadsForPr, selectedRepo]);
 
@@ -148,6 +159,7 @@ function usePerDocumentBindings(
     const fn = props.loadFileSourceAt;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string, commitId: string) => fn(repoId, path, commitId);
   }, [perDocumentMode, props.loadFileSourceAt, selectedRepo]);
 

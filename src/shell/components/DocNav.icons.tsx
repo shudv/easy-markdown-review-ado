@@ -44,6 +44,7 @@ export function SvgFolder(props: Readonly<{ open: boolean }>): ReactElement {
       </svg>
     );
   }
+
   return (
     <svg
       width="12"

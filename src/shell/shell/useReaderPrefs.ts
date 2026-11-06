@@ -20,32 +20,40 @@ import {
  */
 export function useReaderPrefs(draftScope: DraftScope | undefined) {
   const prefsScope: DraftScope = draftScope ?? "pr";
+
   const [readerPrefs, setReaderPrefs] = useState<ReaderPrefs>(() =>
     readReaderPrefs(prefsScope),
   );
+
   useEffect(() => {
     writeReaderPrefs(prefsScope, readerPrefs);
   }, [prefsScope, readerPrefs]);
+
   const toggleReaderNav = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showNav: !p.showNav })),
     [],
   );
+
   const toggleReaderOutline = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showOutline: !p.showOutline })),
     [],
   );
+
   const toggleReaderComments = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showComments: !p.showComments })),
     [],
   );
+
   const setReaderFont = useCallback(
     (fontId: string) => setReaderPrefs((p) => ({ ...p, fontId })),
     [],
   );
+
   const setReaderSize = useCallback(
     (sizePct: number) => setReaderPrefs((p) => ({ ...p, sizePct })),
     [],
   );
+
   const setReaderSpacing = useCallback(
     (spacingPct: number) =>
       setReaderPrefs((p) => ({
@@ -57,10 +65,12 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
       })),
     [],
   );
+
   const resetNavWidth = useCallback(
     () => setReaderPrefs((p) => ({ ...p, navWidthPct: DEFAULT_NAV_WIDTH_PCT })),
     [],
   );
+
   const resetCommentWidth = useCallback(
     () =>
       setReaderPrefs((p) => ({
@@ -69,6 +79,7 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
       })),
     [],
   );
+
   // Reveal the comments pane if it's hidden — called when the reader starts (or
   // restores) a comment/reply draft, whose composer lives in the rail, so the
   // pane always shows the moment there is something to write.
@@ -79,6 +90,7 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
       ),
     [],
   );
+
   return {
     readerPrefs,
     setReaderPrefs,

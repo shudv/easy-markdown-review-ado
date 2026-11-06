@@ -17,6 +17,7 @@ export function CommentRowMeta(
   }>,
 ): ReactElement {
   const { comment } = props;
+
   return (
     <div className="emr-comment-meta">
       <span className="name">{comment.author.displayName}</span>
@@ -43,6 +44,7 @@ export function CommentMenuToggle(
   }>,
 ): ReactElement {
   const { buttonRef, open, onToggle } = props;
+
   return (
     <button
       ref={buttonRef}
@@ -69,6 +71,7 @@ export function CommentLikeButton(
   }>,
 ): ReactElement {
   const { onLike } = props;
+
   return (
     <button
       type="button"
@@ -102,6 +105,7 @@ export function CommentLikePill(
   }>,
 ): ReactElement {
   const { likedByMe, likeCount, likeTooltip, canReact, onLike } = props;
+
   return (
     <button
       type="button"
@@ -158,6 +162,7 @@ export function CommentRowMenu(
   }>,
 ): ReactElement {
   const { menuRef, confirm, setConfirm, state, actions } = props;
+
   return (
     // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/interactive-supports-focus -- onClick is only an event stopper (keeps menu clicks from selecting the thread); keyboard focus lives on the native role="menuitem" buttons inside, and Escape closes via useCommentRowMenu
     <div
@@ -195,6 +200,7 @@ function CommentMenuItems(
   }>,
 ): ReactElement {
   const { state, actions, setConfirm } = props;
+
   return (
     <>
       {state.canLink ? (
@@ -243,6 +249,7 @@ function CommentThreadStatusItems(
   }>,
 ): ReactElement {
   const { isTerminal, threadStatus, actions } = props;
+
   if (isTerminal) {
     return (
       <CommentMenuItem
@@ -252,6 +259,7 @@ function CommentThreadStatusItems(
       />
     );
   }
+
   return (
     <>
       <CommentMenuItem
@@ -291,6 +299,7 @@ function CommentDeleteItem(
   }>,
 ): ReactElement | null {
   const { isFirst, canDeleteThread, canDelete, setConfirm } = props;
+
   if (isFirst && canDeleteThread) {
     return (
       <CommentMenuItem
@@ -301,6 +310,7 @@ function CommentDeleteItem(
       />
     );
   }
+
   if (!isFirst && canDelete) {
     return (
       <CommentMenuItem
@@ -311,6 +321,7 @@ function CommentDeleteItem(
       />
     );
   }
+
   return null;
 }
 
@@ -323,6 +334,7 @@ function CommentMenuItem(
   }>,
 ): ReactElement {
   const { icon, label, onClick, danger } = props;
+
   return (
     <button
       type="button"
@@ -344,6 +356,7 @@ function CommentDeleteConfirm(
   }>,
 ): ReactElement {
   const { confirm, onCancel, onConfirm } = props;
+
   return (
     <div className="emr-popover-confirm">
       <p className="emr-popover-confirm-text">

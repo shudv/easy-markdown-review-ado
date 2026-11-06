@@ -30,6 +30,7 @@ export function setMarkdownDark(isDark: boolean): void {
     styleEl.setAttribute("data-emr-markdown-theme", "");
     document.head.appendChild(styleEl);
   }
+
   styleEl.textContent = isDark ? darkCss : lightCss;
   currentDark = isDark;
 }

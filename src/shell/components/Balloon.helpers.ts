@@ -33,6 +33,7 @@ export function balloonClassName(flags: {
   if (flags.resolved) classes.push("is-resolved");
   if (flags.isOrphaned) classes.push("is-orphaned");
   if (flags.general) classes.push("is-general");
+
   return classes.join(" ");
 }
 

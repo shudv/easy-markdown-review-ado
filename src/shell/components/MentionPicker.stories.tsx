@@ -119,9 +119,12 @@ export const People: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe("https://example.com/alex.png");
     await expect(within(canvasElement).getByText("SD")).toBeTruthy();
   },
@@ -165,9 +168,12 @@ export const PeopleWithResolvedPhotos: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe(PHOTO);
   },
 };

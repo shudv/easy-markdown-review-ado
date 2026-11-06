@@ -117,6 +117,7 @@ export function PrTabApp(): ReactElement {
   // transient auth blip (a 401 on the first git call, most common on the legacy
   // {org}.visualstudio.com host) clears on a fresh attempt with a warm token.
   const [bootAttempt, setBootAttempt] = useState(0);
+
   // Set when a boot failure is the token dead-window (see adoAuthToken.ts): the
   // host is serving an ADO-expired token, so only a re-mint (auto at the AAD
   // `exp`, or a host reload) can heal it. Kept distinct from `error` so the UI
@@ -127,6 +128,7 @@ export function PrTabApp(): ReactElement {
     /** An automatic host reload is allowed (see `claimAutoReload`). */
     autoReload: boolean;
   } | null>(null);
+
   // How many auto-retries we've scheduled for the current refreshing spell, so
   // `planSessionRefreshRetry` can bound them before falling back to manual.
   const [refreshAttempt, setRefreshAttempt] = useState(0);
@@ -136,28 +138,34 @@ export function PrTabApp(): ReactElement {
   // The document on screen — encoded into shared links so they open the same
   // file. Seeded from the route (or the first changed file) once known.
   const [activeDocPath, setActiveDocPath] = useState("");
+
   // The compared PR updates as ADO iteration ids, for shared links and the
   // address bar. `undefined` = "All updates" (left out of links).
   const [activeIterationParams, setActiveIterationParams] = useState<
     IterationParams | undefined
   >(undefined);
+
   // Per-file diff data, fetched OFF the critical path (see the effect below).
   // Starts empty so the shell renders Markdown immediately; diff decorations
   // fill in when this resolves.
   const [diffsByFile, setDiffsByFile] = useState<Record<string, DiffRange[]>>(
     {},
   );
+
   const [originalSourcesByFile, setOriginalSourcesByFile] = useState<
     Record<string, string>
   >({});
+
   useEffect(() => {
     void (async () => {
       setError(null);
       setRefreshing(null);
+
       const log = (step: string, extra?: unknown) => {
         // eslint-disable-next-line no-console -- boot step trace in the host DevTools console, for diagnosing PR tab boot problems in a real org
         console.log(`[PrTabApp] ${step}`, extra ?? "");
       };
+
       try {
         log("resolving pr context");
         const bootStartedAt = Date.now();
@@ -180,10 +188,12 @@ export function PrTabApp(): ReactElement {
         setCtx(context);
         log("reading current user");
         setUser(commentAuthorFromUser(SDK.getUser()));
+
         const seed = await readRouteSeed(
           context.changedMdFiles,
           context.reviewIterationStops,
         );
+
         setActiveDocPath(
           seed.selectedPath ??
             (context.changedMdFiles.length > 0
@@ -195,6 +205,7 @@ export function PrTabApp(): ReactElement {
         log("ready");
       } catch (err: unknown) {
         const refresh = await detectSessionRefreshing(err, readHostToken);
+
         if (refresh) {
           console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
           trackUserFacingError({
@@ -213,8 +224,10 @@ export function PrTabApp(): ReactElement {
               Date.now(),
             ),
           });
+
           return;
         }
+
         console.error("[PrTabApp] load failed", err);
         trackUserFacingError({
           error: err,
@@ -237,6 +250,7 @@ export function PrTabApp(): ReactElement {
   // Bounded; once exhausted the user falls back to the manual "Reload page".
   useEffect(() => {
     if (!refreshing) return;
+
     const retryBoot = (): void => {
       markBootAuthWaitEnd();
       setRefreshAttempt((n) => n + 1);
@@ -244,37 +258,47 @@ export function PrTabApp(): ReactElement {
       setError(null);
       setBootAttempt((n) => n + 1);
     };
+
     const offRecovered = adoSession.onRecovered(retryBoot);
+
     // If the automatic reload can't happen (the loop guard can't be recorded,
     // or the host refuses), or it was requested but the page is still here a
     // while later, swap "This only takes a moment" for the manual action.
     const offerManualReload = (): void =>
       setRefreshing((r) => (r?.autoReload ? { ...r, autoReload: false } : r));
+
     let manualId: number | undefined;
+
     const reloadId = refreshing.autoReload
       ? window.setTimeout(() => {
           if (!claimAutoReload(sessionStorageOrUndefined(), Date.now())) {
             offerManualReload();
+
             return;
           }
+
           void adoSession.reloadHost("auto").then((requested) => {
             if (!requested) offerManualReload();
           });
           manualId = window.setTimeout(offerManualReload, AUTO_RELOAD_STALL_MS);
         }, BOOT_AUTO_RELOAD_AFTER_MS)
       : undefined;
+
     const { delayMs, giveUp } = planSessionRefreshRetry({
       recoverAtMs: refreshing.recoverAtMs,
       nowMs: Date.now(),
       attempt: refreshAttempt + 1,
     });
+
     if (giveUp) {
       // Auto-recovery exhausted — leave the manual "Reload page" action. Fire
       // the (idempotent) boot event so this terminal state is still measured
       // rather than looking like an infinite hang.
       markAppReady("error");
     }
+
     const id = giveUp ? undefined : window.setTimeout(retryBoot, delayMs);
+
     return () => {
       offRecovered();
       window.clearTimeout(reloadId);
@@ -294,12 +318,15 @@ export function PrTabApp(): ReactElement {
     // fails the WHOLE request if any param path is missing at a version, which
     // would blank every file's diff (see diffableFilePaths).
     const diffPaths = diffableFilePaths(ctx.changedMdFiles);
+
     if (
       !hasText(baseCommit) ||
       !hasText(targetCommit) ||
       diffPaths.length === 0
-    )
+    ) {
       return;
+    }
+
     let cancelled = false;
     void fetchFileDiffs(
       { repositoryId, project: projectId, baseCommit, targetCommit },
@@ -317,6 +344,7 @@ export function PrTabApp(): ReactElement {
           err,
         );
       });
+
     return () => {
       cancelled = true;
     };
@@ -335,6 +363,7 @@ export function PrTabApp(): ReactElement {
   const loadFileSource = useCallback(
     async (path: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
+
       return fetchFileContent(ctx, path);
     },
     [ctx],
@@ -362,9 +391,11 @@ export function PrTabApp(): ReactElement {
   // then hidden rather than copying a dead iframe URL.
   const buildDeepLink = useMemo<DeepLinkBuilder | null>(() => {
     const ext = readExtensionIdentity();
+
     const base = ext
       ? buildPrTabDocUrl(prWebUrl, ext, activeDocPath, activeIterationParams)
       : undefined;
+
     return hasText(base) ? (target) => withDeepLinkTarget(base, target) : null;
   }, [prWebUrl, activeDocPath, activeIterationParams]);
 
@@ -375,14 +406,18 @@ export function PrTabApp(): ReactElement {
     const prRefs:
       | { lastMergeSourceCommit?: { commitId?: string } }
       | undefined = ctx?.pr;
+
     const commitId =
       ctx?.targetCommit ?? prRefs?.lastMergeSourceCommit?.commitId;
+
     if (!ctx || !hasText(commitId)) return undefined;
+
     const repo = {
       id: ctx.repositoryId,
       name: ctx.repositoryName,
       defaultBranch: "",
     };
+
     return (folderPath, atCommitId) =>
       listSubpageFolder(
         repo,
@@ -400,6 +435,7 @@ export function PrTabApp(): ReactElement {
       if (!ctx) throw new Error("PR context not loaded yet");
       const params = iterationParamsForRange(range, ctx.reviewIterationStops);
       if (!params) return {};
+
       return fetchRangeChangeTypes(ctx, params);
     },
     [ctx],
@@ -408,6 +444,7 @@ export function PrTabApp(): ReactElement {
   const loadFileSourceAt = useCallback(
     async (path: string, commitId: string): Promise<string> => {
       if (!ctx) throw new Error("PR context not loaded yet");
+
       return fetchFileContentAtCommit(ctx, path, commitId);
     },
     [ctx],
@@ -420,8 +457,10 @@ export function PrTabApp(): ReactElement {
       atCommitId?: string,
     ): Promise<string | undefined> => {
       if (!ctx) return undefined;
+
       const sourceCommit =
         atCommitId ?? contentCommitForPath(ctx, documentPath);
+
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: ctx.repositoryId,
         project: ctx.projectId,
@@ -434,6 +473,7 @@ export function PrTabApp(): ReactElement {
 
   const commentApi = useMemo(() => {
     if (!ctx) return undefined;
+
     return new AdoCommentApi({
       repositoryId: ctx.repositoryId,
       pullRequestId: ctx.pullRequestId,
@@ -446,6 +486,7 @@ export function PrTabApp(): ReactElement {
   const fetchRemoteThreads = useCallback(
     async (_signal: AbortSignal) => {
       if (!ctx) return [];
+
       return loadAdoThreads(ctx.repositoryId, ctx.pullRequestId, ctx.projectId);
     },
     [ctx],
@@ -477,6 +518,7 @@ export function PrTabApp(): ReactElement {
   // payload.
   const prTitle = (ctx.pr.title as string | undefined) ?? "(untitled PR)";
   const createdBy = ctx.pr.createdBy as { displayName?: string } | undefined;
+
   const pr: PrInfo = {
     prId: ctx.pullRequestId,
     title: prTitle,
@@ -540,6 +582,7 @@ export function PrTabApp(): ReactElement {
               const params = range
                 ? iterationParamsForRange(range, ctx.reviewIterationStops)
                 : undefined;
+
               setActiveIterationParams(params);
               void writeRouteParams({
                 [ITERATION_LINK_PARAM]: params ? String(params.iteration) : "",

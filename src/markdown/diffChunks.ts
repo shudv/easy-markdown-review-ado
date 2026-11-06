@@ -33,6 +33,7 @@ type LineRun = "table" | "quote" | "other";
 function lineRun(line: string): LineRun {
   if (TABLE_ROW.test(line)) return "table";
   if (QUOTE_LINE.test(line)) return "quote";
+
   return "other";
 }
 
@@ -81,10 +82,12 @@ function makeChunk(
   const text = lines.join("\n");
   const words = new Map<string, number>();
   let wordCount = 0;
+
   for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
     words.set(word, (words.get(word) ?? 0) + 1);
     wordCount++;
   }
+
   return {
     start,
     end: start + lines.length - 1,
@@ -105,6 +108,7 @@ function blockKind(line: string): string {
   if (TABLE_ROW.test(line)) return "table";
   if (QUOTE_LINE.test(line)) return "quote";
   if (FENCE_OPEN.test(line)) return "fence";
+
   return "text";
 }
 
@@ -134,27 +138,35 @@ export function chunkMarkdownLines(
         }),
       );
     }
+
     current = null;
   };
 
   lines.forEach((line, index) => {
     const lineNumber = firstLine + index;
+
     if (fence !== null) {
       current!.push(line);
+
       if (line.trim().startsWith(fence)) {
         fence = null;
         close();
       }
+
       return;
     }
+
     if (line.trim() === "") {
       close();
       chunks.push(makeChunk(lineNumber, [line]));
       afterHeading = false;
+
       return;
     }
+
     const fenceOpen = FENCE_OPEN.exec(line);
     const run = lineRun(line);
+
     if (
       current === null ||
       afterHeading ||
@@ -168,11 +180,13 @@ export function chunkMarkdownLines(
       currentStart = lineNumber;
       currentRun = run;
     }
+
     current!.push(line);
     if (fenceOpen) fence = fenceOpen[1]!;
     afterHeading = HEADING.test(line);
   });
   close();
+
   return chunks;
 }
 
@@ -180,13 +194,17 @@ export function chunkMarkdownLines(
 export function chunkSimilarity(a: DiffChunk, b: DiffChunk): number {
   if (a.text === b.text) return 1;
   if (a.blank || b.blank) return 0;
+
   if (a.wordCount === 0 || b.wordCount === 0) {
     return a.wordCount === b.wordCount ? WORDLESS_SIMILARITY : 0;
   }
+
   let shared = 0;
+
   for (const [word, count] of a.words) {
     shared += Math.min(count, b.words.get(word) ?? 0);
   }
+
   return (2 * shared) / (a.wordCount + b.wordCount);
 }
 
@@ -197,7 +215,9 @@ function pairWeight(a: DiffChunk, b: DiffChunk): number {
     // rewritten region into many small removed/added runs.
     return a.blank ? -1 : EQUAL_WEIGHT;
   }
+
   const similarity = chunkSimilarity(a, b);
+
   return similarity >= PAIR_MIN_SIMILARITY ? similarity : -1;
 }
 
@@ -209,6 +229,7 @@ function alignmentScores(
 ): Float64Array {
   const width = cols + 1;
   const score = new Float64Array((rows + 1) * width);
+
   for (let i = 1; i <= rows; i++) {
     for (let j = 1; j <= cols; j++) {
       const w = weight[(i - 1) * cols + (j - 1)]!;
@@ -220,6 +241,7 @@ function alignmentScores(
       );
     }
   }
+
   return score;
 }
 
@@ -237,6 +259,7 @@ function takesDiagonal(grid: AlignmentGrid, i: number, j: number): boolean {
   if (i === 0 || j === 0) return false;
   const { cols, width, weight, score } = grid;
   const w = weight[(i - 1) * cols + (j - 1)]!;
+
   return (
     w > 0 && score[i * width + j] === score[(i - 1) * width + (j - 1)]! + w
   );
@@ -248,6 +271,7 @@ function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
   const ops: AlignmentOp[] = [];
   let i = before.length;
   let j = after.length;
+
   while (i > 0 || j > 0) {
     if (takesDiagonal(grid, i, j)) {
       const a = before[i - 1]!;
@@ -261,6 +285,7 @@ function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
       j--;
       continue;
     }
+
     if (
       j > 0 &&
       (i === 0 || score[i * width + (j - 1)] === score[i * width + j])
@@ -272,6 +297,7 @@ function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
       i--;
     }
   }
+
   return ops.reverse();
 }
 
@@ -287,12 +313,15 @@ export function alignChunks(
   const rows = before.length;
   const cols = after.length;
   const weight = new Float64Array(rows * cols);
+
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
       weight[i * cols + j] = pairWeight(before[i]!, after[j]!);
     }
   }
+
   const score = alignmentScores(weight, rows, cols);
+
   return backtrackAlignment({
     before,
     after,
@@ -309,6 +338,7 @@ export function trimBlankChunks(run: readonly DiffChunk[]): DiffChunk[] {
   let last = run.length - 1;
   while (first <= last && run[first]!.blank) first++;
   while (last >= first && run[last]!.blank) last--;
+
   return run.slice(first, last + 1);
 }
 
@@ -320,12 +350,15 @@ export function clipChunks(
   to: number,
 ): DiffChunk[] {
   const clipped: DiffChunk[] = [];
+
   for (const chunk of chunks) {
     if (chunk.end < from || chunk.start > to) continue;
+
     if (chunk.start >= from && chunk.end <= to) {
       clipped.push(chunk);
       continue;
     }
+
     const start = Math.max(chunk.start, from);
     const end = Math.min(chunk.end, to);
     // A clipped piece keeps its block's kind: a fragment of a code fence that
@@ -338,6 +371,7 @@ export function clipChunks(
       }),
     );
   }
+
   return clipped;
 }
 
@@ -363,8 +397,10 @@ export function rowAlignable(before: DiffChunk, after: DiffChunk): boolean {
   const afterHasHeader = after.start === after.blockStart;
   if (!beforeHasHeader && !afterHasHeader) return true;
   if (!beforeHasHeader || !afterHasHeader) return false;
+
   const header = (chunk: DiffChunk) =>
     chunk.text.split("\n").slice(0, 2).join("\n");
+
   return header(before) === header(after);
 }
 
@@ -374,6 +410,7 @@ export function expandTablePairs(ops: readonly AlignmentOp[]): AlignmentOp[] {
     if (op.type !== "pair" || !rowAlignable(op.before, op.after)) return [op];
     const beforeRows = tableRows(op.before);
     const afterRows = tableRows(op.after);
+
     return beforeRows.length * afterRows.length > MAX_ALIGNMENT_CELLS
       ? [op]
       : alignChunks(beforeRows, afterRows);

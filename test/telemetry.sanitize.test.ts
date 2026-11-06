@@ -18,6 +18,7 @@ describe("sanitizeProperties", () => {
       succeeded: true,
       count: 7,
     });
+
     expect(clean).toEqual({
       projectId: "abc-123",
       anchorKind: "text-quote",
@@ -36,6 +37,7 @@ describe("sanitizeProperties", () => {
       commentBody: "looks good",
       searchQuery: "design",
     });
+
     expect(clean).toEqual({});
     expect([...dropped].sort()).toEqual(
       [
@@ -55,6 +57,7 @@ describe("sanitizeProperties", () => {
       ref: "refs/heads/main", // path-like
       note: "two words", // whitespace
     });
+
     expect(clean).toEqual({});
     expect([...dropped].sort()).toEqual(["kind", "note", "ref"].sort());
   });
@@ -73,6 +76,7 @@ describe("sanitizeProperties", () => {
       "weird key": "v",
       "1leading": "v",
     });
+
     expect(clean).toEqual({});
     // null/undefined are skipped (not 'dropped'); invalid keys are dropped.
     expect([...dropped].sort()).toEqual(["1leading", "weird key"].sort());
@@ -89,6 +93,7 @@ describe("sanitizeProperties — domain-like values", () => {
       host: "example.com",
       enumish: "text-quote",
     });
+
     expect(clean).toEqual({ enumish: "text-quote" });
     expect(dropped).toEqual(["host"]);
   });

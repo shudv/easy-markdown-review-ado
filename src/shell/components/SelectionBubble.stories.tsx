@@ -48,9 +48,11 @@ export const CopiesLink: Story = {
     ).not.toBeNull();
     await userEvent.click(link);
     await userEvent.click(link);
+
     const copied = await waitFor(() =>
       canvas.getByRole("button", { name: "Link copied" }),
     );
+
     await expect(copied.classList.contains("is-copied")).toBe(true);
     await expect(copied.textContent).toBe("Link copied");
     await expect(canvas.getByRole("status").textContent).toBe("Link copied");
@@ -72,9 +74,11 @@ export const CopyLinkFails: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Copy link to selection" }),
     );
+
     const failed = await waitFor(() =>
       canvas.getByRole("button", { name: "Couldn't copy link" }),
     );
+
     await expect(failed.classList.contains("is-failed")).toBe(true);
     await waitFor(() => expect(args.onCopyLinkSettled).toHaveBeenCalled(), {
       timeout: 4000,

@@ -51,6 +51,7 @@ const THREAD_COUNTS: Record<string, number> = { "docs/api/guide.md": 2 };
  *  id, a heading outside a section, and a couple of collapsed sections. */
 function Article(): ReactElement {
   const tall: CSSProperties = { minHeight: 260 };
+
   return (
     <>
       <section className="emr-section" data-section-id="intro" style={tall}>
@@ -113,9 +114,11 @@ interface HarnessProps {
 function Harness(props: HarnessProps): ReactElement {
   const scrollRef = useRef<HTMLElement | null>(null);
   const articleWrapRef = useRef<HTMLDivElement | null>(null);
+
   const [selectedPath, setSelectedPath] = useState(
     props.initialSelected ?? SELECTED,
   );
+
   // The real app bumps `version` once the article content has loaded; do the
   // same so DocNav re-reads the headings after the article is in the DOM.
   const [version, setVersion] = useState(0);
@@ -176,6 +179,7 @@ function LazyHostHarness(props: {
   const scrollRef = useRef<HTMLElement | null>(null);
   const articleWrapRef = useRef<HTMLDivElement | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
+
   const [unloadedFolders, setUnloadedFolders] = useState<string[]>(
     props.initialUnloaded,
   );
@@ -191,6 +195,7 @@ function LazyHostHarness(props: {
         ...curr.filter((f) => f !== path),
         ...yielded.folders,
       ]);
+
       return yielded;
     },
     [props],
@@ -280,9 +285,11 @@ export const TreeAndHeadings: Story = {
     const fileName = canvasElement.querySelector(
       ".emr-docnav-file-name",
     ) as HTMLElement;
+
     const headingRow = canvasElement.querySelector(
       ".emr-docnav-item.lvl-2",
     ) as HTMLElement;
+
     expect(fileName).toBeTruthy();
     expect(headingRow).toBeTruthy();
     const fileStyle = getComputedStyle(fileName);
@@ -316,6 +323,7 @@ export const FewFiles: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     // Search is hidden, but the "Documents" title still shows (>1 file).
     await expect(
       nav.queryByRole("button", { name: "Search documents" }),
@@ -340,6 +348,7 @@ export const SingleFile: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     await waitFor(() => expect(nav.getByText(/README\.md/)).toBeTruthy());
     await expect(nav.getByText("Documents")).toBeTruthy();
     await expect(
@@ -366,6 +375,7 @@ export const ScrollSpy: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     await waitFor(() => expect(nav.getByText("Setup")).toBeTruthy());
     const scroller = canvasElement.querySelector("main") as HTMLElement;
 
@@ -440,6 +450,7 @@ export const NoChangeIndicators: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     await waitFor(() => expect(nav.getByText(/guide\.md/)).toBeTruthy());
 
     // No change-type glyphs anywhere in the tree.
@@ -447,6 +458,7 @@ export const NoChangeIndicators: Story = {
     // `.emr-docnav-file-icon` — isn't counted.)
     const changeGlyphSelector =
       ".emr-docnav-file-icon.is-added, .emr-docnav-file-icon.is-modified, .emr-docnav-file-icon.is-renamed, .emr-docnav-file-icon.is-deleted";
+
     expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
 
     // Search results also omit the change glyph.
@@ -481,10 +493,12 @@ export const RangeChangesMarkTouchedFiles: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     const rowOf = (name: RegExp) =>
       nav
         .getByRole("button", { name })
         .closest<HTMLElement>(".emr-docnav-item")!;
+
     await waitFor(() => expect(nav.getByText(/internal\.md/)).toBeTruthy());
 
     // Touched in the selection: normal row, the change WITHIN the updates.
@@ -580,6 +594,7 @@ export const RemoteUnavailable: Story = {
   args: {
     onSearchFiles: (query: string) => {
       const reason = REASONS[Math.min(query.length - 2, REASONS.length - 1)]!;
+
       return Promise.resolve({
         kind: "unavailable",
         reason,
@@ -592,6 +607,7 @@ export const RemoteUnavailable: Story = {
       canvas.getByRole("button", { name: "Search documents" }),
     );
     const input = canvas.getByRole("searchbox") as HTMLInputElement;
+
     const expected = [
       /Code Search isn't installed/,
       /Couldn't authenticate/,
@@ -600,6 +616,7 @@ export const RemoteUnavailable: Story = {
       /Code Search isn't available here/,
       /unavailable right now/,
     ];
+
     for (let i = 0; i < REASONS.length; i += 1) {
       await userEvent.clear(input);
       await userEvent.type(input, "q".repeat(i + 2));
@@ -617,6 +634,7 @@ export const CollapsedAncestorReexpand: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     await waitFor(() => expect(nav.getByText("guide.md")).toBeTruthy());
     // Collapse the docs/api folder.
     await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
@@ -842,15 +860,19 @@ export const WikiPages: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+
     const names = () =>
       Array.from(canvasElement.querySelectorAll(".emr-docnav-file-name")).map(
         (el) => el.textContent,
       );
+
     // No separate `Guides.md` file row: it's the folder's page.
     await expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]);
+
     const pageLabel = canvasElement.querySelector<HTMLElement>(
       ".emr-docnav-page-label",
     )!;
+
     await expect(pageLabel.title).toBe("Guides.md");
     await expect(pageLabel.textContent).toContain("Guides.md");
     await expect(within(pageLabel).getByText("2")).toBeTruthy();
@@ -1010,6 +1032,7 @@ export const ReselectWithoutScroller: Story = {
     const nav = within(
       canvasElement.querySelector(".emr-docnav") as HTMLElement,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /guide\.md/ }));
     await expect(args.onSelectPath).not.toHaveBeenCalled();
   },
@@ -1051,10 +1074,12 @@ export const OpenFromSearchWhileFolderLoads: Story = {
       canvas.getByRole("button", { name: "Search documents" }),
     );
     await userEvent.type(canvas.getByRole("searchbox"), "deep");
+
     const result = await waitFor(
       () => canvas.getByRole("button", { name: /deep\.md/ }),
       { timeout: 3000 },
     );
+
     await userEvent.click(result);
     await waitFor(() =>
       expect(args.onSelectPath).toHaveBeenCalledWith("lazy/deep.md"),

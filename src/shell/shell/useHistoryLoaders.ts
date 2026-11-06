@@ -55,22 +55,27 @@ interface HistoryLoadersOptions {
 export function useHistoryLoaders(opts: HistoryLoadersOptions) {
   const { selectedPath, nativeIterationMode, viewingHistorical, activeStop } =
     opts;
+
   // Historical content/threads caches (keyed by `path\u0000commit` and
   // `path\u0000prId` respectively).
   const [historicalHtmlByKey, setHistoricalHtmlByKey] = useState<
     Record<string, string>
   >({});
+
   const [historicalSourceByKey, setHistoricalSourceByKey] = useState<
     Record<string, string>
   >({});
+
   const [historicalErrorByKey, setHistoricalErrorByKey] = useState<
     Record<string, string>
   >({});
+
   // PR-update endpoints where the file doesn't exist (added later / already
   // deleted). Native-iteration mode only: a normal state, not an error.
   const [historicalAbsentByKey, setHistoricalAbsentByKey] = useState<
     Record<string, true>
   >({});
+
   // Keyed by `path\u0000prId` (not PR id alone): one PR can change several
   // documents and `loadThreadsForPr` returns threads filtered to a path, so a
   // PR-id-only key would leak one document's threads onto another at the same PR.
@@ -84,10 +89,12 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
   // Load source + rendered HTML for every historical endpoint needed by the
   // current selection. A range may need two commits; single selection needs one.
   const keys = historicalContentKeys(opts);
+
   const historicalLoadTargets = useHistoricalLoadTargets(
     keys,
     activeStop.commitId,
   );
+
   useHistoricalContentLoad({
     loadFileSourceAt: opts.loadFileSourceAt,
     selectedPath,
@@ -110,6 +117,7 @@ export function useHistoryLoaders(opts: HistoryLoadersOptions) {
   // Load the active historical stop PR's threads (read-only).
   const activeHistoricalPrId =
     viewingHistorical && !nativeIterationMode ? activeStop.prId : null;
+
   useHistoricalThreadsLoad({
     activeHistoricalPrId,
     loadThreadsForPr: opts.loadThreadsForPr,
@@ -138,6 +146,7 @@ function useStepperResets(opts: HistoryLoadersOptions): void {
     setCompletedHistoryStopIndex,
     setIterationRange,
   } = opts;
+
   // ---- comment-history stepper effects ----
   // Always start a freshly-opened document at its live "Current" head: a
   // Documents-hub history is per document.
@@ -164,6 +173,7 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
     loadDocHistory,
     setHistoryByPath,
   } = opts;
+
   // Load the selected document's review history the first time it's opened.
   const loadedHistoryPathsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -188,6 +198,7 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
           impact: "degraded",
         });
       });
+
     return () => {
       cancelled = true;
     };
@@ -207,14 +218,18 @@ function useHistoricalLoadTargets(
   activeCommitId: string | null | undefined,
 ) {
   const { historicalContentKey, baselineCommitId, baselineContentKey } = keys;
+
   return useMemo(() => {
     const targets = new Map<string, string>();
+
     if (isNonEmpty(historicalContentKey) && isNonEmpty(activeCommitId)) {
       targets.set(historicalContentKey, activeCommitId);
     }
+
     if (isNonEmpty(baselineContentKey) && isNonEmpty(baselineCommitId)) {
       targets.set(baselineContentKey, baselineCommitId);
     }
+
     return [...targets].map(([key, commitId]) => ({ key, commitId }));
   }, [
     historicalContentKey,
@@ -249,21 +264,25 @@ function useHistoricalContentLoad(args: {
 }): void {
   const { loadFileSourceAt, selectedPath, historicalLoadTargets } = args;
   const { nativeIterationMode } = args;
+
   const {
     historicalErrorByKey,
     historicalAbsentByKey,
     historicalHtmlByKey,
     historicalSourceByKey,
   } = args.caches;
+
   const {
     setHistoricalHtmlByKey,
     setHistoricalSourceByKey,
     setHistoricalErrorByKey,
     setHistoricalAbsentByKey,
   } = args.setters;
+
   useEffect(() => {
     if (!loadFileSourceAt || historicalLoadTargets.length === 0) return;
     let cancelled = false;
+
     for (const target of historicalLoadTargets) {
       if (
         historicalErrorByKey[target.key] !== undefined ||
@@ -273,6 +292,7 @@ function useHistoricalContentLoad(args: {
       ) {
         continue;
       }
+
       loadHistoricalTarget({
         load: loadFileSourceAt(selectedPath, target.commitId),
         key: target.key,
@@ -286,6 +306,7 @@ function useHistoricalContentLoad(args: {
         },
       });
     }
+
     return () => {
       cancelled = true;
     };
@@ -330,6 +351,7 @@ function loadHistoricalTarget(args: {
     })
     .catch((err: unknown) => {
       if (isCancelled()) return;
+
       // Comparing PR updates: the file legitimately may not exist at an
       // endpoint (the PR adds it later, or deleted it already).
       if (nativeIterationMode && isItemNotFoundError(err)) {
@@ -337,8 +359,10 @@ function loadHistoricalTarget(args: {
           ...prev,
           [key]: true,
         }));
+
         return;
       }
+
       console.warn("[Shell] loadFileSourceAt failed:", err);
       trackUserFacingError({
         error: err,
@@ -370,6 +394,7 @@ function useHistoricalThreadsLoad(args: {
     historicalThreadsByKey,
     setHistoricalThreadsByKey,
   } = args;
+
   useEffect(() => {
     if (activeHistoricalPrId == null || !loadThreadsForPr) return;
     const key = `${selectedPath}\u0000${activeHistoricalPrId}`;
@@ -392,6 +417,7 @@ function useHistoricalThreadsLoad(args: {
           impact: "degraded",
         });
       });
+
     return () => {
       cancelled = true;
     };

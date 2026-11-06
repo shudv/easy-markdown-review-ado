@@ -33,6 +33,7 @@ async function firstRenderedThreadId(frame: FrameLocator): Promise<string> {
   await highlight.waitFor({ state: "visible", timeout: 30_000 });
   const tid = await highlight.getAttribute("data-thread-id");
   expect(tid, "rendered highlight must carry a thread id").toBeTruthy();
+
   return tid!;
 }
 
@@ -59,10 +60,12 @@ test.describe("Comment deep-linking (real ADO host)", () => {
     const highlight = frame
       .locator(`.emr-highlight[data-thread-id="${tid}"]`)
       .first();
+
     await expect
       .poll(
         async () => {
           await highlight.click();
+
           return frame
             .locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`)
             .count();

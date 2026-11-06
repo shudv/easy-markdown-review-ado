@@ -54,10 +54,12 @@ function unquote(value: string): string {
   if (value.length >= 2) {
     const first = value[0];
     const last = value[value.length - 1];
+
     if ((first === '"' || first === "'") && first === last) {
       return value.slice(1, -1);
     }
   }
+
   return value;
 }
 
@@ -74,6 +76,7 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
   let current: FrontmatterEntry | null = null;
 
   const lines = raw.split(/\r?\n/);
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     // `raw` is the content BETWEEN the fences, so its first line is source
@@ -89,6 +92,7 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
     const listItem = /^[ \t]+-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
       line,
     );
+
     if (listItem && current) {
       appendListItem(current, listItem[1]!, sourceLine);
       continue;
@@ -97,6 +101,7 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
     const kv = /^([^:\s][^:]*):[ \t]*((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
       line,
     );
+
     if (!kv) continue;
     const key = kv[1]!.trim();
     const rawValue = kv[2]!.trim();
@@ -107,6 +112,7 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
       startLine: sourceLine,
       endLine: sourceLine,
     };
+
     entries.push(entry);
     // Bare key — a block list (or empty value) may follow on later lines.
     current = rawValue === "" ? entry : null;
@@ -122,6 +128,7 @@ function appendListItem(
   sourceLine: number,
 ): void {
   const item = unquote(itemText.trim());
+
   if (item !== "") {
     entry.values.push(item);
     entry.endLine = sourceLine;
@@ -131,9 +138,11 @@ function appendListItem(
 /** Values of a `key: value` line: none, an inline list, or one scalar. */
 function parseEntryValues(rawValue: string): string[] {
   if (rawValue === "") return [];
+
   if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
     return parseInlineList(rawValue);
   }
+
   return [unquote(rawValue)];
 }
 
@@ -157,6 +166,7 @@ export function frontmatterValuesForKey(
   key: string,
 ): string[] | null {
   const entry = parseFrontmatter(source).find((e) => e.key === key);
+
   return entry ? entry.values : null;
 }
 
@@ -169,12 +179,14 @@ export function frontmatterValuesForKey(
  */
 export function parseFrontmatterListItems(fragment: string): string[] {
   const items: string[] = [];
+
   for (const line of fragment.split(/\r?\n/)) {
     const m = /^[ \t]*-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
     if (!m) continue;
     const value = unquote(m[1]!.trim());
     if (value !== "") items.push(value);
   }
+
   return items;
 }
 
@@ -199,6 +211,7 @@ export function extractFrontmatter(src: string): {
   // The block runs from line 1 through its closing fence. Drop a trailing
   // newline before counting so the EOF-close and newline-close cases agree.
   const endLine = consumed.replace(/\r?\n$/, "").split(/\r?\n/).length;
+
   return {
     body,
     entries: parseFrontmatter(match[1]!),
@@ -292,9 +305,11 @@ export function renderFrontmatterHtml(
   sourceRange?: FrontmatterSourceRange | null,
 ): string {
   if (entries.length === 0) return "";
+
   const root: Root = {
     type: "root",
     children: [frontmatterToHast(entries, sourceRange)],
   };
+
   return frontmatterStringifier.stringify(root);
 }

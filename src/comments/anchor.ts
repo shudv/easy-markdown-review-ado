@@ -26,22 +26,28 @@ interface TextRun {
 function flattenText(root: Element): { text: string; runs: TextRun[] } {
   const runs: TextRun[] = [];
   let acc = "";
+
   // The root's own document, so an inert (DOMParser) document works too.
   const walker = root.ownerDocument.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT,
     null,
   );
+
   let n: Node | null = walker.nextNode();
+
   while (n) {
     const text = (n as Text).data;
+
     if (text.length > 0) {
       const start = acc.length;
       runs.push({ node: n as Text, start, end: start + text.length });
       acc += text;
     }
+
     n = walker.nextNode();
   }
+
   return { text: acc, runs };
 }
 
@@ -54,6 +60,7 @@ function locateOffset(
   // the first run ending at/after `offset` always contains it. Linear is fine
   // for documents of our size.
   const run = runs.find((candidate) => offset <= candidate.end)!;
+
   return { run, nodeOffset: offset - run.start };
 }
 
@@ -73,9 +80,11 @@ export function resolveAnchor(
     const quoted = resolveTextQuote(root, anchor);
     if (quoted) return quoted;
   }
+
   if (typeof anchor.line === "number" && anchor.line > 0) {
     return resolveLineAnchor(root, anchor.line, anchor.endLine ?? anchor.line);
   }
+
   return null;
 }
 
@@ -94,6 +103,7 @@ function resolveTextQuote(
   const range = document.createRange();
   range.setStart(start.run.node, start.nodeOffset);
   range.setEnd(end.run.node, end.nodeOffset);
+
   return range;
 }
 
@@ -126,10 +136,12 @@ function findQuoteStart(
   quote: Pick<TextQuoteAnchor, "exact" | "prefix" | "suffix">,
 ): number {
   const composite = quote.prefix + quote.exact + quote.suffix;
+
   if (composite.length > quote.exact.length) {
     const cIdx = text.indexOf(composite);
     if (cIdx >= 0) return cIdx + quote.prefix.length;
   }
+
   return bestScoredOccurrence(text, quote);
 }
 
@@ -137,12 +149,14 @@ function findQuoteStart(
 function occurrencesOf(text: string, needle: string): number[] {
   const candidates: number[] = [];
   let from = 0;
+
   while (from <= text.length) {
     const idx = text.indexOf(needle, from);
     if (idx < 0) break;
     candidates.push(idx);
     from = idx + 1;
   }
+
   return candidates;
 }
 
@@ -159,19 +173,24 @@ function bestScoredOccurrence(
   const { exact, prefix, suffix } = quote;
   let best = -1;
   let bestScore = -1;
+
   for (const c of occurrencesOf(text, exact)) {
     const preActual = text.slice(Math.max(0, c - prefix.length), c);
+
     const sufActual = text.slice(
       c + exact.length,
       c + exact.length + suffix.length,
     );
+
     const score =
       commonSuffixLen(preActual, prefix) + commonPrefixLen(sufActual, suffix);
+
     if (score > bestScore) {
       bestScore = score;
       best = c;
     }
   }
+
   return best;
 }
 
@@ -190,6 +209,7 @@ function sourceLinesOf(
   const line = sourceLineFromNode(overlapping[0]!.node);
   if (typeof line !== "number") return {};
   const endLine = sourceLineFromNode(overlapping[overlapping.length - 1]!.node);
+
   return {
     line,
     endLine: typeof endLine === "number" ? Math.max(line, endLine) : line,
@@ -212,6 +232,7 @@ export function relocateAnchor(
   const doc = new DOMParser().parseFromString(html, "text/html");
   const match = matchTextQuote(doc.body, anchor);
   if (!match) return null;
+
   return {
     exact: anchor.exact,
     prefix: anchor.prefix,
@@ -223,6 +244,7 @@ export function relocateAnchor(
 /** True when generated diagram/equation internals cannot hold durable anchors. */
 export function isWithinGeneratedContent(node: Node): boolean {
   const el = node instanceof Element ? node : node.parentElement;
+
   // `.emr-math` covers the pre-hydration and load-failure source fallback, not
   // just KaTeX output — that text is replaced once hydration succeeds, so an
   // anchor placed on it would orphan. Mirrors `.emr-mermaid`, which wraps its
@@ -251,16 +273,19 @@ export function captureAnchorFromSelection(
   if (!raw.trim()) return null;
   // Compute flattened-text offsets for start/end of the selection.
   const { text, runs } = flattenText(root);
+
   const rawStart = boundaryOffsetToFlat(
     runs,
     range.startContainer,
     range.startOffset,
   );
+
   const rawEnd = boundaryOffsetToFlat(
     runs,
     range.endContainer,
     range.endOffset,
   );
+
   // An empty Text node has no run, so a boundary inside one maps to -1.
   if (rawStart < 0 || rawEnd < rawStart) return null;
 
@@ -283,6 +308,7 @@ export function captureAnchorFromSelection(
     Math.max(0, startOffset - CONTEXT_LEN),
     startOffset,
   );
+
   const suffix = text.slice(
     endOffset,
     Math.min(text.length, endOffset + CONTEXT_LEN),
@@ -313,14 +339,18 @@ export function captureAnchorFromSelection(
  */
 function sourceLineFromNode(node: Node): number | undefined {
   let el: Element | null = node.parentElement;
+
   while (el) {
     const raw = el.getAttribute("data-source-line");
+
     if (raw != null) {
       const n = Number.parseInt(raw, 10);
       if (Number.isFinite(n)) return n;
     }
+
     el = el.parentElement;
   }
+
   return undefined;
 }
 
@@ -338,6 +368,7 @@ export function withSourceLocation(
   const start = offsetToLineColumn(source, span.start);
   // `span.end` is exclusive; endColumn is inclusive.
   const end = offsetToLineColumn(source, Math.max(span.start, span.end - 1));
+
   return {
     ...anchor,
     line: start.line,
@@ -364,19 +395,24 @@ function normalizeSourceForMatching(src: string): {
 } {
   let normalized = "";
   const map: number[] = [];
+
   for (let i = 0; i < src.length; ) {
     const ch = src[i]!;
+
     if (ch === "\r") {
       normalized += "\n";
       map.push(i);
       i += i + 1 < src.length && src[i + 1] === "\n" ? 2 : 1;
       continue;
     }
+
     normalized += ch;
     map.push(i);
     i += 1;
   }
+
   map.push(src.length);
+
   return { normalized, map };
 }
 
@@ -401,11 +437,13 @@ function findTextQuoteOffsets(
 ): TextSpan | null {
   const { normalized, map } = normalizeSourceForMatching(text);
   const exact = normalizeNewlines(anchor.exact);
+
   const exactStart = findQuoteStart(normalized, {
     exact,
     prefix: normalizeNewlines(anchor.prefix),
     suffix: normalizeNewlines(anchor.suffix),
   });
+
   if (exactStart < 0) return null;
 
   // Map normalized offsets back to the original source.
@@ -418,19 +456,25 @@ function offsetToLineColumn(
   offset: number,
 ): { line: number; column: number } {
   const lineStarts = [0];
+
   for (let i = 0; i < text.length; i++) {
     if (text[i] === "\n") lineStarts.push(i + 1);
   }
+
   let lineIdx = 0;
+
   for (let i = 0; i < lineStarts.length; i++) {
     const start = lineStarts[i]!;
     const next = i + 1 < lineStarts.length ? lineStarts[i + 1]! : Infinity;
+
     if (offset >= start && offset < next) {
       lineIdx = i;
       break;
     }
   }
+
   const lineStart = lineStarts[lineIdx]!;
+
   return { line: lineIdx + 1, column: offset - lineStart + 1 };
 }
 
@@ -443,6 +487,7 @@ function boundaryOffsetToFlat(
     for (const run of runs) {
       if (run.node === node) return run.start + offsetInNode;
     }
+
     // Empty Text nodes are skipped by flattenText, so they have no run.
     return -1;
   }
@@ -455,11 +500,14 @@ function boundaryOffsetToFlat(
     const next = runs.find((run) => child.contains(run.node));
     if (next) return next.start;
   }
+
   for (let index = offsetInNode - 1; index >= 0; index--) {
     const child = node.childNodes[index]!;
+
     const previous = [...runs]
       .reverse()
       .find((run) => child.contains(run.node));
+
     if (previous) return previous.end;
   }
 
@@ -469,6 +517,7 @@ function boundaryOffsetToFlat(
   // run, so the scans above always succeed by the time the lift reaches root.
   const parent = node.parentNode!;
   const index = Array.prototype.indexOf.call(parent.childNodes, node) as number;
+
   return boundaryOffsetToFlat(
     runs,
     parent,
@@ -480,6 +529,7 @@ function commonPrefixLen(a: string, b: string): number {
   const n = Math.min(a.length, b.length);
   let i = 0;
   while (i < n && a[i] === b[i]) i++;
+
   return i;
 }
 
@@ -487,6 +537,7 @@ function commonSuffixLen(a: string, b: string): number {
   const n = Math.min(a.length, b.length);
   let i = 0;
   while (i < n && a[a.length - 1 - i] === b[b.length - 1 - i]) i++;
+
   return i;
 }
 
@@ -515,21 +566,25 @@ function resolveLineAnchor(
   const blocks = Array.from(
     root.querySelectorAll<HTMLElement>(LINE_ANCHOR_BLOCK_SELECTOR),
   );
+
   if (blocks.length === 0) return null;
 
   // Most-specific block (largest start) whose [s, e] range contains `line`.
   const mostSpecificAt = (line: number): HTMLElement | null => {
     let best: HTMLElement | null = null;
     let bestStart = -1;
+
     for (const el of blocks) {
       const s = numAttr(el, "data-source-line");
       const e = numAttr(el, "data-source-end-line");
       if (s == null || e == null) continue;
+
       if (s <= line && line <= e && s > bestStart) {
         best = el;
         bestStart = s;
       }
     }
+
     return best;
   };
 
@@ -547,20 +602,25 @@ function resolveLineAnchor(
     ) {
       return rangeAcrossElements(startEl, endEl);
     }
+
     return rangeOverElementText(startEl);
   }
 
   // No block spans the line — anchor to the first block that begins at or
   // after it so the balloon lands near the right place.
   let fallback: HTMLElement | null = null;
+
   for (const el of blocks) {
     const s = numAttr(el, "data-source-line");
+
     if (s != null && s >= startLine) {
       fallback = el;
       break;
     }
   }
+
   const resolved = fallback ?? blocks[blocks.length - 1]!;
+
   return rangeOverElementText(resolved);
 }
 
@@ -568,16 +628,20 @@ function resolveLineAnchor(
 function rangeAcrossElements(startEl: Element, endEl: Element): Range | null {
   const start = firstLastText(startEl);
   const end = firstLastText(endEl);
+
   if (!start || !end) {
     // One side has no text — fall back to selecting both nodes.
     const r = document.createRange();
     r.setStartBefore(startEl);
     r.setEndAfter(endEl);
+
     return r;
   }
+
   const range = document.createRange();
   range.setStart(start.first, 0);
   range.setEnd(end.last, end.last.data.length);
+
   return range;
 }
 
@@ -589,21 +653,26 @@ function firstLastText(el: Element): { first: Text; last: Text } | null {
   let last: Text = first;
   let n: Node | null;
   while ((n = walker.nextNode())) last = n as Text;
+
   return { first, last };
 }
 
 /** Build a Range spanning all the text inside `el` (first → last text node). */
 function rangeOverElementText(el: Element): Range | null {
   const fl = firstLastText(el);
+
   if (!fl) {
     // No text content (e.g. a bare image) — select the element itself so the
     // caller can at least measure its position.
     const r = document.createRange();
     r.selectNode(el);
+
     return r;
   }
+
   const range = document.createRange();
   range.setStart(fl.first, 0);
   range.setEnd(fl.last, fl.last.data.length);
+
   return range;
 }

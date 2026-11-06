@@ -34,6 +34,7 @@ export function hasText(s: string | null | undefined): s is string {
 /** `s` trimmed, or `undefined` when absent or blank. */
 function trimmedText(s: string | null | undefined): string | undefined {
   const trimmed = s?.trim();
+
   return hasText(trimmed) ? trimmed : undefined;
 }
 
@@ -47,17 +48,22 @@ export function reviewIterationStops(
       typeof iteration.id === "number" &&
       hasText(iteration.sourceRefCommit?.commitId),
   );
+
   return valid
     .map((iteration, chronologicalIndex) => {
       const isCurrent = chronologicalIndex === valid.length - 1;
       const lastCommit = iteration.commits?.[iteration.commits.length - 1];
+
       const title =
         trimmedText(iteration.description) ??
         trimmedText(lastCommit?.comment) ??
         `Iteration ${iteration.id}`;
+
       const rawDate = iteration.createdDate;
+
       const dateMs =
         rawDate === undefined ? undefined : new Date(rawDate).getTime();
+
       return {
         commitId: isCurrent ? null : iteration.sourceRefCommit!.commitId!,
         prId,
@@ -75,6 +81,7 @@ export function reviewIterationStops(
 function toPullRequestId(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && /^\d+$/.test(v)) return Number.parseInt(v, 10);
+
   return null;
 }
 
@@ -102,13 +109,16 @@ export function pickPullRequestId(
       (config["repoContext"] as { pullRequestId?: unknown } | undefined)
         ?.pullRequestId,
     ];
+
     for (const c of candidates) {
       const n = toPullRequestId(c);
       if (n !== null) return n;
     }
   }
+
   const m = /\/pullrequest\/(\d+)\b/i.exec(referrer);
   if (m) return Number.parseInt(m[1]!, 10);
+
   return null;
 }
 
@@ -125,8 +135,10 @@ export function configuredRepositoryId(
   const pr = config?.["pullRequest"] as
     | { pullRequestId?: unknown; repository?: { id?: unknown } }
     | undefined;
+
   if (toPullRequestId(pr?.pullRequestId) !== pullRequestId) return null;
   const id = pr!.repository?.id;
+
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
@@ -146,10 +158,13 @@ export async function loadWithRepositoryHint<
 ): Promise<{ pr: P; changes: C }> {
   const hinted =
     hint !== null && hint !== "" ? load(hint).catch(() => null) : null;
+
   const pr = await prRequest;
+
   const changes =
     (pr.repository.id === hint ? await hinted : null) ??
     (await load(pr.repository.id));
+
   return { pr, changes };
 }
 
@@ -212,6 +227,7 @@ export function mapChangeType(t: unknown): ChangeType {
   if (n & 16) return "deleted";
   if (n & 8) return "renamed";
   if (n & 1) return "added";
+
   return "modified";
 }
 
@@ -240,6 +256,7 @@ export function markdownChangePath(entry: {
   // A deleted file reports `item.path` as "", so fall back on empty too.
   const itemPath = entry.item?.path;
   const path = hasText(itemPath) ? itemPath : entry.originalPath;
+
   return path?.toLowerCase().endsWith(".md") ? path : undefined;
 }
 
@@ -286,6 +303,7 @@ export function buildPrWebUrl(
   if (typeof web === "string" && web.length > 0) return web;
   if (!location) return undefined;
   const { orgUrl, projectName, repositoryName, pullRequestId } = location;
+
   if (
     !orgUrl ||
     !projectName ||
@@ -295,9 +313,11 @@ export function buildPrWebUrl(
   ) {
     return undefined;
   }
+
   const url = `${orgUrl.replace(/\/+$/, "")}/${encodeURIComponent(
     projectName,
   )}/_git/${encodeURIComponent(repositoryName)}/pullrequest/${pullRequestId}`;
+
   try {
     return new URL(url).toString();
   } catch {
@@ -338,9 +358,12 @@ export function iterationParamsForRange(
   if (resolved.isAllChanges) return undefined;
   const idOf = (update: number) => stops[count - update]?.iterationId;
   const iteration = idOf(resolved.range.toUpdate);
+
   const base =
     resolved.range.fromUpdate === 0 ? 0 : idOf(resolved.range.fromUpdate);
+
   if (iteration === undefined || base === undefined) return undefined;
+
   return { iteration, base };
 }
 
@@ -355,18 +378,23 @@ export function rangeFromIterationParams(
 ): ReviewIterationRange | undefined {
   const parse = (value: string | undefined) =>
     /^\s*\d+\s*$/.test(value ?? "") ? Number(value) : undefined;
+
   const iteration = parse(params?.[ITERATION_LINK_PARAM]);
   if (iteration === undefined) return undefined;
   const base = parse(params?.[BASE_LINK_PARAM] ?? "0");
   if (base === undefined) return undefined;
+
   const updateOf = (id: number) => {
     const index = stops.findIndex((stop) => stop.iterationId === id);
+
     return index === -1 ? undefined : stops.length - index;
   };
+
   const toUpdate = updateOf(iteration);
   const fromUpdate = base === 0 ? 0 : updateOf(base);
   if (toUpdate === undefined || fromUpdate === undefined) return undefined;
   if (fromUpdate >= toUpdate) return undefined;
+
   return { fromUpdate, toUpdate };
 }
 
@@ -382,10 +410,12 @@ export function rangeChangeTypes(
   }>,
 ): Record<string, ChangeType> {
   const byPath: Record<string, ChangeType> = {};
+
   for (const entry of entries) {
     const path = markdownChangePath(entry);
     if (path !== undefined) byPath[path] = mapChangeType(entry.changeType);
   }
+
   return byPath;
 }
 
@@ -406,6 +436,7 @@ export async function fetchAllIterationChanges<T>(
 ): Promise<T[]> {
   const entries: T[] = [];
   let skip = 0;
+
   for (;;) {
     const page = await fetchPage(ITERATION_CHANGES_PAGE, skip);
     entries.push(...(page.changeEntries ?? []));
@@ -433,17 +464,20 @@ export function buildPrTabDocUrl(
 ): string | undefined {
   if (prWebUrl === undefined || prWebUrl === "") return undefined;
   let url: URL;
+
   try {
     url = new URL(prWebUrl);
   } catch {
     return undefined;
   }
+
   url.searchParams.set(
     "_a",
     `${ext.publisherId}.${ext.extensionId}.${PR_TAB_CONTRIBUTION}`,
   );
   const path = prTabRoutePath(documentPath);
   if (path) url.searchParams.set(PATH_LINK_PARAM, path);
+
   if (iterationParams) {
     url.searchParams.set(
       ITERATION_LINK_PARAM,
@@ -451,12 +485,14 @@ export function buildPrTabDocUrl(
     );
     url.searchParams.set(BASE_LINK_PARAM, String(iterationParams.base));
   }
+
   return url.toString();
 }
 
 /** A repo path in the PR route's `path` form (`/docs/a.md`); `""` when blank. */
 export function prTabRoutePath(documentPath: string): string {
   const bare = documentPath.trim().replace(/^\/+/, "");
+
   return bare ? `/${bare}` : "";
 }
 
@@ -470,6 +506,7 @@ function pickRoutedFile(
   files: ReadonlyArray<{ path: string }>,
 ): string | undefined {
   if (routedPath === undefined || routedPath === "") return undefined;
+
   return files.find((file) => samePath(file.path, routedPath))?.path;
 }
 
@@ -503,6 +540,7 @@ export function resolvePrTabRouteSeed(
   const routedPath = readPathParam(params);
   const selectedPath = pickRoutedFile(routedPath, files);
   const pathMissing = routedPath !== undefined && selectedPath === undefined;
+
   return {
     selectedPath,
     threadId: readCommentParam(params),
@@ -511,6 +549,7 @@ export function resolvePrTabRouteSeed(
     iterationRange: rangeFromIterationParams(params, stops),
   };
 }
+
 /**
  * The page-visibility signals {@link withTimeout} needs. Injectable so tests
  * can drive hidden/visible transitions deterministically.
@@ -527,6 +566,7 @@ const DOCUMENT_VISIBILITY: VisibilityClock = {
   isVisible: () => document.visibilityState === "visible",
   subscribeVisibilityChange(listener) {
     document.addEventListener("visibilitychange", listener);
+
     return () => document.removeEventListener("visibilitychange", listener);
   },
 };
@@ -556,11 +596,13 @@ export function withTimeout<T>(
     const pause = (): void => {
       if (timer !== null) clearTimeout(timer);
       timer = null;
+
       if (visibleSinceMs !== null) {
         remainingMs -= Math.max(0, visibility.now() - visibleSinceMs);
         visibleSinceMs = null;
       }
     };
+
     // `finish` / `resume` run only after `unsubscribe` is initialised: the
     // timer and the visibility listener fire asynchronously, never inline.
     const resume = (): void => {
@@ -574,10 +616,12 @@ export function withTimeout<T>(
         Math.max(0, remainingMs),
       );
     };
+
     const unsubscribe = visibility.subscribeVisibilityChange(() => {
       if (visibility.isVisible()) resume();
       else pause();
     });
+
     const finish = (): void => {
       settled = true;
       pause();

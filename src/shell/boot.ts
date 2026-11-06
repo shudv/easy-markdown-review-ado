@@ -54,6 +54,7 @@ export async function orchestrateBoot(deps: BootDeps): Promise<void> {
     } catch {
       // An error sink must never prevent the host from being notified.
     }
+
     try {
       deps.notifyFailed(err instanceof Error ? err : new Error(String(err)));
     } catch {

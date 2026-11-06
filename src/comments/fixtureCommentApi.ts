@@ -28,6 +28,7 @@ import {
 export class FixtureCommentApi extends LocalOnlyCommentApi {
   override async searchUsers(query: string): Promise<UserSuggestion[]> {
     const all = Object.values(FIXTURE_AUTHORS).map(authorToUserSuggestion);
+
     return filterByQuery(all, query, (u) => [u.displayName, u.id, u.initials]);
   }
 
@@ -54,11 +55,13 @@ export class FixtureCommentApi extends LocalOnlyCommentApi {
     ids: string[],
   ): Promise<Record<string, { displayName: string; avatarUrl?: string }>> {
     const out: Record<string, { displayName: string; avatarUrl?: string }> = {};
+
     for (const a of Object.values(FIXTURE_AUTHORS)) {
       if (ids.some((id) => id.toLowerCase() === a.id.toLowerCase())) {
         out[a.id] = { displayName: a.displayName, avatarUrl: a.avatarUrl };
       }
     }
+
     return out;
   }
 }

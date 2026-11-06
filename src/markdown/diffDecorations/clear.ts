@@ -92,20 +92,24 @@ function clearTooltipDecorations(root: HTMLElement): void {
     el.classList.remove(DIFF_TOOLTIP_RIGHT_CLASS);
     delete el.dataset.diffTooltip;
     delete el.dataset.diffAmberMode;
+
     if (el.dataset.diffTooltipHadTitle === "true") {
       el.setAttribute("title", el.dataset.diffTooltipPreviousTitle!);
     } else {
       el.removeAttribute("title");
     }
+
     if (el.dataset.diffTooltipHadTabindex === "true") {
       el.setAttribute("tabindex", el.dataset.diffTooltipPreviousTabindex!);
     } else {
       el.removeAttribute("tabindex");
     }
+
     delete el.dataset.diffTooltipHadTitle;
     delete el.dataset.diffTooltipPreviousTitle;
     delete el.dataset.diffTooltipHadTabindex;
     delete el.dataset.diffTooltipPreviousTabindex;
+
     if (el.dataset.diffTooltipHadDescription === "true") {
       el.setAttribute(
         "aria-description",
@@ -114,6 +118,7 @@ function clearTooltipDecorations(root: HTMLElement): void {
     } else {
       el.removeAttribute("aria-description");
     }
+
     delete el.dataset.diffTooltipHadDescription;
     delete el.dataset.diffTooltipPreviousDescription;
   });

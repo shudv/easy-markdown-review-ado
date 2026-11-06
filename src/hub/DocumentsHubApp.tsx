@@ -82,6 +82,7 @@ export function DocumentsHubApp(): ReactElement {
   const [state, setState] = useState<DiscoveryState | null>(null);
   const [user, setUser] = useState<CommentAuthor | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   // Picker pagination/filter view. `viewIds` is the ordered set of repo ids
   // currently shown in the dropdown (the full first page, or the server-side
   // filter result). `token` is the continuation token for the *current* view
@@ -95,6 +96,7 @@ export function DocumentsHubApp(): ReactElement {
     hasMore: false,
     loading: false,
   });
+
   // Per-document comment routing. Each document's comments live on the most
   // recent COMPLETED PR that changed it (resolved lazily, cached here). This
   // replaces the old per-doc "housing PR" model so the hub needs no
@@ -103,6 +105,7 @@ export function DocumentsHubApp(): ReactElement {
   const [routingPrByPath, setRoutingPrByPath] = useState<
     Record<string, GitPullRequest | null>
   >({});
+
   // Per-repo PR-routing load state. Held in a ref so concurrent
   // `loadDetailsFor` calls dedupe without a re-render race; mirrored into
   // `state.repos[i].detailsLoaded` so DocumentsApp can gate on it.
@@ -180,8 +183,10 @@ export function DocumentsHubApp(): ReactElement {
     const snapshot = stateRef.current;
     const rawRepo = snapshot?.rawRepoById.get(repoId);
     const projectId = snapshot?.projectId ?? "";
+
     if (!rawRepo || !projectId) {
       detailsStatusRef.current.set(repoId, "idle");
+
       return;
     }
 
@@ -195,6 +200,7 @@ export function DocumentsHubApp(): ReactElement {
         refreshRepoDiscovery(rawRepo, projectId),
         checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
       ]);
+
       detailsStatusRef.current.set(repoId, "loaded");
       setState((curr) =>
         withRepoDetails(curr, repoId, details, perm.canComment),
@@ -232,6 +238,7 @@ export function DocumentsHubApp(): ReactElement {
         refreshRepoDiscovery(rawRepo, projectId),
         checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
       ]);
+
       // Drop any cached commentApi so a new PR target gets a fresh instance.
       apiCacheRef.current.delete(repoId);
       // Also invalidate per-document routing for this repo so each doc
@@ -269,11 +276,14 @@ export function DocumentsHubApp(): ReactElement {
       if (!curr) return curr;
       const known = new Set(curr.repos.map((r) => r.id));
       const added = page.repos.filter((r) => !known.has(r.id));
+
       const rawRepoById =
         page.rawRepoById.size > 0
           ? new Map(curr.rawRepoById)
           : curr.rawRepoById;
+
       page.rawRepoById.forEach((raw, id) => rawRepoById.set(id, raw));
+
       return added.length === 0 && rawRepoById === curr.rawRepoById
         ? curr
         : { ...curr, repos: [...curr.repos, ...added], rawRepoById };
@@ -288,21 +298,25 @@ export function DocumentsHubApp(): ReactElement {
     const cur = pickerRef.current;
     if (!snapshot || cur.loading || !cur.hasMore || cur.token === null) return;
     setPicker((p) => ({ ...p, loading: true }));
+
     try {
       const page = await fetchRepoPage(snapshot.projectId, {
         filter: cur.filter,
         continuationToken: cur.token,
         top: REPO_PAGE_SIZE,
       });
+
       mergeRepos(page);
       setPicker((p) => {
         // The filter may have changed while this page was in flight; if so,
         // discard these results rather than mixing views.
         if (p.filter !== cur.filter) return p;
         const seen = new Set(p.viewIds);
+
         const nextIds = page.repos
           .map((r) => r.id)
           .filter((id) => !seen.has(id));
+
         return {
           ...p,
           viewIds: [...p.viewIds, ...nextIds],
@@ -323,6 +337,7 @@ export function DocumentsHubApp(): ReactElement {
         // If the filter changed while this request was in flight, don't let
         // this older failure clobber the newer filtered view's pagination.
         if (p.filter !== cur.filter) return p;
+
         return { ...p, loading: false, hasMore: false };
       });
     }
@@ -338,11 +353,13 @@ export function DocumentsHubApp(): ReactElement {
       const trimmed = keyword.trim();
       const seq = ++filterSeqRef.current;
       setPicker((p) => ({ ...p, filter: trimmed, loading: true }));
+
       try {
         const page = await fetchRepoPage(snapshot.projectId, {
           filter: trimmed,
           top: REPO_PAGE_SIZE,
         });
+
         if (seq !== filterSeqRef.current) return; // a newer keystroke won
         mergeRepos(page);
         setPicker((p) => ({
@@ -376,10 +393,12 @@ export function DocumentsHubApp(): ReactElement {
       if (!state) throw new Error("project not loaded yet");
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) throw new Error(`Unknown repo ${repoId}`);
+
       return fetchRepoFileContent(repo, state.projectId, path);
     },
     [state],
   );
+
   const resolveDocumentImage = useCallback(
     async (
       repoId: string,
@@ -390,6 +409,7 @@ export function DocumentsHubApp(): ReactElement {
       const snapshot = stateRef.current;
       const repo = snapshot?.repos.find((item) => item.id === repoId);
       if (!snapshot || !repo) return undefined;
+
       const versionDescriptor =
         atCommitId !== undefined && atCommitId !== ""
           ? {
@@ -402,6 +422,7 @@ export function DocumentsHubApp(): ReactElement {
               versionType: GitVersionType.Branch,
               versionOptions: GitVersionOptions.None,
             };
+
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: repoId,
         project: snapshot.projectId,
@@ -415,6 +436,7 @@ export function DocumentsHubApp(): ReactElement {
   const loadThreadsFor = useCallback(
     async (repoId: string): Promise<CommentThread[]> => {
       if (!state) return [];
+
       return loadThreadsForRepo(repoId, state.projectId, state.prByRepo);
     },
     [state],
@@ -427,6 +449,7 @@ export function DocumentsHubApp(): ReactElement {
       if (!state) return { files: [], folders: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { files: [], folders: [] };
+
       return listFolderMarkdown(repo, state.projectId, path);
     },
     [state],
@@ -444,6 +467,7 @@ export function DocumentsHubApp(): ReactElement {
       if (!state) return { files: [], folders: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { files: [], folders: [] };
+
       return listSubpageFolder(repo, state.projectId, folderPath, atCommitId);
     },
     [state],
@@ -460,6 +484,7 @@ export function DocumentsHubApp(): ReactElement {
       if (!state) return { kind: "ok", files: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { kind: "ok", files: [] };
+
       return searchRepoFiles(repo, state.projectName, query, signal);
     },
     [state],
@@ -476,12 +501,15 @@ export function DocumentsHubApp(): ReactElement {
       if (cached) return cached;
       const pr = state.prByRepo[repoId];
       if (!pr || typeof pr.pullRequestId !== "number") return undefined;
+
       const api = new AdoCommentApi({
         repositoryId: repoId,
         pullRequestId: pr.pullRequestId,
         project: state.projectId,
       });
+
       apiCacheRef.current.set(repoId, api);
+
       return api;
     },
     [state],
@@ -500,17 +528,21 @@ export function DocumentsHubApp(): ReactElement {
   const resolveRoutingPrForPath = useCallback(
     async (repoId: string, path: string): Promise<GitPullRequest | null> => {
       const key = `${repoId}\u0000${path}`;
+
       if (key in routingPrByPathRef.current) {
         return routingPrByPathRef.current[key] ?? null;
       }
+
       const snapshot = stateRef.current;
       const rawRepo = snapshot?.rawRepoById.get(repoId);
       if (!snapshot || !rawRepo) return null;
       if (routingInFlightRef.current.has(key)) return null;
       routingInFlightRef.current.add(key);
+
       try {
         const pr = await findRoutingPrForDoc(rawRepo, snapshot.projectId, path);
         setRoutingPrByPath((prev) => ({ ...prev, [key]: pr }));
+
         return pr;
       } finally {
         routingInFlightRef.current.delete(key);
@@ -530,15 +562,19 @@ export function DocumentsHubApp(): ReactElement {
       // write-capable api is adopted on the next render.
       const pr = routingPrByPath[key];
       const snapshot = stateRef.current;
+
       if (!pr || typeof pr.pullRequestId !== "number" || !snapshot) {
         return undefined;
       }
+
       const api = new AdoCommentApi({
         repositoryId: repoId,
         pullRequestId: pr.pullRequestId,
         project: snapshot.projectId,
       });
+
       pathApiCacheRef.current.set(key, api);
+
       return api;
     },
     [routingPrByPath],
@@ -550,6 +586,7 @@ export function DocumentsHubApp(): ReactElement {
       if (!snapshot) return [];
       const pr = await resolveRoutingPrForPath(repoId, path);
       if (!pr || typeof pr.pullRequestId !== "number") return [];
+
       return loadThreadsForRoutedPr(
         repoId,
         snapshot.projectId,
@@ -575,6 +612,7 @@ export function DocumentsHubApp(): ReactElement {
       const pr = routingPrByPath[key];
       if (!pr || typeof pr.pullRequestId !== "number") return null;
       const rawRepo = stateRef.current?.rawRepoById.get(repoId);
+
       return {
         prId: pr.pullRequestId,
         // `title` is typed required but can be absent from the ADO REST payload.
@@ -594,6 +632,7 @@ export function DocumentsHubApp(): ReactElement {
       const snapshot = stateRef.current;
       const rawRepo = snapshot?.rawRepoById.get(repoId);
       if (!snapshot || !rawRepo) return [];
+
       return loadDocPrHistory(rawRepo, snapshot.projectId, path);
     },
     [],
@@ -608,6 +647,7 @@ export function DocumentsHubApp(): ReactElement {
     ): Promise<CommentThread[]> => {
       const snapshot = stateRef.current;
       if (!snapshot) return [];
+
       return loadThreadsForRoutedPr(repoId, snapshot.projectId, prId, path);
     },
     [],
@@ -619,6 +659,7 @@ export function DocumentsHubApp(): ReactElement {
       const snapshot = stateRef.current;
       const repo = snapshot?.repos.find((r) => r.id === repoId);
       if (!snapshot || !repo) return "";
+
       return fetchRepoFileContent(repo, snapshot.projectId, path, commitId);
     },
     [],
@@ -665,6 +706,7 @@ export function DocumentsHubApp(): ReactElement {
   // view, resolved from the accumulated union. Falls back to the union order
   // if the view hasn't been seeded yet.
   const repoById = new Map(state.repos.map((r) => [r.id, r]));
+
   const repoPickerView =
     picker.viewIds.length > 0
       ? picker.viewIds

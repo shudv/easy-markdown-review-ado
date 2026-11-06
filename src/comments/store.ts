@@ -73,10 +73,12 @@ export type ThreadAction =
 export function initialThreadState(seed: CommentThread[] = []): ThreadState {
   const threadsById: Record<string, CommentThread> = {};
   const order: string[] = [];
+
   for (const t of seed) {
     threadsById[t.id] = t;
     order.push(t.id);
   }
+
   return { threadsById, order };
 }
 
@@ -121,15 +123,19 @@ export function threadReducer(
         status: action.status,
       }));
     case "DELETE_THREAD":
-      if (findThread(state.threadsById, action.threadId) === undefined)
+      if (findThread(state.threadsById, action.threadId) === undefined) {
         return state;
+      }
+
       return removeThread(state, action.threadId);
     case "MERGE_REMOTE_THREADS":
       return mergeRemoteThreads(state, action.threads);
+
     default: {
       // Exhaustiveness guard: `action` must be `never` here.
       const _exhaustive: never = action;
       void _exhaustive;
+
       return state;
     }
   }
@@ -139,8 +145,10 @@ function addThread(
   state: ThreadState,
   action: ActionOf<"ADD_THREAD">,
 ): ThreadState {
-  if (findThread(state.threadsById, action.thread.id) !== undefined)
+  if (findThread(state.threadsById, action.thread.id) !== undefined) {
     return state;
+  }
+
   return {
     threadsById: {
       ...state.threadsById,
@@ -162,6 +170,7 @@ function updateThread(
 ): ThreadState {
   const existing = findThread(state.threadsById, threadId);
   if (existing === undefined) return state;
+
   return replaceThread(state, threadId, update(existing));
 }
 
@@ -178,6 +187,7 @@ function replaceThread(
 
 function removeThread(state: ThreadState, threadId: string): ThreadState {
   const { [threadId]: _drop, ...rest } = state.threadsById;
+
   return {
     threadsById: rest,
     order: state.order.filter((id) => id !== threadId),
@@ -209,10 +219,12 @@ function deleteComment(
   const existing = findThread(state.threadsById, action.threadId);
   if (existing === undefined) return state;
   const remaining = existing.comments.filter((c) => c.id !== action.commentId);
+
   if (remaining.length === 0) {
     // Deleting the last comment removes the thread entirely.
     return removeThread(state, action.threadId);
   }
+
   return replaceThread(state, action.threadId, {
     ...existing,
     comments: remaining,
@@ -241,19 +253,24 @@ function toggleReaction(
   const user = { id: action.userId, displayName: action.displayName };
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- ReactionKind has a single member today; matching by kind keeps the toggle per-kind once ADO kinds are added.
   const idx = reactions.findIndex((r) => r.kind === action.kind);
+
   if (idx === -1) {
     // No reaction of this kind yet — add one.
     return [...reactions, { kind: action.kind, users: [user] }];
   }
+
   const cur = reactions[idx]!;
   const has = cur.users.some((u) => u.id === action.userId);
+
   const nextUsers = has
     ? cur.users.filter((u) => u.id !== action.userId)
     : [...cur.users, user];
+
   if (nextUsers.length === 0) {
     // Drop the whole reaction entry when no one is left reacting.
     return reactions.filter((_, i) => i !== idx);
   }
+
   return reactions.map((r, i) => (i === idx ? { ...r, users: nextUsers } : r));
 }
 
@@ -264,21 +281,27 @@ function mergeRemoteThreads(
   const nextById: Record<string, CommentThread> = { ...state.threadsById };
   const appended: string[] = [];
   let changed = false;
+
   for (const incoming of threads) {
     const existing = findThread(nextById, incoming.id);
+
     if (existing === undefined) {
       nextById[incoming.id] = incoming;
       appended.push(incoming.id);
       changed = true;
       continue;
     }
+
     const merged = mergeOneThread(existing, incoming);
+
     if (merged !== existing) {
       nextById[incoming.id] = merged;
       changed = true;
     }
   }
+
   if (!changed) return state;
+
   return {
     threadsById: nextById,
     order: appended.length > 0 ? [...state.order, ...appended] : state.order,
@@ -318,6 +341,7 @@ function mergeOneThread(
 ): CommentThread {
   let changed = false;
   const existingCommentIds = new Set(existing.comments.map((c) => c.id));
+
   const incomingCommentsById = new Map(
     incoming.comments.map((c) => [c.id, c] as const),
   );
@@ -325,20 +349,26 @@ function mergeOneThread(
   const mergedComments: Comment[] = existing.comments.map((local) => {
     const remote = incomingCommentsById.get(local.id);
     if (!remote) return local;
+
     // Compare timestamps numerically — ISO strings with different precision
     // or offsets don't sort chronologically as plain strings.
     const remoteMs =
       remote.updatedAt === undefined ? NaN : Date.parse(remote.updatedAt);
+
     const localMs =
       local.updatedAt === undefined ? NaN : Date.parse(local.updatedAt);
+
     const remoteNewer =
       Number.isFinite(remoteMs) &&
       (!Number.isFinite(localMs) || remoteMs > localMs);
+
     const bodyChanged =
       remoteNewer && remote.bodyMarkdown !== local.bodyMarkdown;
+
     const reactionsChanged = !reactionsEqual(local.reactions, remote.reactions);
     if (!bodyChanged && !reactionsChanged) return local;
     changed = true;
+
     return {
       ...local,
       bodyMarkdown: bodyChanged ? remote.bodyMarkdown : local.bodyMarkdown,
@@ -358,6 +388,7 @@ function mergeOneThread(
   if (statusChanged) changed = true;
 
   if (!changed) return existing;
+
   return {
     ...existing,
     status: incoming.status,
@@ -373,6 +404,7 @@ function reactionsEqual(
   if (!a || !b) return (a?.length ?? 0) === 0 && (b?.length ?? 0) === 0;
   if (a.length !== b.length) return false;
   const byKind = new Map(a.map((r) => [r.kind, r] as const));
+
   for (const r of b) {
     const other = byKind.get(r.kind);
     if (!other) return false;
@@ -380,10 +412,12 @@ function reactionsEqual(
     // Compare by id AND display name so a remote snapshot that renamed a
     // liker (same id, new name) is adopted rather than kept with a stale name.
     const aNameById = new Map(other.users.map((u) => [u.id, u.displayName]));
+
     for (const u of r.users) {
       if (aNameById.get(u.id) !== u.displayName) return false;
     }
   }
+
   return true;
 }
 

@@ -32,6 +32,7 @@ function makeRoot(
 ): HTMLElement {
   const root = document.createElement("div");
   root.className = "markdown-body emr-rendered";
+
   for (const b of blocks) {
     const el = document.createElement(b.tag);
     el.setAttribute("data-source-line", String(b.start));
@@ -39,6 +40,7 @@ function makeRoot(
     if (b.html !== undefined && b.html !== "") el.innerHTML = b.html;
     root.appendChild(el);
   }
+
   return root;
 }
 
@@ -60,10 +62,12 @@ describe("decorateDiffRanges", () => {
       { tag: "p", start: 5, end: 7 },
       { tag: "p", start: 20, end: 20 },
     ]);
+
     const ranges: DiffRange[] = [
       { startLine: 5, endLine: 7, kind: "added" },
       { startLine: 20, endLine: 20, kind: "modified" },
     ];
+
     const res = decorateDiffRanges(root, ranges);
     expect(res.decorated).toBe(2);
     const ps = root.querySelectorAll("p");
@@ -78,10 +82,12 @@ describe("decorateDiffRanges", () => {
 
   it("prefers 'modified' over 'added' when a block overlaps both", () => {
     const root = makeRoot([{ tag: "p", start: 3, end: 8 }]);
+
     const ranges: DiffRange[] = [
       { startLine: 3, endLine: 4, kind: "added" },
       { startLine: 7, endLine: 8, kind: "modified" },
     ];
+
     decorateDiffRanges(root, ranges);
     const p = root.querySelector("p")!;
     expect(p.dataset.diffKind).toBe("modified");
@@ -106,6 +112,7 @@ describe("decorateDiffRanges", () => {
     const res = decorateDiffRanges(root, [
       { startLine: 4, endLine: 6, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(quote.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     expect(inner.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
@@ -116,6 +123,7 @@ describe("decorateDiffRanges", () => {
       { tag: "p", start: 1, end: 1 },
       { tag: "p", start: 10, end: 12 },
     ]);
+
     const ranges: DiffRange[] = [
       {
         startLine: 10,
@@ -125,11 +133,14 @@ describe("decorateDiffRanges", () => {
         deletedContent: "gone line one\ngone line two\n",
       },
     ];
+
     const res = decorateDiffRanges(root, ranges);
     expect(res.markers).toBe(1);
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(marker).not.toBeNull();
     // Inserted right before the second paragraph.
     expect(marker.nextElementSibling?.getAttribute("data-source-line")).toBe(
@@ -144,6 +155,7 @@ describe("decorateDiffRanges", () => {
     const chip = marker.querySelector<HTMLButtonElement>(
       ".emr-diff-deleted-chip",
     )!;
+
     chip.click();
     expect(body.hidden).toBe(false);
     expect(chip.getAttribute("aria-expanded")).toBe("true");
@@ -171,9 +183,11 @@ describe("decorateDiffRanges", () => {
 
   it("appends a deletion marker when no block follows the deleted line", () => {
     const root = makeRoot([{ tag: "p", start: 1, end: 1 }]);
+
     const res = decorateDiffRanges(root, [
       { startLine: 99, endLine: 99, kind: "deleted-marker", linesDeleted: 3 },
     ]);
+
     expect(res.markers).toBe(1);
     expect(
       root.lastElementChild?.classList.contains(DIFF_DELETED_MARKER_CLASS),
@@ -209,10 +223,13 @@ describe("decorateDiffRanges", () => {
         deletedContent: "gone\ngone two\n",
       },
     ]);
+
     expect(res.markers).toBe(1);
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     // Inserted immediately before the diagram, not appended at the end.
     expect(marker.nextElementSibling).toBe(mermaid);
     expect(root.lastElementChild).toBe(mermaid);
@@ -223,6 +240,7 @@ describe("decorateDiffRanges", () => {
       { tag: "p", start: 1, end: 1 },
       { tag: "p", start: 10, end: 12 },
     ]);
+
     // First pass inserts a deletion marker.
     decorateDiffRanges(root, [
       {
@@ -240,6 +258,7 @@ describe("decorateDiffRanges", () => {
     const res = decorateDiffRanges(root, [
       { startLine: 1, endLine: 1, kind: "added" },
     ]);
+
     expect(root.querySelector(`.${DIFF_DELETED_MARKER_CLASS}`)).toBeNull();
     expect(res.markers).toBe(0);
   });
@@ -249,11 +268,14 @@ describe("decorateDiffRanges", () => {
       { tag: "p", start: 5, end: 7 },
       { tag: "p", start: 20, end: 20 },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 7, kind: "added" }]);
+
     // Second pass with a different range set.
     const res = decorateDiffRanges(root, [
       { startLine: 20, endLine: 20, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(1);
     const marked = root.querySelectorAll(`.${DIFF_BLOCK_CLASS}`);
     expect(marked).toHaveLength(1);
@@ -265,6 +287,7 @@ describe("decorateDiffRanges", () => {
       { tag: "p", start: 5, end: 7 },
       { tag: "p", start: 20, end: 20 },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 7, kind: "added" }]);
     const first = root.querySelectorAll("p")[0];
     expect(first.dataset.diffLabel).toBe("Added");
@@ -280,9 +303,11 @@ describe("decorateDiffRanges", () => {
     const root = document.createElement("div");
     const p = document.createElement("p");
     root.appendChild(p);
+
     const res = decorateDiffRanges(root, [
       { startLine: 1, endLine: 1, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(0);
   });
 
@@ -290,9 +315,11 @@ describe("decorateDiffRanges", () => {
     const root = makeRoot([{ tag: "p", start: 1, end: 1 }]);
     const p = root.querySelector("p")!;
     p.setAttribute("data-source-line", "not-a-number");
+
     const res = decorateDiffRanges(root, [
       { startLine: 1, endLine: 1, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(0);
     expect(p.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
   });
@@ -572,11 +599,13 @@ describe("decorateDiffRanges", () => {
 
     expect(res.decorated).toBe(1);
     expect(row.dataset.diffInline).toBe("true");
+
     // Both items read as added words; nothing struck.
     const addedText = Array.from(
       value.querySelectorAll(`.${WORD_ADDED_CLASS}`),
       (el) => el.textContent,
     ).join(" ");
+
     expect(addedText).toContain("alpha");
     expect(addedText).toContain("beta");
     expect(value.querySelector(`.${WORD_REMOVED_CLASS}`)).toBeNull();
@@ -809,6 +838,7 @@ describe("summarizeDiff", () => {
       { startLine: 20, endLine: 20, kind: "deleted-marker", linesDeleted: 3 },
       { startLine: 40, endLine: 40, kind: "deleted-marker", linesDeleted: 1 },
     ];
+
     expect(summarizeDiff(ranges)).toEqual({
       added: 2,
       modified: 1,
@@ -820,6 +850,7 @@ describe("summarizeDiff", () => {
     const ranges: DiffRange[] = [
       { startLine: 3, endLine: 3, kind: "deleted-marker" },
     ];
+
     expect(summarizeDiff(ranges)).toEqual({
       added: 0,
       modified: 0,
@@ -860,11 +891,13 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "hello world" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [{ startLine: 5, endLine: 5, kind: "modified", originalText: "hello" }],
       { renderInline: stubRender },
     );
+
     expect(res.inlined).toBe(1);
     const p = root.querySelector("p")!;
     expect(p.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -878,6 +911,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "hello world" },
     ]);
+
     decorateDiffRanges(
       root,
       // "planet" removed, "world" added → both mark kinds present.
@@ -910,6 +944,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 6, html: "hello world" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -918,6 +953,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     expect(res.inlined).toBe(1);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)?.textContent).toContain(
       "world",
@@ -932,6 +968,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       { tag: "p", start: 5, end: 5, html: "first world" },
       { tag: "p", start: 20, end: 20, html: "second planet" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -945,6 +982,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     expect(res.inlined).toBe(2);
     const ps = root.querySelectorAll("p");
     expect(ps[0]!.querySelector(`.${WORD_ADDED_CLASS}`)?.textContent).toContain(
@@ -962,11 +1000,13 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 7, html: "hello world" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [{ startLine: 5, endLine: 5, kind: "modified", originalText: "hello" }],
       { renderInline: stubRender },
     );
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
     expect(root.querySelector(`.${DIFF_INLINE_CLASS}`)).toBeNull();
@@ -976,6 +1016,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 8, html: "hello world" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -984,6 +1025,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     // Still washed (decorated) but ambiguous → no inline overlay.
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
@@ -994,6 +1036,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "pre", start: 5, end: 5, html: "const x = 2;" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -1006,6 +1049,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     expect(res.inlined).toBe(1);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)?.textContent).toBe("2");
     expect(root.querySelector(`.${WORD_REMOVED_CLASS}`)?.textContent).toBe("1");
@@ -1015,6 +1059,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "pre", start: 5, end: 5, html: "const x = 2;" },
     ]);
+
     expect(() =>
       decorateDiffRanges(
         root,
@@ -1044,6 +1089,7 @@ describe("decorateDiffRanges — inline word diff", () => {
         html: "totally different content entirely",
       },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -1056,6 +1102,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
   });
@@ -1064,11 +1111,13 @@ describe("decorateDiffRanges — inline word diff", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "hello world" },
     ]);
+
     const res = decorateDiffRanges(
       root,
       [{ startLine: 5, endLine: 5, kind: "modified" }],
       { renderInline: stubRender },
     );
+
     expect(res.inlined).toBe(0);
   });
 
@@ -1076,6 +1125,7 @@ describe("decorateDiffRanges — inline word diff", () => {
     // Re-wrapped lines, `*a*` → `_a_`, a renumbered item: nothing a reader can
     // see changed, so the block is not shown as edited.
     const root = makeRoot([{ tag: "p", start: 5, end: 5, html: "same text" }]);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -1088,6 +1138,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: stubRender },
     );
+
     expect(res.decorated).toBe(0);
     expect(res.inlined).toBe(0);
     expect(root.querySelector(`.${DIFF_BLOCK_CLASS}`)).toBeNull();
@@ -1096,6 +1147,7 @@ describe("decorateDiffRanges — inline word diff", () => {
   it("keeps the change when the same text renders with different formatting", () => {
     const root = document.createElement("div");
     root.innerHTML = renderMarkdownSync("same **text**");
+
     const res = decorateDiffRanges(
       root,
       [
@@ -1110,6 +1162,7 @@ describe("decorateDiffRanges — inline word diff", () => {
       ],
       { renderInline: renderMarkdownSync, originalSource: "same text" },
     );
+
     expect(res.decorated).toBe(1);
     expect(root.querySelector(`.${DIFF_BLOCK_CLASS}`)).not.toBeNull();
   });
@@ -1131,6 +1184,7 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "h2", start: 5, end: 5 },
       { tag: "p", start: 6, end: 6 },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 6, kind: "added" }]);
     const [h2, p] = Array.from(root.children) as HTMLElement[];
     expect(h2!.dataset.diffGroup).toBe("start");
@@ -1143,10 +1197,13 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "p", start: 6, end: 6 },
       { tag: "p", start: 7, end: 7 },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 7, kind: "added" }]);
+
     const groups = (Array.from(root.children) as HTMLElement[]).map(
       (el) => el.dataset.diffGroup,
     );
+
     expect(groups).toEqual(["start", "mid", "end"]);
   });
 
@@ -1155,6 +1212,7 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "p", start: 5, end: 5 },
       { tag: "p", start: 6, end: 6 },
     ]);
+
     decorateDiffRanges(root, [
       { startLine: 5, endLine: 5, kind: "added" },
       { startLine: 6, endLine: 6, kind: "modified" },
@@ -1170,6 +1228,7 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "p", start: 6, end: 6 }, // unchanged, not decorated
       { tag: "p", start: 7, end: 7 },
     ]);
+
     decorateDiffRanges(root, [
       { startLine: 5, endLine: 5, kind: "added" },
       { startLine: 7, endLine: 7, kind: "added" },
@@ -1184,6 +1243,7 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "p", start: 5, end: 5, html: "hello world" },
       { tag: "p", start: 6, end: 6, html: "second one" },
     ]);
+
     decorateDiffRanges(
       root,
       [
@@ -1203,6 +1263,7 @@ describe("decorateDiffRanges — contiguous grouping", () => {
       { tag: "h2", start: 5, end: 5 },
       { tag: "p", start: 6, end: 6 },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 6, kind: "added" }]);
     expect(root.querySelector("h2")?.dataset.diffGroup).toBe("start");
     decorateDiffRanges(root, []);
@@ -1225,6 +1286,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
         html: "A short <strong>changed line</strong>.",
       },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     const paragraph = root.querySelector<HTMLElement>("p")!;
@@ -1243,6 +1305,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
         html: '<button class="emr-section-toggle" type="button"></button>Changed heading',
       },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     const heading = root.querySelector<HTMLElement>("h2")!;
@@ -1268,6 +1331,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
         html: 'Changed heading<button class="emr-heading-link" type="button"></button>',
       },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     const heading = root.querySelector<HTMLElement>("h2")!;
@@ -1291,6 +1355,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
         html: 'Goals<button class="emr-heading-link" type="button"></button>',
       },
     ]);
+
     decorateDiffRanges(
       root,
       [
@@ -1320,6 +1385,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
       { tag: "p", start: 6, end: 6, html: "First changed line." },
       { tag: "p", start: 7, end: 7, html: "Second changed line." },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 7, kind: "added" }]);
 
     const blocks = Array.from(root.children) as HTMLElement[];
@@ -1371,6 +1437,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "dl", start: 5, end: 5, html: "<dt>Term</dt><dd>Meaning</dd>" },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
@@ -1386,6 +1453,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
         html: 'Caption <img src="diagram.png" alt="Diagram">',
       },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
@@ -1396,6 +1464,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "  <strong>Changed</strong>" },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     expect(root.querySelector(".emr-diff-line-wash")?.textContent).toBe(
@@ -1407,6 +1476,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "pre", start: 5, end: 5, html: "<code>const x = 1;</code>" },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     expect(
@@ -1420,6 +1490,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "pre", start: 5, end: 5, html: "const x = 1;" },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
 
     expect(root.querySelector(".emr-diff-line-wash")).toBeNull();
@@ -1433,6 +1504,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "Changed content" },
     ]);
+
     const text = root.querySelector("p")!.firstChild!;
     Object.defineProperty(text, "textContent", {
       configurable: true,
@@ -1450,6 +1522,7 @@ describe("decorateDiffRanges — minimal line washes", () => {
     const root = makeRoot([
       { tag: "p", start: 5, end: 5, html: "Keep <em>this markup</em>." },
     ]);
+
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
     decorateDiffRanges(root, []);
 
@@ -1496,6 +1569,7 @@ describe("decorateDiffRanges — direct images", () => {
     const result = decorateDiffRanges(root, [
       { startLine: 4, endLine: 4, kind: "added" },
     ]);
+
     expect(result.decorated).toBe(1);
     expect(image.classList.contains(DIFF_IMAGE_CLASS)).toBe(true);
 
@@ -1519,14 +1593,17 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
     div.setAttribute("data-source-end-line", String(end));
     div.setAttribute("data-mermaid-src", encodeURIComponent("flowchart LR"));
     root.appendChild(div);
+
     return root;
   }
 
   it("marks a changed diagram with the mermaid diff class + kind (no wash)", () => {
     const root = mermaidRoot(5, 8);
+
     const res = decorateDiffRanges(root, [
       { startLine: 5, endLine: 8, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(1);
     const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
     expect(el.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
@@ -1600,9 +1677,11 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
 
   it("leaves an unchanged diagram untouched", () => {
     const root = mermaidRoot(5, 8);
+
     const res = decorateDiffRanges(root, [
       { startLine: 20, endLine: 20, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(0);
     expect(
       root.querySelector(".emr-mermaid")?.classList.contains(DIFF_BLOCK_CLASS),
@@ -1611,9 +1690,11 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
 
   it("marks a wholly-added diagram green", () => {
     const root = mermaidRoot(5, 8);
+
     const res = decorateDiffRanges(root, [
       { startLine: 5, endLine: 8, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(1);
     const el = root.querySelector<HTMLElement>(".emr-mermaid")!;
     expect(el.classList.contains("emr-diff-block--added")).toBe(true);
@@ -1629,9 +1710,11 @@ describe("decorateDiffRanges — mermaid diagrams", () => {
     div.className = "emr-mermaid";
     div.setAttribute("data-mermaid-src", encodeURIComponent("flowchart LR"));
     root.appendChild(div);
+
     const res = decorateDiffRanges(root, [
       { startLine: 1, endLine: 1, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(0);
     expect(div.classList.contains(DIFF_MERMAID_CLASS)).toBe(false);
   });
@@ -1703,6 +1786,7 @@ describe("decorateDiffRanges — equations", () => {
         html: '<span class="katex"><span class="katex-html">x²</span></span>',
       },
     ]);
+
     root.firstElementChild!.classList.add("emr-math");
 
     const result = decorateDiffRanges(root, [
@@ -1717,6 +1801,7 @@ describe("decorateDiffRanges — equations", () => {
     const equation = root.querySelector<HTMLElement>(
       ".emr-math.emr-diff-block",
     )!;
+
     expect(result.decorated).toBe(1);
     expect(equation.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     expect(equation.classList.contains(DIFF_MATH_CLASS)).toBe(true);
@@ -1752,6 +1837,7 @@ describe("decorateDiffRanges — equations", () => {
     const equation = root.querySelector<HTMLElement>(
       ".emr-math.emr-diff-block",
     )!;
+
     expect(equation.dataset.diffOriginal).toBe("x = g_i");
     expect(equation.querySelector(".emr-diff-before-trigger")).toBeNull();
     expect(root.querySelector(".emr-diff-before-panel")).toBeNull();
@@ -1800,10 +1886,13 @@ describe("selectionTouchesDeletedDiff", () => {
       ],
       { renderInline: stubRender },
     );
+
     const outEl = [...root.children].find(
       (c) => c.tagName === "P",
     ) as HTMLElement;
+
     const body = root.querySelector<HTMLElement>(".emr-diff-deleted-body")!;
+
     return {
       outEl,
       outText: outEl.firstChild,
@@ -1844,6 +1933,7 @@ describe("selectionTouchesDeletedDiff", () => {
       { tag: "p", start: 5, end: 5, html: "before text" },
       { tag: "p", start: 10, end: 10, html: "after text" },
     ]);
+
     decorateDiffRanges(
       root,
       [
@@ -1857,9 +1947,11 @@ describe("selectionTouchesDeletedDiff", () => {
       ],
       { renderInline: stubRender },
     );
+
     const paras = [...root.querySelectorAll("p")].filter(
       (p) => !p.closest(`.${DIFF_DELETED_MARKER_CLASS}`),
     );
+
     return {
       beforeText: paras[0].firstChild,
       afterText: paras[1].firstChild,
@@ -1887,6 +1979,7 @@ describe("selectionTouchesDeletedDiff", () => {
       "<p>after text</p>";
     root.querySelector<HTMLElement>(".emr-diff-before-panel")!.hidden = !open;
     const [first, , last] = [...root.querySelectorAll("p")];
+
     return { beforeText: first!.firstChild, afterText: last!.firstChild };
   }
 

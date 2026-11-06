@@ -16,6 +16,7 @@ import {
 function el(className: string): Element {
   const d = document.createElement("div");
   d.className = className;
+
   return d;
 }
 
@@ -52,6 +53,7 @@ describe("mergeMarkers", () => {
       { top: 0.1, height: 0.02, kind: "added" },
       { top: 0.13, height: 0.02, kind: "added" }, // gap 0.01 ≤ 0.02 → merge
     ];
+
     const merged = mergeMarkers(marks, 0.02);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.kind).toBe("added");
@@ -63,6 +65,7 @@ describe("mergeMarkers", () => {
       { top: 0.1, height: 0.02, kind: "added" },
       { top: 0.12, height: 0.02, kind: "deleted" },
     ];
+
     expect(mergeMarkers(marks, 0.05)).toHaveLength(2);
   });
   it("keeps far-apart same-kind ticks separate", () => {
@@ -70,6 +73,7 @@ describe("mergeMarkers", () => {
       { top: 0.1, height: 0.02, kind: "modified" },
       { top: 0.5, height: 0.02, kind: "modified" },
     ];
+
     expect(mergeMarkers(marks, 0.02)).toHaveLength(2);
   });
   it("sorts out-of-order input before merging", () => {
@@ -77,6 +81,7 @@ describe("mergeMarkers", () => {
       { top: 0.5, height: 0.02, kind: "added" },
       { top: 0.1, height: 0.02, kind: "added" },
     ];
+
     const merged = mergeMarkers(marks, 0.02);
     expect(merged[0]).toEqual({ top: 0.1, height: 0.02, kind: "added" });
     expect(merged).toHaveLength(2);
@@ -91,6 +96,7 @@ describe("resolveOverlaps", () => {
       { top: 0.8, height: 0.05, kind: "modified" },
       { top: 0.6, height: 0.05, kind: "deleted" },
     ]);
+
     expect(out.map((m) => m.top)).toEqual([0.1, 0.4, 0.6, 0.8]);
     expect(out).toHaveLength(4);
     expect(resolveOverlaps([])).toEqual([]);
@@ -100,6 +106,7 @@ describe("resolveOverlaps", () => {
       { top: 0.2, height: 0.3, kind: "modified" }, // 0.2..0.5
       { top: 0.35, height: 0.05, kind: "deleted" }, // 0.35..0.4 inside it
     ];
+
     const out = resolveOverlaps(marks);
     // edit · removed · edit
     expect(out.map((m) => m.kind)).toEqual(["modified", "deleted", "modified"]);
@@ -115,6 +122,7 @@ describe("resolveOverlaps", () => {
       { top: 0.2, height: 0.2, kind: "added" }, // 0.2..0.4
       { top: 0.35, height: 0.15, kind: "deleted" }, // 0.35..0.5
     ];
+
     const out = resolveOverlaps(marks);
     const add = out.find((m) => m.kind === "added")!;
     const del = out.find((m) => m.kind === "deleted")!;
@@ -128,6 +136,7 @@ describe("resolveOverlaps", () => {
       { top: 0.3, height: 0.1, kind: "modified" }, // 0.3..0.4
       { top: 0.2, height: 0.4, kind: "deleted" }, // 0.2..0.6 covers it
     ];
+
     const out = resolveOverlaps(marks);
     expect(out).toHaveLength(1);
     expect(out[0]!.kind).toBe("deleted");
@@ -139,6 +148,7 @@ describe("resolveOverlaps", () => {
       { top: 0.1, height: 0.2, kind: "added" }, // 0.1..0.3
       { top: 0.25, height: 0.2, kind: "modified" }, // 0.25..0.45 → keep 0.3..0.45
     ];
+
     const out = resolveOverlaps(marks);
     const mod = out.find((m) => m.kind === "modified")!;
     expect(mod.top).toBeCloseTo(0.3);

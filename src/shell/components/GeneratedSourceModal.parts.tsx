@@ -18,6 +18,7 @@ export function GeneratedSourceIdentity(
   }>,
 ): ReactElement {
   const isMath = props.kind === "math";
+
   return (
     <div className="emr-generated-source-identity">
       <span className="emr-generated-source-kind" aria-hidden="true">
@@ -49,9 +50,11 @@ export function GeneratedSourceViewControls(
   }>,
 ): ReactElement {
   const { beforeShown, changesShown, onToggleBefore, onToggleChanges } = props;
+
   const changesLabel = changesShown
     ? "Hide source changes"
     : "Show source changes";
+
   return (
     <div className="emr-generated-source-view-controls">
       {!beforeShown ? (
@@ -104,6 +107,7 @@ export function GeneratedSourceDiff(
 ): ReactElement {
   const { kind, original, current } = props;
   const diff = kind === "math" ? diffCharacters : diffWords;
+
   return (
     <code className="emr-generated-source-code-diff">
       {diff(original, current).map((op, i) => (
@@ -118,8 +122,10 @@ function renderDiffOp(op: WordDiffOp): ReactElement {
   if (op.kind === "added") {
     return <ins className={WORD_ADDED_CLASS}>{op.value}</ins>;
   }
+
   if (op.kind === "removed") {
     return <del className={removedRunClass(op.value)}>{op.value}</del>;
   }
+
   return <span>{op.value}</span>;
 }

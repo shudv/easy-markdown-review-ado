@@ -17,14 +17,17 @@ function revealAncestors(
   if (!selectedPath) return curr;
   let changed = false;
   const next = new Set(curr);
+
   for (const dir of pathAncestors(selectedPath)) {
     if (next.has(dir)) {
       next.delete(dir);
       changed = true;
     }
   }
+
   if (!changed) return curr;
   writeCollapsedDirs(folderStorageKey, next);
+
   return next;
 }
 
@@ -45,19 +48,23 @@ export function useCollapsedDirs(
       folderStorageKey,
     ),
   );
+
   const [source, setSource] = useState({
     folderStorageKey,
     selectedPath,
   });
+
   if (
     source.folderStorageKey !== folderStorageKey ||
     source.selectedPath !== selectedPath
   ) {
     setSource({ folderStorageKey, selectedPath });
+
     const base =
       source.folderStorageKey === folderStorageKey
         ? collapsedDirs
         : readCollapsedDirs(folderStorageKey);
+
     setCollapsedDirs(revealAncestors(base, selectedPath, folderStorageKey));
   }
 
@@ -68,6 +75,7 @@ export function useCollapsedDirs(
         if (next.has(dirPath)) next.delete(dirPath);
         else next.add(dirPath);
         writeCollapsedDirs(folderStorageKey, next);
+
         return next;
       });
     },

@@ -89,8 +89,10 @@ function targetParams(target: DeepLinkTarget): Record<string, string> {
       return { [COMMENT_LINK_PARAM]: target.threadId.trim() };
     case "heading":
       return { [ANCHOR_LINK_PARAM]: target.anchor.trim() };
+
     case "text": {
       const anchor = target.anchor?.trim();
+
       return {
         [TEXT_LINK_PARAM]: target.text.trim(),
         ...(anchor !== undefined && anchor !== ""
@@ -117,21 +119,26 @@ export function withDeepLinkTarget(
   const primary = Object.values(params)[0]!;
   if (!baseUrl || !primary) return undefined;
   let url: URL;
+
   try {
     url = new URL(baseUrl);
   } catch {
     return undefined;
   }
+
   for (const param of TARGET_LINK_PARAMS) url.searchParams.delete(param);
+
   for (const [param, value] of Object.entries(params)) {
     url.searchParams.set(param, value);
   }
+
   // Quoted text is mostly spaces: spell them `%20`, not the form-style `+`,
   // which a host that decodes with `decodeURIComponent` would keep literally.
   // (A literal `+` is always serialized as `%2B`, so this is lossless.)
   if (target.kind === "text") {
     url.search = url.searchParams.toString().replace(/\+/g, "%20");
   }
+
   return url.toString();
 }
 
@@ -142,6 +149,7 @@ function readTrimmed(params: RouteParams, key: string): string | undefined {
   const raw = params[key];
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -160,6 +168,7 @@ export function readCommentParam(params: RouteParams): string | undefined {
  */
 export function readAnchorParam(params: RouteParams): string | undefined {
   const anchor = readTrimmed(params, ANCHOR_LINK_PARAM)?.replace(/^#+/, "");
+
   return anchor === "" ? undefined : anchor;
 }
 
@@ -178,5 +187,6 @@ export function readTextParam(params: RouteParams): string | undefined {
  */
 export function readPathParam(params: RouteParams): string | undefined {
   const bare = readTrimmed(params, PATH_LINK_PARAM)?.replace(/^\/+/, "");
+
   return bare !== undefined && bare !== "" ? `/${bare}` : undefined;
 }

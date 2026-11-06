@@ -95,6 +95,7 @@ export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
     isFirst,
     canLink,
   });
+
   const { likedByMe, likeCount, likeTooltip } = summarizeLikes(
     comment.reactions,
     currentUser.id,

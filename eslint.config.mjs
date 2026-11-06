@@ -16,6 +16,7 @@ import noUnsanitized from "eslint-plugin-no-unsanitized";
 import jsxA11y from "eslint-plugin-jsx-a11y-x";
 import eslintReact from "@eslint-react/eslint-plugin";
 import vitest from "@vitest/eslint-plugin";
+import stylistic from "@stylistic/eslint-plugin";
 import emrRules from "./scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
 // Every TypeScript file that is type-checked and linted.
@@ -236,10 +237,21 @@ const config = tseslint.config(
       "@typescript-eslint/related-getter-setter-pairs": "error",
       "@typescript-eslint/require-array-sort-compare": "error",
       "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "inline-type-imports",
+          // `typeof import("…")` is the vi.importActual / vi.mock idiom.
+          disallowTypeAnnotations: false,
+        },
+      ],
 
       // Core correctness and clarity rules.
       eqeqeq: ["error", "smart"],
       "array-callback-return": "error",
+      "arrow-body-style": ["error", "as-needed"],
+      curly: ["error", "multi-line"],
       "default-case-last": "error",
       "logical-assignment-operators": "error",
       "no-alert": "error",
@@ -259,6 +271,7 @@ const config = tseslint.config(
       "no-useless-rename": "error",
       "no-useless-return": "error",
       "object-shorthand": "error",
+      "prefer-template": "error",
       radix: "error",
       yoda: "error",
     },
@@ -428,5 +441,32 @@ export default [
     files: STORIES,
     languageOptions: { parser: tseslint.parser },
     rules: { "no-restricted-syntax": REACT_NAMED_IMPORTS },
+  },
+  {
+    // Blank lines split a body into readable steps: around multi-line
+    // declarations and blocks, and before `return`. Short declarations stay
+    // next to the guard that checks them. Prettier keeps single blank lines,
+    // and the size limits above don't count them.
+    files: [...TYPED, ...STORIES],
+    plugins: { "@stylistic": stylistic },
+    rules: {
+      "@stylistic/padding-line-between-statements": [
+        "error",
+        {
+          blankLine: "always",
+          prev: "*",
+          next: ["multiline-const", "multiline-let"],
+        },
+        {
+          blankLine: "always",
+          prev: ["multiline-const", "multiline-let"],
+          next: "*",
+        },
+        { blankLine: "always", prev: "*", next: "multiline-block-like" },
+        { blankLine: "always", prev: "multiline-block-like", next: "*" },
+        { blankLine: "always", prev: "*", next: "return" },
+        { blankLine: "always", prev: "directive", next: "*" },
+      ],
+    },
   },
 ];

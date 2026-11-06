@@ -12,6 +12,7 @@ import type { CommentFilterMode } from "../components/commentFilter";
 export function useReaderToggles() {
   const [commentFilter, setCommentFilter] =
     useState<CommentFilterMode>("active");
+
   // Scope toggle paired with the filter: hide comments not on the current file
   // (General/Overview + comments on files no longer in the PR).
   const [onlyThisFile, setOnlyThisFile] = useState(false);

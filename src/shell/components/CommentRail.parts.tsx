@@ -38,6 +38,7 @@ export function RailDraftBalloon(
     onSubmitDraft,
     onCancelDraft,
   } = props;
+
   return (
     <div
       className="emr-balloon inline is-active is-draft"
@@ -79,6 +80,7 @@ export function RailCollapsibleTray(
   }>,
 ): ReactElement {
   const { title, count, expanded, onToggle, children } = props;
+
   return (
     <div className="emr-rail-section emr-rail-section--general">
       <button
@@ -126,5 +128,6 @@ function SvgChevronRight(): ReactElement {
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n - 1) + "…";
+
+  return `${s.slice(0, n - 1)}…`;
 }

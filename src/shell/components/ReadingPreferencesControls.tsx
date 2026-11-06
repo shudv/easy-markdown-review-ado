@@ -5,7 +5,7 @@ import type { CSSProperties, ReactElement, RefObject } from "react";
 import {
   clampReaderPct,
   nudgeReaderPct,
-  READER_FONTS,
+  type READER_FONTS,
   READER_PERCENT_MAX,
   READER_PERCENT_MIN,
   READER_SPACING_UI_MAX,
@@ -41,8 +41,10 @@ function PercentSlider({
   const displayValue = Math.max(min, Math.min(max, value));
   const progress = ((displayValue - min) / (max - min)) * 100;
   const defaultPosition = ((100 - min) / (max - min)) * 100;
+
   const nudge = (dir: number) =>
     onChange(nudgeReaderPct(displayValue, dir, min, max));
+
   const style = {
     "--emr-percent-progress": `${progress}%`,
     "--emr-percent-default-position": `${defaultPosition}%`,
@@ -79,6 +81,7 @@ function PercentSlider({
                 : event.key === "ArrowRight" || event.key === "ArrowUp"
                   ? 1
                   : 0;
+
             if (delta === 0) return;
             event.preventDefault();
             onChange(clampReaderPct(displayValue + delta, min, max));
@@ -134,6 +137,7 @@ export function ReadingPreferencesControls(
     spacingPct,
     onSpacingChange,
   } = props;
+
   return (
     <div className="emr-statusbar-control-group">
       <div

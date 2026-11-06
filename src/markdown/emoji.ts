@@ -123,20 +123,20 @@ const SHORTCODE_LOOKUP: ReadonlyMap<string, string> = new Map(
 /** Replace known `:shortcode:` runs in a string; unknown codes pass through. */
 export function replaceEmojiShortcodes(text: string): string {
   if (text.indexOf(":") === -1) return text;
-  return text.replace(SHORTCODE_RE, (whole, name: string) => {
-    return SHORTCODE_LOOKUP.get(name.toLowerCase()) ?? whole;
-  });
+
+  return text.replace(
+    SHORTCODE_RE,
+    (whole, name: string) => SHORTCODE_LOOKUP.get(name.toLowerCase()) ?? whole,
+  );
 }
 
 /**
  * remark plugin: rewrite emoji shortcodes inside `text` nodes. Skips code
  * (fenced + inline) automatically since those are not `text` nodes.
  */
-export const remarkEmoji: Plugin<[], Root> = () => {
-  return (tree) => {
-    visit(tree, "text", (node: Text) => {
-      const next = replaceEmojiShortcodes(node.value);
-      if (next !== node.value) node.value = next;
-    });
-  };
+export const remarkEmoji: Plugin<[], Root> = () => (tree) => {
+  visit(tree, "text", (node: Text) => {
+    const next = replaceEmojiShortcodes(node.value);
+    if (next !== node.value) node.value = next;
+  });
 };

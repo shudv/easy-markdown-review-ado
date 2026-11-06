@@ -68,6 +68,7 @@ function makeLoad(): (path: string) => Promise<string> {
     if (path === BROKEN) throw new Error("kaboom while loading");
     const src = SOURCES[path];
     if (src == null) throw new Error(`No source for ${path}`);
+
     return src;
   };
 }
@@ -255,7 +256,9 @@ async function waitForHighlight(
       const el = canvasElement.querySelector<HTMLElement>(
         `.emr-highlight[data-thread-id="${tid}"]`,
       );
+
       if (!el) throw new Error(`no highlight for ${tid}`);
+
       return el;
     },
     { timeout: 5000 },
@@ -266,7 +269,9 @@ function balloonFor(canvasElement: HTMLElement, tid: string): HTMLElement {
   const b = canvasElement.querySelector<HTMLElement>(
     `.emr-balloon[data-thread-id="${tid}"]`,
   );
+
   if (!b) throw new Error(`no balloon for ${tid}`);
+
   return b;
 }
 
@@ -275,14 +280,17 @@ export const ThreadReply: Story = {
   play: async ({ canvasElement }) => {
     const hl = await waitForHighlight(canvasElement, "t-active");
     await userEvent.click(hl);
+
     const bal = within(
       await waitFor(() => balloonFor(canvasElement, "t-active")),
     );
 
     await userEvent.click(bal.getByText("@mention or reply"));
+
     const ta = await waitFor(
       () => bal.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(ta, `Looks good to me @<${MENTION_GUID}> `);
     await userEvent.click(bal.getByRole("button", { name: "Reply" }));
     await waitFor(() => expect(bal.getByText(/Looks good to me/)).toBeTruthy());
@@ -310,14 +318,18 @@ export const ThreadEdit: Story = {
     const hl = await waitForHighlight(canvasElement, "t-active");
     await userEvent.click(hl);
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+
     const c2u = within(
       balloon.querySelector<HTMLElement>('[data-comment-id="c2"]')!,
     );
+
     await userEvent.click(c2u.getByRole("button", { name: "More options" }));
     await userEvent.click(c2u.getByText("Edit comment"));
+
     const editTa = await waitFor(
       () => c2u.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.clear(editTa);
     await userEvent.type(editTa, "Edited reply body");
     await userEvent.click(c2u.getByRole("button", { name: "Save" }));
@@ -337,14 +349,18 @@ export const ThreadEditFailureKeepsText: Story = {
     const hl = await waitForHighlight(canvasElement, "t-active");
     await userEvent.click(hl);
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+
     const c2u = within(
       balloon.querySelector<HTMLElement>('[data-comment-id="c2"]')!,
     );
+
     await userEvent.click(c2u.getByRole("button", { name: "More options" }));
     await userEvent.click(c2u.getByText("Edit comment"));
+
     const editTa = await waitFor(
       () => c2u.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.clear(editTa);
     await userEvent.type(editTa, "An edit that must survive");
     await userEvent.click(c2u.getByRole("button", { name: "Save" }));
@@ -371,12 +387,15 @@ export const ThreadEditFailureKeepsText: Story = {
 export const ThreadCycle: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const status = within(
       canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
+
     const nextBtn = await waitFor(() =>
       status.getByRole("button", { name: "Next comment" }),
     );
+
     await userEvent.click(nextBtn);
     await userEvent.click(
       status.getByRole("button", { name: "Previous comment" }),
@@ -397,19 +416,25 @@ export const ThreadCycle: Story = {
 export const CyclerExpandsCollapsedTray: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     const status = within(
       canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
+
     const trayName = /General comments/;
+
     // The cross-file tray is present but collapsed, its comment not rendered.
     const tray = await waitFor(() =>
       railU.getByRole("button", { name: trayName }),
     );
+
     expect(tray.getAttribute("aria-expanded")).toBe("false");
     expect(railU.queryByText("Overall this looks great.")).toBeNull();
+
     // Cycle Next until it lands on the general comment; the tray must expand.
     for (let i = 0; i < 12; i++) {
       await userEvent.click(
@@ -422,6 +447,7 @@ export const CyclerExpandsCollapsedTray: Story = {
       )
         break;
     }
+
     expect(
       railU
         .getByRole("button", { name: trayName })
@@ -442,24 +468,32 @@ export const CyclerExpandsCollapsedTray: Story = {
 export const OnlyThisFileScopesFilterCounts: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     // The "Comments" header doubles as the filter-menu trigger.
     const trigger = await waitFor(() =>
       railU.getByRole("button", { name: /Filter comments/ }),
     );
+
     await userEvent.click(trigger);
+
     const allCount = (): number => {
       const btn = railU.getByRole("menuitemradio", { name: /All comments/ });
+
       return Number(btn.textContent?.trim().match(/(\d+)$/)?.[1] ?? "NaN");
     };
+
     // With the default (whole-PR) scope the count includes the general thread.
     const before = await waitFor(() => {
       const n = allCount();
       expect(n).toBeGreaterThan(1);
+
       return n;
     });
+
     // Turn on "Hide comments not on this file"; the menu stays open and the
     // counts recompute against the current-file-only set.
     await userEvent.click(
@@ -475,15 +509,19 @@ export const OnlyThisFileScopesFilterCounts: Story = {
 export const ThreadSearch: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     await userEvent.click(
       railU.getByRole("button", { name: "Search comments" }),
     );
+
     const searchBox = await waitFor(
       () => railU.getByPlaceholderText("Search comments…") as HTMLInputElement,
     );
+
     await userEvent.type(searchBox, "positioned");
     await waitFor(() =>
       expect(railU.getByText("A second positioned thread.")).toBeTruthy(),
@@ -533,9 +571,11 @@ export const ResolveReopenDelete: Story = {
     await userEvent.click(
       railU.getByRole("menuitemradio", { name: /All comments/ }),
     );
+
     const resolved = await waitFor(() =>
       balloonFor(canvasElement, "t-resolved"),
     );
+
     const ru = within(resolved);
     // Reopen it.
     await userEvent.click(ru.getByRole("button", { name: "More options" }));
@@ -684,9 +724,11 @@ export const OrphanedFileComments: Story = {
       () => expect(canvasElement.querySelector(".markdown-body")).toBeTruthy(),
       { timeout: 5000 },
     );
+
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     // The resolved orphaned-file thread is hidden by the default Active filter,
     // so switch the filter to "All comments" to reveal it.
     await userEvent.click(
@@ -695,12 +737,14 @@ export const OrphanedFileComments: Story = {
     await userEvent.click(
       railU.getByRole("menuitemradio", { name: /All comments/ }),
     );
+
     // Expand the orphaned-file tray.
     const tray = await waitFor(() =>
       railU.getByRole("button", {
         name: /Comments on files no longer in this PR/,
       }),
     );
+
     await userEvent.click(tray);
     await waitFor(() =>
       expect(railU.getByText("On a removed file.")).toBeTruthy(),
@@ -776,9 +820,11 @@ export const HubHidesCrossFileTrays: Story = {
       () => expect(canvasElement.querySelector(".markdown-body")).toBeTruthy(),
       { timeout: 5000 },
     );
+
     const railU = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     // The open file's own comment renders.
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-balloon")).toBeTruthy(),
@@ -825,6 +871,7 @@ export const Dismissals: Story = {
 export const DraftComment: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     // Re-query the paragraph fresh on each call: submitting a draft re-renders
     // the article (and wraps the selected text in a highlight), so each draft
     // targets a different paragraph that still starts with a bare text node.
@@ -832,11 +879,14 @@ export const DraftComment: Story = {
       const para = await waitFor(() => {
         const ps =
           canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p");
+
         const p = ps[index];
         if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
           throw new Error("no selectable paragraph");
+
         return p;
       });
+
       const textNode = para.firstChild as Text;
       const range = document.createRange();
       range.setStart(textNode, 0);
@@ -850,16 +900,20 @@ export const DraftComment: Story = {
     // First selection -> draft -> submit.
     await select(1);
     const canvas = within(canvasElement);
+
     const addBtn = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn.click();
     const draft = await waitFor(() => balloonFor(canvasElement, "__draft__"));
     const draftU = within(draft);
+
     const ta = await waitFor(
       () => draftU.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(ta, `Brand new comment @<${MENTION_GUID}> `);
     await userEvent.click(draftU.getByRole("button", { name: "Comment" }));
     await waitFor(() =>
@@ -870,9 +924,11 @@ export const DraftComment: Story = {
 
     // Second selection (a different paragraph) -> draft -> cancel.
     await select(2);
+
     const addBtn2 = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn2.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn2.click();
     const draft2 = await waitFor(() => balloonFor(canvasElement, "__draft__"));
@@ -886,9 +942,11 @@ export const DraftComment: Story = {
 export const UnanchoredDraft: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     await userEvent.click(rail.getByRole("button", { name: "New comment" }));
     const draft = await waitFor(() => balloonFor(canvasElement, "__draft__"));
     await expect(within(draft).queryByText(/Anchored to:/)).toBeNull();
@@ -919,10 +977,13 @@ export const AddingCommentRevealsComments: Story = {
     const para = await waitFor(() => {
       const p =
         canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p")[1];
+
       if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
         throw new Error("no selectable paragraph");
+
       return p;
     });
+
     const textNode = para.firstChild as Text;
     const range = document.createRange();
     range.setStart(textNode, 0);
@@ -933,9 +994,11 @@ export const AddingCommentRevealsComments: Story = {
     para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
     const canvas = within(canvasElement);
+
     const addBtn = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn.click();
 
@@ -947,6 +1010,7 @@ export const AddingCommentRevealsComments: Story = {
 };
 
 const DRAFT_KEY = "emr:comment-draft:hub";
+
 const RESTORE_ANCHOR = {
   exact: "second active note",
   prefix: "The ",
@@ -970,6 +1034,7 @@ export const DraftPersistence: Story = {
         body: "Restored draft text",
       }),
     );
+
     return () => window.localStorage.removeItem(DRAFT_KEY);
   },
   play: async ({ canvasElement }) => {
@@ -977,9 +1042,11 @@ export const DraftPersistence: Story = {
 
     // The stored draft re-opens with its text seeded.
     const draft = await waitFor(() => balloonFor(canvasElement, "__draft__"));
+
     const ta = await waitFor(
       () => within(draft).getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await waitFor(() => expect(ta.value).toContain("Restored draft text"));
 
     // A click outside the comment UI keeps the in-progress draft.
@@ -1031,15 +1098,18 @@ export const ReplyDraftPersistence: Story = {
         body: "Restored reply text",
       }),
     );
+
     return () => window.localStorage.removeItem(DRAFT_KEY);
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     // The reply composer of t-active re-opens, seeded with the stored text.
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+
     const ta = await waitFor(
       () => within(balloon).getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await waitFor(() => expect(ta.value).toContain("Restored reply text"));
     // No new-comment draft balloon exists.
     expect(
@@ -1071,9 +1141,11 @@ export const DraftGuard: Story = {
     // Open a reply on t-active and type — this becomes the active draft.
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
     await userEvent.click(within(balloon).getByText("@mention or reply"));
+
     const replyTa = await waitFor(
       () => within(balloon).getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(replyTa, "My in-progress reply");
 
     // Select article text and request a new comment → guard dialog appears.
@@ -1081,10 +1153,13 @@ export const DraftGuard: Story = {
       const para = await waitFor(() => {
         const p =
           canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p")[index];
+
         if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
           throw new Error("no selectable paragraph");
+
         return p;
       });
+
       const textNode = para.firstChild as Text;
       const range = document.createRange();
       range.setStart(textNode, 0);
@@ -1094,16 +1169,20 @@ export const DraftGuard: Story = {
       sel.addRange(range);
       para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     };
+
     await selectPara(1);
+
     const addBtn = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn.click();
 
     const dialog = await waitFor(() =>
       canvas.getByRole("dialog", { name: /unsaved comment draft/i }),
     );
+
     // Keep editing preserves the reply draft (no new-comment balloon).
     await userEvent.click(
       within(dialog).getByRole("button", { name: /keep editing/i }),
@@ -1116,14 +1195,18 @@ export const DraftGuard: Story = {
 
     // Request again and discard → the new-comment composer opens.
     await selectPara(1);
+
     const addBtn2 = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn2.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn2.click();
+
     const dialog2 = await waitFor(() =>
       canvas.getByRole("dialog", { name: /unsaved comment draft/i }),
     );
+
     await userEvent.click(
       within(dialog2).getByRole("button", { name: /discard draft/i }),
     );
@@ -1159,10 +1242,13 @@ export const DraftGuardReplyDirection: Story = {
       const para = await waitFor(() => {
         const p =
           canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p")[index];
+
         if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
           throw new Error("no selectable paragraph");
+
         return p;
       });
+
       const textNode = para.firstChild as Text;
       const range = document.createRange();
       range.setStart(textNode, 0);
@@ -1172,11 +1258,14 @@ export const DraftGuardReplyDirection: Story = {
       sel.addRange(range);
       para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     };
+
     const openDraft = async (index: number) => {
       await selectPara(index);
+
       const addBtn = await waitFor(() =>
         canvas.getByRole("button", { name: /add comment/i }),
       );
+
       addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       addBtn.click();
     };
@@ -1206,9 +1295,11 @@ export const DraftGuardReplyDirection: Story = {
 
     // Requesting a reply on t-active now prompts the discard dialog.
     await userEvent.click(within(balloon).getByText("@mention or reply"));
+
     const dialog = await waitFor(() =>
       canvas.getByRole("dialog", { name: /unsaved comment draft/i }),
     );
+
     await userEvent.click(
       within(dialog).getByRole("button", { name: /discard draft/i }),
     );
@@ -1235,6 +1326,7 @@ export const DraftSurvivesFileSwitch: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
@@ -1243,10 +1335,13 @@ export const DraftSurvivesFileSwitch: Story = {
     const para = await waitFor(() => {
       const p =
         canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p")[1];
+
       if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
         throw new Error("no selectable paragraph");
+
       return p;
     });
+
     const textNode = para.firstChild as Text;
     const range = document.createRange();
     range.setStart(textNode, 0);
@@ -1255,9 +1350,11 @@ export const DraftSurvivesFileSwitch: Story = {
     sel.removeAllRanges();
     sel.addRange(range);
     para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
     const addBtn = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn.click();
     const draft = await waitFor(() => balloonFor(canvasElement, "__draft__"));
@@ -1278,9 +1375,11 @@ export const DraftSurvivesFileSwitch: Story = {
 
     // Back to a.md — the composer re-opens with its text intact.
     await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
+
     const draftAgain = await waitFor(() =>
       balloonFor(canvasElement, "__draft__"),
     );
+
     await waitFor(() =>
       expect(
         (within(draftAgain).getByRole("textbox") as HTMLTextAreaElement).value,
@@ -1293,6 +1392,7 @@ export const DraftSurvivesFileSwitch: Story = {
 export const FileSwitching: Story = {
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
@@ -1343,6 +1443,7 @@ export const DeepLinkRouting: Story = {
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
     await waitForHighlight(canvasElement, "t-active");
     await waitFor(() => expect(args.onSelectPath).toHaveBeenCalledWith(A), {
@@ -1401,6 +1502,7 @@ export const DeepLinkCommentPerDocumentThreads: Story = {
   },
   beforeEach: () => {
     perDocLoads = 0;
+
     return recordLinksOpened();
   },
   play: async ({ canvasElement }) => {
@@ -1456,6 +1558,7 @@ export const DeepLinkCommentWaitsForThreads: Story = {
     initialActiveThreadId: "t-active2",
     fetchRemoteThreads: async () => {
       await new Promise((r) => setTimeout(r, 300));
+
       return threads();
     },
   },
@@ -1501,6 +1604,7 @@ export const ActiveThreadReportsToRoute: Story = {
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
     await waitFor(
       () => expect(args.onActiveThreadChange).toHaveBeenCalledWith(null),
@@ -1518,9 +1622,11 @@ export const FailingApi: Story = {
     const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
     const bal = within(balloon);
     await userEvent.click(bal.getByText("@mention or reply"));
+
     const ta = await waitFor(
       () => bal.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(ta, "This reply will fail");
     await userEvent.click(bal.getByRole("button", { name: "Reply" }));
 
@@ -1586,6 +1692,7 @@ export const HeldReplyKeepsNewerDraft: Story = {
     const sending = await waitFor(
       () => bal.getByRole("button", { name: "Sending…" }) as HTMLButtonElement,
     );
+
     await expect(sending.disabled).toBe(true);
 
     // The user gives up on it and starts a fresh reply.
@@ -1593,9 +1700,11 @@ export const HeldReplyKeepsNewerDraft: Story = {
     await userEvent.click(
       await waitFor(() => bal.getByText("@mention or reply")),
     );
+
     const fresh = await waitFor(
       () => bal.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(fresh, "My next thought");
 
     // The held reply finally lands: it shows up in the thread…
@@ -1628,13 +1737,17 @@ export const HeldCommentKeepsNewerDraft: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+
     const first = within(
       await waitFor(() => balloonFor(canvasElement, "__draft__")),
     );
+
     await userEvent.type(first.getByRole("textbox"), "Held comment");
     await userEvent.click(first.getByRole("button", { name: "Comment" }));
     await waitFor(() =>
@@ -1644,9 +1757,11 @@ export const HeldCommentKeepsNewerDraft: Story = {
     // Abandon it and start another comment.
     await userEvent.click(first.getByRole("button", { name: "Cancel" }));
     await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+
     const second = within(
       await waitFor(() => balloonFor(canvasElement, "__draft__")),
     );
+
     await userEvent.type(second.getByRole("textbox"), "Second thought");
 
     await waitFor(() => expect(heldReplyApi.release).not.toBeNull());
@@ -1686,6 +1801,7 @@ class ReconnectingCommentApi extends LocalOnlyCommentApi {
   ): Promise<{ commentId: string; createdAt: string }> {
     return this.gate(() => {
       this.replies.push(body);
+
       return super.addReply(threadId, body);
     });
   }
@@ -1696,6 +1812,7 @@ class ReconnectingCommentApi extends LocalOnlyCommentApi {
   ): Promise<{ updatedAt: string }> {
     return this.gate(() => {
       this.edits.push(body);
+
       return super.editComment(threadId, commentId, body);
     });
   }
@@ -1714,6 +1831,7 @@ export const ReconnectHoldsChangesAndSavesOnce: Story = {
     reconnectingApi.reconnecting = true;
     reconnectingApi.replies = [];
     reconnectingApi.edits = [];
+
     return () => {
       reconnectingApi.reconnecting = false;
       adoSession.noteSuccess(Date.now());
@@ -1729,11 +1847,14 @@ export const ReconnectHoldsChangesAndSavesOnce: Story = {
     const c2u = within(
       balloon.querySelector<HTMLElement>('[data-comment-id="c2"]')!,
     );
+
     await userEvent.click(c2u.getByRole("button", { name: "More options" }));
     await userEvent.click(c2u.getByText("Edit comment"));
+
     const editTa = await waitFor(
       () => c2u.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.clear(editTa);
     await userEvent.type(editTa, "Edit made while reconnecting");
     await userEvent.click(c2u.getByRole("button", { name: "Save" }));
@@ -1742,8 +1863,10 @@ export const ReconnectHoldsChangesAndSavesOnce: Story = {
     const notice = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-toast--info");
       if (!el) throw new Error("no reconnect notice yet");
+
       return el;
     });
+
     await waitFor(() =>
       expect(notice.textContent).toBe(
         "Reconnecting to Azure DevOps — your changes will be saved automatically.",
@@ -1812,8 +1935,10 @@ class PlainUnauthorizedCommentApi extends LocalOnlyCommentApi {
   ): Promise<CreatedThreadIds> {
     return adoSession.holdWrite(() => {
       this.attempts += 1;
+
       if (this.failNext) {
         this.failNext = false;
+
         return Promise.reject(
           Object.assign(
             new Error(
@@ -1823,8 +1948,10 @@ class PlainUnauthorizedCommentApi extends LocalOnlyCommentApi {
           ),
         );
       }
+
       return super.createThread(input).then((ids) => {
         this.saved += 1;
+
         return ids;
       });
     });
@@ -1846,13 +1973,17 @@ export const PlainUnauthorizedIsNotReconnecting: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     await userEvent.click(rail.getByRole("button", { name: "New comment" }));
+
     const draft = within(
       await waitFor(() => balloonFor(canvasElement, "__draft__")),
     );
+
     const textarea = draft.getByRole("textbox") as HTMLTextAreaElement;
     await userEvent.type(textarea, "Posted through a plain 401");
     await userEvent.click(draft.getByRole("button", { name: "Comment" }));
@@ -2001,10 +2132,12 @@ export const ReaderStatusBarControls: Story = {
 
       async load(): Promise<FontFace> {
         this.status = "loaded";
+
         return this as unknown as FontFace;
       }
     }
     window.FontFace = AvailableFontFace as unknown as typeof FontFace;
+
     return () => {
       window.FontFace = NativeFontFace;
     };
@@ -2013,12 +2146,15 @@ export const ReaderStatusBarControls: Story = {
     await waitForHighlight(canvasElement, "t-active");
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
     const canvas = within(canvasElement);
+
     const q = <T extends HTMLElement>(sel: string): T =>
       canvasElement.querySelector<T>(sel)!;
+
     const byText = (sel: string, text: string): HTMLElement =>
       [...canvasElement.querySelectorAll<HTMLElement>(sel)].find((el) =>
         el.textContent?.includes(text),
       )!;
+
     const paragraph = q<HTMLParagraphElement>(".emr-rendered.markdown-body p");
     expect(getComputedStyle(paragraph).marginBottom).toBe("16px");
     await waitFor(() =>
@@ -2123,6 +2259,7 @@ export const IterationSelectionPersistsAcrossFiles: Story = {
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
     await waitFor(
       () =>
@@ -2168,6 +2305,7 @@ const UPDATE_PRESENCE: Record<string, readonly string[]> = {
   // …and deletes this one by Update 2.
   [DELETED_DOC]: ["base", "update-1"],
 };
+
 const UPDATE_SOURCES: Record<string, string> = {
   [A]: SOURCE_A,
   [ADDED_DOC]: "# Added doc\n\nBrand new content.\n",
@@ -2218,22 +2356,27 @@ export const IterationFileMissingAtAnUpdate: Story = {
           { status: 404 },
         );
       }
+
       return UPDATE_SOURCES[path]!;
     },
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     const pickUpdate = async (current: string, option: RegExp) => {
       // Choosing an update leaves the picker open; only open it if closed.
       if (!canvasElement.querySelector(".emr-statusbar-iteration.is-open")) {
         await userEvent.click(canvas.getByRole("button", { name: current }));
       }
+
       await userEvent.click(canvas.getByRole("option", { name: option }));
     };
+
     const notice = () =>
       canvasElement.querySelector<HTMLElement>(".emr-update-absent");
 
@@ -2330,23 +2473,30 @@ async function selectPhrase(canvasElement: HTMLElement, phrase: string) {
     const article = canvasElement.querySelector<HTMLElement>(
       ".emr-article-wrap > .emr-rendered",
     )!;
+
     const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
     const found: { node: Text; from: number }[] = [];
     let text = "";
+
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       found.push({ node: n as Text, from: text.length });
       text += (n as Text).data;
     }
+
     const at = text.indexOf(phrase);
     if (at < 0) throw new Error(`"${phrase}" not rendered yet`);
+
     return { runs: found, start: at };
   });
+
   const locate = (offset: number) => {
     const run = [...runs]
       .reverse()
       .find((r) => r.from <= offset && offset <= r.from + r.node.data.length)!;
+
     return { node: run.node, offset: offset - run.from };
   };
+
   const from = locate(start);
   const to = locate(start + phrase.length);
   const range = document.createRange();
@@ -2359,6 +2509,7 @@ async function selectPhrase(canvasElement: HTMLElement, phrase: string) {
     new MouseEvent("mouseup", { bubbles: true }),
   );
 }
+
 /** Records every new thread so a story can check where it was anchored. */
 class RecordingCommentApi extends LocalOnlyCommentApi {
   created: Parameters<LocalOnlyCommentApi["createThread"]>[0][] = [];
@@ -2366,6 +2517,7 @@ class RecordingCommentApi extends LocalOnlyCommentApi {
     input: Parameters<LocalOnlyCommentApi["createThread"]>[0],
   ): Promise<CreatedThreadIds> {
     this.created.push(input);
+
     return super.createThread(input);
   }
 }
@@ -2407,14 +2559,18 @@ export const CommentOnEarlierUpdate: Story = {
 
     // Text that's still in the latest version: comment as usual.
     await selectPhrase(canvasElement, "the rendered preview");
+
     const add = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     add.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     add.click();
+
     const draft = within(
       await waitFor(() => balloonFor(canvasElement, "__draft__")),
     );
+
     await userEvent.type(draft.getByRole("textbox"), "Still true later.");
     await userEvent.click(draft.getByRole("button", { name: "Comment" }));
     await waitFor(() => expect(recordingApi.created).toHaveLength(1));
@@ -2426,23 +2582,29 @@ export const CommentOnEarlierUpdate: Story = {
 
     // Text the latest update removed: explained, no composer.
     await selectPhrase(canvasElement, "Draft note removed");
+
     const bubble = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(
         ".emr-selection-bubble.is-blocked",
       );
+
       if (!el) throw new Error("no explained bubble yet");
+
       return el;
     });
+
     await expect(bubble.textContent).toContain(
       "This text changed in a later update",
     );
     await expect(
       within(bubble).queryByRole("button", { name: /add comment/i }),
     ).toBeNull();
+
     // The way forward: compare up to the latest update (same start point).
     const compare = within(bubble).getByRole("button", {
       name: "Compare up to Update 3",
     });
+
     compare.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     compare.click();
     await waitFor(() =>
@@ -2478,9 +2640,11 @@ export const CommentDraftSurvivesComparisonSwitch: Story = {
       ).toContain("Draft note removed later."),
     );
     await selectPhrase(canvasElement, "the rendered preview");
+
     const add = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     add.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     add.click();
     await userEvent.type(
@@ -2528,6 +2692,7 @@ export const IterationLinkRoundTrip: Story = {
     // comparison's baseline last of all.
     loadFileSourceAt: async (path: string, commitId: string) => {
       await new Promise((r) => setTimeout(r, commitId === "base" ? 300 : 150));
+
       return COMPARISON_ARGS.loadFileSourceAt(path, commitId);
     },
     initialIterationRange: { fromUpdate: 0, toUpdate: 1 },
@@ -2559,9 +2724,11 @@ export const IterationLinkRoundTrip: Story = {
     await waitFor(() =>
       expect(args.onIterationRangeChange).toHaveBeenLastCalledWith(null),
     );
+
     // Selecting the same comparison again doesn't re-report it.
     const calls = (args.onIterationRangeChange as ReturnType<typeof fn>).mock
       .calls.length;
+
     await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
     await new Promise((r) => setTimeout(r, 100));
     await expect(
@@ -2583,13 +2750,16 @@ export const RangeChangesDimUntouchedFiles: Story = {
   play: async ({ args, canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     const rowOf = (name: RegExp) =>
       nav
         .getByRole("button", { name })
         .closest<HTMLElement>(".emr-docnav-item")!;
+
     // All updates: nothing dimmed, no range lookup.
     await expect(rowOf(/notes\.md/).classList).not.toContain(
       "is-unchanged-in-range",
@@ -2659,11 +2829,14 @@ function NewPushHarness(props: ComponentProps<typeof Shell>): ReactElement {
   const [stops, setStops] = useState<
     NonNullable<typeof props.reviewIterationStops>
   >(props.reviewIterationStops!.slice(1));
+
   useEffect(() => {
     const onPush = () => setStops(props.reviewIterationStops!);
     window.addEventListener("emr-story-push", onPush);
+
     return () => window.removeEventListener("emr-story-push", onPush);
   }, [props.reviewIterationStops]);
+
   return <Shell {...props} reviewIterationStops={stops} />;
 }
 
@@ -2733,6 +2906,7 @@ export const DocumentsRoutingPending: Story = {
     const [resolution, setResolution] = useState<
       RoutedPrInfo | null | undefined
     >(undefined);
+
     return (
       <>
         <button type="button" onClick={() => setResolution(null)}>
@@ -2761,6 +2935,7 @@ export const DocumentsRoutingPending: Story = {
 
     const paragraph =
       canvasElement.querySelector<HTMLElement>(".emr-rendered p")!;
+
     const text = paragraph.firstChild as Text;
     const range = document.createRange();
     range.setStart(text, 0);
@@ -2775,6 +2950,7 @@ export const DocumentsRoutingPending: Story = {
 
     const navResize =
       canvasElement.querySelector<HTMLElement>(".emr-nav-resize")!;
+
     navResize.dispatchEvent(
       new PointerEvent("pointerdown", {
         clientX: 260,
@@ -2806,6 +2982,7 @@ export const ReaderStatusBarIterationLoadError: Story = {
     ...ReaderStatusBarControls.args,
     loadFileSourceAt: async (_path: string, commitId: string) => {
       if (commitId === "base") throw new Error("base snapshot failed");
+
       return `> ${commitId}.\n`;
     },
   },
@@ -2839,9 +3016,11 @@ export const NavResize: Story = {
     const handle = canvasElement.querySelector<HTMLElement>(".emr-nav-resize")!;
     const navRail = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
     const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+
     const firstRow = canvasElement.querySelector<HTMLElement>(
       ".emr-docnav-item.emr-docnav-file",
     )!;
+
     const badge = firstRow.querySelector<HTMLElement>(".emr-docnav-badge")!;
     expect(getComputedStyle(navRail).paddingLeft).toBe("0px");
     expect(getComputedStyle(docNav).paddingRight).toBe("0px");
@@ -2905,8 +3084,10 @@ export const CommentResize: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-rail-resize")).toBeTruthy(),
     );
+
     const handle =
       canvasElement.querySelector<HTMLElement>(".emr-rail-resize")!;
+
     // A move with no press in progress is ignored — the width stays put, and
     // the nav's own scale is untouched (the two rails are independent).
     handle.dispatchEvent(
@@ -3001,11 +3182,14 @@ export const NavDragToReopen: Story = {
   play: async ({ canvasElement }) => {
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
     await waitFor(() => expect(app.className).toContain("is-nav-hidden"));
+
     const grabber = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-nav-reopen");
       if (!el) throw new Error("nav reopen grabber not mounted");
+
       return el;
     });
+
     // A move with no press in progress is ignored — the pane stays closed.
     grabber.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -3068,8 +3252,10 @@ export const CommentDragToClose: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-rail-resize")).toBeTruthy(),
     );
+
     const handle =
       canvasElement.querySelector<HTMLElement>(".emr-rail-resize")!;
+
     expect(app.className).not.toContain("is-comments-hidden");
     // The rail's left-border handle mirrors the nav: dragging RIGHT shrinks it,
     // and a >170px inward drag drives the target under 50%, collapsing it.
@@ -3110,11 +3296,14 @@ export const CommentDragToReopen: Story = {
   play: async ({ canvasElement }) => {
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
     await waitFor(() => expect(app.className).toContain("is-comments-hidden"));
+
     const grabber = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-rail-reopen");
       if (!el) throw new Error("comment reopen grabber not mounted");
+
       return el;
     });
+
     // A move with no press in progress is ignored — the pane stays closed.
     grabber.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -3177,11 +3366,14 @@ export const CommentDragToReopen: Story = {
 export const CommentRailWidthClamped: Story = {
   play: async ({ canvasElement }) => {
     const app = canvasElement.querySelector<HTMLElement>(".emr-app")!;
+
     const rail = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-rail");
       if (!el) throw new Error("rail not rendered yet");
+
       return el;
     });
+
     const cs = getComputedStyle(rail);
     const maxPx = parseFloat(cs.maxWidth);
     const minPx = parseFloat(cs.minWidth);
@@ -3248,10 +3440,12 @@ export const RemoteSync: Story = {
   play: async ({ args, canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     // The refresh lives on the always-visible status bar.
     const refresh = await waitFor(() =>
       canvas.getByRole("button", { name: "Refresh comments" }),
     );
+
     await userEvent.click(refresh);
     await waitFor(() => expect(args.fetchRemoteThreads).toHaveBeenCalled());
   },
@@ -3271,9 +3465,11 @@ export const RemoteSyncWithFiles: Story = {
   play: async ({ args, canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     const refresh = await waitFor(() =>
       canvas.getByRole("button", { name: "Refresh files and comments" }),
     );
+
     await userEvent.click(refresh);
     await waitFor(() => expect(args.fetchRemoteThreads).toHaveBeenCalled());
     expect(args.onRefreshFiles).toHaveBeenCalled();
@@ -3296,9 +3492,11 @@ export const RemoteSyncFileRefreshFails: Story = {
   play: async ({ args, canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
+
     const refresh = await waitFor(() =>
       canvas.getByRole("button", { name: "Refresh files and comments" }),
     );
+
     await userEvent.click(refresh);
     await waitFor(() => expect(args.onRefreshFiles).toHaveBeenCalled());
     // The rejection is swallowed, so the refresh path settles and re-enables
@@ -3320,6 +3518,7 @@ export const RemoteSyncFileRefreshFails: Story = {
 export const PerDocumentHousing: Story = {
   args: (() => {
     const apis = new Map<string, LocalOnlyCommentApi>();
+
     return {
       initialThreads: [],
       draftScope: "hub" as const,
@@ -3342,14 +3541,17 @@ export const PerDocumentHousing: Story = {
         // renders and stays commentable.
         if (path === BROKEN) return undefined;
         let api = apis.get(path);
+
         if (!api) {
           api = new FixtureCommentApi();
           apis.set(path, api);
         }
+
         return api;
       },
       loadThreadsForPath: async (path: string): Promise<CommentThread[]> => {
         if (path === BROKEN) throw new Error("threads load failed");
+
         return path === A ? threads() : [];
       },
     };
@@ -3363,11 +3565,13 @@ export const PerDocumentHousing: Story = {
     await expect(
       canvasElement.querySelector(".emr-rail-title-pr-link"),
     ).toBeNull();
+
     const statusPr = await waitFor(() =>
       within(canvasElement).getByRole("link", {
         name: "Latest completed PR for this file: #42 Routed PR",
       }),
     );
+
     expect(statusPr.getAttribute("href")).toBe("https://example.test/pr/42");
 
     await userEvent.click(hl);
@@ -3376,9 +3580,11 @@ export const PerDocumentHousing: Story = {
 
     // A reply routes through file A's own per-path CommentApi.
     await userEvent.click(bal.getByText("@mention or reply"));
+
     const ta = await waitFor(
       () => bal.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(ta, "Routed reply");
     await userEvent.click(bal.getByRole("button", { name: "Reply" }));
     await waitFor(() => expect(bal.getByText("Routed reply")).toBeTruthy());
@@ -3492,12 +3698,14 @@ export const CommentHistoryStepper: Story = {
   args: stepLoaders(),
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = () =>
       within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
 
     const older = await waitFor(() =>
       rail().getByRole("button", { name: "Older version" }),
     );
+
     await userEvent.click(older);
     await waitFor(() =>
       expect(
@@ -3536,6 +3744,7 @@ export const CommentHistoryStepper: Story = {
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
     await waitFor(
       () =>
@@ -3566,12 +3775,15 @@ export const CommentHistoryStepperLoadErrors: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = within(
       canvasElement.querySelector<HTMLElement>(".emr-rail-col")!,
     );
+
     const older = await waitFor(() =>
       rail.getByRole("button", { name: "Older version" }),
     );
+
     await userEvent.click(older);
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-error")?.textContent).toContain(
@@ -3594,9 +3806,11 @@ export const CommentHistoryStepperHistoryError: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const status = within(
       canvasElement.querySelector<HTMLElement>(".emr-statusbar")!,
     );
+
     await waitFor(() =>
       expect(status.queryByRole("button", { name: /Iteration/ })).toBeNull(),
     );
@@ -3628,12 +3842,14 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForHighlight(canvasElement, "t-active");
+
     const rail = () =>
       within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
 
     const older = await waitFor(() =>
       rail().getByRole("button", { name: "Older version" }),
     );
+
     await userEvent.click(older);
 
     await waitFor(() =>
@@ -3667,12 +3883,15 @@ export const WordCountAndFeedback: Story = {
       const words = canvasElement.querySelector<HTMLElement>(
         ".emr-statusbar-words",
       );
+
       expect(words?.textContent).toContain("words");
     });
+
     // The status bar's feedback link opens the configured mailto address.
     const feedback = canvasElement.querySelector<HTMLAnchorElement>(
       "a.emr-statusbar-feedback",
     );
+
     expect(feedback).toBeTruthy();
     expect(feedback!.getAttribute("href")).toContain("mailto:x@microsoft.com");
   },
@@ -3688,11 +3907,13 @@ class ResolvingCommentApi extends LocalOnlyCommentApi {
     ids: string[],
   ): Promise<Record<string, { displayName: string; avatarUrl?: string }>> {
     const out: Record<string, { displayName: string }> = {};
+
     for (const id of ids) {
       if (id.toLowerCase() === MENTION_GUID) {
         out[id] = { displayName: "Grace Hopper" };
       }
     }
+
     return out;
   }
 }
@@ -3732,6 +3953,7 @@ export const MentionResolvesToName: Story = {
         const pill = canvasElement.querySelector<HTMLElement>(
           '.emr-comment-content .emr-mention[data-mention-kind="user"]',
         );
+
         expect(pill?.textContent).toBe("@Grace Hopper");
       },
       { timeout: 5000 },
@@ -3814,9 +4036,11 @@ export const DiffHighlighting: Story = {
     const added = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-block--added",
     );
+
     const edited = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-block--modified",
     );
+
     expect(added?.dataset.diffLabel).toBe("Added");
     expect(edited?.dataset.diffLabel).toBe("Edited");
     // The removed-lines marker sits in the prose.
@@ -3833,9 +4057,11 @@ export const DiffHighlighting: Story = {
         ).toBeTruthy(),
       { timeout: 5000 },
     );
+
     const inlineBlock = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-block--inline",
     )!;
+
     expect(inlineBlock.querySelector(".emr-word-added")?.textContent).toContain(
       "everywhere",
     );
@@ -3852,11 +4078,14 @@ export const DiffHighlighting: Story = {
             ".emr-statusbar-btn.is-toggle",
           ),
         ].find((b) => b.textContent?.includes("Changes"));
+
         if (!btn) throw new Error("no changes toggle");
+
         return btn;
       },
       { timeout: 5000 },
     );
+
     // Starts pressed: the diff layer is the default view.
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
 
@@ -3996,9 +4225,11 @@ function makeDocLinksLoad(): (path: string) => Promise<string> {
     [LINKS_DOC]: SOURCE_LINKS_DOC,
     [SIBLING_DOC]: SOURCE_SIBLING_DOC,
   };
+
   return async (path: string) => {
     const src = map[path];
     if (src == null) throw new Error(`No source for ${path}`);
+
     return src;
   };
 }
@@ -4011,9 +4242,11 @@ async function articleBody(
   return waitFor(
     () => {
       const el = canvasElement.querySelector<HTMLElement>(".markdown-body");
+
       if (!el?.textContent?.includes(marker)) {
         throw new Error(`article not showing "${marker}" yet`);
       }
+
       return within(el);
     },
     { timeout: 5000 },
@@ -4186,9 +4419,11 @@ function makeGlossaryLoad(): (path: string) => Promise<string> {
     [A]: SOURCE_A,
     [GLOSSARY]: SOURCE_GLOSSARY,
   };
+
   return async (path: string) => {
     const src = map[path];
     if (src == null) throw new Error(`No source for ${path}`);
+
     return src;
   };
 }
@@ -4197,6 +4432,7 @@ function makeGlossaryLoad(): (path: string) => Promise<string> {
 function collapseTermsSection(): () => void {
   const key = `emr.section.${GLOSSARY}.terms`;
   sessionStorage.setItem(key, "1");
+
   return () => sessionStorage.removeItem(key);
 }
 
@@ -4232,15 +4468,19 @@ export const DeepLinkHeading: Story = {
         const h = canvasElement.querySelector<HTMLElement>(
           ".emr-rendered #classifiers-hashing",
         );
+
         if (!h) throw new Error("heading not rendered");
+
         return h;
       },
       { timeout: 5000 },
     );
+
     // The collapsed parent is unfolded (and its chevron agrees).
     const terms = canvasElement.querySelector<HTMLElement>(
       '.emr-section[data-section-id="terms"]',
     )!;
+
     await waitFor(() =>
       expect(terms.hasAttribute("data-collapsed")).toBe(false),
     );
@@ -4254,14 +4494,18 @@ export const DeepLinkHeading: Story = {
         "Classifier body text that the deep link should reveal.",
       ),
     ).toBeVisible();
+
     // The landing cue plays on the heading's TEXT…
     const cueOf = (h: HTMLElement) =>
       h.querySelector<HTMLElement>(":scope > .emr-anchor-target");
+
     const cue = await waitFor(() => {
       const el = cueOf(heading);
       if (!el) throw new Error("no landing cue yet");
+
       return el;
     });
+
     const landedAt = performance.now();
     // …hugging the words like a comment highlight (an inline box around the
     // text), not the heading's full block width…
@@ -4295,6 +4539,7 @@ export const DeepLinkHeading: Story = {
     if (performance.now() - landedAt > 2000) {
       throw new Error("setup exceeded the 2.5s landing-cue budget");
     }
+
     const before = scroller.scrollTop;
     const article = canvasElement.querySelector<HTMLElement>(".emr-rendered")!;
     const pristine = article.cloneNode(true) as HTMLElement;
@@ -4303,12 +4548,15 @@ export const DeepLinkHeading: Story = {
       .forEach((el) => el.replaceWith(...el.childNodes));
     article.innerHTML = `<div style="height: 400px"></div>${pristine.innerHTML}`;
     const relaid = article.querySelector<HTMLElement>("#classifiers-hashing")!;
+
     // The landing cue survives the rebuild, continuing its fade.
     const relaidCue = await waitFor(() => {
       const el = cueOf(relaid);
       if (!el) throw new Error("cue not carried over to the rebuilt heading");
+
       return el;
     });
+
     await expect(relaidCue.style.animationDelay).toMatch(/^-\d+ms$/);
     await waitFor(
       () => {
@@ -4329,19 +4577,24 @@ export const DeepLinkHeading: Story = {
 // Installed in `beforeEach` (before render), so a negative check can't pass
 // just because the cue came and went outside a fixed observation window.
 let anchorCueSeen = false;
+
 function recordAnchorCue(): () => void {
   anchorCueSeen = false;
+
   const observer = new MutationObserver(() => {
     if (document.querySelector(".emr-anchor-target")) anchorCueSeen = true;
   });
+
   observer.observe(document.body, {
     subtree: true,
     childList: true,
     attributes: true,
     attributeFilter: ["class"],
   });
+
   return () => observer.disconnect();
 }
+
 /** Let pending effects + their requestAnimationFrame callbacks run. */
 async function settleFrames(): Promise<void> {
   for (let i = 0; i < 3; i++) {
@@ -4351,6 +4604,7 @@ async function settleFrames(): Promise<void> {
 
 // The `link.opened` telemetry a story emits (installed in `beforeEach`).
 let linksOpened: Array<Record<string, unknown> | undefined> = [];
+
 function recordLinksOpened(): () => void {
   linksOpened = [];
   __resetTelemetryForTests({
@@ -4363,6 +4617,7 @@ function recordLinksOpened(): () => void {
     trackException: () => undefined,
     flush: () => undefined,
   });
+
   return () => __resetTelemetryForTests();
 }
 
@@ -4431,6 +4686,7 @@ export const DeepLinkHeadingDroppedOnFileSwitch: Story = {
       if (path === B) {
         await new Promise<void>((r) => (releaseLinkedDoc = r));
       }
+
       return makeLoad()(path);
     },
   },
@@ -4439,6 +4695,7 @@ export const DeepLinkHeadingDroppedOnFileSwitch: Story = {
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
     await waitForHighlight(canvasElement, "t-active");
     // a.md also has a "Notes" heading; the stale anchor must not land on it…
@@ -4454,6 +4711,7 @@ export const DeepLinkHeadingDroppedOnFileSwitch: Story = {
 // A remembered or linked path that was renamed/deleted since. ADO answers the
 // load with TF401174 (HTTP 404).
 const GONE = "/renamed-away.md";
+
 function itemNotFound(path: string): Error {
   return Object.assign(
     new Error(
@@ -4462,16 +4720,20 @@ function itemNotFound(path: string): Error {
     { status: 404 },
   );
 }
+
 function loadWithGone(): (path: string) => Promise<string> {
   const load = makeLoad();
+
   return async (path) => {
     if (path === GONE) throw itemNotFound(path);
+
     return load(path);
   };
 }
 
 // The `app.exception` operations a story reports (installed in `beforeEach`).
 let reportedOperations: unknown[] = [];
+
 function recordExceptions(): () => void {
   reportedOperations = [];
   __resetTelemetryForTests({
@@ -4484,6 +4746,7 @@ function recordExceptions(): () => void {
     },
     flush: () => undefined,
   });
+
   return () => __resetTelemetryForTests();
 }
 
@@ -4507,9 +4770,11 @@ export const DocumentsMissingDocFallsBack: Story = {
   play: async ({ args, canvasElement }) => {
     await articleBody(canvasElement, "Word-doc-style review");
     const canvas = within(canvasElement);
+
     const notice = await waitFor(() =>
       canvas.getByText(/is no longer in this repository/),
     );
+
     await expect(notice.textContent).toContain(GONE);
     await expect(notice.textContent).toContain(`Showing ${A} instead.`);
     await expect(args.onSelectPath).toHaveBeenCalledWith(A);
@@ -4529,9 +4794,11 @@ export const DocumentsMissingDocNoticeClearsOnNavigate: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(() => canvas.getByText(/is no longer in this repository/));
+
     const nav = within(
       canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
     );
+
     await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
     await articleBody(canvasElement, "Just another document");
     await expect(
@@ -4617,6 +4884,7 @@ export const PrFileNotFoundIsReported: Story = {
     await waitFor(() => expect(reportedOperations).toContain("document-load"));
   },
 };
+
 function stubClipboard(writeText: (text: string) => Promise<void>): () => void {
   const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
   const originalExec = document.execCommand;
@@ -4626,6 +4894,7 @@ function stubClipboard(writeText: (text: string) => Promise<void>): () => void {
   });
   // Pin the legacy fallback to "fails" so only the stub decides the outcome.
   document.execCommand = (() => false) as typeof document.execCommand;
+
   return () => {
     // `clipboard` is normally inherited from Navigator.prototype: drop the
     // own-property shadow rather than leave the stub installed.
@@ -4664,17 +4933,21 @@ export const HeadingLinkCopy: Story = {
   play: async ({ args, canvasElement }) => {
     const writeText = fn(() => Promise.resolve());
     const restore = stubClipboard(writeText);
+
     try {
       const notes = await waitFor(
         () => {
           const b = canvasElement.querySelector<HTMLButtonElement>(
             ".emr-rendered #notes > .emr-heading-link",
           );
+
           if (!b) throw new Error("no heading link yet");
+
           return b;
         },
         { timeout: 5000 },
       );
+
       await userEvent.click(notes);
       await waitFor(() =>
         expect(writeText).toHaveBeenCalledWith(
@@ -4692,6 +4965,7 @@ export const HeadingLinkCopy: Story = {
       const design = canvasElement.querySelector<HTMLButtonElement>(
         ".emr-rendered #design > .emr-heading-link",
       )!;
+
       await userEvent.click(design);
       await waitFor(() =>
         expect(design.getAttribute("aria-label")).toBe("Couldn't copy link"),
@@ -4714,17 +4988,21 @@ export const HeadingLinkCopyBlocked: Story = {
     const restore = stubClipboard(() =>
       Promise.reject(new Error("blocked by Permissions-Policy")),
     );
+
     try {
       const notes = await waitFor(
         () => {
           const b = canvasElement.querySelector<HTMLButtonElement>(
             ".emr-rendered #notes > .emr-heading-link",
           );
+
           if (!b) throw new Error("no heading link yet");
+
           return b;
         },
         { timeout: 5000 },
       );
+
       await userEvent.click(notes);
       await waitFor(() =>
         expect(notes.getAttribute("aria-label")).toBe("Couldn't copy link"),
@@ -4751,8 +5029,10 @@ export const HeadingLinksHiddenOnHistoricalVersion: Story = {
         canvasElement.querySelector(".emr-rendered .emr-heading-link"),
       ).not.toBeNull(),
     );
+
     const rail = () =>
       within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+
     await userEvent.click(
       await waitFor(() =>
         rail().getByRole("button", { name: "Older version" }),
@@ -4815,6 +5095,7 @@ export const DeepLinkText: Story = {
   beforeEach: () => {
     const undoCollapse = collapseTermsSection();
     const undoTelemetry = recordLinksOpened();
+
     return () => {
       undoCollapse();
       undoTelemetry();
@@ -4829,13 +5110,17 @@ export const DeepLinkText: Story = {
       { timeout: 5000 },
     );
     const landedAt = performance.now();
+
     const terms = canvasElement.querySelector<HTMLElement>(
       '.emr-section[data-section-id="terms"]',
     )!;
+
     await expect(terms.hasAttribute("data-collapsed")).toBe(false);
+
     const cue = canvasElement.querySelector<HTMLElement>(
       "[data-emr-text-cue]",
     )!;
+
     await expect(cue.classList.contains("emr-anchor-target")).toBe(true);
     await expect(getComputedStyle(cue).animationName).toBe("emr-anchor-land");
     await expect(
@@ -4856,17 +5141,21 @@ export const DeepLinkText: Story = {
     if (performance.now() - landedAt > 2000) {
       throw new Error("setup exceeded the 2.5s landing-cue budget");
     }
+
     const article = canvasElement.querySelector<HTMLElement>(".emr-rendered")!;
     const pristine = article.cloneNode(true) as HTMLElement;
     pristine
       .querySelectorAll("[data-emr-text-cue]")
       .forEach((el) => el.replaceWith(...el.childNodes));
     article.innerHTML = pristine.innerHTML;
+
     const relaid = await waitFor(() => {
       const el = article.querySelector<HTMLElement>("[data-emr-text-cue]");
       if (!el) throw new Error("cue not carried over to the rebuilt article");
+
       return el;
     });
+
     await expect(relaid.style.animationDelay).toMatch(/^-\d+ms$/);
     await expect(textCue(canvasElement)).toBe(
       "Classifier body text that the deep link",
@@ -4917,6 +5206,7 @@ export const DeepLinkTextMalformed: Story = {
   beforeEach: () => {
     const undoCue = recordAnchorCue();
     const undoTelemetry = recordLinksOpened();
+
     return () => {
       undoCue();
       undoTelemetry();
@@ -4944,11 +5234,14 @@ async function selectParagraphText(
       const p = Array.from(
         canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
       ).find((el) => el.textContent?.startsWith(prefix));
+
       if (!p) throw new Error(`no paragraph "${prefix}"`);
+
       return p;
     },
     { timeout: 5000 },
   );
+
   const range = document.createRange();
   range.setStart(para.firstChild!, 0);
   range.setEnd(para.firstChild!, length);
@@ -4956,6 +5249,7 @@ async function selectParagraphText(
   sel.removeAllRanges();
   sel.addRange(range);
   para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
   return waitFor(() =>
     within(canvasElement).getByRole<HTMLButtonElement>("button", {
       name: "Copy link to selection",
@@ -4976,6 +5270,7 @@ export const TextLinkCopy: Story = {
     const canvas = within(canvasElement);
     const writeText = fn(() => Promise.resolve());
     let restore = stubClipboard(writeText);
+
     try {
       await userEvent.click(
         await selectParagraphText(canvasElement, "Shared vocabulary", 17),
@@ -5068,20 +5363,26 @@ export const WikiSyntax: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const tosp = await waitFor(() => {
       const nav = canvasElement.querySelector<HTMLElement>(
         ".emr-rendered nav.emr-wiki-tosp",
       );
+
       if (!nav?.querySelector("a")) throw new Error("subpages not listed");
+
       return nav;
     });
+
     await expect(listWikiFolder).toHaveBeenCalledWith("/Guides", undefined);
     await expect(
       Array.from(tosp.querySelectorAll("a")).map((a) => a.textContent),
     ).toEqual(["Install", "Configure"]);
+
     const toc = canvasElement.querySelector<HTMLElement>(
       ".emr-rendered nav.emr-wiki-toc",
     )!;
+
     await expect(
       within(toc).getByRole("link", { name: "Start here" }),
     ).toBeTruthy();
@@ -5090,6 +5391,7 @@ export const WikiSyntax: Story = {
     const names = Array.from(
       canvasElement.querySelectorAll(".emr-docnav-file-name"),
     ).map((el) => el.textContent);
+
     await expect(names.indexOf("Overview.md")).toBeLessThan(
       names.indexOf("Guides.md"),
     );
@@ -5212,8 +5514,10 @@ export const NavOutlineToggle: Story = {
     await waitForHighlight(canvasElement, "t-active");
     const canvas = within(canvasElement);
     const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+
     const headingRow = () =>
       within(nav).queryByRole("button", { name: "Notes" });
+
     await waitFor(() => expect(headingRow()).not.toBeNull());
     const toggle = canvas.getByRole("button", { name: "Outline" });
     await expect(toggle.getAttribute("aria-pressed")).toBe("true");

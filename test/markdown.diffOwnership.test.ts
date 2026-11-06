@@ -36,6 +36,7 @@ interface Doc {
 function buildDoc(container: Container, children: Child[], depth: 1 | 2): Doc {
   let next = 0;
   const tok = () => `t${++next}`;
+
   const childLines = (kind: Child, ind: string): string[] => {
     switch (kind) {
       case "para":
@@ -54,10 +55,13 @@ function buildDoc(container: Container, children: Child[], depth: 1 | 2): Doc {
         ];
     }
   };
+
   const outer = depth === 2 ? "   " : "";
   const body: string[] = [];
+
   if (container === "quote") {
     body.push(`${outer}> Lead ${tok()} text`);
+
     for (const child of children) {
       body.push(`${outer}>`, ...childLines(child, `${outer}> `));
     }
@@ -67,14 +71,18 @@ function buildDoc(container: Container, children: Child[], depth: 1 | 2): Doc {
     body.push(`${outer}${marker}Lead ${tok()} text`);
     for (const child of children) body.push("", ...childLines(child, ind));
   }
+
   const lines = [`Intro ${tok()} paragraph.`, ""];
   if (depth === 2) lines.push(`1. Outer ${tok()} item`, "");
+
   if (container !== "quote") {
     const keep = container === "bullet" ? "- " : "1. ";
     lines.push(`${outer}${keep}Keep ${tok()} item`, "");
   }
+
   const first = lines.length + 1;
   lines.push(...body, "", `Outro ${tok()} paragraph.`);
+
   return {
     name: `${container}[${children.join(",") || "lead"}]@${depth}`,
     lines,
@@ -86,6 +94,7 @@ function* corpus(): Generator<Doc> {
   for (const depth of [1, 2] as const) {
     for (const container of CONTAINERS) {
       yield buildDoc(container, [], depth);
+
       for (const a of CHILDREN) {
         yield buildDoc(container, [a], depth);
         for (const b of CHILDREN) yield buildDoc(container, [a, b], depth);
@@ -98,6 +107,7 @@ function render(md: string): HTMLElement {
   const root = document.createElement("div");
   root.className = "markdown-body emr-rendered";
   root.innerHTML = renderMarkdownSync(md);
+
   return root;
 }
 
@@ -107,11 +117,14 @@ function tokenNode(root: HTMLElement, token: string): Text | null {
     root,
     NodeFilter.SHOW_TEXT,
   );
+
   const pattern = new RegExp(`\\b${token}\\b`);
+
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (node.parentElement?.closest(`.${DIFF_DELETED_MARKER_CLASS}`)) continue;
     if (pattern.test(node.textContent ?? "")) return node as Text;
   }
+
   return null;
 }
 
@@ -120,6 +133,7 @@ function painted(node: Text): boolean {
   const el = node.parentElement!;
   if (el.closest(`.emr-diff-line-wash, .${WORD_ADDED_CLASS}`)) return true;
   const block = el.closest<HTMLElement>(`.${DIFF_BLOCK_CLASS}`);
+
   return (
     block != null &&
     block.dataset.diffLineWash !== "true" &&
@@ -139,6 +153,7 @@ function audit(
   kind: "added" | "modified",
 ): Audit {
   const current = doc.lines.join("\n");
+
   const original =
     kind === "modified"
       ? doc.lines
@@ -149,6 +164,7 @@ function audit(
           )
           .join("\n")
       : undefined;
+
   const range: DiffRange =
     kind === "added"
       ? { startLine: changed[0], endLine: changed[1], kind }
@@ -163,6 +179,7 @@ function audit(
             .slice(changed[0] - 1, changed[1])
             .join("\n"),
         };
+
   // Re-decorating the same root also proves the decoration pass is idempotent.
   decorateDiffRanges(root, [range], {
     renderInline: renderMarkdownSync,
@@ -179,10 +196,12 @@ function audit(
     const isChanged = i + 1 >= changed[0] && i + 1 <= changed[1];
     const label = `${doc.name} ${kind} ${changed.join("-")}: L${i + 1} ${line.trim()}`;
     if (isChanged && !painted(node!)) result.lost.push(label);
+
     if (kind === "added" && !isChanged && painted(node!)) {
       result.misplaced.push(label);
     }
   });
+
   return result;
 }
 
@@ -203,14 +222,17 @@ describe("diff ownership invariant", () => {
       doc.lines.forEach((line, i) => {
         if (/\bt\d+\b/.test(line)) changes.push([i + 1, i + 1]);
       });
+
       for (const change of changes) {
         const added = audit(doc, root, change, "added");
         lost.push(...added.lost);
         misplaced.push(...added.misplaced);
+
         if (change[0] === change[1]) {
           lost.push(...audit(doc, root, change, "modified").lost);
         }
       }
+
       expect(lost).toEqual([]);
       expect(misplaced).toEqual([]);
     },
@@ -231,6 +253,7 @@ describe("diff ownership regressions", () => {
       "",
       "### Security",
     ].join("\n");
+
     const current = [
       "### Performance",
       "",
@@ -253,6 +276,7 @@ describe("diff ownership regressions", () => {
       "",
       "### Security",
     ].join("\n");
+
     const ranges = refineDiffRanges(
       lineDiffBlocksToRanges(
         [
@@ -276,6 +300,7 @@ describe("diff ownership regressions", () => {
       original,
       current,
     );
+
     const root = render(current);
     decorateDiffRanges(root, ranges, {
       renderInline: renderMarkdownSync,
@@ -286,6 +311,7 @@ describe("diff ownership regressions", () => {
     const continuation = Array.from(root.querySelectorAll("p")).find((p) =>
       p.textContent.startsWith("You can use"),
     )!;
+
     expect(continuation.dataset.diffKind).toBe("added");
     expect(continuation.querySelector(".emr-diff-line-wash")).not.toBeNull();
     const benchmark = continuation.closest("li")!;
@@ -331,6 +357,7 @@ describe("diff ownership regressions", () => {
   it("gives a diagram inside a washed list item its own accent", () => {
     const md =
       "- Keep\n\n- New lead\n\n  ```mermaid\n  graph TD; A-->B\n  ```\n";
+
     const root = render(md);
     decorateDiffRanges(root, [{ startLine: 3, endLine: 7, kind: "added" }], {
       renderInline: renderMarkdownSync,
@@ -346,6 +373,7 @@ describe("diff ownership regressions", () => {
   it("keeps the box-wash fallback for an image lead", () => {
     const md =
       "- Keep\n\n- ![chart](chart.png)\n\n  - Nested item\n\n> ![chart](chart.png)\n>\n> - Quoted item\n";
+
     const root = render(md);
     decorateDiffRanges(root, [{ startLine: 3, endLine: 9, kind: "added" }], {
       renderInline: renderMarkdownSync,

@@ -106,6 +106,7 @@ export function isAlmSearchError(e: unknown): e is AlmSearchError {
 
 function errMsg(e: unknown): string {
   if (e instanceof Error) return e.message;
+
   try {
     return String(e);
   } catch {
@@ -161,6 +162,7 @@ export class AlmSearchRestClient implements AlmSearchClient {
       `/_apis/search/codesearchresults?api-version=7.1-preview.1`;
 
     let res: Response;
+
     try {
       res = await withRetry(
         async () => {
@@ -172,14 +174,17 @@ export class AlmSearchRestClient implements AlmSearchClient {
           // boot (shell/adoAuthToken.ts); search itself just degrades when it
           // can't authenticate.
           let token: string;
+
           try {
             token = await this.getToken();
           } catch (err) {
             throw new AlmSearchError("auth", errMsg(err));
           }
+
           if (!token) {
             throw new AlmSearchError("auth", "empty access token");
           }
+
           const r = await this.fetchImpl(url, {
             method: "POST",
             headers: {
@@ -189,6 +194,7 @@ export class AlmSearchRestClient implements AlmSearchClient {
             body: JSON.stringify(req),
             signal,
           });
+
           // Throw a status-bearing AlmSearchError on non-2xx so the retry
           // classifier can distinguish transient (retry) from terminal
           // (extension-missing / bad-request) failures.
@@ -199,6 +205,7 @@ export class AlmSearchRestClient implements AlmSearchClient {
               r.status,
             );
           }
+
           return r;
         },
         {
@@ -219,6 +226,7 @@ export class AlmSearchRestClient implements AlmSearchClient {
       ) {
         throw err;
       }
+
       // A shaped AlmSearchError (from a non-2xx / auth throw above) propagates
       // as-is; a raw throw from fetch itself is a network failure.
       if (isAlmSearchError(err)) throw err;
@@ -240,6 +248,7 @@ export function statusToKind(status: number): AlmSearchErrorKind {
   if (status === 404) return "extension-missing";
   if (status === 401 || status === 403) return "auth";
   if (status === 400) return "bad-request";
+
   return "unknown";
 }
 
@@ -272,6 +281,7 @@ export function createAlmSearchClient(opts: {
       message: "missing org name or token provider",
     };
   }
+
   return {
     ok: true,
     source: "rest",
@@ -304,5 +314,6 @@ export function outcomeFromError(err: unknown): FileSearchOutcome {
   if (isAlmSearchError(err)) {
     return { kind: "unavailable", reason: err.kind, message: err.message };
   }
+
   return { kind: "unavailable", reason: "unknown", message: errMsg(err) };
 }

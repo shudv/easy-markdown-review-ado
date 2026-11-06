@@ -13,18 +13,23 @@ import {
 function parse(html: string): HTMLElement {
   const root = document.createElement("div");
   root.innerHTML = html;
+
   return root;
 }
 
 /** The TOC as nested `[text, href, children]` tuples, for readable asserts. */
 type TocNode = [string, string, TocNode[]];
+
 function tocTree(list: Element | null): TocNode[] {
   if (!list) return [];
+
   return Array.from(list.children).map((li) => {
     const a = li.querySelector(":scope > a")!;
+
     const nested = Array.from(li.querySelectorAll(":scope > ul")).flatMap(
       (ul) => tocTree(ul),
     );
+
     return [a.textContent, a.getAttribute("href")!, nested];
   });
 }
@@ -45,6 +50,7 @@ describe("[[_TOC_]]", () => {
         ].join("\n"),
       ),
     );
+
     const nav = root.querySelector("nav.emr-wiki-macro.emr-wiki-toc")!;
     expect(nav.getAttribute("aria-label")).toBe("Contents");
     expect(nav.getAttribute("data-wiki-macro")).toBe("toc");
@@ -62,6 +68,7 @@ describe("[[_TOC_]]", () => {
       ],
       ["Appendix", "#appendix", []],
     ]);
+
     // Every link target exists in the rendered document.
     for (const a of nav.querySelectorAll("a")) {
       expect(root.querySelector(a.getAttribute("href")!)).not.toBeNull();
@@ -80,6 +87,7 @@ describe("[[_TOC_]]", () => {
     const root = parse(
       renderMarkdownSync("[[_TOC_]]\n\n## A\n#### Deep\n### B\n## C\n"),
     );
+
     expect(tocTree(root.querySelector("nav > ul"))).toEqual([
       [
         "A",
@@ -159,6 +167,7 @@ describe("[[_TOSP_]]", () => {
         { path: "/Guides/C#-notes?.md", title: "C# notes?" },
       ],
     );
+
     const nav = subpagesBox(html);
     // The title and the box's source position survive the fill.
     expect(nav.querySelector(".emr-wiki-macro-title")!.textContent).toBe(
@@ -204,6 +213,7 @@ describe("[[_TOSP_]]", () => {
       renderMarkdownSync("[[_TOSP_]]\n\nBetween <b>us</b>.\n\n[[_TOSP_]]\n"),
       "loading",
     );
+
     const root = parse(html);
     expect(root.querySelectorAll(".emr-wiki-macro-note")).toHaveLength(2);
     expect(root.querySelector("p:not([class])")!.textContent).toBe(

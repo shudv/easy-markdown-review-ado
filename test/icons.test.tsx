@@ -9,6 +9,7 @@ describe("shared toolbar icons", () => {
   it("uses matching defaults and composes optional classes", () => {
     const search = renderToStaticMarkup(<SearchIcon />);
     const plusDefault = renderToStaticMarkup(<PlusIcon />);
+
     const plus = renderToStaticMarkup(
       <PlusIcon size={18} className="custom-icon" />,
     );

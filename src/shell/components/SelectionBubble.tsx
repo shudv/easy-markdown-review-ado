@@ -35,6 +35,7 @@ export function SelectionBubble(
 ): ReactElement {
   const { top, left, onAddComment, onCopyLink, onCopyLinkSettled, block } =
     props;
+
   const { linkState, copyLink } = useSelectionCopyLink(
     onCopyLink,
     onCopyLinkSettled,

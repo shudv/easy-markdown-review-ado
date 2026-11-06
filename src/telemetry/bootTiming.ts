@@ -39,6 +39,7 @@ const BROWSER_ENVIRONMENT: BootTimingEnvironment = {
   subscribeVisibilityChange(listener) {
     if (typeof document === "undefined") return () => {};
     document.addEventListener("visibilitychange", listener);
+
     return () => document.removeEventListener("visibilitychange", listener);
   },
 };
@@ -70,18 +71,22 @@ function clearVisibilitySubscription(): void {
 function captureVisibilityTransition(): void {
   if (startMs === null || fired) return;
   const now = environment.now();
+
   if (environment.isVisible()) {
     if (hiddenStartMs !== null) {
       hiddenElapsedMs += elapsed(hiddenStartMs, now);
       hiddenStartMs = null;
     }
+
     activeStartMs ??= now;
   } else {
     wasHiddenDuringBoot = true;
+
     if (activeStartMs !== null) {
       activeElapsedMs += elapsed(activeStartMs, now);
       activeStartMs = null;
     }
+
     hiddenStartMs ??= now;
   }
 }
@@ -151,18 +156,22 @@ export function markBootAfterAutoReload(): void {
 export function markAppReady(reason: AppReadyReason = "content"): void {
   if (fired || startMs === null) return;
   const now = environment.now();
+
   if (activeStartMs !== null) {
     activeElapsedMs += elapsed(activeStartMs, now);
     activeStartMs = null;
   }
+
   if (hiddenStartMs !== null) {
     hiddenElapsedMs += elapsed(hiddenStartMs, now);
     hiddenStartMs = null;
   }
+
   if (authWaitStartMs !== null) {
     authRefreshWaitMs += elapsed(authWaitStartMs, now);
     authWaitStartMs = null;
   }
+
   fired = true;
   clearVisibilitySubscription();
 

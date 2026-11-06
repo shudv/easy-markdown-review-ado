@@ -21,9 +21,11 @@ import { withRetry } from "./retry";
  */
 export function hashString(s: string): string {
   let h = 5381;
+
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) + h) ^ s.charCodeAt(i);
   }
+
   return (h >>> 0).toString(16);
 }
 
@@ -81,10 +83,12 @@ export function lineDiffBlocksToRanges(
   originalLines?: readonly string[],
 ): DiffRange[] {
   const ranges: DiffRange[] = [];
+
   for (const b of blocks ?? []) {
     const range = lineDiffBlockToRange(b, originalLines);
     if (range) ranges.push(range);
   }
+
   return ranges;
 }
 
@@ -102,16 +106,20 @@ function lineDiffBlockToRange(
   if (ct === 1 /* Add */) {
     return modCount > 0 ? addedLinesRange(modStart, modCount) : undefined;
   }
+
   if (ct === 3 /* Edit */) {
     return editBlockToRange(
       { modStart, modCount, origStart, origCount },
       originalLines,
     );
   }
+
   if (ct === 2 /* Delete */) {
     const at = Math.max(1, modStart);
+
     return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
   }
+
   return undefined;
 }
 
@@ -142,12 +150,14 @@ function editBlockToRange(
     // insertion — surface it as an addition (green) rather than an edit.
     return addedLinesRange(modStart, modCount);
   }
+
   if (modCount > 0) {
     const originalText = sliceOriginalLines(
       originalLines,
       origStart,
       origCount,
     );
+
     return {
       startLine: modStart,
       endLine: modStart + modCount - 1,
@@ -159,8 +169,10 @@ function editBlockToRange(
       ...(originalText !== undefined ? { originalText } : {}),
     };
   }
+
   // Edit that left no modified lines behaves like a deletion.
   const at = Math.max(1, modStart);
+
   return buildDeletedMarkerRange(at, origCount, originalLines, origStart);
 }
 
@@ -182,8 +194,10 @@ function buildDeletedMarkerRange(
     linesAdded: 0,
     linesDeleted: origCount,
   };
+
   const content = sliceOriginalLines(originalLines, originalStart, origCount);
   if (content !== undefined) range.deletedContent = content;
+
   return range;
 }
 
@@ -200,9 +214,11 @@ function sliceOriginalLines(
   if (!originalLines || originalCount <= 0 || originalStart <= 0) {
     return undefined;
   }
+
   const from = originalStart - 1;
   const slice = originalLines.slice(from, from + originalCount);
   if (slice.length === 0) return undefined;
+
   return slice.join("\n");
 }
 
@@ -212,6 +228,7 @@ export function lineDiffBlocksToCounts(
 ): { linesAdded: number; linesDeleted: number } {
   let added = 0;
   let deleted = 0;
+
   for (const b of blocks ?? []) {
     switch (b.changeType ?? 0) {
       case 1: // Add
@@ -228,6 +245,7 @@ export function lineDiffBlocksToCounts(
         break;
     }
   }
+
   return { linesAdded: added, linesDeleted: deleted };
 }
 
@@ -262,6 +280,7 @@ export async function loadFileDiffs(
   const { repositoryId, project, baseCommit, targetCommit } = diff;
   const cacheKey = buildLineCountsCacheKey(diff, paths);
   const cached = readLineCountsCache(cacheKey);
+
   if (cached) {
     const pathsToHydrate = pathsRequiringOriginalSource(cached);
     if (pathsToHydrate.length === 0) return cached;
@@ -269,14 +288,18 @@ export async function loadFileDiffs(
     await Promise.all(
       pathsToHydrate.map(async (path) => {
         const originalLines = await fetchOriginalLines(gitClient, diff, path);
-        if (originalLines)
+
+        if (originalLines) {
           cached[path]!.originalSource = originalLines.join("\n");
+        }
       }),
     );
+
     return cached;
   }
 
   const gitClient = getGitClient();
+
   // The REST client returns the parsed body as-is, which can be empty.
   const diffs = await withRetry<FileDiff[] | null | undefined>(
     () =>
@@ -291,7 +314,9 @@ export async function loadFileDiffs(
       ),
     { mode: "read", label: "fetchFileDiffs.getFileDiffs" },
   );
+
   const out: Record<string, FileDiffInfo> = {};
+
   for (const d of diffs ?? []) {
     if (!d.path) continue;
     const blocks = d.lineDiffBlocks;
@@ -301,9 +326,11 @@ export async function loadFileDiffs(
     // range into each marker's expandable body. Fetched lazily (only files
     // with deletions) and tolerant of failure — the marker still renders.
     let originalLines: string[] | undefined;
+
     if (linesDeleted > 0) {
       originalLines = await fetchOriginalLines(gitClient, diff, d.path);
     }
+
     out[d.path] = {
       linesAdded,
       linesDeleted,
@@ -311,7 +338,9 @@ export async function loadFileDiffs(
       ranges: lineDiffBlocksToRanges(blocks, originalLines),
     };
   }
+
   writeLineCountsCache(cacheKey, out);
+
   return out;
 }
 
@@ -346,6 +375,7 @@ async function fetchOriginalLines(
         ),
       { mode: "read", label: "fetchFileDiffs.getItemText(original)" },
     );
+
     return text.split(/\r\n|\r|\n/);
   } catch (err) {
     console.warn(
@@ -358,6 +388,7 @@ async function fetchOriginalLines(
       operation: "original-content-load",
       impact: "degraded",
     });
+
     return undefined;
   }
 }
@@ -396,6 +427,7 @@ function buildLineCountsCacheKey(
   // iteration id separately.
   const sortedPaths = [...paths].sort();
   const pathHash = hashString(sortedPaths.join("\n"));
+
   return (
     `${LINE_COUNTS_CACHE_PREFIX}${project}:${repositoryId}:` +
     `${baseCommit}:${targetCommit}:${pathHash}`
@@ -408,6 +440,7 @@ function readLineCountsCache(key: string): Record<string, FileDiffInfo> | null {
     const raw = sessionStorage.getItem(key);
     if (raw === null || raw === "") return null;
     const parsed = JSON.parse(raw) as Record<string, FileDiffInfo>;
+
     return parsed;
   } catch {
     return null;

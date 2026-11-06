@@ -99,6 +99,7 @@ function useMentionPickerPosition(
     const onMove = () => recomputePickerPos();
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
+
     return () => {
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
@@ -111,6 +112,7 @@ function useMentionPickerPosition(
 // eslint-disable-next-line max-lines-per-function -- Comment editor: textarea, @-mention typeahead, keyboard shortcuts and image paste all act on the same text and caret. Splitting would pass the caret state around.
 export function Composer(props: Readonly<ComposerProps>): ReactElement {
   const busy = useContext(ComposerBusyContext);
+
   const {
     initial = "",
     placeholder = "Write a comment… Markdown supported.",
@@ -176,14 +178,15 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
   }, [autoFocus]);
 
   // Drop any pending debounced search when the composer unmounts.
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (mentionDebounceRef.current !== null) {
         window.clearTimeout(mentionDebounceRef.current);
         mentionDebounceRef.current = null;
       }
-    };
-  }, []);
+    },
+    [],
+  );
 
   // Auto-grow the textarea to fit content (with a sensible cap).
   useLayoutEffect(() => {
@@ -192,12 +195,14 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
     ta.style.height = "auto";
     const next = Math.min(ta.scrollHeight, 320);
     ta.style.height = `${Math.max(next, 70)}px`;
+
     // Keep the composer visible inside the scroll container. Deferred into a
     // rAF so it runs after other scrolls scheduled by the opening click
     // (notably the article-highlight re-center), which would otherwise win.
     const raf = requestAnimationFrame(() => {
       rootRef.current?.scrollIntoView({ block: "nearest" });
     });
+
     return () => cancelAnimationFrame(raf);
   }, [value, tab]);
 
@@ -224,6 +229,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
     async (trigger: ActiveTrigger, requestId: number) => {
       try {
         let result: MentionSuggestion[];
+
         switch (trigger.kind) {
           case "user":
             result = await commentApi.searchUsers(trigger.query);
@@ -235,14 +241,17 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
             result = await commentApi.searchPullRequests(trigger.query);
             break;
         }
+
         // Drop stale responses.
         if (requestId !== requestSeqRef.current) return;
         setMention((prev) => {
           if (prev?.requestId !== requestId) return prev;
+
           const clamped = Math.min(
             prev.selectedIndex,
             Math.max(0, result.length - 1),
           );
+
           return {
             ...prev,
             suggestions: result,
@@ -272,19 +281,25 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
   const reevaluateTrigger = useCallback(
     (text: string, caret: number) => {
       const trigger = detectActiveTrigger(text, caret);
+
       if (!trigger) {
         setMention(null);
+
         if (mentionDebounceRef.current !== null) {
           window.clearTimeout(mentionDebounceRef.current);
           mentionDebounceRef.current = null;
         }
+
         return;
       }
+
       setMention((prev) => {
         const sameRun =
           prev?.trigger.start === trigger.start &&
           prev.trigger.kind === trigger.kind;
+
         const requestId = ++requestSeqRef.current;
+
         const nextState: MentionState = {
           trigger,
           suggestions: sameRun ? prev!.suggestions : [],
@@ -292,14 +307,17 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
           selectedIndex: sameRun ? prev!.selectedIndex : 0,
           requestId,
         };
+
         // Debounce the REST call — each keystroke replaces the pending timer.
         if (mentionDebounceRef.current !== null) {
           window.clearTimeout(mentionDebounceRef.current);
         }
+
         mentionDebounceRef.current = window.setTimeout(() => {
           mentionDebounceRef.current = null;
           void fetchSuggestions(trigger, requestId);
         }, MENTION_DEBOUNCE_MS);
+
         return nextState;
       });
     },
@@ -315,6 +333,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
   const commitSelection = useCallback(() => {
     const m = mention!;
     const suggestion = m.suggestions[m.selectedIndex]!;
+
     // Seed the identity store so the just-picked person's `@<GUID>` renders as
     // their name immediately (in the preview and the posted comment) with no
     // lookup — we already know it here.
@@ -327,6 +346,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
         },
       ]);
     }
+
     const before = value.slice(0, m.trigger.start);
     const after = value.slice(m.trigger.end);
     // For user mentions, insert the READABLE `@Display Name` so the author sees
@@ -334,6 +354,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
     // `@<GUID>` token in the preview and on submit via `encodePickedMentions`.
     // Work-item / PR mentions keep their canonical link markdown.
     let insertion: string;
+
     if (suggestion.kind === "user") {
       // Disambiguate against already-picked labels so two different people who
       // share a display name each get a distinct, deterministically-matchable
@@ -342,11 +363,13 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
         suggestion.displayName,
         pickedMentions.map((p) => p.label),
       );
+
       insertion = `@${label} `;
       setPickedMentions([...pickedMentions, { label, id: suggestion.id }]);
     } else {
       insertion = buildMentionMarkdown(suggestion);
     }
+
     const next = before + insertion + after;
     const nextCaret = before.length + insertion.length;
     setValue(next);
@@ -412,8 +435,10 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                       (prev.selectedIndex + 1) % prev.suggestions.length,
                   })),
                 );
+
                 return;
               }
+
               if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setMention(
@@ -424,18 +449,23 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                       prev.suggestions.length,
                   })),
                 );
+
                 return;
               }
+
               if (e.key === "Enter" || e.key === "Tab") {
                 e.preventDefault();
                 e.stopPropagation();
                 commitSelection();
+
                 return;
               }
+
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
                 cancelMention();
+
                 return;
               }
             }
@@ -444,6 +474,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
               e.preventDefault();
               onSubmit(encodedValue.trim());
             }
+
             if (e.key === "Escape" && onCancel) {
               e.preventDefault();
               // Cancel only this composer, not the thread — don't bubble to the

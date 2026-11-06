@@ -49,9 +49,12 @@ export const Photo: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe(PHOTO);
   },
 };
@@ -98,9 +101,12 @@ export const Resolved: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe(PHOTO);
   },
 };

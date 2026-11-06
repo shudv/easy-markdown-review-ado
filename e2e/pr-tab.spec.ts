@@ -56,6 +56,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const settled = frame.locator(
       ".markdown-body, h2:has-text('No Markdown files changed'), .emr-error h2",
     );
+
     await expect(settled.first()).toBeVisible({ timeout: 45_000 });
     await expect(frame.locator(".emr-loading")).toHaveCount(0);
 
@@ -84,9 +85,11 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const iterationsStart = requests.findIndex(
       (e) => e.phase === "start" && PR_ITERATIONS.test(e.url),
     );
+
     const prEnd = requests.findIndex(
       (e) => e.phase === "end" && PR_BY_ID.test(e.url),
     );
+
     expect(iterationsStart, "no PR iterations request seen").toBeGreaterThan(
       -1,
     );
@@ -103,9 +106,11 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       await expect
         .poll(() => telemetry.events().some((e) => e.name === "app.loaded"))
         .toBe(true);
+
       const m = telemetry
         .events()
         .find((e) => e.name === "app.loaded")!.measurements;
+
       test.info().annotations.push({
         type: "boot timing (dev build)",
         description: `visible ${m?.activeBootTimeMs}ms · context ${m?.contextReadyMs}ms · render ${m?.renderReadyMs}ms`,
@@ -168,6 +173,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const textarea = frame.locator(
       ".emr-balloon.is-draft textarea.emr-textarea",
     );
+
     await expect(textarea).toBeVisible({ timeout: 10_000 });
 
     // Type an `@` mention query. The picker queries ADO's identity service.
@@ -178,12 +184,16 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     // query (clear + retype) until a real suggestion row appears, so a transient
     // empty response self-heals instead of failing the run.
     const picker = frame.locator(".emr-mention-picker");
+
     const firstOption = picker
       .locator("button[role=option].emr-mention-picker-row")
       .first();
+
     let displayName = "";
+
     for (let attempt = 0; attempt < 4; attempt++) {
       await textarea.fill(`@${E2E.mentionQuery}`);
+
       try {
         await firstOption.waitFor({ state: "visible", timeout: 10_000 });
         displayName = (
@@ -198,6 +208,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         await expect(picker).toHaveCount(0, { timeout: 5_000 });
       }
     }
+
     expect(displayName, "identity option had no display name").toBeTruthy();
 
     // Commit the selected first suggestion from the still-focused textarea.
@@ -221,9 +232,11 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       .locator(".emr-balloon.is-draft")
       .getByRole("button", { name: /^preview$/i })
       .click();
+
     const pill = frame.locator(
       '.emr-balloon.is-draft .emr-preview .emr-mention[data-mention-kind="user"]',
     );
+
     await expect(pill).toBeVisible({ timeout: 10_000 });
     await expect(pill).toContainText(displayName);
     await expect(pill).not.toContainText(/^@?<?[\da-f-]{36}>?$/i);
@@ -271,6 +284,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       .locator(".emr-rendered p")
       .filter({ hasNot: frame.locator(".emr-highlight") })
       .first();
+
     await openDraftComposerBySelection(frame, {
       para,
       minNodeLen: 4,
@@ -296,11 +310,13 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     // actually exercises the persisted-mention fix. Fall back to the first row.
     const rows = picker.locator("button[role=option].emr-mention-picker-row");
     await rows.first().waitFor({ state: "visible", timeout: 10_000 });
+
     const guestRow = rows.filter({
       has: frame.locator(".emr-mention-picker-secondary", {
         hasText: /@microsoft\.com/i,
       }),
     });
+
     const pick = (await guestRow.count()) > 0 ? guestRow.first() : rows.first();
     await pick.click();
     // While typing, the composer shows the readable name (not a raw GUID); the
@@ -316,6 +332,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
     const posted = frame
       .locator(".emr-balloon:not(.is-draft)[data-thread-id]")
       .filter({ hasText: marker });
+
     await expect(posted).toBeVisible({ timeout: 20_000 });
 
     // Reply to the thread WITH a mention. This exercises the addReply path,
@@ -351,6 +368,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       const reloaded = frame
         .locator(".emr-balloon:not(.is-draft)[data-thread-id]")
         .filter({ hasText: marker });
+
       await expect(reloaded).toBeVisible({ timeout: 45_000 });
 
       // EVERY user-mention pill in our comment must render a display NAME, never
@@ -359,11 +377,13 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
       const pills = reloaded.locator(
         '.emr-comment-body .emr-mention[data-mention-kind="user"]',
       );
+
       await expect(pills.first()).toBeVisible({ timeout: 20_000 });
       await expect
         .poll(
           async () => {
             const texts = await pills.allTextContents();
+
             return texts.map((t) => t.trim());
           },
           {
@@ -373,6 +393,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         )
         .not.toContain("");
       const texts = await pills.allTextContents();
+
       for (const t of texts) {
         expect(t.trim(), `pill "${t}" is still a raw GUID`).not.toMatch(
           GUID_RE,
@@ -384,6 +405,7 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         .locator(".emr-balloon:not(.is-draft)[data-thread-id]")
         .filter({ hasText: marker })
         .first();
+
       if (await target.count()) {
         await target
           .getByRole("button", { name: /more options/i })

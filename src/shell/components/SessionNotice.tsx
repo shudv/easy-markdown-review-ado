@@ -27,6 +27,7 @@ export function SessionNotice({
 }>): ReactElement | null {
   const session = useAdoSession(monitor);
   if (session.state !== "refreshing") return null;
+
   return (
     <div className="emr-toast emr-toast--info" role="status">
       <span className="emr-toast-msg">

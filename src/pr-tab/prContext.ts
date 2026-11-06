@@ -68,6 +68,7 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
     configuredRepositoryId(config, pullRequestId),
     fileChangesLoader({ gitClient, pullRequestId, projectId, log }),
   );
+
   const repositoryId = pr.repository.id;
   // Typed required, but the ADO REST payload can omit the repository name.
   const repositoryName = (pr.repository.name as string | undefined) ?? "";
@@ -75,10 +76,12 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
   log("got pull request", { repositoryId, title: pr.title });
 
   const { iterations, latest, changes } = fileChanges;
+
   const reviewIterationStops = mapReviewIterationStops(
     iterations,
     pullRequestId,
   );
+
   const location = {
     projectId,
     projectName: project.name,
@@ -88,8 +91,10 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
     pullRequestId,
     pr,
   };
+
   if (latest === undefined || !hasId(latest.id) || !changes) {
     log("no iterations; returning empty file list");
+
     return { ...location, changedMdFiles: [], reviewIterationStops };
   }
 
@@ -121,18 +126,21 @@ function readPullRequestId(log: BootLog): {
   log("reading SDK configuration");
   const config = SDK.getConfiguration() as Record<string, unknown> | undefined;
   log("sdk configuration", config);
+
   const pullRequestId = pickPullRequestId(
     config,
     typeof document !== "undefined" ? document.referrer : "",
   );
+
   if (!hasId(pullRequestId)) {
     throw new Error(
-      "Could not determine pull request id from SDK configuration. " +
-        "Raw configuration: " +
-        JSON.stringify(config, null, 2),
+      `Could not determine pull request id from SDK configuration. ` +
+        `Raw configuration: ${JSON.stringify(config, null, 2)}`,
     );
   }
+
   log("resolved pullRequestId", pullRequestId);
+
   return { config, pullRequestId };
 }
 
@@ -168,8 +176,10 @@ function requestPullRequest(
 // descriptions already carry the push's title, so commits aren't requested.
 function fileChangesLoader(scope: PrRequestScope) {
   const { gitClient, pullRequestId, projectId, log } = scope;
+
   return async (repositoryId: string) => {
     log("fetching pull request iterations", repositoryId);
+
     const iterations = await withRetry(
       () =>
         withAdoSessionRefreshDetection(
@@ -184,12 +194,17 @@ function fileChangesLoader(scope: PrRequestScope) {
         ),
       { mode: "read", label: "getPullRequestIterations" },
     );
+
     const latest =
       iterations.length > 0 ? iterations[iterations.length - 1] : undefined;
-    if (latest === undefined || !hasId(latest.id))
+
+    if (latest === undefined || !hasId(latest.id)) {
       return { iterations, latest, changes: undefined };
+    }
+
     log("fetching iteration changes", latest.id);
     const latestId = latest.id;
+
     const changes = await fetchAllIterationChanges((top, skip) =>
       withRetry(
         () =>
@@ -208,6 +223,7 @@ function fileChangesLoader(scope: PrRequestScope) {
         { mode: "read", label: "getPullRequestIterationChanges" },
       ),
     );
+
     return { iterations, latest, changes };
   };
 }
@@ -222,6 +238,7 @@ export async function fetchRangeChangeTypes(
   params: IterationParams,
 ): Promise<Record<string, ChangeType>> {
   const gitClient = sharedGitClient();
+
   const entries = await fetchAllIterationChanges((top, skip) =>
     withRetry(
       () =>
@@ -237,6 +254,7 @@ export async function fetchRangeChangeTypes(
       { mode: "read", label: "getPullRequestIterationChanges.range" },
     ),
   );
+
   return rangeChangeTypes(entries);
 }
 
@@ -267,6 +285,7 @@ export async function fetchFileContentAtCommit(
 ): Promise<string> {
   const gitClient = sharedGitClient();
   const versionDescriptor = commitVersionDescriptor(commitId);
+
   const ab = await withRetry(
     () =>
       gitClient.getItemContent(
@@ -283,6 +302,7 @@ export async function fetchFileContentAtCommit(
       ),
     { mode: "read", label: "fetchFileContent.getItemContent" },
   );
+
   return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
@@ -302,6 +322,7 @@ function resolveOrgUrl(): string {
   } catch {
     // Falls through to the referrer-based heuristic.
   }
+
   return orgUrlFromReferrer(
     typeof document !== "undefined" ? document.referrer : "",
   );

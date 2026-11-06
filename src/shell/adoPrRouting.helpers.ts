@@ -94,6 +94,7 @@ export async function mostRecentRoutingPr(
 ): Promise<GitPullRequest | null> {
   if (!repo.defaultBranch) return null;
   const gitClient = scope.git();
+
   // Fetch the most recent COMPLETED PRs targeting the default branch and let
   // the pure `selectRoutingPr` helper make the routing decision (most recent
   // completed; active PRs ignored). We over-fetch a small page rather than
@@ -103,8 +104,10 @@ export async function mostRecentRoutingPr(
     targetRefName: repo.defaultBranch,
     status: COMPLETED_PR_STATUS,
   } as Parameters<GitRestClient["getPullRequests"]>[1];
+
   try {
     let completed: GitPullRequest[];
+
     try {
       completed = await withRetry(
         () =>
@@ -128,6 +131,7 @@ export async function mostRecentRoutingPr(
       });
       completed = [];
     }
+
     return selectRoutingPr(completed);
   } catch (err) {
     console.warn(
@@ -140,6 +144,7 @@ export async function mostRecentRoutingPr(
       operation: "repository-pr-routing",
       impact: "degraded",
     });
+
     return null;
   }
 }
@@ -189,6 +194,7 @@ export async function routingPrForDoc(
 
 async function lastCommitTouching(read: DocRead): Promise<string | null> {
   const { gitClient, projectId, repo, wanted } = read;
+
   try {
     const commits = await withRetry(
       () =>
@@ -199,12 +205,14 @@ async function lastCommitTouching(read: DocRead): Promise<string | null> {
         ),
       { mode: "read", label: "findRoutingPrForDoc.getCommits" },
     );
+
     return firstCommitId(commits);
   } catch (err) {
     console.warn(
       `[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`,
       err,
     );
+
     // A path that's no longer on the branch can't be routed — expected, not a
     // failure; fall through to the repo's most recent completed PR below.
     if (!isItemNotFoundError(err)) {
@@ -215,6 +223,7 @@ async function lastCommitTouching(read: DocRead): Promise<string | null> {
         impact: "degraded",
       });
     }
+
     return null;
   }
 }
@@ -224,6 +233,7 @@ async function prMergingCommit(
   commitId: string,
 ): Promise<GitPullRequest | null> {
   const { gitClient, projectId, repo } = read;
+
   try {
     const query = await withRetry(
       () =>
@@ -234,6 +244,7 @@ async function prMergingCommit(
         ),
       { mode: "read", label: "findRoutingPrForDoc.getPullRequestQuery" },
     );
+
     return selectRoutingPrFromQuery(query.results, commitId);
   } catch (err) {
     console.warn(
@@ -246,6 +257,7 @@ async function prMergingCommit(
       operation: "document-pr-routing",
       impact: "degraded",
     });
+
     return null;
   }
 }
@@ -289,11 +301,13 @@ async function findDocPrHistory(
 ): Promise<DocPrHistoryPage> {
   const skip = opts.skip ?? 0;
   const top = opts.top ?? 30;
+
   const empty: DocPrHistoryPage = {
     prs: [],
     nextCommitSkip: skip,
     hasMore: false,
   };
+
   if (!repo.defaultBranch) return empty;
   const read = docRead(scope, repo, docPath);
 
@@ -310,6 +324,7 @@ async function findDocPrHistory(
   //    When that mapping fails, report no stops for this page but let the
   //    caller keep paging in case older commits map cleanly.
   const prs = await prsMergingCommits(read, ids);
+
   return { prs, nextCommitSkip, hasMore };
 }
 
@@ -319,6 +334,7 @@ async function fileCommitIdsPage(
   page: { $top: number; $skip: number },
 ): Promise<string[] | null> {
   const { gitClient, projectId, repo, wanted } = read;
+
   try {
     const commits = await withRetry(
       () =>
@@ -329,12 +345,14 @@ async function fileCommitIdsPage(
         ),
       { mode: "read", label: "findDocPrHistory.getCommits" },
     );
+
     return commitIds(commits);
   } catch (err) {
     console.warn(
       `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
       err,
     );
+
     // A path that's no longer on the branch has no history — expected, not a
     // failure (the reader falls back to another document).
     if (!isItemNotFoundError(err)) {
@@ -345,6 +363,7 @@ async function fileCommitIdsPage(
         impact: "degraded",
       });
     }
+
     return null;
   }
 }
@@ -355,6 +374,7 @@ async function prsMergingCommits(
   ids: string[],
 ): Promise<GitPullRequest[]> {
   const { gitClient, projectId, repo } = read;
+
   try {
     const query = await withRetry(
       () =>
@@ -365,6 +385,7 @@ async function prsMergingCommits(
         ),
       { mode: "read", label: "findDocPrHistory.getPullRequestQuery" },
     );
+
     return selectRoutingPrsFromQuery(query.results, ids);
   } catch (err) {
     console.warn(
@@ -377,6 +398,7 @@ async function prsMergingCommits(
       operation: "history-pr-load",
       impact: "degraded",
     });
+
     return [];
   }
 }
@@ -396,5 +418,6 @@ export async function docPrHistory(
   opts: HistoryPageOptions = {},
 ): Promise<DocPrRef[]> {
   const page = await findDocPrHistory(scope, repo, docPath, opts);
+
   return docPrRefsFromHistory(page.prs, (id) => buildPrUrl(repo, id));
 }

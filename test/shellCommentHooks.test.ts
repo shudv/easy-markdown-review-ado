@@ -32,8 +32,10 @@ const GUID = "6f2c3a1e-1234-4abc-9def-0123456789ab";
 /** Runs the write, then reports it failed (as `persistWith` does on error). */
 const failingPersist = (async <T>(_label: string, op: () => Promise<T>) => {
   await op();
+
   return null;
 }) as PersistWith;
+
 const passingPersist = (async <T>(_label: string, op: () => Promise<T>) =>
   op()) as PersistWith;
 
@@ -88,10 +90,12 @@ describe("useCommentPosting", () => {
     const { onSubmitDraft } = await mount(useCommentPosting, opts);
     onSubmitDraft(`Ping @<${GUID}>`);
     await settle();
+
     const action = opts.dispatch.mock.calls[0]![0] as Extract<
       ThreadAction,
       { type: "ADD_THREAD" }
     >;
+
     expect(action.thread.comments.map((c) => c.id)).toEqual(["c-server"]);
     expect(action.thread.mentionedIdentities).toEqual([
       expect.objectContaining({ id: GUID, displayName: "Ada" }),
@@ -120,6 +124,7 @@ async function mountMutations(threadsById: Record<string, CommentThread>) {
     threadsById,
     setActiveThreadId: vi.fn(),
   };
+
   return { opts, actions: await mount(useThreadMutations, opts) };
 }
 
@@ -144,11 +149,13 @@ describe("useThreadMutations", () => {
     const liked = thread([
       { kind: "like", users: [{ id: "me", displayName: "Me" }] },
     ]);
+
     const cases: Array<[Record<string, CommentThread>, boolean]> = [
       [{}, true],
       [{ t1: thread() }, true],
       [{ t1: liked }, false],
     ];
+
     for (const [threadsById, add] of cases) {
       const { opts, actions } = await mountMutations(threadsById);
       actions.onToggleReaction("t1", "c1", "like");
@@ -166,6 +173,7 @@ describe("useThreadMutations", () => {
 describe("useThreadSelection", () => {
   async function selectWhileComparing(htmlByPath: Record<string, string>) {
     const requestDraft = vi.fn<(target: DraftTarget) => void>();
+
     const { onSelectionMade } = await mount(useThreadSelection, {
       setActiveThreadId: vi.fn(),
       scrollDocToAnchor: vi.fn(),
@@ -175,7 +183,9 @@ describe("useThreadSelection", () => {
       viewingHistorical: true,
       htmlByPath,
     });
+
     onSelectionMade(anchor);
+
     return requestDraft.mock.calls[0]![0].anchor;
   }
 
@@ -183,6 +193,7 @@ describe("useThreadSelection", () => {
     const relocated = await selectWhileComparing({
       "docs/a.md": '<p data-source-line="4">Some quoted text</p>',
     });
+
     expect(relocated).not.toBe(anchor);
     expect(relocated).toMatchObject({ exact: "quoted" });
   });
@@ -195,6 +206,7 @@ describe("useThreadSelection", () => {
 describe("useDraftController", () => {
   it("ignores a discard with no pending draft guard", async () => {
     const revealComments = vi.fn();
+
     const controller = await mount(useDraftController, {
       draftScope: undefined,
       selectedPath: "docs/a.md",
@@ -202,6 +214,7 @@ describe("useDraftController", () => {
       revealComments,
       setActiveThreadId: vi.fn(),
     });
+
     controller.onDiscardExistingDraft();
     await settle();
     expect(revealComments).not.toHaveBeenCalled();

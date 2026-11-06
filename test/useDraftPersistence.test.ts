@@ -46,6 +46,7 @@ const NEW_TARGET: DraftTarget = {
   threadId: NEW_DRAFT_THREAD_ID,
   anchor,
 };
+
 const REPLY_TARGET: DraftTarget = {
   path: "docs/a.md",
   threadId: "t-7",
@@ -77,7 +78,9 @@ function Harness(props: {
   const [activeDraft, setTarget] = useState<DraftTarget | null>(
     props.initialTarget ?? null,
   );
+
   const restoredRef = useRef<Array<{ target: DraftTarget; body: string }>>([]);
+
   const api = useDraftPersistence({
     scope: props.scope,
     activeDraft,
@@ -86,9 +89,11 @@ function Harness(props: {
       setTarget(target);
     },
   });
+
   useLayoutEffect(() => {
     handle = { api, setTarget, restored: restoredRef.current };
   }, [api]);
+
   return createElement("div", null, api.initialBody);
 }
 
@@ -112,6 +117,7 @@ function unmount(): void {
     act(() => root!.unmount());
     root = null;
   }
+
   container?.remove();
   container = null;
 }

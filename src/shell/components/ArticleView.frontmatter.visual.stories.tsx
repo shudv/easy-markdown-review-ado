@@ -61,11 +61,13 @@ function ThemeFrame({
     // the heavy spacing seen in the real PR. Loading it here keeps the visual
     // loop faithful to production.
     setMarkdownDark(theme === "dark");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div
       style={{
@@ -188,6 +190,7 @@ async function waitForFrontmatterDiff(
       ) {
         throw new Error("frontmatter value word-diff (added) not applied yet");
       }
+
       if (
         !canvasElement.querySelector(".emr-frontmatter-value .emr-word-removed")
       ) {

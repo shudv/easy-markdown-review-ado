@@ -39,11 +39,14 @@ async function loadLocalReaderFont(
   id: string,
 ): Promise<boolean> {
   if (typeof FontFace !== "function") return false;
+
   const face = new FontFace(
     `emr-local-probe-${id}`,
     `local(${JSON.stringify(family)})`,
   );
+
   await face.load();
+
   return face.status === "loaded";
 }
 
@@ -76,23 +79,30 @@ export function ReaderStatusBar(
 
   const typeRef = useRef<HTMLDivElement>(null);
   const [typeOpen, setTypeOpen] = useState(false);
+
   const {
     triggerRef: typeTriggerRef,
     popoverRef: typePopoverRef,
     restoreFocusAfterClose: restoreTypeFocusAfterClose,
   } = useInertPopover(typeOpen);
+
   const overriddenFonts = useMemo(() => {
     if (!availableFontIds) return undefined;
     const ids = new Set([DEFAULT_FONT_ID, ...availableFontIds]);
+
     return READER_FONTS.filter((font) => ids.has(font.id));
   }, [availableFontIds]);
+
   const [detectedFonts, setDetectedFonts] = useState<
     readonly (typeof READER_FONTS)[number][]
   >(() => READER_FONTS.filter((font) => font.localFamily === undefined));
+
   const availableFonts = overriddenFonts ?? detectedFonts;
+
   const effectiveFontId = availableFonts.some((font) => font.id === fontId)
     ? fontId
     : DEFAULT_FONT_ID;
+
   const hasAlternativeFonts = availableFonts.some(
     (font) => font.id !== DEFAULT_FONT_ID,
   );
@@ -104,6 +114,7 @@ export function ReaderStatusBar(
       if (cancelled) return;
       setDetectedFonts(fonts);
     });
+
     return () => {
       cancelled = true;
     };
@@ -112,16 +123,20 @@ export function ReaderStatusBar(
   // Close the font popover on an outside pointer-down or Escape.
   useEffect(() => {
     if (!typeOpen) return undefined;
+
     const onDocPointer = (e: PointerEvent) => {
       if (!typeRef.current!.contains(e.target as Node)) setTypeOpen(false);
     };
+
     const onKey = (e: KeyboardEvent) => {
       handlePopoverEscape(e, restoreTypeFocusAfterClose, () =>
         setTypeOpen(false),
       );
     };
+
     document.addEventListener("pointerdown", onDocPointer, true);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("pointerdown", onDocPointer, true);
       document.removeEventListener("keydown", onKey);
@@ -141,10 +156,12 @@ export function ReaderStatusBar(
     hasIterationRange: !!iterationRange,
     onIterationRangeChange,
   });
+
   const selectedActivity = useMemo(
     () => selectReaderActivity(activities),
     [activities],
   );
+
   const visibleActivity = useDelayedReaderActivity(
     selectedActivity,
     activityDelayMs,

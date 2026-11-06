@@ -33,8 +33,10 @@ export function GeneratedSourceModal(
   const { kind = "mermaid", source, originalSource, onClose } = props;
   const previewRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+
   const hasDiff =
     source !== null && originalSource != null && originalSource !== source;
+
   const {
     copied,
     setCopied,
@@ -43,6 +45,7 @@ export function GeneratedSourceModal(
     changesShown,
     setChangesShown,
   } = useGeneratedSourceViewState(hasDiff, kind, source);
+
   const selectedSource =
     beforeShown && originalSource != null ? originalSource : source;
 
@@ -54,19 +57,23 @@ export function GeneratedSourceModal(
     // `activeElement` is at least <body> while a document is loaded.
     const opener = document.activeElement as HTMLElement;
     panelRef.current!.focus();
+
     return () => opener.focus();
   }, [isOpen]);
 
   // Close on Escape.
   useEffect(() => {
     if (source === null) return;
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
       }
     }
+
     document.addEventListener("keydown", onKey, true);
+
     return () => document.removeEventListener("keydown", onKey, true);
   }, [source, onClose]);
 
@@ -75,6 +82,7 @@ export function GeneratedSourceModal(
     const el = previewRef.current;
     if (!el || selectedSource === null) return;
     const encoded = encodeURIComponent(selectedSource);
+
     if (kind === "math") {
       const code = document.createElement("code");
       code.textContent = selectedSource;
@@ -207,6 +215,7 @@ function useGeneratedSourceViewState(
   const [beforeShown, setBeforeShown] = useState(false);
   const [changesShown, setChangesShown] = useState(hasDiff);
   const [shown, setShown] = useState({ hasDiff, kind, source });
+
   if (
     shown.hasDiff !== hasDiff ||
     shown.kind !== kind ||
@@ -217,6 +226,7 @@ function useGeneratedSourceViewState(
     setBeforeShown(false);
     setChangesShown(hasDiff);
   }
+
   return {
     copied,
     setCopied,

@@ -46,9 +46,11 @@ function classifyUrl(
 ): { safe: true } | { safe: false; reason: string } {
   const url = raw.trim();
   if (url === "") return { safe: false, reason: "empty" };
+
   if (
     Array.from(url).some((character) => {
       const codePoint = character.codePointAt(0)!;
+
       return codePoint <= 0x1f || codePoint === 0x7f;
     })
   ) {
@@ -64,12 +66,13 @@ function classifyUrl(
   // Direct scheme check on the raw string — stricter and simpler than relying
   // on `new URL()` quirks for inputs like `javascript:alert(1)`.
   const schemeMatch = /^([a-z][a-z0-9+\-.]*):/i.exec(url);
+
   if (!schemeMatch) {
     // No scheme — treat as a relative reference.
     return { safe: true };
   }
 
-  const scheme = schemeMatch[1]!.toLowerCase() + ":";
+  const scheme = `${schemeMatch[1]!.toLowerCase()}:`;
   if (allowed.has(scheme)) return { safe: true };
 
   return { safe: false, reason: scheme };
@@ -80,18 +83,22 @@ type Properties = NonNullable<Element["properties"]>;
 function existingRelTokens(rel: unknown): string[] {
   if (Array.isArray(rel)) return (rel as unknown[]).map(String);
   if (typeof rel === "string") return rel.split(/\s+/).filter(Boolean);
+
   return [];
 }
 
 function sanitizeAnchor(props: Properties): void {
   const href = props.href;
+
   if (typeof href === "string") {
     const verdict = classifyUrl(href, SAFE_LINK_SCHEMES);
+
     if (!verdict.safe) {
       delete props.href;
       props["dataEmrBlockedScheme"] = verdict.reason;
     }
   }
+
   // New-context links always get safe rel, overriding any weaker value.
   if (typeof props.target === "string" && props.target.length > 0) {
     const required = new Set(["noopener", "noreferrer"]);
@@ -102,11 +109,14 @@ function sanitizeAnchor(props: Properties): void {
 
 function sanitizeImage(props: Properties): void {
   const src = props.src;
+
   if (typeof src === "string") {
     const verdict = classifyUrl(src, SAFE_IMAGE_SCHEMES);
+
     if (!verdict.safe) {
       delete props.src;
       props["dataEmrBlockedScheme"] = verdict.reason;
+
       // Preserve accessibility: if there's no alt, advertise that an
       // image was suppressed rather than silently rendering nothing.
       if (typeof props.alt !== "string" || props.alt.length === 0) {
@@ -114,6 +124,7 @@ function sanitizeImage(props: Properties): void {
       }
     }
   }
+
   // Strip any `srcset` regardless — we don't use it, and validating
   // each candidate URL adds complexity for zero benefit today. If a
   // future feature needs srcset, validate it here.
@@ -125,17 +136,15 @@ function sanitizeImage(props: Properties): void {
  * new-context links. Run AFTER any plugin that mutates `href`/`src` and
  * BEFORE `rehype-stringify`.
  */
-export const rehypeSanitizeUrls: Plugin<[], Root> = () => {
-  return (tree) => {
-    visit(tree, "element", (node: Element) => {
-      const tag = node.tagName;
-      const props = node.properties;
+export const rehypeSanitizeUrls: Plugin<[], Root> = () => (tree) => {
+  visit(tree, "element", (node: Element) => {
+    const tag = node.tagName;
+    const props = node.properties;
 
-      if (tag === "a") {
-        sanitizeAnchor(props);
-      } else if (tag === "img") {
-        sanitizeImage(props);
-      }
-    });
-  };
+    if (tag === "a") {
+      sanitizeAnchor(props);
+    } else if (tag === "img") {
+      sanitizeImage(props);
+    }
+  });
 };

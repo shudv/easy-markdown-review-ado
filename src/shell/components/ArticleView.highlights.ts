@@ -11,6 +11,7 @@ export function syncActiveHighlights(
   const highlights = Array.from(
     article.querySelectorAll<HTMLElement>(".emr-highlight"),
   );
+
   highlights.forEach((highlight) => {
     const threadId = highlight.dataset.threadId;
     highlight.classList.toggle(
@@ -21,9 +22,11 @@ export function syncActiveHighlights(
   });
 
   if (!land || activeThreadId === null) return;
+
   const activeHighlights = highlights.filter(
     (highlight) => highlight.dataset.threadId === activeThreadId,
   );
+
   if (activeHighlights.length === 0) return;
   void article.offsetWidth;
   activeHighlights.forEach((highlight) =>
@@ -51,7 +54,9 @@ export function containedThreadIds(root: HTMLElement): string[] {
       `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
     ),
   ).reverse();
+
   highlights.push(root);
+
   return [
     ...new Set(highlights.map((highlight) => highlight.dataset.threadId!)),
   ];
@@ -61,29 +66,35 @@ export function addHighlightKeyboardTargets(article: HTMLElement): void {
   const highlights = Array.from(
     article.querySelectorAll<HTMLElement>(".emr-highlight"),
   ).filter((highlight) => highlight.dataset.threadId !== DRAFT_THREAD_ID);
+
   const roots = highlights.filter(
     (highlight) =>
       !highlight.parentElement?.closest(
         `.emr-highlight:not([data-thread-id="${DRAFT_THREAD_ID}"])`,
       ),
   );
+
   const represented = new Set<string>();
   roots.forEach((root) => {
     const threadIds = containedThreadIds(root);
+
     if (
       threadIds.length === 0 ||
       threadIds.every((id) => represented.has(id))
     ) {
       return;
     }
+
     threadIds.forEach((id) => represented.add(id));
     const anchorText = root.innerText.replace(/\s+/g, " ").trim();
     root.tabIndex = 0;
     root.setAttribute("role", "button");
     let label = "Open comment thread";
+
     if (threadIds.length > 1) {
       label = `Open ${threadIds.length} overlapping comment threads`;
     }
+
     root.setAttribute("aria-label", `${label}: ${anchorText}`);
   });
 }

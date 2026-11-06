@@ -35,11 +35,13 @@ describe("bindRepositoryImageResolver", () => {
       bindRepositoryImageResolver(undefined, "/docs/guide.md", null),
     ).toBeUndefined();
     const resolveImage = vi.fn().mockResolvedValue("blob:image");
+
     const current = bindRepositoryImageResolver(
       resolveImage,
       "/docs/guide.md",
       null,
     )!;
+
     const historical = bindRepositoryImageResolver(
       resolveImage,
       "/docs/guide.md",
@@ -163,6 +165,7 @@ describe("friendlyWriteError", () => {
       ),
       { status: 403 },
     );
+
     const msg = friendlyWriteError("Add reply", err);
     expect(msg).toBe(
       "Add reply didn't go through \u2014 your session refreshed. Please try again.",
@@ -186,6 +189,7 @@ describe("friendlyWriteError", () => {
       ),
       { status: 403 },
     );
+
     expect(friendlyWriteError("Delete thread", err)).toBe(
       "Delete thread failed: Only the comment author and project admins can delete a comment.",
     );
@@ -232,6 +236,7 @@ describe("patchIfSet", () => {
     const next = patchIfSet((p: { n: number }) => ({ ...p, n: p.n + 1 }))({
       n: 1,
     });
+
     expect(next).toEqual({ n: 2 });
   });
 
@@ -295,6 +300,7 @@ describe("countWords", () => {
   it("ignores fenced code blocks and inline code", () => {
     const md =
       "Intro words\n\n```js\nconst x = 1; // not counted\n```\n\nmore `inlineCode` text";
+
     // "Intro words more text" = 4 words.
     expect(countWords(md)).toBe(4);
   });
@@ -302,6 +308,7 @@ describe("countWords", () => {
   it("keeps link text but drops URLs and images", () => {
     const md =
       "See [the docs](https://example.com/very/long) and ![alt](img.png)";
+
     // "See the docs and" = 4 words.
     expect(countWords(md)).toBe(4);
   });
@@ -362,6 +369,7 @@ describe("buildHistoryStops", () => {
     const stops = buildHistoryStops(null, [
       ref(7, { url: "https://x/7", dateMs: 123, commitId: null }),
     ]);
+
     expect(stops[1]).toMatchObject({
       prId: 7,
       url: "https://x/7",
@@ -476,8 +484,10 @@ describe("sourceDiffRanges", () => {
 
   it("reports a rewrite as one coarse line hunk (the view refines it per block)", () => {
     const original = "# Doc\n\n_Placeholder question?_\n\n## Next\n";
+
     const current =
       "# Doc\n\nNew intro sentence for the section.\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n## Next\n";
+
     expect(sourceDiffRanges(original, current)).toEqual([
       {
         startLine: 3,

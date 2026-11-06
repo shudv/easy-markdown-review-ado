@@ -78,11 +78,13 @@ export function DiffMinimap({
   showDiff,
 }: Readonly<DiffMinimapProps>): ReactElement | null {
   const [markers, setMarkers] = useState<DiffMarker[]>([]);
+
   const [metrics, setMetrics] = useState<Metrics>({
     scrollTop: 0,
     clientHeight: 0,
     scrollHeight: 0,
   });
+
   const [scrollable, setScrollable] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +94,7 @@ export function DiffMinimap({
     const m = readMetrics(scroller);
     const scRect = scroller.getBoundingClientRect();
     const raw: DiffMarker[] = [];
+
     if (showDiff) {
       scroller.querySelectorAll<HTMLElement>(MARKER_SELECTOR).forEach((el) => {
         const kind = classifyDiffElement(el);
@@ -101,6 +104,7 @@ export function DiffMinimap({
         raw.push({ ...markerFraction(elTop, r.height, m.scrollHeight), kind });
       });
     }
+
     setMarkers(resolveOverlaps(mergeMarkers(raw, MERGE_GAP)));
     setMetrics(m);
     setScrollable(m.scrollHeight > m.clientHeight + 1);
@@ -122,20 +126,24 @@ export function DiffMinimap({
     const scroller = scrollRef.current;
     if (!scroller) return;
     let raf = 0;
+
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(syncScroll);
     };
+
     // Coalesce resize / zoom / re-decoration bursts into ONE measure on the next
     // frame. Measuring synchronously mid-reflow (a zoom fires many resize events
     // while layout is still settling) reads an inconsistent scrollHeight vs the
     // element rects, so the ticks jumped around before snapping back; deferring
     // to a frame reads a settled, self-consistent layout.
     let measureRaf = 0;
+
     const scheduleMeasure = () => {
       cancelAnimationFrame(measureRaf);
       measureRaf = requestAnimationFrame(measure);
     };
+
     scroller.addEventListener("scroll", onScroll, { passive: true });
     const wrap = scroller.querySelector(".emr-article-wrap");
     wrap?.addEventListener("emr-sections-changed", scheduleMeasure);
@@ -146,6 +154,7 @@ export function DiffMinimap({
     // ResizeObserver can miss it. A window resize fires on every zoom step, so
     // re-measure there too to keep the tick fractions correct at any zoom.
     window.addEventListener("resize", scheduleMeasure);
+
     return () => {
       cancelAnimationFrame(raf);
       cancelAnimationFrame(measureRaf);
@@ -173,12 +182,14 @@ export function DiffMinimap({
   // margins (plus the ruler's CSS top offset) already inset it to align with the
   // reading surface, so no extra inset is subtracted here.
   const rulerH = metrics.clientHeight;
+
   const thumb = thumbMetrics(metrics.scrollTop, {
     clientHeight: metrics.clientHeight,
     scrollHeight: metrics.scrollHeight,
     trackPx: rulerH,
     minThumbPx: MIN_THUMB,
   });
+
   const viewportFrac = viewportRange(
     metrics.scrollTop,
     metrics.clientHeight,
@@ -213,6 +224,7 @@ export function DiffMinimap({
     const startScroll = scroller.scrollTop;
     const ch = scroller.clientHeight;
     const sh = scroller.scrollHeight;
+
     const onMove = (ev: PointerEvent) => {
       scroller.scrollTop = scrollFromThumbDrag(
         startScroll,
@@ -226,6 +238,7 @@ export function DiffMinimap({
         },
       );
     };
+
     // End the drag on pointerup OR pointercancel, and expose the teardown via a
     // ref so an unmount mid-drag can also run it — otherwise these document
     // listeners would leak and keep closing over a stale scroller.
@@ -235,6 +248,7 @@ export function DiffMinimap({
       document.removeEventListener("pointercancel", cleanup);
       dragCleanupRef.current = null;
     };
+
     dragCleanupRef.current = cleanup;
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", cleanup);
@@ -276,10 +290,9 @@ export function DiffMinimap({
         <div
           // eslint-disable-next-line @eslint-react/no-array-index-key -- ticks are stateless, identity-free positions recomputed wholesale on every measure; index keys update nodes in place so the is-active opacity transition survives a re-measure
           key={i}
-          className={
-            `emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}` +
-            (markerInViewport(m, viewportFrac) ? " is-active" : "")
-          }
+          className={`emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}${
+            markerInViewport(m, viewportFrac) ? " is-active" : ""
+          }`}
           title={KIND_TITLE[m.kind]}
           style={{ top: `${m.top * 100}%`, height: `${m.height * 100}%` }}
         />

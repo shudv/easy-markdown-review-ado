@@ -41,25 +41,23 @@ const MACRO_LABELS: Readonly<Record<WikiMacroKind, string>> = {
   tosp: "Subpages",
 };
 
-export const remarkWikiMacros: Plugin<[], MdastRoot> = () => {
-  return (tree, file) => {
-    const source = String(file.value);
-    visit(tree, "paragraph", (node: Paragraph) => {
-      const start = node.position!.start.offset!;
-      const end = node.position!.end.offset!;
-      const kind = MACROS.get(source.slice(start, end).trim());
-      if (!kind) return;
-      node.children = [];
-      node.data = {
-        hName: "nav",
-        hProperties: {
-          className: ["emr-wiki-macro", `emr-wiki-${kind}`],
-          ariaLabel: MACRO_LABELS[kind],
-          dataWikiMacro: kind,
-        },
-      };
-    });
-  };
+export const remarkWikiMacros: Plugin<[], MdastRoot> = () => (tree, file) => {
+  const source = String(file.value);
+  visit(tree, "paragraph", (node: Paragraph) => {
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
+    const kind = MACROS.get(source.slice(start, end).trim());
+    if (!kind) return;
+    node.children = [];
+    node.data = {
+      hName: "nav",
+      hProperties: {
+        className: ["emr-wiki-macro", `emr-wiki-${kind}`],
+        ariaLabel: MACRO_LABELS[kind],
+        dataWikiMacro: kind,
+      },
+    };
+  });
 };
 
 function element(
@@ -99,6 +97,7 @@ function collectHeadings(tree: Root): TocEntry[] {
     if (!match || typeof id !== "string") return;
     entries.push({ level: Number(match[1]), id, text: extractHastText(node) });
   });
+
   return entries;
 }
 
@@ -109,6 +108,7 @@ function collectHeadings(tree: Root): TocEntry[] {
 function tocList(entries: readonly TocEntry[]): Element {
   const root = element("ul", null, []);
   const frames: Array<{ level: number; list: Element; last: Element }> = [];
+
   for (const entry of entries) {
     while (
       frames.length > 0 &&
@@ -116,8 +116,10 @@ function tocList(entries: readonly TocEntry[]): Element {
     ) {
       frames.pop();
     }
+
     const item = element("li", null, [link(`#${entry.id}`, entry.text)]);
     const top = frames.length > 0 ? frames[frames.length - 1] : undefined;
+
     if (top?.level === entry.level) {
       top.list.children.push(item);
       top.last = item;
@@ -130,6 +132,7 @@ function tocList(entries: readonly TocEntry[]): Element {
       frames.push({ level: entry.level, list: root, last: item });
     }
   }
+
   return root;
 }
 
@@ -148,34 +151,35 @@ function encodeRepoPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-export const rehypeWikiMacros: Plugin<[], Root> = () => {
-  return (tree) => {
-    const macros: Element[] = [];
-    visit(tree, "element", (node: Element) => {
-      // Only remarkWikiMacros sets this (to a non-empty kind); rehypeSafeHtml
-      // drops `data-wiki-macro` from raw HTML.
-      if (typeof node.properties.dataWikiMacro === "string") macros.push(node);
-    });
-    if (macros.length === 0) return;
-    let headings: TocEntry[] | null = null;
-    for (const nav of macros) {
-      const kind = nav.properties.dataWikiMacro as WikiMacroKind;
-      const title = element("p", "emr-wiki-macro-title", [
-        { type: "text", value: MACRO_LABELS[kind] },
-      ]);
-      if (kind === "toc") {
-        headings ??= collectHeadings(tree);
-        nav.children = [
-          title,
-          headings.length > 0
-            ? tocList(headings)
-            : note("This page has no headings."),
-        ];
-      } else {
-        nav.children = [title, note(SUBPAGES_UNAVAILABLE)];
-      }
+export const rehypeWikiMacros: Plugin<[], Root> = () => (tree) => {
+  const macros: Element[] = [];
+  visit(tree, "element", (node: Element) => {
+    // Only remarkWikiMacros sets this (to a non-empty kind); rehypeSafeHtml
+    // drops `data-wiki-macro` from raw HTML.
+    if (typeof node.properties.dataWikiMacro === "string") macros.push(node);
+  });
+  if (macros.length === 0) return;
+  let headings: TocEntry[] | null = null;
+
+  for (const nav of macros) {
+    const kind = nav.properties.dataWikiMacro as WikiMacroKind;
+
+    const title = element("p", "emr-wiki-macro-title", [
+      { type: "text", value: MACRO_LABELS[kind] },
+    ]);
+
+    if (kind === "toc") {
+      headings ??= collectHeadings(tree);
+      nav.children = [
+        title,
+        headings.length > 0
+          ? tocList(headings)
+          : note("This page has no headings."),
+      ];
+    } else {
+      nav.children = [title, note(SUBPAGES_UNAVAILABLE)];
     }
-  };
+  }
 };
 
 /** What a `[[_TOSP_]]` box shows: the subpages, or why there are none yet. */
@@ -204,10 +208,12 @@ export function fillSubpagesMacros(html: string, state: SubpagesState): string {
   // eslint-disable-next-line no-unsanitized/property -- html is renderMarkdown output (sanitized by rehypeSafeHtml + rehypeSanitizeUrls), parsed in an inert <template>
   template.innerHTML = html;
   const doc = template.content.ownerDocument;
+
   for (const nav of template.content.querySelectorAll(SUBPAGES_SELECTOR)) {
     const title = nav.querySelector(":scope > .emr-wiki-macro-title")!;
     nav.replaceChildren(title, subpagesContent(doc, state));
   }
+
   return template.innerHTML;
 }
 
@@ -219,9 +225,12 @@ function subpagesContent(doc: Document, state: SubpagesState): HTMLElement {
       typeof state === "string"
         ? SUBPAGES_NOTES[state]
         : "This page has no subpages.";
+
     return text;
   }
+
   const list = doc.createElement("ul");
+
   for (const page of state) {
     const anchor = doc.createElement("a");
     anchor.setAttribute("href", encodeRepoPath(page.path));
@@ -230,5 +239,6 @@ function subpagesContent(doc: Document, state: SubpagesState): HTMLElement {
     item.append(anchor);
     list.append(item);
   }
+
   return list;
 }

@@ -28,6 +28,7 @@ function fakeSink() {
     trackException: vi.fn(),
     flush: vi.fn(),
   };
+
   return sink;
 }
 
@@ -35,16 +36,19 @@ function fakeEnvironment(initiallyVisible = true) {
   let now = 0;
   let visible = initiallyVisible;
   let listener: (() => void) | null = null;
+
   const environment: BootTimingEnvironment = {
     now: () => now,
     isVisible: () => visible,
     subscribeVisibilityChange(nextListener) {
       listener = nextListener;
+
       return () => {
         listener = null;
       };
     },
   };
+
   return {
     environment,
     advance(ms: number) {
@@ -78,6 +82,7 @@ describe("bootTiming", () => {
     markAppReady("content");
 
     expect(sink.eventCalls).toHaveLength(1);
+
     const { event } = sink.eventCalls[0]! as {
       event: {
         name: string;
@@ -85,6 +90,7 @@ describe("bootTiming", () => {
         measurements?: Record<string, number>;
       };
     };
+
     expect(event.name).toBe("app.loaded");
     expect(event.properties).toEqual({
       readyReason: "content",
@@ -116,6 +122,7 @@ describe("bootTiming", () => {
         measurements: Record<string, number>;
       };
     };
+
     expect(event.properties.bootHadHiddenInterval).toBe(true);
     expect(event.measurements).toMatchObject({
       bootTimeMs: 100,
@@ -135,6 +142,7 @@ describe("bootTiming", () => {
     const { event } = sink.eventCalls[0]! as {
       event: { measurements: Record<string, number> };
     };
+
     expect(event.measurements).toMatchObject({
       bootTimeMs: 50,
       activeBootTimeMs: 10,
@@ -159,6 +167,7 @@ describe("bootTiming", () => {
     const { event } = sink.eventCalls[0]! as {
       event: { measurements: Record<string, number> };
     };
+
     expect(event.measurements).toEqual({
       bootTimeMs: 70,
       activeBootTimeMs: 70,
@@ -180,6 +189,7 @@ describe("bootTiming", () => {
     const { event } = sink.eventCalls[0]! as {
       event: { measurements: Record<string, number> };
     };
+
     expect(event.measurements.authRefreshWaitMs).toBe(12);
   });
 
@@ -194,9 +204,11 @@ describe("bootTiming", () => {
   it("defaults readyReason to 'content'", () => {
     markBootStart();
     markAppReady();
+
     const { event } = sink.eventCalls[0]! as {
       event: { properties?: Record<string, unknown> };
     };
+
     expect(event.properties).toEqual({
       readyReason: "content",
       bootHadHiddenInterval: false,
@@ -217,9 +229,11 @@ describe("bootTiming", () => {
     markBootStart();
     markAppReady("empty");
     expect(sink.eventCalls).toHaveLength(2);
+
     const { event } = sink.eventCalls[1]! as {
       event: { properties?: Record<string, unknown> };
     };
+
     expect(event.properties).toEqual({
       readyReason: "empty",
       bootHadHiddenInterval: false,
@@ -239,6 +253,7 @@ describe("bootTiming", () => {
       ({ event }) =>
         (event as { properties?: Record<string, unknown> }).properties,
     );
+
     expect(props).toEqual([
       {
         readyReason: "content",

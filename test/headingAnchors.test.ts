@@ -22,6 +22,7 @@ function mount(html: string): HTMLElement {
   wrap.className = "emr-article-wrap";
   wrap.innerHTML = `<div class="markdown-body emr-rendered">${html}</div>`;
   document.body.appendChild(wrap);
+
   return wrap.querySelector<HTMLElement>(".emr-rendered")!;
 }
 
@@ -58,6 +59,7 @@ describe("findAnchorTarget", () => {
     const root = mount(
       `<h2 id="classifiers-hashing">Classifiers &amp; Hashing</h2>`,
     );
+
     expect(findAnchorTarget(root, anchor)?.id).toBe("classifiers-hashing");
   });
 
@@ -67,6 +69,7 @@ describe("findAnchorTarget", () => {
       <div class="emr-diff-before-panel"><h2 id="goals">Before goals</h2></div>
       <div class="emr-diff-metadata-panel"><h2 id="goals">Meta goals</h2></div>
       <h2 id="goals">Goals</h2>`);
+
     expect(findAnchorTarget(root, "goals")?.textContent).toBe("Goals");
   });
 
@@ -74,6 +77,7 @@ describe("findAnchorTarget", () => {
     const root = mount(
       `<div class="emr-diff-before-panel"><h2 id="goals">Before</h2></div>`,
     );
+
     expect(findAnchorTarget(root, "goals")).toBeNull();
   });
 
@@ -99,6 +103,7 @@ describe("findAnchorTarget", () => {
       const root = mount(
         `<h2 id="section">目标</h2><h2 id="section-2">обзор</h2>`,
       );
+
       expect(findAnchorTarget(root, anchor)).toBeNull();
     },
   );
@@ -107,6 +112,7 @@ describe("findAnchorTarget", () => {
     const root = mount(
       `<h2 id="section">目标</h2><h2 id="section-2">обзор</h2>`,
     );
+
     expect(findAnchorTarget(root, "section-2")?.textContent).toBe("обзор");
   });
 
@@ -146,6 +152,7 @@ describe("revealAnchorTarget", () => {
     for (const section of root.querySelectorAll(".emr-section")) {
       expect(section.hasAttribute("data-collapsed")).toBe(false);
     }
+
     for (const toggle of root.querySelectorAll<HTMLElement>(
       ".emr-section-toggle",
     )) {
@@ -153,6 +160,7 @@ describe("revealAnchorTarget", () => {
       expect(toggle.getAttribute("aria-label")).toBe("Collapse section");
       expect(toggle.title).toBe("Collapse section");
     }
+
     // Persisted as open, like a manual expand.
     expect(readSectionState("/a.md", "outer")).toBe(false);
     expect(readSectionState("/a.md", "inner")).toBe(false);
@@ -166,6 +174,7 @@ describe("revealAnchorTarget", () => {
     const root = mount(
       `<section class="emr-section" data-section-id="s"><h2 id="s">S</h2></section>`,
     );
+
     const onChanged = vi.fn();
     root.parentElement!.addEventListener("emr-sections-changed", onChanged);
     expect(revealAnchorTarget(root.querySelector("#s")!, "/a.md")).toBe(false);
@@ -188,8 +197,10 @@ describe("revealAnchorTarget", () => {
 
 describe("flashAnchorTarget", () => {
   const flush = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
   const cueOf = (el: Element) =>
     el.querySelector<HTMLElement>(`:scope > .${ANCHOR_TARGET_CLASS}`);
+
   const HEADING =
     '<h2 id="goals"><button class="emr-section-toggle"></button>Goals <em>now</em><button class="emr-heading-link"></button></h2>';
 
@@ -234,9 +245,11 @@ describe("flashAnchorTarget", () => {
 
   it("leaves the diff's Before disclosure outside the cue", () => {
     vi.useFakeTimers();
+
     const root = mount(
       '<h2 id="goals">Goals<button class="emr-diff-before-control">Before</button></h2>',
     );
+
     const heading = root.querySelector<HTMLElement>("#goals")!;
     flashAnchorTarget(root, () => heading);
     expect(cueOf(heading)!.textContent).toBe("Goals");
@@ -358,6 +371,7 @@ describe("holdScrollOnTarget", () => {
     target.scrollIntoView = scroll;
     const cancel = holdScrollOnTarget(root, () => target);
     cancels.push(cancel);
+
     return { root, scroll, cancel, observer: observers[0]! };
   }
 
@@ -399,11 +413,14 @@ describe("holdScrollOnTarget", () => {
     const { cancel } = setup();
     cancel();
     const added = add.mock.calls.map(([type, fn]) => [type, fn]);
+
     const removed = remove.mock.calls.map(([type, fn, opts]) => {
       // Same capture phase it was added in, or the removal is a no-op.
       expect(opts).toBe(true);
+
       return [type, fn];
     });
+
     expect(removed).toEqual(added);
     add.mockRestore();
     remove.mockRestore();
@@ -446,21 +463,27 @@ describe("flashTextTarget", () => {
     const range = document.createRange();
     range.setStart(node, start);
     range.setEnd(node, end);
+
     return range;
   }
 
   it("wraps the text in cue spans, skipping reference content, then unwraps", () => {
     vi.useFakeTimers();
+
     const root = mount(
       `<p id="p">alpha <em>beta</em><span class="emr-diff-deleted-marker">gone</span> gamma</p>`,
     );
+
     const p = root.querySelector("#p")!;
+
     const resolve = () => {
       const range = document.createRange();
       range.setStart(p.firstChild!, 0);
       range.setEnd(p.lastChild!, 6);
+
       return range;
     };
+
     const cancel = flashTextTarget(root, resolve);
     const cues = Array.from(root.querySelectorAll("[data-emr-text-cue]"));
     expect(cues.map((c) => c.textContent)).toEqual([
@@ -481,10 +504,13 @@ describe("flashTextTarget", () => {
   it("re-applies after a re-wrap with a negative delay, or not at all if gone", async () => {
     const root = mount(`<p>alpha beta</p>`);
     let present = true;
+
     const cancel = flashTextTarget(root, () => {
       const node = root.querySelector("p")?.firstChild;
+
       return present && node instanceof Text ? rangeOver(node, 0, 5) : null;
     });
+
     // Unrelated churn leaves the cue alone.
     root.append(document.createElement("hr"));
     await Promise.resolve();
@@ -511,13 +537,17 @@ describe("flashTextTarget", () => {
     const root = mount(
       `<p>gate <del class="emr-word-removed">blocks deploys</del><ins class="emr-word-added">pauses releases</ins> when</p>`,
     );
+
     const p = root.querySelector("p")!;
+
     const cancel = flashTextTarget(root, () => {
       const range = document.createRange();
       range.setStart(p.firstChild!, 0);
       range.setEnd(p.lastChild!, 5);
+
       return range;
     });
+
     expect(
       Array.from(root.querySelectorAll("[data-emr-text-cue]")).map(
         (c) => c.textContent,

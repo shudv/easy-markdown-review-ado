@@ -42,6 +42,7 @@ export function isDarkTheme(theme: string): boolean {
  */
 export function pickTheme(isDark: boolean, forcedColors: boolean): EmrTheme {
   if (forcedColors) return isDark ? "hc-dark" : "hc-light";
+
   return isDark ? "dark" : "light";
 }
 
@@ -59,6 +60,7 @@ export function isHighContrastPrimary(primary: string): boolean {
   const r = Number(m[1]);
   const g = Number(m[2]);
   const b = Number(m[3]);
+
   return r === g && g === b;
 }
 
@@ -84,6 +86,7 @@ export function parseLuminance(color: string): number | null {
 
   if (s.startsWith("#")) {
     const hex = s.slice(1);
+
     if (hex.length === 3) {
       r = parseInt(hex[0]! + hex[0]!, 16);
       g = parseInt(hex[1]! + hex[1]!, 16);
@@ -104,5 +107,6 @@ export function parseLuminance(color: string): number | null {
   }
 
   if ([r, g, b].some((n) => Number.isNaN(n))) return null;
+
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }

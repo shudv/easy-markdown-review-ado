@@ -45,6 +45,7 @@ interface SourceSide {
 
 function sourceSide(source: string): SourceSide {
   const lines = source.split(/\r\n|\r|\n/);
+
   return { lines, chunks: chunkMarkdownLines(lines, 1) };
 }
 
@@ -98,6 +99,7 @@ function pushUnpairedRuns(
       linesDeleted: to - from + 1,
     });
   }
+
   if (added.length > 0) {
     const from = added[0]!.start;
     const to = added[added.length - 1]!.end;
@@ -120,6 +122,7 @@ function flushRuns(runs: SpanRuns): void {
   // a heading and paragraph) still read as edits of them, one for one.
   const removedBlocks = removed.filter((chunk) => !chunk.blank);
   const addedBlocks = added.filter((chunk) => !chunk.blank);
+
   if (
     removedBlocks.length > 0 &&
     removedBlocks.length === addedBlocks.length &&
@@ -128,8 +131,10 @@ function flushRuns(runs: SpanRuns): void {
     removedBlocks.forEach((chunk, i) =>
       runs.out.push(modifiedRange(chunk, addedBlocks[i]!)),
     );
+
     return;
   }
+
   pushUnpairedRuns(runs, removed, added);
 }
 
@@ -143,6 +148,7 @@ function isSingleBlockEdit(
 ): boolean {
   const contentBefore = before.filter((chunk) => !chunk.blank);
   const contentAfter = after.filter((chunk) => !chunk.blank);
+
   return (
     contentBefore.length === 1 &&
     contentAfter.length === 1 &&
@@ -170,12 +176,14 @@ function refineSpan(
     span.originalStartLine,
     span.originalEndLine,
   );
+
   const after = clipChunks(
     current.chunks,
     current.lines,
     span.startLine,
     span.endLine,
   );
+
   if (keepSingleBlock && isSingleBlockEdit(before, after)) return null;
   if (before.length * after.length > MAX_ALIGNMENT_CELLS) return null;
 
@@ -186,21 +194,26 @@ function refineSpan(
     addedRun: [],
     nextCurrentLine: span.startLine,
   };
+
   for (const op of expandTablePairs(alignChunks(before, after))) {
     if (op.type === "removed") {
       runs.removedRun.push(op.before);
       continue;
     }
+
     if (op.type === "added") {
       runs.addedRun.push(op.after);
       runs.nextCurrentLine = op.after.end + 1;
       continue;
     }
+
     flushRuns(runs);
     runs.nextCurrentLine = op.after.end + 1;
     if (op.type === "pair") runs.out.push(modifiedRange(op.before, op.after));
   }
+
   flushRuns(runs);
+
   return runs.out;
 }
 
@@ -228,9 +241,11 @@ function placeRanges(
   const placed: PlacedRange[] = [];
   let offset = 0;
   let previousEnd = 0;
+
   for (const range of ranges) {
     if (range.startLine <= previousEnd) return null;
     const originalStart = range.startLine + offset;
+
     if (range.kind === "modified") {
       if (range.originalStartLine !== originalStart) return null;
       placed.push({
@@ -255,6 +270,7 @@ function placeRanges(
     } else {
       const deleted = range.linesDeleted ?? 0;
       const originalEnd = originalStart + deleted - 1;
+
       if (
         deleted < 1 ||
         originalEnd > original.lines.length ||
@@ -264,6 +280,7 @@ function placeRanges(
       ) {
         return null;
       }
+
       placed.push({
         range,
         start: range.startLine,
@@ -275,15 +292,18 @@ function placeRanges(
       previousEnd = range.startLine - 1;
     }
   }
+
   return placed;
 }
 
 /** True when every line in [from,to] is blank (an empty window counts). */
 function allBlank(lines: readonly string[], from: number, to: number): boolean {
   if (to > lines.length) return false;
+
   for (let line = from; line <= to; line++) {
     if (lines[line - 1]!.trim() !== "") return false;
   }
+
   return true;
 }
 
@@ -297,16 +317,20 @@ function clusterRanges(
   current: SourceSide,
 ): PlacedRange[][] {
   const clusters: PlacedRange[][] = [];
+
   for (const item of placed) {
     const cluster =
       clusters.length > 0 ? clusters[clusters.length - 1] : undefined;
+
     const last = cluster?.[cluster.length - 1];
+
     if (last && allBlank(current.lines, last.end + 1, item.start - 1)) {
       cluster!.push(item);
     } else {
       clusters.push([item]);
     }
   }
+
   return clusters;
 }
 
@@ -319,12 +343,14 @@ function refineCluster(
   const ranges = cluster.map((item) => item.range);
   const first = cluster[0]!;
   const last = cluster[cluster.length - 1]!;
+
   const span: Span = {
     startLine: first.start,
     endLine: last.end,
     originalStartLine: first.originalStart,
     originalEndLine: last.originalEnd,
   };
+
   // Only a region that both lost and gained lines can be re-paired.
   if (
     span.endLine < span.startLine ||
@@ -337,6 +363,7 @@ function refineCluster(
   ) {
     return ranges;
   }
+
   return refineSpan(span, original, current, ranges.length === 1) ?? ranges;
 }
 
@@ -356,8 +383,10 @@ export function refineDiffRanges(
   ) {
     return [...ranges];
   }
+
   const original = sourceSide(originalSource);
   const current = sourceSide(currentSource);
+
   const inBounds = ranges.every(
     (range) =>
       range.startLine >= 1 &&
@@ -371,13 +400,16 @@ export function refineDiffRanges(
           range.originalEndLine >= range.originalStartLine &&
           range.originalEndLine <= original.lines.length)),
   );
+
   if (!inBounds) return [...ranges];
   const placed = placeRanges(ranges, original);
+
   if (placed) {
     return clusterRanges(placed, current).flatMap((cluster) =>
       refineCluster(cluster, original, current),
     );
   }
+
   return ranges.flatMap((range) =>
     range.kind === "modified"
       ? (refineSpan(

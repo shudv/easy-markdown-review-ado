@@ -44,6 +44,7 @@ describe("repoSkeleton", () => {
     const skeleton = repoSkeleton(
       repo({ id: "b", name: "bravo", defaultBranch: undefined }),
     );
+
     expect(skeleton.defaultBranch).toBe("main");
   });
 });

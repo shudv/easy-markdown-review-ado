@@ -7,6 +7,7 @@ import { loadWikiSubpages, subpagesCommit } from "../src/shell/wikiSubpages";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -26,6 +27,7 @@ describe("loadWikiSubpages", () => {
       folders: [],
       order: ["Install"],
     }));
+
     await expect(loadWikiSubpages("/Guides.md", listFolder)).resolves.toEqual([
       { path: "/Guides/Install.md", title: "Install" },
       { path: "/Guides/Configure.md", title: "Configure" },

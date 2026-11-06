@@ -41,8 +41,10 @@ export function CommentFilterMenu(
 
   useEffect(() => {
     if (!open) return;
+
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
+
       if (
         menuRef.current &&
         target &&
@@ -53,6 +55,7 @@ export function CommentFilterMenu(
         setOpen(false);
       }
     }
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -60,8 +63,10 @@ export function CommentFilterMenu(
         btnRef.current?.focus();
       }
     }
+
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);

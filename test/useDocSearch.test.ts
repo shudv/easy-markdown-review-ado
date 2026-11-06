@@ -20,6 +20,7 @@ const trackMock = vi.fn();
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     track: (...args: unknown[]) => trackMock(...args),
@@ -55,6 +56,7 @@ function Harness(props: {
   useLayoutEffect(() => {
     resultRef.current = search;
   });
+
   return null;
 }
 
@@ -75,6 +77,7 @@ function mount(props: {
   act(() => {
     root!.render(createElement(Harness, { ...props, handle }));
   });
+
   return handle;
 }
 
@@ -83,6 +86,7 @@ afterEach(() => {
     act(() => root!.unmount());
     root = null;
   }
+
   container?.remove();
   container = null;
   vi.useRealTimers();
@@ -161,10 +165,12 @@ describe("useDocSearch — remote merge", () => {
         files: [file("docs/guide.md"), file("remote/only.md")],
       }),
     );
+
     const h = mount({
       files: [file("docs/guide.md"), file("local.md")],
       onSearchFiles,
     });
+
     act(() => h.current!.setSearchQuery("o"));
     // 1-char query: local-only ("o" matches docs and local), no remote.
     act(() => h.current!.setSearchQuery("do"));
@@ -187,6 +193,7 @@ describe("useDocSearch — remote merge", () => {
         message: "Code Search not installed",
       }),
     );
+
     const h = mount({ files: [file("local.md")], onSearchFiles });
     act(() => h.current!.setSearchQuery("loc"));
     await flush(300);
@@ -204,6 +211,7 @@ describe("useDocSearch — remote merge", () => {
     const onSearchFiles = vi.fn(async (): Promise<FileSearchOutcome> => {
       throw new Error("boom");
     });
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("query"));
     await flush(300);
@@ -223,9 +231,11 @@ describe("useDocSearch — remote merge", () => {
       kind: "unavailable",
       reason: "network",
     };
+
     const onSearchFiles = vi.fn(
       async (): Promise<FileSearchOutcome> => outcome,
     );
+
     const h = mount({ files: [], onSearchFiles });
 
     act(() => h.current!.setSearchQuery("aa"));
@@ -247,12 +257,14 @@ describe("useDocSearch — remote merge", () => {
 
   it("sets remoteLoading true during the debounce and clears it after settle", async () => {
     let resolveOutcome: (o: FileSearchOutcome) => void = () => {};
+
     const onSearchFiles = vi.fn(
       () =>
         new Promise<FileSearchOutcome>((res) => {
           resolveOutcome = res;
         }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("abc"));
     // After the debounce fires but before the promise settles, loading is on.
@@ -274,6 +286,7 @@ describe("useDocSearch — remote merge", () => {
     const onSearchFiles = vi.fn(
       async (): Promise<FileSearchOutcome> => ({ kind: "ok", files: [] }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("abc"));
     // Just short of the 250ms debounce: no call yet.
@@ -291,6 +304,7 @@ describe("useDocSearch — remote merge", () => {
         files: [file("r/one.md"), file("r/two.md")],
       }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("abcd"));
     await flush(300);
@@ -310,6 +324,7 @@ describe("useDocSearch — remote merge", () => {
         reason: "extension-missing",
       }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("abcd"));
     await flush(300);
@@ -333,6 +348,7 @@ describe("useDocSearch — remote merge", () => {
         reason: "no-config",
       }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("abcd"));
     await flush(300);
@@ -353,16 +369,19 @@ describe("useDocSearch — superseded remote searches", () => {
       resolve: (outcome: FileSearchOutcome) => void;
       reject: (err: Error) => void;
     }> = [];
+
     const onSearchFiles = vi.fn(
       () =>
         new Promise<FileSearchOutcome>((resolve, reject) => {
           calls.push({ resolve, reject });
         }),
     );
+
     const h = mount({ files: [], onSearchFiles });
     act(() => h.current!.setSearchQuery("ab"));
     await flush(250);
     act(() => h.current!.setSearchQuery("abc"));
+
     return { calls, h };
   }
 

@@ -63,6 +63,7 @@ export function hydrateMentionLinks(
   const links = root.querySelectorAll<HTMLAnchorElement>(
     'a.emr-mention[data-mention-kind="workitem"], a.emr-mention[data-mention-kind="pullrequest"]',
   );
+
   links.forEach((a) => {
     const current = a.getAttribute("href") ?? "";
     if (current.startsWith("http://") || current.startsWith("https://")) return;
@@ -93,11 +94,13 @@ function buildMentionWebUrl(
   ctx: MentionLinkResolution,
 ): string | undefined {
   let base: URL;
+
   try {
     base = new URL(ctx.orgUrl);
   } catch {
     return undefined;
   }
+
   if (base.protocol !== "https:" && base.protocol !== "http:") return undefined;
 
   const orgUrl = `${base.origin}${base.pathname.replace(/\/+$/, "")}`;
@@ -107,13 +110,16 @@ function buildMentionWebUrl(
   switch (parsed.kind) {
     case "workitem":
       return `${orgUrl}/${project}/_workitems/edit/${id}`;
+
     case "pullrequest": {
       const repo = parsed.params["repo"] ?? ctx.defaultRepoName;
       if (!repo) return undefined;
+
       return `${orgUrl}/${project}/_git/${encodeURIComponent(
         repo,
       )}/pullrequest/${id}`;
     }
+
     default:
       return undefined;
   }

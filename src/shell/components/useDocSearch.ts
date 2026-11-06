@@ -69,6 +69,7 @@ function applySearchOutcome(
         failureReason: outcome.reason,
       }),
     );
+
     if (
       outcome.reason !== "extension-missing" &&
       outcome.reason !== "no-config"
@@ -107,10 +108,12 @@ function mergeSearchResults(
 ): FileInfo[] {
   const seen = new Set<string>();
   const out: FileInfo[] = [];
+
   for (const f of localHits) {
     seen.add(f.path);
     out.push(f);
   }
+
   // Only merge remote hits when they match the current query (else they'd
   // be stale between keystrokes).
   if (remoteHits.query === trimmedQuery) {
@@ -120,6 +123,7 @@ function mergeSearchResults(
       out.push(f);
     }
   }
+
   return out;
 }
 
@@ -134,6 +138,7 @@ function useSearchBox(
   const [searchOpen, setSearchOpen] = useState<boolean>(
     () => searchQuery.length > 0,
   );
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -141,10 +146,12 @@ function useSearchBox(
   // Re-open if the query gets set externally while collapsed (adjusted during
   // render so the collapsed state never paints with a query set).
   if (searchQuery && !searchOpen) setSearchOpen(true);
+
   const closeSearch = useCallback(() => {
     setSearchQuery("");
     setSearchOpen(false);
   }, [setSearchQuery]);
+
   return { searchOpen, setSearchOpen, closeSearch, searchInputRef };
 }
 
@@ -154,7 +161,9 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
     query: "",
     files: [],
   }));
+
   const [remoteLoading, setRemoteLoading] = useState<boolean>(false);
+
   // Sticky once the search service is known unavailable; held until a later
   // call succeeds.
   const [searchUnavailable, setSearchUnavailable] =
@@ -162,18 +171,22 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
 
   useEffect(() => {
     if (!onSearchFiles) return;
+
     if (trimmedQuery.length < 2) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect owns the external debounced, abortable Code Search request; its loading/result state is reset and set in the same step that cancels or starts that request.
       setRemoteHits({ query: "", files: [] });
       setRemoteLoading(false);
+
       return;
     }
+
     let cancelled = false;
     // AbortController cancels the in-flight fetch on cleanup; the `cancelled`
     // flag additionally guards against stale-query state updates.
     const controller = new AbortController();
     const setters = { setRemoteHits, setSearchUnavailable };
     setRemoteLoading(true);
+
     const handle = window.setTimeout(() => {
       onSearchFiles(trimmedQuery, controller.signal)
         .then((outcome) => {
@@ -189,6 +202,7 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
           setRemoteLoading(false);
         });
     }, SEARCH_DEBOUNCE_MS);
+
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
@@ -203,8 +217,10 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const trimmedQuery = searchQuery.trim();
   const isSearching = trimmedQuery.length > 0;
+
   const { searchOpen, setSearchOpen, closeSearch, searchInputRef } =
     useSearchBox(searchQuery, setSearchQuery);
+
   const { remoteHits, remoteLoading, searchUnavailable } = useRemoteSearch(
     trimmedQuery,
     onSearchFiles,
@@ -214,6 +230,7 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
   const localHits = useMemo<FileInfo[]>(() => {
     if (!isSearching) return [];
     const q = trimmedQuery.toLowerCase();
+
     return files.filter((f) => f.path.toLowerCase().includes(q));
   }, [files, isSearching, trimmedQuery]);
 
@@ -221,6 +238,7 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
    *  hits, deduped by path. */
   const searchResults = useMemo<FileInfo[]>(() => {
     if (!isSearching) return [];
+
     return mergeSearchResults(localHits, remoteHits, trimmedQuery);
   }, [isSearching, localHits, remoteHits, trimmedQuery]);
 

@@ -25,14 +25,17 @@ test.describe("PR iteration picker (real ADO host)", () => {
       E2E.iterationPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.iterationRepo, prId);
 
     const frame = prTabFrame(page);
     await waitForFrameRoot(frame);
     const trigger = frame.locator(".emr-statusbar-iteration-trigger");
+
     const anchor = frame.locator(
       '.emr-highlight[data-thread-id]:has-text("The first release covers engineering design notes and operational runbooks.")',
     );
+
     const orphanedComment = frame.locator(".emr-balloon.is-orphaned", {
       hasText: "EMR iteration anchor lifecycle",
     });
@@ -67,6 +70,7 @@ test.describe("PR iteration picker (real ADO host)", () => {
       E2E.iterationPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.iterationRepo, prId);
 
     const frame = prTabFrame(page);
@@ -77,11 +81,13 @@ test.describe("PR iteration picker (real ADO host)", () => {
     const allChangesDelta = await delta.innerText();
     const previous = frame.locator(".emr-statusbar-iteration-step").first();
     const next = frame.locator(".emr-statusbar-iteration-step").last();
+
     const stepperGeometry = () =>
       Promise.all(
         [previous, trigger, next].map((locator) =>
           locator.evaluate((element) => {
             const rect = element.getBoundingClientRect();
+
             return { left: rect.left, width: rect.width };
           }),
         ),
@@ -93,6 +99,7 @@ test.describe("PR iteration picker (real ADO host)", () => {
         triggerOffset: triggerRect!.left - previousRect!.left,
         nextOffset: nextRect!.left - previousRect!.left,
       }));
+
     const initialGeometry = await stepperGeometry();
 
     await expect(previous).toHaveAttribute(
@@ -155,6 +162,7 @@ test.describe("PR iteration picker (real ADO host)", () => {
       .click({ modifiers: ["Shift"] });
     await expect(trigger).toHaveText(/Update 2 → 5/);
     await expect(list.getByRole("option", { selected: true })).toHaveCount(3);
+
     for (const update of [3, 4, 5]) {
       await expect(
         list.getByRole("option", {
@@ -163,6 +171,7 @@ test.describe("PR iteration picker (real ADO host)", () => {
         }),
       ).toBeVisible();
     }
+
     await expect.poll(() => delta.innerText()).not.toBe(updateFiveDelta);
     await expect(list).toBeVisible();
     await expect(previous).toHaveAttribute(
@@ -245,16 +254,20 @@ test.describe("PR iteration picker (real ADO host)", () => {
     // updates; and an earlier update still takes new comments.
     const frame = await openUpdateScopePr(page);
     const { trigger, pickUpdate, pickAllUpdates } = updatePicker(frame);
+
     const routeParam = (name: string) =>
       new URL(page.url()).searchParams.get(name);
+
     const fileRow = (name: string) =>
       frame.locator(".emr-docnav-file").filter({ hasText: name }).first();
+
     const expectDimmed = async (names: string[], others: string[]) => {
       for (const name of names) {
         await expect(fileRow(name)).toHaveClass(/is-unchanged-in-range/, {
           timeout: 30_000,
         });
       }
+
       for (const name of others) {
         await expect(fileRow(name)).not.toHaveClass(/is-unchanged-in-range/);
       }
@@ -321,9 +334,11 @@ async function openUpdateScopePr(page: Page): Promise<FrameLocator> {
     E2E.updateScopePrTitle,
     "active",
   );
+
   await gotoPrTab(page, E2E.updateScopeRepo, prId);
   const frame = prTabFrame(page);
   await waitForFrameRoot(frame);
+
   return frame;
 }
 
@@ -331,6 +346,7 @@ async function openUpdateScopePr(page: Page): Promise<FrameLocator> {
 function updatePicker(frame: FrameLocator) {
   const trigger = frame.locator(".emr-statusbar-iteration-trigger");
   const list = frame.getByRole("listbox", { name: "Review iterations" });
+
   // Choosing an update leaves the picker open; only open it when closed.
   const open = async () => {
     if (
@@ -339,6 +355,7 @@ function updatePicker(frame: FrameLocator) {
       await trigger.click();
     }
   };
+
   return {
     trigger,
     openFile: (name: string) =>

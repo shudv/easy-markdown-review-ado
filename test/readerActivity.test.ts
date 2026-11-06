@@ -59,6 +59,7 @@ describe("buildReaderActivities", () => {
       historicalLoading: false,
       documentLoading: true,
     });
+
     expect(activities.map((activity) => activity.id)).toEqual([
       "search",
       "comment-sync",
@@ -76,6 +77,7 @@ describe("buildReaderActivities", () => {
       historicalLoading: true,
       documentLoading: true,
     });
+
     expect(activities.map((activity) => activity.id)).toEqual([
       "file-refresh",
       "history",
@@ -142,21 +144,26 @@ describe("useDelayedReaderActivity", () => {
     vi.useFakeTimers();
     const root = createRoot(document.createElement("div"));
     const committed: (string | null)[] = [];
+
     function Probe(props: { activity: ReaderActivity | null }) {
       const visible = useDelayedReaderActivity(props.activity, 100);
       committed.push(visible?.id ?? null);
+
       return null;
     }
+
     const render = (activity: ReaderActivity | null) => {
       act(() => {
         root.render(createElement(Probe, { activity }));
       });
     };
+
     const advance = (ms: number) => {
       act(() => {
         vi.advanceTimersByTime(ms);
       });
     };
+
     const latest = () => committed[committed.length - 1];
 
     render({ id: "first", label: "First…", priority: 10 });

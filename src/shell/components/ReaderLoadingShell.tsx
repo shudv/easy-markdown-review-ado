@@ -29,6 +29,7 @@ export function ReaderLoadingShell({
   const prefs = readReaderPrefs(scope);
   const readerFont = resolveReaderFont(prefs.fontId);
   const readerSpacing = readerSpacingValues(prefs);
+
   const style = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(prefs.sizePct / 100),

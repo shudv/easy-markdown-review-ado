@@ -10,12 +10,14 @@ export function useInertPopover(open: boolean): {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef(false);
+
   const restoreFocusAfterClose = useCallback(() => {
     restoreFocusRef.current = true;
   }, []);
 
   useLayoutEffect(() => {
     popoverRef.current!.inert = !open;
+
     if (!open && restoreFocusRef.current) {
       restoreFocusRef.current = false;
       triggerRef.current?.focus();

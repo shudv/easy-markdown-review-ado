@@ -12,6 +12,7 @@ let loadAttempts = 0;
 vi.mock("katex", () => {
   loadAttempts += 1;
   if (loadAttempts === 1) throw new Error("chunk load failed");
+
   return {
     default: {
       renderToString: (source: string) =>
@@ -25,6 +26,7 @@ import { hydrateMath } from "../src/markdown/mathHydrate";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>

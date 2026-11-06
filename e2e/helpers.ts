@@ -46,10 +46,12 @@ export async function gotoDocumentsHub(
   params?: Record<string, string>,
 ): Promise<void> {
   let url = hubUrl();
+
   if (params && Object.keys(params).length > 0) {
     const qs = new URLSearchParams(params).toString();
     url += `${url.includes("?") ? "&" : "?"}${qs}`;
   }
+
   await page.goto(url, { waitUntil: "domcontentloaded" });
 }
 
@@ -76,15 +78,18 @@ export async function waitForPersistedDraft(
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (!key?.startsWith("emr:comment-draft:")) continue;
+
             try {
               const draft = JSON.parse(localStorage.getItem(key) ?? "") as {
                 body?: unknown;
               };
+
               if (draft.body === expected) return true;
             } catch {
               // Malformed entry — keep scanning.
             }
           }
+
           return false;
         }, body),
       { timeout: 10_000, message: "draft was never persisted" },
@@ -123,17 +128,21 @@ export async function selectRepoInPicker(
   const triggerName = frame.locator(
     "button.emr-docnav-repo-btn .emr-docnav-repo-name",
   );
+
   const list = frame.locator(".emr-docnav-repo-list");
   const filter = frame.locator("input.emr-docnav-repo-filter-input");
+
   const option = frame
     .locator("button[role=option].emr-docnav-repo-option")
     .filter({ hasText: repoName })
     .first();
+
   // When this call SWITCHES repos, the previous repo's GUID may still be in
   // `?repo=` for a tick after the label updates; returning it would hand the
   // caller the wrong repo. Remember it so we can wait for the switch to land.
   const switching =
     (await triggerName.innerText().catch(() => "")).trim() !== repoName;
+
   const previousRepo = repoParam(page);
 
   // Drive open -> (filter) -> click as idempotent steps, retrying the whole
@@ -151,14 +160,17 @@ export async function selectRepoInPicker(
             .waitFor({ state: "visible", timeout: 4_000 })
             .catch(() => {});
         }
+
         // Paginated orgs render a filter box; narrow the list so the option is
         // in view even when the repo lives beyond the first page.
         if (await filter.isVisible().catch(() => false)) {
           await filter.fill(repoName).catch(() => {});
         }
+
         if (await option.isVisible().catch(() => false)) {
           await option.click().catch(() => {});
         }
+
         return (await triggerName.innerText().catch(() => "")).trim();
       },
       { timeout: 30_000, message: `repo "${repoName}" never selectable` },
@@ -171,6 +183,7 @@ export async function selectRepoInPicker(
     .poll(
       () => {
         const repo = repoParam(page);
+
         return (
           repo !== null && repo !== "" && (!switching || repo !== previousRepo)
         );
@@ -222,6 +235,7 @@ export async function openCommentableDoc(
   const frame = hubFrame(page);
   await waitForFrameRoot(frame);
   await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
+
   return { frame, repo, path };
 }
 
@@ -257,6 +271,7 @@ export interface AdoRequestEvent {
  */
 export function recordAdoRequests(page: Page): AdoRequestEvent[] {
   const events: AdoRequestEvent[] = [];
+
   const fromOurFrame = (request: Request): boolean => {
     try {
       return (
@@ -267,12 +282,14 @@ export function recordAdoRequests(page: Page): AdoRequestEvent[] {
       return false; // e.g. a service-worker request with no frame
     }
   };
+
   page.on("request", (r) => {
     if (fromOurFrame(r)) events.push({ phase: "start", url: r.url() });
   });
   page.on("requestfinished", (r) => {
     if (fromOurFrame(r)) events.push({ phase: "end", url: r.url() });
   });
+
   return events;
 }
 
@@ -307,10 +324,12 @@ export async function discoverPullRequestId(
   if (!(await link.isVisible({ timeout: 8_000 }).catch(() => false))) {
     // The URL filter didn't surface it — flip to the matching view via chrome.
     const statusRe = new RegExp(status, "i");
+
     const tab = page
       .getByRole("tab", { name: statusRe })
       .or(page.getByRole("link", { name: statusRe }))
       .first();
+
     await tab.click({ timeout: 8_000 }).catch(() => {});
     await link.waitFor({ state: "visible", timeout: 20_000 });
   }
@@ -321,6 +340,7 @@ export async function discoverPullRequestId(
     match,
     `could not extract a PR id from the "${prTitle}" row (href="${href}") — is the sandbox provisioned?`,
   ).toBeTruthy();
+
   return Number(match![1]);
 }
 
@@ -371,6 +391,7 @@ export async function openDraftComposerBySelection(
                 n.nodeType === Node.TEXT_NODE &&
                 (n.textContent ?? "").length > cfg.minNodeLen,
             ) as Text | undefined;
+
             if (!textNode) return null;
             const len = Math.min(cfg.selLen, textNode.data.length);
             const range = document.createRange();
@@ -380,10 +401,12 @@ export async function openDraftComposerBySelection(
             sel.removeAllRanges();
             sel.addRange(range);
             el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
             return textNode.data.slice(0, len);
           },
           { minNodeLen, selLen },
         );
+
         return bubble.isVisible().catch(() => false);
       },
       {
@@ -401,6 +424,7 @@ export async function openDraftComposerBySelection(
   await expect(draft.locator("textarea.emr-textarea")).toBeVisible({
     timeout: 10_000,
   });
+
   return selectedText!;
 }
 
@@ -461,6 +485,7 @@ export async function setAdoTheme(page: Page, target: RegExp): Promise<string> {
   const gearItem = page
     .getByRole("menuitem", { name: /user settings|profile/i })
     .first();
+
   const gearBtn = gearItem.getByRole("button").first();
 
   // Level 1: the "Theme" row inside the opened settings menu. Addressed by its
@@ -480,8 +505,10 @@ export async function setAdoTheme(page: Page, target: RegExp): Promise<string> {
         const exp = await gearItem
           .getAttribute("aria-expanded")
           .catch(() => null);
+
         if (exp !== "true") await gearBtn.click().catch(() => {});
         await page.waitForTimeout(600);
+
         return gearItem.getAttribute("aria-expanded").catch(() => null);
       },
       { timeout: 30_000, message: "ADO settings menu never opened" },
@@ -507,10 +534,12 @@ export async function setAdoTheme(page: Page, target: RegExp): Promise<string> {
             .waitFor({ state: "visible", timeout: 4_000 })
             .catch(() => {});
         }
+
         if (await swatch.isVisible().catch(() => false)) {
           selectedLabel = (await swatch.innerText().catch(() => "")).trim();
           await swatch.click().catch(() => {});
         }
+
         return selectedLabel;
       },
       {

@@ -85,12 +85,15 @@ export function detectActiveTrigger(
   // Cap look-back; longer mentions are pathological — close the picker instead.
   const MAX_LOOKBACK = 64;
   const start = Math.max(0, caret - MAX_LOOKBACK);
+
   for (let i = caret - 1; i >= start; i--) {
     const ch = text[i]!;
     const kind = TRIGGER_CHARS[ch];
+
     if (kind !== undefined) {
       const prev = i === 0 ? "" : text[i - 1]!;
       if (i !== 0 && !/\s/.test(prev)) return null;
+
       return {
         kind,
         char: ch,
@@ -99,9 +102,11 @@ export function detectActiveTrigger(
         query: text.slice(i + 1, caret),
       };
     }
+
     // Allow the in-progress query to contain a small set of safe chars.
     if (!/[\w.\- ]/.test(ch)) return null;
   }
+
   return null;
 }
 
@@ -121,25 +126,34 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
       // leaves the caret outside the mention after insertion.
       return `@<${suggestion.id}> `;
     }
+
     case "workitem": {
       // Embed the title in the label so historical comments stay legible
       // without re-fetching; the renderer ignores it when richer data exists.
       const label = `#${suggestion.id} ${suggestion.title}`;
+
       const params = new URLSearchParams({
         type: suggestion.workItemType,
         state: suggestion.state,
       });
-      if (suggestion.stateColor !== undefined && suggestion.stateColor !== "")
+
+      if (suggestion.stateColor !== undefined && suggestion.stateColor !== "") {
         params.set("stateColor", suggestion.stateColor);
+      }
+
       return `[${escapeLabel(label)}](mention://workitem/${encodeURIComponent(
         suggestion.id,
       )}?${params.toString()}) `;
     }
+
     case "pullrequest": {
       const label = `!${suggestion.id} ${suggestion.title}`;
       const params = new URLSearchParams({ status: suggestion.status });
-      if (suggestion.repository !== undefined && suggestion.repository !== "")
+
+      if (suggestion.repository !== undefined && suggestion.repository !== "") {
         params.set("repo", suggestion.repository);
+      }
+
       return `[${escapeLabel(label)}](mention://pullrequest/${encodeURIComponent(
         suggestion.id,
       )}?${params.toString()}) `;
@@ -168,6 +182,7 @@ export function uniqueMentionLabel(
   taken: readonly string[],
 ): string {
   if (!taken.includes(base)) return base;
+
   for (let n = 2; ; n++) {
     const candidate = `${base} ${n}`;
     if (!taken.includes(candidate)) return candidate;
@@ -193,10 +208,12 @@ export function encodePickedMentions(
   if (picks.length === 0) return text;
   const sorted = [...picks].sort((a, b) => b.label.length - a.label.length);
   let out = text;
+
   for (const { label, id } of sorted) {
     if (!label) continue;
     out = replaceStandaloneMention(out, `@${label}`, `@<${id}>`);
   }
+
   return out;
 }
 
@@ -208,6 +225,7 @@ function replaceStandaloneMention(
 ): string {
   let result = "";
   let i = 0;
+
   for (;;) {
     const at = text.indexOf(token, i);
     if (at === -1) return result + text.slice(i);
@@ -227,11 +245,13 @@ function isStandaloneMention(
   const before = at === 0 ? "" : text[at - 1]!;
   const afterIndex = at + length;
   const leftOk = at === 0 || /\s/.test(before);
+
   // Boundary rules consistent with `detectActiveTrigger`, which allows
   // `[\w.-]` inside mention text: don't encode when the token is followed
   // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
   const rightOk =
     afterIndex >= text.length || !/[\w.-]/.test(text[afterIndex]!);
+
   return leftOk && rightOk;
 }
 
@@ -252,6 +272,7 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
   const slash = after.indexOf("/");
   if (slash < 0) return null;
   const kindStr = after.slice(0, slash);
+
   if (
     kindStr !== "user" &&
     kindStr !== "workitem" &&
@@ -259,15 +280,18 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
   ) {
     return null;
   }
+
   const rest = after.slice(slash + 1);
   const q = rest.indexOf("?");
   const idRaw = q < 0 ? rest : rest.slice(0, q);
   const id = decodeURIComponent(idRaw);
   const params: Record<string, string> = {};
+
   if (q >= 0) {
     const search = new URLSearchParams(rest.slice(q + 1));
     for (const [k, v] of search) params[k] = v;
   }
+
   return { kind: kindStr, id, params };
 }
 
@@ -321,17 +345,22 @@ export function normalizeIdentityGuid(
   raw: string | undefined,
 ): string | undefined {
   if (raw === undefined || raw === "") return undefined;
+
   const dashed =
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(raw);
+
   if (dashed) return dashed[0].toLowerCase();
   const bare = /[0-9a-f]{32}/i.exec(raw);
+
   if (bare) {
     const h = bare[0].toLowerCase();
+
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(
       16,
       20,
     )}-${h.slice(20)}`;
   }
+
   return undefined;
 }
 
@@ -344,6 +373,7 @@ export function normalizeIdentityGuid(
 export function collectUserMentionIds(body: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
+
   const add = (raw: string): void => {
     const id = raw.trim();
     if (!id) return;
@@ -352,7 +382,9 @@ export function collectUserMentionIds(body: string): string[] {
     seen.add(key);
     out.push(id);
   };
+
   for (const m of body.matchAll(USER_MENTION_RE)) add(m[1]!);
+
   for (const m of body.matchAll(USER_MENTION_LINK_RE)) {
     try {
       add(decodeURIComponent(m[1]!));
@@ -361,6 +393,7 @@ export function collectUserMentionIds(body: string): string[] {
       add(m[1]!);
     }
   }
+
   return out;
 }
 
@@ -382,6 +415,7 @@ export function collectMentionIdentities(
 ): MentionedIdentity[] {
   const out: MentionedIdentity[] = [];
   const seen = new Set<string>();
+
   for (const raw of collectUserMentionIds(body)) {
     const id = normalizeIdentityGuid(raw) ?? raw;
     const key = id.toLowerCase();
@@ -391,6 +425,7 @@ export function collectMentionIdentities(
     seen.add(key);
     out.push({ id, displayName: info.displayName, avatarUrl: info.avatarUrl });
   }
+
   return out;
 }
 
@@ -404,6 +439,7 @@ export function mergeMentionIdentities(
 ): MentionedIdentity[] {
   const out: MentionedIdentity[] = [];
   const seen = new Set<string>();
+
   for (const list of lists) {
     for (const m of list) {
       const key = (normalizeIdentityGuid(m.id) ?? m.id).toLowerCase();
@@ -412,6 +448,7 @@ export function mergeMentionIdentities(
       out.push(m);
     }
   }
+
   return out;
 }
 

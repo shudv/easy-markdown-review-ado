@@ -36,6 +36,7 @@ function readMap(): NavMap {
     if (raw === null || raw === "") return {};
     const parsed: unknown = JSON.parse(raw);
     if (parsed !== null && typeof parsed === "object") return parsed as NavMap;
+
     return {};
   } catch {
     return {};

@@ -37,6 +37,7 @@ describe("extractHastText", () => {
       ]),
       { type: "text", value: "!" },
     ]);
+
     expect(extractHastText(heading)).toBe("Get started now!");
   });
 
@@ -48,6 +49,7 @@ describe("extractHastText", () => {
       { type: "comment", value: " ignored " },
       { type: "text", value: "after" },
     ]);
+
     expect(extractHastText(node)).toBe("before after");
   });
 });

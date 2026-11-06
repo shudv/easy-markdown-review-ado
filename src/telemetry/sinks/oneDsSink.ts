@@ -55,6 +55,7 @@ export function createOneDsSink(
   config: TelemetryBuildConfig,
 ): TelemetrySink | null {
   let core: AppInsightsCore;
+
   try {
     core = new AppInsightsCore();
     const channel = new PostChannel();
@@ -99,6 +100,7 @@ export function createOneDsSink(
           ...event.measurements,
           ...contextData(ctx),
         };
+
         // The telemetry layer owns table routing (see ../eventTables.ts).
         core.track(toTableEvent(event.name, data));
       } catch {
@@ -111,6 +113,7 @@ export function createOneDsSink(
         // Exception text leaks paths/usernames/URLs — scrub before egress.
         const message = redactText(shape.message, 256);
         const stack = redactText(shape.stack, 2048);
+
         // Custom properties first; the computed exception fields and context
         // are spread after so a property named `message`/`stack`/etc. or a
         // collision with a context key cannot clobber the real value.
@@ -134,6 +137,7 @@ export function createOneDsSink(
           source: info.source,
           handled: info.handled ?? true,
         };
+
         // Exceptions are a Diagnostics signal, routed like any other event.
         core.track(toTableEvent(EVENT.AppException, data));
       } catch {

@@ -25,10 +25,12 @@ describe("FixtureCommentApi", () => {
     // resolveIdentities maps fixture user ids to names (case-insensitive) and
     // omits unknown ids.
     const someUser = namedUsers[0]!;
+
     const resolved = await api.resolveIdentities([
       someUser.id.toUpperCase(),
       "not-a-real-id",
     ]);
+
     expect(resolved[someUser.id]!.displayName).toBe(someUser.displayName);
     expect(resolved["not-a-real-id"]).toBeUndefined();
 
@@ -129,11 +131,13 @@ describe("FixtureCommentApi", () => {
 
   it("still mints session-local write ids (inherited from LocalOnly)", async () => {
     const api = new FixtureCommentApi();
+
     const t = await api.createThread({
       filePath: "f.md",
       anchor: { exact: "x", prefix: "", suffix: "" },
       bodyMarkdown: "hi",
     });
+
     expect(t.threadId).toBe("t-local-1");
   });
 });

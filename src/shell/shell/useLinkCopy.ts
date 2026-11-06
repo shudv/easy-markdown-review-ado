@@ -27,12 +27,15 @@ export function useLinkCopy(
   // host can build a shareable surface URL. On success the host is told so it
   // can mirror the anchor into the page URL, as ADO's own preview does.
   const buildDeepLink = useDeepLink();
+
   const onCopyHeadingLink = useMemo(() => {
     if (!buildDeepLink) return undefined;
+
     return async (anchor: string): Promise<boolean> => {
       const url = buildDeepLink({ kind: "heading", anchor });
       const hasUrl = url !== undefined && url !== "";
       const ok = hasUrl ? await copyText(url) : false;
+
       if (ok) {
         track(events.linkCopied({ target: "heading" }));
         onHeadingLinkCopied?.(anchor);
@@ -46,6 +49,7 @@ export function useLinkCopy(
           impact: "action-failed",
         });
       }
+
       return ok;
     };
   }, [buildDeepLink, onHeadingLinkCopied]);
@@ -54,10 +58,12 @@ export function useLinkCopy(
   // quoted text, with its section heading as a fallback.
   const onCopySelectionLink = useMemo(() => {
     if (!buildDeepLink) return undefined;
+
     return async ({ text, anchor }: SelectionLinkTarget): Promise<boolean> => {
       const url = buildDeepLink({ kind: "text", text, anchor });
       const hasUrl = url !== undefined && url !== "";
       const ok = hasUrl ? await copyText(url) : false;
+
       if (ok) {
         track(events.linkCopied({ target: "text" }));
         onTextLinkCopied?.(text, anchor);
@@ -71,6 +77,7 @@ export function useLinkCopy(
           impact: "action-failed",
         });
       }
+
       return ok;
     };
   }, [buildDeepLink, onTextLinkCopied]);

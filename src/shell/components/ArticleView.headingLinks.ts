@@ -13,6 +13,7 @@ export function createHeadingLinkButton(
   button.dataset.headingId = headingId;
   button.setAttribute("aria-label", HEADING_LINK_LABEL);
   button.title = HEADING_LINK_LABEL;
+
   return button;
 }
 

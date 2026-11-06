@@ -205,6 +205,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
     draftY: railDraftY(readOnly, draftAnchor, draftY),
     onlyThisFile,
   });
+
   const {
     orderedAnchoredIds,
     kindById,
@@ -217,12 +218,14 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
   // Auto-expand a cross-file tray while its comment is active (e.g. status-bar
   // navigation landed there), so the selected balloon is on screen.
   const searchActive = commentQuery.trim().length > 0;
+
   const generalExpanded = isRailTrayExpanded({
     collapsed: generalCollapsed,
     threads: visibleGeneralThreads,
     activeThreadId,
     searchActive,
   });
+
   const orphanedFilesExpanded = isRailTrayExpanded({
     collapsed: orphanedFilesCollapsed,
     threads: visibleOrphanedFileThreads,
@@ -312,7 +315,9 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
               />
             );
           }
+
           const t = currentThreads.find((x) => x.id === id)!;
+
           return (
             <Balloon
               key={t.id}
@@ -410,5 +415,6 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
 /** Filename (last path segment) for the orphaned-file label. */
 function baseName(p: string): string {
   const i = p.lastIndexOf("/");
+
   return i === -1 ? p : p.slice(i + 1);
 }

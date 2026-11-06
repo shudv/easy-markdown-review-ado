@@ -60,6 +60,7 @@ export function addCommentDraftTarget(
   ) {
     return current;
   }
+
   return implicitCommentDraft(path);
 }
 
@@ -84,6 +85,7 @@ export interface PersistedDraft {
 /** Single-line snippet of a draft body for the discard dialog (trimmed + capped). */
 export function draftSnippet(body: string, max = 80): string {
   const oneLine = body.replace(/\s+/g, " ").trim();
+
   return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
 }
 
@@ -100,19 +102,24 @@ export function draftStorageKey(scope: DraftScope): string {
  */
 export function loadDraft(scope: DraftScope): PersistedDraft | null {
   let raw: string | null;
+
   try {
     raw = window.localStorage.getItem(draftStorageKey(scope));
   } catch {
     return null;
   }
+
   if (raw === null || raw === "") return null;
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return null;
   }
+
   if (!isPersistedDraft(parsed)) return null;
+
   return parsed;
 }
 
@@ -120,6 +127,7 @@ export function loadDraft(scope: DraftScope): PersistedDraft | null {
 function isPersistedDraft(value: unknown): value is PersistedDraft {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
+
   if (
     typeof v.path !== "string" ||
     typeof v.threadId !== "string" ||
@@ -128,15 +136,18 @@ function isPersistedDraft(value: unknown): value is PersistedDraft {
   ) {
     return false;
   }
+
   // A new-comment draft must carry a usable anchor; a reply draft has none.
   if (v.threadId === NEW_DRAFT_THREAD_ID) {
     const anchor = v.anchor as Record<string, unknown> | null | undefined;
+
     return (
       typeof anchor === "object" &&
       anchor !== null &&
       typeof anchor.exact === "string"
     );
   }
+
   return true;
 }
 
@@ -187,6 +198,7 @@ export function createThrottledDraftWriter(
       saveDraft(scope, pending);
       pending = null;
     }
+
     lastWrite = Date.now();
     timer = null;
   };
@@ -195,6 +207,7 @@ export function createThrottledDraftWriter(
     schedule(draft: PersistedDraft): void {
       pending = draft;
       const elapsed = Date.now() - lastWrite;
+
       if (elapsed >= intervalMs) {
         write();
       } else {
@@ -206,6 +219,7 @@ export function createThrottledDraftWriter(
         clearTimeout(timer);
         timer = null;
       }
+
       write();
     },
     cancel(): void {
@@ -213,6 +227,7 @@ export function createThrottledDraftWriter(
         clearTimeout(timer);
         timer = null;
       }
+
       pending = null;
     },
   };

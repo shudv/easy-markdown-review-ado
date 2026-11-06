@@ -59,6 +59,7 @@ export function useDocNavigation(opts: DocNavigationOptions) {
     dismissEmptyDraftRef,
     scrollDocToHash,
   } = opts;
+
   // Heading to scroll to once the selected document renders: a cross-document
   // `#anchor` link, or the `?anchor=` deep link seeded at mount (a `?comment=`
   // link wins when both are present — the thread's own scroll would fight the
@@ -123,7 +124,9 @@ export function useDocNavigation(opts: DocNavigationOptions) {
         currentPath: selectedPath,
         isInReader: (p) => files.some((f) => samePath(f.path, p)),
       });
+
       if (action.type === "external") return false;
+
       if (action.type === "scroll") {
         scrollDocToHash(action.hash, { focus: true });
       } else if (action.type === "select") {
@@ -134,6 +137,7 @@ export function useDocNavigation(opts: DocNavigationOptions) {
       } else {
         navigateOutOfReader(action, onDocNavigate);
       }
+
       return true;
     },
     [selectedPath, isHub, files, onDocNavigate, selectDocPath, scrollDocToHash],
@@ -156,7 +160,9 @@ function initialDeepLinkTargets(opts: DocNavigationOptions): {
   const commentLinkWins =
     opts.initialActiveThreadId !== undefined &&
     opts.initialActiveThreadId !== "";
+
   if (commentLinkWins) return { hash: null, text: null };
+
   return {
     hash: opts.initialAnchor ?? null,
     text: opts.initialTextFragment ?? null,
@@ -189,6 +195,7 @@ function replaceMissingDoc(
   opts.setLoading(false);
   opts.setSelectedPath(next);
   opts.onSelectPath?.(next);
+
   return "replaced";
 }
 
@@ -235,9 +242,11 @@ export function usePendingDocScroll(opts: PendingDocScrollOptions): void {
     scrollDocToHash,
     scrollDocToText,
   } = opts;
+
   useEffect(() => {
     if (!articleReady) return;
     const text = pendingTextRef.current;
+
     if (text !== null && text !== "") {
       pendingTextRef.current = null;
       const fallback = pendingScrollHashRef.current;
@@ -245,11 +254,15 @@ export function usePendingDocScroll(opts: PendingDocScrollOptions): void {
       pendingHashIsDeepLinkRef.current = false;
       scrollDocToText(text, (found) => {
         track(events.linkOpened({ target: "text", found }));
-        if (!found && fallback !== null && fallback !== "")
+
+        if (!found && fallback !== null && fallback !== "") {
           scrollDocToHash(fallback, { hold: true });
+        }
       });
+
       return;
     }
+
     const hash = pendingScrollHashRef.current;
     if (hash === null || hash === "") return;
     pendingScrollHashRef.current = null;

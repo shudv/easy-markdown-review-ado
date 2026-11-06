@@ -27,14 +27,18 @@ export function extractStatus(err: unknown): number | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   const e = err as Record<string, unknown>;
   const candidates = [e.status, e.statusCode, e.httpStatusCode];
+
   for (const c of candidates) {
     if (typeof c === "number" && c >= 100 && c <= 599) return c;
   }
+
   // Some SDK errors nest the status inside a `serverError` payload.
   const serverError = e.serverError as Record<string, unknown> | undefined;
+
   if (serverError && typeof serverError.status === "number") {
     return serverError.status;
   }
+
   return undefined;
 }
 
@@ -46,6 +50,7 @@ export function extractStatus(err: unknown): number | undefined {
 export function isAbortError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const e = err as Record<string, unknown>;
+
   return e.name === "AbortError" || e.code === 20 /* DOMException.ABORT_ERR */;
 }
 
@@ -134,6 +139,7 @@ export function isRetryable(err: unknown, mode: RetryMode): boolean {
     if (status === undefined) return false;
     if (TERMINAL_STATUSES.has(status)) return false;
     if (WRITE_SAFE_TRANSIENT_STATUSES.has(status)) return true;
+
     return status === 401 || status === 403;
   }
 

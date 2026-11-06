@@ -93,6 +93,7 @@ function ControlledReaderStatusBar(
   props: ComponentProps<typeof ReaderStatusBar>,
 ): ReactElement {
   const [iterationRange, setIterationRange] = useState(props.iterationRange);
+
   return (
     <ReaderStatusBar
       {...props}
@@ -109,9 +110,11 @@ function ControlledCommentStatusBar(
   props: ComponentProps<typeof ReaderStatusBar>,
 ): ReactElement {
   const [showComments, setShowComments] = useState(props.showComments);
+
   const [activeCommentThreadId, setActiveCommentThreadId] = useState(
     props.activeCommentThreadId ?? null,
   );
+
   return (
     <ReaderStatusBar
       {...props}
@@ -136,20 +139,25 @@ export const Default: Story = {
     expect(
       canvas.getByRole("toolbar", { name: "Reader status and controls" }),
     ).toBeTruthy();
+
     const iterationPopover = canvasElement.querySelector<HTMLElement>(
       ".emr-statusbar-iteration-pop",
     )!;
+
     const typePopover =
       canvasElement.querySelector<HTMLElement>(".emr-statusbar-pop")!;
+
     expect(iterationPopover.inert).toBe(true);
     expect(iterationPopover).toHaveAttribute("aria-hidden", "true");
     expect(typePopover.inert).toBe(true);
     expect(typePopover).toHaveAttribute("aria-hidden", "true");
+
     const visibleToolbarButtons = [
       ...canvasElement.querySelectorAll<HTMLButtonElement>(
         ".emr-statusbar-left > button, .emr-statusbar-context-controls > button, .emr-statusbar-controls button",
       ),
     ].filter((button) => button.offsetParent !== null);
+
     expect(
       visibleToolbarButtons.map(
         (button) =>
@@ -173,9 +181,11 @@ export const Default: Story = {
         button.textContent?.includes("Comments"),
       ),
     );
+
     const delta = canvasElement.querySelector<HTMLElement>(
       ".emr-statusbar-delta",
     )!;
+
     expect(delta.textContent).toBe("+38−12");
     expect(
       delta
@@ -184,9 +194,11 @@ export const Default: Story = {
     ).toBe("38 words added");
     const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
     expect(canvas.queryByRole("slider", { name: "Text spacing" })).toBeNull();
+
     const spacingSlider = typePopover.querySelector<HTMLInputElement>(
       'input[aria-label="Text spacing"]',
     )!;
+
     expect(sizeSlider.getAttribute("min")).toBe("50");
     expect(sizeSlider.getAttribute("max")).toBe("150");
     expect(spacingSlider.getAttribute("min")).toBe("100");
@@ -196,6 +208,7 @@ export const Default: Story = {
         ".emr-percent-adjust.is-minus",
       ),
     ).toBeDisabled();
+
     for (const selector of [
       ".emr-statusbar-iteration-trigger .emr-statusbar-iteration-text",
       ".emr-statusbar-words",
@@ -207,15 +220,19 @@ export const Default: Story = {
       const style = getComputedStyle(
         canvasElement.querySelector<HTMLElement>(selector)!,
       );
+
       expect(style.transform).toBe("none");
       expect(style.getPropertyValue("text-box-trim")).toBe("none");
     }
+
     const barCenter = (() => {
       const rect = canvasElement
         .querySelector<HTMLElement>(".emr-statusbar")!
         .getBoundingClientRect();
+
       return rect.top + rect.height / 2;
     })();
+
     for (const selector of [
       ".emr-statusbar-iteration-trigger .emr-statusbar-iteration-text",
       ".emr-statusbar-words",
@@ -226,10 +243,12 @@ export const Default: Story = {
       const rect = canvasElement
         .querySelector<HTMLElement>(selector)!
         .getBoundingClientRect();
+
       expect(
         Math.abs(rect.top + rect.height / 2 - barCenter),
       ).toBeLessThanOrEqual(0.75);
     }
+
     expect(
       getComputedStyle(
         canvasElement.querySelector<SVGElement>(
@@ -241,12 +260,17 @@ export const Default: Story = {
     const separators = [
       ...canvasElement.querySelectorAll<HTMLElement>(".emr-statusbar-sep"),
     ];
+
     expect(separators).toHaveLength(4);
+
     const separatorMetrics = separators.map((separator) => {
       const rect = separator.getBoundingClientRect();
+
       const previousRect =
         separator.previousElementSibling!.getBoundingClientRect();
+
       const nextRect = separator.nextElementSibling!.getBoundingClientRect();
+
       return {
         width: rect.width,
         height: rect.height,
@@ -254,6 +278,7 @@ export const Default: Story = {
         gapAfter: nextRect.left - rect.right,
       };
     });
+
     for (const metric of separatorMetrics) {
       expect(metric.width).toBeCloseTo(separatorMetrics[0]!.width, 1);
       expect(metric.height).toBeCloseTo(separatorMetrics[0]!.height, 1);
@@ -281,12 +306,14 @@ export const Default: Story = {
     expect(
       canvas.getByRole("option", { name: /3 Improve review workflow/ }),
     ).toHaveAttribute("aria-selected", "false");
+
     // The selected row must actually be painted. `aria-selected` alone passes
     // even when the stylesheet drifts to a different attribute and the
     // highlight silently disappears.
     const unselected = canvas.getByRole("option", {
       name: /3 Improve review workflow/,
     });
+
     const selectedBg = getComputedStyle(selectedOptions[0]!).backgroundColor;
     expect(selectedBg).not.toBe(getComputedStyle(unselected).backgroundColor);
     expect(selectedBg).not.toBe("rgba(0, 0, 0, 0)");
@@ -306,15 +333,18 @@ export const LoadingActivity: Story = {
     const status = await waitFor(() =>
       canvasElement.querySelector<HTMLElement>(".emr-statusbar-activity"),
     );
+
     await expect(status).toBeTruthy();
     await expect(status).toHaveTextContent("Loading document…");
     await expect(status).toHaveAttribute(
       "title",
       "Loading document… (2 operations running)",
     );
+
     const spinner = canvasElement.querySelector<HTMLElement>(
       ".emr-statusbar-spinner",
     )!;
+
     await expect(getComputedStyle(spinner).animationName).toBe(
       "emr-statusbar-spin",
     );
@@ -339,14 +369,17 @@ export const ResolvedPullRequest: Story = {
     const link = within(canvasElement).getByRole("link", {
       name: "Latest completed PR for this file: #128 Clarify the review checklist",
     });
+
     await expect(link).toHaveTextContent("PR #128");
     await expect(link).toHaveAttribute(
       "href",
       "https://example.test/pullrequest/128",
     );
+
     const comments = within(canvasElement).getByRole("button", {
       name: "Comments",
     });
+
     await expect(link.getBoundingClientRect().left).toBeGreaterThan(
       comments.getBoundingClientRect().left,
     );
@@ -366,6 +399,7 @@ export const ResolvedPullRequestWithoutLink: Story = {
     const status = within(canvasElement).getByLabelText(
       "Latest completed PR for this file: #128 Clarify the review checklist",
     );
+
     await expect(status.tagName).toBe("SPAN");
     await expect(status).toHaveTextContent("PR #128");
   },
@@ -377,14 +411,17 @@ export const IterationStepping: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole("button", { name: "All updates" });
+
     const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
       ".emr-statusbar-iteration-step",
     );
+
     const initialPositions = {
       previous: previous!.getBoundingClientRect().left,
       trigger: trigger.getBoundingClientRect().left,
       next: next!.getBoundingClientRect().left,
     };
+
     expect(previous!.getBoundingClientRect().right).toBeCloseTo(
       trigger.getBoundingClientRect().left,
       1,
@@ -398,14 +435,17 @@ export const IterationStepping: Story = {
 
     const expectCenteredLabel = () => {
       const triggerRect = trigger.getBoundingClientRect();
+
       const labelRect = trigger
         .querySelector<HTMLElement>(".emr-statusbar-iteration-value")!
         .getBoundingClientRect();
+
       expect(labelRect.left + labelRect.width / 2).toBeCloseTo(
         triggerRect.left + triggerRect.width / 2,
         1,
       );
     };
+
     expectCenteredLabel();
 
     expect(previous).toHaveAttribute(
@@ -431,16 +471,20 @@ export const IterationStepping: Story = {
         1,
       );
     }
+
     expect(previous).toBeDisabled();
     expect(
       trigger.querySelector(".emr-statusbar-iteration-base"),
     ).toHaveAttribute("title", "Base commit abcdef1");
+
     const baseGlyph = trigger
       .querySelector<HTMLElement>(".emr-statusbar-iteration-base")!
       .getBoundingClientRect();
+
     const arrow = [...trigger.querySelectorAll<HTMLElement>("span")]
       .find((element) => element.textContent === "→")!
       .getBoundingClientRect();
+
     expect(baseGlyph.top + baseGlyph.height / 2).toBeCloseTo(
       arrow.top + arrow.height / 2,
       1,
@@ -473,6 +517,7 @@ export const IterationStepping: Story = {
         1,
       );
     }
+
     expect(next).toBeDisabled();
     expect(args.onIterationRangeChange).toHaveBeenCalledWith({
       fromUpdate: 0,
@@ -519,15 +564,18 @@ export const IterationMultiDigitStepping: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole("button", { name: "Update 98 → 99" });
+
     const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
       ".emr-statusbar-iteration-step",
     );
+
     const initialGeometry = {
       previousLeft: previous!.getBoundingClientRect().left,
       triggerLeft: trigger.getBoundingClientRect().left,
       triggerWidth: trigger.getBoundingClientRect().width,
       nextLeft: next!.getBoundingClientRect().left,
     };
+
     expect(initialGeometry.triggerWidth).toBeLessThanOrEqual(310);
 
     await userEvent.click(next!);
@@ -558,10 +606,12 @@ export const IterationMultiDigitStepping: Story = {
     );
     const list = canvas.getByRole("listbox", { name: "Review iterations" });
     await expect(list.scrollTop).toBeGreaterThan(0);
+
     const selected = canvas.getByRole("option", {
       name: /^100 Update 100/,
       selected: true,
     });
+
     const listRect = list.getBoundingClientRect();
     const rowRect = selected.getBoundingClientRect();
     await expect(rowRect.top).toBeGreaterThanOrEqual(listRect.top);
@@ -582,9 +632,11 @@ export const IterationRangeStepping: Story = {
   render: (args) => <ControlledReaderStatusBar {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
       ".emr-statusbar-iteration-step",
     );
+
     expect(canvas.getByRole("button", { name: "Update 2 → 5" })).toBeTruthy();
     expect(previous).toHaveAttribute(
       "aria-label",
@@ -610,10 +662,12 @@ export const CommentStepping: Story = {
     const canvas = within(canvasElement);
     const comments = canvas.getByRole("button", { name: "Comments" });
     const navigation = canvas.getByRole("button", { name: "Navigation" });
+
     const persistentPositions = {
       comments: comments.getBoundingClientRect().left,
       navigation: navigation.getBoundingClientRect().left,
     };
+
     expect(canvas.getByLabelText("Comment 2 of 3")).toBeTruthy();
 
     const previous = canvas.getByRole("button", { name: "Previous comment" });
@@ -714,9 +768,11 @@ export const IterationRange: Story = {
   render: (args) => <ControlledReaderStatusBar {...args} />,
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+
     const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
       ".emr-statusbar-iteration-step",
     );
+
     expect(previous).toHaveAttribute(
       "aria-label",
       "Previous comparison: Base → Update 1",
@@ -753,11 +809,13 @@ export const IterationRangeHighContrast: Story = {
         const root = document.documentElement;
         const previousTheme = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "hc-light");
+
         return () => {
           if (previousTheme) root.setAttribute("data-emr-theme", previousTheme);
           else root.removeAttribute("data-emr-theme");
         };
       }, []);
+
       return <Story />;
     },
   ],
@@ -853,9 +911,11 @@ export const Interactions: Story = {
     const iterationTrigger = canvas.getByRole("button", {
       name: "All updates",
     });
+
     const iterationPopover = canvasElement.querySelector<HTMLElement>(
       ".emr-statusbar-iteration-pop",
     )!;
+
     await userEvent.click(iterationTrigger);
     expect(iterationPopover.inert).toBe(false);
     expect(iterationPopover).toHaveAttribute("aria-hidden", "false");
@@ -890,9 +950,11 @@ export const Interactions: Story = {
     expect(
       canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
     ).not.toBeNull();
+
     const iterationOne = canvas.getByRole("option", {
       name: /1 Initial draft/,
     });
+
     fireEvent.click(iterationOne, { shiftKey: true });
     expect(args.onIterationRangeChange).toHaveBeenCalledWith({
       fromUpdate: 0,
@@ -919,8 +981,10 @@ export const Interactions: Story = {
 
     // Font popover: open, pick the reading serif, then close with Escape.
     const typeTrigger = canvas.getByRole("button", { name: "Aa" });
+
     const typePopover =
       canvasElement.querySelector<HTMLElement>(".emr-statusbar-pop")!;
+
     await userEvent.click(typeTrigger);
     await waitFor(() =>
       expect(
@@ -972,6 +1036,7 @@ export const Interactions: Story = {
       target: { value: "125" },
     });
     const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
+
     for (const key of [
       "ArrowLeft",
       "ArrowDown",
@@ -981,6 +1046,7 @@ export const Interactions: Story = {
     ]) {
       fireEvent.keyDown(sizeSlider, { key });
     }
+
     expect(args.onSizeChange).toHaveBeenCalledWith(95);
     expect(args.onSizeChange).toHaveBeenCalledWith(105);
     expect(args.onSizeChange).toHaveBeenCalledWith(125);
@@ -1013,6 +1079,7 @@ export const FontDetectionUnavailable: Story = {
   beforeEach: () => {
     const NativeFontFace = window.FontFace;
     window.FontFace = undefined as unknown as typeof FontFace;
+
     return () => {
       window.FontFace = NativeFontFace;
     };
@@ -1050,6 +1117,7 @@ export const OutlineToggleOff: Story = {
     const toggle = within(canvasElement).getByRole("button", {
       name: "Outline",
     });
+
     await expect(toggle.getAttribute("aria-pressed")).toBe("false");
     await expect(toggle.title).toBe(
       "Show the document outline in the navigation",

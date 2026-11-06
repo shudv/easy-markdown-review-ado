@@ -13,6 +13,7 @@ import { extractHastText } from "./hast-text";
 
 function classesOf(element: Element): string[] {
   const classes = element.properties.className;
+
   return Array.isArray(classes) ? classes.map(String) : [];
 }
 
@@ -69,38 +70,41 @@ function placeholder(
   };
 }
 
-export const rehypeMathPlaceholder: Plugin<[], Root> = () => {
-  return (tree) => {
-    visit(tree, "element", (node: Element, index, parent) => {
-      /* v8 ignore next -- visit() over a Root only matches descendant elements, which always have a parent and index; this only narrows the optional callback params */
-      if (index == null || !parent) return;
+export const rehypeMathPlaceholder: Plugin<[], Root> = () => (tree) => {
+  visit(tree, "element", (node: Element, index, parent) => {
+    /* v8 ignore next -- visit() over a Root only matches descendant elements, which always have a parent and index; this only narrows the optional callback params */
+    if (index == null || !parent) return;
 
-      if (node.tagName === "pre") {
-        const code = node.children.find(
-          (child): child is Element =>
-            child.type === "element" && child.tagName === "code",
-        );
-        if (!code) return;
-        const classes = classesOf(code);
-        if (
-          !classes.includes("language-math") &&
-          !classes.includes("math-display")
-        ) {
-          return;
-        }
-        const source = extractHastText(code).replace(/\n+$/g, "");
-        // Empty math fences remain ordinary code blocks.
-        if (!source) return;
-        parent.children[index] = placeholder(source, true, node);
-        return SKIP;
+    if (node.tagName === "pre") {
+      const code = node.children.find(
+        (child): child is Element =>
+          child.type === "element" && child.tagName === "code",
+      );
+
+      if (!code) return;
+      const classes = classesOf(code);
+
+      if (
+        !classes.includes("language-math") &&
+        !classes.includes("math-display")
+      ) {
+        return;
       }
 
-      if (node.tagName === "code" && classesOf(node).includes("math-inline")) {
-        const source = extractHastText(node);
-        if (!source) return;
-        parent.children[index] = placeholder(source, false, node);
-        return SKIP;
-      }
-    });
-  };
+      const source = extractHastText(code).replace(/\n+$/g, "");
+      // Empty math fences remain ordinary code blocks.
+      if (!source) return;
+      parent.children[index] = placeholder(source, true, node);
+
+      return SKIP;
+    }
+
+    if (node.tagName === "code" && classesOf(node).includes("math-inline")) {
+      const source = extractHastText(node);
+      if (!source) return;
+      parent.children[index] = placeholder(source, false, node);
+
+      return SKIP;
+    }
+  });
 };

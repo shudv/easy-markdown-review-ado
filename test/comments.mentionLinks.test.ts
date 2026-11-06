@@ -24,6 +24,7 @@ function mountHtml(html: string): HTMLElement {
   const wrap = document.createElement("div");
   wrap.innerHTML = html;
   document.body.appendChild(wrap);
+
   return wrap;
 }
 
@@ -40,6 +41,7 @@ describe("hydrateMentionLinks — no-op guards", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, null);
     expect(root.querySelector("a")!.getAttribute("href")).toBe(
       "mention://workitem/42",
@@ -88,6 +90,7 @@ describe("hydrateMentionLinks — no-op guards", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42">#42</a>',
     );
+
     expect(() => hydrateMentionLinks(root, CTX)).not.toThrow();
   });
 });
@@ -97,6 +100,7 @@ describe("hydrateMentionLinks — workitem rewrites", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, CTX);
     const a = root.querySelector("a")!;
     expect(a.getAttribute("href")).toBe(
@@ -110,6 +114,7 @@ describe("hydrateMentionLinks — workitem rewrites", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "https://dev.azure.com/contoso///",
       projectName: "P",
@@ -149,6 +154,7 @@ describe("hydrateMentionLinks — pullrequest rewrites", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="50" href="mention://pullrequest/50">!50</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "https://dev.azure.com/contoso",
       projectName: "P",
@@ -171,6 +177,7 @@ describe("hydrateMentionLinks — bulk + idempotency", () => {
         "</p>",
       ].join(""),
     );
+
     hydrateMentionLinks(root, CTX);
     const anchors = root.querySelectorAll("a");
     expect(anchors[0]!.getAttribute("href")).toBe(
@@ -185,6 +192,7 @@ describe("hydrateMentionLinks — bulk + idempotency", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, CTX);
     const firstHref = root.querySelector("a")!.getAttribute("href");
     hydrateMentionLinks(root, CTX);
@@ -197,6 +205,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "javascript:alert(1)",
       projectName: "P",
@@ -212,6 +221,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
     );
+
     hydrateMentionLinks(root, { orgUrl: "not a url", projectName: "P" });
     expect(root.querySelector("a")!.getAttribute("href")).toBe(
       "mention://workitem/1",
@@ -227,6 +237,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
       const root = mountHtml(
         '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
       );
+
       hydrateMentionLinks(root, { orgUrl, projectName: "P" });
       expect(root.querySelector("a")!.getAttribute("href")).toBe(
         "mention://workitem/1",
@@ -238,6 +249,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
     );
+
     hydrateMentionLinks(root, {
       // eslint-disable-next-line sonarjs/no-clear-text-protocols -- test fixture: on-prem ADO Server deployments are served over http, and the hydrator must accept them
       orgUrl: "http://tfs.contoso.local:8080/tfs/DefaultCollection",

@@ -40,6 +40,7 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
   const pristineHtml = opts.htmlByPath[selectedPath] ?? "";
   const currentFileDiff = opts.diffsByFile[selectedPath];
   const currentOriginalSource = opts.originalSourcesByFile?.[selectedPath];
+
   // A file added or removed wholesale in the PR has no meaningful "what
   // changed" story — every line is the same colour — so we suppress the diff
   // layer and its toggle for those and just show the clean document.
@@ -47,14 +48,17 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
     () => files.find((f) => f.path === selectedPath)?.changeType,
     [files, selectedPath],
   );
+
   const isWholeFileChange =
     currentFileChangeType === "added" || currentFileChangeType === "deleted";
+
   // ---- comment-history stepper: active-stop render values ----
   // A historical stop swaps the whole document view atomically — content,
   // threads, routed-PR pill and read-only state all follow the active stop, so
   // the existing anchor/positioning pipeline simply re-resolves against the
   // historical snapshot.
   const status = historicalStatus({ ...opts, currentFileChangeType });
+
   const { activePristineHtml, activeStorageKey, articleReady } =
     activeArticleState({ ...opts, status, pristineHtml });
 
@@ -65,6 +69,7 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
     commitId: activeStop.commitId,
     listFolder: opts.listFolder,
   });
+
   // Read only by the scroll helpers' rAF callbacks, which run after commit.
   const { activeStorageKeyRef } = opts;
   useLayoutEffect(() => {
@@ -72,6 +77,7 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
   });
 
   const resolveDocumentImage = opts.resolveDocumentImage;
+
   const activeDocumentImageResolver = useMemo(
     () =>
       bindRepositoryImageResolver(

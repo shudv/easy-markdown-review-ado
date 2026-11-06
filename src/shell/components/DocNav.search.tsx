@@ -67,8 +67,10 @@ export function SearchResultsList(
     threadCountsByPath,
     onSelectFile,
   } = props;
+
   const showChangeIndicators = useContext(ChangeIndicatorContext);
   const rangeChanges = useContext(RangeChangesContext);
+
   const banner = unavailable ? (
     <div
       className="emr-docnav-search-unavailable"
@@ -80,6 +82,7 @@ export function SearchResultsList(
       <span>{unavailableMessage(unavailable.reason)}</span>
     </div>
   ) : null;
+
   if (results.length === 0) {
     return (
       <>
@@ -94,6 +97,7 @@ export function SearchResultsList(
       </>
     );
   }
+
   return (
     <>
       {banner}
@@ -105,20 +109,21 @@ export function SearchResultsList(
       {results.map((file) => {
         const isActive = file.path === selectedPath;
         const fileName = basename(file.path);
+
         const parentPath = file.path
           .replace(/^\/+/, "")
           .replace(/\/[^/]*$/, "");
+
         const openComments = threadCountsByPath[file.path] ?? 0;
         const change = fileChangeView(file, rangeChanges);
         const note = change.note ?? "";
+
         return (
           <div
             key={`search:${file.path}`}
-            className={
-              "emr-docnav-item emr-docnav-search-result" +
-              (isActive ? " is-active" : "") +
-              (change.unchanged ? " is-unchanged-in-range" : "")
-            }
+            className={`emr-docnav-item emr-docnav-search-result${
+              isActive ? " is-active" : ""
+            }${change.unchanged ? " is-unchanged-in-range" : ""}`}
             data-change-type={change.changeType}
           >
             <button
@@ -129,7 +134,7 @@ export function SearchResultsList(
             >
               {showChangeIndicators ? (
                 <span
-                  className={"emr-docnav-file-icon is-" + change.changeType}
+                  className={`emr-docnav-file-icon is-${change.changeType}`}
                   aria-hidden
                 >
                   {changeTypeGlyph(change.changeType)}

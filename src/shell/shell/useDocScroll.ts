@@ -65,12 +65,14 @@ export function useDocScroll(initialStorageKey: string): {
     },
     [],
   );
+
   const scrollDocToHash = useCallback<ScrollDocToHash>((hash, opts) => {
     if (!hash) return;
     window.requestAnimationFrame(() => {
       const article = document.querySelector<HTMLElement>(
         ".emr-article-wrap > .emr-rendered",
       );
+
       if (!article) return;
       const target = findAnchorTarget(article, hash);
       opts?.onResolved?.(target !== null);
@@ -83,6 +85,7 @@ export function useDocScroll(initialStorageKey: string): {
       const resolveTarget = () => findAnchorTarget(article, hash);
       stopLandingCueRef.current?.();
       stopLandingCueRef.current = flashAnchorTarget(article, resolveTarget);
+
       // A link the user followed moves focus to its target, as native
       // fragment navigation does, so the next Tab and screen readers continue
       // from there. (Not for a mount-time deep link: that would steal focus
@@ -91,6 +94,7 @@ export function useDocScroll(initialStorageKey: string): {
         if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
         target.focus({ preventScroll: true });
       }
+
       releaseScrollHoldRef.current?.();
       releaseScrollHoldRef.current = opts?.hold
         ? holdScrollOnTarget(article, resolveTarget)
@@ -139,6 +143,7 @@ function landOnTextFragment(
   const article = document.querySelector<HTMLElement>(
     ".emr-article-wrap > .emr-rendered",
   );
+
   if (!article) return;
   const fragment = parseTextFragment(serialized);
   const range = fragment ? findTextFragment(article, fragment) : null;

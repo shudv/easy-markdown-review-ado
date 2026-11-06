@@ -28,11 +28,13 @@ import {
 } from "../src/shell/hostToken";
 
 const NOW = Date.UTC(2026, 9, 21, 9, 0, 0);
+
 const ADO =
   "https://dev.azure.com/org/proj/_apis/git/repositories/r/pullRequests/1/threads";
 
 function memoryStorage() {
   const map = new Map<string, string>();
+
   return {
     map,
     getItem: (k: string) => map.get(k) ?? null,
@@ -54,6 +56,7 @@ function deps(
 function withConfig(cfg: FaultConfig) {
   const d = deps();
   writeFaults(d.storage, cfg);
+
   return d;
 }
 
@@ -85,10 +88,12 @@ describe("dead-window token", () => {
   // The whole point: the app must treat the fake exactly like production's.
   it("classifies as the dead window, recovering at the window's end", () => {
     const until = NOW + 5 * 60_000;
+
     const { state, recoverAtMs } = classifyAdoGrant(
       deadWindowToken(NOW, until),
       NOW,
     );
+
     expect(state).toBe("refreshing");
     expect(recoverAtMs).toBe(Math.floor(until / 1000) * 1000);
   });
@@ -125,6 +130,7 @@ describe("onBoot", () => {
       { deadWindow: { untilMs: NOW + 1, healAfterBoots: 1 } },
       NOW,
     );
+
     expect(first.deadWindow).toEqual({ untilMs: NOW + 1, healAfterBoots: 0 });
     expect(onBoot(first, NOW)).toEqual({});
   });
@@ -134,20 +140,24 @@ describe("createFaultyFetch", () => {
   it("never touches non-ADO requests", async () => {
     const original = okFetch();
     const d = withConfig({ deadWindow: { untilMs: NOW + 1 } });
+
     const res = await createFaultyFetch(
       original,
       d,
     )("https://cdn.example/x.js");
+
     expect(res.status).toBe(200);
     expect(original).toHaveBeenCalledOnce();
   });
 
   it("passes ADO requests through when no fault is active", async () => {
     const original = okFetch();
+
     const d = withConfig({
       deadWindow: { untilMs: NOW },
       plain401: { untilMs: NOW - 1 },
     });
+
     const res = await createFaultyFetch(original, d)(new URL(ADO));
     expect(res.status).toBe(200);
   });
@@ -261,6 +271,7 @@ describe("simulateHidden", () => {
     const events: string[] = [];
     const listener = () => events.push(document.visibilityState);
     document.addEventListener("visibilitychange", listener);
+
     try {
       simulateHidden(document, NOW + 5_000, () => NOW, schedule);
       expect(document.visibilityState).toBe("hidden");
@@ -333,6 +344,7 @@ describe("installDevFaults", () => {
     const api = (
       window as unknown as { __emrFaults: ReturnType<typeof faultsApi> }
     ).__emrFaults;
+
     api.clear();
     expect(d.storage.map.size).toBe(0);
   });
@@ -344,9 +356,11 @@ describe("installDevFaults", () => {
     installDevFaults();
     expect(warn).not.toHaveBeenCalled();
     expect(hostTokenOverride()).toBeNull();
+
     const api = (
       window as unknown as { __emrFaults: ReturnType<typeof faultsApi> }
     ).__emrFaults;
+
     api.slowApi(10);
     expect(window.sessionStorage.getItem(FAULTS_STORAGE_KEY)).toContain("10");
 

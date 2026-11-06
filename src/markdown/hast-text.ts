@@ -9,6 +9,7 @@ import type { Element } from "hast";
  */
 export function extractHastText(node: Element): string {
   let out = "";
+
   for (const child of node.children) {
     if (child.type === "text") {
       out += child.value;
@@ -16,5 +17,6 @@ export function extractHastText(node: Element): string {
       out += extractHastText(child);
     }
   }
+
   return out;
 }

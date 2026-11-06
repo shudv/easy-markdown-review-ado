@@ -59,6 +59,7 @@ function realSleep(ms: number): Promise<void> {
 function abortError(): Error {
   const err = new Error("Retry aborted");
   err.name = "AbortError";
+
   return err;
 }
 
@@ -77,11 +78,13 @@ function abortableSleep(
   // An `onRetry` callback can abort the signal after the loop's own check; an
   // already-aborted signal never fires "abort", so reject up front.
   if (signal.aborted) return Promise.reject(abortError());
+
   return new Promise<void>((resolve, reject) => {
     const onAbort = () => {
       cleanup();
       reject(abortError());
     };
+
     const cleanup = () => signal.removeEventListener("abort", onAbort);
     signal.addEventListener("abort", onAbort, { once: true });
     sleep(ms).then(
@@ -110,21 +113,26 @@ export function parseRetryAfterMs(
   const e = err as Record<string, unknown>;
   // A raw header bag on the error, or a `Response`-like `.headers`.
   let raw: string | undefined;
+
   const headers = e.headers as
     | { get?: (name: string) => string | null }
     | undefined;
+
   if (headers && typeof headers.get === "function") {
     raw = headers.get("Retry-After") ?? headers.get("retry-after") ?? undefined;
   }
+
   if (raw === undefined && typeof e.retryAfter === "string") {
     raw = e.retryAfter;
   }
+
   if (raw === undefined) return undefined;
 
   const asNum = Number(raw);
   if (Number.isFinite(asNum)) return Math.max(0, asNum * 1000);
   const asDate = Date.parse(raw);
   if (Number.isFinite(asDate)) return Math.max(0, asDate - now);
+
   return undefined;
 }
 
@@ -139,6 +147,7 @@ export function computeBackoffMs(
   random: () => number,
 ): number {
   const exp = Math.min(maxDelayMs, baseDelayMs * 2 ** retryIndex);
+
   // Full jitter: pick a random point in [0, exp].
   return Math.floor(random() * exp);
 }
@@ -162,9 +171,11 @@ function resolveRetryOptions(opts: RetryOptions): ResolvedRetryOptions {
     random = Math.random,
     onRetry,
   } = opts;
+
   const attempts =
     opts.attempts ??
     (mode === "write" ? DEFAULT_WRITE_ATTEMPTS : DEFAULT_READ_ATTEMPTS);
+
   return {
     mode,
     attempts,
@@ -198,25 +209,32 @@ export async function withRetry<T>(
   } = resolveRetryOptions(opts);
 
   let lastError: unknown;
+
   for (let attempt = 1; attempt <= attempts; attempt++) {
     if (signal?.aborted) throw abortError();
+
     try {
       return await fn(attempt);
     } catch (err) {
       lastError = err;
       const isLast = attempt >= attempts;
+
       if (isLast || signal?.aborted || !isRetryable(err, mode)) {
         throw err;
       }
+
       // Prefer a server-provided Retry-After; otherwise jittered backoff.
       const retryAfter = parseRetryAfterMs(err);
+
       const delayMs =
         retryAfter ??
         computeBackoffMs(attempt - 1, baseDelayMs, maxDelayMs, random);
+
       onRetry?.({ attempt, delayMs, error: err });
       await abortableSleep(sleep, delayMs, signal);
     }
   }
+
   // Only reached when `attempts` < 1, so the loop never ran.
   throw lastError;
 }

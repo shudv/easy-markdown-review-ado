@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readRouteParams: vi.fn(),
   setTelemetryContext: vi.fn(),
 }));
+
 vi.mock("../src/shell/adoClients", () => ({
   resolveCurrentProject: mocks.resolveCurrentProject,
 }));

@@ -30,6 +30,7 @@ const current: HistoryStop = {
   isCurrent: true,
   readOnly: false,
 };
+
 const pastStop: HistoryStop = {
   commitId: "c1",
   prId: 7,
@@ -37,6 +38,7 @@ const pastStop: HistoryStop = {
   isCurrent: false,
   readOnly: true,
 };
+
 const never = <T>(): Promise<T> => new Promise<T>(() => {});
 
 function options(overrides: Partial<Options>): Options {
@@ -75,6 +77,7 @@ async function loadThenSwitch(overrides: Partial<Options>): Promise<void> {
     activeStop: pastStop,
     ...overrides,
   });
+
   mounted = await mountHook(useHistoryLoaders, base);
   await settle();
   await mounted.rerender({ ...base, selectedPath: "docs/b.md" });

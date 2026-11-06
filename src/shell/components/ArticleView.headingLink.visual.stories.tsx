@@ -56,11 +56,13 @@ function ThemeFrame({
     // The same github-markdown-css the shipped reader injects, so heading
     // sizes (which the button scales with) match production.
     setMarkdownDark(theme === "dark");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div
       style={{

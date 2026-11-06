@@ -10,6 +10,7 @@ import { ExcalidrawSceneError } from "../src/markdown/excalidraw";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -106,11 +107,13 @@ describe("hydrateDocumentImages", () => {
   it("shows an unavailable state and ignores late results after cleanup", async () => {
     const root = document.createElement("div");
     root.innerHTML = '<img src="./missing.png" alt="Missing">';
+
     const cleanup = hydrateDocumentImages(
       root,
       "/docs/guide.md",
       async () => undefined,
     );
+
     const image = root.querySelector<HTMLImageElement>("img")!;
     const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
     await vi.waitFor(() =>
@@ -133,16 +136,20 @@ describe("hydrateDocumentImages", () => {
     });
 
     let resolve!: (value: string) => void;
+
     const pending = new Promise<string>((done) => {
       resolve = done;
     });
+
     root.innerHTML = '<img src="./late.png" alt="Late">';
     const lateImage = root.querySelector<HTMLImageElement>("img")!;
+
     const lateCleanup = hydrateDocumentImages(
       root,
       "/docs/guide.md",
       () => pending,
     );
+
     cleanup();
     frame.className = "emr-repo-image-frame is-loading";
     image.className = "emr-repo-image is-loading";
@@ -237,6 +244,7 @@ describe("hydrateDocumentImages", () => {
     const tagged = [...root.querySelectorAll("img")].map((image) =>
       image.classList.contains("emr-excalidraw"),
     );
+
     expect(tagged).toEqual([true, true, false]);
   });
 });

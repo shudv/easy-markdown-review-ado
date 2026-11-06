@@ -12,6 +12,7 @@ function block(html: string): HTMLElement {
   const p = document.createElement("p");
   p.innerHTML = html;
   document.body.appendChild(p);
+
   return p;
 }
 
@@ -31,6 +32,7 @@ function marks(el: HTMLElement) {
 function modifiedText(el: HTMLElement): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(`.${WORD_REMOVED_CLASS}`).forEach((n) => n.remove());
+
   return clone.textContent;
 }
 
@@ -144,6 +146,7 @@ describe("applyInlineWordDiff", () => {
     const el = block(
       'Keep <span class="emr-highlight" data-thread-id="t1">this</span> words',
     );
+
     // Only "word" → "words" changes; the anchored "this" is untouched.
     const ops = diffWords("Keep this word", "Keep this words");
     const res = applyInlineWordDiff(el, ops);

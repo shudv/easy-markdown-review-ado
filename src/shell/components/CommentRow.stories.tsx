@@ -18,6 +18,7 @@ const shubhd: CommentAuthor = {
   displayName: "Shubham Dwivedi",
   initials: "SD",
 };
+
 const alex: CommentAuthor = {
   id: "u-alex",
   displayName: "Alex Rivera",
@@ -39,6 +40,7 @@ function stubClipboard(impl: { writeText: (s: string) => Promise<void> }) {
     value: impl,
     configurable: true,
   });
+
   return () => {
     if (original) Object.defineProperty(navigator, "clipboard", original);
   };
@@ -48,6 +50,7 @@ function stubClipboard(impl: { writeText: (s: string) => Promise<void> }) {
 function stubExecCommand(result: boolean) {
   const original = document.execCommand;
   document.execCommand = (() => result) as typeof document.execCommand;
+
   return () => {
     document.execCommand = original;
   };
@@ -95,6 +98,7 @@ export const Default: Story = {
     // Clicking the tools strip itself is swallowed (stopPropagation).
     const tools =
       canvasElement.querySelector<HTMLElement>(".emr-comment-tools")!;
+
     await userEvent.click(tools);
   },
 };
@@ -179,6 +183,7 @@ export const LikedByMeAndOthers: Story = {
   play: async ({ args, canvasElement }) => {
     const pill =
       canvasElement.querySelector<HTMLButtonElement>(".emr-like-pill")!;
+
     // Current user shown first as "You", then the other likers by name.
     await expect(pill.title).toBe("You, Alex Rivera and Dana Xu liked this");
     await userEvent.click(pill);
@@ -210,6 +215,7 @@ export const LikedByMeAndOneOther: Story = {
     const pill = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-like-pill.is-mine",
     )!;
+
     await expect(pill).toBeTruthy();
     await expect(pill.title).toBe("You and Alex Rivera liked this");
   },
@@ -263,6 +269,7 @@ export const CopyLinkSucceeds: Story = {
   play: async ({ canvasElement }) => {
     const writeText = fn(() => Promise.resolve());
     const restore = stubClipboard({ writeText });
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -310,6 +317,7 @@ export const CopyLinkUnavailable: Story = {
   play: async ({ canvasElement }) => {
     const writeText = fn(() => Promise.resolve());
     const restore = stubClipboard({ writeText });
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -394,7 +402,9 @@ export const CopyLinkFallsBackToLegacy: Story = {
       writeText: () =>
         Promise.reject(new Error("blocked by Permissions-Policy")),
     });
+
     const restoreExec = stubExecCommand(true);
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -427,7 +437,9 @@ export const CopyLinkFails: Story = {
       writeText: () =>
         Promise.reject(new Error("blocked by Permissions-Policy")),
     });
+
     const restoreExec = stubExecCommand(false);
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -456,9 +468,11 @@ export const EditComment: Story = {
     await userEvent.click(
       canvas.getByRole("menuitem", { name: "Edit comment" }),
     );
+
     const save = await waitFor(() =>
       canvas.getByRole("button", { name: "Save" }),
     );
+
     const textarea = canvas.getByRole("textbox");
     await userEvent.type(textarea, " (updated)");
     await userEvent.click(save);
@@ -477,12 +491,14 @@ export const EditComment: Story = {
 /** A save the host can hold, then finish with `true` (saved) or `false`. */
 function heldSave() {
   let finish: ((saved: boolean) => void) | null = null;
+
   const onEdit = fn(
     () =>
       new Promise<boolean>((resolve) => {
         finish = resolve;
       }),
   );
+
   return { onEdit, finish: (saved: boolean) => finish?.(saved) };
 }
 
@@ -493,12 +509,15 @@ async function openEditorAndSave(
   const canvas = within(canvasElement);
   await userEvent.click(canvas.getByRole("button", { name: "More options" }));
   await userEvent.click(canvas.getByRole("menuitem", { name: "Edit comment" }));
+
   const textarea = (await waitFor(() =>
     canvas.getByRole("textbox"),
   )) as HTMLTextAreaElement;
+
   await userEvent.clear(textarea);
   await userEvent.type(textarea, text);
   await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+
   return textarea;
 }
 
@@ -532,9 +551,11 @@ export const EditHeldSaveKeepsReopenedEditor: Story = {
     await userEvent.click(
       canvas.getByRole("menuitem", { name: "Edit comment" }),
     );
+
     const again = (await waitFor(() =>
       canvas.getByRole("textbox"),
     )) as HTMLTextAreaElement;
+
     await userEvent.type(again, " — second try");
     reopen.finish(true);
     await new Promise((r) => setTimeout(r, 50));
@@ -564,9 +585,11 @@ export const EditCommentCancel: Story = {
     await userEvent.click(
       canvas.getByRole("menuitem", { name: "Edit comment" }),
     );
+
     const cancel = await waitFor(() =>
       canvas.getByRole("button", { name: "Cancel" }),
     );
+
     await userEvent.click(cancel);
     await waitFor(() =>
       expect(canvas.queryByRole("button", { name: "Save" })).toBeNull(),

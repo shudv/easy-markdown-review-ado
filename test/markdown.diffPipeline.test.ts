@@ -21,19 +21,25 @@ const lines = (...source: string[]) => source.join("\n");
 /** Annotation for a diff-mark element, or `null` when `node` isn't one. */
 function diffMarkText(node: HTMLElement): string | null {
   const cls = node.classList;
+
   if (
     cls.contains("emr-diff-before-panel") ||
     cls.contains("emr-diff-metadata-panel")
   ) {
     return "";
   }
+
   if (cls.contains("emr-diff-before-control")) return "Before ";
+
   if (cls.contains("emr-diff-metadata")) {
     const trigger = node.querySelector(".emr-diff-metadata-trigger")!;
+
     return ` ⟨${trigger.getAttribute("aria-label") ?? trigger.textContent}⟩`;
   }
+
   if (cls.contains("emr-word-added")) return `{+${node.textContent}+}`;
   if (cls.contains("emr-word-removed")) return `[-${node.textContent}-]`;
+
   return null;
 }
 
@@ -46,6 +52,7 @@ function hasText(value: string | undefined): value is string {
 function isNestedBlock(node: HTMLElement): boolean {
   if (node.dataset.summarized === "self") return false;
   if (hasText(node.dataset.diffKind)) return true;
+
   return (
     ["UL", "OL", "TABLE", "PRE"].includes(node.tagName) &&
     node.hasAttribute("data-source-line")
@@ -61,6 +68,7 @@ function annotate(node: Node): string {
   if (isNestedBlock(node)) return "";
   const inner = Array.from(node.childNodes).map(annotate).join("");
   const tip = node.dataset.diffTooltip;
+
   return hasText(tip) && node.dataset.summarized !== "self"
     ? `⟨${tip}⟩${inner}`
     : inner;
@@ -68,35 +76,47 @@ function annotate(node: Node): string {
 
 function summarize(root: HTMLElement): string[] {
   const out: string[] = [];
+
   const walk = (el: Element): void => {
     if (!(el instanceof HTMLElement)) return;
+
     if (el.classList.contains("emr-diff-deleted-marker")) {
       out.push(`deleted: ${el.getAttribute("aria-label")}`);
+
       return;
     }
+
     if (el.classList.contains("emr-diff-source-only")) {
       out.push("source-only");
+
       return;
     }
+
     if (hasText(el.dataset.diffKind)) {
       el.dataset.summarized = "self";
+
       const flags = [
         el.dataset.diffInline === "true" ? "inline" : "",
         el.dataset.diffCells === "true" ? "cells" : "",
         el.dataset.diffLineWash === "true" ? "wash" : "",
       ].filter(Boolean);
+
       const tip = hasText(el.dataset.diffTooltip)
         ? ` ⟨${el.dataset.diffTooltip}⟩`
         : "";
+
       const text = annotate(el).replace(/\s+/g, " ").trim();
       delete el.dataset.summarized;
       out.push(
         `${el.tagName.toLowerCase()} ${[el.dataset.diffKind, ...flags].join(" ")}${tip}: ${text}`,
       );
     }
+
     Array.from(el.children).forEach(walk);
   };
+
   Array.from(root.children).forEach(walk);
+
   return out;
 }
 
@@ -106,14 +126,17 @@ function diffView(original: string, current: string) {
     original,
     current,
   );
+
   const root = document.createElement("div");
   root.className = "markdown-body emr-rendered";
   root.innerHTML = renderMarkdownSync(current);
+
   const result = decorateDiffRanges(root, ranges, {
     renderInline: renderMarkdownSync,
     originalSource: original,
     currentSource: current,
   });
+
   return { view: summarize(root), result, root };
 }
 
@@ -159,6 +182,7 @@ describe("lines added to or removed from inside an existing block", () => {
       lines("Sentence one.", "Sentence two.", "Sentence three.", "", "Next."),
       lines("Sentence one.", "Sentence three.", "", "Next."),
     );
+
     expect(result).toEqual([
       "p modified inline: Sentence one. [-Sentence two. -]Sentence three.",
     ]);
@@ -188,6 +212,7 @@ describe("lines added to or removed from inside an existing block", () => {
       lines("```js", "a();", "b();", "c();", "```"),
       lines("```js", "a();", "c();", "```"),
     );
+
     expect(result).toEqual(["pre modified inline: a(); [-b(); -]c();"]);
     expect(counts.markers).toBe(0);
   });
@@ -221,6 +246,7 @@ describe("lines added to or removed from inside an existing block", () => {
       lines("$$", "a + b", "$$"),
       lines("$$", "a + b", "+ c", "$$"),
     );
+
     expect(result).toEqual(["div modified: a + b + c"]);
     expect(
       root.querySelector<HTMLElement>(".emr-math")!.dataset.diffOriginal,
@@ -232,6 +258,7 @@ describe("lines added to or removed from inside an existing block", () => {
       lines("```mermaid", "graph TD", "A-->B", "```"),
       lines("```mermaid", "graph TD", "A-->B", "B-->C", "```"),
     );
+
     const diagram = root.querySelector<HTMLElement>(".emr-mermaid")!;
     expect(diagram.dataset.diffKind).toBe("modified");
     expect(diagram.dataset.diffOriginal).toBe("graph TD\nA-->B");
@@ -265,11 +292,13 @@ describe("lines added to or removed from inside an existing block", () => {
     const current = lines("Sentence one.", "Sentence three.");
     const root = document.createElement("div");
     root.innerHTML = renderMarkdownSync(current);
+
     const result = decorateDiffRanges(
       root,
       [{ startLine: 2, endLine: 2, kind: "deleted-marker", linesDeleted: 1 }],
       { renderInline: renderMarkdownSync, currentSource: current },
     );
+
     expect(result).toEqual({ decorated: 0, markers: 1, inlined: 0 });
   });
 
@@ -325,6 +354,7 @@ describe("lines added to or removed from inside an existing block", () => {
       "Beta stays exactly the same.",
       "Gamma three is new",
     );
+
     const root = document.createElement("div");
     root.className = "markdown-body emr-rendered";
     root.innerHTML = renderMarkdownSync(current);
@@ -353,6 +383,7 @@ describe("lines added to or removed from inside an existing block", () => {
       lines("```mermaid", "graph TD", "A-->B", "B-->C", "```"),
       lines("```mermaid", "graph TD", "B-->C", "```"),
     );
+
     const diagram = root.querySelector<HTMLElement>(".emr-mermaid")!;
     expect(diagram.dataset.diffKind).toBe("modified");
     expect(diagram.dataset.diffOriginal).toBe("graph TD\nA-->B\nB-->C");
@@ -582,9 +613,11 @@ describe("list item structure", () => {
       lines("- a", "- b", "  - c"),
       lines("- a", "  - b", "    - c"),
     );
+
     const tints = Array.from(
       root.querySelectorAll<HTMLElement>(".emr-diff-format-change"),
     ).map((tint) => [tint.textContent, tint.dataset.diffTooltip]);
+
     expect(tints).toEqual([
       ["b", "List nesting changed from level 1 to level 2"],
     ]);
@@ -614,6 +647,7 @@ describe("list item structure", () => {
       lines("- a", "- b", "  - c old"),
       lines("- a", "  - b", "    - c new"),
     );
+
     expect(root.querySelector(".emr-word-removed")?.textContent).toBe("old");
     expect(root.querySelector(".emr-word-added")?.textContent).toBe("new");
   });
@@ -623,6 +657,7 @@ describe("list item structure", () => {
       lines("1. a", "   - c old"),
       lines("3. a", "   - c new"),
     );
+
     expect(root.querySelector(".emr-word-removed")?.textContent).toBe("old");
     expect(root.querySelector(".emr-word-added")?.textContent).toBe("new");
   });
@@ -773,6 +808,7 @@ describe("scripts without word spaces", () => {
 describe("whitespace in code blocks", () => {
   function codeMarks(original: string, current: string) {
     const { root } = diffView(original, current);
+
     return Array.from(
       root.querySelectorAll<HTMLElement>(
         ".emr-word-added, .emr-word-removed, .emr-diff-format-change",
@@ -862,6 +898,7 @@ describe("footnotes and equations", () => {
       lines("Text.", "", "$$", "a + b", "$$"),
       lines("Text.", "", "$$", "a + c", "$$"),
     );
+
     expect(result).toEqual(["div modified: a + c"]);
     expect(
       root.querySelector<HTMLElement>(".emr-math")!.dataset.diffOriginal,

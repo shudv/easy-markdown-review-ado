@@ -29,6 +29,7 @@ interface ShellNoticesProps {
  */
 export function ShellNotices(props: Readonly<ShellNoticesProps>): ReactElement {
   const { persistError, missingDoc, draftGuard } = props;
+
   return (
     <>
       {persistError !== null && persistError !== "" ? (

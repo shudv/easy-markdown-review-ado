@@ -38,6 +38,7 @@ function findLiveId(root: ParentNode, id: string): HTMLElement | null {
   for (const el of Array.from(root.querySelectorAll<HTMLElement>("[id]"))) {
     if (el.id === id && !el.closest(REFERENCE_CONTENT_SELECTOR)) return el;
   }
+
   return null;
 }
 
@@ -61,10 +62,12 @@ export function findAnchorTarget(
   // digits): anything else — punctuation, CJK, Cyrillic — slugs to the generic
   // "section" fallback and would match an unrelated heading.
   if (/[a-z0-9]/i.test(decoded)) candidates.push(slugifyHeading(decoded));
+
   for (const id of new Set(candidates)) {
     const hit = findLiveId(root, id);
     if (hit) return hit;
   }
+
   return null;
 }
 
@@ -81,26 +84,34 @@ export function revealAnchorTarget(
 ): boolean {
   let changed = false;
   let section = target.closest<HTMLElement>(".emr-section");
+
   while (section) {
     if (section.getAttribute("data-collapsed") === "true") {
       section.removeAttribute("data-collapsed");
+
       const toggle = section.querySelector<HTMLElement>(
         ":scope > :is(h1, h2, h3, h4, h5, h6) > .emr-section-toggle",
       );
+
       if (toggle) {
         toggle.setAttribute("aria-label", "Collapse section");
         toggle.setAttribute("aria-expanded", "true");
         toggle.title = "Collapse section";
       }
+
       const sid = section.dataset.sectionId;
+
       if (sid !== undefined && sid !== "") {
         persistSectionState(storageKey, sid, false);
       }
+
       changed = true;
     }
+
     section =
       section.parentElement?.closest<HTMLElement>(".emr-section") ?? null;
   }
+
   if (changed) {
     target
       .closest(".emr-article-wrap")
@@ -108,6 +119,7 @@ export function revealAnchorTarget(
         new CustomEvent("emr-sections-changed", { bubbles: false }),
       );
   }
+
   return changed;
 }
 
@@ -142,7 +154,9 @@ function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
   const nodes = Array.from(target.childNodes).filter(
     (node) => !(node instanceof Element && node.matches(CUE_EXCLUDED_SELECTOR)),
   );
+
   let cue = target;
+
   // Child nodes are never Documents/Doctypes, so textContent is never null.
   if (nodes.some((node) => node.textContent!.trim().length > 0)) {
     cue = target.ownerDocument.createElement("span");
@@ -150,8 +164,10 @@ function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
     target.insertBefore(cue, nodes[0]!);
     cue.append(...nodes);
   }
+
   if (delayMs > 0) cue.style.animationDelay = `-${delayMs}ms`;
   cue.classList.add(ANCHOR_TARGET_CLASS);
+
   return cue;
 }
 
@@ -178,16 +194,19 @@ export function flashAnchorTarget(
   const startedAt = performance.now();
   let target = resolveTarget();
   let cue = target ? applyCue(target, 0) : null;
+
   const observer = new MutationObserver(() => {
     const next = resolveTarget();
     if (!next || next === target) return;
     target = next;
     cue = applyCue(next, Math.round(performance.now() - startedAt));
   });
+
   observer.observe(article, { childList: true, subtree: true });
   let done = false;
   // A timer, not `animationend`, so the cue always clears on schedule.
   const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
+
   function cancel(): void {
     if (done) return;
     done = true;
@@ -195,6 +214,7 @@ export function flashAnchorTarget(
     window.clearTimeout(timer);
     if (cue) clearCue(cue);
   }
+
   return cancel;
 }
 
@@ -220,6 +240,7 @@ export function flashTextTarget(
 ): () => void {
   const startedAt = performance.now();
   let cues: HTMLElement[] = [];
+
   const apply = (delayMs: number): void => {
     const range = resolveRange();
     cues = range
@@ -230,21 +251,26 @@ export function flashTextTarget(
             span.setAttribute(TEXT_CUE_ATTR, "");
             span.className = ANCHOR_TARGET_CLASS;
             if (delayMs > 0) span.style.animationDelay = `-${delayMs}ms`;
+
             return span;
           },
           isContentText,
         )
       : [];
   };
+
   apply(0);
+
   const observer = new MutationObserver(() => {
     // Our own wrap (or unrelated churn) leaves the spans in place.
     if (cues.length > 0 && cues.every((cue) => article.contains(cue))) return;
     apply(Math.round(performance.now() - startedAt));
   });
+
   observer.observe(article, { childList: true, subtree: true });
   let done = false;
   const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
+
   function cancel(): void {
     if (done) return;
     done = true;
@@ -253,8 +279,10 @@ export function flashTextTarget(
     for (const cue of cues) cue.replaceWith(...cue.childNodes);
     cues = [];
   }
+
   return cancel;
 }
+
 const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"];
 
 /**
@@ -279,27 +307,36 @@ export function holdScrollOnTarget(
   // ResizeObserver reports once on `observe()` — that's the current layout,
   // which the caller just scrolled to; only later changes need re-aligning.
   let primed = false;
+
   const observer = new ResizeObserver(() => {
     if (!primed) {
       primed = true;
+
       return;
     }
+
     if (done) return;
     resolveTarget()?.scrollIntoView({ behavior: "auto", block });
   });
+
   const timer = window.setTimeout(cancel, maxMs);
+
   function cancel(): void {
     if (done) return;
     done = true;
     observer.disconnect();
     window.clearTimeout(timer);
+
     for (const type of USER_SCROLL_EVENTS) {
       doc.removeEventListener(type, cancel, true);
     }
   }
+
   observer.observe(observed);
+
   for (const type of USER_SCROLL_EVENTS) {
     doc.addEventListener(type, cancel, { capture: true, passive: true });
   }
+
   return cancel;
 }

@@ -38,6 +38,7 @@ describe("renderMarkdown — state-color sanitization end to end", () => {
   it("emits a background style only for a valid hex state color", async () => {
     const md =
       "See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=%23cc293d)";
+
     const html = await renderMarkdown(md);
     expect(html).toContain("background:#cc293d");
   });
@@ -46,12 +47,14 @@ describe("renderMarkdown — state-color sanitization end to end", () => {
     const hostile = encodeURIComponent('red;} body{display:none}"');
     const md = `See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=${hostile})`;
     const html = await renderMarkdown(md);
+
     // The state-dot span must carry NO inline style at all, so nothing hostile
     // reaches a `style` attribute. (The raw param may still appear elsewhere as
     // a safely HTML-encoded data-* attribute — that's not a CSS breakout.)
     const dotSpan = /<span class="emr-mention-state-dot"[^>]*><\/span>/.exec(
       html,
     );
+
     expect(dotSpan).not.toBeNull();
     expect(dotSpan![0]).not.toContain("style=");
     // And there is no inline style carrying the injected declaration anywhere.

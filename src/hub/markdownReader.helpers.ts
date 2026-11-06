@@ -25,6 +25,7 @@ export function parseVersionSpec(
   if (spec === undefined || spec === "") return null;
   const value = spec.slice(2);
   if (!value) return null;
+
   switch (spec.slice(0, 2)) {
     case "GB":
       return { kind: "branch", value };

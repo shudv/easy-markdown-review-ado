@@ -24,6 +24,7 @@ describe("withDeepLinkTarget — comment", () => {
       "https://dev.azure.com/org/proj/_git/repo/pullrequest/4",
       comment("t-42"),
     );
+
     expect(out).toBe(
       "https://dev.azure.com/org/proj/_git/repo/pullrequest/4?comment=t-42",
     );
@@ -34,6 +35,7 @@ describe("withDeepLinkTarget — comment", () => {
       "https://dev.azure.com/org/proj/_apps/hub/pub.ext.documents-hub?path=docs%2Fa.md",
       comment("t-7"),
     );
+
     const url = new URL(out!);
     expect(url.searchParams.get("path")).toBe("docs/a.md");
     expect(url.searchParams.get(COMMENT_LINK_PARAM)).toBe("t-7");
@@ -44,6 +46,7 @@ describe("withDeepLinkTarget — comment", () => {
       "https://example.com/x#section",
       comment("t-1"),
     );
+
     expect(out).toBe("https://example.com/x?comment=t-1#section");
   });
 
@@ -52,6 +55,7 @@ describe("withDeepLinkTarget — comment", () => {
       "https://example.com/x?comment=old",
       comment("new"),
     );
+
     expect(new URL(out!).searchParams.get("comment")).toBe("new");
   });
 
@@ -60,6 +64,7 @@ describe("withDeepLinkTarget — comment", () => {
       "https://example.com/x?anchor=goals",
       comment("t-2"),
     );
+
     const url = new URL(out!);
     expect(url.searchParams.has(ANCHOR_LINK_PARAM)).toBe(false);
     expect(url.searchParams.get(COMMENT_LINK_PARAM)).toBe("t-2");
@@ -97,6 +102,7 @@ describe("withDeepLinkTarget — heading", () => {
       "https://dev.azure.com/org/proj/_git/repo/pullrequest/4?_a=pub.ext.markdown-review-pr-tab&path=%2Fdocs%2Fglossary.md",
       heading("classifiers-hashing"),
     );
+
     const url = new URL(out!);
     expect(url.searchParams.get("_a")).toBe("pub.ext.markdown-review-pr-tab");
     expect(url.searchParams.get("path")).toBe("/docs/glossary.md");
@@ -108,6 +114,7 @@ describe("withDeepLinkTarget — heading", () => {
       "https://example.com/x?comment=t-1",
       heading("goals"),
     );
+
     const url = new URL(out!);
     expect(url.searchParams.has(COMMENT_LINK_PARAM)).toBe(false);
     expect(url.searchParams.get(ANCHOR_LINK_PARAM)).toBe("goals");
@@ -200,6 +207,7 @@ describe("withDeepLinkTarget — text", () => {
         anchor: " goals ",
       })!,
     );
+
     expect(url.searchParams.get(TEXT_LINK_PARAM)).toBe("blocks deploys");
     expect(url.searchParams.get(ANCHOR_LINK_PARAM)).toBe("goals");
     expect(url.searchParams.has(COMMENT_LINK_PARAM)).toBe(false);
@@ -217,6 +225,7 @@ describe("withDeepLinkTarget — text", () => {
         anchor: "  ",
       })!,
     );
+
     expect(url.searchParams.get(TEXT_LINK_PARAM)).toBe("a + b");
     expect(url.searchParams.has(ANCHOR_LINK_PARAM)).toBe(false);
   });
@@ -231,6 +240,7 @@ describe("withDeepLinkTarget — text", () => {
     const url = new URL(
       withDeepLinkTarget(`${BASE}&text=x`, { kind: "heading", anchor: "g" })!,
     );
+
     expect(url.searchParams.has(TEXT_LINK_PARAM)).toBe(false);
   });
 });

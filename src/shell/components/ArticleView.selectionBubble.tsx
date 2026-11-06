@@ -24,13 +24,16 @@ export function selectionLinkTarget(
 ): SelectionLinkTarget | null {
   const fragment = buildTextFragment(article, range);
   if (!fragment) return null;
+
   const start =
     range.startContainer instanceof Element
       ? range.startContainer
       : range.startContainer.parentElement;
+
   const heading = start
     ?.closest(".emr-section")
     ?.querySelector<HTMLElement>(":scope > :is(h1, h2, h3, h4, h5, h6)[id]");
+
   return {
     text: serializeTextFragment(fragment),
     ...(heading ? { anchor: heading.id } : {}),
@@ -49,6 +52,7 @@ export function selectionBubbleWidth(
 ): number {
   if (block) return 320;
   if (readOnly) return 104;
+
   return link ? 170 : 132;
 }
 
@@ -59,8 +63,10 @@ export function selectionBubblePosition(
   bubbleWidth: number,
 ): { top: number; left: number } {
   const desiredTop = rect.top - wrapRect.top - 36;
+
   const desiredLeft =
     rect.left + rect.width / 2 - wrapRect.left - bubbleWidth / 2;
+
   return {
     // Don't render above the article. If selection is at the very top,
     // tuck the bubble just below it instead of off-screen.
@@ -84,6 +90,7 @@ export function ArticleSelectionBubble(
 ): ReactElement {
   const { bubble, readOnly, onCopySelectionLink, onSelection, onDismiss } =
     props;
+
   return (
     <SelectionBubble
       top={bubble.top}

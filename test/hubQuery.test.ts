@@ -41,6 +41,7 @@ describe("parseHubQuery", () => {
       emrRepoName: "",
       emrVer: "",
     });
+
     expect(config?.repositoryName).toBeUndefined();
     expect(config?.version).toBeUndefined();
   });

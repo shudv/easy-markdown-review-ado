@@ -77,6 +77,7 @@ export function RailSearchInput(
   }>,
 ): ReactElement {
   const { inputRef, commentQuery, onCommentQueryChange, setSearchOpen } = props;
+
   return (
     <input
       ref={inputRef}
@@ -124,6 +125,7 @@ export function RailToolbarTitle(
     onOnlyThisFileChange,
     allResolved,
   } = props;
+
   return (
     <>
       {filterCounts.all > 0 ? (
@@ -161,6 +163,7 @@ export function RailSearchToggle(
   }>,
 ): ReactElement {
   const { searchOpen, onClick } = props;
+
   return (
     <button
       type="button"
@@ -187,6 +190,7 @@ export function RailVersionRow(
 ): ReactElement {
   const { pr, historyNav } = props;
   const modifier = pr ? `is-${pr.status}` : "is-history-only";
+
   return (
     <div
       className={`emr-rail-version ${modifier}`}
@@ -223,6 +227,7 @@ export function RailVersionRow(
 
 function RailVersionPr(props: Readonly<{ pr: RoutedPrLabel }>): ReactElement {
   const { pr } = props;
+
   return (
     <span
       className="emr-rail-version-pr"

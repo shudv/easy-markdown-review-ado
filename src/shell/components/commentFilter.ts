@@ -75,6 +75,7 @@ export function threadMatchesQuery(
 ): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
+
   return thread.comments.some(
     (comment) =>
       comment.bodyMarkdown.toLowerCase().includes(normalized) ||
@@ -112,12 +113,14 @@ export function countCommentFilters(
     resolved: 0,
     mine: 0,
   };
+
   for (const t of threads) {
     counts.all += 1;
     if (isResolvedLike(t.status)) counts.resolved += 1;
     else counts.active += 1;
     if (isMyThread(t, currentUserId)) counts.mine += 1;
   }
+
   return counts;
 }
 

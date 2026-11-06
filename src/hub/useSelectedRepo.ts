@@ -32,7 +32,9 @@ export function useSelectedRepo(
     repoId: selectedRepoId,
     repo: pickSelectedRepo(repos, selectedRepoId, undefined),
   }));
+
   let selectedRepo = resolution.repo;
+
   if (resolution.repos !== repos || resolution.repoId !== selectedRepoId) {
     selectedRepo = pickSelectedRepo(repos, selectedRepoId, resolution.repo);
     setResolution({ repos, repoId: selectedRepoId, repo: selectedRepo });
@@ -57,6 +59,7 @@ export function useSelectedRepo(
   // host dedupes, so firing on every selectedRepo change is safe.
   useEffect(() => {
     if (!selectedRepo || !onLoadRepoDetails) return;
+
     if (selectedRepo.detailsLoaded === false) {
       void onLoadRepoDetails(selectedRepo.id);
     }

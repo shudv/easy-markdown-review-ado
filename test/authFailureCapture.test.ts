@@ -76,12 +76,15 @@ describe("authFailureInput", () => {
       "x-tfs-fedauthredirect": "1",
       "www-authenticate": "Bearer",
     };
+
     const get = (n: string) => headers[n.toLowerCase()] ?? null;
+
     const out = authFailureInput(
       "https://office.visualstudio.com/p/_apis/git/pullRequests/1",
       401,
       get,
     );
+
     expect(out).toEqual({
       status: 401,
       api: "git.pullrequests",

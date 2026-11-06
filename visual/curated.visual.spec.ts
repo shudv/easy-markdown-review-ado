@@ -531,27 +531,32 @@ interface StoryIndex {
 }
 
 let indexPromise: Promise<StoryIndex> | undefined;
+
 async function storyIndex(page: Page): Promise<StoryIndex> {
   indexPromise ??= page.request
     .get("/index.json")
     .then((r) => r.json() as Promise<StoryIndex>);
+
   return indexPromise;
 }
 
 async function resolveStoryId(page: Page, shot: Shot): Promise<string> {
   const index = await storyIndex(page);
+
   const match = Object.values(index.entries).find(
     (e) =>
       (e.type === undefined || e.type === "story") &&
       e.title === shot.title &&
       e.name === shot.name,
   );
+
   if (!match) {
     throw new Error(
       `No story found for "${shot.title}" / "${shot.name}". ` +
         `Did the story title/name change?`,
     );
   }
+
   return match.id;
 }
 
@@ -591,6 +596,7 @@ for (const shot of SHOTS) {
   const slugSource = isNonEmpty(shot.clip)
     ? `${shot.title}-${shot.name}-${shot.clip}`
     : `${shot.title}-${shot.name}`;
+
   const slug = slugSource
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -599,6 +605,7 @@ for (const shot of SHOTS) {
   const label = isNonEmpty(shot.clip)
     ? `${shot.title} / ${shot.name} [${shot.clip}]`
     : `${shot.title} / ${shot.name}`;
+
   test(`visual — ${label}`, async ({ page }) => {
     const id = await resolveStoryId(page, shot);
     await page.goto(`/iframe.html?id=${id}&viewMode=story`);
@@ -613,13 +620,17 @@ for (const shot of SHOTS) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+
     for (const selector of settledSelectors) {
       await page.locator(selector).first().waitFor({ state: "visible" });
     }
+
     await stabilize(page);
+
     if (isNonEmpty(shot.hover)) {
       const hovered = page.locator(shot.hover).first();
       await hovered.hover();
+
       if (shot.hoverEffect === "tooltip") {
         await expect
           .poll(() =>
@@ -643,6 +654,7 @@ for (const shot of SHOTS) {
     const target = isNonEmpty(shot.clip)
       ? page.locator(shot.clip)
       : storyRoot(page);
+
     await expect(target).toHaveScreenshot(`${slug}.png`);
   });
 }

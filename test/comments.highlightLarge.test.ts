@@ -14,6 +14,7 @@ function mount(md: string): HTMLElement {
   root.className = "markdown-body emr-rendered";
   root.innerHTML = renderMarkdownSync(md);
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -25,21 +26,27 @@ function rangeOverText(root: Element, from: string, to: string): Range {
   let endNode: Text | null = null;
   let endOff = 0;
   let n: Node | null = walker.nextNode();
+
   while (n) {
     const t = n as Text;
+
     if (!startNode && t.data.includes(from)) {
       startNode = t;
       startOff = t.data.indexOf(from);
     }
+
     if (startNode && t.data.includes(to)) {
       endNode = t;
       endOff = t.data.indexOf(to) + to.length;
     }
+
     n = walker.nextNode();
   }
+
   const r = document.createRange();
   r.setStart(startNode!, startOff);
   r.setEnd(endNode!, endOff);
+
   return r;
 }
 
@@ -58,10 +65,12 @@ describe("large selection highlight wrapping", () => {
       "| status | enum | active, abandoned, completed |",
       "| sourceRefName | string | refs/heads/main |",
     ].join("\n");
+
     const root = mount(md);
     const cellsBefore = root.querySelectorAll("th,td").length;
 
     const range = rangeOverText(root, "status", "string");
+
     const spans = wrapRangeWithHighlight(range, {
       className: "emr-highlight",
       threadId: "t1",
@@ -72,12 +81,14 @@ describe("large selection highlight wrapping", () => {
     // Table structure is preserved — no cells lost, no stray spans hoisted
     // into <tr>/<table> (every highlight span lives inside a cell).
     expect(root.querySelectorAll("th,td")).toHaveLength(cellsBefore);
+
     for (const s of spans) {
       expect(
         s.closest("td, th"),
         "highlight span must sit inside a cell",
       ).not.toBeNull();
     }
+
     // The real cell contents are highlighted.
     const texts = spans.map((s) => s.textContent);
     expect(texts).toContain("status");
@@ -89,10 +100,12 @@ describe("large selection highlight wrapping", () => {
     const md = ["```ts", "const a = 1;", "const b = 2;", "```"].join("\n");
     const root = mount(md);
     const range = rangeOverText(root, "const a", "b = 2;");
+
     const spans = wrapRangeWithHighlight(range, {
       className: "emr-highlight",
       threadId: "t2",
     });
+
     expect(spans.length).toBeGreaterThan(0);
     expect(whitespaceOnly(spans)).toHaveLength(0);
     // The <pre><code> block is preserved.
@@ -107,12 +120,15 @@ describe("large selection highlight wrapping", () => {
       "",
       "Second paragraph after the quote.",
     ].join("\n");
+
     const root = mount(md);
     const range = rangeOverText(root, "First", "Second");
+
     const spans = wrapRangeWithHighlight(range, {
       className: "emr-highlight",
       threadId: "t3",
     });
+
     expect(whitespaceOnly(spans)).toHaveLength(0);
     const joined = spans.map((s) => s.textContent).join(" ");
     expect(joined).toContain("First paragraph");
@@ -131,19 +147,23 @@ describe("large selection highlight wrapping", () => {
     let alpha: Text | null = null;
     let beta: Text | null = null;
     let n: Node | null = walker.nextNode();
+
     while (n) {
       const t = n as Text;
       if (t.data.includes("Alpha")) alpha = t;
       if (t.data.includes("Beta")) beta = t;
       n = walker.nextNode();
     }
+
     const r = document.createRange();
     r.setStart(alpha!, alpha!.data.length); // just after "…paragraph."
     r.setEnd(beta!, 0); // just before "Beta"
+
     const spans = wrapRangeWithHighlight(r, {
       className: "emr-highlight",
       threadId: "t4",
     });
+
     expect(spans).toHaveLength(0);
   });
 });

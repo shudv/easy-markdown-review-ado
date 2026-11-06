@@ -103,10 +103,13 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
     if (!ref.current || !onHeightChange) return;
     const el = ref.current;
     onHeightChange(thread.id, el.getBoundingClientRect().height);
+
     const ro = new ResizeObserver(() => {
       onHeightChange(thread.id, el.getBoundingClientRect().height);
     });
+
     ro.observe(el);
+
     return () => ro.disconnect();
   }, [
     thread.id,
@@ -135,6 +138,7 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
   // Orphaned threads are still live conversations (only the in-doc highlight is
   // missing).
   const isInteractive = !readOnly;
+
   const canDeleteThread =
     isInteractive &&
     thread.comments.every((comment) => comment.author.id === currentUser.id);

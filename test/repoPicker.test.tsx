@@ -54,18 +54,24 @@ function render(props: Partial<PickerProps> = {}): PickerProps {
     onSelect: vi.fn(),
     ...props,
   };
+
   act(() => root.render(<RepoPicker {...full} />));
+
   return full;
 }
 
 const trigger = () =>
   container.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!;
+
 const menu = () =>
   container.querySelector<HTMLElement>(".emr-docnav-repo-menu");
+
 const list = () =>
   container.querySelector<HTMLElement>(".emr-docnav-repo-list")!;
+
 const options = () =>
   Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+
 const filterInput = () =>
   container.querySelector<HTMLInputElement>(".emr-docnav-repo-filter-input")!;
 
@@ -93,6 +99,7 @@ function type(input: HTMLInputElement, value: string): void {
     HTMLInputElement.prototype,
     "value",
   )!;
+
   act(() => {
     descriptor.set!.bind(input)(value);
     input.dispatchEvent(new Event("input", { bubbles: true }));

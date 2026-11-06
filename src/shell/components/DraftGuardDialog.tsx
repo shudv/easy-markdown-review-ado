@@ -36,7 +36,9 @@ export function DraftGuardDialog(
         onKeepEditing();
       }
     }
+
     document.addEventListener("keydown", onKey, true);
+
     return () => document.removeEventListener("keydown", onKey, true);
   }, [onKeepEditing]);
 

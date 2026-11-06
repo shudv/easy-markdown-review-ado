@@ -31,9 +31,11 @@ export interface WikiSubpagesInput {
 export function useWikiSubpages(input: WikiSubpagesInput): string {
   const { html, documentPath, listFolder } = input;
   const atCommit = subpagesCommit(input.historical, input.commitId);
+
   const [byVersion, setByVersion] = useState<
     Partial<Record<string, SubpagesState>>
   >({});
+
   // Read when a listing starts, so a host passing a fresh callback doesn't
   // re-list.
   const listFolderRef = useRef(listFolder);
@@ -44,8 +46,10 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
 
   const key = `${documentPath}\u0000${atCommit ?? ""}`;
   const canList = listFolder !== undefined && atCommit !== null;
+
   const needsListing =
     canList && hasSubpagesMacro(html) && byVersion[key] === undefined;
+
   useEffect(() => {
     if (!needsListing) return;
     // `canList` rules out a null commit here.
@@ -65,5 +69,6 @@ export function useWikiSubpages(input: WikiSubpagesInput): string {
   const state: SubpagesState = canList
     ? (byVersion[key] ?? "loading")
     : "unavailable";
+
   return useMemo(() => fillSubpagesMacros(html, state), [html, state]);
 }

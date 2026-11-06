@@ -14,6 +14,7 @@ import { ArticleView } from "./ArticleView";
 
 const SELECTED_LINE =
   "Triple-click selects this entire line for an inline review comment.";
+
 const SOURCE = [
   "# Selection behavior",
   "",
@@ -33,12 +34,14 @@ const meta = {
         const root = document.documentElement;
         const previous = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "dark");
+
         return () => {
           if (previous) root.setAttribute("data-emr-theme", previous);
           else root.removeAttribute("data-emr-theme");
           window.getSelection()?.removeAllRanges();
         };
       }, []);
+
       return (
         <div style={{ width: 760, padding: 32 }}>
           <Story />
@@ -167,12 +170,15 @@ function UnmountOnThemeFlip(
     const observer = new MutationObserver(() =>
       flushSync(() => setMounted(false)),
     );
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-emr-theme"],
     });
+
     return () => observer.disconnect();
   }, []);
+
   return mounted ? <ArticleView {...props} /> : <p>Article closed</p>;
 }
 

@@ -37,6 +37,7 @@ export function ArticleColumn(
 
 function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
   const { selectedPath, absentNotice } = props;
+
   if (props.error !== null && props.error !== "") {
     return (
       <div className="emr-article-wrap">
@@ -52,7 +53,9 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
       </div>
     );
   }
+
   if (props.loading && !props.pristineHtml) return <ArticleSkeleton />;
+
   if (absentNotice) {
     return (
       <div className="emr-article-wrap">
@@ -72,6 +75,7 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
       </div>
     );
   }
+
   if (
     props.historicalLoadError !== undefined &&
     props.historicalLoadError !== ""
@@ -90,6 +94,8 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
       </div>
     );
   }
+
   if (props.historicalLoading) return <ArticleSkeleton />;
+
   return props.children;
 }

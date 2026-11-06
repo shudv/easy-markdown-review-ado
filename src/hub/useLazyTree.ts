@@ -28,6 +28,7 @@ export function useLazyTree(
     Map<string, LazyTreeState>
   >(() => {
     const m = new Map<string, LazyTreeState>();
+
     // Only seed once the repo's listing has loaded. The paginated picker hands
     // us a content-less skeleton (`detailsLoaded === false`) first; seeding
     // from it would cache an empty tree that never refreshes when the real
@@ -35,8 +36,10 @@ export function useLazyTree(
     if (selectedRepo && selectedRepo.detailsLoaded !== false) {
       m.set(selectedRepo.id, seedLazyTree(selectedRepo));
     }
+
     return m;
   });
+
   // Seed an entry the first time we see a repo with loaded content; existing
   // entries are the cache. Skeletons (`detailsLoaded === false`) are skipped so
   // the entry is first created from the real listing, not the empty skeleton.
@@ -44,8 +47,10 @@ export function useLazyTree(
   // every render: a refresh deletes the entry and must re-seed from the
   // refreshed repo object, not the stale one).
   const [seededFor, setSeededFor] = useState(selectedRepo);
+
   if (seededFor !== selectedRepo) {
     setSeededFor(selectedRepo);
+
     if (
       selectedRepo &&
       selectedRepo.detailsLoaded !== false &&
@@ -72,6 +77,7 @@ export function useLazyTree(
       if (!selectedRepo || !onExpandFolder) return null;
       const repoIdAtCall = selectedRepo.id;
       let payload: FolderListing;
+
       try {
         payload = await onExpandFolder(repoIdAtCall, path);
       } catch (err) {
@@ -82,8 +88,10 @@ export function useLazyTree(
           operation: "folder-expand",
           impact: "action-failed",
         });
+
         return null;
       }
+
       setLazyTreeByRepo((curr) => {
         const entry = curr.get(repoIdAtCall);
         if (!entry) return curr;
@@ -92,8 +100,10 @@ export function useLazyTree(
           repoIdAtCall,
           mergeFolderListing(entry, repoIdAtCall, path, payload),
         );
+
         return next;
       });
+
       return payload;
     },
     [selectedRepo, onExpandFolder],
@@ -125,6 +135,7 @@ function useRootAutoExpand(
     const tree = lazyTree;
     if (!tree || tree.unloadedFolders.length === 0) return;
     const repoId = selectedRepo.id;
+
     const plan = planRootAutoExpand({
       repoId,
       fileCount: tree.files.length,
@@ -133,6 +144,7 @@ function useRootAutoExpand(
       used: autoExpandUsedRef.current.get(repoId) ?? 0,
       max: 40, // safety cap per repo
     });
+
     if (plan.folders.length === 0) return;
     for (const key of plan.keys) autoExpandedFoldersRef.current.add(key);
     autoExpandUsedRef.current.set(repoId, plan.used);

@@ -102,6 +102,7 @@ describe("selectDiffCommits", () => {
         lastMergeSourceCommit: { commitId: "src-S" },
       },
     );
+
     // Base is the merge base (B), NOT the target-branch tip (T) — the fix.
     expect(pair).toEqual({ baseCommit: "base-B", targetCommit: "src-S" });
   });
@@ -206,6 +207,7 @@ describe("configuredRepositoryId", () => {
     const stringId = {
       pullRequest: { ...config.pullRequest, pullRequestId: "58" },
     };
+
     expect(configuredRepositoryId(stringId, 58)).toBe("repo-guid");
   });
 
@@ -261,6 +263,7 @@ describe("loadWithRepositoryHint", () => {
       .fn<(id: string) => Promise<string>>()
       .mockRejectedValueOnce(new Error("TF401019"))
       .mockResolvedValueOnce("changes@repo");
+
     await expect(
       loadWithRepositoryHint(Promise.resolve(pr), "repo", load),
     ).resolves.toEqual({ pr, changes: "changes@repo" });
@@ -440,6 +443,7 @@ describe("buildPrWebUrl", () => {
       iterations: { href: "https://dev.azure.com/office/_apis/.../iterations" },
     },
   } as { _links: { web?: { href?: string } } };
+
   const location = {
     orgUrl: "https://dev.azure.com/office",
     projectName: "DigiTS",
@@ -491,6 +495,7 @@ describe("buildPrTabDocUrl", () => {
     publisherId: "plannerengineering",
     extensionId: "easy-markdown-review",
   };
+
   const web =
     "https://dev.azure.com/office/DigiTS/_git/digits-ai/pullrequest/5807430";
 
@@ -523,6 +528,7 @@ describe("buildPrTabDocUrl", () => {
     const url = new URL(
       buildPrTabDocUrl(web, ext, "/docs/a.md", { iteration: 5, base: 4 })!,
     );
+
     expect(url.searchParams.get(ITERATION_LINK_PARAM)).toBe("5");
     expect(url.searchParams.get(BASE_LINK_PARAM)).toBe("4");
     // All updates (no params) leaves them out.
@@ -559,6 +565,7 @@ describe("resolvePrTabRouteSeed", () => {
       { path: "docs/glossary.md", anchor: "classifiers-&-hashing" },
       files,
     );
+
     expect(seed.selectedPath).toBe("/docs/Glossary.md");
     expect(seed.anchor).toBe("classifiers-&-hashing");
   });
@@ -625,14 +632,17 @@ describe("withTimeout", () => {
     function fakeVisibility(initiallyVisible: boolean) {
       let visible = initiallyVisible;
       const listeners = new Set<() => void>();
+
       const clock: VisibilityClock = {
         now: () => Date.now(),
         isVisible: () => visible,
         subscribeVisibilityChange(listener) {
           listeners.add(listener);
+
           return () => listeners.delete(listener);
         },
       };
+
       return {
         clock,
         listeners,
@@ -646,6 +656,7 @@ describe("withTimeout", () => {
     function deferred<T>() {
       let resolve!: (v: T) => void;
       const promise = new Promise<T>((r) => (resolve = r));
+
       return { promise, resolve };
     }
 
@@ -657,12 +668,14 @@ describe("withTimeout", () => {
     it("does not time out while the tab boots hidden, and resolves after reveal", async () => {
       const vis = fakeVisibility(false);
       const req = deferred<string>();
+
       const result = withTimeout(
         req.promise,
         15_000,
         "getPullRequestById",
         vis.clock,
       );
+
       let outcome: string | undefined;
       result.then(
         (v) => (outcome = `ok:${v}`),
@@ -681,12 +694,14 @@ describe("withTimeout", () => {
 
     it("pauses the budget while hidden and resumes with what was left", async () => {
       const vis = fakeVisibility(true);
+
       const result = withTimeout(
         new Promise<string>(() => {}),
         10_000,
         "x",
         vis.clock,
       );
+
       let rejected = false;
       result.catch(() => (rejected = true));
 
@@ -704,12 +719,14 @@ describe("withTimeout", () => {
 
     it("still times out a genuinely hung call once enough visible time passes", async () => {
       const vis = fakeVisibility(false);
+
       const result = withTimeout(
         new Promise<string>(() => {}),
         15_000,
         "x",
         vis.clock,
       );
+
       await Promise.all([
         expect(result).rejects.toThrow(/Timeout after 15000ms/),
         (async () => {
@@ -721,12 +738,14 @@ describe("withTimeout", () => {
 
     it("ignores repeated visible signals without restarting the budget", async () => {
       const vis = fakeVisibility(true);
+
       const result = withTimeout(
         new Promise<string>(() => {}),
         1_000,
         "x",
         vis.clock,
       );
+
       let rejected = false;
       result.catch(() => (rejected = true));
       await vi.advanceTimersByTimeAsync(600);
@@ -746,6 +765,7 @@ describe("withTimeout", () => {
         "x",
         vis.clock,
       );
+
       await expect(failing).rejects.toThrow("boom");
       expect(vis.listeners.size).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
@@ -774,12 +794,14 @@ describe("withTimeout", () => {
       ]);
 
       let rejectLate!: (e: unknown) => void;
+
       const lateErr = withTimeout(
         new Promise<string>((_, rej) => (rejectLate = rej)),
         100,
         "y",
         vis.clock,
       );
+
       await Promise.all([
         expect(lateErr).rejects.toThrow(/Timeout/),
         (async () => {
@@ -794,6 +816,7 @@ describe("withTimeout", () => {
         configurable: true,
         get: () => "hidden",
       });
+
       try {
         const result = withTimeout(new Promise<string>(() => {}), 1_000, "x");
         let rejected = false;
@@ -852,10 +875,12 @@ describe("iterationParamsForRange", () => {
     expect(
       iterationParamsForRange({ fromUpdate: 0, toUpdate: 2 }, noIds),
     ).toBeUndefined();
+
     // Only the older end lacks one.
     const olderUnknown = STOPS.map((stop, i) =>
       i === 1 ? { ...stop, iterationId: undefined } : stop,
     );
+
     expect(
       iterationParamsForRange({ fromUpdate: 2, toUpdate: 3 }, olderUnknown),
     ).toBeUndefined();
@@ -884,6 +909,7 @@ describe("rangeFromIterationParams", () => {
       ...stop,
       iterationId: stop.iterationId + 10,
     }));
+
     expect(
       rangeFromIterationParams({ iteration: " 17 ", base: " 15 " }, longIds),
     ).toEqual({ fromUpdate: 2, toUpdate: 3 });
@@ -894,6 +920,7 @@ describe("rangeFromIterationParams", () => {
     const partial = STOPS.map((stop, i) =>
       i === 0 ? stop : { ...stop, iterationId: undefined },
     );
+
     expect(rangeFromIterationParams({}, partial)).toBeUndefined();
     expect(
       rangeFromIterationParams({ iteration: "7", base: "x" }, partial),
@@ -927,6 +954,7 @@ describe("fetchAllIterationChanges", () => {
       2: { changeEntries: ["c.md"], nextSkip: 3 },
       3: { changeEntries: ["d.md"] },
     };
+
     const fetchPage = vi.fn(async (_top: number, skip: number) => pages[skip]!);
 
     await expect(fetchAllIterationChanges(fetchPage)).resolves.toEqual([

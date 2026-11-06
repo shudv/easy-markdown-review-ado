@@ -33,6 +33,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
     viewingHistorical,
     htmlByPath,
   } = opts;
+
   const onHighlightClick = useCallback(
     (tid: string) => {
       // The clicked highlight is already in view, so only select — the

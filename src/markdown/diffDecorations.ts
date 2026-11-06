@@ -80,11 +80,13 @@ export function summarizeDiff(ranges: readonly DiffRange[]): DiffSummary {
   let added = 0;
   let modified = 0;
   let deleted = 0;
+
   for (const r of ranges) {
     if (r.kind === "added") added++;
     else if (r.kind === "modified") modified++;
     else deleted += r.linesDeleted ?? 0;
   }
+
   return { added, modified, deleted };
 }
 
@@ -101,12 +103,19 @@ export interface DiffLegendStat {
  */
 export function diffLegendStats(summary: DiffSummary): DiffLegendStat[] {
   const stats: DiffLegendStat[] = [];
-  if (summary.added > 0)
+
+  if (summary.added > 0) {
     stats.push({ kind: "added", label: `${summary.added} added` });
-  if (summary.modified > 0)
+  }
+
+  if (summary.modified > 0) {
     stats.push({ kind: "modified", label: `${summary.modified} edited` });
-  if (summary.deleted > 0)
+  }
+
+  if (summary.deleted > 0) {
     stats.push({ kind: "deleted", label: `${summary.deleted} removed` });
+  }
+
   return stats;
 }
 
@@ -142,6 +151,7 @@ export function decorateDiffRanges(
       `${BLOCK_SELECTOR}, ${MERMAID_SELECTOR}`,
     ),
   );
+
   insertSourceOnlyMarkers(pass, markerAnchors);
   const markers = insertDeletionMarkers(pass, markerAnchors);
 

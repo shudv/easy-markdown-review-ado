@@ -165,6 +165,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
     onCopySelectionLink,
     commentBlocker,
   } = props;
+
   const hasHeadingLinks = onCopyHeadingLink !== undefined;
   const hasSelectionLinks = onCopySelectionLink !== undefined;
 
@@ -174,12 +175,15 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
   // Polite announcement for the heading link button's copy outcome (the
   // button's own label change is not reliably announced).
   const [linkAnnouncementText, setLinkAnnouncementText] = useState("");
+
   const setLinkAnnouncement = useCallback((text: string) => {
     // Clear first so repeating the same outcome is announced again.
     setLinkAnnouncementText("");
     window.requestAnimationFrame(() => setLinkAnnouncementText(text));
   }, []);
+
   const [bubble, setBubble] = useState<SelectionBubbleState | null>(null);
+
   // Generated block whose Source action was clicked. `original` carries the
   // pre-PR source so the modal can show an internal source-level diff.
   const [generatedSource, setGeneratedSource] =
@@ -194,6 +198,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
     onSelection,
     commentBlocker,
   });
+
   useLayoutEffect(() => {
     callbacksRef.current = {
       onAnchorsResolved,
@@ -211,6 +216,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
         .join("\n"),
     [threads],
   );
+
   const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
   const previousActiveThreadIdRef = useRef<string | null>(null);
 
@@ -218,6 +224,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
   // show/hide toggle) change, without re-running on unrelated renders.
   const diffKey = useMemo(() => {
     if (!hasVisibleDiff(showDiff, diff)) return "";
+
     return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
   }, [diff, showDiff]);
 
@@ -227,11 +234,13 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
   useLayoutEffect(() => {
     const article = articleRef.current!;
     const wrap = wrapRef.current!;
+
     const focusedThreadId = focusedDatasetValue(
       article,
       '.emr-highlight[role="button"]',
       "threadId",
     );
+
     // A keyboard user on a heading link button keeps their place when a
     // thread poll / diff / image load re-wraps the article.
     const focusedHeadingLinkId = focusedDatasetValue(
@@ -246,6 +255,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
 
     // Upgrade mention placeholder hrefs to real ADO web URLs before wrapping.
     hydrateMentionLinks(article, mentionCtx);
+
     const cleanupDocumentImages = resolveDocumentImage
       ? hydrateDocumentImages(
           article,
@@ -317,7 +327,9 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
     function onSectionsChanged() {
       measureAll();
     }
+
     wrap.addEventListener("emr-sections-changed", onSectionsChanged);
+
     return () => {
       wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
       cleanupDocumentImages?.();
@@ -356,10 +368,12 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
         );
       });
     });
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-emr-theme"],
     });
+
     return () => observer.disconnect();
   }, [readerFontFamily]);
 
@@ -371,6 +385,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
     const activeChanged =
       activeThreadId !== null &&
       activeThreadId !== previousActiveThreadIdRef.current;
+
     syncActiveHighlights(articleRef.current!, activeThreadId, activeChanged);
     previousActiveThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
@@ -385,6 +400,7 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
       const target = e.target as HTMLElement;
       if (handleDocLinkClick(e, target, onDocLink)) return;
       if (handleGeneratedSourceClick(e, target, setGeneratedSource)) return;
+
       if (
         handleHeadingLinkClick(
           e,
@@ -395,12 +411,15 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
       ) {
         return;
       }
+
       if (handleSectionToggleClick(target, storageKey, wrapRef)) return;
+
       const threadId = nextClickedThreadId(
         target,
         articleRef.current,
         activeThreadId,
       );
+
       if (threadId === null) return;
       syncHoveredHighlights(articleRef.current!, null);
       callbacksRef.current.onHighlightClick(threadId);
@@ -419,11 +438,15 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         '.emr-highlight[role="button"]',
       );
+
       if (!target) return;
+
       if (event.key === " ") {
         event.preventDefault();
+
         return;
       }
+
       if (event.key !== "Enter" || event.repeat) return;
       const threadIds = containedThreadIds(target);
       event.preventDefault();
@@ -438,9 +461,11 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
   const onKeyUp = useCallback(
     (event: ReactKeyboardEvent) => {
       if (event.key !== " ") return;
+
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         '.emr-highlight[role="button"]',
       );
+
       if (!target) return;
       event.preventDefault();
       const threadIds = containedThreadIds(target);
@@ -454,9 +479,11 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
 
   const onPointerOver = useCallback((event: ReactPointerEvent) => {
     const article = articleRef.current!;
+
     const highlight = (event.target as HTMLElement).closest<HTMLElement>(
       ".emr-highlight",
     );
+
     const threadId = highlight?.dataset.threadId;
     syncHoveredHighlights(
       article,
@@ -482,34 +509,45 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
       const article = articleRef.current!;
       const wrap = wrapRef.current!;
       const anchor = captureAnchorFromSelection(article);
+
       if (!anchor) {
         setBubble(null);
+
         return;
       }
+
       const sel = window.getSelection();
       /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
       if (!sel || sel.rangeCount === 0) return;
+
       // Removed (deleted-diff) content is shown for reference only; it isn't
       // part of the document, so a comment anchored there orphans immediately.
       // Don't offer the bubble when the selection lands in a deletion marker.
       if (selectionTouchesDeletedDiff(sel.anchorNode, sel.focusNode)) {
         setBubble(null);
+
         return;
       }
+
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
+
       const block = readOnly
         ? null
         : (callbacksRef.current.commentBlocker?.(anchor) ?? null);
+
       const link =
         hasSelectionLinks && !block
           ? selectionLinkTarget(article, range)
           : null;
+
       if (readOnly && !link) {
         setBubble(null);
+
         return;
       }
+
       // Approx bubble width (button label + chrome). Used to clamp horizontal.
       const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
       setBubble({
@@ -529,7 +567,9 @@ export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
       if (target.closest(".emr-selection-bubble")) return;
       setBubble(null);
     }
+
     document.addEventListener("mousedown", onDocMouseDown);
+
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 

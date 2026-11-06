@@ -34,11 +34,13 @@ function ThemeRoot({
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
     else el.removeAttribute("data-emr-theme");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div style={{ background: "var(--emr-bg)", height: "100vh" }}>
       {children}
@@ -69,25 +71,32 @@ async function settleDiagram(
       const host = canvasElement.ownerDocument.querySelector<HTMLElement>(
         '.emr-generated-source-preview .emr-mermaid[data-hydrated="true"]',
       );
+
       const svg = host?.querySelector<SVGSVGElement>(":scope > svg");
       if (!host || !svg) throw new Error("diagram preview did not hydrate");
+
       // Hydration strips the SVG's width/height attributes, so the diagram is
       // sized purely by the `.emr-mermaid` rules. If those are not in scope the
       // browser falls back to the 300x150 default instead of the natural width.
       if (getComputedStyle(host).display !== "flex") {
         throw new Error("diagram preview is missing `.emr-mermaid` styling");
       }
+
       const natural = host.style.getPropertyValue("--emr-diagram-natural-w");
+
       const expected = Math.min(
         parseFloat(natural),
         host.getBoundingClientRect().width,
       );
+
       const actual = svg.getBoundingClientRect().width;
+
       if (!natural || Math.abs(actual - expected) > 2) {
         throw new Error(
           `diagram preview is ${actual}px wide, expected ~${expected}px`,
         );
       }
+
       return svg;
     },
     { timeout: 15000 },
@@ -133,6 +142,7 @@ export const DiagramSourceDiff: Story = {
       const added = canvasElement.ownerDocument.querySelector(
         ".emr-generated-source-code-diff .emr-word-added",
       );
+
       if (added?.textContent !== "Ship") {
         throw new Error("diagram source diff did not settle");
       }
@@ -154,14 +164,17 @@ export const DiagramSourceBefore: Story = {
   args: { source: CURRENT, originalSource: ORIGINAL },
   play: async ({ canvasElement }) => {
     await settleDiagram(canvasElement);
+
     const before = canvasElement.ownerDocument.querySelector<HTMLButtonElement>(
       '.emr-generated-source-before[aria-pressed="false"]',
     )!;
+
     before.click();
     await waitFor(() => {
       const preview = canvasElement.ownerDocument.querySelector<HTMLElement>(
         ".emr-generated-source-preview .emr-mermaid",
       );
+
       if (preview?.dataset.mermaidSrc !== encodeURIComponent(ORIGINAL)) {
         throw new Error("preview did not switch to the previous diagram");
       }

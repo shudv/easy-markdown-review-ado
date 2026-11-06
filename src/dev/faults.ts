@@ -59,6 +59,7 @@ export function readFaults(storage: StorageLike): FaultConfig {
   try {
     const raw = storage.getItem(FAULTS_STORAGE_KEY);
     const parsed: unknown = raw !== null && raw !== "" ? JSON.parse(raw) : null;
+
     return typeof parsed === "object" && parsed !== null
       ? (parsed as FaultConfig)
       : {};
@@ -83,6 +84,7 @@ function b64url(json: string): string {
  */
 export function deadWindowToken(nowMs: number, untilMs: number): string {
   const header = b64url(JSON.stringify({ typ: "JWT", alg: "none" }));
+
   const payload = b64url(
     JSON.stringify({
       exp: Math.floor(untilMs / 1000),
@@ -91,6 +93,7 @@ export function deadWindowToken(nowMs: number, untilMs: number): string {
       },
     }),
   );
+
   return `${header}.${payload}.dev-fault`;
 }
 
@@ -100,6 +103,7 @@ export function activeDeadToken(
   nowMs: number,
 ): string | null {
   const w = cfg.deadWindow;
+
   return w && nowMs < w.untilMs ? deadWindowToken(nowMs, w.untilMs) : null;
 }
 
@@ -115,6 +119,7 @@ export function onBoot(cfg: FaultConfig, nowMs: number): FaultConfig {
   if (nowMs >= w.untilMs) return rest;
   if (w.healAfterBoots === undefined) return cfg;
   if (w.healAfterBoots <= 0) return rest;
+
   return { ...cfg, deadWindow: { ...w, healAfterBoots: w.healAfterBoots - 1 } };
 }
 
@@ -139,20 +144,24 @@ function unauthorized(url: string): Response {
       "WWW-Authenticate": "Bearer",
     },
   });
+
   // A constructed Response has an empty `url`; real ones don't, and the auth
   // failure capture keys off it.
   Object.defineProperty(res, "url", { value: url });
+
   return res;
 }
 
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
+
   return input.url;
 }
 
 function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
   const fromRequest = typeof input === "object" && "method" in input;
+
   return (init?.method ?? (fromRequest ? input.method : "GET")).toUpperCase();
 }
 
@@ -167,6 +176,7 @@ export function createFaultyFetch(
     const cfg = readFaults(deps.storage);
     // `?? 0` folds a JSON `null` into "off", like the old truthiness check.
     const slowApiMs = cfg.slowApiMs ?? 0;
+
     if (slowApiMs !== 0 && !Number.isNaN(slowApiMs)) {
       if (cfg.slowApiRemaining !== undefined) {
         const { slowApiMs: _ms, slowApiRemaining: left, ...rest } = cfg;
@@ -175,17 +185,21 @@ export function createFaultyFetch(
           left > 1 ? { ...cfg, slowApiRemaining: left - 1 } : rest,
         );
       }
+
       await deps.sleep(slowApiMs);
     }
+
     if (cfg.failNextWrite && requestMethod(input, init) !== "GET") {
       const { failNextWrite: _used, ...rest } = cfg;
       writeFaults(deps.storage, rest);
       throw new TypeError("Failed to fetch");
     }
+
     const now = deps.now();
     const deadActive = !!cfg.deadWindow && now < cfg.deadWindow.untilMs;
     const plainActive = !!cfg.plain401 && now < cfg.plain401.untilMs;
     if (deadActive || plainActive) return unauthorized(url);
+
     return original(input, init);
   }) as typeof fetch;
 }
@@ -195,8 +209,10 @@ export function faultsApi(deps: FaultDeps) {
   const update = (patch: (cfg: FaultConfig) => FaultConfig): FaultConfig => {
     const next = patch(readFaults(deps.storage));
     writeFaults(deps.storage, next);
+
     return next;
   };
+
   return {
     /**
      * Start a dead window now, lasting `seconds` (default 120). With
@@ -281,12 +297,15 @@ export function installDevFaults(deps: FaultDeps = BROWSER_DEPS()): void {
   setHostTokenOverride(() =>
     activeDeadToken(readFaults(deps.storage), deps.now()),
   );
+
   if (booted.hiddenUntilMs !== undefined) {
     simulateHidden(document, booted.hiddenUntilMs, deps.now, (fn, ms) => {
       setTimeout(fn, ms);
     });
   }
+
   (window as unknown as { __emrFaults: unknown }).__emrFaults = faultsApi(deps);
+
   if (Object.keys(booted).length > 0) {
     console.warn("[dev faults] active:", booted);
   }

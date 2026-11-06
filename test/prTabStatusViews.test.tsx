@@ -29,6 +29,7 @@ function mount(element: ReactElement): HTMLDivElement {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => root!.render(element));
+
   return container;
 }
 
@@ -53,9 +54,11 @@ describe("SessionRefreshingView", () => {
 
   it("offers a manual reload once auto recovery is off", () => {
     const onReload = vi.fn();
+
     const el = mount(
       <SessionRefreshingView autoReload={false} onReload={onReload} />,
     );
+
     expect(el.textContent).toContain(
       "This usually fixes itself within a few minutes.",
     );
@@ -70,9 +73,11 @@ describe("SessionRefreshingView", () => {
 describe("BootErrorView", () => {
   it("shows the error and retries on demand", () => {
     const onRetry = vi.fn();
+
     const el = mount(
       <BootErrorView error="TF400813: nope" onRetry={onRetry} />,
     );
+
     expect(el.querySelector(".emr-error h2")?.textContent).toBe(
       "Something went wrong",
     );

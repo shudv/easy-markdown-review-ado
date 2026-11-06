@@ -30,10 +30,12 @@ interface ActiveDiffOptions {
 export function useActiveDiff(opts: ActiveDiffOptions) {
   const { comparingIterations, currentFileDiff } = opts;
   const latestSource = opts.sourceByPath[opts.selectedPath];
+
   const { activeSource, baselineSource } = activeSources({
     ...opts,
     latestSource,
   });
+
   const iterationDiff = useMemo(
     () =>
       comparingIterations &&
@@ -43,6 +45,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
         : undefined,
     [comparingIterations, baselineSource, activeSource],
   );
+
   const { activeOriginalSource, activeDiffTarget, rawActiveDiff } = diffInputs({
     comparingIterations,
     baselineSource,
@@ -52,6 +55,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
     iterationDiff,
     currentFileDiff,
   });
+
   // Both line diffs (ADO's and the update comparison's) report a rewrite as
   // coarse hunks; re-align them per Markdown block so new blocks read as
   // added and only genuine edits read as edited.
@@ -61,6 +65,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
       refineDiffRanges(rawActiveDiff, activeOriginalSource, activeDiffTarget),
     [rawActiveDiff, activeOriginalSource, activeDiffTarget],
   );
+
   const diffAvailable = isDiffAvailable({ ...opts, iterationDiff });
   const showDiff = diffAvailable && !opts.diffHidden;
 
@@ -70,6 +75,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
     () => countWords(activeSource ?? ""),
     [activeSource],
   );
+
   // When the diff is shown, also surface how the PR grew/shrank the prose:
   // words added vs. removed, derived from the changed line ranges. `showDiff`
   // already implies a present, non-empty `currentFileDiff` (see `diffAvailable`),
@@ -77,6 +83,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
   // the badge simply renders no `+/−` segment.
   const docWordDelta = useMemo(() => {
     if (!showDiff) return undefined;
+
     return wordCountDelta(activeSource ?? "", activeDiff!);
   }, [showDiff, activeDiff, activeSource]);
 

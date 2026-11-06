@@ -26,6 +26,7 @@ export function useActiveDocPath(
       syntheticPr?.files[0]?.path,
     ),
   );
+
   // The repo whose open document we've already published to the route. It
   // trails `selectedRepoId` until that repo's files resolve, then we publish
   // its initial/default document exactly once.
@@ -57,10 +58,12 @@ export function useActiveDocPath(
     // Republishing is idempotent — `setRouteQuery` merges, preserving
     // `?comment=`.
     if (publishedRepoRef.current === selectedRepoId) return;
+
     const nextPath = resolveInitialDocPath(
       initialSelectedPathForShell,
       syntheticPr?.files[0]?.path,
     );
+
     if (
       !shouldPublishDefaultPath(
         publishedRepoRef.current,
@@ -70,6 +73,7 @@ export function useActiveDocPath(
     ) {
       return; // files not resolved yet — retry on the next render
     }
+
     publishedRepoRef.current = selectedRepoId;
     setActiveDocPath(nextPath);
     onSelectPath?.(selectedRepoId, nextPath);

@@ -48,6 +48,7 @@ interface CommentPostingOptions {
 export function useCommentPosting(opts: CommentPostingOptions) {
   const onSubmitDraft = useSubmitDraft(opts);
   const onReply = useReply(opts);
+
   return { onSubmitDraft, onReply };
 }
 
@@ -69,19 +70,23 @@ function useSubmitDraft(opts: CommentPostingOptions) {
     setDraftY,
     setActiveThreadId,
   } = opts;
+
   return useCallback(
     (body: string) => {
       // Anchor against the SAME source that produced the currently rendered
       // article so the comment can be located in it.
       const source = sourceByPath[selectedPath] ?? "";
       const anchor = withSourceLocation(draftAnchor!, source);
+
       // Names the picker already resolved for this body's @mentions. Persisted
       // with the thread so they render on load even where ADO can't resolve the
       // id (cross-tenant guests / personal-MSA orgs).
       const mentions = collectMentionIdentities(body, (mid) =>
         identityStore.get(mid),
       );
+
       const postedTarget = activeDraftRef.current;
+
       void (async () => {
         const created = await persistWith("Create comment", () =>
           commentApi.createThread({
@@ -91,7 +96,9 @@ function useSubmitDraft(opts: CommentPostingOptions) {
             mentions,
           }),
         );
+
         if (!created) return;
+
         const thread = createdThread({
           created,
           filePath: selectedPath,
@@ -100,6 +107,7 @@ function useSubmitDraft(opts: CommentPostingOptions) {
           body,
           mentions,
         });
+
         dispatch({ type: "ADD_THREAD", thread });
         track(
           events.commentCreated({
@@ -145,13 +153,16 @@ function useReply(opts: CommentPostingOptions) {
     isStillPostedDraft,
     setActiveDraft,
   } = opts;
+
   return useCallback(
     (threadId: string, body: string) => {
       const postedTarget = activeDraftRef.current;
+
       void (async () => {
         const created = await persistWith("Add reply", () =>
           commentApi.addReply(threadId, body),
         );
+
         if (!created) return;
         dispatch({
           type: "ADD_REPLY",
@@ -192,17 +203,20 @@ function createdThread(args: {
   mentions: MentionedIdentity[];
 }): CommentThread {
   const { created, filePath, anchor, author, body, mentions } = args;
+
   const thread = makeNewThread(
     { id: created.threadId, filePath, anchor },
     author,
     body,
     created.createdAt,
   );
+
   // `makeNewThread` mints exactly one comment; give it the server's id.
   thread.comments = thread.comments.map((c) => ({
     ...c,
     id: created.firstCommentId,
   }));
   if (mentions.length > 0) thread.mentionedIdentities = mentions;
+
   return thread;
 }

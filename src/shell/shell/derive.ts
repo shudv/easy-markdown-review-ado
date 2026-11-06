@@ -66,6 +66,7 @@ export function draftTargetsOnScreen(
   activeReplyThreadId: string | null;
 } {
   const onScreen = activeDraft !== null && activeDraft.path === selectedPath;
+
   return {
     // The new-comment draft's anchor, shown only when its draft targets the
     // file currently on screen (a reply draft, or a draft on another file,
@@ -147,27 +148,35 @@ export function resolveHistoryView(opts: {
   completedHistoryStopIndex: number;
 }): HistoryView {
   const native = opts.nativeIterationMode;
+
   const historyStops = native
     ? opts.reviewIterationStops!
     : opts.completedPrHistoryStops;
+
   const resolvedIterationRange = resolveReviewIterationRange(
     opts.iterationRange,
     historyStops.length,
   );
+
   const clampedStopIndex = native
     ? resolvedIterationRange.activeStopIndex
     : Math.min(opts.completedHistoryStopIndex, historyStops.length - 1);
+
   const comparingIterations = native && !resolvedIterationRange.isAllChanges;
+
   const baselineStopIndex = native
     ? resolvedIterationRange.baselineStopIndex
     : clampedStopIndex;
+
   const activeStop = historyStops[clampedStopIndex]!;
   const { fromUpdate, toUpdate } = resolvedIterationRange.range;
+
   const reportedRangeKey = native
     ? resolvedIterationRange.isAllChanges
       ? "all"
       : `${fromUpdate}-${toUpdate}`
     : null;
+
   return {
     historyStops,
     resolvedIterationRange,
@@ -194,6 +203,7 @@ export function docNavRangeChangesFor(
   if (rangeChangesKey === null) return undefined;
   const byPath = rangeChangesByKey[rangeChangesKey];
   if (byPath === undefined) return undefined;
+
   return {
     label: reviewRangeLabel(range, updateCount),
     byPath,
@@ -218,8 +228,10 @@ export function historicalContentKeys(opts: {
   baselineContentKey: string | null;
 } {
   const { selectedPath, activeStop } = opts;
+
   const baselineCommitId =
     opts.baselineStop?.commitId ?? opts.reviewIterationBaseCommit;
+
   return {
     historicalContentKey:
       opts.viewingHistorical && isNonEmpty(activeStop.commitId)
@@ -256,20 +268,24 @@ export function historicalStatus(opts: {
   historicalAbsentByKey: Partial<Record<string, true>>;
 }): HistoricalStatus {
   const { historicalContentKey, baselineContentKey } = opts;
+
   const historicalHtml = isNonEmpty(historicalContentKey)
     ? opts.historicalHtmlByKey[historicalContentKey]
     : undefined;
+
   // A historical stop with no recorded merge commit can't load a snapshot
   // (`historicalContentKey` is null), so fall back to the live head content
   // instead of rendering a blank, perpetually-"loading" article.
   const usingHistoricalContent =
     opts.viewingHistorical && isNonEmpty(historicalContentKey);
+
   const historicalLoadError = opts.historicalLoadTargets.reduce<
     string | undefined
   >(
     (found, target) => found ?? opts.historicalErrorByKey[target.key],
     undefined,
   );
+
   // Comparing PR updates, the file may not exist at an endpoint. Absent at the
   // NEWER end: nothing to show (the PR adds it later / deleted it) — a notice
   // with a way back to "All updates". Absent at the OLDER end only: the file is
@@ -283,9 +299,11 @@ export function historicalStatus(opts: {
     (opts.comparingIterations &&
       historicalContentKey == null &&
       opts.currentFileChangeType === "deleted");
+
   const baselineAbsent =
     baselineContentKey != null &&
     !!opts.historicalAbsentByKey[baselineContentKey];
+
   const historicalLoading =
     historicalLoadError === undefined &&
     !activeAbsent &&
@@ -293,6 +311,7 @@ export function historicalStatus(opts: {
       (baselineContentKey != null &&
         !baselineAbsent &&
         opts.historicalSourceByKey[baselineContentKey] === undefined));
+
   return {
     historicalHtml,
     usingHistoricalContent,
@@ -318,9 +337,11 @@ export function activeArticleState(opts: {
   articleReady: boolean;
 } {
   const { status, historicalContentKey } = opts;
+
   const activePristineHtml = status.usingHistoricalContent
     ? (status.historicalHtml ?? "")
     : opts.pristineHtml;
+
   return {
     activePristineHtml,
     activeStorageKey:
@@ -346,11 +367,15 @@ export function activeSources(opts: {
   latestSource: string | undefined;
 }): { activeSource: string | undefined; baselineSource: string | undefined } {
   const { historicalSourceByKey } = opts;
+
   const activeSource = opts.usingHistoricalContent
     ? historicalSourceByKey[opts.historicalContentKey!]
     : opts.latestSource;
-  if (!opts.comparingIterations)
+
+  if (!opts.comparingIterations) {
     return { activeSource, baselineSource: undefined };
+  }
+
   return {
     activeSource,
     baselineSource: opts.baselineAbsent
@@ -383,6 +408,7 @@ export function diffInputs(opts: {
       rawActiveDiff: opts.iterationDiff,
     };
   }
+
   return {
     activeOriginalSource: opts.currentOriginalSource,
     activeDiffTarget: opts.latestSource,
@@ -405,6 +431,7 @@ export function isDiffAvailable(opts: {
       opts.iterationDiff.length > 0
     );
   }
+
   return (
     !opts.viewingHistorical &&
     !opts.isWholeFileChange &&
@@ -440,16 +467,19 @@ export function commentAccess(opts: {
   // `commentBlocker`). Only the Documents hub's history stops — earlier,
   // completed PRs — are read-only.
   const viewingPastPr = opts.viewingHistorical && !opts.nativeIterationMode;
+
   const activeRoutedPr = activeRoutedPrFor(
     viewingPastPr,
     opts.activeStop,
     opts.effectiveRoutedPr,
   );
+
   const commentsAvailable = commentsAvailableFor(
     opts.documentsMode,
     opts.routedPrResolution,
     activeRoutedPr,
   );
+
   return {
     viewingPastPr,
     activeRoutedPr,
@@ -475,6 +505,7 @@ function activeRoutedPrFor(
   effectiveRoutedPr: RoutedPrInfo | undefined,
 ): RoutedPrInfo | undefined {
   if (!viewingPastPr) return effectiveRoutedPr;
+
   return {
     prId: activeStop.prId ?? 0,
     title: activeStop.title ?? `PR #${activeStop.prId}`,
@@ -509,12 +540,14 @@ function activeReadOnlyState(opts: {
     opts.viewingPastPr ||
     opts.viewingDeletedFile ||
     !opts.commentsAvailable;
+
   if (opts.viewingPastPr) {
     return {
       activeReadOnly,
       activeReadOnlyMessage: `Viewing this document as it was at pull request #${opts.activeStopPrId}. Comments here are read-only — open the pull request to reply.`,
     };
   }
+
   if (opts.viewingDeletedFile) {
     return {
       activeReadOnly,
@@ -522,6 +555,7 @@ function activeReadOnlyState(opts: {
         "This document was deleted in this pull request. Its previous version is read-only.",
     };
   }
+
   if (!opts.commentsAvailable) {
     return {
       activeReadOnly,
@@ -529,6 +563,7 @@ function activeReadOnlyState(opts: {
         "Comments are unavailable until this document is part of a completed pull request.",
     };
   }
+
   return {
     activeReadOnly,
     activeReadOnlyMessage: opts.effectiveReadOnlyMessage,
@@ -547,6 +582,7 @@ export function buildHistoryNav(
   onStep: (stopIndex: number) => void,
 ): HistoryNav | undefined {
   if (!completedPrHistoryEnabled || historyStops.length <= 1) return undefined;
+
   return {
     canNewer: clampedStopIndex > 0,
     canOlder: clampedStopIndex < historyStops.length - 1,

@@ -45,5 +45,6 @@ export function renderBootErrorInto(root: HTMLElement, detail: string): void {
 /** Reduce an unknown thrown value to the detail string shown in the panel. */
 export function bootErrorDetail(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
+
   return err.stack !== undefined && err.stack !== "" ? err.stack : err.message;
 }

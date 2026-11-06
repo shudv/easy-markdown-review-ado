@@ -50,12 +50,14 @@ describe("statusBarVisibility", () => {
       statusBarVisibility({ ...baseInput, wordDelta, changesAvailable: true })
         .deltaParts,
     ).toEqual([]);
+
     const visible = statusBarVisibility({
       ...baseInput,
       wordDelta,
       changesAvailable: true,
       changesShown: true,
     });
+
     expect(visible.deltaParts.map((part) => part.kind)).toEqual([
       "added",
       "removed",
@@ -65,11 +67,13 @@ describe("statusBarVisibility", () => {
 
   it("needs several visible threads and a handler for the comment stepper", () => {
     const onCycleComment = () => undefined;
+
     const ready = {
       ...baseInput,
       commentThreadIds: ["a", "b"],
       onCycleComment,
     };
+
     expect(statusBarVisibility(ready).showCommentStepper).toBe(true);
     expect(
       statusBarVisibility({ ...ready, commentThreadIds: ["a"] })
@@ -91,6 +95,7 @@ describe("statusBarVisibility", () => {
       hasIterationRange: true,
       onIterationRangeChange: () => undefined,
     };
+
     expect(statusBarVisibility(ready)).toMatchObject({
       showIterationPicker: true,
       showContextControls: true,

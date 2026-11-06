@@ -17,6 +17,7 @@ test("renders native ADO images, GIFs, and attachments inside comments", async (
     E2E.commentMediaPrTitle,
     "active",
   );
+
   await gotoPrTab(page, E2E.commentMediaRepo, prId);
 
   const frame = prTabFrame(page);
@@ -26,6 +27,7 @@ test("renders native ADO images, GIFs, and attachments inside comments", async (
   const comment = frame
     .locator(".emr-comment-content")
     .filter({ hasText: "[EMR native media showcase]" });
+
   await expect(comment).toBeVisible({ timeout: 30_000 });
 
   const media = comment.locator(".emr-comment-media");
@@ -46,13 +48,16 @@ test("renders native ADO images, GIFs, and attachments inside comments", async (
 
   const contained = await comment.evaluate((root) => {
     const bounds = root.getBoundingClientRect();
+
     return Array.from(
       root.querySelectorAll(".emr-comment-media, .emr-comment-attachment"),
     ).every((element) => {
       const item = element.getBoundingClientRect();
+
       return item.left >= bounds.left && item.right <= bounds.right + 0.5;
     });
   });
+
   expect(contained).toBe(true);
   await expect(frame.getByRole("dialog")).toHaveCount(0);
 });

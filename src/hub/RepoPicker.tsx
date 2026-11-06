@@ -89,14 +89,18 @@ export function RepoPicker({
   // When opening: focus the filter box (paginated) or the selected option.
   useEffect(() => {
     if (!open) return;
+
     if (paginated) {
       filterInputRef.current?.focus();
+
       return;
     }
+
     const idx = Math.max(
       0,
       repos.findIndex((r) => r.id === selectedId),
     );
+
     optionElsRef.current[idx]?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- focus only on open; re-focusing on every repos change would fight the user
   }, [open]);
@@ -111,9 +115,11 @@ export function RepoPicker({
     // Closed: the close effect below sends the single page-one re-query.
     if (!paginated || !open) return;
     if (filterText === filter) return; // already in sync (e.g. external reset)
+
     const handle = window.setTimeout(() => {
       void onFilterRef.current?.(filterText);
     }, 250);
+
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filter` is omitted on purpose: the debounce follows local input only
   }, [filterText, paginated, open]);
@@ -125,10 +131,12 @@ export function RepoPicker({
   // The local reset is adjusted during render on each open/close transition
   // (and on mount, via the `null` seed), matching the effect below.
   const [prevOpen, setPrevOpen] = useState<boolean | null>(null);
+
   if (prevOpen !== open) {
     setPrevOpen(open);
     if (!open && filterText !== "") setFilterText("");
   }
+
   useEffect(() => {
     if (open) return;
     if (paginated && filter !== "") void onFilterRef.current?.("");
@@ -138,25 +146,37 @@ export function RepoPicker({
   // Dismiss on outside pointer, scroll (outside the menu) or resize while open.
   useEffect(() => {
     if (!open) return;
+
     const onPointer = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (menuRef.current?.contains(t) || triggerRef.current?.contains(t))
+
+      if (menuRef.current?.contains(t) || triggerRef.current?.contains(t)) {
         return;
+      }
+
       setOpen(false);
     };
+
     // Close on scroll/resize since the menu is fixed to a now-stale rect — but
     // NOT when the scroll happens inside our own (paginated) results list.
     const onScrollCapture = (e: Event) => {
       if (listRef.current && e.target instanceof Node) {
-        if (listRef.current === e.target || listRef.current.contains(e.target))
+        if (
+          listRef.current === e.target ||
+          listRef.current.contains(e.target)
+        ) {
           return;
+        }
       }
+
       setOpen(false);
     };
+
     const onResize = () => setOpen(false);
     document.addEventListener("pointerdown", onPointer, true);
     window.addEventListener("scroll", onScrollCapture, true);
     window.addEventListener("resize", onResize);
+
     return () => {
       document.removeEventListener("pointerdown", onPointer, true);
       window.removeEventListener("scroll", onScrollCapture, true);
@@ -186,10 +206,13 @@ export function RepoPicker({
       loading ||
       loadMoreRequestedRef.current ||
       !onLoadMore
-    )
+    ) {
       return;
+    }
+
     // Bound as the list's own onScroll, so the ref is always set here.
     const el = listRef.current!;
+
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
       loadMoreRequestedRef.current = true;
       void onLoadMore();
@@ -200,11 +223,14 @@ export function RepoPicker({
     if (e.key === "Escape") {
       e.preventDefault();
       close();
+
       return;
     }
+
     const current = optionElsRef.current.findIndex(
       (el) => el === document.activeElement,
     );
+
     const target = menuFocusTarget(e.key, current, repos.length);
     if (target === undefined) return;
     e.preventDefault();
@@ -260,6 +286,7 @@ export function RepoPicker({
           >
             {repos.map((r, i) => {
               const isSelected = r.id === selectedId;
+
               return (
                 <button
                   key={r.id}
@@ -329,6 +356,7 @@ function renderRepoListStatus(
   filterText: string,
 ): ReactElement | null {
   if (paginated) return renderRepoPageStatus(loading, count, filterText);
+
   return count === 0 ? (
     <div className="emr-docnav-repo-status">
       No repositories match “{filterText.trim()}”.

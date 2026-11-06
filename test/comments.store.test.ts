@@ -27,6 +27,7 @@ const AUTHOR: CommentAuthor = {
   displayName: "Alice Anderson",
   initials: "AA",
 };
+
 const OTHER_AUTHOR: CommentAuthor = {
   id: "u2",
   displayName: "Bob Brown",
@@ -107,12 +108,14 @@ describe("threadReducer ADD_REPLY", () => {
   it("appends a reply to the existing thread", () => {
     const t = buildThread("t1");
     let s = initialThreadState([t]);
+
     const reply: Comment = {
       id: "t1-c2",
       author: OTHER_AUTHOR,
       bodyMarkdown: "reply",
       createdAt: "2024-01-02T00:00:00.000Z",
     };
+
     s = threadReducer(s, { type: "ADD_REPLY", threadId: "t1", comment: reply });
     expect(s.threadsById.t1!.comments.map((c) => c.id)).toEqual([
       "t1-c1",
@@ -123,11 +126,13 @@ describe("threadReducer ADD_REPLY", () => {
   it("is a no-op for unknown threads", () => {
     const t = buildThread("t1");
     const s = initialThreadState([t]);
+
     const next = threadReducer(s, {
       type: "ADD_REPLY",
       threadId: "missing",
       comment: { ...t.comments[0]!, id: "x" },
     });
+
     expect(next).toBe(s);
   });
 });
@@ -150,6 +155,7 @@ describe("threadReducer EDIT_COMMENT", () => {
 
   it("is a no-op for unknown thread", () => {
     const s = initialThreadState([buildThread("t1")]);
+
     const next = threadReducer(s, {
       type: "EDIT_COMMENT",
       threadId: "missing",
@@ -157,11 +163,13 @@ describe("threadReducer EDIT_COMMENT", () => {
       newBodyMarkdown: "x",
       updatedAt: "x",
     });
+
     expect(next).toBe(s);
   });
 
   it("is a no-op for unknown comment id within a known thread", () => {
     const s = initialThreadState([buildThread("t1")]);
+
     const next = threadReducer(s, {
       type: "EDIT_COMMENT",
       threadId: "t1",
@@ -169,6 +177,7 @@ describe("threadReducer EDIT_COMMENT", () => {
       newBodyMarkdown: "x",
       updatedAt: "y",
     });
+
     // The store object is rebuilt but the comment array contents are equivalent.
     expect(next.threadsById.t1!.comments).toEqual(s.threadsById.t1!.comments);
   });
@@ -180,6 +189,7 @@ describe("threadReducer DELETE_COMMENT", () => {
       { id: "c1", author: AUTHOR, bodyMarkdown: "a", createdAt: "1" },
       { id: "c2", author: AUTHOR, bodyMarkdown: "b", createdAt: "2" },
     ]);
+
     let s = initialThreadState([t]);
     s = threadReducer(s, {
       type: "DELETE_COMMENT",
@@ -333,6 +343,7 @@ describe("threadReducer TOGGLE_REACTION", () => {
         },
       ]),
     ]);
+
     s = threadReducer(s, {
       type: "TOGGLE_REACTION",
       threadId: "t1",
@@ -369,6 +380,7 @@ describe("threadReducer TOGGLE_REACTION", () => {
         displayName: "User One",
       }),
     ).toBe(s);
+
     // Unknown comment id leaves comments untouched.
     const next = threadReducer(s, {
       type: "TOGGLE_REACTION",
@@ -378,6 +390,7 @@ describe("threadReducer TOGGLE_REACTION", () => {
       userId: "u1",
       displayName: "User One",
     });
+
     expect(next.threadsById.t1!.comments).toEqual(s.threadsById.t1!.comments);
   });
 });
@@ -460,6 +473,7 @@ describe("makeNewThread", () => {
       "Looks good!",
       "2024-03-01T00:00:00.000Z",
     );
+
     expect(t).toEqual({
       id: "id1",
       filePath: "doc.md",
@@ -482,6 +496,7 @@ describe("makeNewThread", () => {
       AUTHOR,
       "x",
     );
+
     expect(Number.isFinite(Date.parse(t.comments[0]!.createdAt))).toBe(true);
   });
 });
@@ -505,35 +520,42 @@ describe("threadReducer (defensive)", () => {
 describe("threadReducer MERGE_REMOTE_THREADS", () => {
   it("appends unknown threads to the END of order (preserves existing ordering)", () => {
     const state = initialThreadState([buildThread("t1")]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1"), buildThread("t2")],
     });
+
     expect(next.order).toEqual(["t1", "t2"]);
   });
 
   it("returns same reference when nothing changes (no re-render)", () => {
     const state = initialThreadState([buildThread("t1")]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1")],
     });
+
     expect(next).toBe(state);
   });
 
   it("preserves local-only (optimistic) threads not present in remote snapshot", () => {
     const local = buildThread("local-tmp-1");
     const state = initialThreadState([buildThread("t1"), local]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1")],
     });
+
     expect(next.threadsById["local-tmp-1"]).toBe(local);
     expect(next.order).toContain("local-tmp-1");
   });
 
   it("appends remote replies that aren't in our local copy yet", () => {
     const state = initialThreadState([buildThread("t1")]);
+
     const remoteWithReply = buildThread("t1", "docs/a.md", [
       {
         id: "t1-c1",
@@ -548,24 +570,29 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         createdAt: "2024-01-02T00:00:00.000Z",
       },
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [remoteWithReply],
     });
+
     expect(next.threadsById.t1!.comments).toHaveLength(2);
     expect(next.threadsById.t1!.comments[1]!.bodyMarkdown).toBe("nice point");
   });
 
   it("updates status when the server resolves a thread", () => {
     const state = initialThreadState([buildThread("t1")]);
+
     const resolvedRemote: CommentThread = {
       ...buildThread("t1"),
       status: "resolved",
     };
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [resolvedRemote],
     });
+
     expect(next.threadsById.t1!.status).toBe("resolved");
   });
 
@@ -582,6 +609,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         },
       ]),
     ]);
+
     const staleRemote = buildThread("t1", "docs/a.md", [
       {
         id: "t1-c1",
@@ -591,10 +619,12 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         updatedAt: "2024-01-01T10:30:00.000Z",
       },
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [staleRemote],
     });
+
     expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe("local edit");
   });
 
@@ -603,20 +633,24 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
     // landed yet. False positive: a genuinely deleted thread will linger
     // until the next user action — acceptable trade-off.
     const state = initialThreadState([buildThread("t1"), buildThread("t2")]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1")],
     });
+
     expect(next.threadsById.t2).toBeDefined();
     expect(next.order).toEqual(["t1", "t2"]);
   });
 
   it("merges threads on multiple files (selectThreadsByFile filters)", () => {
     const state = initialThreadState([buildThread("t1", "a.md")]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1", "a.md"), buildThread("t2", "b.md")],
     });
+
     expect(selectThreadsByFile(next, "a.md").map((t) => t.id)).toEqual(["t1"]);
     expect(selectThreadsByFile(next, "b.md").map((t) => t.id)).toEqual(["t2"]);
   });
@@ -641,6 +675,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         },
       ]),
     ]);
+
     const staleRemote = buildThread("t1", "docs/a.md", [
       {
         id: "t1-c1",
@@ -650,10 +685,12 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         updatedAt: "2024-01-01T12:00:00+05:00",
       },
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [staleRemote],
     });
+
     // Local is chronologically newer → its body must survive.
     expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe(
       "newer local edit",
@@ -672,6 +709,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         },
       ]),
     ]);
+
     const garbageRemote = buildThread("t1", "docs/a.md", [
       {
         id: "t1-c1",
@@ -681,10 +719,12 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         updatedAt: "not a date",
       },
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [garbageRemote],
     });
+
     expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe("local");
   });
 
@@ -700,6 +740,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         },
       ]),
     ]);
+
     const fresherRemote = buildThread("t1", "docs/a.md", [
       {
         id: "t1-c1",
@@ -709,10 +750,12 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         updatedAt: "2024-01-01T12:00:00.000Z",
       },
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [fresherRemote],
     });
+
     expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe("fresh remote");
     expect(next.threadsById.t1!.comments[0]!.updatedAt).toBe(
       "2024-01-01T12:00:00.000Z",
@@ -736,6 +779,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         },
       ]),
     ]);
+
     // Remote feed only carries the first comment; the second has no match and
     // must be passed through untouched.
     const next = threadReducer(state, {
@@ -751,6 +795,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         ]),
       ],
     });
+
     const merged = next.threadsById.t1!.comments;
     expect(merged.map((c) => c.id)).toEqual(["t1-c1", "t1-c2"]);
     expect(merged[1]!.bodyMarkdown).toBe("local only");
@@ -843,10 +888,12 @@ describe("threadReducer MERGE_REMOTE_THREADS — reaction sync", () => {
     const state = initialThreadState([
       buildThread("t1", "docs/a.md", [commentWith(local)]),
     ]);
+
     const next = threadReducer(state, {
       type: "MERGE_REMOTE_THREADS",
       threads: [buildThread("t1", "docs/a.md", [commentWith(remote)])],
     });
+
     return { state, next };
   };
 

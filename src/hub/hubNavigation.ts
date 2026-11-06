@@ -29,6 +29,7 @@ async function queryParamsOf(
     | Record<string, string>
     | null
     | undefined;
+
   return params ?? {};
 }
 
@@ -41,6 +42,7 @@ export async function readRouteParams(): Promise<Record<string, string>> {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
+
     return await queryParamsOf(nav);
   } catch {
     return {};
@@ -57,6 +59,7 @@ export async function openInNewTab(url: string): Promise<void> {
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
+
     nav.openNewWindow(url, "");
   } catch {
     /* navigation service unavailable — opening the file is best-effort */
@@ -81,10 +84,12 @@ export async function setRouteQuery(
     const nav = await SDK.getService<IHostNavigationService>(
       CommonServiceIds.HostNavigationService,
     );
+
     const next =
       typeof updates === "function"
         ? updates(await queryParamsOf(nav))
         : updates;
+
     nav.setQueryParams(next);
   } catch {
     /* navigation service unavailable — route syncing is best-effort */
@@ -102,11 +107,13 @@ export function buildHubDeepLinkUrl(
   target: DeepLinkTarget,
 ): string | undefined {
   let ext: { publisherId: string; extensionId: string };
+
   try {
     ext = SDK.getExtensionContext();
   } catch {
     return undefined;
   }
+
   return assembleHubDeepLinkUrl(doc, ext, target);
 }
 
@@ -124,12 +131,14 @@ export function resolveOrgUrl(): string {
   } catch {
     // Falls through to the referrer-based heuristic.
   }
+
   return orgUrlFromReferrer(document.referrer);
 }
 
 /** The signed-in user as a comment author. */
 export function readCurrentUser(): CommentAuthor {
   const u = SDK.getUser();
+
   return {
     id: u.id,
     displayName: u.displayName,

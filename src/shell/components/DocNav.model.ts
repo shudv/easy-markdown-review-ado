@@ -35,6 +35,7 @@ export function fileChangeView(
 ): { changeType: ChangeType; unchanged: boolean; note?: string } {
   if (!rangeChanges) return { changeType: file.changeType, unchanged: false };
   const inRange = rangeChanges.byPath[file.path];
+
   return inRange !== undefined
     ? { changeType: inRange, unchanged: false }
     : {
@@ -85,6 +86,7 @@ export type DirNavNode = Extract<NavNode, { kind: "dir" }>;
 
 export function basename(p: string): string {
   const idx = p.lastIndexOf("/");
+
   return idx === -1 ? p : p.slice(idx + 1);
 }
 
@@ -106,6 +108,7 @@ export function cssEscape(s: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(s);
   }
+
   return s.replace(/([^\w-])/g, "\\$1");
 }
 
@@ -124,6 +127,7 @@ export function shownActiveHeading(
 export function navNodeKey(node: NavNode): string {
   if (node.kind === "dir") return `dir:${node.path}`;
   if (node.kind === "file") return `file:${node.file.path}`;
+
   return `heading:${node.heading.id}`;
 }
 
@@ -139,9 +143,11 @@ export function pathAncestors(path: string): string[] {
   if (segments.length <= 1) return [];
   const out: string[] = [];
   let acc = "";
+
   for (let i = 0; i < segments.length - 1; i += 1) {
     acc = acc ? `${acc}/${segments[i]!}` : segments[i]!;
     out.push(acc);
   }
+
   return out;
 }

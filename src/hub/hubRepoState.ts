@@ -26,6 +26,7 @@ export function withRepoDetails(
 ): DiscoveryState | null {
   if (!curr) return curr;
   const { files, topLevelFolders, rootOrder, recentPr, pr } = details;
+
   const nextRepos = curr.repos.map((r) =>
     r.id === repoId
       ? {
@@ -39,10 +40,12 @@ export function withRepoDetails(
         }
       : r,
   );
+
   const nextPrByRepo = {
     ...curr.prByRepo,
     [repoId]: pr ?? undefined,
   };
+
   return { ...curr, repos: nextRepos, prByRepo: nextPrByRepo };
 }
 
@@ -53,9 +56,11 @@ export function withRepoDetailsLoaded(
   detailsLoaded: boolean,
 ): DiscoveryState | null {
   if (!curr) return curr;
+
   const nextRepos = curr.repos.map((r) =>
     r.id === repoId ? { ...r, detailsLoaded } : r,
   );
+
   return { ...curr, repos: nextRepos };
 }
 
@@ -66,12 +71,15 @@ export function withoutKeyPrefix<T>(
 ): Record<string, T> {
   let changed = false;
   const next: Record<string, T> = {};
+
   for (const [key, value] of Object.entries(prev)) {
     if (key.startsWith(keyPrefix)) {
       changed = true;
       continue;
     }
+
     next[key] = value;
   }
+
   return changed ? next : prev;
 }

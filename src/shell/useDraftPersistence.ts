@@ -102,9 +102,7 @@ export function useDraftPersistence(
 
   // Flush a pending write on unmount so the last keystrokes survive a soft
   // teardown (host navigation away from the shell).
-  useEffect(() => {
-    return () => writer?.flush();
-  }, [writer]);
+  useEffect(() => () => writer?.flush(), [writer]);
 
   const handleChange = useCallback(
     (body: string) => {
@@ -112,6 +110,7 @@ export function useDraftPersistence(
       if (!scope || !writer) return;
       const target = activeDraftRef.current;
       if (!target) return;
+
       if (body.trim().length > 0) {
         writer.schedule({
           path: target.path,

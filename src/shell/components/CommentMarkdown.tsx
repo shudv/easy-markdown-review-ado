@@ -31,8 +31,10 @@ export function CommentMarkdown({ body }: Readonly<Props>): ReactElement {
     /* v8 ignore next -- the div below renders unconditionally and React attaches its ref before layout effects run */
     if (!root) return;
     void hydrateMath(root);
+
     return decorateCommentMedia(root, resolveAdoAttachmentObjectUrl);
   }, [html]);
+
   return (
     <div
       ref={ref}

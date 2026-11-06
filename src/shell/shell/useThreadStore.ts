@@ -50,29 +50,35 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     loadThreadsForPath,
     onRefreshFiles,
   } = opts;
+
   const [threadState, dispatch] = useReducer(
     threadReducer,
     initialThreadState(opts.initialThreads),
   );
+
   useIdentitySeeding(threadState, currentUser, identityStore);
 
   // Background remote-thread sync; merges snapshots preserving optimistic writes.
   const onRemoteThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
   }, []);
+
   // A PR-wide snapshot (`fetchRemoteThreads`) holds every thread, so it lets a
   // `?comment=` deep link tell "not loaded yet" from "doesn't exist". A
   // per-document snapshot can't: it only covers whichever file was open.
   const [prThreadSnapshots, setPrThreadSnapshots] = useState(0);
+
   const onPrThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
     setPrThreadSnapshots((n) => n + 1);
   }, []);
+
   const noopFetch = useCallback(
     /* v8 ignore next -- useThreadSync never calls fetchThreads while enabled is false */
     (_signal: AbortSignal): Promise<CommentThread[]> => Promise.resolve([]),
     [],
   );
+
   // Per-document mode: poll the *currently selected* document's threads. The
   // closure reads `selectedPathRef` so its identity stays stable across file
   // switches while always targeting the active document.
@@ -81,10 +87,12 @@ export function useThreadStore(opts: ThreadStoreOptions) {
       loadThreadsForPath!(selectedPathRef.current),
     [loadThreadsForPath, selectedPathRef],
   );
+
   // Branch on the loaders themselves rather than on `perPathFetch`, which only
   // reads its ref when the poller calls it.
   const hasRemoteFetch =
     opts.fetchRemoteThreads !== undefined || loadThreadsForPath !== undefined;
+
   const threadSync = useThreadSync({
     enabled: hasRemoteFetch,
     fetchThreads:
@@ -95,6 +103,7 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     // Resume polling the moment the ADO session is re-minted.
     subscribeRecovered: adoSession.onRecovered,
   });
+
   // Unified data refresh surfaced on the reading toolbar: pull a fresh comment
   // snapshot AND (when the host provides one) reload the file list in one click
   // — replacing the separate per-header refresh buttons. Gated on comment
@@ -131,7 +140,9 @@ function useIdentitySeeding(
       displayName?: string;
       avatarUrl?: string;
     }> = [currentUser];
+
     const mentionIds: string[] = [];
+
     for (const id of threadState.order) {
       const t = threadState.threadsById[id];
       // Seed names ADO already resolved for this thread's @mentions. This is
@@ -139,11 +150,13 @@ function useIdentitySeeding(
       // by-id identities endpoint returns null), so mentions render as names on
       // load with no network call.
       if (t.mentionedIdentities) people.push(...t.mentionedIdentities);
+
       for (const c of t.comments) {
         people.push(c.author);
         mentionIds.push(...collectUserMentionIds(c.bodyMarkdown));
       }
     }
+
     identityStore.seed(people);
     // `ensure` skips ids already known (e.g. seeded authors) and coalesces the
     // rest into a single resolver call.
@@ -160,6 +173,7 @@ function useUnifiedRefresh(
   // re-enables the moment the poll finishes and a slow file reload could be
   // fired again while the first is still running.
   const [fileRefreshInFlight, setFileRefreshInFlight] = useState(false);
+
   const handleRefresh = useCallback(() => {
     // `refreshNow` is a safe no-op when thread sync is disabled, so no guard.
     threadSync.refreshNow();
@@ -180,6 +194,7 @@ function useUnifiedRefresh(
       })
       .finally(() => setFileRefreshInFlight(false));
   }, [threadSync, onRefreshFiles]);
+
   const refreshLabel = onRefreshFiles
     ? "Refresh files and comments"
     : "Refresh comments";
@@ -217,6 +232,7 @@ function useFirstThreadLoad(
           impact: "degraded",
         });
       });
+
     return () => {
       cancelled = true;
     };

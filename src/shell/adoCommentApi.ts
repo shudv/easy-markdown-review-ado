@@ -22,7 +22,7 @@
 
 import * as SDK from "azure-devops-extension-sdk";
 import {
-  GitRestClient,
+  type GitRestClient,
   CommentThreadStatus,
   PullRequestStatus,
   type GitPullRequest,
@@ -142,6 +142,7 @@ export async function loadAdoThreads(
   // shared session monitor learns about the spell (and its end) from here.
   let raw: GitPullRequestCommentThread[];
   const startedAt = Date.now();
+
   try {
     raw = await withRetry(
       () =>
@@ -155,12 +156,15 @@ export async function loadAdoThreads(
     adoSession.report(err, "poll");
     throw err;
   }
+
   adoSession.noteSuccess(startedAt);
   const out: CommentThread[] = [];
+
   for (const t of raw) {
     const local = adoThreadToLocal(t);
     if (local) out.push(local);
   }
+
   return out;
 }
 
@@ -199,6 +203,7 @@ export class AdoCommentApi implements CommentApi {
 
   async createThread(input: NewThreadInput): Promise<CreatedThreadIds> {
     const { repositoryId, pullRequestId, project } = this.ctx;
+
     const threadInput: Partial<GitPullRequestCommentThread> = {
       status: CommentThreadStatus.Active,
       threadContext: buildThreadContext(
@@ -224,6 +229,7 @@ export class AdoCommentApi implements CommentApi {
           : {}),
       },
     };
+
     const created: AdoThreadWire = await this.write("createThread", () =>
       this.client().createThread(
         threadInput as GitPullRequestCommentThread,
@@ -232,10 +238,13 @@ export class AdoCommentApi implements CommentApi {
         project,
       ),
     );
+
     const firstComment: AdoCommentWire | undefined = created.comments?.[0];
+
     if (!firstComment) {
       throw new Error("ADO createThread returned no comments");
     }
+
     return {
       threadId: String(created.id),
       firstCommentId: String(firstComment.id),
@@ -250,6 +259,7 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ commentId: string; createdAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
+
     const created: AdoCommentWire = await this.write("addReply", () =>
       this.client().createComment(
         buildReplyComment(bodyMarkdown) as AdoComment,
@@ -259,6 +269,7 @@ export class AdoCommentApi implements CommentApi {
         project,
       ),
     );
+
     // A reply's `@<GUID>` mentions resolve on load via the identity resolver
     // (the token rides in the comment body). We intentionally do NOT persist
     // them onto the thread's emrMentions property: ADO rejects updating thread
@@ -277,6 +288,7 @@ export class AdoCommentApi implements CommentApi {
     bodyMarkdown: string,
   ): Promise<{ updatedAt: string }> {
     const { repositoryId, pullRequestId, project } = this.ctx;
+
     const updated: AdoCommentWire = await this.write("editComment", () =>
       this.client().updateComment(
         { content: bodyMarkdown } as AdoComment,
@@ -287,6 +299,7 @@ export class AdoCommentApi implements CommentApi {
         project,
       ),
     );
+
     return {
       updatedAt: new Date(
         updated.lastContentUpdatedDate ?? Date.now(),
@@ -357,15 +370,19 @@ export class AdoCommentApi implements CommentApi {
   async searchUsers(query: string): Promise<UserSuggestion[]> {
     const trimmed = query.trim();
     if (trimmed.length === 0) return [];
+
     try {
       const svc = await SDK.getService<IVssIdentityService>(
         IdentityServiceIds.IdentityService,
       );
+
       const results = await withRetry(
         () => svc.searchIdentitiesAsync(trimmed, ["user"]),
         { mode: "read", attempts: 2, label: "searchUsers" },
       );
+
       const selfImageUrl = currentUserImageUrl();
+
       return results.slice(0, 10).map((r) => toUserSuggestion(r, selfImageUrl));
     } catch (err) {
       console.warn("[adoCommentApi] searchUsers failed:", err);
@@ -375,6 +392,7 @@ export class AdoCommentApi implements CommentApi {
         operation: "user-search",
         impact: "degraded",
       });
+
       return [];
     }
   }
@@ -384,13 +402,16 @@ export class AdoCommentApi implements CommentApi {
   ): Promise<Record<string, { displayName: string; avatarUrl?: string }>> {
     const empty: Record<string, { displayName: string; avatarUrl?: string }> =
       {};
+
     if (ids.length === 0) return empty;
+
     try {
       // Resolve GUIDs via the vssps "Read Identities" REST endpoint (lookup by
       // id). `searchIdentitiesAsync` is a name/email typeahead and can't be
       // queried by GUID, so a persisted `@<GUID>` mention only resolves here.
       const url = buildIdentitiesUrl(getOrgName(), ids);
       if (url === null) return empty;
+
       const res = await withRetry(
         async () => {
           // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
@@ -398,12 +419,14 @@ export class AdoCommentApi implements CommentApi {
           // only heals a true transient auth race — not the `ado_exp` dead window
           // where the host keeps replaying the same lapsed token.
           const token = await SDK.getAccessToken();
+
           const r = await fetch(url, {
             headers: {
               Authorization: `Bearer ${token}`,
               Accept: "application/json",
             },
           });
+
           // Surface a status-bearing error so the retry classifier can decide
           // whether a non-2xx is transient (retry) or terminal (give up).
           if (!r.ok) {
@@ -412,15 +435,19 @@ export class AdoCommentApi implements CommentApi {
               headers: r.headers,
             });
           }
+
           return r;
         },
         { mode: "read", label: "resolveIdentities.fetch" },
       );
+
       if (!res.ok) return empty;
       const body = (await res.json()) as unknown;
+
       return parseIdentitiesResponse(body, ids);
     } catch (err) {
       console.warn("[adoCommentApi] resolveIdentities failed:", err);
+
       return empty;
     }
   }
@@ -429,9 +456,11 @@ export class AdoCommentApi implements CommentApi {
     const trimmed = query.trim();
     if (trimmed.length === 0) return [];
     const { project } = this.ctx;
+
     try {
       const client = sharedWorkItemClient();
       const wiql = buildWorkItemWiql(trimmed);
+
       const result: Partial<WorkItemQueryResult> = await withRetry(
         () =>
           client.queryByWiql(
@@ -443,11 +472,14 @@ export class AdoCommentApi implements CommentApi {
           ),
         { mode: "read", attempts: 2, label: "searchWorkItems.queryByWiql" },
       );
+
       const ids = (result.workItems ?? [])
         .map((w) => w.id)
         .filter((id): id is number => typeof id === "number")
         .slice(0, 10);
+
       if (ids.length === 0) return [];
+
       const items: Partial<WorkItem>[] = await withRetry(
         () =>
           client.getWorkItems(ids, project, [
@@ -458,16 +490,21 @@ export class AdoCommentApi implements CommentApi {
           ]),
         { mode: "read", attempts: 2, label: "searchWorkItems.getWorkItems" },
       );
+
       // Preserve WIQL ordering.
       const byId = new Map<number, Partial<WorkItem>>();
+
       for (const w of items) {
         if (typeof w.id === "number") byId.set(w.id, w);
       }
+
       const ordered: Partial<WorkItem>[] = [];
+
       for (const id of ids) {
         const w = byId.get(id);
         if (w) ordered.push(w);
       }
+
       return ordered.map(toWorkItemSuggestion);
     } catch (err) {
       console.warn("[adoCommentApi] searchWorkItems failed:", err);
@@ -477,6 +514,7 @@ export class AdoCommentApi implements CommentApi {
         operation: "work-item-search",
         impact: "degraded",
       });
+
       return [];
     }
   }
@@ -492,8 +530,10 @@ export class AdoCommentApi implements CommentApi {
     const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
     if (numeric === null && trimmed.length < 2) return [];
     const { project } = this.ctx;
+
     try {
       const client = this.client();
+
       // ADO's `getPullRequestsByProject` doesn't accept a `title` filter
       // server-side, so we pull a small page of the latest active PRs
       // and filter by title client-side. This mirrors what the in-line
@@ -502,11 +542,13 @@ export class AdoCommentApi implements CommentApi {
       const criteria: GitPullRequestSearchCriteria = {
         status: PullRequestStatus.Active,
       } as GitPullRequestSearchCriteria;
+
       const prs: Partial<GitPullRequest>[] = await withRetry(
         () =>
           client.getPullRequestsByProject(project, criteria, undefined, 0, 50),
         { mode: "read", attempts: 2, label: "searchPullRequests" },
       );
+
       return matchPullRequestSuggestions(prs, trimmed);
     } catch (err) {
       console.warn("[adoCommentApi] searchPullRequests failed:", err);
@@ -516,6 +558,7 @@ export class AdoCommentApi implements CommentApi {
         operation: "pull-request-search",
         impact: "degraded",
       });
+
       return [];
     }
   }
@@ -562,8 +605,10 @@ function toUserSuggestion(
   selfImageUrl?: string,
 ): UserSuggestion {
   const i = raw as IdentityRuntime;
+
   const displayName =
     i.displayName ?? i.signInAddress ?? i.mail ?? "(unknown user)";
+
   // ADO's native `@<GUID>` mention token — and comment authors — key off the
   // dashed identity GUID, but `entityId` is the storage-key form
   // `vss.ds.v1.ims.user.<32-hex>`. Prefer `localId` (already the GUID); else
@@ -573,6 +618,7 @@ function toUserSuggestion(
     normalizeIdentityGuid(i.localId) ??
     normalizeIdentityGuid(i.entityId) ??
     i.entityId;
+
   return {
     kind: "user",
     id,
@@ -602,6 +648,7 @@ function toWorkItemSuggestion(w: Partial<WorkItem>): WorkItemSuggestion {
   const title = stringField(fields["System.Title"], "");
   const workItemType = stringField(fields["System.WorkItemType"], "Work item");
   const state = stringField(fields["System.State"], "");
+
   return {
     kind: "workitem",
     id: String(id),

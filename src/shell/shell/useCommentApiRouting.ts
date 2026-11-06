@@ -39,6 +39,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   effectiveRoutedPr: RoutedPrInfo | undefined;
 } {
   const { commentApiForPath, routedPr, routedPrForPath, selectedPath } = opts;
+
   // Stable CommentApi: callers supply one (real ADO) or we fall back to a
   // session-local stub so standalone dev still works. The per-document cache
   // lives alongside it; the effective `commentApi` is resolved from
@@ -47,6 +48,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
     stable: null,
     perPath: new Map(),
   });
+
   // eslint-disable-next-line react-hooks/refs -- the memo below reads the stable API in this same render, so the latest host API must be recorded before it rather than in an effect.
   syncStableApi(routingRef.current, opts.commentApi);
 
@@ -55,6 +57,7 @@ export function useCommentApiRouting(opts: CommentApiRoutingOptions): {
   // reads the latest effective CommentApi via a ref so a per-document API swap
   // still resolves; the store is created once and provided to the subtree.
   const resolveIdentitiesRef = useRef<IdentityResolver | undefined>(undefined);
+
   const [identityStore] = useState(
     // eslint-disable-next-line react-hooks/refs -- the store calls this resolver only when it flushes on a microtask, so the ref is read after render, never during it.
     () =>
@@ -121,19 +124,24 @@ function resolveApi(
   selectedPath: string,
 ): { commentApi: CommentApi; perDocNoWriteTarget: boolean } {
   const stable = routing.stable!;
+
   if (!commentApiForPath) {
     return { commentApi: stable, perDocNoWriteTarget: false };
   }
+
   let api = routing.perPath.get(selectedPath);
+
   if (!api) {
     // A document whose housing PR isn't resolved yet — or has none —
     // resolves to `undefined`; don't cache the fallback.
     api = commentApiForPath(selectedPath);
     if (api) routing.perPath.set(selectedPath, api);
   }
+
   // No routed PR to persist to: still render via the session-local stub, but
   // flag the document as having no write target so the composer is shown
   // read-only instead of silently accepting comments that never reach ADO.
   if (api) return { commentApi: api, perDocNoWriteTarget: false };
+
   return { commentApi: stable, perDocNoWriteTarget: true };
 }

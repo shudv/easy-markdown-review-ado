@@ -34,6 +34,7 @@ export interface GitScope<C> {
 export function normalizePath(p: string): string {
   if (!p) return "/";
   const stripped = p.replace(/\/+$/, "");
+
   return stripped.length === 0 ? "/" : stripped;
 }
 
@@ -47,6 +48,7 @@ export function normalizePath(p: string): string {
  */
 export function stripRefsHeads(ref: string | undefined | null): string {
   if (ref == null || ref === "") return "";
+
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
 }
 
@@ -75,6 +77,7 @@ export function editBranchName(
       .replace(/^\.+|\.+$/g, "")
       .replace(/^-+|-+$/g, "")
       .toLowerCase() || "doc";
+
   return `emr/edit/${slug}-${now.toString(36)}`;
 }
 
@@ -118,8 +121,10 @@ export function filterReposByName<R extends NamedRepoLike>(
   if (restrictToRepoName == null || restrictToRepoName === "") {
     return [...repos];
   }
+
   const lc = restrictToRepoName.toLowerCase();
   const narrowed = repos.filter((r) => r.name.toLowerCase() === lc);
+
   return narrowed.length > 0 ? narrowed : [...repos];
 }
 
@@ -142,10 +147,12 @@ export function projectMarkdownLevel(
   const files: FileInfo[] = [];
   const folders: string[] = [];
   const normalizedScope = normalizePath(scopePath);
+
   for (const item of items) {
     const path = item.path ?? "";
     if (!path) continue;
     if (normalizePath(path) === normalizedScope) continue;
+
     if (item.isFolder) {
       folders.push(path);
     } else if (path.toLowerCase().endsWith(".md")) {
@@ -157,8 +164,10 @@ export function projectMarkdownLevel(
       });
     }
   }
+
   files.sort((a, b) => a.path.localeCompare(b.path));
   folders.sort((a, b) => a.localeCompare(b));
+
   return { files, folders };
 }
 
@@ -177,6 +186,7 @@ export function listingFailureOutcome(
   options: { missingOk?: boolean; propagate?: boolean },
 ): ListingFailureOutcome {
   if (options.missingOk && isItemNotFoundError(err)) return "empty";
+
   return options.propagate ? "throw" : "degrade";
 }
 
@@ -192,6 +202,7 @@ export function findOrderFile(
   const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
   const scope = bare(scopePath);
   const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
+
   return items.find(
     (item) => !item.isFolder && bare(item.path ?? "") === expected,
   )?.path;
@@ -238,11 +249,13 @@ export function identityAvatarUrl(identity: {
 }): string | undefined {
   if (identity.imageUrl == null || identity.imageUrl === "") return undefined;
   let parsed: URL;
+
   try {
     parsed = new URL(identity.imageUrl);
   } catch {
     return undefined;
   }
+
   // The org base is everything before the API segment, e.g.
   // "https://dev.azure.com/{org}" or "https://{org}.visualstudio.com". When no
   // API segment is present, keep the whole path (sans trailing slash) as base.
@@ -251,6 +264,7 @@ export function identityAvatarUrl(identity: {
   const legacyIdx = path.indexOf("/_api/");
   const cut = apiIdx >= 0 ? apiIdx : legacyIdx;
   const base = cut >= 0 ? path.slice(0, cut) : path.replace(/\/+$/, "");
+
   return `${parsed.origin}${base}/_api/_common/identityImage?id=${encodeURIComponent(
     identity.id,
   )}`;
@@ -264,6 +278,7 @@ export function identityAvatarUrl(identity: {
 export function prDate(pr: { closedDate?: Date; creationDate?: Date }): number {
   const closed = pr.closedDate ? new Date(pr.closedDate).getTime() : 0;
   const created = pr.creationDate ? new Date(pr.creationDate).getTime() : 0;
+
   return Math.max(closed, created);
 }
 
@@ -293,10 +308,12 @@ export function selectRoutingPr(
   prs: readonly GitPullRequest[],
 ): GitPullRequest | null {
   let best: GitPullRequest | null = null;
+
   for (const pr of prs) {
     if (pr.status !== COMPLETED_PR_STATUS) continue;
     if (best === null || prDate(pr) > prDate(best)) best = pr;
   }
+
   return best;
 }
 
@@ -341,9 +358,11 @@ export function commitIds(
   commits: ReadonlyArray<{ commitId?: string | null }> | undefined | null,
 ): string[] {
   const out: string[] = [];
+
   for (const c of commits ?? []) {
     if (c.commitId != null && c.commitId !== "") out.push(c.commitId);
   }
+
   return out;
 }
 
@@ -370,18 +389,22 @@ export function selectRoutingPrsFromQuery(
   if (!map) return [];
   const seen = new Set<number>();
   const out: GitPullRequest[] = [];
+
   for (const commitId of commitIds) {
     const completed = (map[commitId] ?? [])
       .filter((pr) => pr.status === COMPLETED_PR_STATUS)
       .sort((a, b) => prDate(b) - prDate(a));
+
     for (const pr of completed) {
       if (typeof pr.pullRequestId !== "number" || seen.has(pr.pullRequestId)) {
         continue;
       }
+
       seen.add(pr.pullRequestId);
       out.push(pr);
     }
   }
+
   return out;
 }
 
@@ -398,6 +421,7 @@ export function docPrRefsFromHistory(
   buildUrl: (prId: number) => string | undefined,
 ): DocPrRef[] {
   const out: DocPrRef[] = [];
+
   for (const pr of prs) {
     const prId = pr.pullRequestId;
     if (typeof prId !== "number" || !Number.isFinite(prId)) continue;
@@ -409,6 +433,7 @@ export function docPrRefsFromHistory(
       dateMs: prDate(pr),
     });
   }
+
   return out;
 }
 
@@ -424,10 +449,12 @@ export function changedPathsFromEntries(
     | null,
 ): string[] {
   const paths: string[] = [];
+
   for (const entry of entries ?? []) {
     const p = entry.item?.path;
     if (p != null && p !== "") paths.push(normalizePath(p).toLowerCase());
   }
+
   return paths;
 }
 
@@ -442,6 +469,7 @@ export function prsTouchingPath<T extends { paths: readonly string[] }>(
   path: string,
 ): T[] {
   const key = normalizePath(path).toLowerCase();
+
   return (prs ?? []).filter((e) => e.paths.includes(key));
 }
 
@@ -454,9 +482,11 @@ export function buildPrUrl(
   prId: number | undefined,
 ): string | undefined {
   if (typeof prId !== "number") return undefined;
+
   if (repo.webUrl) {
     return `${repo.webUrl.replace(/\/$/, "")}/pullrequest/${prId}`;
   }
+
   return undefined;
 }
 
@@ -488,6 +518,7 @@ export async function runWithConcurrency<T, R>(
   const workers: Promise<void>[] = [];
   for (let w = 0; w < safeCap; w++) workers.push(pump());
   await Promise.all(workers);
+
   return results;
 }
 
@@ -498,6 +529,7 @@ export async function runWithConcurrency<T, R>(
 /** Human-readable one-liner shown under a repo name in the picker. */
 export function repoDescription(repo: GitRepository): string {
   const branch = stripRefsHeads(repo.defaultBranch) || "main";
+
   return `Default branch: ${branch}`;
 }
 
@@ -526,6 +558,7 @@ export function repoSkeleton(repo: GitRepository): DocRepo {
  */
 export function normalizeRepoFilter(filter?: string): string | undefined {
   const trimmed = filter?.trim();
+
   return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
 
@@ -539,6 +572,7 @@ export function webContextProject(
 ): { id: string; name: string } | null {
   const project = webContext?.project;
   if (typeof project?.id !== "string" || project.id.length === 0) return null;
+
   return {
     id: project.id,
     name: typeof project.name === "string" ? project.name : "",

@@ -42,6 +42,7 @@ function Harness(props: {
     doc = source;
     missingDocRef.current = () => "unexpected";
   });
+
   return null;
 }
 
@@ -117,8 +118,10 @@ describe("useDocumentSource", () => {
     settleSlow: (slow: Deferred<string>) => void,
   ): Promise<void> {
     const slow = deferred<string>();
+
     const loadFileSource = (path: string): Promise<string> =>
       path === "docs/slow.md" ? slow.promise : Promise.resolve("# A");
+
     await show("docs/slow.md", loadFileSource);
     await show("docs/a.md", loadFileSource);
     settleSlow(slow);
@@ -133,8 +136,10 @@ describe("useDocumentSource", () => {
 
   it("drops a render that finishes after the selection moved on", async () => {
     heldRender.gate = deferred<void>();
+
     const loadFileSource = (path: string): Promise<string> =>
       Promise.resolve(path === "docs/held.md" ? HELD_SOURCE : "# A");
+
     try {
       await show("docs/held.md", loadFileSource);
       await show("docs/a.md", loadFileSource);

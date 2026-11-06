@@ -42,10 +42,12 @@ export function compareComments(
   const bAnchored = b.anchorY !== null;
   // Anchored comments always precede unanchored ones.
   if (aAnchored !== bAnchored) return aAnchored ? -1 : 1;
+
   // Both anchored: order by document position (top of the document first).
   if (aAnchored && bAnchored && a.anchorY !== b.anchorY) {
     return a.anchorY! - b.anchorY!;
   }
+
   // Same anchor position, or both unanchored: newest thread first.
   return b.createdAt - a.createdAt;
 }

@@ -33,10 +33,12 @@ export function useSelectionCopyLink(
 
   useEffect(() => {
     if (linkState !== "copied" && linkState !== "failed") return;
+
     const timer = window.setTimeout(
       () => settledRef.current?.(),
       LINK_RESULT_MS[linkState],
     );
+
     return () => window.clearTimeout(timer);
   }, [linkState]);
 
@@ -65,6 +67,7 @@ export function BlockedSelectionBubble(
   }>,
 ): ReactElement {
   const { top, left, block } = props;
+
   return (
     // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- Event-stopper: mousedown is only prevented so clicking the bubble keeps the text selection; the button inside is the interactive control.
     <div
@@ -94,6 +97,7 @@ export function SelectionLinkButton(
 ): ReactElement {
   const { linkState, linkResult, alone, onClick } = props;
   const linkText = linkResult ?? (alone ? "Copy link" : null);
+
   return (
     <button
       type="button"

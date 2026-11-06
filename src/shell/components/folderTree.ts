@@ -105,10 +105,13 @@ export function buildFolderTree<F extends { path: string }>(
   }
 
   const roots: TreeNode<F>[] = [];
+
   for (const child of root.children.values()) {
     roots.push(buildTreeNode(child, options?.folderOrders));
   }
+
   sortNodes(roots, ownOrder(options?.folderOrders, ""));
+
   return roots;
 }
 
@@ -130,8 +133,10 @@ function insertPath<F extends { path: string }>(
   segments: readonly string[],
 ): Building<F> {
   let cursor = root;
+
   for (const seg of segments) {
     let next = cursor.children.get(seg);
+
     if (!next) {
       next = {
         name: seg,
@@ -140,8 +145,10 @@ function insertPath<F extends { path: string }>(
       };
       cursor.children.set(seg, next);
     }
+
     cursor = next;
   }
+
   return cursor;
 }
 
@@ -151,6 +158,7 @@ function collapsibleChild<F extends { path: string }>(
 ): Building<F> | undefined {
   if (node.file !== undefined || node.children.size !== 1) return undefined;
   const onlyChild = [...node.children.values()][0]!;
+
   return onlyChild.file === undefined ? onlyChild : undefined;
 }
 
@@ -165,12 +173,14 @@ function buildTreeNode<F extends { path: string }>(
   if (node.file && node.children.size === 0) {
     return { kind: "file", file: node.file };
   }
+
   // Collapse: while this folder has exactly one child folder and no
   // file-of-its-own, fold that child up into ourselves. We accumulate
   // the display segments so the rendered label reflects the full
   // collapsed path.
   const displaySegments = [node.name];
   let work = node;
+
   for (
     let onlyChild = collapsibleChild(work);
     onlyChild;
@@ -179,11 +189,15 @@ function buildTreeNode<F extends { path: string }>(
     displaySegments.push(onlyChild.name);
     work = onlyChild;
   }
+
   const children: TreeNode<F>[] = [];
+
   for (const child of work.children.values()) {
     children.push(buildTreeNode(child, folderOrders));
   }
+
   sortNodes(children, ownOrder(folderOrders, work.full));
+
   return {
     kind: "dir",
     path: work.full,
@@ -220,6 +234,7 @@ function sortNodes<F extends { path: string }>(
     if (!aDir && bDir) return 1;
     const an = a.kind === "dir" ? a.displayName : basename(a.file.path);
     const bn = b.kind === "dir" ? b.displayName : basename(b.file.path);
+
     return an.toLowerCase().localeCompare(bn.toLowerCase());
   });
 }
@@ -236,6 +251,7 @@ function orderName<F extends { path: string }>(node: TreeNode<F>): string {
 
 function basename(p: string): string {
   const i = p.lastIndexOf("/");
+
   return i === -1 ? p : p.slice(i + 1);
 }
 
@@ -247,13 +263,16 @@ export function collectDirPaths<F extends { path: string }>(
   nodes: ReadonlyArray<TreeNode<F>>,
 ): string[] {
   const out: string[] = [];
+
   function walk(n: TreeNode<F>): void {
     if (n.kind === "dir") {
       out.push(n.path);
       for (const c of n.children) walk(c);
     }
   }
+
   for (const n of nodes) walk(n);
+
   return out;
 }
 
@@ -270,21 +289,26 @@ export function mergeWikiPages<F extends { path: string }>(
   nodes: ReadonlyArray<TreeNode<F>>,
 ): Array<TreeNode<F>> {
   const pagesByName = new Map<string, F>();
+
   for (const node of nodes) {
     if (node.kind === "file" && /\.md$/i.test(node.file.path)) {
       pagesByName.set(wikiPageName(node.file.path), node.file);
     }
   }
+
   const merged = new Set<F>();
   const out: Array<TreeNode<F>> = [];
+
   for (const node of nodes) {
     if (node.kind === "file") {
       out.push(node);
       continue;
     }
+
     const page = node.displayName.includes("/")
       ? undefined
       : pagesByName.get(node.displayName);
+
     if (page) merged.add(page);
     out.push({
       ...node,
@@ -292,5 +316,6 @@ export function mergeWikiPages<F extends { path: string }>(
       ...(page ? { page } : {}),
     });
   }
+
   return out.filter((node) => node.kind === "dir" || !merged.has(node.file));
 }

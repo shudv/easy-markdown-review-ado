@@ -47,6 +47,7 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown(
       "> [!NOTE]\n> The browser may omit capabilities.\n",
     );
+
     expect(html).toMatch(
       /<blockquote\b[^>]+class="markdown-alert markdown-alert-note"/,
     );
@@ -92,6 +93,7 @@ describe("renderMarkdown", () => {
       "</details>",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toMatch(/<details\b[^>]+open/);
     expect(html).toContain("<summary>Common question</summary>");
@@ -110,6 +112,7 @@ describe("renderMarkdown", () => {
       "</div>",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toContain('class="card-grid"');
     expect(html).toContain('class="card"');
@@ -128,6 +131,7 @@ describe("renderMarkdown", () => {
       const html = await renderMarkdown(
         `<a href="java${characterReference}script:alert(1)">Open</a>\n`,
       );
+
       expect(html).not.toContain("href=");
       expect(html).toContain('data-emr-blocked-scheme="control-character"');
     },
@@ -144,6 +148,7 @@ describe("renderMarkdown", () => {
       "<!-- safe comment is intentionally omitted -->",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toContain('id="start"');
     expect(html).toContain('title="Start"');
@@ -160,9 +165,11 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain('height="wide"');
     expect(html).toContain('aria-hidden="false"');
     expect(html).not.toContain("safe comment");
+
     const unsafeClassOnly = await renderMarkdown(
       '<span class="evil">Plain</span>\n',
     );
+
     expect(unsafeClassOnly).toMatch(/<span\b[^>]*>Plain<\/span>/);
     expect(unsafeClassOnly).not.toContain("evil");
   });
@@ -202,6 +209,7 @@ describe("renderMarkdown", () => {
         "",
       ].join("\n"),
     );
+
     expect(html).toMatch(/<details\b[^>]*>[\s\S]*Answer\.[\s\S]*<\/details>/);
   });
 
@@ -479,6 +487,7 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown(
       ["<Note>", "", "Keep **this text**.", "", "</Note>", ""].join("\n"),
     );
+
     expect(html).not.toContain("<note");
     expect(html).toMatch(/Keep <strong\b[^>]*>this text<\/strong>\./);
   });
@@ -495,6 +504,7 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown(
       '```js [[1, 3, "updateName"]]\nconst x = 1;\n```\n',
     );
+
     expect(html).toContain('data-code-meta="[[1, 3, &#x22;updateName&#x22;]]"');
   });
 
@@ -583,10 +593,12 @@ describe("renderMarkdown — collapsible sections & slugs", () => {
     expect(html).toMatch(
       /class="emr-section emr-section-level-1 emr-section--doc-title"/,
     );
+
     // The nested subsection is NOT a title.
     const subMatch = html.match(
       /<section[^>]*data-section-id="sub"[^>]*class="([^"]*)"|<section[^>]*class="([^"]*)"[^>]*data-section-id="sub"/,
     );
+
     expect(html).not.toMatch(/emr-section-level-2[^"]*emr-section--doc-title/);
     expect(subMatch).not.toBeNull();
   });
@@ -600,6 +612,7 @@ describe("renderMarkdown — collapsible sections & slugs", () => {
     const html = await renderMarkdown(
       "Intro paragraph.\n\n# Heading\n\nBody.\n",
     );
+
     expect(html).not.toContain("emr-section--doc-title");
   });
 
@@ -653,6 +666,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body text.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
 
     // A styled metadata card is emitted before the article body.
@@ -684,6 +698,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "# Heading",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toMatch(/<h1\b[^>]+data-source-line="6"/);
   });
@@ -699,6 +714,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "# Heading",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     const card = /<div class="emr-frontmatter"[^>]*>/.exec(html)?.[0] ?? "";
     expect(card).toMatch(/data-source-line="1"/);
@@ -716,10 +732,13 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
+
     const rows = [
       ...html.matchAll(/<div class="emr-frontmatter-row"[^>]*>/g),
     ].map((m) => m[0]);
+
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatch(
       /data-source-line="2"[^>]*data-source-end-line="2"/,
@@ -741,6 +760,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     const row = /<div class="emr-frontmatter-row"[^>]*>/.exec(html)?.[0] ?? "";
     expect(row).toMatch(/data-source-line="2"/);
@@ -759,6 +779,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
     const html = renderFrontmatterHtml([
       { key: "title", values: ["Doc"], startLine: 3 },
     ]);
+
     expect(html).toMatch(/data-source-line="3"/);
     expect(html).toMatch(/data-source-end-line="3"/);
   });
@@ -776,6 +797,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toContain(
       '<dd class="emr-frontmatter-value">alpha, beta</dd>',
@@ -796,6 +818,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toContain(
       '<dd class="emr-frontmatter-value">Quoted Title</dd>',
@@ -814,6 +837,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&#x3C;img");
@@ -849,6 +873,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
       "Body.",
       "",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     // The one valid pair renders; the comment / blank / malformed lines vanish.
     expect(html).toContain('<dt class="emr-frontmatter-key">title</dt>');
@@ -868,6 +893,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
     const md = ["---", "  - orphan", "title: Doc", "---", "", "Body.", ""].join(
       "\n",
     );
+
     const html = await renderMarkdown(md);
     expect(html).toContain('<dt class="emr-frontmatter-key">title</dt>');
     expect(html).not.toContain("orphan");
@@ -959,6 +985,7 @@ describe("parseFrontmatterListItems", () => {
     const fragment = ["  - Ada Lovelace", '  - "Grace Hopper"', "  - "].join(
       "\n",
     );
+
     expect(parseFrontmatterListItems(fragment)).toEqual([
       "Ada Lovelace",
       "Grace Hopper",

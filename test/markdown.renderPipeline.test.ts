@@ -37,6 +37,7 @@ describe("renderMarkdown — mention pills", () => {
     const html = await renderMarkdown(
       "See [#42](mention://workitem/42?stateColor=00ff00)",
     );
+
     expect(html).toMatch(
       /<a[^>]*class="[^"]*emr-mention emr-mention-workitem[^"]*"/,
     );
@@ -53,6 +54,7 @@ describe("renderMarkdown — mention pills", () => {
     const html = await renderMarkdown(
       "PR [!9](mention://pullrequest/9?status=active)",
     );
+
     expect(html).toMatch(
       /<span[^>]*class="emr-mention-state-dot emr-pr-state-active"/,
     );
@@ -70,11 +72,13 @@ describe("renderMarkdown — mention pills", () => {
     const html = await renderMarkdown(
       'WI [#1](mention://workitem/1?stateColor=red";<script>)',
     );
+
     // `sanitizeCssColor` allow-lists hex shapes and fails closed, so a hostile
     // value produces NO `style` attribute on the dot — nothing to break out of.
     const dot = html.match(
       /<span[^>]*class="emr-mention-state-dot"[^>]*><\/span>/,
     );
+
     expect(dot).not.toBeNull();
     expect(dot![0]).not.toContain("style=");
   });

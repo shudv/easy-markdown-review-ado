@@ -26,6 +26,7 @@ export function reconstructOriginalBlock(
         overlaps(blockStart, blockEnd, range.start, range.end),
     )
     .sort((a, b) => a.start - b.start);
+
   if (overlapping.length === 0) return null;
 
   const exact = overlapping.find(
@@ -34,6 +35,7 @@ export function reconstructOriginalBlock(
       range.end === blockEnd &&
       range.originalText != null,
   );
+
   if (exact) return exact.originalText!;
 
   if (originalSource === undefined || originalSource === "") return null;
@@ -42,6 +44,7 @@ export function reconstructOriginalBlock(
   if (overlapping.length === 1) {
     const range = overlapping[0]!;
     const currentSpan = range.end - range.start;
+
     if (
       range.originalStart != null &&
       range.originalEnd != null &&
@@ -51,7 +54,9 @@ export function reconstructOriginalBlock(
     ) {
       const originalBlockStart =
         range.originalStart + (blockStart - range.start);
+
       const originalBlockEnd = range.originalStart + (blockEnd - range.start);
+
       return sourceLines
         .slice(originalBlockStart - 1, originalBlockEnd)
         .join("\n");
@@ -69,13 +74,16 @@ export function reconstructOriginalBlock(
   ) {
     return null;
   }
+
   const first = overlapping[0]!;
   const last = overlapping[overlapping.length - 1]!;
   const originalBlockStart = first.originalStart! - (first.start - blockStart);
   const originalBlockEnd = last.originalEnd! + (blockEnd - last.end);
+
   if (originalBlockStart < 1 || originalBlockEnd < originalBlockStart) {
     return null;
   }
+
   return sourceLines.slice(originalBlockStart - 1, originalBlockEnd).join("\n");
 }
 
@@ -118,27 +126,34 @@ export function reconstructEditedBlock(
   }: InteriorEditSources,
 ): InteriorEdit | null {
   if (!canDiffInPlace(el)) return null;
+
   const deletions = deletedRanges.filter(
     (range) => range.startLine > start && range.startLine <= end,
   );
+
   const touching = ranges.filter((range) =>
     overlaps(start, end, range.start, range.end),
   );
+
   if (deletions.length === 0 && !blockPredatesAddition(touching, start, end)) {
     return null;
   }
+
   const lines = rebuildOriginalLines(
     { start, end, deletions, touching },
     currentLines,
   );
+
   if (!lines) return null;
   const original = lines.join("\n");
   // An edit that joined or split blocks reads better as separate changes.
   const rendered = renderOriginalStandalone(el, original, renderInline);
   if (rendered.children.length !== 1) return null;
+
   if (el.tagName === "LI" && rendered.querySelectorAll("li").length !== 1) {
     return null;
   }
+
   return { original, deletions };
 }
 
@@ -172,9 +187,11 @@ function blockPredatesAddition(
   end: number,
 ): boolean {
   if (!touching.some((range) => range.kind === "added")) return false;
+
   for (let line = start; line <= end; line++) {
     if (changeRangeAt(touching, line)?.kind !== "added") return true;
   }
+
   return false;
 }
 
@@ -183,17 +200,21 @@ function rebuildOriginalLines(
   currentLines: readonly string[],
 ): string[] | null {
   const lines: string[] = [];
+
   for (let line = edits.start; line <= edits.end; line++) {
     const deleted = deletedLinesAt(edits.deletions, line);
     if (!deleted) return null;
     lines.push(...deleted);
     const range = changeRangeAt(edits.touching, line);
+
     const restored = range
       ? originalRangeLines(range, line, edits)
       : currentLineAt(currentLines, line);
+
     if (!restored) return null;
     lines.push(...restored);
   }
+
   return lines;
 }
 
@@ -203,6 +224,7 @@ function deletedLinesAt(
   line: number,
 ): string[] | null {
   const lines: string[] = [];
+
   for (const deletion of deletions) {
     if (deletion.startLine !== line) continue;
     if (deletion.deletedContent == null) return null;
@@ -210,6 +232,7 @@ function deletedLinesAt(
       ...deletion.deletedContent.replace(/\r?\n$/, "").split(/\r\n|\r|\n/),
     );
   }
+
   return lines;
 }
 
@@ -224,6 +247,7 @@ function originalRangeLines(
   block: { start: number; end: number },
 ): string[] | null {
   if (range.kind === "added") return [];
+
   if (
     range.start < block.start ||
     range.end > block.end ||
@@ -231,6 +255,7 @@ function originalRangeLines(
   ) {
     return null;
   }
+
   return line === range.start ? range.originalText.split(/\r\n|\r|\n/) : [];
 }
 
@@ -242,6 +267,7 @@ function currentLineAt(
     line >= 1 && line <= currentLines.length
       ? currentLines[line - 1]
       : undefined;
+
   return current == null ? null : [current];
 }
 
@@ -257,11 +283,13 @@ export function soleModifiedRange(
   ranges: readonly ChangeRange[],
 ): ChangeRange | null {
   let found: ChangeRange | null = null;
+
   for (const r of ranges) {
     if (r.kind !== "modified") continue;
     if (!overlaps(start, end, r.start, r.end)) continue;
     if (found) return null;
     found = r;
   }
+
   return found;
 }

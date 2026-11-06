@@ -48,8 +48,10 @@ describe("IdentityStore — ensure / resolve", () => {
     const resolver = vi.fn<IdentityResolver>(async (ids) => {
       const out: Record<string, { displayName: string }> = {};
       for (const id of ids) out[id] = { displayName: `Name ${id}` };
+
       return out;
     });
+
     const s = new IdentityStore(resolver);
     s.ensure(["id1", "id2"]);
     s.ensure(["id2", "id3"]); // id2 already queued; id3 new
@@ -89,11 +91,14 @@ describe("IdentityStore — ensure / resolve", () => {
     // and (b) key both forms to one entry so a pill carrying either resolves.
     const DASHED = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
     const ENTITY = "vss.ds.v1.ims.user.6b71186cc2e66813b4e0ffcd511163f4";
+
     const resolver = vi.fn<IdentityResolver>(async (ids) => {
       const out: Record<string, { displayName: string }> = {};
       for (const id of ids) out[id] = { displayName: "Grace Hopper" };
+
       return out;
     });
+
     const s = new IdentityStore(resolver);
     s.ensure([ENTITY]);
     await Promise.resolve();
@@ -122,6 +127,7 @@ describe("IdentityStore — ensure / resolve", () => {
       // @ts-expect-error — simulate a malformed/empty entry from the service
       bad: { displayName: "" },
     });
+
     const s = new IdentityStore(resolver);
     s.ensure(["good", "bad"]);
     await Promise.resolve();
@@ -133,11 +139,14 @@ describe("IdentityStore — ensure / resolve", () => {
   it("swallows resolver errors and clears the pending set for retry", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     let calls = 0;
+
     const resolver: IdentityResolver = async () => {
       calls++;
       if (calls === 1) throw new Error("boom");
+
       return { z: { displayName: "Zed" } };
     };
+
     const s = new IdentityStore(resolver);
     s.ensure(["z"]);
     await Promise.resolve();
@@ -165,6 +174,7 @@ describe("hydrateUserMentions", () => {
       `<span class="emr-mention emr-mention-user" ` +
       `data-mention-kind="user" data-mention-id="${id}">@${id}</span>`;
     document.body.appendChild(root);
+
     return root;
   }
 

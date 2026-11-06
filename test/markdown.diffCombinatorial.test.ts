@@ -30,14 +30,18 @@ function renderCase(
 ): RenderedCase {
   const root = document.createElement("div");
   root.className = "markdown-body emr-rendered";
+
   const source =
     context === "paragraph"
       ? current
       : ["| Value |", "| --- |", `| ${current} |`].join("\n");
+
   root.innerHTML = renderMarkdownSync(source);
+
   const target = root.querySelector<HTMLElement>(
     context === "paragraph" ? "p" : "tbody td",
   )!;
+
   const currentText = target.textContent;
   decorateDiffRanges(
     root,
@@ -51,6 +55,7 @@ function renderCase(
     ],
     { renderInline: renderMarkdownSync },
   );
+
   return { root, target, currentText };
 }
 
@@ -65,9 +70,11 @@ function expectPreciseAndClear(
   rendered: RenderedCase,
 ): void {
   expect(rendered.root.querySelector(".emr-diff-before-trigger")).toBeNull();
+
   if (context === "paragraph") {
     expect(rendered.target.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
   }
+
   decorateDiffRanges(rendered.root, [], { renderInline: renderMarkdownSync });
   expect(rendered.root.querySelector(`.${DIFF_TOOLTIP_CLASS}`)).toBeNull();
   expect(rendered.root.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
@@ -274,13 +281,16 @@ describe.each<InlineContext>(["paragraph", "table-cell"])(
     it.each(sharedCases)("$name", (scenario) => {
       const rendered = renderCase(context, scenario.current, scenario.original);
       scenario.assert(rendered.root, rendered.target);
+
       const hasInlineSignal = Array.from(
         rendered.target.querySelectorAll(
           `.${WORD_ADDED_CLASS}, .${WORD_REMOVED_CLASS}, .${DIFF_FORMAT_CLASS}`,
         ),
       ).some((element) => element.closest(`.${DIFF_METADATA_CLASS}`) == null);
+
       const hasMetadataSignal =
         rendered.root.querySelector(`.${DIFF_METADATA_CLASS}`) != null;
+
       expect(hasInlineSignal).toBe(scenario.mode !== "metadata");
       expect(hasMetadataSignal).toBe(scenario.mode !== "inline");
       // Cell classes only ever apply to table cells; a paragraph never has them.
@@ -303,6 +313,7 @@ describe("context-specific confidence policies", () => {
       "Current ![Architecture](https://example.com/v2.png)",
       "Legacy ![Architecture](https://example.com/v1.png)",
     );
+
     expect(
       paragraph.root.querySelector(".emr-diff-before-trigger"),
     ).not.toBeNull();
@@ -313,6 +324,7 @@ describe("context-specific confidence policies", () => {
       "Current ![Architecture](https://example.com/v2.png)",
       "Legacy ![Architecture](https://example.com/v1.png)",
     );
+
     expect(markText(cell.root, WORD_REMOVED_CLASS)).toContain("Legacy");
     expect(markText(cell.root, WORD_ADDED_CLASS)).toContain("Current");
     expect(cell.root.querySelector(`.${DIFF_METADATA_CLASS}`)).not.toBeNull();

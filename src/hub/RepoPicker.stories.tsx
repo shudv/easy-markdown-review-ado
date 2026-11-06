@@ -68,13 +68,16 @@ export const StablePagination: Story = {
     const trigger = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-docnav-repo-btn",
     )!;
+
     const chevron = trigger.querySelector<SVGElement>(
       ".emr-docnav-repo-chevron",
     )!;
+
     // Browser tests use a real pointer, which can rest over the centered trigger.
     const restingOpacity = trigger.matches(":hover, :focus-visible")
       ? "0.75"
       : "0";
+
     expect(getComputedStyle(chevron).opacity).toBe(restingOpacity);
     expect(chevron.getBoundingClientRect().width).toBe(16);
     expect(
@@ -83,15 +86,19 @@ export const StablePagination: Story = {
     ).toBeCloseTo(5, 1);
     await userEvent.click(trigger);
     expect(getComputedStyle(chevron).opacity).toBe("0.75");
+
     const list = await waitFor(() => {
       const element = document.querySelector<HTMLElement>(
         ".emr-docnav-repo-list",
       );
+
       if (!element || element.scrollHeight <= element.clientHeight) {
         throw new Error("repository list is not scrollable");
       }
+
       return element;
     });
+
     const heightBeforeLoading = list.scrollHeight;
 
     list.scrollTop = list.scrollHeight;
@@ -116,10 +123,12 @@ const filterCalls = fn();
 /** A paginated host that applies `onFilter` like DocumentsHubApp does. */
 function FilteringPicker(): ReactElement {
   const [filter, setFilter] = useState("");
+
   const handleFilter = useCallback((text: string) => {
     filterCalls(text);
     setFilter(text);
   }, []);
+
   return (
     <div style={{ width: 260 }}>
       <RepoPicker
@@ -143,13 +152,17 @@ export const FilterResetsOnceOnClose: Story = {
     await userEvent.click(
       canvasElement.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!,
     );
+
     const input = await waitFor(() => {
       const el = document.querySelector<HTMLInputElement>(
         ".emr-docnav-repo-filter-input",
       );
+
       if (!el) throw new Error("filter input not shown");
+
       return el;
     });
+
     await userEvent.type(input, "rep");
     await waitFor(() => expect(filterCalls).toHaveBeenCalledWith("rep"));
     await userEvent.keyboard("{Escape}");

@@ -132,6 +132,7 @@ export class LocalOnlyCommentApi implements CommentApi {
   async createThread(_input: NewThreadInput): Promise<CreatedThreadIds> {
     const n = ++this.threadCounter;
     const threadId = `t-local-${n}`;
+
     return {
       threadId,
       firstCommentId: `${threadId}-c1`,
@@ -219,12 +220,15 @@ export function filterByQuery<T>(
   // fast path doesn't change the output.
   if (!q) return items.slice(0, 8);
   const matches: { item: T; score: number }[] = [];
+
   for (const item of items) {
     const hay = keys(item).join(" ").toLowerCase();
     const idx = hay.indexOf(q);
     if (idx >= 0) matches.push({ item, score: idx });
   }
+
   matches.sort((a, b) => a.score - b.score);
+
   return matches.slice(0, 8).map((m) => m.item);
 }
 
@@ -247,10 +251,12 @@ export const CommentApiProvider = CommentApiContext.Provider;
  */
 export function useCommentApi(): CommentApi {
   const api = useContext(CommentApiContext);
+
   if (!api) {
     throw new Error(
       "useCommentApi must be used inside <CommentApiProvider value={...}>",
     );
   }
+
   return api;
 }

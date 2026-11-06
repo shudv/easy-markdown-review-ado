@@ -60,6 +60,7 @@ describe("add comment draft targets", () => {
       threadId: NEW_DRAFT_THREAD_ID,
       anchor,
     };
+
     expect(addCommentDraftTarget(selected, "docs/a.md")).toBe(selected);
   });
 
@@ -212,6 +213,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("blocked");
       });
+
     expect(loadDraft("pr")).toBeNull();
     spy.mockRestore();
   });
@@ -222,6 +224,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("quota");
       });
+
     expect(() => saveDraft("pr", newDraft())).not.toThrow();
     spy.mockRestore();
   });
@@ -232,6 +235,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("blocked");
       });
+
     expect(() => clearDraft("pr")).not.toThrow();
     spy.mockRestore();
   });

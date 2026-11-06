@@ -29,6 +29,7 @@ function fakeSink() {
     trackException: vi.fn((info) => sink.exceptionCalls.push(info)),
     flush: vi.fn(),
   };
+
   return sink;
 }
 
@@ -60,6 +61,7 @@ describe("error reliability denominator", () => {
       source: "unit",
       children: createElement("div"),
     });
+
     boundary.componentDidCatch(new Error("render failed"), {
       componentStack: "at Unit",
     });
@@ -198,6 +200,7 @@ describe("rejectionTypeOf", () => {
         },
       },
     );
+
     expect(rejectionTypeOf(hostile)).toBe("object:opaque");
   });
 });

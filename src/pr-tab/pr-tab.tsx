@@ -48,6 +48,7 @@ if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
 // just the time to kick off React. `markAppReady()` fires later — from Shell
 // when the first document renders, or from PrTabApp for empty/error states.
 markBootStart();
+
 // Tag this boot if it is the reload we triggered to escape the token dead
 // window, so telemetry shows whether that reload actually worked.
 if (followsRecentAutoReload(sessionStorageOrUndefined(), Date.now())) {

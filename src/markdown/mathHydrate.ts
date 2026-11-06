@@ -34,6 +34,7 @@ function getKatex(): Promise<KatexApi> {
         import(/* webpackChunkName: "katex" */ "katex/dist/katex.min.css"),
       ]),
     );
+
     // A CommonJS-interop namespace exposes the API without a `default`.
     return (mod as { default?: KatexApi }).default ?? (mod as KatexApi);
   })().catch((error: unknown) => {
@@ -42,6 +43,7 @@ function getKatex(): Promise<KatexApi> {
     katexPromise = null;
     throw error;
   });
+
   return katexPromise;
 }
 
@@ -52,15 +54,18 @@ export async function hydrateMath(
   const placeholders = Array.from(
     root.querySelectorAll<HTMLElement>(".emr-math[data-math-src]"),
   ).filter((element) => element.dataset.hydrated !== "true");
+
   if (placeholders.length === 0) return;
 
   let katex: KatexApi;
+
   try {
     katex = await loadKatex();
   } catch (error) {
     for (const element of placeholders) {
       element.dataset.mathError = "load-failed";
     }
+
     console.warn("[math] failed to load KaTeX:", error);
     trackUserFacingError({
       error,
@@ -68,6 +73,7 @@ export async function hydrateMath(
       operation: "math-library-load",
       impact: "degraded",
     });
+
     return;
   }
 
@@ -76,6 +82,7 @@ export async function hydrateMath(
     // An empty `data-math-src` has nothing to render; keep its fallback.
     if (encoded === undefined || encoded === "") continue;
     let source: string;
+
     try {
       source = decodeURIComponent(encoded);
     } catch {
@@ -92,6 +99,7 @@ export async function hydrateMath(
         maxExpand: 1000,
         maxSize: 20,
       });
+
       element.removeAttribute("data-math-error");
       element.dataset.hydrated = "true";
       const template = document.createElement("template");

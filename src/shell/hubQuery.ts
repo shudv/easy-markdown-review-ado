@@ -39,6 +39,7 @@ export function parseHubQuery(
   const project = params[HUB_QUERY_KEYS.project];
   const path = params[HUB_QUERY_KEYS.path];
   if (!repositoryId || !project || !path) return null;
+
   return {
     repositoryId,
     repositoryName: params[HUB_QUERY_KEYS.repositoryName] || undefined,

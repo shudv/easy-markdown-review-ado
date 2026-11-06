@@ -45,6 +45,7 @@ afterEach(() => {
     act(() => root!.unmount());
     root = null;
   }
+
   container?.remove();
   container = null;
 });
@@ -71,10 +72,13 @@ describe("useCommentApi", () => {
   it("returns the provider's value to descendants", () => {
     const api = { marker: "the-api" } as unknown as CommentApi;
     let seen: CommentApi | null = null;
+
     function Consumer(): null {
       seen = useCommentApi();
+
       return null;
     }
+
     mount(
       createElement(
         CommentApiProvider,
@@ -87,10 +91,13 @@ describe("useCommentApi", () => {
 
   it("throws when used without a provider", () => {
     let captured: Error | null = null;
+
     function Consumer(): null {
       useCommentApi();
+
       return null;
     }
+
     mount(
       createElement(
         Boundary,
@@ -115,6 +122,7 @@ describe("useMentionLinkHydration", () => {
   function Inner(): ReactElement {
     const ref = useRef<HTMLDivElement>(null);
     useMentionLinkHydration(ref, []);
+
     return createElement("div", {
       ref,
       dangerouslySetInnerHTML: {

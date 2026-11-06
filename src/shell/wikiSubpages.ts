@@ -44,6 +44,7 @@ export async function loadWikiSubpages(
       operation: "subpages-load",
       impact: "degraded",
     });
+
     return undefined;
   }
 }

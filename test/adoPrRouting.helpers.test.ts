@@ -18,6 +18,7 @@ import {
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -35,6 +36,7 @@ const repo = {
   defaultBranch: "refs/heads/main",
   webUrl: "https://dev.azure.com/o/p/_git/Docs",
 } as GitRepository;
+
 const noBranch = { ...repo, defaultBranch: "" } as GitRepository;
 
 function pr(id: number, closed: string, status = 3): GitPullRequest {
@@ -48,8 +50,10 @@ function pr(id: number, closed: string, status = 3): GitPullRequest {
 }
 
 type Reply<T> = T | Error;
+
 const answer = async <T>(r: Reply<T>): Promise<T> => {
   if (r instanceof Error) throw r;
+
   return r;
 };
 
@@ -89,6 +93,7 @@ describe("mostRecentRoutingPr", () => {
     const client = fakeClient({
       prs: [pr(1, "2024-01-01"), pr(2, "2024-03-01"), pr(3, "2024-05-01", 1)],
     });
+
     const found = await mostRecentRoutingPr(scopeFor(client), repo);
     expect(found?.pullRequestId).toBe(2);
     expect(client.getPullRequests).toHaveBeenCalledWith(
@@ -106,6 +111,7 @@ describe("mostRecentRoutingPr", () => {
       scopeFor(fakeClient({ prs: failure() })),
       repo,
     );
+
     expect(found).toBeNull();
     expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "repository-pr-routing" }),
@@ -117,6 +123,7 @@ describe("mostRecentRoutingPr", () => {
       scopeFor(fakeClient({ prs: [null] })),
       repo,
     );
+
     expect(found).toBeNull();
     expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
   });
@@ -131,10 +138,12 @@ describe("routingPrForDoc", () => {
 
   it("routes to the PR that merged the file's last commit", async () => {
     const merged = pr(7, "2024-02-01");
+
     const client = fakeClient({
       commits: [{ commitId: "c1" }],
       query: { results: [{ c1: [merged] }] },
     });
+
     await expect(
       routingPrForDoc(scopeFor(client), repo, "/docs/a.md/"),
     ).resolves.toBe(merged);
@@ -157,11 +166,13 @@ describe("routingPrForDoc", () => {
 
   it("falls back to the repo's latest PR when the commit has no PR", async () => {
     const latest = pr(9, "2024-04-01");
+
     const client = fakeClient({
       commits: [{ commitId: "c1" }],
       query: { results: [{}] },
       prs: [latest],
     });
+
     await expect(
       routingPrForDoc(scopeFor(client), repo, "/a.md"),
     ).resolves.toEqual(latest);
@@ -213,10 +224,12 @@ describe("docPrHistory", () => {
         results: [{ c2: [pr(2, "2024-03-01")], c1: [pr(1, "2024-01-01")] }],
       },
     });
+
     const refs = await docPrHistory(scopeFor(client), repo, "/a.md", {
       top: 2,
       skip: 4,
     });
+
     expect(refs.map((r) => [r.prId, r.commitId, r.url])).toEqual([
       [2, "m2", "https://dev.azure.com/o/p/_git/Docs/pullrequest/2"],
       [1, "m1", "https://dev.azure.com/o/p/_git/Docs/pullrequest/1"],

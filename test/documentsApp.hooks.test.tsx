@@ -23,6 +23,7 @@ const telemetry = vi.hoisted(() => ({
   setTelemetryContext: vi.fn(),
   trackUserFacingError: vi.fn(),
 }));
+
 vi.mock("../src/telemetry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/telemetry")>()),
   ...telemetry,
@@ -36,13 +37,17 @@ let roots: Root[] = [];
 
 function renderHook<P, R>(hook: (props: P) => R, initial: P) {
   const result = { current: undefined as unknown as R };
+
   function Host({ props }: { props: P }): null {
     result.current = hook(props);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(<Host props={initial} />));
+
   return {
     result,
     rerender: (props: P) => act(() => root.render(<Host props={props} />)),
@@ -86,12 +91,14 @@ describe("useSelectedRepo", () => {
 
   it("selects the initial repo, syncs telemetry and loads skeleton details", () => {
     const onLoad = vi.fn(async () => {});
+
     const { result } = run([
       [repo("a"), repo("b", { detailsLoaded: false })],
       "b",
       undefined,
       onLoad,
     ]);
+
     expect(result.current.selectedRepoId).toBe("b");
     expect(result.current.selectedRepo?.id).toBe("b");
     expect(telemetry.setTelemetryContext).toHaveBeenCalledWith({
@@ -162,13 +169,16 @@ describe("useLazyTree", () => {
       "/docs": { files: [], folders: ["docs/guide"], order: ["guide"] },
       "docs/guide": { files: [file("/docs/guide/a.md")], folders: [] },
     };
-    const onExpand = vi.fn(async (_repoId: string, path: string) => {
-      return listings[path]!;
-    });
+
+    const onExpand = vi.fn(
+      async (_repoId: string, path: string) => listings[path]!,
+    );
+
     const { result } = run([
       repo("a", { topLevelFolders: ["/docs"] }),
       onExpand,
     ]);
+
     await flush();
     await flush();
     expect(onExpand.mock.calls).toEqual([
@@ -183,13 +193,15 @@ describe("useLazyTree", () => {
   });
 
   it("skips auto-expand for skeletons, unseeded repos and visible docs", async () => {
-    const onExpand = vi.fn(async (): Promise<FolderListing> => {
-      return { files: [], folders: [] };
-    });
+    const onExpand = vi.fn(
+      async (): Promise<FolderListing> => ({ files: [], folders: [] }),
+    );
+
     const { rerender } = run([
       repo("a", { topLevelFolders: ["/x"], detailsLoaded: false }),
       onExpand,
     ]);
+
     rerender([
       repo("b", { files: [file("/b.md")], topLevelFolders: ["/x"] }),
       onExpand,
@@ -200,9 +212,11 @@ describe("useLazyTree", () => {
 
   it("reports a failed expansion and leaves the tree as-is", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const onExpand = vi.fn(async (): Promise<FolderListing> => {
       throw new Error("boom");
     });
+
     const { result } = run([repo("a", { files: [file("/a.md")] }), onExpand]);
     await act(async () => {
       await expect(result.current.handleExpandFolder("/x")).resolves.toBeNull();
@@ -216,12 +230,14 @@ describe("useLazyTree", () => {
 
   it("drops a listing whose repo entry was evicted mid-flight", async () => {
     let resolveListing: (listing: FolderListing) => void = () => {};
+
     const onExpand = vi.fn(
       () =>
         new Promise<FolderListing>((resolve) => {
           resolveListing = resolve;
         }),
     );
+
     const { result } = run([repo("a", { files: [file("/a.md")] }), onExpand]);
     const pending = result.current.handleExpandFolder("/x");
     act(() => result.current.setLazyTreeByRepo(new Map()));
@@ -234,9 +250,11 @@ describe("useLazyTree", () => {
 
   it("stops auto-expanding once the per-repo budget is spent", async () => {
     const folders = Array.from({ length: 41 }, (_, i) => `/f${i}`);
-    const onExpand = vi.fn(async (): Promise<FolderListing> => {
-      return { files: [], folders: [] };
-    });
+
+    const onExpand = vi.fn(
+      async (): Promise<FolderListing> => ({ files: [], folders: [] }),
+    );
+
     run([repo("a", { topLevelFolders: folders }), onExpand]);
     await flush();
     await flush();
@@ -247,6 +265,7 @@ describe("useLazyTree", () => {
 describe("useActiveDocPath", () => {
   type P = Parameters<typeof useActiveDocPath>;
   const run = (args: P) => renderHook((p: P) => useActiveDocPath(...p), args);
+
   const pr = (paths: string[]): PrInfo =>
     ({ prId: 0, title: "", authorName: "", files: paths.map(file) }) as PrInfo;
 
@@ -276,6 +295,7 @@ describe("useActiveDocPath", () => {
       undefined,
       undefined,
     ]);
+
     expect(result.current[0]).toBe("/a.md");
     act(() => result.current[1]("/other.md"));
     expect(result.current[0]).toBe("/other.md");
@@ -365,6 +385,7 @@ describe("useRepoBindings", () => {
       loadThreadsFor: vi.fn(async () => []),
       loadFileSource: vi.fn(async () => ""),
     };
+
     const { result } = run([props, repo("r1"), true]);
     const b = result.current;
     expectNothingBound(b);

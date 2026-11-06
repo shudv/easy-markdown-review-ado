@@ -47,6 +47,7 @@ export class ErrorBoundary extends Component<
   override render(): ReactNode {
     if (!this.state.hasError) return this.props.children;
     if (this.props.fallback !== undefined) return this.props.fallback;
+
     return (
       <div
         role="alert"

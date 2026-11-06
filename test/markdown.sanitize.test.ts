@@ -17,6 +17,7 @@ function sanitizeElement(el: Element): Element {
   const tree: Root = { type: "root", children: [el] };
   const transform = rehypeSanitizeUrls() as unknown as (t: Root) => void;
   transform(tree);
+
   return tree.children[0] as Element;
 }
 
@@ -25,9 +26,11 @@ function relTokens(el: Element): string[] {
   // but this helper must also report a non-array value the sanitizer under
   // test might emit.
   const rel = el.properties.rel as Properties[string];
+
   const raw = Array.isArray(rel)
     ? rel.map(String).join(" ")
     : String(rel ?? "");
+
   return raw.split(/\s+/).filter(Boolean).sort();
 }
 
@@ -49,6 +52,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         "[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)",
       );
+
       expect(html).not.toMatch(/href="data:/i);
       expect(html).toContain("data-emr-blocked-scheme");
     });
@@ -87,6 +91,7 @@ describe("renderMarkdown — security", () => {
           "[e](ftp://files.example.com/x)",
         ].join("\n\n"),
       );
+
       expect(html).toContain('href="https://example.com"');
       expect(html).toContain('href="http://example.com"');
       expect(html).toContain('href="mailto:nobody@example.com"');
@@ -98,6 +103,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         ["[a](#section)", "[b](./other.md)", "[c](/abs/path)"].join("\n\n"),
       );
+
       expect(html).toContain('href="#section"');
       expect(html).toContain('href="./other.md"');
       expect(html).toContain('href="/abs/path"');
@@ -121,6 +127,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         "![x](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxzY3JpcHQ%2BYWxlcnQoMSk8L3NjcmlwdD48L3N2Zz4=)",
       );
+
       expect(html).not.toMatch(/src="data:/i);
       expect(html).toContain("data-emr-blocked-scheme");
     });
@@ -129,6 +136,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         "![x](data:text/html,<script>alert(1)</script>)",
       );
+
       expect(html).not.toMatch(/src="data:/i);
       expect(html).toContain("data-emr-blocked-scheme");
     });
@@ -142,6 +150,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         "![meaningful alt](javascript:alert(1))",
       );
+
       expect(html).toContain('alt="meaningful alt"');
       expect(html).not.toMatch(/src="javascript:/i);
     });
@@ -150,6 +159,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         "![logo](https://example.com/logo.png)",
       );
+
       expect(html).toContain('src="https://example.com/logo.png"');
     });
   });
@@ -164,6 +174,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         'Hi <iframe src="https://evil.example/"></iframe> there',
       );
+
       expect(html).not.toMatch(/<iframe/i);
     });
 
@@ -171,6 +182,7 @@ describe("renderMarkdown — security", () => {
       const html = await renderMarkdown(
         'Hi <a href="https://example.com" onclick="alert(1)">x</a>',
       );
+
       expect(html).not.toMatch(/onclick=/i);
     });
 
@@ -179,6 +191,7 @@ describe("renderMarkdown — security", () => {
         '<object data="javascript:alert(1)"></object>' +
           '<embed src="javascript:alert(1)" />',
       );
+
       expect(html).not.toMatch(/<object/i);
       expect(html).not.toMatch(/<embed/i);
     });
@@ -200,6 +213,7 @@ describe("renderMarkdown — security", () => {
         properties: { href: "https://example.com", target: "_blank" },
         children: [],
       });
+
       expect(relTokens(out)).toEqual(["noopener", "noreferrer"]);
     });
 
@@ -214,6 +228,7 @@ describe("renderMarkdown — security", () => {
         },
         children: [],
       });
+
       expect(relTokens(out)).toEqual([
         "author",
         "help",
@@ -233,6 +248,7 @@ describe("renderMarkdown — security", () => {
         },
         children: [],
       });
+
       expect(relTokens(out)).toEqual(["author", "noopener", "noreferrer"]);
     });
 
@@ -245,6 +261,7 @@ describe("renderMarkdown — security", () => {
         properties: { href: "https://example.com", target: "" },
         children: [],
       });
+
       expect(out.properties.rel).toBeUndefined();
     });
 
@@ -257,6 +274,7 @@ describe("renderMarkdown — security", () => {
         properties: { target: "_blank" },
         children: [],
       });
+
       expect(out.properties).not.toHaveProperty("dataEmrBlockedScheme");
       expect(relTokens(out)).toEqual(["noopener", "noreferrer"]);
     });
@@ -272,6 +290,7 @@ describe("renderMarkdown — security", () => {
         properties: { alt: "x", srcset: "a.png 1x, b.png 2x" },
         children: [],
       });
+
       expect(out.properties).not.toHaveProperty("dataEmrBlockedScheme");
       expect(out.properties.srcset).toBeUndefined();
     });

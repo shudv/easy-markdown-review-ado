@@ -5,5 +5,6 @@ import type { TextQuoteAnchor } from "../types";
 export function anchorKindOf(anchor: TextQuoteAnchor): AnchorKind {
   if (anchor.exact && anchor.exact.length > 0) return "text-quote";
   if (anchor.line !== undefined) return "line";
+
   return "file-level";
 }

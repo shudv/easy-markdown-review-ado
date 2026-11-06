@@ -35,15 +35,18 @@ export function decorateFrontmatterValue(
   // Resolve the pre-edit value text. A wholly-added row has no "before", so we
   // diff against an empty string — every word reads as added (green).
   let originalText = "";
+
   if (kind === "modified") {
     const key = el.querySelector(".emr-frontmatter-key")?.textContent.trim();
     if (key === undefined || key === "") return false;
+
     const resolved = resolveFrontmatterOriginalValue(
       key,
       modifiedText,
       row,
       changeRanges,
     );
+
     if (resolved == null) return false;
     originalText = resolved;
   }
@@ -56,6 +59,7 @@ export function decorateFrontmatterValue(
   // green-new rather than a flat wash.
   const ops = diffWords(originalText, modifiedText);
   const res = applyInlineWordDiff(valueEl, ops);
+
   return res != null && res.added + res.removed > 0;
 }
 
@@ -85,6 +89,7 @@ function resolveFrontmatterOriginalValue(
       r.originalText != null &&
       overlaps(rowStart, rowEnd, r.start, r.end),
   );
+
   if (overlapping.length === 0) return null;
 
   // Shape 1: a fragment that carries the `key:` line resolves the value whole.
@@ -100,6 +105,7 @@ function resolveFrontmatterOriginalValue(
   const firstItemLine = rowStart + 1;
   const originalItems = currentText === "" ? [] : currentText.split(", ");
   const sorted = [...overlapping].sort((a, b) => b.start - a.start);
+
   for (const r of sorted) {
     const startIdx = r.start - firstItemLine;
     if (startIdx < 0) return null; // Can't map the fragment onto an item slot.
@@ -110,5 +116,6 @@ function resolveFrontmatterOriginalValue(
       ...parseFrontmatterListItems(r.originalText!),
     );
   }
+
   return frontmatterValueText(originalItems);
 }

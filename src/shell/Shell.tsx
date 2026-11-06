@@ -81,6 +81,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   const [selectedPath, setSelectedPath] = useState<string>(() =>
     pickInitialPath(props.initialSelectedPath, pr.files),
   );
+
   // Effective CommentApi, routed-PR pill and shared identity store for the
   // selected document.
   const routing = useCommentApiRouting({
@@ -90,8 +91,10 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     routedPrForPath: props.routedPrForPath,
     selectedPath,
   });
+
   const { identityStore, commentApi, routedPrResolution, effectiveRoutedPr } =
     routing;
+
   const { effectiveReadOnly, effectiveReadOnlyMessage } = documentReadOnly(
     props.readOnly,
     props.readOnlyMessage,
@@ -110,10 +113,12 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   // this surface: PR tab vs Documents hub).
   const prefs = useReaderPrefs(props.draftScope);
   const { readerPrefs } = prefs;
+
   const { bodyFrameRef, commentsAvailableRef, ...resize } = usePaneResize(
     readerPrefs,
     prefs.setReaderPrefs,
   );
+
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // The routed-PR pill is redundant in the PR tab (comments obviously belong to
@@ -137,6 +142,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     revealComments: prefs.revealComments,
     setActiveThreadId,
   });
+
   const { dismissEmptyDraftRef, setDraftY } = drafts;
 
   const history = useReviewHistory({
@@ -151,6 +157,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     onIterationRangeChange: props.onIterationRangeChange,
     loadRangeChanges: props.loadRangeChanges,
   });
+
   const { nativeIterationMode, viewingHistorical, activeStop } = history;
 
   const store = useThreadStore({
@@ -164,6 +171,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     threadSyncIntervalMs: props.threadSyncIntervalMs,
     onRefreshFiles: props.onRefreshFiles,
   });
+
   const { threadState, threadSync } = store;
 
   const historical = useHistoryLoaders({
@@ -177,6 +185,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
 
   const doc = useDocumentSource(selectedPath, loadFileSource);
   const { htmlByPath, renderVersion } = doc;
+
   const [navigationActivities, setNavigationActivities] = useState<
     readonly ReaderActivity[]
   >([]);
@@ -232,6 +241,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   // -------------------------------------------------------------------------
   const scroll = useDocScroll(selectedPath);
   const { scrollDocToHash, scrollDocToText } = scroll;
+
   const nav = useDocNavigation({
     initialActiveThreadId: props.initialActiveThreadId,
     initialAnchor: props.initialAnchor,
@@ -256,6 +266,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   // placed after the active article's render state (`articleReady`).
 
   const links = useLinkCopy(props.onHeadingLinkCopied, props.onTextLinkCopied);
+
   const selection = useThreadSelection({
     setActiveThreadId,
     scrollDocToAnchor: scroll.scrollDocToAnchor,
@@ -267,6 +278,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   });
 
   const writes = useCommentWrites();
+
   const posting = useCommentPosting({
     commentApi,
     persistWith: writes.persistWith,
@@ -283,6 +295,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     setDraftY,
     setActiveThreadId,
   });
+
   const mutations = useThreadMutations({
     commentApi,
     persistWith: writes.persistWith,
@@ -319,7 +332,9 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     resolveDocumentImage: props.resolveDocumentImage,
     activeStorageKeyRef: scroll.activeStorageKeyRef,
   });
+
   const { historicalLoading } = article;
+
   const readerActivities = useMemo(
     () =>
       buildReaderActivities({
@@ -351,6 +366,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     scrollDocToHash,
     scrollDocToText,
   });
+
   const diff = useActiveDiff({
     ...article,
     selectedPath,
@@ -362,6 +378,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     viewingHistorical,
     diffHidden: toggles.diffHidden,
   });
+
   const access = commentAccess({
     viewingHistorical,
     nativeIterationMode,
@@ -373,17 +390,20 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     effectiveReadOnly,
     effectiveReadOnlyMessage,
   });
+
   const { commentsAvailable, activeReadOnly, activeRoutedPr } = access;
   // Read by the nav-resize drag handlers, after this commit.
   useLayoutEffect(() => {
     commentsAvailableRef.current = commentsAvailable;
   }, [commentsAvailableRef, commentsAvailable]);
+
   const tooNarrow = useTooNarrow(
     bodyFrameRef,
     props.hideDocNav,
     commentsAvailable,
     readerPrefs,
   );
+
   const controls = useIterationControls({
     completedPrHistoryEnabled: history.completedPrHistoryEnabled,
     nativeIterationMode,
@@ -398,6 +418,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     setActiveThreadId,
     dismissEmptyDraftRef,
   });
+
   const { changeIterationRange } = controls;
 
   const rail = useRailModel({
@@ -416,12 +437,14 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
   // properties set on the app root.
   const layout = paneLayout(props.hideDocNav, readerPrefs, commentsAvailable);
   const { readerFont, readerStyle } = readerStyleFor(readerPrefs);
+
   const chrome = railChrome({
     nativeIterationMode,
     viewingHistorical,
     hidePrPill,
     documentsMode: props.documentsMode,
   });
+
   const statusExtras = statusBarExtras({
     documentsMode: props.documentsMode,
     activeRoutedPr,
@@ -433,8 +456,10 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
     commentsRefreshing: threadSync.isRefreshing,
     fileRefreshInFlight: store.fileRefreshInFlight,
   });
+
   const showRailSkeleton =
     (doc.loading && !article.pristineHtml) || historicalLoading;
+
   const linkCopy = access.viewingPastPr ? undefined : links;
 
   return (

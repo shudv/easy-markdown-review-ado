@@ -77,14 +77,17 @@ function versionDescriptorFor(
     versionType: GitVersionType.Branch,
     versionOptions: GitVersionOptions.None,
   };
+
   const parsed = parseVersionSpec(spec);
   if (!parsed) return fallback;
+
   const versionType =
     parsed.kind === "commit"
       ? GitVersionType.Commit
       : parsed.kind === "tag"
         ? GitVersionType.Tag
         : GitVersionType.Branch;
+
   return {
     version: parsed.value,
     versionType,
@@ -95,6 +98,7 @@ function versionDescriptorFor(
 function stripRefsHeads(ref: string | undefined): string {
   // `defaultBranch` comes from the ADO REST repository payload.
   if (ref == null || ref === "") return "";
+
   return ref.replace(/^refs\/heads\//, "");
 }
 
@@ -104,6 +108,7 @@ async function fetchReaderFileContent(
   const { config, rawRepo } = resolved;
   const gitClient = sharedGitClient();
   const descriptor = versionDescriptorFor(config.version, rawRepo);
+
   const ab = await gitClient.getItemContent(
     config.repositoryId,
     config.path,
@@ -116,12 +121,14 @@ async function fetchReaderFileContent(
     descriptor,
     true,
   );
+
   return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
 function basename(path: string): string {
   const clean = path.replace(/\/+$/, "");
   const idx = clean.lastIndexOf("/");
+
   return idx >= 0 ? clean.slice(idx + 1) : clean;
 }
 
@@ -129,6 +136,7 @@ function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
@@ -150,6 +158,7 @@ export function MarkdownReader({
     void (async () => {
       try {
         const gitClient = sharedGitClient();
+
         const rawRepo = await gitClient.getRepository(
           config.repositoryId,
           config.project,
@@ -163,13 +172,16 @@ export function MarkdownReader({
         );
 
         let initialThreads: CommentThread[] = [];
+
         if (pr && typeof pr.pullRequestId === "number") {
           const prByRepo = { [config.repositoryId]: pr };
+
           const all = await loadThreadsForRepo(
             config.repositoryId,
             config.project,
             prByRepo,
           );
+
           // Single-file reader: only threads anchored to this file.
           initialThreads = all.filter((t) => t.filePath === config.path);
         }
@@ -214,10 +226,12 @@ export function MarkdownReader({
   const loadFileSource = useCallback(
     (_path: string): Promise<string> => {
       if (!resolved) return Promise.reject(new Error("Reader not ready"));
+
       return fetchReaderFileContent(resolved);
     },
     [resolved],
   );
+
   const resolveDocumentImage = useCallback(
     async (
       _documentPath: string,
@@ -225,6 +239,7 @@ export function MarkdownReader({
       atCommitId?: string,
     ): Promise<string | undefined> => {
       if (!resolved) return undefined;
+
       const versionDescriptor =
         atCommitId !== undefined && atCommitId !== ""
           ? {
@@ -233,6 +248,7 @@ export function MarkdownReader({
               versionOptions: GitVersionOptions.None,
             }
           : versionDescriptorFor(resolved.config.version, resolved.rawRepo);
+
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: resolved.config.repositoryId,
         project: resolved.config.project,
@@ -245,6 +261,7 @@ export function MarkdownReader({
 
   const commentApi = useMemo<CommentApi | undefined>(() => {
     if (!resolved?.pr) return undefined;
+
     return new AdoCommentApi({
       repositoryId: resolved.config.repositoryId,
       pullRequestId: resolved.pr.pullRequestId,
@@ -258,19 +275,24 @@ export function MarkdownReader({
     if (!resolved?.pr) return undefined;
     const { config: cfg, pr } = resolved;
     const prByRepo = { [cfg.repositoryId]: pr };
+
     const abortError = (): Error =>
       typeof DOMException !== "undefined"
         ? new DOMException("Aborted", "AbortError")
         : Object.assign(new Error("Aborted"), { name: "AbortError" });
+
     return async (signal: AbortSignal): Promise<CommentThread[]> => {
       if (signal.aborted) throw abortError();
+
       const all = await loadThreadsForRepo(
         cfg.repositoryId,
         cfg.project,
         prByRepo,
       );
+
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the signal can abort during the awaited load; TS wrongly keeps the narrowing from the pre-await check.
       if (signal.aborted) throw abortError();
+
       return all.filter((t) => t.filePath === cfg.path);
     };
   }, [resolved]);
@@ -299,6 +321,7 @@ export function MarkdownReader({
   }
 
   const fileName = basename(resolved.config.path);
+
   const pr: PrInfo = {
     prId: resolved.pr?.pullRequestId ?? 0,
     title: fileName,
@@ -314,6 +337,7 @@ export function MarkdownReader({
   };
 
   const readOnly = !resolved.pr;
+
   const readOnlyMessage = readOnly
     ? `${resolved.config.repositoryName ?? "This repository"} has no completed pull request — commenting is disabled until one is completed.`
     : undefined;

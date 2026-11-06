@@ -56,6 +56,7 @@ export async function listMarkdownLevel(
   ) {
     return { files: [], folders: [] };
   }
+
   const read: LevelRead = {
     gitClient: scope.git(),
     projectId: scope.projectId,
@@ -73,10 +74,12 @@ export async function listMarkdownLevel(
   const listing = projectMarkdownLevel(items, scopePath);
   // An Azure DevOps wiki folder orders its pages with a `.order` file.
   const orderPath = findOrderFile(items, scopePath);
+
   if (orderPath !== undefined && orderPath !== "") {
     const order = await readOrderFile(read, orderPath);
     if (order !== undefined) listing.order = order;
   }
+
   return listing;
 }
 
@@ -112,6 +115,7 @@ async function fetchLevelItems(
   options: ListLevelOptions,
 ): Promise<GitItem[] | null> {
   const { gitClient, projectId, repo, scopePath, versionDescriptor } = read;
+
   try {
     return await withRetry(
       () =>
@@ -142,6 +146,7 @@ async function fetchLevelItems(
       operation: "folder-listing-load",
       impact: "degraded",
     });
+
     return null;
   }
 }
@@ -152,6 +157,7 @@ async function readOrderFile(
   orderPath: string,
 ): Promise<string[] | undefined> {
   const { gitClient, projectId, repo, versionDescriptor } = read;
+
   try {
     const text = await withRetry(
       () =>
@@ -168,6 +174,7 @@ async function readOrderFile(
         ),
       { mode: "read", label: "listMarkdownLevel.getItemText(.order)" },
     );
+
     return parseOrderFile(text);
   } catch (err) {
     // Best-effort: the folder still lists, alphabetically.
@@ -175,6 +182,7 @@ async function readOrderFile(
       `[documents-hub] reading ${orderPath} failed for ${repo.name}:`,
       err,
     );
+
     if (!isItemNotFoundError(err)) {
       trackUserFacingError({
         error: err,
@@ -183,6 +191,7 @@ async function readOrderFile(
         impact: "degraded",
       });
     }
+
     return undefined;
   }
 }

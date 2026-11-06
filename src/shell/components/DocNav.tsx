@@ -176,14 +176,17 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   // Captured headings (id, text, level, top position).
   const [headings, setHeadings] = useState<NavHeading[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+
   // Section ids whose doc section is currently collapsed. Drives both the
   // chevron orientation in the nav AND whether to render descendant items.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
     () => new Set(),
   );
+
   // Folder paths the user manually collapsed in the file tree (default: all
   // expanded). Persisted per-paths-signature in sessionStorage.
   const folderStorageKey = useMemo(() => buildFolderStorageKey(files), [files]);
+
   const { collapsedDirs, toggleDir } = useCollapsedDirs(
     folderStorageKey,
     selectedPath,
@@ -204,6 +207,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
     () => new Set<string>((unloadedFolders ?? []).map(normalizeFolderPath)),
     [unloadedFolders],
   );
+
   const [loadingDirs, setLoadingDirs] = useState<Set<string>>(() => new Set());
   const inFlightDirsRef = useRef<Set<string>>(new Set());
 
@@ -215,8 +219,10 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
       setLoadingDirs((curr) => {
         const next = new Set(curr);
         next.add(dirPath);
+
         return next;
       });
+
       void (async () => {
         try {
           await onExpandFolder(dirPath);
@@ -225,6 +231,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
           setLoadingDirs((curr) => {
             const next = new Set(curr);
             next.delete(dirPath);
+
             return next;
           });
         }
@@ -251,6 +258,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
 
   const navigationActivities = useMemo<readonly ReaderActivity[]>(() => {
     const activities: ReaderActivity[] = [];
+
     if (loadingDirs.size > 0) {
       activities.push({
         id: "folder",
@@ -261,6 +269,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         priority: 45,
       });
     }
+
     if (remoteLoading) {
       activities.push({
         id: "document-search",
@@ -268,10 +277,13 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         priority: 40,
       });
     }
+
     return activities;
   }, [loadingDirs, remoteLoading, trimmedQuery]);
+
   useEffect(() => {
     onActivitiesChange?.(navigationActivities);
+
     return () => onActivitiesChange?.([]);
   }, [navigationActivities, onActivitiesChange]);
 
@@ -292,26 +304,33 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   // -----------------------------------------------------------------------
   const readHeadings = useCallback(() => {
     const wrap = articleWrapRef.current;
+
     if (!wrap) {
       setHeadings([]);
       setCollapsedIds(new Set());
+
       return;
     }
+
     const hs = Array.from(wrap.querySelectorAll<HTMLElement>("h1, h2, h3, h4"));
     const wrapRect = wrap.getBoundingClientRect();
+
     const next: NavHeading[] = hs
       .map<NavHeading | null>((h) => {
         if (!h.id) return null;
         const section = h.parentElement as HTMLElement | null;
         let openComments = 0;
         let totalComments = 0;
+
         if (section?.classList.contains("emr-section")) {
           const highlights = section.querySelectorAll<HTMLElement>(
             ".emr-highlight[data-thread-id]",
           );
+
           const seen = new Set<string>();
           highlights.forEach((el) => {
             const tid = el.dataset.threadId;
+
             if (
               tid === undefined ||
               tid === "" ||
@@ -320,11 +339,13 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
             ) {
               return;
             }
+
             seen.add(tid);
             totalComments += 1;
             if (!el.classList.contains("is-resolved")) openComments += 1;
           });
         }
+
         return {
           id: h.id,
           text: h.textContent,
@@ -335,6 +356,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         };
       })
       .filter((h): h is NavHeading => h !== null);
+
     setHeadings(next);
 
     // Also snapshot which sections are currently collapsed so the chevrons
@@ -356,12 +378,15 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
 
     const wrap = articleWrapRef.current;
     if (!wrap) return;
+
     // Refresh on ArticleView's layout-changed signal. `useLayoutEffect` so we
     // attach before ArticleView's sibling effect fires its initial dispatch.
     function onChanged() {
       readHeadings();
     }
+
     wrap.addEventListener("emr-sections-changed", onChanged);
+
     return () => wrap.removeEventListener("emr-sections-changed", onChanged);
   }, [version, readHeadings, articleWrapRef]);
 
@@ -376,29 +401,37 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
 
     function recompute() {
       if (performance.now() < spyLockUntilRef.current) return;
+
       // When the user is at (or very near) the top of the article we want
       // the file row to own the "active" indicator — the single-selection
       // model means heading rows only light up once the user has scrolled
       // past the first heading.
       if (scroller!.scrollTop < ACTIVE_MARGIN) {
         setActiveId(null);
+
         return;
       }
+
       const wrapRectNow = wrap!.getBoundingClientRect();
       const scrollerRect = scroller!.getBoundingClientRect();
+
       const wrapTopRel =
         wrapRectNow.top - scrollerRect.top + scroller!.scrollTop;
+
       const cursor = scroller!.scrollTop + ACTIVE_MARGIN;
       let bestId: string | null = headings[0]!.id;
+
       for (const h of headings) {
         if (wrapTopRel + h.topPx <= cursor) bestId = h.id;
         else break;
       }
+
       setActiveId(bestId);
     }
 
     recompute();
     scroller.addEventListener("scroll", recompute, { passive: true });
+
     return () => scroller.removeEventListener("scroll", recompute);
   }, [headings, scrollRef, articleWrapRef]);
 
@@ -408,13 +441,16 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   useEffect(() => {
     if (activeId === null || activeId === "") return;
     const list = listRef.current!;
+
     const item = list.querySelector<HTMLElement>(
       `[data-nav-id="${cssEscape(activeId)}"]`,
     );
+
     if (!item) return;
     const itemRect = item.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const margin = 16;
+
     if (itemRect.top < listRect.top + margin) {
       list.scrollTop -= listRect.top + margin - itemRect.top;
     } else if (itemRect.bottom > listRect.bottom - margin) {
@@ -429,12 +465,15 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
     (id: string) => {
       const scroller = scrollRef.current!;
       const wrap = articleWrapRef.current!;
+
       const target = wrap.querySelector<HTMLElement>(
         `[id="${cssEscape(id)}"]`,
       )!;
+
       // Expand the target's collapsed section first so the scroll lands
       // somewhere visible.
       const section = target.closest<HTMLElement>(".emr-section");
+
       if (section?.getAttribute("data-collapsed") === "true") {
         section.removeAttribute("data-collapsed");
         // Persist so a later "expand all" / refresh doesn't re-collapse it.
@@ -444,12 +483,15 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
           new CustomEvent("emr-sections-changed", { bubbles: false }),
         );
       }
+
       const wrapTopRel =
         wrap.getBoundingClientRect().top -
         scroller.getBoundingClientRect().top +
         scroller.scrollTop;
+
       const headingTopRel =
         target.getBoundingClientRect().top - wrap.getBoundingClientRect().top;
+
       // Lock the scroll-spy briefly so it doesn't fight the smooth scroll
       // and keep highlighting intermediate headings.
       spyLockUntilRef.current = performance.now() + 700;
@@ -469,9 +511,11 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   const toggleSection = useCallback(
     (id: string) => {
       const wrap = articleWrapRef.current!;
+
       const section = wrap.querySelector<HTMLElement>(
         `.emr-section[data-section-id="${cssEscape(id)}"]`,
       )!;
+
       const wasCollapsed = section.getAttribute("data-collapsed") === "true";
       if (wasCollapsed) section.removeAttribute("data-collapsed");
       else section.setAttribute("data-collapsed", "true");
@@ -489,25 +533,31 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   // reader has the outline turned off.
   // -----------------------------------------------------------------------
   const outlineShown = showOutline !== false;
+
   const headingTree = useMemo<NavNode[]>(() => {
     if (!outlineShown) return [];
     const filtered = headings.filter((h) => h.level <= MAX_TREE_LEVEL);
     const roots: NavNode[] = [];
     const stack: Array<{ heading: NavHeading; children: NavNode[] }> = [];
+
     for (const h of filtered) {
       const node: NavNode = { kind: "heading", heading: h, children: [] };
+
       while (
         stack.length > 0 &&
         stack[stack.length - 1]!.heading.level >= h.level
       ) {
         stack.pop();
       }
+
       if (stack.length === 0) roots.push(node);
       else stack[stack.length - 1]!.children.push(node);
       stack.push({ heading: h, children: node.children });
     }
+
     return roots;
   }, [headings, outlineShown]);
+
   // With the outline off no heading row exists to carry the active state, so
   // the open file's row keeps it while the reader scrolls.
   const navActiveId = shownActiveHeading(outlineShown, activeId);
@@ -522,14 +572,19 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
       extraFolders: unloadedFolders,
       folderOrders,
     });
+
     const folderTree = wikiPages ? mergeWikiPages(builtTree) : builtTree;
+
     function toNavNode(node: TreeNode<FileInfo>): NavNode {
       if (node.kind === "dir") {
         const dirNode = node as DirNode<FileInfo>;
+
         // "Lazy" iff the path is unloaded AND has no fetched children yet.
         const isLazy =
           dirNode.children.length === 0 && lazyDirSet.has(dirNode.path);
+
         const page = dirNode.page;
+
         return {
           kind: "dir",
           path: dirNode.path,
@@ -547,7 +602,9 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
             : {}),
         };
       }
+
       const fileNode = node as FileNode<FileInfo>;
+
       return {
         kind: "file",
         file: fileNode.file,
@@ -555,6 +612,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         children: fileNode.file.path === selectedPath ? headingTree : [],
       };
     }
+
     return folderTree.map(toNavNode);
   }, [
     files,
@@ -577,6 +635,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
   const autoExpandedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!selectedPath) return;
+
     for (const dir of pathAncestors(selectedPath)) {
       if (lazyDirSet.has(dir) && !autoExpandedRef.current.has(dir)) {
         autoExpandedRef.current.add(dir);
@@ -595,6 +654,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
       // heading active state on the way up.
       spyLockUntilRef.current = performance.now() + 700;
       setActiveId(null);
+
       if (path !== selectedPath) {
         onSelectPath(path);
       } else {

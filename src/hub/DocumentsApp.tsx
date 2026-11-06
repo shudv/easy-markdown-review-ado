@@ -71,6 +71,7 @@ function renderDocNavTitleSlot(
 ): ReactElement {
   const { repos } = props;
   const paginated = !!props.onFilterRepos;
+
   if (paginated || repos.length > 1) {
     return (
       <RepoPicker
@@ -87,6 +88,7 @@ function renderDocNavTitleSlot(
       />
     );
   }
+
   return (
     <span className="emr-docnav-title" title={selectedRepo.name}>
       <SvgRepo />
@@ -171,6 +173,7 @@ export function DocumentsApp(props: AppProps): ReactElement {
   const perDocumentMode = !!props.loadThreadsForPath;
 
   const initialRepoId = props.initialRepoId ?? firstRepoId(repos);
+
   const { selectedRepoId, selectedRepo, handleSelectRepo } = useSelectedRepo(
     repos,
     initialRepoId,
@@ -188,11 +191,13 @@ export function DocumentsApp(props: AppProps): ReactElement {
   // latching on mount here would drop the deep-link path before Shell ever
   // reads it.
   const initialPathConsumedRef = useRef(false);
+
   const deepLinkSeeds = pickDeepLinkSeeds(
     // eslint-disable-next-line react-hooks/refs -- one-shot latch set when Shell mounts; it must not trigger a re-render, since Shell only reads the seed on its first mount.
     !initialPathConsumedRef.current && selectedRepoId === initialRepoId,
     props,
   );
+
   const initialSelectedPathForShell = deepLinkSeeds.initialSelectedPath;
 
   // Threads are NOT fetched up front and awaited before mounting Shell.
@@ -209,11 +214,13 @@ export function DocumentsApp(props: AppProps): ReactElement {
   const handleSearchFiles = useMemo<SearchFilesBound | undefined>(() => {
     if (!selectedRepo || !onSearchFiles) return undefined;
     const repoIdAtBind = selectedRepo.id;
+
     return (query: string, signal?: AbortSignal) =>
       onSearchFiles(repoIdAtBind, query, signal);
   }, [selectedRepo, onSearchFiles]);
 
   const { lazyTree } = tree;
+
   const syntheticPr: PrInfo | null = useMemo(
     () => (selectedRepo ? buildSyntheticPr(selectedRepo, lazyTree) : null),
     [selectedRepo, lazyTree],
@@ -241,6 +248,7 @@ export function DocumentsApp(props: AppProps): ReactElement {
   const fetchRemoteThreads = useMemo<FetchRemoteThreads | undefined>(() => {
     if (!selectedRepo || readOnly) return undefined;
     const repoIdAtBind = selectedRepo.id;
+
     return async (_signal: AbortSignal) => loadThreadsFor(repoIdAtBind);
   }, [selectedRepo, readOnly, loadThreadsFor]);
 
@@ -249,6 +257,7 @@ export function DocumentsApp(props: AppProps): ReactElement {
   // the host can't build a shareable URL (standalone). Declared before the
   // early return below so the hook order is stable across renders.
   const buildDeepLinkFor = props.buildDeepLink;
+
   const deepLinkBuilder = useMemo<DeepLinkBuilder | null>(
     () =>
       buildDeepLinkFor
@@ -299,12 +308,14 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
     bindings,
     gating: { shellReadOnly, shellReadOnlyMessage },
   } = body;
+
   const { currentUser, onExpandFolder, onRefreshRepo, onSelectPath } = props;
 
   // Refresh handler: bust the lazy-tree cache for the current repo and
   // delegate to the host (which flips `detailsLoaded` false then true,
   // remounting Shell with fresh data).
   const [refreshingRepoId, setRefreshingRepoId] = useState<string | null>(null);
+
   const handleRefresh = useCallback(async () => {
     if (!onRefreshRepo) return;
     // Re-mirror the host's ADO theme on manual refresh — some ADO chromes
@@ -317,8 +328,10 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
       if (!curr.has(repoId)) return curr;
       const next = new Map(curr);
       next.delete(repoId);
+
       return next;
     });
+
     try {
       await onRefreshRepo(repoId);
     } finally {
@@ -338,6 +351,7 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
     selectedRepo,
     body.handleSelectRepo,
   );
+
   const docNavHeaderActions = onRefreshRepo
     ? renderRefreshButton(refreshingRepoId === selectedRepo.id, handleRefresh)
     : null;

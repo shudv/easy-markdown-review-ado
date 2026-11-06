@@ -8,6 +8,7 @@ const CHUNK_RETRY_DELAYS_MS = [1_000, 3_000] as const;
 export function isChunkLoadError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const { name, message } = err as { name?: unknown; message?: unknown };
+
   return (
     name === "ChunkLoadError" ||
     (typeof message === "string" && /\bLoading (?:CSS )?chunk\b/.test(message))
@@ -27,6 +28,7 @@ export async function withChunkRetry<T>(op: () => Promise<T>): Promise<T> {
       if (attempt >= CHUNK_RETRY_DELAYS_MS.length || !isChunkLoadError(err)) {
         throw err;
       }
+
       const delayMs = CHUNK_RETRY_DELAYS_MS[attempt];
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }

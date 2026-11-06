@@ -38,12 +38,14 @@ export function parseOrderFile(text: string): string[] {
  */
 export function wikiPageName(pathOrName: string): string {
   const segments = pathOrName.split("/").filter(Boolean);
+
   return (segments[segments.length - 1] ?? "").replace(/\.md$/i, "");
 }
 
 /** The display title of a wiki page file. */
 export function wikiPageTitle(path: string): string {
   const name = wikiPageName(path).replace(/-/g, " ");
+
   try {
     return decodeURIComponent(name);
   } catch {
@@ -67,6 +69,7 @@ export function orderRank(
     const lower = name.toLowerCase();
     if (!folded.has(lower)) folded.set(lower, index);
   });
+
   return (name) =>
     exact.get(name) ?? folded.get(name.toLowerCase()) ?? Infinity;
 }
@@ -74,6 +77,7 @@ export function orderRank(
 /** Compare two ranks; equal ranks (including two unlisted) tie at 0. */
 export function compareRanks(a: number, b: number): number {
   if (a === b) return 0;
+
   return a < b ? -1 : 1;
 }
 
@@ -89,14 +93,17 @@ export function withFirstPageFirst<F extends { path: string }>(
   const rank = orderRank(rootOrder);
   let first: F | undefined;
   let best = Infinity;
+
   for (const file of files) {
     if (file.path.replace(/^\/+/, "").includes("/")) continue;
     const fileRank = rank(wikiPageName(file.path));
+
     if (fileRank < best) {
       best = fileRank;
       first = file;
     }
   }
+
   return first ? [first, ...files.filter((file) => file !== first)] : files;
 }
 
@@ -114,6 +121,7 @@ export function subpagesFolderOf(documentPath: string): string {
  */
 export function subpagesFromListing(listing: FolderListing): WikiSubpage[] {
   const rank = orderRank(listing.order);
+
   return listing.files
     .map((file) => ({
       path: file.path,

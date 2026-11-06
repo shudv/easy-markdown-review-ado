@@ -26,6 +26,7 @@ function render(element: ReactElement): void {
     document.body.appendChild(container);
     root = createRoot(container);
   }
+
   act(() => root!.render(element));
 }
 
@@ -44,9 +45,11 @@ afterEach(() => {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
+
   const promise = new Promise<T>((r) => {
     resolve = r;
   });
+
   return { promise, resolve };
 }
 
@@ -62,16 +65,20 @@ function author(id: string): CommentAuthor {
 describe("Avatar", () => {
   it("ignores a photo that resolves after the author changed", async () => {
     const pending = new Map<string, ReturnType<typeof deferred<string>>>();
+
     const resolver = vi.fn((url: string) => {
       const d = deferred<string>();
       pending.set(url, d);
+
       return d.promise;
     });
+
     const withResolver = (who: CommentAuthor) => (
       <AvatarImageContext.Provider value={resolver}>
         <Avatar author={who} />
       </AvatarImageContext.Provider>
     );
+
     render(withResolver(author("first")));
     render(withResolver(author("second")));
 
@@ -107,10 +114,13 @@ describe("useCommentLinkCopy", () => {
     const writeText = vi.fn();
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     let hook: ReturnType<typeof useCommentLinkCopy> | null = null;
+
     function Probe(): null {
       hook = useCommentLinkCopy("t1");
+
       return null;
     }
+
     render(<Probe />);
     expect(hook!.canLink).toBe(false);
     act(() => hook!.handleLink());

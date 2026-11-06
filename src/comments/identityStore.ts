@@ -69,6 +69,7 @@ export class IdentityStore {
   /** Subscribe to store changes (for `useSyncExternalStore`). */
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
+
     return () => {
       this.listeners.delete(cb);
     };
@@ -83,6 +84,7 @@ export class IdentityStore {
     entries: Iterable<{ id: string; displayName?: string; avatarUrl?: string }>,
   ): void {
     let changed = false;
+
     for (const e of entries) {
       if (e.displayName === undefined || e.displayName === "") continue;
       const key = norm(e.id);
@@ -93,6 +95,7 @@ export class IdentityStore {
       });
       changed = true;
     }
+
     if (changed) this.emit();
   }
 
@@ -104,12 +107,14 @@ export class IdentityStore {
   ensure(ids: readonly string[]): void {
     if (!this.resolver) return;
     let added = false;
+
     for (const raw of ids) {
       const key = norm(raw);
       if (!key || this.map.has(key) || this.pending.has(key)) continue;
       this.queued.add(key);
       added = true;
     }
+
     if (added && !this.flushScheduled) {
       this.flushScheduled = true;
       queueMicrotask(() => void this.flush());
@@ -121,15 +126,18 @@ export class IdentityStore {
     const ids = [...this.queued];
     this.queued.clear();
     for (const k of ids) this.pending.add(k);
+
     try {
       const resolved = await this.resolver!(ids);
       let changed = false;
+
       // Resolved entries come from ADO identity REST responses, so treat them
       // as possibly missing or partial despite the resolver's declared type.
       const entries = Object.entries(resolved) as [
         string,
         Partial<IdentityInfo> | null | undefined,
       ][];
+
       for (const [id, info] of entries) {
         if (info?.displayName == null || info.displayName === "") continue;
         this.map.set(norm(id), {
@@ -138,6 +146,7 @@ export class IdentityStore {
         });
         changed = true;
       }
+
       if (changed) this.emit();
     } catch (err) {
       // Best-effort: a failed lookup just leaves the mention showing its GUID.
@@ -177,16 +186,20 @@ export function hydrateUserMentions(
   store: IdentityStore | null,
 ): void {
   if (!root || !store) return;
+
   const pills = root.querySelectorAll<HTMLElement>(
     'span.emr-mention[data-mention-kind="user"]',
   );
+
   const unresolved: string[] = [];
   pills.forEach((el) => {
     const id = el.getAttribute("data-mention-id");
     if (id === null || id === "") return;
     const info = store.get(id);
+
     if (info) {
       const label = `@${info.displayName}`;
+
       // Only touch the DOM when the label actually changed, so we don't thrash.
       if (el.getAttribute("data-mention-label") !== label) {
         el.textContent = label;
@@ -226,9 +239,11 @@ export function useIdentityVersion(store: IdentityStore | null): number {
     (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
     [store],
   );
+
   const getSnapshot = useCallback(
     () => (store ? store.getVersion() : 0),
     [store],
   );
+
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

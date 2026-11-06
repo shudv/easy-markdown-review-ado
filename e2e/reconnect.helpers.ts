@@ -22,11 +22,13 @@ export async function prTabWindow(page: Page): Promise<Frame> {
         (f) =>
           f.url().includes(DEV_ORIGIN_HOST) && f.url().includes("pr-tab.html"),
       );
+
   await expect
     .poll(
       async () => {
         const frame = find();
         if (!frame) return false;
+
         return frame.evaluate(() => "__emrFaults" in window).catch(() => false);
       },
       {
@@ -36,6 +38,7 @@ export async function prTabWindow(page: Page): Promise<Frame> {
       },
     )
     .toBe(true);
+
   return find()!;
 }
 
@@ -64,6 +67,7 @@ export async function fault(
           __emrFaults: Record<string, (...x: unknown[]) => unknown>;
         }
       ).__emrFaults;
+
       api[n as string]!(...(a as unknown[]));
     },
     [name, args] as const,
@@ -78,6 +82,7 @@ export function countHostNavigations(page: Page): () => number {
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) n += 1;
   });
+
   return () => n;
 }
 
@@ -114,6 +119,7 @@ export function collectTelemetry(page: Page): {
         /* handle disposed by a navigation — best effort */
       });
   });
+
   return { events: () => events, active: () => sawInit };
 }
 
@@ -121,9 +127,14 @@ export function collectTelemetry(page: Page): {
 
 function authHeader(): string {
   const pat = process.env.AZDO_PAT;
-  if (pat === undefined || pat === "")
+
+  if (pat === undefined || pat === "") {
     throw new Error("AZDO_PAT is not set in .env");
-  return "Basic " + Buffer.from(`:${pat}`, "utf8").toString("base64");
+  }
+
+  const token = Buffer.from(`:${pat}`, "utf8").toString("base64");
+
+  return `Basic ${token}`;
 }
 
 function threadsUrl(repo: string, prId: number, suffix = ""): string {
@@ -149,7 +160,9 @@ async function listThreads(repo: string, prId: number): Promise<RestThread[]> {
   const res = await fetch(threadsUrl(repo, prId), {
     headers: { Authorization: authHeader() },
   });
+
   expect(res.ok, `GET threads failed: ${res.status}`).toBe(true);
+
   return ((await res.json()) as { value: RestThread[] }).value;
 }
 
@@ -160,6 +173,7 @@ export async function commentsContaining(
   marker: string,
 ): Promise<RestComment[]> {
   const threads = await listThreads(repo, prId);
+
   return threads
     .filter((t) => !t.isDeleted)
     .flatMap((t) => t.comments ?? [])
@@ -176,15 +190,18 @@ export async function deleteCommentsContaining(
   marker: string,
 ): Promise<void> {
   const threads = await listThreads(repo, prId);
+
   for (const thread of threads) {
     if (thread.isDeleted) continue;
     const comments = (thread.comments ?? []).filter((c) => !c.isDeleted);
     if (!comments.some((c) => (c.content ?? "").includes(marker))) continue;
+
     for (const c of [...comments].sort((a, b) => b.id - a.id)) {
       const res = await fetch(
         threadsUrl(repo, prId, `/${thread.id}/comments/${c.id}`),
         { method: "DELETE", headers: { Authorization: authHeader() } },
       );
+
       // 404: already gone (e.g. a concurrent sweep) — that's the goal anyway.
       // Anything else would silently leave test comments in the shared PR.
       if (!res.ok && res.status !== 404) {

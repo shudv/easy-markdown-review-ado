@@ -83,18 +83,20 @@ function HeadingNavRow(
     onSelectHeading,
     onToggleHeading,
   } = props;
+
   const h = node.heading;
   const hasChildren = node.children.length > 0;
   const isCollapsed = collapsedIds.has(h.id);
   const isActive = h.id === activeId;
+
   return (
     <div className="emr-docnav-branch">
       <div
         className={
-          "emr-docnav-item" +
-          ` lvl-${h.level}` +
-          (isActive ? " is-active" : "") +
-          (hasChildren ? " has-children" : "")
+          `emr-docnav-item` +
+          ` lvl-${h.level}${
+            isActive ? " is-active" : ""
+          }${hasChildren ? " has-children" : ""}`
         }
         data-nav-id={h.id}
         style={
@@ -139,7 +141,6 @@ function HeadingNavRow(
 // stays visible whether or not the subpages are shown (or loaded yet).
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line max-lines-per-function -- Folder row in the navigation tree: twist button, label, badges and ARIA treeitem attributes for one row.
 function DirNavRow(
   props: NavTreeItemProps & { node: DirNavNode },
 ): ReactElement {
@@ -154,21 +155,26 @@ function DirNavRow(
     onToggleDir,
     onExpandLazyDir,
   } = props;
+
   const page = node.page;
   const isLazy = node.lazy === true;
   const isLoading = loadingDirs.has(node.path);
   // Lazy folders are always "collapsed" until the user triggers a fetch
   // via the chevron or label.
   const isCollapsed = isLazy ? !isLoading : collapsedDirs.has(node.path);
+
   const onDirToggle = (): void => {
     if (isLazy) onExpandLazyDir(node.path);
     else onToggleDir(node.path);
   };
+
   const twist = dirTwistText(
     { lazy: isLazy, loading: isLoading, collapsed: isCollapsed },
     page ? "subpages" : "folder",
   );
+
   const isActivePage = page?.file.path === selectedPath && activeId === null;
+
   const rowClass = [
     "emr-docnav-item emr-docnav-dir",
     isLoading ? "is-loading" : "",
@@ -177,11 +183,10 @@ function DirNavRow(
   ]
     .filter(Boolean)
     .join(" ");
+
   return (
     <div
-      className={
-        "emr-docnav-branch emr-docnav-dir-branch" + (isLazy ? " is-lazy" : "")
-      }
+      className={`emr-docnav-branch emr-docnav-dir-branch${isLazy ? " is-lazy" : ""}`}
     >
       <div
         className={rowClass}
@@ -235,6 +240,7 @@ function NavChildren(
 ): ReactElement | null {
   const { nodes, item, className = "emr-docnav-children" } = props;
   if (nodes.length === 0) return null;
+
   return (
     <div className={className}>
       {nodes.map((child) => (
@@ -280,6 +286,7 @@ function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
     onToggleDir,
     onExpandLazyDir,
   } = props;
+
   const showChangeIndicators = useContext(ChangeIndicatorContext);
   const change = fileChangeView(file, useContext(RangeChangesContext));
   // Single selection: the file row lights up only when no heading is
@@ -291,18 +298,18 @@ function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
   const renamedFrom = file.renamedFrom ?? "";
   const renamedFromName = renamedFrom !== "" ? basename(renamedFrom) : "";
   const note = change.note ?? "";
+
   const titleText =
     (file.changeType === "renamed" && renamedFromName !== ""
       ? `${renamedFromName} \u2192 ${fileName}`
       : file.path) + (note !== "" ? ` \u2014 ${note}` : "");
+
   return (
     <div className="emr-docnav-branch emr-docnav-file-branch">
       <div
-        className={
-          "emr-docnav-item emr-docnav-file" +
-          (isActive ? " is-active" : "") +
-          (change.unchanged ? " is-unchanged-in-range" : "")
-        }
+        className={`emr-docnav-item emr-docnav-file${
+          isActive ? " is-active" : ""
+        }${change.unchanged ? " is-unchanged-in-range" : ""}`}
         data-change-type={change.changeType}
         style={
           {
@@ -325,7 +332,7 @@ function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
         >
           {showChangeIndicators ? (
             <span
-              className={"emr-docnav-file-icon is-" + change.changeType}
+              className={`emr-docnav-file-icon is-${change.changeType}`}
               aria-hidden
             >
               {changeTypeGlyph(change.changeType)}

@@ -64,11 +64,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseExcalidrawScene(text: string): ExcalidrawScene {
   let data: unknown;
+
   try {
     data = JSON.parse(text);
   } catch {
     throw new ExcalidrawSceneError("Excalidraw file is not valid JSON");
   }
+
   if (
     !isRecord(data) ||
     data.type !== "excalidraw" ||
@@ -76,7 +78,9 @@ export function parseExcalidrawScene(text: string): ExcalidrawScene {
   ) {
     throw new ExcalidrawSceneError("File is not an Excalidraw scene");
   }
+
   const appState = isRecord(data.appState) ? data.appState : {};
+
   return {
     elements: data.elements.filter(
       (element): element is ExcalidrawElement =>
@@ -121,6 +125,7 @@ function loadExporter(): Promise<ExportToSvg> {
       throw error;
     },
   );
+
   return exporterPromise;
 }
 
@@ -134,6 +139,7 @@ export async function renderExcalidrawSvgBlob(
 ): Promise<Blob> {
   const scene = parseExcalidrawScene(new TextDecoder().decode(content));
   const exportSvg = await loadExporter();
+
   const svg = await exportSvg({
     elements: scene.elements,
     files: scene.files,
@@ -145,6 +151,7 @@ export async function renderExcalidrawSvgBlob(
       viewBackgroundColor: scene.viewBackgroundColor,
     },
   });
+
   return new Blob([new XMLSerializer().serializeToString(svg)], {
     type: "image/svg+xml",
   });

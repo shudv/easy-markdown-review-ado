@@ -22,6 +22,7 @@ export function readBuildConfig(): TelemetryBuildConfig {
       : undefined;
 
   const key = typeof raw?.key === "string" ? raw.key.trim() : "";
+
   return {
     key,
     endpoint:

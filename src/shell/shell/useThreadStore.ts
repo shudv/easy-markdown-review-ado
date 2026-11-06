@@ -1,6 +1,14 @@
 // Shell: the comment thread store and its remote sync.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import type { CommentAuthor, CommentThread } from "../../types";
 import {
@@ -20,7 +28,7 @@ interface ThreadStoreOptions {
   currentUser: CommentAuthor;
   identityStore: IdentityStore;
   selectedPath: string;
-  selectedPathRef: React.MutableRefObject<string>;
+  selectedPathRef: MutableRefObject<string>;
   fetchRemoteThreads:
     | ((signal: AbortSignal) => Promise<CommentThread[]>)
     | undefined;
@@ -42,55 +50,66 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     loadThreadsForPath,
     onRefreshFiles,
   } = opts;
-  const [threadState, dispatch] = React.useReducer(
+
+  const [threadState, dispatch] = useReducer(
     threadReducer,
     initialThreadState(opts.initialThreads),
   );
+
   useIdentitySeeding(threadState, currentUser, identityStore);
 
   // Background remote-thread sync; merges snapshots preserving optimistic writes.
-  const onRemoteThreads = React.useCallback((threads: CommentThread[]) => {
+  const onRemoteThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
   }, []);
+
   // A PR-wide snapshot (`fetchRemoteThreads`) holds every thread, so it lets a
   // `?comment=` deep link tell "not loaded yet" from "doesn't exist". A
   // per-document snapshot can't: it only covers whichever file was open.
-  const [prThreadSnapshots, setPrThreadSnapshots] = React.useState(0);
-  const onPrThreads = React.useCallback((threads: CommentThread[]) => {
+  const [prThreadSnapshots, setPrThreadSnapshots] = useState(0);
+
+  const onPrThreads = useCallback((threads: CommentThread[]) => {
     dispatch({ type: "MERGE_REMOTE_THREADS", threads });
     setPrThreadSnapshots((n) => n + 1);
   }, []);
-  const noopFetch = React.useCallback(
+
+  const noopFetch = useCallback(
     /* v8 ignore next -- useThreadSync never calls fetchThreads while enabled is false */
     (_signal: AbortSignal): Promise<CommentThread[]> => Promise.resolve([]),
     [],
   );
+
   // Per-document mode: poll the *currently selected* document's threads. The
   // closure reads `selectedPathRef` so its identity stays stable across file
   // switches while always targeting the active document.
-  const perPathFetch = React.useMemo(
-    () =>
-      loadThreadsForPath
-        ? (_signal: AbortSignal): Promise<CommentThread[]> =>
-            loadThreadsForPath(selectedPathRef.current)
-        : undefined,
+  const perPathFetch = useCallback(
+    (_signal: AbortSignal): Promise<CommentThread[]> =>
+      loadThreadsForPath!(selectedPathRef.current),
     [loadThreadsForPath, selectedPathRef],
   );
-  const effectiveFetch = opts.fetchRemoteThreads ?? perPathFetch;
+
+  // Branch on the loaders themselves rather than on `perPathFetch`, which only
+  // reads its ref when the poller calls it.
+  const hasRemoteFetch =
+    opts.fetchRemoteThreads !== undefined || loadThreadsForPath !== undefined;
+
   const threadSync = useThreadSync({
-    enabled: !!effectiveFetch,
-    fetchThreads: effectiveFetch ?? noopFetch,
+    enabled: hasRemoteFetch,
+    fetchThreads:
+      opts.fetchRemoteThreads ??
+      (loadThreadsForPath ? perPathFetch : noopFetch),
     onThreads: opts.fetchRemoteThreads ? onPrThreads : onRemoteThreads,
     intervalMs: opts.threadSyncIntervalMs,
     // Resume polling the moment the ADO session is re-minted.
     subscribeRecovered: adoSession.onRecovered,
   });
+
   // Unified data refresh surfaced on the reading toolbar: pull a fresh comment
   // snapshot AND (when the host provides one) reload the file list in one click
   // — replacing the separate per-header refresh buttons. Gated on comment
   // refreshability, which every reader surface has; hosts that also expose a
   // file reload pass `onRefreshFiles` to fold it into the same click.
-  const canRefreshComments = !!effectiveFetch;
+  const canRefreshComments = hasRemoteFetch;
   const refresh = useUnifiedRefresh(threadSync, onRefreshFiles);
   useFirstThreadLoad(loadThreadsForPath, selectedPath, dispatch);
 
@@ -115,13 +134,15 @@ function useIdentitySeeding(
   // ids (people who aren't participants) are prefetched in one batch so their
   // names resolve on load, rather than flashing a raw GUID until each pill
   // happens to render.
-  React.useEffect(() => {
+  useEffect(() => {
     const people: Array<{
       id: string;
       displayName?: string;
       avatarUrl?: string;
     }> = [currentUser];
+
     const mentionIds: string[] = [];
+
     for (const id of threadState.order) {
       const t = threadState.threadsById[id];
       // Seed names ADO already resolved for this thread's @mentions. This is
@@ -129,11 +150,13 @@ function useIdentitySeeding(
       // by-id identities endpoint returns null), so mentions render as names on
       // load with no network call.
       if (t.mentionedIdentities) people.push(...t.mentionedIdentities);
+
       for (const c of t.comments) {
         people.push(c.author);
         mentionIds.push(...collectUserMentionIds(c.bodyMarkdown));
       }
     }
+
     identityStore.seed(people);
     // `ensure` skips ids already known (e.g. seeded authors) and coalesces the
     // rest into a single resolver call.
@@ -149,8 +172,9 @@ function useUnifiedRefresh(
   // so the toolbar stays "refreshing" until BOTH settle — otherwise the button
   // re-enables the moment the poll finishes and a slow file reload could be
   // fired again while the first is still running.
-  const [fileRefreshInFlight, setFileRefreshInFlight] = React.useState(false);
-  const handleRefresh = React.useCallback(() => {
+  const [fileRefreshInFlight, setFileRefreshInFlight] = useState(false);
+
+  const handleRefresh = useCallback(() => {
     // `refreshNow` is a safe no-op when thread sync is disabled, so no guard.
     threadSync.refreshNow();
     track(events.commentsRefreshed());
@@ -170,6 +194,7 @@ function useUnifiedRefresh(
       })
       .finally(() => setFileRefreshInFlight(false));
   }, [threadSync, onRefreshFiles]);
+
   const refreshLabel = onRefreshFiles
     ? "Refresh files and comments"
     : "Refresh comments";
@@ -180,12 +205,12 @@ function useUnifiedRefresh(
 function useFirstThreadLoad(
   loadThreadsForPath: ((path: string) => Promise<CommentThread[]>) | undefined,
   selectedPath: string,
-  dispatch: React.Dispatch<ThreadAction>,
+  dispatch: Dispatch<ThreadAction>,
 ): void {
   // Per-document mode: load the selected file's threads the first time it's
   // opened (the poller above keeps the active file fresh thereafter).
-  const loadedThreadPathsRef = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
+  const loadedThreadPathsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
     if (!loadThreadsForPath || !selectedPath) return;
     if (loadedThreadPathsRef.current.has(selectedPath)) return;
     loadedThreadPathsRef.current.add(selectedPath);
@@ -207,6 +232,7 @@ function useFirstThreadLoad(
           impact: "degraded",
         });
       });
+
     return () => {
       cancelled = true;
     };

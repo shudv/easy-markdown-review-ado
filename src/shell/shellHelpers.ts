@@ -30,6 +30,7 @@ export function buildReaderActivities(input: {
   documentLoading: boolean;
 }): ReaderActivity[] {
   const activities = [...input.navigationActivities];
+
   if (input.commentSyncing) {
     activities.push({
       id: "comment-sync",
@@ -45,6 +46,7 @@ export function buildReaderActivities(input: {
       priority: 60,
     });
   }
+
   if (input.historicalLoading) {
     activities.push({
       id: "history",
@@ -58,6 +60,7 @@ export function buildReaderActivities(input: {
       priority: 100,
     });
   }
+
   return activities;
 }
 
@@ -67,6 +70,7 @@ export function bindRepositoryImageResolver(
   atCommitId: string | null | undefined,
 ): RepositoryImageResolver | undefined {
   if (!resolveImage) return undefined;
+
   return (repositoryPath) =>
     resolveImage(documentPath, repositoryPath, atCommitId ?? undefined);
 }
@@ -101,12 +105,14 @@ export function absentAtUpdateMessage(
       body: `This file was deleted in this pull request by Update ${update}, so there's nothing to show for the selected updates.`,
     };
   }
+
   if (changeType === "added") {
     return {
       title: `Not added yet at Update ${update}`,
       body: `This pull request adds this file in a later update, so it doesn't exist yet at Update ${update}.`,
     };
   }
+
   return {
     title: `Not present at Update ${update}`,
     body: `This file doesn't exist at Update ${update} of this pull request (it may have been moved or renamed).`,
@@ -126,19 +132,24 @@ export function friendlyWriteError(label: string, err: unknown): string {
   if (isSessionRefreshingError(err)) {
     return `${label} didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.`;
   }
+
   const status = extractStatus(err);
   const raw = errorMessage(err);
+
   // Transient auth blip — token refresh race / SPS auth blip.
   if (status === 401 || /\bTF400813\b/.test(raw)) {
     return `${label} didn't go through — your session refreshed. Please try again.`;
   }
+
   // No HTTP status reached us — a dropped connection.
   if (status === undefined) {
     return `${label} didn't go through — check your connection and try again.`;
   }
+
   // A server-provided, human-readable reason (permission rules, etc.) — keep it,
   // but only when it isn't an opaque TF code.
   const clean = raw && !/\bTF\d{5,6}\b/.test(raw) ? raw.trim() : "";
+
   return clean
     ? `${label} failed: ${clean}`
     : `${label} didn't go through. Please try again.`;
@@ -194,6 +205,7 @@ export function isCommentUiClickTarget(target: Element | null): boolean {
  */
 export function countWords(markdown: string): number {
   if (!markdown) return 0;
+
   const text = markdown
     .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
     .replace(/`[^`]*`/g, " ") // inline code
@@ -201,7 +213,9 @@ export function countWords(markdown: string): number {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links → keep text
     .replace(/<[^>]+>/g, " ") // HTML tags
     .replace(/[#>*_~`|=]+/g, " "); // common md punctuation (keep hyphens)
+
   const matches = text.match(/\p{L}[\p{L}\p{N}'-]*/gu);
+
   return matches ? matches.length : 0;
 }
 
@@ -227,16 +241,20 @@ export function wordCountDelta(
   const lines = source.split(/\r?\n/);
   let added = 0;
   let removed = 0;
+
   for (const range of diff) {
     if (range.kind === "deleted-marker") {
       removed += countWords(range.deletedContent ?? "");
       continue;
     }
+
     const slice = lines.slice(range.startLine - 1, range.endLine).join("\n");
+
     if (range.kind === "added") {
       added += countWords(slice);
       continue;
     }
+
     // modified: word-diff the pre-edit text against the current slice so only
     // the genuinely changed words count on each side.
     for (const op of diffWords(range.originalText ?? "", slice)) {
@@ -244,6 +262,7 @@ export function wordCountDelta(
       else if (op.kind === "removed") removed += countWords(op.value);
     }
   }
+
   return { added, removed };
 }
 
@@ -262,6 +281,7 @@ export interface WordDeltaPart {
  */
 export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
   const parts: WordDeltaPart[] = [];
+
   if (delta.added > 0) {
     parts.push({
       kind: "added",
@@ -269,6 +289,7 @@ export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
       a11y: `${delta.added} words added`,
     });
   }
+
   if (delta.removed > 0) {
     parts.push({
       kind: "removed",
@@ -276,6 +297,7 @@ export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
       a11y: `${delta.removed} words removed`,
     });
   }
+
   return parts;
 }
 
@@ -342,6 +364,7 @@ export function oneReviewUpdate(
   updateCount: number,
 ): ReviewIterationRange {
   const toUpdate = Math.max(1, Math.min(update, Math.max(1, updateCount)));
+
   return { fromUpdate: toUpdate - 1, toUpdate };
 }
 
@@ -354,6 +377,7 @@ export function betweenReviewUpdates(
   const first = Math.max(1, Math.min(firstUpdate, max));
   const second = Math.max(1, Math.min(secondUpdate, max));
   if (first === second) return oneReviewUpdate(first, max);
+
   return {
     fromUpdate: Math.min(first, second) - 1,
     toUpdate: Math.max(first, second),
@@ -369,6 +393,7 @@ export function resolveReviewIterationRange(
   const toUpdate = Math.max(1, Math.min(requested.toUpdate, max));
   const fromUpdate = Math.max(0, Math.min(requested.fromUpdate, toUpdate - 1));
   const range = { fromUpdate, toUpdate };
+
   return {
     range,
     isAllChanges: fromUpdate === 0 && toUpdate === max,
@@ -387,9 +412,11 @@ export function reviewRangeLabel(
 ): string {
   const resolved = resolveReviewIterationRange(range, updateCount);
   if (resolved.isAllChanges) return "All updates";
+
   if (resolved.range.fromUpdate === 0) {
     return `Base → Update ${resolved.range.toUpdate}`;
   }
+
   return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
 }
 
@@ -410,9 +437,11 @@ export function buildHistoryStops(
     isCurrent: true,
     readOnly: false,
   };
+
   const seen = new Set<number>();
   if (currentPrId != null) seen.add(currentPrId);
   const historical: HistoryStop[] = [];
+
   for (const ref of history) {
     if (seen.has(ref.prId)) continue;
     seen.add(ref.prId);
@@ -426,6 +455,7 @@ export function buildHistoryStops(
       readOnly: true,
     });
   }
+
   return [current, ...historical];
 }
 
@@ -446,8 +476,10 @@ export function sourceDiffRanges(
   let originalLine = 1;
   let modifiedLine = 1;
   let index = 0;
+
   while (index < diffs.length) {
     const [operation, text] = diffs[index]!;
+
     if (operation === 0) {
       const count = sourceLineCount(text);
       originalLine += count;
@@ -462,6 +494,7 @@ export function sourceDiffRanges(
     modifiedLine += run.addedLines;
     index = run.next;
   }
+
   return ranges;
 }
 
@@ -484,17 +517,21 @@ function collectChangeRun(
     deletedLines: 0,
     addedLines: 0,
   };
+
   while (run.next < diffs.length && diffs[run.next]![0] !== 0) {
     const [change, changeText] = diffs[run.next]!;
     const count = sourceLineCount(changeText);
+
     if (change < 0) {
       run.deletedText += changeText;
       run.deletedLines += count;
     } else {
       run.addedLines += count;
     }
+
     run.next += 1;
   }
+
   return run;
 }
 
@@ -515,6 +552,7 @@ function changeRunToRange(
       linesDeleted: deletedLines,
     };
   }
+
   if (addedLines > 0) {
     return {
       startLine: modifiedStartLine,
@@ -524,6 +562,7 @@ function changeRunToRange(
       linesDeleted: 0,
     };
   }
+
   return {
     startLine: Math.max(1, modifiedStartLine),
     endLine: Math.max(1, modifiedStartLine),
@@ -536,9 +575,11 @@ function changeRunToRange(
 
 function sourceLineCount(text: string): number {
   let lines = text.endsWith("\n") ? 0 : 1;
+
   for (const character of text) {
     if (character === "\n") lines += 1;
   }
+
   return lines;
 }
 
@@ -560,6 +601,7 @@ export function stepStopIndex(
   if (next < 0) return 0;
   const last = length - 1;
   if (next > last) return last < 0 ? 0 : last;
+
   return next;
 }
 
@@ -579,11 +621,19 @@ export function historyChevronTooltip(
       ? "No earlier versions"
       : "Already at the current version";
   }
+
+  const titleSuffix =
+    target.title !== undefined && target.title !== ""
+      ? `: ${target.title}`
+      : "";
+
   const where = target.isCurrent
     ? target.prId != null
       ? `current version (PR #${target.prId})`
       : "current version"
-    : `PR #${target.prId}${target.title ? `: ${target.title}` : ""}`;
+    : `PR #${target.prId}${titleSuffix}`;
+
   const verb = direction === "older" ? "Older" : "Newer";
+
   return `${verb} version — ${where}`;
 }

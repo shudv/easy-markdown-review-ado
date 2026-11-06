@@ -1,6 +1,11 @@
 // Shell: posting new comments and replies.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useCallback,
+} from "react";
 
 import type {
   CommentAuthor,
@@ -22,27 +27,28 @@ import type { PersistWith } from "./useCommentWrites";
 interface CommentPostingOptions {
   commentApi: CommentApi;
   persistWith: PersistWith;
-  dispatch: React.Dispatch<ThreadAction>;
+  dispatch: Dispatch<ThreadAction>;
   currentUser: CommentAuthor;
   identityStore: IdentityStore;
   selectedPath: string;
   sourceByPath: Record<string, string>;
   draftAnchor: TextQuoteAnchor | null;
-  activeDraftRef: React.MutableRefObject<DraftTarget | null>;
+  activeDraftRef: MutableRefObject<DraftTarget | null>;
   draft: DraftPersistence;
   isStillPostedDraft: (
     postedTarget: DraftTarget | null,
     body: string,
   ) => boolean;
-  setActiveDraft: React.Dispatch<React.SetStateAction<DraftTarget | null>>;
-  setDraftY: React.Dispatch<React.SetStateAction<number | null>>;
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveDraft: Dispatch<SetStateAction<DraftTarget | null>>;
+  setDraftY: Dispatch<SetStateAction<number | null>>;
+  setActiveThreadId: Dispatch<SetStateAction<string | null>>;
 }
 
 /** Posting the open composer: a new comment thread or a reply. */
 export function useCommentPosting(opts: CommentPostingOptions) {
   const onSubmitDraft = useSubmitDraft(opts);
   const onReply = useReply(opts);
+
   return { onSubmitDraft, onReply };
 }
 
@@ -64,19 +70,23 @@ function useSubmitDraft(opts: CommentPostingOptions) {
     setDraftY,
     setActiveThreadId,
   } = opts;
-  return React.useCallback(
+
+  return useCallback(
     (body: string) => {
       // Anchor against the SAME source that produced the currently rendered
       // article so the comment can be located in it.
       const source = sourceByPath[selectedPath] ?? "";
       const anchor = withSourceLocation(draftAnchor!, source);
+
       // Names the picker already resolved for this body's @mentions. Persisted
       // with the thread so they render on load even where ADO can't resolve the
       // id (cross-tenant guests / personal-MSA orgs).
       const mentions = collectMentionIdentities(body, (mid) =>
         identityStore.get(mid),
       );
+
       const postedTarget = activeDraftRef.current;
+
       void (async () => {
         const created = await persistWith("Create comment", () =>
           commentApi.createThread({
@@ -86,7 +96,9 @@ function useSubmitDraft(opts: CommentPostingOptions) {
             mentions,
           }),
         );
+
         if (!created) return;
+
         const thread = createdThread({
           created,
           filePath: selectedPath,
@@ -95,6 +107,7 @@ function useSubmitDraft(opts: CommentPostingOptions) {
           body,
           mentions,
         });
+
         dispatch({ type: "ADD_THREAD", thread });
         track(
           events.commentCreated({
@@ -140,13 +153,16 @@ function useReply(opts: CommentPostingOptions) {
     isStillPostedDraft,
     setActiveDraft,
   } = opts;
-  return React.useCallback(
+
+  return useCallback(
     (threadId: string, body: string) => {
       const postedTarget = activeDraftRef.current;
+
       void (async () => {
         const created = await persistWith("Add reply", () =>
           commentApi.addReply(threadId, body),
         );
+
         if (!created) return;
         dispatch({
           type: "ADD_REPLY",
@@ -187,17 +203,20 @@ function createdThread(args: {
   mentions: MentionedIdentity[];
 }): CommentThread {
   const { created, filePath, anchor, author, body, mentions } = args;
+
   const thread = makeNewThread(
     { id: created.threadId, filePath, anchor },
     author,
     body,
     created.createdAt,
   );
+
   // `makeNewThread` mints exactly one comment; give it the server's id.
   thread.comments = thread.comments.map((c) => ({
     ...c,
     id: created.firstCommentId,
   }));
   if (mentions.length > 0) thread.mentionedIdentities = mentions;
+
   return thread;
 }

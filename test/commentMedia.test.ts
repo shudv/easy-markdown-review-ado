@@ -8,6 +8,7 @@ import {
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -42,6 +43,7 @@ describe("isAdoPullRequestAttachmentUrl", () => {
     ).toBe(false);
     expect(
       isAdoPullRequestAttachmentUrl(
+        // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// attachment URL is rejected
         "http://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
       ),
     ).toBe(false);
@@ -151,8 +153,10 @@ describe("decorateCommentMedia", () => {
 
   it("replaces ADO image URLs with authenticated object URLs", async () => {
     const root = document.createElement("div");
+
     const original =
       "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.png";
+
     root.innerHTML = `<img src="${original}" alt="Design">`;
     const resolveImage = vi.fn().mockResolvedValue("blob:authenticated-image");
 
@@ -253,12 +257,16 @@ describe("decorateCommentMedia", () => {
 
   it("does not apply a resolved object URL after cleanup", async () => {
     let resolve!: (url: string) => void;
+
     const pending = new Promise<string>((done) => {
       resolve = done;
     });
+
     const root = document.createElement("div");
+
     const original =
       "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.png";
+
     root.innerHTML = `<img src="${original}" alt="Design">`;
 
     const cleanup = decorateCommentMedia(root, () => pending);

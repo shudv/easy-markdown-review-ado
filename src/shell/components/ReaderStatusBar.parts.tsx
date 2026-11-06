@@ -1,6 +1,6 @@
 // Status-bar control groups: navigation, comparison, comments, refresh.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 import type { ReviewIterationRange, WordDeltaPart } from "../shellHelpers";
 import type { StatusBarVisibility } from "./readerStatusBarModel";
@@ -22,14 +22,17 @@ import { IterationPicker } from "./IterationPicker";
  * Opt-in toggle for the heading outline under the open document in the
  * navigation panel. Only offered while that panel is shown.
  */
-function OutlineToggle(props: {
-  navToggleable: boolean;
-  navShown: boolean;
-  shown: boolean;
-  onToggle: (() => void) | undefined;
-}): React.ReactElement | null {
+function OutlineToggle(
+  props: Readonly<{
+    navToggleable: boolean;
+    navShown: boolean;
+    shown: boolean;
+    onToggle: (() => void) | undefined;
+  }>,
+): ReactElement | null {
   const { navToggleable, navShown, shown, onToggle } = props;
   if (!navToggleable || !navShown || !onToggle) return null;
+
   return (
     <button
       type="button"
@@ -58,9 +61,13 @@ function CommentStepper({
   threadIds,
   activeThreadId,
   onCycle,
-}: CommentStepperProps): React.ReactElement {
+}: Readonly<CommentStepperProps>): ReactElement {
   const total = threadIds.length;
-  const activeIndex = activeThreadId ? threadIds.indexOf(activeThreadId) : -1;
+
+  const activeIndex = hasText(activeThreadId)
+    ? threadIds.indexOf(activeThreadId)
+    : -1;
+
   const cycle = (direction: -1 | 1) => {
     const nextIndex =
       activeIndex < 0
@@ -68,6 +75,7 @@ function CommentStepper({
           ? total - 1
           : 0
         : (activeIndex + direction + total) % total;
+
     onCycle(threadIds[nextIndex]!);
   };
 
@@ -119,11 +127,11 @@ function WordStatus({
   wordCount,
   hasCount,
   deltaParts,
-}: {
+}: Readonly<{
   wordCount: number | undefined;
   hasCount: boolean;
   deltaParts: readonly WordDeltaPart[];
-}): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-statusbar-status">
       {hasCount ? (
@@ -153,17 +161,20 @@ function WordStatus({
 }
 
 /** PR-comparison controls: the update picker and the Changes toggle. */
-function ContextControls(props: {
-  showIterationPicker: boolean;
-  iterationOptions: ReaderStatusBarProps["iterationOptions"];
-  iterationBaseCommit: string | undefined;
-  iterationRange: ReviewIterationRange | undefined;
-  onIterationRangeChange: ReaderStatusBarProps["onIterationRangeChange"];
-  changesAvailable: boolean;
-  changesShown: boolean;
-  onToggleChanges: () => void;
-}): React.ReactElement {
+function ContextControls(
+  props: Readonly<{
+    showIterationPicker: boolean;
+    iterationOptions: ReaderStatusBarProps["iterationOptions"];
+    iterationBaseCommit: string | undefined;
+    iterationRange: ReviewIterationRange | undefined;
+    onIterationRangeChange: ReaderStatusBarProps["onIterationRangeChange"];
+    changesAvailable: boolean;
+    changesShown: boolean;
+    onToggleChanges: () => void;
+  }>,
+): ReactElement {
   const { changesAvailable, changesShown, onToggleChanges } = props;
+
   return (
     <div className="emr-statusbar-context-controls">
       {props.showIterationPicker ? (
@@ -198,14 +209,17 @@ function ContextControls(props: {
 export function StatusBarLeft({
   props,
   visibility,
-}: {
+}: Readonly<{
   props: ReaderStatusBarProps;
   visibility: StatusBarVisibility;
-}): React.ReactElement {
+}>): ReactElement {
   const { navToggleable, showNav } = props;
+
   const { hasCount, deltaParts, showIterationPicker, showContextControls } =
     visibility;
+
   const hasStatus = hasCount || deltaParts.length > 0;
+
   return (
     <div className="emr-statusbar-left">
       {navToggleable ? (
@@ -257,16 +271,18 @@ function ResolvedPullRequestBadge({
   pullRequest,
 }: {
   pullRequest: ReaderStatusBarProps["resolvedPullRequest"];
-}): React.ReactElement | null {
+}): ReactElement | null {
   if (!pullRequest) return null;
   const label = `Latest completed PR for this file: #${pullRequest.prId} ${pullRequest.title}`;
+
   const content = (
     <>
       <IconPullRequest />
       <span>PR #{pullRequest.prId}</span>
     </>
   );
-  return pullRequest.url ? (
+
+  return hasText(pullRequest.url) ? (
     <a
       className="emr-statusbar-resolved-pr"
       href={pullRequest.url}
@@ -292,11 +308,12 @@ function ResolvedPullRequestBadge({
 export function CommentControls({
   props,
   showCommentStepper,
-}: {
+}: Readonly<{
   props: ReaderStatusBarProps;
   showCommentStepper: boolean;
-}): React.ReactElement {
+}>): ReactElement {
   const { showComments } = props;
+
   return (
     <>
       <div className="emr-statusbar-control-group emr-statusbar-comment-controls">
@@ -330,12 +347,15 @@ export function RefreshFeedbackControls({
   refreshing,
   refreshLabel,
   feedbackHref,
-}: Pick<
-  ReaderStatusBarProps,
-  "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref"
->): React.ReactElement | null {
-  if (!onRefresh && !feedbackHref) return null;
+}: Readonly<
+  Pick<
+    ReaderStatusBarProps,
+    "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref"
+  >
+>): ReactElement | null {
+  if (!onRefresh && !hasText(feedbackHref)) return null;
   const label = refreshLabel ?? "Refresh";
+
   return (
     <>
       <StatusBarSeparator />
@@ -352,7 +372,7 @@ export function RefreshFeedbackControls({
             <IconRefresh />
           </button>
         ) : null}
-        {feedbackHref ? (
+        {hasText(feedbackHref) ? (
           <a
             className="emr-statusbar-btn emr-statusbar-feedback"
             href={feedbackHref}
@@ -370,4 +390,8 @@ export function RefreshFeedbackControls({
       </div>
     </>
   );
+}
+
+function hasText(value: string | null | undefined): value is string {
+  return value != null && value !== "";
 }

@@ -87,12 +87,14 @@ describe("CommentRail layout", () => {
 
   it("expands a tray when opened, active, or matched by search", () => {
     const threads = [thread("a")];
+
     const base = {
       collapsed: true,
       threads,
       activeThreadId: null,
       searchActive: false,
     };
+
     expect(isRailTrayExpanded(base)).toBe(false);
     expect(isRailTrayExpanded({ ...base, collapsed: false })).toBe(true);
     expect(isRailTrayExpanded({ ...base, activeThreadId: "a" })).toBe(true);
@@ -111,6 +113,7 @@ describe("CommentRail layout", () => {
       hasRoutedPr: false,
       hidePrPill: undefined,
     };
+
     expect(shouldShowRailHeader(base)).toBe(false);
     expect(shouldShowRailHeader({ ...base, readOnly: false })).toBe(true);
     expect(shouldShowRailHeader({ ...base, totalCommentCount: 1 })).toBe(true);
@@ -130,6 +133,7 @@ describe("CommentRail layout", () => {
       visibleGeneralThreads: [] as CommentThread[],
       visibleOrphanedFileThreads: [] as CommentThread[],
     };
+
     const opts = {
       hasDraft: false,
       commentQuery: "",
@@ -137,6 +141,7 @@ describe("CommentRail layout", () => {
       fileThreadCount: 0,
       readOnly: false,
     };
+
     expect(
       railEmptyMessageFor({ ...model, orderedAnchoredIds: ["a"] }, opts),
     ).toBeNull();
@@ -144,10 +149,12 @@ describe("CommentRail layout", () => {
     expect(railEmptyMessageFor(model, { ...opts, commentQuery: "x" })).toBe(
       "No comments match \u201cx\u201d.",
     );
+
     const withOther = railEmptyMessageFor(
       { ...model, visibleGeneralThreads: [thread("g")] },
       opts,
     );
+
     const withoutOther = railEmptyMessageFor(model, opts);
     expect(withOther).not.toBe(withoutOther);
   });
@@ -202,10 +209,12 @@ describe("CommentRow helpers", () => {
       likedByMe: false,
       likeCount: 0,
     });
+
     const users = [
       { id: "me", displayName: "Me" },
       { id: "you", displayName: "You" },
     ];
+
     expect(summarizeLikes([{ kind: "like", users }], "me")).toMatchObject({
       likedByMe: true,
       likeCount: 2,

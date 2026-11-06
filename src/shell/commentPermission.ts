@@ -38,22 +38,27 @@ export async function checkRepoCommentPermission(
   if (!orgUrl) return ALLOWED_UNRESOLVED;
   // Never attach the ADO access token to a non-ADO origin.
   if (!isAzureDevOpsOrgUrl(orgUrl)) return ALLOWED_UNRESOLVED;
+
   try {
     const accessToken = await SDK.getAccessToken();
     const base = orgUrl.replace(/\/+$/, "");
+
     const url = `${base}/${hasPermissionsPath(
       GIT_REPOSITORIES_NAMESPACE_ID,
       GIT_CONTRIBUTE_BIT,
       repoSecurityToken(projectId, repoId),
     )}`;
+
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
       },
     });
+
     if (!res.ok) return ALLOWED_UNRESOLVED;
     const body = (await res.json()) as { value?: unknown };
+
     return commentPermissionFromResponse(body);
   } catch {
     // Never block commenting because the probe failed.

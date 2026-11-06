@@ -1,6 +1,6 @@
 // Shell: change highlights and word counts for the shown article.
 
-import * as React from "react";
+import { useMemo } from "react";
 
 import type { DiffRange } from "../../types";
 import { refineDiffRanges } from "../../markdown/diffRefine";
@@ -30,11 +30,13 @@ interface ActiveDiffOptions {
 export function useActiveDiff(opts: ActiveDiffOptions) {
   const { comparingIterations, currentFileDiff } = opts;
   const latestSource = opts.sourceByPath[opts.selectedPath];
+
   const { activeSource, baselineSource } = activeSources({
     ...opts,
     latestSource,
   });
-  const iterationDiff = React.useMemo(
+
+  const iterationDiff = useMemo(
     () =>
       comparingIterations &&
       baselineSource !== undefined &&
@@ -43,6 +45,7 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
         : undefined,
     [comparingIterations, baselineSource, activeSource],
   );
+
   const { activeOriginalSource, activeDiffTarget, rawActiveDiff } = diffInputs({
     comparingIterations,
     baselineSource,
@@ -52,31 +55,35 @@ export function useActiveDiff(opts: ActiveDiffOptions) {
     iterationDiff,
     currentFileDiff,
   });
+
   // Both line diffs (ADO's and the update comparison's) report a rewrite as
   // coarse hunks; re-align them per Markdown block so new blocks read as
   // added and only genuine edits read as edited.
-  const activeDiff = React.useMemo(
+  const activeDiff = useMemo(
     () =>
       rawActiveDiff &&
       refineDiffRanges(rawActiveDiff, activeOriginalSource, activeDiffTarget),
     [rawActiveDiff, activeOriginalSource, activeDiffTarget],
   );
+
   const diffAvailable = isDiffAvailable({ ...opts, iterationDiff });
   const showDiff = diffAvailable && !opts.diffHidden;
 
   // Subtle word-count badge for the doc-nav title. Uses the active document's
   // Markdown source; falls back to 0 (badge hidden) until the source loads.
-  const docWordCount = React.useMemo(
+  const docWordCount = useMemo(
     () => countWords(activeSource ?? ""),
     [activeSource],
   );
+
   // When the diff is shown, also surface how the PR grew/shrank the prose:
   // words added vs. removed, derived from the changed line ranges. `showDiff`
   // already implies a present, non-empty `currentFileDiff` (see `diffAvailable`),
   // so the delta only needs the show/hide gate here; an all-zero delta is fine —
   // the badge simply renders no `+/−` segment.
-  const docWordDelta = React.useMemo(() => {
+  const docWordDelta = useMemo(() => {
     if (!showDiff) return undefined;
+
     return wordCountDelta(activeSource ?? "", activeDiff!);
   }, [showDiff, activeDiff, activeSource]);
 

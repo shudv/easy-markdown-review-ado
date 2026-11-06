@@ -24,6 +24,7 @@ describe("repairSequenceSemicolons", () => {
       "  else Accepted; slow",
       "  end",
     ].join("\n");
+
     expect(repairSequenceSemicolons(src)).toBe(
       [
         "sequenceDiagram",

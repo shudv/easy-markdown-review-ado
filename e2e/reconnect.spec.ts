@@ -56,8 +56,10 @@ let prId = 0;
 const RECOVERY_SLACK_MS = 30_000;
 
 const BOOT_HEADING = "Reconnecting to Azure DevOps…";
+
 const NOTICE_IDLE =
   "Reconnecting to Azure DevOps — this usually fixes itself within a few minutes.";
+
 const NOTICE_HELD =
   "Reconnecting to Azure DevOps — your changes will be saved automatically.";
 
@@ -67,6 +69,7 @@ function countLoads(page: Page): () => number {
   page.on("load", () => {
     n += 1;
   });
+
   return () => n;
 }
 
@@ -77,6 +80,7 @@ async function openPr(page: Page): Promise<FrameLocator> {
   await expect(frame.locator(".markdown-body").first()).toBeVisible({
     timeout: 60_000,
   });
+
   return frame;
 }
 
@@ -109,6 +113,7 @@ async function draftComment(frame: FrameLocator, text: string) {
     .locator(".emr-rendered p")
     .filter({ hasNot: frame.locator(".emr-highlight") })
     .first();
+
   await openDraftComposerBySelection(frame, {
     para,
     minNodeLen: 4,
@@ -118,6 +123,7 @@ async function draftComment(frame: FrameLocator, text: string) {
   const textarea = draft.locator("textarea.emr-textarea");
   await textarea.click();
   await textarea.fill(text);
+
   return { draft, textarea };
 }
 
@@ -212,6 +218,7 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
     const marker = runMarker("held");
     const posted = `${marker} posted while reconnecting`;
     const edited = `${marker} edited while reconnecting`;
+
     try {
       const frame = await openPr(page);
 
@@ -282,6 +289,7 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
   }) => {
     test.setTimeout(180_000);
     const marker = runMarker("reply");
+
     try {
       let frame = await openPr(page);
       // Start a thread to reply to (no faults yet).
@@ -307,9 +315,11 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
       // After the reload the reply composer is back with the text intact.
       frame = prTabFrame(page);
       await waitForFrameRoot(frame);
+
       const restored = postedThread(frame, marker).locator(
         "textarea.emr-textarea",
       );
+
       await expect(restored).toHaveValue(`${marker} reply`, {
         timeout: 60_000,
       });
@@ -336,12 +346,15 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
   }) => {
     test.setTimeout(120_000);
     const marker = runMarker("network");
+
     try {
       const frame = await openPr(page);
+
       const { draft, textarea } = await draftComment(
         frame,
         `${marker} comment`,
       );
+
       await fault(page, "failNextWrite");
       await draft.getByRole("button", { name: /^comment$/i }).click();
 
@@ -391,7 +404,7 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
             (e) =>
               e.name === "app.loaded" &&
               e.properties?.readyReason === "content" &&
-              e.properties?.bootHadHiddenInterval === true,
+              e.properties.bootHadHiddenInterval === true,
           ),
       )
       .toBe(true);

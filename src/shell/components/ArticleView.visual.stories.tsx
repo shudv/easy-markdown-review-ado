@@ -8,7 +8,15 @@
 // no animation, and no Mermaid (KaTeX is deterministic and covered here).
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { expect, fn, waitFor } from "storybook/test";
 
 import type { CommentThread, DiffRange } from "../../types";
@@ -164,18 +172,20 @@ function ThemeFrame({
 }: {
   theme?: "dark" | "hc-light" | "hc-dark";
   width?: number;
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
     else el.removeAttribute("data-emr-theme");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div
       style={{
@@ -219,11 +229,14 @@ function assertMicroBeforeTriggers(canvasElement: HTMLElement): void {
     const control = trigger.closest<HTMLElement>(".emr-diff-before-control")!;
     const panel = control.nextElementSibling as HTMLElement | null;
     const controlParent = control.parentElement;
+
     const owner = controlParent?.classList.contains("emr-diff-block")
       ? controlParent
       : (panel?.nextElementSibling as HTMLElement | null);
+
     const triggerRect = trigger.getBoundingClientRect();
     const ownerRect = owner?.getBoundingClientRect();
+
     if (
       trigger.textContent !== "Before" ||
       trigger.getAttribute("aria-label") !== "Show previous version" ||
@@ -249,15 +262,18 @@ async function waitForDiff(canvasElement: HTMLElement): Promise<void> {
       if (!canvasElement.querySelector(".emr-diff-block")) {
         throw new Error("diff not decorated yet");
       }
+
       if (!canvasElement.querySelector(".emr-word-added")) {
         throw new Error("inline word diff not applied yet");
       }
     },
     { timeout: 5000 },
   );
+
   const tableMarker = canvasElement.querySelector<HTMLTableRowElement>(
     "tr.emr-diff-deleted-table-row",
   );
+
   if (!tableMarker) throw new Error("deleted table row not rendered");
   await waitFor(() => {
     if (tableMarker.hidden) {
@@ -332,15 +348,18 @@ export const MinimalLineWashes: Story = {
       const wrappers = canvasElement.querySelectorAll<HTMLElement>(
         ".emr-diff-line-wash",
       );
+
       if (wrappers.length !== 5) throw new Error("line washes not settled");
     });
 
     const heading = canvasElement.querySelector<HTMLElement>(
       "h2 .emr-diff-line-wash",
     )!;
+
     const paragraph = canvasElement.querySelector<HTMLElement>(
       "p .emr-diff-line-wash",
     )!;
+
     const listWashes = Array.from(
       canvasElement.querySelectorAll<HTMLElement>("li > .emr-diff-line-wash"),
     );
@@ -349,15 +368,18 @@ export const MinimalLineWashes: Story = {
       const owner = wash.parentElement!;
       const rects = Array.from(wash.getClientRects());
       const finalRect = rects[rects.length - 1]!;
+
       if (finalRect.right >= owner.getBoundingClientRect().right - 24) {
         throw new Error("line wash still reaches the block edge");
       }
+
       return rects;
     };
 
     expect(expectShortFinalRect(heading)).toHaveLength(1);
     expect(expectShortFinalRect(paragraph).length).toBeGreaterThan(1);
     expect(listWashes).toHaveLength(3);
+
     for (const wash of listWashes) {
       expect(expectShortFinalRect(wash)).toHaveLength(1);
     }
@@ -477,7 +499,7 @@ const LEGACY_DIFF_FIXTURE_CSS = `
   .minimal-diff-comparison .legacy-diff-washes .emr-rendered .emr-diff-source-only { width: min(100%, 720px); max-width: none; }
 `;
 
-function MinimalDiffComparison(): React.ReactElement {
+function MinimalDiffComparison(): ReactElement {
   const articleProps = {
     pristineHtml: renderMarkdownSync(MINIMAL_DIFF_COMPARISON_SOURCE),
     documentPath: "/minimal-diff-comparison.md",
@@ -492,7 +514,7 @@ function MinimalDiffComparison(): React.ReactElement {
     onAnchorsResolved: fn(),
     onHighlightClick: fn(),
     onSelection: fn(),
-  } satisfies React.ComponentProps<typeof ArticleView>;
+  } satisfies ComponentProps<typeof ArticleView>;
 
   return (
     <ThemeFrame width={1280}>
@@ -533,12 +555,15 @@ export const MinimalDiffComparisonShot: Story = {
     const afterPane = canvasElement.querySelectorAll<HTMLElement>(
       ".minimal-diff-comparison-pane",
     )[1]!;
+
     const codeWash = afterPane.querySelector<HTMLElement>(
       "pre .emr-diff-line-wash",
     )!;
+
     const sourceOnly = afterPane.querySelector<HTMLElement>(
       ".emr-diff-source-only",
     )!;
+
     const article = afterPane.querySelector<HTMLElement>(".emr-rendered")!;
     expect(codeWash.getClientRects().length).toBeGreaterThan(1);
     expect(sourceOnly.getBoundingClientRect().width).toBeLessThan(
@@ -556,6 +581,7 @@ export const MinimalDiffComparisonShot: Story = {
 
 const MEDIA_IMAGE_URL = new URL("../../../static/logo.png", import.meta.url)
   .href;
+
 const MEDIA_SOURCE = [
   "# Media Diff",
   "",
@@ -567,6 +593,7 @@ const MEDIA_SOURCE = [
   "",
   `![Current architecture](${MEDIA_IMAGE_URL})`,
 ].join("\n");
+
 const MEDIA_DIFF: DiffRange[] = [
   { startLine: 5, endLine: 5, kind: "added" },
   {
@@ -581,9 +608,12 @@ async function waitForMinimalMediaDiff(canvasElement: HTMLElement) {
   await waitFor(() => {
     const blocks =
       canvasElement.querySelectorAll<HTMLElement>(".emr-diff-image");
+
     if (blocks.length !== 2) throw new Error("media diffs not decorated");
+
     for (const block of blocks) {
       const style = getComputedStyle(block);
+
       if (
         style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
         style.borderLeftWidth !== "0px" ||
@@ -629,10 +659,11 @@ export const MediaDiffDark: Story = {
 };
 
 function OriginalSourceRewrapArticle(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [originalSource, setOriginalSource] = React.useState<string>();
-  React.useEffect(() => setOriginalSource(SOURCE), []);
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [originalSource, setOriginalSource] = useState<string>();
+  useEffect(() => setOriginalSource(SOURCE), []);
+
   return (
     <div data-original-source-ready={originalSource !== undefined}>
       <ArticleView {...props} originalSource={originalSource} />
@@ -650,6 +681,7 @@ export const ActiveHighlightAfterOriginalSource: Story = {
       ) {
         throw new Error("original source did not settle");
       }
+
       if (
         canvasElement.querySelector(
           '.emr-highlight.is-active[data-thread-id="t1"]',
@@ -774,52 +806,67 @@ async function waitForTableGallery(canvasElement: HTMLElement): Promise<void> {
     const trigger = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-diff-metadata-trigger",
     )!;
+
     const panel = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-metadata-panel",
     )!;
+
     if (!panel.matches(":popover-open")) {
       throw new Error("metadata popover not open");
     }
+
     if (
       trigger.getAttribute("aria-expanded") !== "true" ||
       trigger.getAttribute("aria-controls") !== panel.id
     ) {
       throw new Error("metadata popover ARIA is not synchronized");
     }
+
     const panelRect = panel.getBoundingClientRect();
+
     if (panelRect.top < 7 || panelRect.bottom > window.innerHeight - 7) {
       throw new Error("metadata popover extends beyond the viewport");
     }
+
     if (
       canvasElement.querySelector<HTMLElement>(".emr-diff-before-panel")!.hidden
     ) {
       throw new Error("before table not expanded");
     }
+
     const removedRowCell = canvasElement.querySelector<HTMLElement>(
       "tr.emr-diff-deleted-table-row > td",
     );
+
     const removedColumnCell = canvasElement.querySelector<HTMLElement>(
       "td.emr-diff-cell--removed, th.emr-diff-cell--removed",
     );
+
     if (!removedRowCell || !removedColumnCell) {
       throw new Error("structural removal examples not rendered");
     }
+
     const removedRowBackground =
       getComputedStyle(removedRowCell).backgroundColor;
+
     const removedColumnBackground =
       getComputedStyle(removedColumnCell).backgroundColor;
+
     if (removedRowBackground !== removedColumnBackground) {
       throw new Error(
         `removed row (${removedRowBackground}) and column (${removedColumnBackground}) washes do not match`,
       );
     }
   });
+
   const trigger = canvasElement.querySelector<HTMLButtonElement>(
     ".emr-diff-metadata-trigger",
   )!;
+
   const panel = canvasElement.querySelector<HTMLElement>(
     ".emr-diff-metadata-panel",
   )!;
+
   (
     panel as HTMLElement & {
       hidePopover(): void;
@@ -973,12 +1020,15 @@ async function waitForConfidenceGallery(
     ) {
       throw new Error("confidence fallbacks not rendered");
     }
+
     if (!canvasElement.querySelector("thead .emr-word-added")) {
       throw new Error("header rename not rendered");
     }
+
     const formattingCell = Array.from(
       canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
     ).find((cell) => cell.textContent?.includes("incident guide"));
+
     if (
       !formattingCell ||
       !formattingCell.classList.contains("emr-diff-cell--inline") ||
@@ -990,15 +1040,18 @@ async function waitForConfidenceGallery(
     }
   });
   assertMicroBeforeTriggers(canvasElement);
+
   for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
     ".emr-diff-before-trigger",
   )) {
     trigger.click();
   }
+
   await waitFor(() => {
     const panels = Array.from(
       canvasElement.querySelectorAll<HTMLElement>(".emr-diff-before-panel"),
     );
+
     if (panels.length !== 2 || panels.some((panel) => panel.hidden)) {
       throw new Error("confidence before panels not expanded");
     }
@@ -1077,9 +1130,11 @@ async function waitForFormattingPrecision(
     const paragraph = canvasElement.querySelector<HTMLElement>(
       "p.emr-diff-block--inline",
     );
+
     const cell = Array.from(
       canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
     ).find((candidate) => candidate.textContent?.includes("incident guide"));
+
     if (
       !paragraph ||
       paragraph.querySelector(".emr-diff-format-change")?.textContent !==
@@ -1093,6 +1148,7 @@ async function waitForFormattingPrecision(
     ) {
       throw new Error("formatting-only changes were not marked precisely");
     }
+
     if (canvasElement.querySelector(".emr-diff-before-trigger")) {
       throw new Error("precise formatting diff exposed a Before fallback");
     }
@@ -1332,20 +1388,24 @@ async function waitForBlockConfidenceReady(
     const triggers = canvasElement.querySelectorAll<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     );
+
     if (triggers.length !== 3) {
       throw new Error(`expected 3 block fallbacks, found ${triggers.length}`);
     }
+
     if (
       canvasElement.querySelectorAll('[data-diff-amber-mode="comparison"]')
         .length !== 3
     ) {
       throw new Error("comparison amber regions are not classified precisely");
     }
+
     const explained = Array.from(
       canvasElement.querySelectorAll<HTMLElement>(
         '[data-diff-amber-mode="explained"]',
       ),
     );
+
     if (
       explained.length < 5 ||
       explained.some(
@@ -1355,12 +1415,15 @@ async function waitForBlockConfidenceReady(
     ) {
       throw new Error("explained amber regions lack one custom-only tooltip");
     }
+
     if (!canvasElement.querySelector("p.emr-diff-block--inline")) {
       throw new Error("reconstructed hard-wrap diff not rendered inline");
     }
+
     const preciseCode = Array.from(
       canvasElement.querySelectorAll<HTMLElement>("pre"),
     ).find((candidate) => candidate.textContent?.includes("timeout"));
+
     if (
       preciseCode?.querySelector(".emr-word-added")?.textContent !== "30" ||
       preciseCode.querySelector(".emr-word-removed")?.textContent !== "15" ||
@@ -1372,27 +1435,34 @@ async function waitForBlockConfidenceReady(
         `numeric code edit was not rendered precisely: ${preciseCode?.outerHTML ?? "missing"}`,
       );
     }
+
     const formattingMark = Array.from(
       canvasElement.querySelectorAll<HTMLElement>(".emr-diff-format-change"),
     ).find((mark) => mark.textContent === "release owner");
+
     if (!formattingMark) {
       throw new Error("formatting-only block was not marked precisely");
     }
+
     if (!canvasElement.querySelector("li.emr-diff-list-marker-change")) {
       throw new Error("list type change was not scoped to its marker");
     }
+
     if (
       canvasElement.querySelector("h3 .emr-diff-format-change")?.textContent !==
       "Approval workflow"
     ) {
       throw new Error("heading structure change was not scoped to its text");
     }
+
     const linkMark = Array.from(
       canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
     ).find((mark) => mark.textContent === "deployment guide");
+
     if (!linkMark) {
       throw new Error("link wrapping change was not scoped to its text");
     }
+
     if (!canvasElement.querySelector(".emr-diff-task-state-change")) {
       throw new Error("checklist state change was not scoped to its checkbox");
     }
@@ -1404,30 +1474,38 @@ async function waitForBlockConfidence(
   canvasElement: HTMLElement,
 ): Promise<void> {
   await waitForBlockConfidenceReady(canvasElement);
+
   for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
     ".emr-diff-before-trigger",
   )) {
     trigger.click();
   }
+
   await waitFor(() => {
     const panels = Array.from(
       canvasElement.querySelectorAll<HTMLElement>(
         ".emr-diff-before-panel--block",
       ),
     );
+
     if (panels.length !== 3 || panels.some((panel) => panel.hidden)) {
       throw new Error("block Before panels not expanded");
     }
+
     for (const panel of panels) {
       const label = panel.querySelector<HTMLElement>(".emr-diff-before-label")!;
+
       const content = panel.querySelector<HTMLElement>(
         ".emr-diff-before-content",
       )!;
+
       const panelStyle = getComputedStyle(panel);
+
       const expectedLeft =
         panel.getBoundingClientRect().left +
         Number.parseFloat(panelStyle.borderLeftWidth) +
         Number.parseFloat(panelStyle.paddingLeft);
+
       if (
         getComputedStyle(label).display !== "none" ||
         Math.abs(content.getBoundingClientRect().left - expectedLeft) > 1
@@ -1437,6 +1515,7 @@ async function waitForBlockConfidence(
         );
       }
     }
+
     if (!canvasElement.querySelector(".emr-diff-before-panel pre")) {
       throw new Error("historical code block not rendered");
     }
@@ -1447,16 +1526,21 @@ async function prepareBlockDisclosureHover(
   canvasElement: HTMLElement,
 ): Promise<void> {
   await waitForBlockConfidenceReady(canvasElement);
+
   const paragraph = Array.from(canvasElement.querySelectorAll("p")).find(
     (candidate) => candidate.textContent?.includes("Production traffic"),
   )!;
+
   const panel = paragraph.previousElementSibling as HTMLElement;
+
   const control = paragraph.querySelector<HTMLElement>(
     ":scope > .emr-diff-before-control",
   )!;
+
   const trigger = control.querySelector<HTMLButtonElement>(
     ".emr-diff-before-trigger",
   )!;
+
   if (
     control.getBoundingClientRect().height !== 0 ||
     !panel.hidden ||
@@ -1464,6 +1548,7 @@ async function prepareBlockDisclosureHover(
   ) {
     throw new Error("collapsed disclosure still consumes layout");
   }
+
   trigger.focus();
   await waitFor(() => {
     if (getComputedStyle(trigger).opacity !== "1") {
@@ -1477,9 +1562,11 @@ async function preparePreciseAmberTooltip(
   canvasElement: HTMLElement,
 ): Promise<void> {
   await waitForBlockConfidenceReady(canvasElement);
+
   const mark = Array.from(
     canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
   ).find((candidate) => candidate.textContent === "deployment guide")!;
+
   if (
     mark.dataset.diffTooltip !== "Link added: https://example.com/deployment" ||
     mark.hasAttribute("title") ||
@@ -1489,6 +1576,7 @@ async function preparePreciseAmberTooltip(
       "precise link tooltip is missing detail or has a native duplicate",
     );
   }
+
   mark.focus();
   await waitFor(() => {
     if (getComputedStyle(mark, "::after").opacity !== "1") {
@@ -1502,15 +1590,19 @@ async function prepareChecklistStateTooltip(
   canvasElement: HTMLElement,
 ): Promise<void> {
   await waitForBlockConfidenceReady(canvasElement);
+
   const wrapper = canvasElement.querySelector<HTMLElement>(
     ".emr-diff-task-tooltip-anchor",
   )!;
+
   const checkbox = wrapper.querySelector<HTMLElement>(
     ".emr-diff-task-state-change",
   )!;
+
   const wrapperRect = wrapper.getBoundingClientRect();
   const checkboxRect = checkbox.getBoundingClientRect();
   const checkboxCenter = checkboxRect.left + checkboxRect.width / 2;
+
   if (
     wrapper.dataset.diffTooltip !==
       "Checklist item changed from unchecked to checked" ||
@@ -1524,6 +1616,7 @@ async function prepareChecklistStateTooltip(
       "checklist tooltip is not anchored to the changed checkbox",
     );
   }
+
   wrapper.focus();
   await waitFor(() => {
     if (getComputedStyle(wrapper, "::after").opacity !== "1") {
@@ -1641,9 +1734,11 @@ export const BeforeChipTextInflation: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForBlockConfidenceReady(canvasElement);
+
     const trigger = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.focus();
     await waitFor(() => {
       if (getComputedStyle(trigger).opacity !== "1") {
@@ -1672,9 +1767,11 @@ export const BeforeChipNarrowOwner: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitForBlockConfidenceReady(canvasElement);
+
     const trigger = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     const owner = trigger.closest<HTMLElement>(".emr-section")!;
     owner.style.width = "32px";
     trigger.focus();
@@ -1682,6 +1779,7 @@ export const BeforeChipNarrowOwner: Story = {
       const ownerRect = owner.getBoundingClientRect();
       const triggerRect = trigger.getBoundingClientRect();
       const style = getComputedStyle(trigger);
+
       if (
         triggerRect.left < ownerRect.left ||
         triggerRect.right > ownerRect.right ||
@@ -1853,7 +1951,9 @@ async function prepareInlineParity(canvasElement: HTMLElement): Promise<void> {
     const item = canvasElement.querySelector<HTMLElement>(
       'li[data-diff-tooltip^="List item changed:"]',
     );
+
     const cells = canvasElement.querySelectorAll<HTMLElement>("tbody td");
+
     if (
       !item ||
       item.querySelector(".emr-diff-task-tooltip-anchor") ||
@@ -1947,18 +2047,22 @@ async function prepareNestedList(canvasElement: HTMLElement): Promise<void> {
     const nested = canvasElement.querySelectorAll(
       "li li.emr-diff-block--added",
     );
+
     if (nested.length < 4) {
       throw new Error(`nested items not decorated yet (${nested.length})`);
     }
   });
+
   const continuation = Array.from(
     canvasElement.querySelectorAll("li > p"),
   ).find((p) => p.textContent?.startsWith("You can use"));
+
   if (!continuation?.querySelector(".emr-diff-line-wash")) {
     throw new Error(
       "the continuation paragraph after a nested list is unpainted",
     );
   }
+
   for (const item of canvasElement.querySelectorAll<HTMLElement>(
     "li.emr-diff-block",
   )) {
@@ -1968,6 +2072,7 @@ async function prepareNestedList(canvasElement: HTMLElement): Promise<void> {
       ancestor = ancestor.parentElement?.closest<HTMLElement>("li")
     ) {
       const paint = getComputedStyle(ancestor).backgroundColor;
+
       if (paint !== "rgba(0, 0, 0, 0)" && paint !== "transparent") {
         throw new Error(
           `"${item.textContent?.trim().slice(0, 40)}" is washed inside a tinted ancestor item (${paint})`,
@@ -2098,25 +2203,32 @@ async function prepareProductionSyntax(
     if (!canvasElement.querySelector(".emr-diff-source-only")) {
       throw new Error("source-only reference diff missing");
     }
+
     if (!canvasElement.querySelector("details[open] .emr-word-added")) {
       throw new Error("details body diff missing");
     }
+
     if (!canvasElement.querySelector(".markdown-alert .emr-word-added")) {
       throw new Error("admonition body diff missing");
     }
+
     if (!canvasElement.querySelector("pre .emr-diff-metadata")) {
       throw new Error("code fence metadata diff missing");
     }
   });
+
   const metadataTrigger = canvasElement.querySelector<HTMLButtonElement>(
     "pre .emr-diff-metadata-trigger",
   )!;
+
   if (metadataTrigger.scrollWidth > metadataTrigger.clientWidth) {
     throw new Error("code fence metadata label overflows its trigger");
   }
+
   const trigger = canvasElement.querySelector<HTMLButtonElement>(
     ".emr-diff-source-only .emr-diff-before-trigger",
   )!;
+
   trigger.click();
   await waitFor(() => {
     if (
@@ -2227,12 +2339,15 @@ async function prepareEquationGallery(
       const equations = canvasElement.querySelectorAll<HTMLElement>(
         ".equation-gallery-frame .emr-math",
       );
+
       const rendered = canvasElement.querySelectorAll<HTMLElement>(
         '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex',
       );
+
       const failed = canvasElement.querySelector<HTMLElement>(
         '.equation-gallery-frame .emr-math[data-math-error="render-failed"]',
       );
+
       if (equations.length !== 5 || rendered.length !== 4 || !failed) {
         throw new Error("equation gallery has not finished hydrating");
       }
@@ -2243,29 +2358,38 @@ async function prepareEquationGallery(
   const frame = canvasElement.querySelector<HTMLElement>(
     ".equation-gallery-frame",
   )!;
+
   const wideEquation = frame.querySelector<HTMLElement>(
     '.emr-math--display[data-source-line="19"]',
   )!;
+
   const wideDisplay =
     wideEquation.querySelector<HTMLElement>(".katex-display")!;
+
   const changedEquation = frame.querySelector<HTMLElement>(
     ".emr-math.emr-diff-block",
   )!;
+
   const fallback = frame.querySelector<HTMLElement>(
     '[data-math-error="render-failed"] .emr-math-fallback',
   );
+
   if (wideDisplay.scrollWidth <= wideDisplay.clientWidth) {
     throw new Error("wide equation does not exercise horizontal overflow");
   }
+
   if (frame.scrollWidth > frame.clientWidth) {
     throw new Error("wide equation leaks overflow outside its owner");
   }
+
   if (!changedEquation) {
     throw new Error("modified equation lacks atomic diff decoration");
   }
+
   if (changedEquation.querySelector(".emr-word-added, .emr-word-removed")) {
     throw new Error("modified equation received internal word-diff markup");
   }
+
   if (fallback?.textContent !== String.raw`\frac{1000n}d}`) {
     throw new Error("malformed equation source fallback is not readable");
   }
@@ -2273,9 +2397,11 @@ async function prepareEquationGallery(
   const sourceButton = changedEquation.querySelector<HTMLElement>(
     ":scope > .emr-math-source-btn",
   );
+
   if (!sourceButton) {
     throw new Error("modified equation lacks a Source affordance");
   }
+
   if (changedEquation.querySelector(".emr-diff-before-trigger")) {
     throw new Error("equation exposes a redundant standalone Before control");
   }
@@ -2283,7 +2409,7 @@ async function prepareEquationGallery(
 
 function equationGalleryDecorator(
   theme?: "dark" | "hc-light" | "hc-dark",
-): (Story: React.ComponentType) => React.ReactElement {
+): (Story: ComponentType) => ReactElement {
   return (Story) => (
     <ThemeFrame theme={theme} width={760}>
       <div className="equation-gallery-frame">
@@ -2330,15 +2456,19 @@ export const EquationSourceDiff: Story = {
   },
   play: async ({ canvasElement }) => {
     await prepareEquationGallery(canvasElement);
+
     const equation = canvasElement.querySelector<HTMLElement>(
       '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
     )!;
+
     equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
     await waitFor(() => {
       const modal = canvasElement.querySelector<HTMLElement>(
         ".emr-generated-source-modal",
       );
+
       if (!modal) throw new Error("equation source modal did not open");
+
       if (
         modal.querySelector(".emr-word-added")?.textContent !== "^2" ||
         !modal.querySelector(".emr-generated-source-preview .katex")
@@ -2357,14 +2487,17 @@ export const EquationSourceBefore: Story = {
   },
   play: async ({ canvasElement }) => {
     await prepareEquationGallery(canvasElement);
+
     const equation = canvasElement.querySelector<HTMLElement>(
       '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
     )!;
+
     equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
     await waitFor(() => {
       const before = canvasElement.querySelector<HTMLButtonElement>(
         '.emr-generated-source-before[aria-pressed="false"]',
       );
+
       if (!before) throw new Error("Before source view is unavailable");
       before.click();
     });
@@ -2372,11 +2505,14 @@ export const EquationSourceBefore: Story = {
       const modal = canvasElement.querySelector<HTMLElement>(
         ".emr-generated-source-modal",
       );
+
       const source = modal?.querySelector(
         ".emr-generated-source-code code",
       )?.textContent;
+
       const preview = modal?.querySelector("annotation")?.textContent;
       const expected = String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`;
+
       if (source !== expected || preview !== expected) {
         throw new Error("Before source or rendered preview is incorrect");
       }
@@ -2413,6 +2549,7 @@ export const EquationSourceBeforeHighContrastDark: Story = {
 
 const EDGE_DESTINATION =
   "https://example.com/platform/deployments/regions/primary/secondary/canary/rings/validation/health/checks/owners/approvals/matrix";
+
 const TOOLTIP_EDGE_SOURCE = [
   "# Tooltip Edge Matrix",
   "",
@@ -2420,6 +2557,7 @@ const TOOLTIP_EDGE_SOURCE = [
   "",
   `Open the [right edge guide](${EDGE_DESTINATION})`,
 ].join("\n");
+
 const TOOLTIP_EDGE_ORIGINAL = [
   "# Tooltip Edge Matrix",
   "",
@@ -2427,6 +2565,7 @@ const TOOLTIP_EDGE_ORIGINAL = [
   "",
   "Open the right edge guide",
 ].join("\n");
+
 const TOOLTIP_EDGE_DIFF: DiffRange[] = [
   {
     startLine: 3,
@@ -2458,24 +2597,30 @@ async function prepareTooltipEdges(canvasElement: HTMLElement): Promise<void> {
   });
   const paragraphs = canvasElement.querySelectorAll<HTMLElement>("p");
   paragraphs[1]!.style.textAlign = "right";
+
   const marks = canvasElement.querySelectorAll<HTMLElement>(
     '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
   );
+
   marks[0]!.focus();
+
   if (marks[0]!.classList.contains("emr-diff-explained-change--right")) {
     throw new Error("left-edge tooltip aligned outward");
   }
+
   marks[0]!.blur();
   marks[1]!.focus();
+
   if (!marks[1]!.classList.contains("emr-diff-explained-change--right")) {
     throw new Error("right-edge tooltip aligned outward");
   }
+
   marks[1]!.blur();
 }
 
 function tooltipEdgeDecorator(
   theme?: "dark" | "hc-light" | "hc-dark",
-): (Story: React.ComponentType) => React.ReactElement {
+): (Story: ComponentType) => ReactElement {
   return (Story) => (
     <ThemeFrame theme={theme} width={360}>
       <Story />
@@ -2677,6 +2822,7 @@ async function prepareStructuralEdits(
     Array.from(canvasElement.querySelectorAll(selector)).some(
       (mark) => mark.textContent === text,
     );
+
   await waitFor(() => {
     const checks: Array<[string, boolean]> = [
       [
@@ -2719,20 +2865,26 @@ async function prepareStructuralEdits(
       ["CJK word", marked("p .emr-word-added", "大阪")],
       ["footnote", marked("[data-footnotes] .emr-word-added", "new")],
     ];
+
     const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
+
     if (missing.length > 0) {
       throw new Error(`structural edits not decorated: ${missing.join(", ")}`);
     }
   });
+
   if (canvasElement.querySelector(".emr-diff-block--added")) {
     throw new Error("an edited block is painted as wholly added");
   }
+
   if (canvasElement.querySelector(".emr-diff-deleted-marker")) {
     throw new Error("an in-block removal is shown as a separate marker");
   }
+
   const blankLine = canvasElement.querySelector(
     "pre .emr-word-mark--line-break",
   );
+
   if (
     !blankLine ||
     getComputedStyle(blankLine, "::before").content !== '"\u21B5"'

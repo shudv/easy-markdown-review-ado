@@ -1,6 +1,13 @@
 // Shell: the single open comment composer and its draft guard.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 
 import {
   NEW_DRAFT_THREAD_ID,
@@ -18,9 +25,9 @@ import { draftTargetsOnScreen, isSameDraftTarget } from "./derive";
 interface DraftControllerOptions {
   draftScope: DraftScope | undefined;
   selectedPath: string;
-  selectedPathRef: React.MutableRefObject<string>;
+  selectedPathRef: MutableRefObject<string>;
   revealComments: () => void;
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveThreadId: Dispatch<SetStateAction<string | null>>;
 }
 
 /**
@@ -33,18 +40,16 @@ export function useDraftController(opts: DraftControllerOptions) {
   // new-comment draft uses `threadId === NEW_DRAFT_THREAD_ID` (+ its selection
   // anchor); a reply draft carries the real thread id. Only one is ever open —
   // opening a second while this one has text prompts the discard dialog.
-  const [activeDraft, setActiveDraft] = React.useState<DraftTarget | null>(
-    null,
-  );
+  const [activeDraft, setActiveDraft] = useState<DraftTarget | null>(null);
   // Pending discard prompt: the composer the user asked to open plus the
   // existing draft's file + snippet to show in the dialog.
-  const [draftGuard, setDraftGuard] = React.useState<DraftGuard | null>(null);
-  const [draftY, setDraftY] = React.useState<number | null>(null);
+  const [draftGuard, setDraftGuard] = useState<DraftGuard | null>(null);
+  const [draftY, setDraftY] = useState<number | null>(null);
 
   // Locally-persisted draft (one per experience). `onRestore` adopts a stored
   // draft on mount so its lock is live and its composer re-opens on the right
   // file; ArticleView recomputes a new-comment draft's Y as it wraps the anchor.
-  const restoreDraft = React.useCallback(
+  const restoreDraft = useCallback(
     (target: DraftTarget) => {
       setActiveDraft(target);
       revealComments();
@@ -54,6 +59,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     },
     [revealComments, setActiveThreadId],
   );
+
   const draft = useDraftPersistence({
     scope: opts.draftScope,
     activeDraft,
@@ -64,6 +70,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     activeDraft,
     selectedPath,
   );
+
   const requests = useDraftRequests({
     ...opts,
     draft,
@@ -72,6 +79,7 @@ export function useDraftController(opts: DraftControllerOptions) {
     setDraftGuard,
     setDraftY,
   });
+
   const resolutions = useDraftResolutions({
     ...opts,
     draft,
@@ -108,9 +116,9 @@ interface DraftGuard {
 }
 
 interface DraftSetters {
-  setActiveDraft: React.Dispatch<React.SetStateAction<DraftTarget | null>>;
-  setDraftGuard: React.Dispatch<React.SetStateAction<DraftGuard | null>>;
-  setDraftY: React.Dispatch<React.SetStateAction<number | null>>;
+  setActiveDraft: Dispatch<SetStateAction<DraftTarget | null>>;
+  setDraftGuard: Dispatch<SetStateAction<DraftGuard | null>>;
+  setDraftY: Dispatch<SetStateAction<number | null>>;
 }
 
 interface DraftRequestsOptions extends DraftControllerOptions, DraftSetters {
@@ -134,21 +142,27 @@ function useDraftRequests(opts: DraftRequestsOptions) {
   // Guarded open: adopt the requested composer unless a *different* draft still
   // holds text, in which case prompt to discard it first. An empty existing
   // draft is silently replaced (nothing to lose).
-  const activeDraftRef = React.useRef(activeDraft);
+  const activeDraftRef = useRef(activeDraft);
+  // eslint-disable-next-line react-hooks/refs -- latest-value ref read by the stable requestDraft/dismiss/post callbacks; written in render so a callback fired by a child's layout effect or handler in this commit already sees this render's draft.
   activeDraftRef.current = activeDraft;
-  const requestDraft = React.useCallback(
+
+  const requestDraft = useCallback(
     (target: DraftTarget) => {
       const current = activeDraftRef.current;
       const isSame = isSameDraftTarget(current, target);
+
       if (current === null || isSame || draft.getSnapshot().trim() === "") {
         if (!isSame) draft.clear();
         setActiveDraft(target);
         revealComments();
+
         if (target.threadId !== NEW_DRAFT_THREAD_ID) {
           setActiveThreadId(target.threadId);
         }
+
         return;
       }
+
       setDraftGuard({
         requested: target,
         existingPath: current.path,
@@ -157,11 +171,14 @@ function useDraftRequests(opts: DraftRequestsOptions) {
     },
     [draft, revealComments, setActiveThreadId, setActiveDraft, setDraftGuard],
   );
+
   // Stable ref for the document-level ESC / outside-click handlers so they can
   // dismiss an *empty* draft without re-subscribing on every draft change.
   // Assigned on every render below (before any handler can fire), so the
   // `null!` seed is never actually called.
-  const dismissEmptyDraftRef = React.useRef<() => void>(null!);
+  const dismissEmptyDraftRef = useRef<() => void>(null!);
+
+  // eslint-disable-next-line react-hooks/refs -- latest-value ref for stable document listeners and callbacks; written in render so the `null!` seed is never observable, even from a child's layout effect on mount.
   dismissEmptyDraftRef.current = () => {
     // Never discard text the user has typed — only tear down a bare composer
     // (a selection with no reply/comment written yet).
@@ -172,7 +189,7 @@ function useDraftRequests(opts: DraftRequestsOptions) {
     setDraftY(null);
   };
 
-  const onAddImplicitComment = React.useCallback(() => {
+  const onAddImplicitComment = useCallback(() => {
     requestDraft(
       addCommentDraftTarget(activeDraftRef.current, selectedPathRef.current),
     );
@@ -180,7 +197,7 @@ function useDraftRequests(opts: DraftRequestsOptions) {
 
   // A thread's "reply" trigger requests its reply composer, subject to the same
   // guard (an active draft elsewhere prompts the discard dialog first).
-  const onRequestReply = React.useCallback(
+  const onRequestReply = useCallback(
     (threadId: string) => {
       requestDraft({
         path: selectedPathRef.current,
@@ -203,7 +220,7 @@ function useDraftRequests(opts: DraftRequestsOptions) {
 interface DraftResolutionsOptions extends DraftControllerOptions, DraftSetters {
   draft: DraftPersistence;
   draftGuard: DraftGuard | null;
-  activeDraftRef: React.MutableRefObject<DraftTarget | null>;
+  activeDraftRef: MutableRefObject<DraftTarget | null>;
 }
 
 /** Cancelling, posting and the draft-guard dialog's outcomes. */
@@ -218,23 +235,26 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
     setDraftGuard,
     setDraftY,
   } = opts;
-  const onCancelReply = React.useCallback(() => {
+
+  const onCancelReply = useCallback(() => {
     draft.clear();
     setActiveDraft(null);
   }, [draft, setActiveDraft]);
 
   // Draft-guard dialog resolution. Discard drops the existing draft and opens
   // the composer the user asked for; keep-editing just dismisses the prompt.
-  const onDiscardExistingDraft = React.useCallback(() => {
+  const onDiscardExistingDraft = useCallback(() => {
     const g = draftGuard;
     if (!g) return;
     draft.clear();
     setDraftY(null);
     setActiveDraft(g.requested);
     revealComments();
+
     if (g.requested.threadId !== NEW_DRAFT_THREAD_ID) {
       setActiveThreadId(g.requested.threadId);
     }
+
     setDraftGuard(null);
   }, [
     draft,
@@ -245,7 +265,8 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
     setDraftGuard,
     setDraftY,
   ]);
-  const onKeepExistingDraft = React.useCallback(
+
+  const onKeepExistingDraft = useCallback(
     () => setDraftGuard(null),
     [setDraftGuard],
   );
@@ -254,14 +275,14 @@ function useDraftResolutions(opts: DraftResolutionsOptions) {
   // time it lands the user may have cancelled this composer or started another
   // draft — only close and clear the composer still showing exactly what was
   // posted, never a newer draft.
-  const isStillPostedDraft = React.useCallback(
+  const isStillPostedDraft = useCallback(
     (postedTarget: DraftTarget | null, body: string): boolean =>
       activeDraftRef.current === postedTarget &&
       draft.getSnapshot().trim() === body,
     [draft, activeDraftRef],
   );
 
-  const onCancelDraft = React.useCallback(() => {
+  const onCancelDraft = useCallback(() => {
     setActiveDraft(null);
     setDraftY(null);
     draft.clear();

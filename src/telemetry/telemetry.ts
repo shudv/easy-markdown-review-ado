@@ -40,9 +40,12 @@ let initialised = false;
 
 function makeSessionId(): string {
   const cryptoObj = globalThis.crypto as Crypto | undefined;
+
   if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
     return cryptoObj.randomUUID();
   }
+
+  // eslint-disable-next-line sonarjs/pseudo-random -- fallback only when crypto.randomUUID is unavailable; the id merely groups telemetry events and grants nothing.
   return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -61,8 +64,10 @@ function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
       "[telemetry] ingestion key present but 1DS sink failed to initialise; " +
         "falling back (see src/telemetry/sinks/oneDsSink.ts).",
     );
+
     return cfg.debug ? consoleSink : NOOP_SINK;
   }
+
   return cfg.debug ? consoleSink : NOOP_SINK;
 }
 
@@ -74,9 +79,11 @@ function normaliseContext(
 ): Partial<TelemetryContext> {
   const { pullRequestId, ...rest } = patch;
   const next: Partial<TelemetryContext> = { ...rest };
+
   if (pullRequestId !== undefined && pullRequestId !== "") {
     next.pullRequestId = hashId(pullRequestId);
   }
+
   return next;
 }
 
@@ -95,6 +102,7 @@ export function initTelemetry(opts: {
 }): void {
   if (initialised) return;
   initialised = true;
+
   try {
     const cfg = readBuildConfig();
     context = {

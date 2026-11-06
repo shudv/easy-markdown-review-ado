@@ -2,7 +2,7 @@
 // resolves collisions by stacking. Also renders the orphaned-anchors tray at
 // the bottom of the column.
 
-import * as React from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import type {
   CommentAuthor,
   CommentThread,
@@ -128,11 +128,11 @@ interface RailProps {
    * Extra controls (e.g. a refresh-threads button) appended to the right end
    * of the rail toolbar, after the resolved-eye toggle.
    */
-  headerActions?: React.ReactNode;
+  headerActions?: ReactNode;
 }
 
 // eslint-disable-next-line max-lines-per-function -- Comment rail layout: positions threads against article anchors and hosts the draft balloon and tray. Layout math is in CommentRail.layout.ts; this is the render that applies it.
-export function CommentRail(props: RailProps): React.ReactElement {
+export function CommentRail(props: Readonly<RailProps>): ReactElement {
   const {
     currentThreads,
     generalThreads = [],
@@ -187,11 +187,10 @@ export function CommentRail(props: RailProps): React.ReactElement {
   // the user expands it when they want the cross-file / unanchored discussion.
   // Kept in component state (not per-file) so the choice persists as the reader
   // switches files within the same PR mount.
-  const [generalCollapsed, setGeneralCollapsed] = React.useState(true);
+  const [generalCollapsed, setGeneralCollapsed] = useState(true);
   // The orphaned-file tray (files removed from the PR) is likewise PR-wide and
   // collapsed by default.
-  const [orphanedFilesCollapsed, setOrphanedFilesCollapsed] =
-    React.useState(true);
+  const [orphanedFilesCollapsed, setOrphanedFilesCollapsed] = useState(true);
 
   // Shape the threads into the rail's ordered, grouped view model (anchored
   // comments by document position, then the unanchored trays). Pure + tested in
@@ -206,6 +205,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
     draftY: railDraftY(readOnly, draftAnchor, draftY),
     onlyThisFile,
   });
+
   const {
     orderedAnchoredIds,
     kindById,
@@ -218,12 +218,14 @@ export function CommentRail(props: RailProps): React.ReactElement {
   // Auto-expand a cross-file tray while its comment is active (e.g. status-bar
   // navigation landed there), so the selected balloon is on screen.
   const searchActive = commentQuery.trim().length > 0;
+
   const generalExpanded = isRailTrayExpanded({
     collapsed: generalCollapsed,
     threads: visibleGeneralThreads,
     activeThreadId,
     searchActive,
   });
+
   const orphanedFilesExpanded = isRailTrayExpanded({
     collapsed: orphanedFilesCollapsed,
     threads: visibleOrphanedFileThreads,
@@ -294,7 +296,7 @@ export function CommentRail(props: RailProps): React.ReactElement {
         </div>
       ) : null}
 
-      {emptyMessage ? (
+      {emptyMessage != null ? (
         <div className="emr-rail-empty">{emptyMessage}</div>
       ) : null}
 
@@ -313,7 +315,9 @@ export function CommentRail(props: RailProps): React.ReactElement {
               />
             );
           }
+
           const t = currentThreads.find((x) => x.id === id)!;
+
           return (
             <Balloon
               key={t.id}
@@ -411,5 +415,6 @@ export function CommentRail(props: RailProps): React.ReactElement {
 /** Filename (last path segment) for the orphaned-file label. */
 function baseName(p: string): string {
   const i = p.lastIndexOf("/");
+
   return i === -1 ? p : p.slice(i + 1);
 }

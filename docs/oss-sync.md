@@ -1,13 +1,51 @@
 # OSS mirror sync ledger
 
+## 2026-11-05 Strict lint tiers sync
+
+- Public base: `b965581` (#29).
+- Previously mirrored product boundary: `5e3935e` (source merge `f7870cb`).
+- New product boundary: `1c1ed97` (source branch `chore/strict-lint-tiers`; not
+  yet merged, record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.0`.
+- Strategy: replay the product tree delta without importing private history.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `1a37bc0`     | Three tiers of ESLint rules enforced as errors (stricter `typescript-eslint` including `strict-boolean-expressions` and `no-unnecessary-condition`, React Compiler rules, SonarJS, `regexp`, `@eslint-react`, `jsx-a11y-x`, `no-unsanitized`, `@vitest/eslint-plugin`) with every violation fixed and 65 documented exceptions; emoji shortcodes no longer resolve `Object.prototype` members; the Mermaid/math source dialog moves focus in and back; RepoPicker sends one page-one query after closing a filter. |
+| `15ae078`     | `@vitest/eslint-plugin` pinned to `1.6.27` (1.6.28 requires TypeScript 6).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `2edded2`     | Unused, TypeScript 6-deprecated `baseUrl` dropped from `tsconfig.json`; `.vscode/settings.json` points VS Code at the workspace TypeScript.                                                                                                                                                                                                                                                                                                                                                                        |
+| `599af9d`     | React imported by name (`import { useState, type ReactElement } from "react"`) with the automatic JSX runtime (`jsx: react-jsx`); DOM-clashing React types aliased (`ReactMouseEvent`); a `no-restricted-syntax` rule bans `import * as React` and `React.x`, stories included.                                                                                                                                                                                                                                    |
+| `5ae3107`     | `cspell.json` and recommended Code Spell Checker extensions (US and British English, project vocabulary, test-only fixture words); two misspellings fixed.                                                                                                                                                                                                                                                                                                                                                         |
+| `157b8be`     | Spell check becomes a blocking gate: `cspell` and `@cspell/dict-en-gb` dev dependencies, a `spell:check` script run in CI and on staged files in the pre-commit hook, and HTML/CSS/Node dictionaries enabled for all file types.                                                                                                                                                                                                                                                                                   |
+| `8f2ffe4`     | Marketplace manifest link keys (`getstarted`, `privacypolicy`) accepted by the spell check.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `0987b33`     | PR mention search skips results without a numeric id (no `!undefined` suggestions); the match-and-map logic moves to the tested `matchPullRequestSuggestions` helper.                                                                                                                                                                                                                                                                                                                                              |
+| `1c1ed97`     | Hub deep links use `HUB_CONTRIBUTION_ID` instead of a hard-coded `.documents-hub`, so the manifest-consistency test now guards runtime code; the orphan-only knip entry is removed.                                                                                                                                                                                                                                                                                                                                |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The README keeps its public wording; it gains the enforced-rules table and
+  the updated lint guardrail line.
+- The public lock adds only the five new ESLint plugins, `cspell` and their
+  dependencies, with public npm URLs, plus patch bumps of two transitive
+  dependencies.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `1c1ed97` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-04 Size cleanup, ESLint complexity gate, lint warnings as errors, coverage-ignore audit, doc fixes, v1 telemetry retirement and Shell rename sync
 
 - Public base: `c8bcb88`, the complexity and size ratchet sync recorded below.
   Both syncs land together in one PR (#29) on public `main` `0c7433f`.
 - Previously mirrored product boundary: `14843f8`.
 - New product boundary: `5e3935e` (source branch `refactor/clear-size-baseline`,
-  which also carries `14843f8`; not yet merged, record the source merge commit
-  here once it lands).
+  which also carries `14843f8`), merged in the source as `f7870cb` and on
+  public `main` as `b965581` (#29).
 - OSS release version: unchanged at `1.3.0`.
 - Strategy: replay the product tree delta without importing private history.
 
@@ -41,9 +79,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `b871f9e` and
-integrate the delta on the latest public `main`. Preserve the adaptations and
-exclusions below, and record validation in the sync PR.
+Superseded by the sync above.
 
 ## 2026-11-04 Complexity and size ratchet sync
 

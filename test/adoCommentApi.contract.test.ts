@@ -62,6 +62,7 @@ describe("toAdoStatusValue", () => {
     const values = (
       ["active", "resolved", "wontFix", "closed", "pending"] as const
     ).map(toAdoStatusValue);
+
     expect(new Set(values).size).toBe(values.length);
   });
 });

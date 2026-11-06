@@ -1,8 +1,8 @@
 // Shell: the comment-history stepper / PR-update comparison state.
 
-import * as React from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { ChangeType } from "../../types";
+import type { ChangeType, CommentThread } from "../../types";
 import { trackUserFacingError } from "../../telemetry";
 import {
   allReviewIterations,
@@ -25,8 +25,12 @@ interface ReviewHistoryOptions {
   selectedPath: string;
   effectiveRoutedPr: RoutedPrInfo | undefined;
   loadDocHistory: ((path: string) => Promise<DocPrRef[]>) | undefined;
-  loadThreadsForPr: unknown;
-  loadFileSourceAt: unknown;
+  loadThreadsForPr:
+    | ((prId: number, path: string) => Promise<CommentThread[]>)
+    | undefined;
+  loadFileSourceAt:
+    | ((path: string, commitId: string) => Promise<string>)
+    | undefined;
   reviewIterationStops: readonly HistoryStop[] | undefined;
   reviewIterationBaseCommit: string | undefined;
   initialIterationRange: ReviewIterationRange | undefined;
@@ -46,29 +50,32 @@ interface ReviewHistoryOptions {
  */
 export function useReviewHistory(opts: ReviewHistoryOptions) {
   const { selectedPath, effectiveRoutedPr, loadRangeChanges } = opts;
+
   // ---- comment-history stepper ----
   // Only active when the host supplies all three loaders (Documents hub).
   const { completedPrHistoryEnabled, nativeIterationMode, nativeUpdateCount } =
     historyModes(opts);
+
   // Per-path review-history stops and the active stop index.
-  const [historyByPath, setHistoryByPath] = React.useState<
+  const [historyByPath, setHistoryByPath] = useState<
     Record<string, DocPrRef[]>
   >({});
-  const [completedHistoryStopIndex, setCompletedHistoryStopIndex] =
-    React.useState(0);
-  const [iterationRange, setIterationRange] =
-    React.useState<ReviewIterationRange>(
-      () =>
-        opts.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
-    );
+
+  const [completedHistoryStopIndex, setCompletedHistoryStopIndex] = useState(0);
+
+  const [iterationRange, setIterationRange] = useState<ReviewIterationRange>(
+    () => opts.initialIterationRange ?? allReviewIterations(nativeUpdateCount),
+  );
 
   const docHistory = completedPrHistoryEnabled
     ? (historyByPath[selectedPath] ?? EMPTY_DOC_HISTORY)
     : EMPTY_DOC_HISTORY;
-  const completedPrHistoryStops = React.useMemo(
+
+  const completedPrHistoryStops = useMemo(
     () => buildHistoryStops(effectiveRoutedPr?.prId ?? null, docHistory),
     [effectiveRoutedPr, docHistory],
   );
+
   const view = resolveHistoryView({
     nativeIterationMode,
     reviewIterationStops: opts.reviewIterationStops,
@@ -76,15 +83,19 @@ export function useReviewHistory(opts: ReviewHistoryOptions) {
     iterationRange,
     completedHistoryStopIndex,
   });
+
   const { resolvedIterationRange, reportedRangeKey, rangeChangesKey } = view;
 
   // Report the compared PR updates up so the host can mirror them into the
   // route and shared links (`null` = All updates). Keyed on the comparison's
   // value; the callback is read through a ref so an inline host callback
   // doesn't re-fire it on every render.
-  const onIterationRangeChangeRef = React.useRef(opts.onIterationRangeChange);
-  onIterationRangeChangeRef.current = opts.onIterationRangeChange;
-  React.useEffect(() => {
+  const onIterationRangeChange = opts.onIterationRangeChange;
+  const onIterationRangeChangeRef = useRef(onIterationRangeChange);
+  useLayoutEffect(() => {
+    onIterationRangeChangeRef.current = onIterationRangeChange;
+  });
+  useEffect(() => {
     if (reportedRangeKey === null) return;
     onIterationRangeChangeRef.current?.(
       resolvedIterationRange.isAllChanges ? null : resolvedIterationRange.range,
@@ -120,13 +131,15 @@ function useRangeChanges(args: {
   historyStopCount: number;
 }) {
   const { loadRangeChanges, rangeChangesKey, range, historyStopCount } = args;
+
   // Which files the compared updates touch, so the file list can mark them and
   // dim the rest. Cached per comparison; a failed load just leaves the
   // PR-wide indicators in place.
-  const [rangeChangesByKey, setRangeChangesByKey] = React.useState<
-    Record<string, Readonly<Record<string, ChangeType>>>
+  const [rangeChangesByKey, setRangeChangesByKey] = useState<
+    Partial<Record<string, Readonly<Record<string, ChangeType>>>>
   >({});
-  React.useEffect(() => {
+
+  useEffect(() => {
     if (
       !loadRangeChanges ||
       rangeChangesKey === null ||
@@ -134,6 +147,7 @@ function useRangeChanges(args: {
     ) {
       return;
     }
+
     loadRangeChanges(range)
       .then((byPath) =>
         setRangeChangesByKey((prev) => ({
@@ -152,6 +166,7 @@ function useRangeChanges(args: {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the comparison's value
   }, [loadRangeChanges, rangeChangesKey, rangeChangesByKey]);
+
   return docNavRangeChangesFor(
     rangeChangesKey,
     rangeChangesByKey,

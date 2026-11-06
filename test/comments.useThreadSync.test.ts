@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act, createElement, type ReactElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +20,7 @@ import type { CommentThread } from "../src/types";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -46,10 +46,15 @@ interface HarnessOpts {
 // Exposed via the harness so tests can inspect / call `refreshNow`.
 interface HarnessHandle {
   controls: ReturnType<typeof useThreadSync> | null;
-  rerenderCount: number;
 }
 
-function Harness(props: HarnessOpts & { handle: HarnessHandle }): null {
+function Harness(
+  props: Readonly<
+    HarnessOpts & {
+      onControls: (controls: ReturnType<typeof useThreadSync>) => void;
+    }
+  >,
+): null {
   const controls = useThreadSync({
     enabled: props.enabled,
     fetchThreads: props.fetchThreads,
@@ -59,22 +64,41 @@ function Harness(props: HarnessOpts & { handle: HarnessHandle }): null {
     maxBackoffMs: props.maxBackoffMs,
     subscribeRecovered: props.subscribeRecovered,
   });
-  props.handle.controls = controls;
-  props.handle.rerenderCount += 1;
+
+  const { onControls } = props;
+  // Publish the latest controls after every commit so tests read the
+  // committed `refreshNow` / `isRefreshing` once `act` returns.
+  useLayoutEffect(() => {
+    onControls(controls);
+  });
+
   return null;
 }
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
+function harnessElement(
+  opts: HarnessOpts,
+  handle: HarnessHandle,
+): ReactElement {
+  return createElement(Harness, {
+    ...opts,
+    onControls: (controls) => {
+      handle.controls = controls;
+    },
+  });
+}
+
 function mount(opts: HarnessOpts): HarnessHandle {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  const handle: HarnessHandle = { controls: null, rerenderCount: 0 };
+  const handle: HarnessHandle = { controls: null };
   act(() => {
-    root!.render(React.createElement(Harness, { ...opts, handle }));
+    root!.render(harnessElement(opts, handle));
   });
+
   return handle;
 }
 
@@ -85,6 +109,7 @@ function unmount(): void {
     });
     root = null;
   }
+
   if (container) {
     container.remove();
     container = null;
@@ -110,13 +135,16 @@ interface Deferred<T> {
   resolve: (value: T) => void;
   reject: (err: unknown) => void;
 }
+
 function defer<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
   let reject!: (err: unknown) => void;
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -128,6 +156,14 @@ async function flush(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
   });
+}
+
+// Advance fake time and let the resulting fetch settle.
+async function tick(ms: number): Promise<void> {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+  });
+  await flush();
 }
 
 beforeEach(() => {
@@ -316,10 +352,13 @@ describe("useThreadSync — visibility transitions", () => {
     setVisibility("hidden");
     const d = defer<CommentThread[]>();
     let firstSignal: AbortSignal | null = null;
+
     const fetchThreads = vi.fn(async (signal: AbortSignal) => {
-      if (!firstSignal) firstSignal = signal;
+      firstSignal ??= signal;
+
       return d.promise;
     });
+
     const onThreads = vi.fn();
     mount({ enabled: true, fetchThreads, onThreads });
     // The eager mount fetch is in flight and not yet aborted.
@@ -341,10 +380,13 @@ describe("useThreadSync — abort + generation safety", () => {
   it("aborts the in-flight request when the tab hides and discards its result", async () => {
     const d = defer<CommentThread[]>();
     let observedSignal: AbortSignal | null = null;
+
     const fetchThreads = vi.fn(async (signal: AbortSignal) => {
       observedSignal = signal;
+
       return d.promise;
     });
+
     const onThreads = vi.fn();
     mount({ enabled: true, fetchThreads, onThreads });
     // Initial fetch is now pending.
@@ -432,9 +474,11 @@ describe("useThreadSync — error handling", () => {
   it("forwards thrown errors to onError without rejecting", async () => {
     const onError = vi.fn();
     const boom = new Error("network down");
+
     const fetchThreads = vi.fn(async () => {
       throw boom;
     });
+
     const onThreads = vi.fn();
     mount({ enabled: true, fetchThreads, onThreads, onError });
     await flush();
@@ -450,9 +494,11 @@ describe("useThreadSync — error handling", () => {
 
   it("falls back to console.warn when onError is not provided", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const fetchThreads = vi.fn(async () => {
       throw new Error("boom");
     });
+
     const onThreads = vi.fn();
     mount({ enabled: true, fetchThreads, onThreads });
     await flush();
@@ -462,14 +508,6 @@ describe("useThreadSync — error handling", () => {
 });
 
 describe("useThreadSync — failure backoff", () => {
-  // Advance fake time and let the resulting fetch settle.
-  async function tick(ms: number): Promise<void> {
-    await act(async () => {
-      vi.advanceTimersByTime(ms);
-    });
-    await flush();
-  }
-
   const authError = () =>
     Object.assign(new Error("TF400813: not authorized"), { status: 401 });
 
@@ -477,9 +515,11 @@ describe("useThreadSync — failure backoff", () => {
   // poll reported to telemetry. Failures must back off and report once.
   it("doubles the delay on consecutive failures and reports once per streak", async () => {
     vi.useFakeTimers();
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       throw authError();
     });
+
     mount({
       enabled: true,
       fetchThreads,
@@ -511,10 +551,13 @@ describe("useThreadSync — failure backoff", () => {
   it("returns to the normal cadence after a success and reports a new streak again", async () => {
     vi.useFakeTimers();
     let fail = true;
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       if (fail) throw authError();
+
       return [];
     });
+
     const onThreads = vi.fn();
     mount({
       enabled: true,
@@ -545,13 +588,16 @@ describe("useThreadSync — failure backoff", () => {
     vi.useFakeTimers();
     const now = Date.now();
     let refreshing = true;
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       if (refreshing) {
         // The real error the PR tab's loader throws in the dead window.
         throw new SessionRefreshingError("refreshing", now + 4 * 60_000);
       }
+
       return [];
     });
+
     mount({
       enabled: true,
       fetchThreads,
@@ -575,9 +621,11 @@ describe("useThreadSync — failure backoff", () => {
 
   it("does not let focus or reveal cut a backoff short", async () => {
     vi.useFakeTimers();
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       throw authError();
     });
+
     mount({
       enabled: true,
       fetchThreads,
@@ -614,9 +662,11 @@ describe("useThreadSync — failure backoff", () => {
 
   it("polls immediately on reveal once a backoff has elapsed while hidden", async () => {
     vi.useFakeTimers();
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       throw authError();
     });
+
     mount({
       enabled: true,
       fetchThreads,
@@ -642,9 +692,11 @@ describe("useThreadSync — failure backoff", () => {
 
   it("lets a manual refreshNow bypass the backoff", async () => {
     vi.useFakeTimers();
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       throw authError();
     });
+
     const handle = mount({
       enabled: true,
       fetchThreads,
@@ -652,6 +704,7 @@ describe("useThreadSync — failure backoff", () => {
       onError: vi.fn(),
       intervalMs: 60_000,
     });
+
     await flush();
     await act(async () => {
       handle.controls!.refreshNow();
@@ -663,9 +716,11 @@ describe("useThreadSync — failure backoff", () => {
   it("arms the first poll only after the tab becomes visible when a hidden mount fails", async () => {
     vi.useFakeTimers();
     setVisibility("hidden");
+
     const fetchThreads = vi.fn(async (): Promise<CommentThread[]> => {
       throw authError();
     });
+
     mount({
       enabled: true,
       fetchThreads,
@@ -690,6 +745,7 @@ describe("nextPollDelayMs", () => {
     const delays = [1, 2, 3, 4, 5, 6, 20].map((failureStreak) =>
       nextPollDelayMs({ ...base, failureStreak }),
     );
+
     expect(delays).toEqual([
       30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000,
     ]);
@@ -708,6 +764,7 @@ describe("nextPollDelayMs", () => {
         failureStreak: 1,
         error: { recoverAtMs: base.nowMs + offsetMs },
       });
+
     expect(at(4 * 60_000)).toBe(4 * 60_000 + RECOVER_BUFFER_MS);
     expect(at(-60_000)).toBe(30_000);
     expect(at(60 * 60_000)).toBe(MAX_RECOVER_WAIT_MS);
@@ -724,6 +781,7 @@ describe("nextPollDelayMs", () => {
         error: { recoverAtMs: base.nowMs - 10_000 },
       }),
     );
+
     expect(delays).toEqual([
       30_000, 60_000, 120_000, 240_000, 300_000, 300_000,
     ]);
@@ -754,19 +812,14 @@ describe("nextPollDelayMs", () => {
 });
 
 describe("useThreadSync — early resume on recovery", () => {
-  async function tick(ms: number): Promise<void> {
-    await act(async () => {
-      vi.advanceTimersByTime(ms);
-    });
-    await flush();
-  }
-
   function recoverySignal() {
     const listeners = new Set<() => void>();
+
     return {
       listeners,
       subscribe: (l: () => void) => {
         listeners.add(l);
+
         return () => listeners.delete(l);
       },
       fire: () => {
@@ -894,7 +947,7 @@ describe("useThreadSync — unmount cleanup", () => {
 describe("useThreadSync — torn-down and stale sessions", () => {
   function rerender(handle: HarnessHandle, opts: HarnessOpts): void {
     act(() => {
-      root!.render(React.createElement(Harness, { ...opts, handle }));
+      root!.render(harnessElement(opts, handle));
     });
   }
 
@@ -918,10 +971,12 @@ describe("useThreadSync — torn-down and stale sessions", () => {
   it("keeps a newer session's spinner when a torn-down fetch settles", async () => {
     const first = defer<CommentThread[]>();
     const second = defer<CommentThread[]>();
+
     const fetchThreads = vi
       .fn<(signal: AbortSignal) => Promise<CommentThread[]>>()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
+
     const onThreads = vi.fn();
     const opts = { enabled: true, fetchThreads, onThreads };
     const handle = mount(opts);

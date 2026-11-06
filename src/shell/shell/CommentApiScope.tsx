@@ -1,6 +1,6 @@
 // Context providers Shell wraps its comment UI in.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { CommentApiProvider, type CommentApi } from "../../comments/api";
 import { ComposerBusyContext } from "../components/composerBusy";
@@ -15,12 +15,12 @@ export function CommentApiScope({
   busy,
   registerEditor,
   children,
-}: {
+}: Readonly<{
   api: CommentApi;
   busy: boolean;
   registerEditor: () => () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
+  children: ReactNode;
+}>): ReactElement {
   return (
     <CommentApiProvider value={api}>
       <ComposerBusyContext.Provider value={busy}>

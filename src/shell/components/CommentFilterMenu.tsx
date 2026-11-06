@@ -8,7 +8,7 @@
 // comment count lives in the prev/next cycler. Escape or an outside click
 // closes it — mirroring Azure DevOps's PR comment filter, sized for our rail.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 
 import {
   commentFilterLabel,
@@ -32,17 +32,19 @@ interface CommentFilterMenuProps {
 
 // eslint-disable-next-line max-lines-per-function -- Filter menu: status modes, file-scope toggle and menu keyboard handling share open/focus state and one ARIA menu.
 export function CommentFilterMenu(
-  props: CommentFilterMenuProps,
-): React.ReactElement {
+  props: Readonly<CommentFilterMenuProps>,
+): ReactElement {
   const { mode, counts, onChange, onlyThisFile, onOnlyThisFileChange } = props;
-  const [open, setOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return;
+
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
+
       if (
         menuRef.current &&
         target &&
@@ -53,6 +55,7 @@ export function CommentFilterMenu(
         setOpen(false);
       }
     }
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -60,8 +63,10 @@ export function CommentFilterMenu(
         btnRef.current?.focus();
       }
     }
+
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
@@ -163,7 +168,7 @@ const iconStrokeProps = {
   strokeLinejoin: "round" as const,
 };
 
-function SvgChevronDown(): React.ReactElement {
+function SvgChevronDown(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -178,7 +183,7 @@ function SvgChevronDown(): React.ReactElement {
   );
 }
 
-function SvgCheck(): React.ReactElement {
+function SvgCheck(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"

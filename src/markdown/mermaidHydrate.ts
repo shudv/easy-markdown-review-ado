@@ -48,10 +48,12 @@ function getMermaid(): Promise<MermaidApi> {
   if (mermaidPromise) return mermaidPromise;
   mermaidPromise = (async () => {
     const mod = await importWithChunkRetry();
+
     // A CommonJS-interop namespace exposes the API without a `default`.
     const api: MermaidApi =
-      (mod as { default: MermaidApi }).default ??
+      (mod as { default?: MermaidApi }).default ??
       (mod as unknown as MermaidApi);
+
     return api;
   })().catch((error: unknown) => {
     // Drop the rejected promise so a later pass (a theme redraw, a re-render)
@@ -59,6 +61,7 @@ function getMermaid(): Promise<MermaidApi> {
     mermaidPromise = null;
     throw error;
   });
+
   return mermaidPromise;
 }
 
@@ -68,6 +71,7 @@ function getMermaid(): Promise<MermaidApi> {
 // <html>; mirror it (both high-contrast palettes count as dark).
 function currentMermaidTheme(): "dark" | "default" {
   const theme = document.documentElement.getAttribute("data-emr-theme");
+
   return isDarkTheme(theme ?? "") ? "dark" : "default";
 }
 
@@ -109,10 +113,12 @@ function reportOnce(key: string, operation: string, error: unknown): void {
 export function isDiagramSyntaxError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const { name, message } = err as { name?: unknown; message?: unknown };
+
   return (
     name === "UnknownDiagramError" ||
     (typeof message === "string" &&
-      /^(?:Parse error|Lexical error)\b|No diagram type detected/.test(message))
+      (/^(?:Parse error|Lexical error)\b/.test(message) ||
+        message.includes("No diagram type detected")))
   );
 }
 
@@ -140,6 +146,7 @@ function paint(
   el.setAttribute("data-hydrated", "true");
   el.setAttribute("data-mermaid-theme", theme);
   el.setAttribute("data-mermaid-font", fontFamily);
+  // eslint-disable-next-line no-unsanitized/property -- svg comes from mermaid.render under securityLevel "strict", which DOMPurify-sanitizes the diagram markup
   el.innerHTML = svg;
   // Let the reader's text-size control scale the whole diagram. Capture the
   // diagram's natural width (the viewBox's 3rd value) into a custom prop the
@@ -148,7 +155,8 @@ function paint(
   // AND their text uniformly, so both track the reading size.
   const svgEl = el.querySelector<SVGSVGElement>("svg")!;
   const viewBox = svgEl.getAttribute("viewBox");
-  if (viewBox) {
+
+  if (viewBox !== null && viewBox !== "") {
     el.style.setProperty(
       "--emr-diagram-natural-w",
       `${viewBox.split(" ")[2]}px`,
@@ -169,7 +177,8 @@ interface HydrationPass {
 /** A placeholder's decoded `data-mermaid-src`, or `null` if absent/malformed. */
 function decodedSource(el: HTMLElement): string | null {
   const enc = el.getAttribute("data-mermaid-src");
-  if (!enc) return null;
+  if (enc === null || enc === "") return null;
+
   try {
     return decodeURIComponent(enc);
   } catch {
@@ -203,6 +212,7 @@ async function recoverFailedRender(
   err: unknown,
 ): Promise<void> {
   let error = err;
+
   // `;` in sequence-diagram text reads as a statement break to Mermaid
   // (the most common diagram failure in production). Retry once with
   // those escaped — only after a failure, so a diagram that renders as
@@ -210,11 +220,13 @@ async function recoverFailedRender(
   const repaired = isDiagramSyntaxError(err)
     ? repairSequenceSemicolons(src)
     : null;
-  if (repaired) {
+
+  if (repaired !== null) {
     try {
       const { svg } = await renderWithChunkRetry(pass.api, repaired);
       paint(el, svg, pass.theme, pass.fontFamily);
       noteRenderIssueOnce(src, "repaired");
+
       return;
     } catch (repairErr) {
       // Still a syntax error: keep the author's original one. Anything
@@ -222,6 +234,7 @@ async function recoverFailedRender(
       if (!isDiagramSyntaxError(repairErr)) error = repairErr;
     }
   }
+
   markRenderFailed(pass, el, src, error);
 }
 
@@ -229,6 +242,7 @@ async function recoverFailedRender(
 async function hydrateOne(pass: HydrationPass, el: HTMLElement): Promise<void> {
   const src = decodedSource(el);
   if (src === null) return;
+
   try {
     const { svg } = await renderWithChunkRetry(pass.api, src);
     paint(el, svg, pass.theme, pass.fontFamily);
@@ -248,6 +262,7 @@ export async function hydrateMermaid(
   fontFamily = DEFAULT_FONT_FAMILY,
 ): Promise<void> {
   const theme = currentMermaidTheme();
+
   // Mermaid SVGs bake both colours and fonts in at render time, so redraw when
   // either reader preference no longer matches the rendered diagram.
   const placeholders = Array.from(
@@ -258,9 +273,11 @@ export async function hydrateMermaid(
       el.getAttribute("data-mermaid-theme") !== theme ||
       el.getAttribute("data-mermaid-font") !== fontFamily,
   );
+
   if (placeholders.length === 0) return;
 
   let api: MermaidApi;
+
   try {
     api = await getMermaid();
   } catch (err) {
@@ -271,6 +288,7 @@ export async function hydrateMermaid(
 
     console.warn("[mermaid] failed to load library:", err);
     reportOnce("library-load", "diagram-library-load", err);
+
     return;
   }
 

@@ -1,8 +1,4 @@
-import React, {
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import type { DraftScope } from "../draftStorage";
 import { ReaderActivityIndicator } from "./readerActivity";
@@ -29,10 +25,11 @@ export function ReaderLoadingShell({
   hideDocNav = false,
   titleSlot,
   headerActions,
-}: ReaderLoadingShellProps): ReactElement {
+}: Readonly<ReaderLoadingShellProps>): ReactElement {
   const prefs = readReaderPrefs(scope);
   const readerFont = resolveReaderFont(prefs.fontId);
   const readerSpacing = readerSpacingValues(prefs);
+
   const style = {
     "--emr-reader-font": readerFont.stack,
     "--emr-reader-scale": String(prefs.sizePct / 100),
@@ -59,7 +56,7 @@ export function ReaderLoadingShell({
         {hideDocNav ? null : (
           <div className="emr-body__nav">
             <aside className="emr-docnav" aria-label="Document navigation">
-              {titleSlot || headerActions ? (
+              {hasSlotContent(titleSlot) || hasSlotContent(headerActions) ? (
                 <div className="emr-docnav-header">
                   {titleSlot}
                   {headerActions}
@@ -113,6 +110,18 @@ export function ReaderLoadingShell({
         />
       </div>
     </div>
+  );
+}
+
+/** Truthiness of a header slot, spelled out for each falsy ReactNode value. */
+function hasSlotContent(node: ReactNode): boolean {
+  return (
+    node !== undefined &&
+    node !== null &&
+    node !== false &&
+    node !== "" &&
+    node !== 0 &&
+    !Number.isNaN(node)
   );
 }
 

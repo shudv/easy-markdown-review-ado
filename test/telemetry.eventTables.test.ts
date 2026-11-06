@@ -62,6 +62,7 @@ describe("tableFor", () => {
   it("covers every event in the catalog", () => {
     // Guard against an event being added to EVENT but forgotten here.
     const classified = new Set([...ENGAGEMENT_EVENTS, ...DIAGNOSTIC_EVENTS]);
+
     for (const name of Object.values(EVENT)) {
       expect(classified.has(name)).toBe(true);
       expect(Object.values(TELEMETRY_TABLE)).toContain(tableFor(name));

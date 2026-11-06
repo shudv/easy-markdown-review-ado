@@ -1,6 +1,6 @@
 // Documents hub: per-repository bindings handed to Shell (comments, links, history).
 
-import * as React from "react";
+import { useCallback, useMemo } from "react";
 
 import type { CommentThread } from "../types";
 import type { RoutedPrInfo } from "../shell/Shell";
@@ -21,6 +21,7 @@ export function useRepoBindings(
   perDocumentMode: boolean,
 ) {
   const repoBindings = useRepoScopedBindings(props, selectedRepo);
+
   const perDocumentBindings = usePerDocumentBindings(
     props,
     selectedRepo,
@@ -28,10 +29,11 @@ export function useRepoBindings(
   );
 
   // Folder lister for `[[_TOSP_]]` subpage tables, bound to the active repo.
-  const listSubpageFolderBound = React.useMemo<FolderLister | undefined>(() => {
+  const listSubpageFolderBound = useMemo<FolderLister | undefined>(() => {
     const fn = props.onListSubpageFolder;
     if (!fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (folderPath, atCommitId) => fn(repoId, folderPath, atCommitId);
   }, [props.onListSubpageFolder, selectedRepo]);
 
@@ -51,14 +53,16 @@ function useRepoScopedBindings(
 
   // Curry the per-repo source loader so Shell's `loadFileSource(path)`
   // contract is satisfied without leaking the repo id.
-  const repoScopedLoader = React.useCallback(
+  const repoScopedLoader = useCallback(
     (path: string): Promise<string> => {
       if (!selectedRepo) return Promise.reject(new Error("No repo selected"));
+
       return loadFileSource(selectedRepo.id, path);
     },
     [selectedRepo, loadFileSource],
   );
-  const resolveDocumentImageBound = React.useMemo<
+
+  const resolveDocumentImageBound = useMemo<
     | ((
         documentPath: string,
         repositoryPath: string,
@@ -69,6 +73,7 @@ function useRepoScopedBindings(
     const resolveImage = props.resolveDocumentImage;
     if (!selectedRepo || !resolveImage) return undefined;
     const repoId = selectedRepo.id;
+
     return (
       documentPath: string,
       repositoryPath: string,
@@ -77,8 +82,9 @@ function useRepoScopedBindings(
       resolveImage(repoId, documentPath, repositoryPath, atCommitId);
   }, [props.resolveDocumentImage, selectedRepo]);
 
-  const commentApi = React.useMemo<CommentApi | undefined>(() => {
+  const commentApi = useMemo<CommentApi | undefined>(() => {
     if (!selectedRepo || !commentApiFor) return undefined;
+
     return commentApiFor(selectedRepo.id);
   }, [selectedRepo, commentApiFor]);
 
@@ -93,61 +99,67 @@ function usePerDocumentBindings(
 ) {
   // Per-document mode: curry the repo id so Shell's per-path contracts
   // (`(path) => …`) are satisfied without leaking it.
-  const commentApiForPathBound = React.useMemo<
+  const commentApiForPathBound = useMemo<
     ((path: string) => CommentApi | undefined) | undefined
   >(() => {
     const fn = props.commentApiForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.commentApiForPath, selectedRepo]);
 
-  const loadThreadsForPathBound = React.useMemo<
+  const loadThreadsForPathBound = useMemo<
     ((path: string) => Promise<CommentThread[]>) | undefined
   >(() => {
     const fn = props.loadThreadsForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.loadThreadsForPath, selectedRepo]);
 
   // Per-document mode: curry the repo id so Shell resolves the routed-PR
   // pill for its selected file.
-  const routedPrForPathBound = React.useMemo<
+  const routedPrForPathBound = useMemo<
     ((path: string) => RoutedPrInfo | null | undefined) | undefined
   >(() => {
     const fn = props.routedPrForPath;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.routedPrForPath, selectedRepo]);
 
   // Comment-history stepper: curry the repo id onto the three history loaders
   // so Shell's per-path stepper contracts are satisfied.
-  const loadDocHistoryBound = React.useMemo<
+  const loadDocHistoryBound = useMemo<
     ((path: string) => Promise<DocPrRef[]>) | undefined
   >(() => {
     const fn = props.loadDocHistory;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string) => fn(repoId, path);
   }, [perDocumentMode, props.loadDocHistory, selectedRepo]);
 
-  const loadThreadsForPrBound = React.useMemo<
+  const loadThreadsForPrBound = useMemo<
     ((prId: number, path: string) => Promise<CommentThread[]>) | undefined
   >(() => {
     const fn = props.loadThreadsForPr;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (prId: number, path: string) => fn(repoId, prId, path);
   }, [perDocumentMode, props.loadThreadsForPr, selectedRepo]);
 
-  const loadFileSourceAtBound = React.useMemo<
+  const loadFileSourceAtBound = useMemo<
     ((path: string, commitId: string) => Promise<string>) | undefined
   >(() => {
     const fn = props.loadFileSourceAt;
     if (!perDocumentMode || !fn || !selectedRepo) return undefined;
     const repoId = selectedRepo.id;
+
     return (path: string, commitId: string) => fn(repoId, path, commitId);
   }, [perDocumentMode, props.loadFileSourceAt, selectedRepo]);
 

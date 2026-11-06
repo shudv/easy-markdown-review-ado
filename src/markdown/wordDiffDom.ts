@@ -81,21 +81,27 @@ function flattenTextNodes(block: HTMLElement): {
 } {
   const nodes: FlatTextNode[] = [];
   let acc = "";
+
   const walker = block.ownerDocument.createTreeWalker(
     block,
     NodeFilter.SHOW_TEXT,
     null,
   );
+
   let n: Node | null = walker.nextNode();
+
   while (n) {
     const data = (n as Text).data;
+
     if (data.length > 0) {
       const start = acc.length;
       nodes.push({ node: n as Text, start, end: start + data.length });
       acc += data;
     }
+
     n = walker.nextNode();
   }
+
   return { nodes, text: acc };
 }
 
@@ -111,6 +117,7 @@ function planEdits(ops: readonly WordDiffOp[]): {
   const added: AddedSegment[] = [];
   const removals: Removal[] = [];
   let cursor = 0;
+
   for (const op of ops) {
     if (op.kind === "equal") {
       cursor += op.value.length;
@@ -121,6 +128,7 @@ function planEdits(ops: readonly WordDiffOp[]): {
       removals.push({ at: cursor, text: op.value });
     }
   }
+
   return { added, removals };
 }
 
@@ -131,10 +139,11 @@ function makeMark(
   text: string,
 ): HTMLElement {
   const el = doc.createElement(tag);
-  el.className = /^\s*[\r\n]\s*$/.test(text)
+  el.className = /^[^\S\r\n]*[\r\n]\s*$/.test(text)
     ? `${className} ${WORD_LINE_BREAK_CLASS}`
     : className;
   el.textContent = text;
+
   return el;
 }
 
@@ -159,14 +168,17 @@ function rewriteNode(
     text: string;
   }
   const events: Event[] = [];
+
   for (const seg of added) {
     const s = Math.max(seg.start, ns);
     const e = Math.min(seg.end, ne);
+
     if (s < e) {
       events.push({ pos: s - ns, kind: "add-start", text: "" });
       events.push({ pos: e - ns, kind: "add-end", text: "" });
     }
   }
+
   for (const r of removals) {
     // Assign a removal to the node that contains its offset. A removal exactly
     // at this node's end belongs to the next node's start instead — except at
@@ -175,9 +187,11 @@ function rewriteNode(
       events.push({ pos: r.at - ns, kind: "remove", text: r.text });
     }
   }
+
   if (events.length === 0) {
     const fragment = doc.createDocumentFragment();
     fragment.appendChild(entry.node.cloneNode(true));
+
     return { fragment, addedCount: 0, removedCount: 0 };
   }
 
@@ -196,6 +210,7 @@ function rewriteNode(
   const emitPlain = (from: number, to: number, wrapped: boolean) => {
     if (to <= from) return;
     const text = data.slice(from, to);
+
     if (wrapped) {
       fragment.appendChild(makeMark(doc, "ins", WORD_ADDED_CLASS, text));
     } else {
@@ -208,6 +223,7 @@ function rewriteNode(
       emitPlain(cursor, ev.pos, inAdd);
       cursor = ev.pos;
     }
+
     if (ev.kind === "remove") {
       fragment.appendChild(
         makeMark(doc, "del", removedRunClass(ev.text), ev.text),
@@ -221,6 +237,7 @@ function rewriteNode(
       addedCount++;
     }
   }
+
   // Tail after the last event.
   emitPlain(cursor, data.length, inAdd);
 
@@ -238,15 +255,18 @@ export function applyInlineWordDiff(
   ops: readonly WordDiffOp[],
 ): InlineWordDiffResult | null {
   const { nodes, text } = flattenTextNodes(block);
+
   // Sanity: equal + added must reconstruct the block's live text. If the
   // rendered text diverges from what we diffed, bail rather than corrupt it.
   const rebuilt = ops
     .filter((o) => o.kind !== "removed")
     .map((o) => o.value)
     .join("");
+
   if (rebuilt !== text) return null;
 
   const { added, removals } = planEdits(ops);
+
   if (added.length === 0 && removals.length === 0) {
     return { added: 0, removed: 0 };
   }
@@ -262,6 +282,7 @@ export function applyInlineWordDiff(
       addedCount: a,
       removedCount: r,
     } = rewriteNode(entry, added, removals);
+
     addedCount += a;
     removedCount += r;
     entry.node.parentNode?.replaceChild(fragment, entry.node);
@@ -272,6 +293,7 @@ export function applyInlineWordDiff(
   // button, so struck-out words stay with their heading text and the button
   // keeps its place after it.
   const trailingControl = block.querySelector(":scope > .emr-heading-link");
+
   for (const r of removals) {
     if (r.at === totalEnd) {
       block.insertBefore(

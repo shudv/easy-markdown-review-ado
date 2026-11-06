@@ -31,5 +31,6 @@ export function shouldPublishDefaultPath(
   path: string,
 ): boolean {
   if (publishedRepoId === selectedRepoId) return false;
+
   return path !== "";
 }

@@ -1,7 +1,7 @@
 // Pure derivations for the Balloon (thread card): its class list, positioning
 // style, and status-chip label.
 
-import type * as React from "react";
+import type { CSSProperties } from "react";
 import type { ThreadStatus } from "../../types";
 
 /** Status a balloon displays; orphaned cards override the thread status. */
@@ -33,6 +33,7 @@ export function balloonClassName(flags: {
   if (flags.resolved) classes.push("is-resolved");
   if (flags.isOrphaned) classes.push("is-orphaned");
   if (flags.general) classes.push("is-general");
+
   return classes.join(" ");
 }
 
@@ -40,6 +41,6 @@ export function balloonClassName(flags: {
 export function balloonStyle(
   inline: boolean | undefined,
   topPx: number | undefined,
-): React.CSSProperties {
+): CSSProperties {
   return inline ? {} : { top: typeof topPx === "number" ? topPx : 0 };
 }

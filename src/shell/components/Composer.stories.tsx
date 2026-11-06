@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  useState,
+} from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import {
@@ -22,7 +27,7 @@ const failingApi: CommentApi = Object.assign(new LocalOnlyCommentApi(), {
 });
 
 function withApi(api: CommentApi) {
-  return (Story: React.ComponentType) => (
+  return (Story: ComponentType) => (
     <CommentApiProvider value={api}>
       <div
         style={{
@@ -100,10 +105,12 @@ export const UserMention: Story = {
     const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
     await userEvent.click(ta);
     await userEvent.type(ta, "@al");
+
     const option = await waitFor(
       () => canvas.getByRole("option", { name: /Alex Rivera/ }),
       { timeout: 3000 },
     );
+
     expect(option).toBeTruthy();
     // Resize while the picker is open re-positions it (scroll/resize listener).
     window.dispatchEvent(new Event("resize"));
@@ -153,9 +160,11 @@ export const WorkItemMentionClick: Story = {
     const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
     await userEvent.click(ta);
     await userEvent.type(ta, "#bug");
+
     const option = await waitFor(() => canvas.getAllByRole("option")[0], {
       timeout: 3000,
     });
+
     await userEvent.hover(option);
     await userEvent.click(option);
     await waitFor(() => expect(ta.value).toContain("mention://workitem/"));
@@ -238,7 +247,7 @@ export const SearchFailure: Story = {
  */
 export const BusyWhileSending: Story = {
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: ComponentType) => (
       <ComposerBusyContext.Provider value={true}>
         <Story />
       </ComposerBusyContext.Provider>
@@ -249,9 +258,11 @@ export const BusyWhileSending: Story = {
     const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
     await userEvent.click(ta);
     await userEvent.type(ta, "Second click");
+
     const submit = canvas.getByRole("button", {
       name: "Sending…",
     }) as HTMLButtonElement;
+
     await expect(submit.disabled).toBe(true);
     await expect(submit.getAttribute("aria-busy")).toBe("true");
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
@@ -265,12 +276,14 @@ function deferredSearchApi() {
     resolve: (suggestions: MentionSuggestion[]) => void;
     reject: (err: Error) => void;
   }> = [];
+
   const api: CommentApi = Object.assign(new LocalOnlyCommentApi(), {
     searchUsers: () =>
       new Promise<MentionSuggestion[]>((resolve, reject) => {
         pending.push({ resolve, reject });
       }),
   });
+
   return { api, pending };
 }
 
@@ -279,6 +292,7 @@ async function startMention(canvasElement: HTMLElement) {
   const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
   await userEvent.click(ta);
   await userEvent.type(ta, "@al", { skipClick: true });
+
   return { canvas, ta };
 }
 
@@ -381,9 +395,10 @@ const unmountSearch = Object.assign(new LocalOnlyCommentApi(), {
 });
 
 function ClosableComposer(
-  props: React.ComponentProps<typeof Composer>,
-): React.ReactElement {
-  const [open, setOpen] = React.useState(true);
+  props: ComponentProps<typeof Composer>,
+): ReactElement {
+  const [open, setOpen] = useState(true);
+
   return (
     <>
       <button type="button" onClick={() => setOpen(false)}>

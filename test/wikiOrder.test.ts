@@ -138,6 +138,7 @@ describe("subpagesFromListing", () => {
       folders: ["/Guides/Install"],
       order: ["Install", "Getting-Started", "Missing"],
     });
+
     expect(subpages).toEqual([
       { path: "/Guides/Install.md", title: "Install" },
       { path: "/Guides/Getting-Started.md", title: "Getting Started" },

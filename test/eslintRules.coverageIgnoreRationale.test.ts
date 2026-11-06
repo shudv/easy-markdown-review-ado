@@ -4,7 +4,7 @@
 // @vitest-environment node
 
 import { RuleTester } from "eslint";
-import { afterAll, describe, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { coverageIgnoreRationale } from "../scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
@@ -18,6 +18,19 @@ const tester = new RuleTester({
     sourceType: "module",
     parserOptions: { ecmaFeatures: { jsx: true } },
   },
+});
+
+describe("coverage-ignore-rationale meta", () => {
+  it("declares a message for every messageId the rule reports", () => {
+    expect(Object.keys(coverageIgnoreRationale.meta.messages)).toStrictEqual([
+      "missingReason",
+      "shortReason",
+      "unknownDirective",
+      "unmatchedStop",
+      "unclosedStart",
+      "stopWithText",
+    ]);
+  });
 });
 
 const REASON = "the SDK host owns this path";

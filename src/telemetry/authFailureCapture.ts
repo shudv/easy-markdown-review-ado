@@ -25,13 +25,14 @@ export function isAdoApiUrl(url: string): boolean {
 /** True when the URL targets a legacy `{org}.visualstudio.com` host. */
 export function isLegacyHost(url: string): boolean {
   const host = /^https?:\/\/([^/]+)/.exec(url)?.[1]?.toLowerCase() ?? "";
+
   return host.endsWith(".visualstudio.com");
 }
 
 // A path segment that's a numeric id or a GUID — dropped so the API area never
 // carries an identifier.
 const ID_SEGMENT_RE =
-  /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  /^(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 // The SECOND `_apis` segment is kept only when it's a known ADO controller
 // name. Otherwise it can be a user-defined project / repo / resource NAME
@@ -67,19 +68,18 @@ const SAFE_SUBAREAS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
  */
 export function apiAreaOf(url: string): string | undefined {
   const m = /\/_apis\/([^?#]*)/.exec(url);
-  if (!m || !m[1]) return undefined;
+  if (m === null || m[1] === "") return undefined;
   const segs = m[1].split("/").filter((s) => s);
   const first = segs[0]?.toLowerCase();
   if (!first || ID_SEGMENT_RE.test(first)) return undefined;
-  const secondRaw = segs[1];
-  const second = secondRaw?.toLowerCase();
-  if (
-    second &&
-    !ID_SEGMENT_RE.test(secondRaw) &&
-    SAFE_SUBAREAS.get(first)?.has(second)
-  ) {
-    return `${first}.${second}`;
+  // Segments are non-empty (filtered above), so a defined one is truthy.
+  const secondRaw = segs.length > 1 ? segs[1] : undefined;
+
+  if (secondRaw !== undefined && !ID_SEGMENT_RE.test(secondRaw)) {
+    const second = secondRaw.toLowerCase();
+    if (SAFE_SUBAREAS.get(first)?.has(second)) return `${first}.${second}`;
   }
+
   return first;
 }
 
@@ -121,11 +121,13 @@ export function createThrottle(
   now: () => number = Date.now,
 ): (key: string) => boolean {
   const last = new Map<string, number>();
+
   return (key: string): boolean => {
     const t = now();
     const prev = last.get(key);
     if (prev !== undefined && t - prev < cooldownMs) return false;
     last.set(key, t);
+
     return true;
   };
 }
@@ -135,25 +137,30 @@ let installed = false;
 /** Wrap the global `fetch` to emit `auth.failure` on ADO 401/403 responses. */
 export function installAuthFailureCapture(): void {
   if (installed) return;
+
   if (typeof window === "undefined" || typeof window.fetch !== "function") {
     return;
   }
+
   installed = true;
   const original = window.fetch.bind(window);
   const allow = createThrottle();
   window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await original(input, init);
+
     try {
       if ((res.status === 401 || res.status === 403) && isAdoApiUrl(res.url)) {
         const data = authFailureInput(res.url, res.status, (n) =>
           res.headers.get(n),
         );
+
         const key = `${data.status}:${data.api ?? "?"}:${data.legacyHost}`;
         if (allow(key)) track(events.authFailure(data));
       }
     } catch {
       /* diagnostics must never break a real fetch */
     }
+
     return res;
   }) as typeof window.fetch;
 }

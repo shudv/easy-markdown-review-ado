@@ -1,8 +1,8 @@
 // Edge grabbers that reopen Shell's collapsed panes.
 
-import * as React from "react";
+import type { ReactElement, PointerEvent as ReactPointerEvent } from "react";
 
-type PointerHandler = (e: React.PointerEvent<HTMLDivElement>) => void;
+type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface PaneReopenGrabbersProps {
   navShown: boolean;
@@ -21,8 +21,8 @@ interface PaneReopenGrabbersProps {
  * (full reader), pinned to the frame's edge.
  */
 export function PaneReopenGrabbers(
-  props: PaneReopenGrabbersProps,
-): React.ReactElement {
+  props: Readonly<PaneReopenGrabbersProps>,
+): ReactElement {
   return (
     <>
       {props.navShown ? (

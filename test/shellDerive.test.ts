@@ -42,6 +42,7 @@ const current: HistoryStop = {
   isCurrent: true,
   readOnly: false,
 };
+
 const past = (prId: number, commitId: string | null): HistoryStop => ({
   commitId,
   prId,
@@ -50,9 +51,12 @@ const past = (prId: number, commitId: string | null): HistoryStop => ({
   isCurrent: false,
   readOnly: true,
 });
+
 const anchor = (exact: string): TextQuoteAnchor =>
   ({ exact, prefix: "", suffix: "" }) as TextQuoteAnchor;
+
 const file = (path: string): FileInfo => ({ path }) as FileInfo;
+
 const range = (start: number) => [
   { kind: "modified" as const, startLine: start, endLine: start },
 ];
@@ -91,6 +95,7 @@ describe("draftTargetsOnScreen", () => {
       threadId: NEW_DRAFT_THREAD_ID,
       anchor: a,
     };
+
     expect(draftTargetsOnScreen(d, "a.md")).toEqual({
       draftAnchor: a,
       activeReplyThreadId: null,
@@ -129,6 +134,7 @@ describe("isSameDraftTarget", () => {
       threadId: NEW_DRAFT_THREAD_ID,
       anchor: anchor(exact),
     });
+
     expect(isSameDraftTarget(d("x"), d("x"))).toBe(true);
     expect(isSameDraftTarget(d("x"), d("y"))).toBe(false);
   });
@@ -188,6 +194,7 @@ describe("resolveHistoryView", () => {
       iterationRange: { fromUpdate: 0, toUpdate: 1 },
       completedHistoryStopIndex: 9,
     });
+
     expect(v.clampedStopIndex).toBe(2);
     expect(v.activeStop).toBe(completed[2]);
     expect(v.baselineStop).toBe(completed[2]);
@@ -199,6 +206,7 @@ describe("resolveHistoryView", () => {
   it("maps a native comparison onto its stops", () => {
     // Newest first: Update 3 (latest), Update 2, Update 1.
     const stops = [current, past(1, "u2"), past(1, "u1")];
+
     const all = resolveHistoryView({
       nativeIterationMode: true,
       reviewIterationStops: stops,
@@ -206,10 +214,12 @@ describe("resolveHistoryView", () => {
       iterationRange: { fromUpdate: 0, toUpdate: 3 },
       completedHistoryStopIndex: 0,
     });
+
     expect(all.historyStops).toBe(stops);
     expect(all.reportedRangeKey).toBe("all");
     expect(all.rangeChangesKey).toBeNull();
     expect(all.baselineStop).toBeUndefined();
+
     const partial = resolveHistoryView({
       nativeIterationMode: true,
       reviewIterationStops: stops,
@@ -217,6 +227,7 @@ describe("resolveHistoryView", () => {
       iterationRange: { fromUpdate: 1, toUpdate: 2 },
       completedHistoryStopIndex: 0,
     });
+
     expect(partial.activeStop).toBe(stops[1]);
     expect(partial.baselineStop).toBe(stops[2]);
     expect(partial.comparingIterations).toBe(true);
@@ -288,6 +299,7 @@ describe("historicalStatus", () => {
     historicalErrorByKey: {} as Record<string, string>,
     historicalAbsentByKey: {} as Record<string, true>,
   };
+
   it("loads until both endpoints arrive", () => {
     expect(historicalStatus(base)).toMatchObject({
       usingHistoricalContent: true,
@@ -312,6 +324,7 @@ describe("historicalStatus", () => {
       ...base,
       historicalAbsentByKey: { k1: true },
     });
+
     expect(s.absentNotice?.title).toBe("Not present at Update 2");
     expect(s.historicalLoading).toBe(false);
   });
@@ -322,6 +335,7 @@ describe("historicalStatus", () => {
       historicalContentKey: null,
       currentFileChangeType: "deleted",
     });
+
     expect(s.absentNotice?.title).toBe("Deleted by Update 2");
     expect(s.usingHistoricalContent).toBe(false);
   });
@@ -331,6 +345,7 @@ describe("historicalStatus", () => {
       historicalHtmlByKey: { k1: "<p>1</p>" },
       historicalAbsentByKey: { k0: true },
     });
+
     expect(s.baselineAbsent).toBe(true);
     expect(s.historicalLoading).toBe(false);
   });
@@ -364,6 +379,7 @@ describe("activeArticleState", () => {
     baselineAbsent: false,
     historicalLoading: false,
   };
+
   it("shows the live document", () => {
     expect(
       activeArticleState({
@@ -386,6 +402,7 @@ describe("activeArticleState", () => {
       historicalContentKey: "k1",
       selectedPath: "a.md",
     };
+
     expect(
       activeArticleState({
         ...args,
@@ -420,6 +437,7 @@ describe("activeSources", () => {
     historicalSourceByKey: { k1: "one", k0: "zero" },
     latestSource: "latest",
   };
+
   it("uses the live source outside a comparison", () => {
     expect(activeSources(base)).toEqual({
       activeSource: "latest",
@@ -447,6 +465,7 @@ describe("activeSources", () => {
 describe("diffInputs / isDiffAvailable", () => {
   const iterationDiff = range(1);
   const currentFileDiff = range(2);
+
   const base = {
     baselineSource: "zero",
     activeSource: "one",
@@ -455,6 +474,7 @@ describe("diffInputs / isDiffAvailable", () => {
     iterationDiff,
     currentFileDiff,
   };
+
   it("diffs the compared updates", () => {
     expect(diffInputs({ ...base, comparingIterations: true })).toEqual({
       activeOriginalSource: "zero",
@@ -469,6 +489,7 @@ describe("diffInputs / isDiffAvailable", () => {
       rawActiveDiff: currentFileDiff,
     });
   });
+
   const avail = {
     comparingIterations: false,
     baselineAbsent: false,
@@ -477,6 +498,7 @@ describe("diffInputs / isDiffAvailable", () => {
     isWholeFileChange: false,
     currentFileDiff: undefined,
   };
+
   it("offers changes only for a non-empty displayable diff", () => {
     expect(isDiffAvailable({ ...avail, currentFileDiff })).toBe(true);
     expect(isDiffAvailable({ ...avail, currentFileDiff: [] })).toBe(false);
@@ -499,6 +521,7 @@ describe("diffInputs / isDiffAvailable", () => {
 
 describe("commentAccess", () => {
   const routed = { prId: 7, title: "Routed", status: "active" as const };
+
   const base = {
     viewingHistorical: false,
     nativeIterationMode: false,
@@ -510,6 +533,7 @@ describe("commentAccess", () => {
     effectiveReadOnly: false,
     effectiveReadOnlyMessage: "msg",
   };
+
   it("keeps the live head writable", () => {
     expect(commentAccess(base)).toEqual({
       viewingPastPr: false,
@@ -525,6 +549,7 @@ describe("commentAccess", () => {
       viewingHistorical: true,
       activeStop: past(4, "c4"),
     });
+
     expect(r.viewingPastPr).toBe(true);
     expect(r.activeRoutedPr).toEqual({
       prId: 4,
@@ -554,6 +579,7 @@ describe("commentAccess", () => {
       nativeIterationMode: true,
       activeStop: past(7, "u1"),
     });
+
     expect(r.viewingPastPr).toBe(false);
     expect(r.activeReadOnly).toBe(false);
   });
@@ -666,6 +692,7 @@ describe("reader chrome", () => {
       showNav: true,
       showComments: true,
     };
+
     expect(paneLayout(undefined, prefs, true)).toEqual({
       navToggleable: true,
       navHidden: false,
@@ -697,6 +724,7 @@ describe("reader chrome", () => {
       { stopIndex: 1, number: 1, title: "Update 1" },
       { stopIndex: 0, number: 2, title: "Update 2" },
     ];
+
     const handleRefresh = vi.fn();
     const done = { prId: 1, title: "t", status: "completed" as const };
     expect(

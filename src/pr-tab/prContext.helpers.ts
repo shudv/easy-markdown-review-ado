@@ -43,11 +43,13 @@ export function changedMarkdownFiles(
   }[],
 ): FileInfo[] {
   const mdEntries: Pick<FileInfo, "path" | "changeType">[] = [];
+
   for (const e of changes) {
     const path = markdownChangePath(e);
-    if (!path) continue;
+    if (path === undefined) continue;
     mdEntries.push({ path, changeType: mapChangeType(e.changeType) });
   }
+
   return mdEntries
     .map(
       (e) =>
@@ -72,9 +74,16 @@ export function contentCommitForPath(
   const changeType = ctx.changedMdFiles.find(
     (file) => file.path === path,
   )?.changeType;
+
+  // Typed required, but the ADO REST payload omits these on some PRs.
+  const pr: {
+    lastMergeTargetCommit?: { commitId?: string };
+    lastMergeSourceCommit?: { commitId?: string };
+  } = ctx.pr;
+
   return contentCommitForChange(changeType, {
-    baseCommit: ctx.baseCommit ?? ctx.pr.lastMergeTargetCommit?.commitId,
-    targetCommit: ctx.targetCommit ?? ctx.pr.lastMergeSourceCommit?.commitId,
+    baseCommit: ctx.baseCommit ?? pr.lastMergeTargetCommit?.commitId,
+    targetCommit: ctx.targetCommit ?? pr.lastMergeSourceCommit?.commitId,
   });
 }
 
@@ -87,12 +96,15 @@ export function splitFileDiffs(
 } {
   const diffs: Record<string, DiffRange[]> = {};
   const originalSources: Record<string, string> = {};
+
   for (const [path, info] of Object.entries(fileDiffs)) {
     if (info.ranges.length > 0) diffs[path] = info.ranges;
+
     if (info.originalSource != null) {
       originalSources[path] = info.originalSource;
     }
   }
+
   return { diffs, originalSources };
 }
 
@@ -121,5 +133,6 @@ export function prBranchVersion(
 ): string | undefined {
   const ref = pr.sourceRefName;
   if (!ref) return undefined;
-  return "GB" + ref.replace(/^refs\/heads\//, "");
+
+  return `GB${ref.replace(/^refs\/heads\//, "")}`;
 }

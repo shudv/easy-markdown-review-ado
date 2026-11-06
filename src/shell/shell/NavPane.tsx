@@ -1,14 +1,18 @@
 // Shell navigation rail with its resize handle.
 
-import * as React from "react";
+import type {
+  ReactElement,
+  ReactNode,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 
-type PointerHandler = (e: React.PointerEvent<HTMLDivElement>) => void;
+type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface NavPaneProps {
   /** False in single-file panels, which drop the navigation rail entirely. */
   shown: boolean;
   /** The DocNav rendered in the rail. */
-  children: React.ReactNode;
+  children: ReactNode;
   onResizeStart: PointerHandler;
   onResizeMove: PointerHandler;
   onResizeEnd: () => void;
@@ -22,8 +26,9 @@ interface NavPaneProps {
  * survives toggling (the document reclaims the freed width). Single-file
  * panels drop it entirely.
  */
-export function NavPane(props: NavPaneProps): React.ReactElement | null {
+export function NavPane(props: Readonly<NavPaneProps>): ReactElement | null {
   if (!props.shown) return null;
+
   return (
     <div className="emr-body__nav">
       {props.children}

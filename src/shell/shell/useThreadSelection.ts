@@ -1,6 +1,11 @@
 // Shell: selecting threads and text in the article.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useCallback,
+} from "react";
 
 import type { TextQuoteAnchor } from "../../types";
 import { relocateAnchor } from "../../comments/anchor";
@@ -8,10 +13,10 @@ import { events, track } from "../../telemetry";
 import { NEW_DRAFT_THREAD_ID, type DraftTarget } from "../draftStorage";
 
 interface ThreadSelectionOptions {
-  setActiveThreadId: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveThreadId: Dispatch<SetStateAction<string | null>>;
   scrollDocToAnchor: (tid: string) => void;
   requestDraft: (target: DraftTarget) => void;
-  selectedPathRef: React.MutableRefObject<string>;
+  selectedPathRef: MutableRefObject<string>;
   nativeIterationMode: boolean;
   viewingHistorical: boolean;
   htmlByPath: Record<string, string>;
@@ -28,7 +33,8 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
     viewingHistorical,
     htmlByPath,
   } = opts;
-  const onHighlightClick = React.useCallback(
+
+  const onHighlightClick = useCallback(
     (tid: string) => {
       // The clicked highlight is already in view, so only select — the
       // rail-follow effect brings its balloon into view in the rail's own
@@ -38,7 +44,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
     [setActiveThreadId],
   );
 
-  const onSelectThread = React.useCallback(
+  const onSelectThread = useCallback(
     (tid: string) => {
       setActiveThreadId(tid);
       scrollDocToAnchor(tid);
@@ -49,7 +55,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
   // Cycle from the status bar: select the thread and scroll the document to its
   // anchor. The rail-follow effect reveals the balloon and auto-expands any
   // collapsed tray containing it. Replying remains an explicit rail action.
-  const onCycleToThread = React.useCallback(
+  const onCycleToThread = useCallback(
     (tid: string) => {
       setActiveThreadId(tid);
       track(events.commentNavigated());
@@ -65,7 +71,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
   // away: the draft then stays correct however the comparison changes before
   // it's posted (the bubble only offers "Add comment" for text the latest
   // version still has; see `commentBlocker`).
-  const onSelectionMade = React.useCallback(
+  const onSelectionMade = useCallback(
     (anchor: TextQuoteAnchor) => {
       const path = selectedPathRef.current;
       requestDraft({

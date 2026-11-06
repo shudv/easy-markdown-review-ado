@@ -32,6 +32,7 @@ afterEach(() => {
     // jsdom ships without `navigator.clipboard`; remove our stub.
     delete (navigator as { clipboard?: unknown }).clipboard;
   }
+
   delete (document as { execCommand?: unknown }).execCommand;
   vi.restoreAllMocks();
 });

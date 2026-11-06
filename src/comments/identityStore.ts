@@ -15,7 +15,15 @@
 // Rendering never blocks on the network: a GUID shows immediately and the name
 // swaps in when known.
 
-import * as React from "react";
+import {
+  createContext,
+  type DependencyList,
+  type RefObject,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
 
 import { normalizeIdentityGuid } from "./mentions";
 
@@ -61,6 +69,7 @@ export class IdentityStore {
   /** Subscribe to store changes (for `useSyncExternalStore`). */
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
+
     return () => {
       this.listeners.delete(cb);
     };
@@ -75,8 +84,9 @@ export class IdentityStore {
     entries: Iterable<{ id: string; displayName?: string; avatarUrl?: string }>,
   ): void {
     let changed = false;
+
     for (const e of entries) {
-      if (!e.displayName) continue;
+      if (e.displayName === undefined || e.displayName === "") continue;
       const key = norm(e.id);
       if (!key || this.map.has(key)) continue;
       this.map.set(key, {
@@ -85,6 +95,7 @@ export class IdentityStore {
       });
       changed = true;
     }
+
     if (changed) this.emit();
   }
 
@@ -96,12 +107,14 @@ export class IdentityStore {
   ensure(ids: readonly string[]): void {
     if (!this.resolver) return;
     let added = false;
+
     for (const raw of ids) {
       const key = norm(raw);
       if (!key || this.map.has(key) || this.pending.has(key)) continue;
       this.queued.add(key);
       added = true;
     }
+
     if (added && !this.flushScheduled) {
       this.flushScheduled = true;
       queueMicrotask(() => void this.flush());
@@ -113,17 +126,27 @@ export class IdentityStore {
     const ids = [...this.queued];
     this.queued.clear();
     for (const k of ids) this.pending.add(k);
+
     try {
       const resolved = await this.resolver!(ids);
       let changed = false;
-      for (const [id, info] of Object.entries(resolved)) {
-        if (!info?.displayName) continue;
+
+      // Resolved entries come from ADO identity REST responses, so treat them
+      // as possibly missing or partial despite the resolver's declared type.
+      const entries = Object.entries(resolved) as [
+        string,
+        Partial<IdentityInfo> | null | undefined,
+      ][];
+
+      for (const [id, info] of entries) {
+        if (info?.displayName == null || info.displayName === "") continue;
         this.map.set(norm(id), {
           displayName: info.displayName,
           avatarUrl: info.avatarUrl,
         });
         changed = true;
       }
+
       if (changed) this.emit();
     } catch (err) {
       // Best-effort: a failed lookup just leaves the mention showing its GUID.
@@ -144,12 +167,10 @@ export class IdentityStore {
  * Context carrying the shared IdentityStore. `null` means "no store" — consumers
  * fall back to showing the raw GUID (never crash).
  */
-export const IdentityStoreContext = React.createContext<IdentityStore | null>(
-  null,
-);
+export const IdentityStoreContext = createContext<IdentityStore | null>(null);
 
 export function useIdentityStore(): IdentityStore | null {
-  return React.useContext(IdentityStoreContext);
+  return useContext(IdentityStoreContext);
 }
 
 /**
@@ -165,16 +186,20 @@ export function hydrateUserMentions(
   store: IdentityStore | null,
 ): void {
   if (!root || !store) return;
+
   const pills = root.querySelectorAll<HTMLElement>(
     'span.emr-mention[data-mention-kind="user"]',
   );
+
   const unresolved: string[] = [];
   pills.forEach((el) => {
     const id = el.getAttribute("data-mention-id");
-    if (!id) return;
+    if (id === null || id === "") return;
     const info = store.get(id);
+
     if (info) {
       const label = `@${info.displayName}`;
+
       // Only touch the DOM when the label actually changed, so we don't thrash.
       if (el.getAttribute("data-mention-label") !== label) {
         el.textContent = label;
@@ -194,12 +219,12 @@ export function hydrateUserMentions(
  * given deps change. Uses `useLayoutEffect` so names are visible before paint.
  */
 export function useUserMentionHydration(
-  ref: React.RefObject<HTMLElement | null>,
-  deps: React.DependencyList,
+  ref: RefObject<HTMLElement | null>,
+  deps: DependencyList,
 ): void {
   const store = useIdentityStore();
   const version = useIdentityVersion(store);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     hydrateUserMentions(ref.current, store);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [store, version, ...deps]);
@@ -210,13 +235,15 @@ export function useUserMentionHydration(
  * resolve. Returns the current version (or 0 when there's no store).
  */
 export function useIdentityVersion(store: IdentityStore | null): number {
-  const subscribe = React.useCallback(
+  const subscribe = useCallback(
     (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
     [store],
   );
-  const getSnapshot = React.useCallback(
+
+  const getSnapshot = useCallback(
     () => (store ? store.getVersion() : 0),
     [store],
   );
-  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

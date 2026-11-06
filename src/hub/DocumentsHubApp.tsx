@@ -7,7 +7,13 @@
 
 /* eslint-disable max-lines -- Holds only the DocumentsHubApp component, itself a documented exception, plus its imports; its logic lives in tested hub modules. */
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   GitVersionOptions,
   GitVersionType,
@@ -72,37 +78,38 @@ import {
 } from "./hubRepoState";
 
 // eslint-disable-next-line max-lines-per-function -- Hub root inside the Azure DevOps SDK: boot, repo discovery, routing and deep links feeding one Shell. Logic is extracted to tested modules; what remains is the wiring that only runs in the host.
-export function DocumentsHubApp(): React.ReactElement {
-  const [state, setState] = React.useState<DiscoveryState | null>(null);
-  const [user, setUser] = React.useState<CommentAuthor | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+export function DocumentsHubApp(): ReactElement {
+  const [state, setState] = useState<DiscoveryState | null>(null);
+  const [user, setUser] = useState<CommentAuthor | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   // Picker pagination/filter view. `viewIds` is the ordered set of repo ids
   // currently shown in the dropdown (the full first page, or the server-side
   // filter result). `token` is the continuation token for the *current* view
   // (unfiltered or filtered); `hasMore` mirrors whether `token` is non-null.
   // The union of every repo we've fetched lives in `state.repos` so a selected
   // repo never vanishes when the filtered view changes underneath it.
-  const [picker, setPicker] = React.useState<PickerState>({
+  const [picker, setPicker] = useState<PickerState>({
     viewIds: [],
     filter: "",
     token: null,
     hasMore: false,
     loading: false,
   });
+
   // Per-document comment routing. Each document's comments live on the most
   // recent COMPLETED PR that changed it (resolved lazily, cached here). This
   // replaces the old per-doc "housing PR" model so the hub needs no
   // vso.code_write scope. An absent key = unresolved; `null` = resolved with
   // no PR found; a PR = the resolved comment home.
-  const [routingPrByPath, setRoutingPrByPath] = React.useState<
+  const [routingPrByPath, setRoutingPrByPath] = useState<
     Record<string, GitPullRequest | null>
   >({});
+
   // Per-repo PR-routing load state. Held in a ref so concurrent
   // `loadDetailsFor` calls dedupe without a re-render race; mirrored into
   // `state.repos[i].detailsLoaded` so DocumentsApp can gate on it.
-  const detailsStatusRef = React.useRef<Map<string, RepoDetailsLoadState>>(
-    new Map(),
-  );
+  const detailsStatusRef = useRef<Map<string, RepoDetailsLoadState>>(new Map());
   // Mirror of `state` so `loadDetailsFor` reads the latest projectId /
   // rawRepoById without changing the callback identity every render.
   //
@@ -111,30 +118,33 @@ export function DocumentsHubApp(): React.ReactElement {
   // call `loadDetailsFor` while `stateRef.current` was still `null` and the
   // load would never complete. Assigning during render is the React-documented
   // pattern for mirroring state into a ref for downstream callbacks.
-  const stateRef = React.useRef<DiscoveryState | null>(null);
+  const stateRef = useRef<DiscoveryState | null>(null);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror must be set during render: child effects call loadDetailsFor before this component's effects run (see CRITICAL above).
   stateRef.current = state;
 
   // Mirror of the picker view so the (stable-identity) load-more / filter
   // handlers read the latest token + filter without re-subscribing.
-  const pickerRef = React.useRef<PickerState>(picker);
+  const pickerRef = useRef<PickerState>(picker);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror set during render, like stateRef, so handlers invoked from child effects never see a stale picker.
   pickerRef.current = picker;
   // Monotonic id stamped on each filter request so a slow earlier query can't
   // clobber the results of a newer keystroke (last-write-wins by sequence).
-  const filterSeqRef = React.useRef(0);
+  const filterSeqRef = useRef(0);
 
   // Mirror of routing resolutions so the async resolver (stable identity)
   // reads the latest cache without re-subscribing.
-  const routingPrByPathRef = React.useRef(routingPrByPath);
+  const routingPrByPathRef = useRef(routingPrByPath);
+  // eslint-disable-next-line react-hooks/refs -- latest-value mirror set during render, like stateRef, so the resolver invoked from child effects reads the current cache.
   routingPrByPathRef.current = routingPrByPath;
 
   // Per-(repo, path) comment-API + in-flight caches for per-document routing.
   // Declared up here so `refreshRepo` can invalidate them. Keys use a NUL
   // separator (illegal in repo ids and paths) to avoid collisions.
-  const pathApiCacheRef = React.useRef<Map<string, CommentApi>>(new Map());
+  const pathApiCacheRef = useRef<Map<string, CommentApi>>(new Map());
   // De-dupe concurrent routing lookups for the same document.
-  const routingInFlightRef = React.useRef<Set<string>>(new Set());
+  const routingInFlightRef = useRef<Set<string>>(new Set());
 
-  React.useEffect(() => {
+  useEffect(() => {
     void (async () => {
       try {
         const log = (step: string) => {
@@ -165,114 +175,115 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // Per-repo deferred PR-routing load. Triggered by DocumentsApp the first
   // time the user selects a repo. Dedupes concurrent calls via the ref.
-  const loadDetailsFor = React.useCallback(
-    async (repoId: string): Promise<void> => {
-      const status = detailsStatusRef.current.get(repoId) ?? "idle";
-      if (status === "loading" || status === "loaded") return;
-      detailsStatusRef.current.set(repoId, "loading");
+  const loadDetailsFor = useCallback(async (repoId: string): Promise<void> => {
+    const status = detailsStatusRef.current.get(repoId) ?? "idle";
+    if (status === "loading" || status === "loaded") return;
+    detailsStatusRef.current.set(repoId, "loading");
 
-      const snapshot = stateRef.current;
-      const rawRepo = snapshot?.rawRepoById.get(repoId);
-      const projectId = snapshot?.projectId ?? "";
-      if (!rawRepo || !projectId) {
-        detailsStatusRef.current.set(repoId, "idle");
-        return;
-      }
+    const snapshot = stateRef.current;
+    const rawRepo = snapshot?.rawRepoById.get(repoId);
+    const projectId = snapshot?.projectId ?? "";
 
-      try {
-        // The repo arrived from the picker as a content-less skeleton, so this
-        // first selection resolves what the document view needs to paint: the
-        // root markdown listing + PR routing, and the Contribute-permission
-        // probe. They're independent, so fire them concurrently — selection
-        // latency is the slower of the two, not their sum.
-        const [details, perm] = await Promise.all([
-          refreshRepoDiscovery(rawRepo, projectId),
-          checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
-        ]);
-        detailsStatusRef.current.set(repoId, "loaded");
-        setState((curr) =>
-          withRepoDetails(curr, repoId, details, perm.canComment),
-        );
-      } catch (err) {
-        console.warn(`[DocumentsHubApp] PR routing failed for ${repoId}:`, err);
-        trackUserFacingError({
-          error: err,
-          source: "DocumentsHubApp.repository",
-          operation: "repository-details-load",
-          impact: "degraded",
-        });
-        detailsStatusRef.current.set(repoId, "error");
-        // Still mark `detailsLoaded: true` so the shell stops waiting — the
-        // read-only banner then surfaces the no-PR state.
-        setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
-      }
-    },
-    [],
-  );
+    if (!rawRepo || !projectId) {
+      detailsStatusRef.current.set(repoId, "idle");
+
+      return;
+    }
+
+    try {
+      // The repo arrived from the picker as a content-less skeleton, so this
+      // first selection resolves what the document view needs to paint: the
+      // root markdown listing + PR routing, and the Contribute-permission
+      // probe. They're independent, so fire them concurrently — selection
+      // latency is the slower of the two, not their sum.
+      const [details, perm] = await Promise.all([
+        refreshRepoDiscovery(rawRepo, projectId),
+        checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
+      ]);
+
+      detailsStatusRef.current.set(repoId, "loaded");
+      setState((curr) =>
+        withRepoDetails(curr, repoId, details, perm.canComment),
+      );
+    } catch (err) {
+      console.warn(`[DocumentsHubApp] PR routing failed for ${repoId}:`, err);
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.repository",
+        operation: "repository-details-load",
+        impact: "degraded",
+      });
+      detailsStatusRef.current.set(repoId, "error");
+      // Still mark `detailsLoaded: true` so the shell stops waiting — the
+      // read-only banner then surfaces the no-PR state.
+      setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
+    }
+  }, []);
 
   // User-initiated refresh: re-run root listing + PR routing in parallel.
   // While in flight, `detailsLoaded` flips back to `false` so DocumentsApp
   // tears down threads/Shell and shows a loading state.
-  const refreshRepo = React.useCallback(
-    async (repoId: string): Promise<void> => {
-      const snapshot = stateRef.current;
-      const rawRepo = snapshot?.rawRepoById.get(repoId);
-      const projectId = snapshot?.projectId ?? "";
-      if (!rawRepo || !projectId) return;
+  const refreshRepo = useCallback(async (repoId: string): Promise<void> => {
+    const snapshot = stateRef.current;
+    const rawRepo = snapshot?.rawRepoById.get(repoId);
+    const projectId = snapshot?.projectId ?? "";
+    if (!rawRepo || !projectId) return;
 
-      // Flip back to "loading" so DocumentsApp's effects gate on it.
-      detailsStatusRef.current.set(repoId, "loading");
-      setState((curr) => withRepoDetailsLoaded(curr, repoId, false));
+    // Flip back to "loading" so DocumentsApp's effects gate on it.
+    detailsStatusRef.current.set(repoId, "loading");
+    setState((curr) => withRepoDetailsLoaded(curr, repoId, false));
 
-      try {
-        const [details, perm] = await Promise.all([
-          refreshRepoDiscovery(rawRepo, projectId),
-          checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
-        ]);
-        // Drop any cached commentApi so a new PR target gets a fresh instance.
-        apiCacheRef.current.delete(repoId);
-        // Also invalidate per-document routing for this repo so each doc
-        // re-resolves to any newly completed PR after refresh (otherwise an
-        // already-resolved path keeps writing to its stale cached PR target).
-        const keyPrefix = `${repoId}\u0000`;
-        pathApiCacheRef.current.forEach((_api, key) => {
-          if (key.startsWith(keyPrefix)) pathApiCacheRef.current.delete(key);
-        });
-        routingInFlightRef.current.forEach((key) => {
-          if (key.startsWith(keyPrefix)) routingInFlightRef.current.delete(key);
-        });
-        setRoutingPrByPath((prev) => withoutKeyPrefix(prev, keyPrefix));
-        detailsStatusRef.current.set(repoId, "loaded");
-        setState((curr) =>
-          withRepoDetails(curr, repoId, details, perm.canComment),
-        );
-      } catch (err) {
-        console.warn(`[DocumentsHubApp] refresh failed for ${repoId}:`, err);
-        trackUserFacingError({
-          error: err,
-          source: "DocumentsHubApp.repository",
-          operation: "repository-refresh",
-          impact: "action-failed",
-        });
-        detailsStatusRef.current.set(repoId, "error");
-        setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
-      }
-    },
-    [],
-  );
+    try {
+      const [details, perm] = await Promise.all([
+        refreshRepoDiscovery(rawRepo, projectId),
+        checkRepoCommentPermission(resolveOrgUrl(), projectId, repoId),
+      ]);
+
+      // Drop any cached commentApi so a new PR target gets a fresh instance.
+      apiCacheRef.current.delete(repoId);
+      // Also invalidate per-document routing for this repo so each doc
+      // re-resolves to any newly completed PR after refresh (otherwise an
+      // already-resolved path keeps writing to its stale cached PR target).
+      const keyPrefix = `${repoId}\u0000`;
+      pathApiCacheRef.current.forEach((_api, key) => {
+        if (key.startsWith(keyPrefix)) pathApiCacheRef.current.delete(key);
+      });
+      routingInFlightRef.current.forEach((key) => {
+        if (key.startsWith(keyPrefix)) routingInFlightRef.current.delete(key);
+      });
+      setRoutingPrByPath((prev) => withoutKeyPrefix(prev, keyPrefix));
+      detailsStatusRef.current.set(repoId, "loaded");
+      setState((curr) =>
+        withRepoDetails(curr, repoId, details, perm.canComment),
+      );
+    } catch (err) {
+      console.warn(`[DocumentsHubApp] refresh failed for ${repoId}:`, err);
+      trackUserFacingError({
+        error: err,
+        source: "DocumentsHubApp.repository",
+        operation: "repository-refresh",
+        impact: "action-failed",
+      });
+      detailsStatusRef.current.set(repoId, "error");
+      setState((curr) => withRepoDetailsLoaded(curr, repoId, true));
+    }
+  }, []);
 
   // Merge a freshly-fetched page into the union without duplicating repos we
   // already hold (the deep-link / last-repo repo, or an earlier filter match).
-  const mergeRepos = React.useCallback((page: RepoPage): void => {
+  const mergeRepos = useCallback((page: RepoPage): void => {
     setState((curr) => {
       if (!curr) return curr;
       const known = new Set(curr.repos.map((r) => r.id));
       const added = page.repos.filter((r) => !known.has(r.id));
+
       const rawRepoById =
         page.rawRepoById.size > 0
           ? new Map(curr.rawRepoById)
           : curr.rawRepoById;
+
       page.rawRepoById.forEach((raw, id) => rawRepoById.set(id, raw));
+
       return added.length === 0 && rawRepoById === curr.rawRepoById
         ? curr
         : { ...curr, repos: [...curr.repos, ...added], rawRepoById };
@@ -282,26 +293,30 @@ export function DocumentsHubApp(): React.ReactElement {
   // Picker "load more": fetch the next page for the CURRENT view (filtered or
   // not), append its ids and roll the continuation token forward. Deduped via
   // the in-flight `loading` flag mirrored in `pickerRef`.
-  const loadMoreRepos = React.useCallback(async (): Promise<void> => {
+  const loadMoreRepos = useCallback(async (): Promise<void> => {
     const snapshot = stateRef.current;
     const cur = pickerRef.current;
     if (!snapshot || cur.loading || !cur.hasMore || cur.token === null) return;
     setPicker((p) => ({ ...p, loading: true }));
+
     try {
       const page = await fetchRepoPage(snapshot.projectId, {
         filter: cur.filter,
         continuationToken: cur.token,
         top: REPO_PAGE_SIZE,
       });
+
       mergeRepos(page);
       setPicker((p) => {
         // The filter may have changed while this page was in flight; if so,
         // discard these results rather than mixing views.
         if (p.filter !== cur.filter) return p;
         const seen = new Set(p.viewIds);
+
         const nextIds = page.repos
           .map((r) => r.id)
           .filter((id) => !seen.has(id));
+
         return {
           ...p,
           viewIds: [...p.viewIds, ...nextIds],
@@ -322,6 +337,7 @@ export function DocumentsHubApp(): React.ReactElement {
         // If the filter changed while this request was in flight, don't let
         // this older failure clobber the newer filtered view's pagination.
         if (p.filter !== cur.filter) return p;
+
         return { ...p, loading: false, hasMore: false };
       });
     }
@@ -330,18 +346,20 @@ export function DocumentsHubApp(): React.ReactElement {
   // Picker keyword filter: re-query page one with a server-side `filterContains`
   // and REPLACE the view (the union keeps growing so the selected repo never
   // disappears). A per-request sequence guards against out-of-order keystrokes.
-  const filterRepos = React.useCallback(
+  const filterRepos = useCallback(
     async (keyword: string): Promise<void> => {
       const snapshot = stateRef.current;
       if (!snapshot) return;
       const trimmed = keyword.trim();
       const seq = ++filterSeqRef.current;
       setPicker((p) => ({ ...p, filter: trimmed, loading: true }));
+
       try {
         const page = await fetchRepoPage(snapshot.projectId, {
           filter: trimmed,
           top: REPO_PAGE_SIZE,
         });
+
         if (seq !== filterSeqRef.current) return; // a newer keystroke won
         mergeRepos(page);
         setPicker((p) => ({
@@ -370,16 +388,18 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // ---- per-repo loaders + commentApi factories ----
 
-  const loadFileSource = React.useCallback(
+  const loadFileSource = useCallback(
     async (repoId: string, path: string): Promise<string> => {
       if (!state) throw new Error("project not loaded yet");
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) throw new Error(`Unknown repo ${repoId}`);
+
       return fetchRepoFileContent(repo, state.projectId, path);
     },
     [state],
   );
-  const resolveDocumentImage = React.useCallback(
+
+  const resolveDocumentImage = useCallback(
     async (
       repoId: string,
       _documentPath: string,
@@ -389,17 +409,20 @@ export function DocumentsHubApp(): React.ReactElement {
       const snapshot = stateRef.current;
       const repo = snapshot?.repos.find((item) => item.id === repoId);
       if (!snapshot || !repo) return undefined;
-      const versionDescriptor = atCommitId
-        ? {
-            version: atCommitId,
-            versionType: GitVersionType.Commit,
-            versionOptions: GitVersionOptions.None,
-          }
-        : {
-            version: repo.defaultBranch,
-            versionType: GitVersionType.Branch,
-            versionOptions: GitVersionOptions.None,
-          };
+
+      const versionDescriptor =
+        atCommitId !== undefined && atCommitId !== ""
+          ? {
+              version: atCommitId,
+              versionType: GitVersionType.Commit,
+              versionOptions: GitVersionOptions.None,
+            }
+          : {
+              version: repo.defaultBranch,
+              versionType: GitVersionType.Branch,
+              versionOptions: GitVersionOptions.None,
+            };
+
       return resolveAdoRepositoryImageObjectUrl({
         repositoryId: repoId,
         project: snapshot.projectId,
@@ -410,9 +433,10 @@ export function DocumentsHubApp(): React.ReactElement {
     [],
   );
 
-  const loadThreadsFor = React.useCallback(
+  const loadThreadsFor = useCallback(
     async (repoId: string): Promise<CommentThread[]> => {
       if (!state) return [];
+
       return loadThreadsForRepo(repoId, state.projectId, state.prByRepo);
     },
     [state],
@@ -420,11 +444,12 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // Lazy folder expansion. Called the first time the user opens an
   // unenumerated folder; backed by `getItems(scopePath, OneLevel)`.
-  const expandFolder = React.useCallback(
+  const expandFolder = useCallback(
     async (repoId: string, path: string): Promise<FolderListing> => {
       if (!state) return { files: [], folders: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { files: [], folders: [] };
+
       return listFolderMarkdown(repo, state.projectId, path);
     },
     [state],
@@ -433,7 +458,7 @@ export function DocumentsHubApp(): React.ReactElement {
   // A wiki page's subpage folder, for its `[[_TOSP_]]` table: at the given
   // commit for a historical version, else the default branch (a missing
   // folder lists as empty — the page simply has no subpages).
-  const listSubpages = React.useCallback(
+  const listSubpages = useCallback(
     async (
       repoId: string,
       folderPath: string,
@@ -442,6 +467,7 @@ export function DocumentsHubApp(): React.ReactElement {
       if (!state) return { files: [], folders: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { files: [], folders: [] };
+
       return listSubpageFolder(repo, state.projectId, folderPath, atCommitId);
     },
     [state],
@@ -449,7 +475,7 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // ALM Code Search-backed filename search. Returns a `FileSearchOutcome` so
   // the DocNav can render a "Code Search isn't installed" hint on failure.
-  const searchFiles = React.useCallback(
+  const searchFiles = useCallback(
     async (
       repoId: string,
       query: string,
@@ -458,6 +484,7 @@ export function DocumentsHubApp(): React.ReactElement {
       if (!state) return { kind: "ok", files: [] };
       const repo = state.repos.find((r) => r.id === repoId);
       if (!repo) return { kind: "ok", files: [] };
+
       return searchRepoFiles(repo, state.projectName, query, signal);
     },
     [state],
@@ -465,21 +492,24 @@ export function DocumentsHubApp(): React.ReactElement {
 
   // Cache constructed AdoCommentApi instances per repo so Shell sees
   // a stable identity across renders.
-  const apiCacheRef = React.useRef<Map<string, CommentApi>>(new Map());
+  const apiCacheRef = useRef<Map<string, CommentApi>>(new Map());
 
-  const commentApiFor = React.useCallback(
+  const commentApiFor = useCallback(
     (repoId: string): CommentApi | undefined => {
       if (!state) return undefined;
       const cached = apiCacheRef.current.get(repoId);
       if (cached) return cached;
       const pr = state.prByRepo[repoId];
       if (!pr || typeof pr.pullRequestId !== "number") return undefined;
+
       const api = new AdoCommentApi({
         repositoryId: repoId,
         pullRequestId: pr.pullRequestId,
         project: state.projectId,
       });
+
       apiCacheRef.current.set(repoId, api);
+
       return api;
     },
     [state],
@@ -495,20 +525,24 @@ export function DocumentsHubApp(): React.ReactElement {
   // Resolve (and cache) the routing PR for a document. Idempotent: once a key
   // is resolved it's served from the cache; concurrent first-time lookups are
   // de-duped so we don't scan the PR history twice.
-  const resolveRoutingPrForPath = React.useCallback(
+  const resolveRoutingPrForPath = useCallback(
     async (repoId: string, path: string): Promise<GitPullRequest | null> => {
       const key = `${repoId}\u0000${path}`;
+
       if (key in routingPrByPathRef.current) {
         return routingPrByPathRef.current[key] ?? null;
       }
+
       const snapshot = stateRef.current;
       const rawRepo = snapshot?.rawRepoById.get(repoId);
       if (!snapshot || !rawRepo) return null;
       if (routingInFlightRef.current.has(key)) return null;
       routingInFlightRef.current.add(key);
+
       try {
         const pr = await findRoutingPrForDoc(rawRepo, snapshot.projectId, path);
         setRoutingPrByPath((prev) => ({ ...prev, [key]: pr }));
+
         return pr;
       } finally {
         routingInFlightRef.current.delete(key);
@@ -517,7 +551,7 @@ export function DocumentsHubApp(): React.ReactElement {
     [],
   );
 
-  const commentApiForPath = React.useCallback(
+  const commentApiForPath = useCallback(
     (repoId: string, path: string): CommentApi | undefined => {
       const key = `${repoId}\u0000${path}`;
       const cached = pathApiCacheRef.current.get(key);
@@ -528,26 +562,31 @@ export function DocumentsHubApp(): React.ReactElement {
       // write-capable api is adopted on the next render.
       const pr = routingPrByPath[key];
       const snapshot = stateRef.current;
+
       if (!pr || typeof pr.pullRequestId !== "number" || !snapshot) {
         return undefined;
       }
+
       const api = new AdoCommentApi({
         repositoryId: repoId,
         pullRequestId: pr.pullRequestId,
         project: snapshot.projectId,
       });
+
       pathApiCacheRef.current.set(key, api);
+
       return api;
     },
     [routingPrByPath],
   );
 
-  const loadThreadsForPath = React.useCallback(
+  const loadThreadsForPath = useCallback(
     async (repoId: string, path: string): Promise<CommentThread[]> => {
       const snapshot = stateRef.current;
       if (!snapshot) return [];
       const pr = await resolveRoutingPrForPath(repoId, path);
       if (!pr || typeof pr.pullRequestId !== "number") return [];
+
       return loadThreadsForRoutedPr(
         repoId,
         snapshot.projectId,
@@ -566,16 +605,18 @@ export function DocumentsHubApp(): React.ReactElement {
   // routing PR resolves (the pill stays hidden meanwhile); the callback's
   // identity changes when `routingPrByPath` updates, so the pill appears on the
   // next render once routing lands.
-  const routedPrForPath = React.useCallback(
+  const routedPrForPath = useCallback(
     (repoId: string, path: string): RoutedPrInfo | null | undefined => {
       const key = `${repoId}\u0000${path}`;
       if (!(key in routingPrByPath)) return undefined;
       const pr = routingPrByPath[key];
       if (!pr || typeof pr.pullRequestId !== "number") return null;
       const rawRepo = stateRef.current?.rawRepoById.get(repoId);
+
       return {
         prId: pr.pullRequestId,
-        title: pr.title ?? `PR #${pr.pullRequestId}`,
+        // `title` is typed required but can be absent from the ADO REST payload.
+        title: (pr.title as string | undefined) ?? `PR #${pr.pullRequestId}`,
         status: "completed",
         url: rawRepo ? buildPrUrl(rawRepo, pr.pullRequestId) : undefined,
       };
@@ -586,18 +627,19 @@ export function DocumentsHubApp(): React.ReactElement {
   // ---- comment-history stepper loaders ----
   // List a document's completed-PR history (most recent first) for the rail's
   // ‹ › chevrons. Degrades to [] (no history) when the repo isn't resolved.
-  const loadDocHistory = React.useCallback(
+  const loadDocHistory = useCallback(
     async (repoId: string, path: string): Promise<DocPrRef[]> => {
       const snapshot = stateRef.current;
       const rawRepo = snapshot?.rawRepoById.get(repoId);
       if (!snapshot || !rawRepo) return [];
+
       return loadDocPrHistory(rawRepo, snapshot.projectId, path);
     },
     [],
   );
 
   // Read a historical PR's threads for the file (read-only stop view).
-  const loadThreadsForPr = React.useCallback(
+  const loadThreadsForPr = useCallback(
     async (
       repoId: string,
       prId: number,
@@ -605,17 +647,19 @@ export function DocumentsHubApp(): React.ReactElement {
     ): Promise<CommentThread[]> => {
       const snapshot = stateRef.current;
       if (!snapshot) return [];
+
       return loadThreadsForRoutedPr(repoId, snapshot.projectId, prId, path);
     },
     [],
   );
 
   // Read the document's Markdown source at a specific commit (a history stop).
-  const loadFileSourceAt = React.useCallback(
+  const loadFileSourceAt = useCallback(
     async (repoId: string, path: string, commitId: string): Promise<string> => {
       const snapshot = stateRef.current;
       const repo = snapshot?.repos.find((r) => r.id === repoId);
       if (!snapshot || !repo) return "";
+
       return fetchRepoFileContent(repo, snapshot.projectId, path, commitId);
     },
     [],
@@ -627,12 +671,12 @@ export function DocumentsHubApp(): React.ReactElement {
   // silently never fire for those sessions. Idempotent + no-ops outside a real
   // boot; if content later renders, Shell's "content" already won.
   const noRepos = !!state && state.repos.length === 0;
-  React.useEffect(() => {
-    if (error) markAppReady("error");
+  useEffect(() => {
+    if (error !== null && error !== "") markAppReady("error");
     else if (noRepos) markAppReady("empty");
   }, [error, noRepos]);
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <div className="emr-error">
         <h2>Couldn't load Documents</h2>
@@ -662,6 +706,7 @@ export function DocumentsHubApp(): React.ReactElement {
   // view, resolved from the accumulated union. Falls back to the union order
   // if the view hasn't been seeded yet.
   const repoById = new Map(state.repos.map((r) => [r.id, r]));
+
   const repoPickerView =
     picker.viewIds.length > 0
       ? picker.viewIds
@@ -746,7 +791,7 @@ export function DocumentsHubApp(): React.ReactElement {
           // builds. An empty value removes the param when nothing is active;
           // an active comment supersedes any heading or text target.
           void setRouteQuery(
-            threadId
+            threadId !== null && threadId !== ""
               ? {
                   [COMMENT_LINK_PARAM]: threadId,
                   [ANCHOR_LINK_PARAM]: "",

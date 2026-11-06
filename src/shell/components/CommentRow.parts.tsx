@@ -2,7 +2,7 @@
 // tools (⋯ toggle, like button / pill), and the ⋯ popover with its menu items
 // and delete confirmation. All mutations are callbacks supplied by the row.
 
-import * as React from "react";
+import type { ReactElement, ReactNode, RefObject } from "react";
 import type { Comment, ThreadStatus } from "../../types";
 import {
   commentLinkLabel,
@@ -11,16 +11,19 @@ import {
 } from "./CommentRow.helpers";
 import type { ConfirmMode } from "./CommentRow.hooks";
 
-export function CommentRowMeta(props: {
-  comment: Comment;
-}): React.ReactElement {
+export function CommentRowMeta(
+  props: Readonly<{
+    comment: Comment;
+  }>,
+): ReactElement {
   const { comment } = props;
+
   return (
     <div className="emr-comment-meta">
       <span className="name">{comment.author.displayName}</span>
       <span className="emr-comment-meta-time">
         <span className="date">{formatFullTime(comment.createdAt)}</span>
-        {comment.updatedAt ? (
+        {comment.updatedAt !== undefined && comment.updatedAt !== "" ? (
           <span
             className="emr-comment-edited"
             title={`Edited ${formatFullTime(comment.updatedAt)}`}
@@ -33,12 +36,15 @@ export function CommentRowMeta(props: {
   );
 }
 
-export function CommentMenuToggle(props: {
-  buttonRef: React.RefObject<HTMLButtonElement>;
-  open: boolean;
-  onToggle: () => void;
-}): React.ReactElement {
+export function CommentMenuToggle(
+  props: Readonly<{
+    buttonRef: RefObject<HTMLButtonElement>;
+    open: boolean;
+    onToggle: () => void;
+  }>,
+): ReactElement {
   const { buttonRef, open, onToggle } = props;
+
   return (
     <button
       ref={buttonRef}
@@ -59,10 +65,13 @@ export function CommentMenuToggle(props: {
 }
 
 /** Hover-revealed like button, shown while nobody has reacted yet. */
-export function CommentLikeButton(props: {
-  onLike: () => void;
-}): React.ReactElement {
+export function CommentLikeButton(
+  props: Readonly<{
+    onLike: () => void;
+  }>,
+): ReactElement {
   const { onLike } = props;
+
   return (
     <button
       type="button"
@@ -86,14 +95,17 @@ export function CommentLikeButton(props: {
  * Always-visible like pill when at least one person has reacted. Conveys info
  * (count) so it should not be hover-gated.
  */
-export function CommentLikePill(props: {
-  likedByMe: boolean;
-  likeCount: number;
-  likeTooltip: string;
-  canReact: boolean;
-  onLike: () => void;
-}): React.ReactElement {
+export function CommentLikePill(
+  props: Readonly<{
+    likedByMe: boolean;
+    likeCount: number;
+    likeTooltip: string;
+    canReact: boolean;
+    onLike: () => void;
+  }>,
+): ReactElement {
   const { likedByMe, likeCount, likeTooltip, canReact, onLike } = props;
+
   return (
     <button
       type="button"
@@ -140,15 +152,19 @@ interface CommentMenuState {
 }
 
 /** The ⋯ popover: the action list, or the delete confirmation step. */
-export function CommentRowMenu(props: {
-  menuRef: React.RefObject<HTMLDivElement>;
-  confirm: ConfirmMode;
-  setConfirm: (mode: ConfirmMode) => void;
-  state: CommentMenuState;
-  actions: CommentMenuActions;
-}): React.ReactElement {
+export function CommentRowMenu(
+  props: Readonly<{
+    menuRef: RefObject<HTMLDivElement>;
+    confirm: ConfirmMode;
+    setConfirm: (mode: ConfirmMode) => void;
+    state: CommentMenuState;
+    actions: CommentMenuActions;
+  }>,
+): ReactElement {
   const { menuRef, confirm, setConfirm, state, actions } = props;
+
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/interactive-supports-focus -- onClick is only an event stopper (keeps menu clicks from selecting the thread); keyboard focus lives on the native role="menuitem" buttons inside, and Escape closes via useCommentRowMenu
     <div
       ref={menuRef}
       className="emr-popover"
@@ -176,12 +192,15 @@ export function CommentRowMenu(props: {
   );
 }
 
-function CommentMenuItems(props: {
-  state: CommentMenuState;
-  actions: CommentMenuActions;
-  setConfirm: (mode: ConfirmMode) => void;
-}): React.ReactElement {
+function CommentMenuItems(
+  props: Readonly<{
+    state: CommentMenuState;
+    actions: CommentMenuActions;
+    setConfirm: (mode: ConfirmMode) => void;
+  }>,
+): ReactElement {
   const { state, actions, setConfirm } = props;
+
   return (
     <>
       {state.canLink ? (
@@ -222,12 +241,15 @@ function CommentMenuItems(props: {
  * thread can be marked pending; a pending thread can be marked active again —
  * both reuse reopen, which sets status active.
  */
-function CommentThreadStatusItems(props: {
-  isTerminal: boolean;
-  threadStatus: ThreadStatus;
-  actions: CommentMenuActions;
-}): React.ReactElement {
+function CommentThreadStatusItems(
+  props: Readonly<{
+    isTerminal: boolean;
+    threadStatus: ThreadStatus;
+    actions: CommentMenuActions;
+  }>,
+): ReactElement {
   const { isTerminal, threadStatus, actions } = props;
+
   if (isTerminal) {
     return (
       <CommentMenuItem
@@ -237,6 +259,7 @@ function CommentThreadStatusItems(props: {
       />
     );
   }
+
   return (
     <>
       <CommentMenuItem
@@ -267,13 +290,16 @@ function CommentThreadStatusItems(props: {
 }
 
 /** Delete thread (first comment) or delete comment (own later reply). */
-function CommentDeleteItem(props: {
-  isFirst: boolean;
-  canDeleteThread: boolean;
-  canDelete: boolean;
-  setConfirm: (mode: ConfirmMode) => void;
-}): React.ReactElement | null {
+function CommentDeleteItem(
+  props: Readonly<{
+    isFirst: boolean;
+    canDeleteThread: boolean;
+    canDelete: boolean;
+    setConfirm: (mode: ConfirmMode) => void;
+  }>,
+): ReactElement | null {
   const { isFirst, canDeleteThread, canDelete, setConfirm } = props;
+
   if (isFirst && canDeleteThread) {
     return (
       <CommentMenuItem
@@ -284,6 +310,7 @@ function CommentDeleteItem(props: {
       />
     );
   }
+
   if (!isFirst && canDelete) {
     return (
       <CommentMenuItem
@@ -294,16 +321,20 @@ function CommentDeleteItem(props: {
       />
     );
   }
+
   return null;
 }
 
-function CommentMenuItem(props: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}): React.ReactElement {
+function CommentMenuItem(
+  props: Readonly<{
+    icon: ReactNode;
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+  }>,
+): ReactElement {
   const { icon, label, onClick, danger } = props;
+
   return (
     <button
       type="button"
@@ -317,12 +348,15 @@ function CommentMenuItem(props: {
   );
 }
 
-function CommentDeleteConfirm(props: {
-  confirm: "comment" | "thread";
-  onCancel: () => void;
-  onConfirm: () => void;
-}): React.ReactElement {
+function CommentDeleteConfirm(
+  props: Readonly<{
+    confirm: "comment" | "thread";
+    onCancel: () => void;
+    onConfirm: () => void;
+  }>,
+): ReactElement {
   const { confirm, onCancel, onConfirm } = props;
+
   return (
     <div className="emr-popover-confirm">
       <p className="emr-popover-confirm-text">
@@ -352,7 +386,7 @@ const iconStrokeProps = {
   strokeLinejoin: "round" as const,
 };
 
-function SvgMore(): React.ReactElement {
+function SvgMore(): ReactElement {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
       <circle cx="5" cy="12" r="1.5" fill="currentColor" />
@@ -362,7 +396,7 @@ function SvgMore(): React.ReactElement {
   );
 }
 
-function SvgLink(): React.ReactElement {
+function SvgLink(): ReactElement {
   // Lucide "link".
   return (
     <svg
@@ -378,7 +412,7 @@ function SvgLink(): React.ReactElement {
   );
 }
 
-function SvgPencil(): React.ReactElement {
+function SvgPencil(): ReactElement {
   // Lucide "pencil".
   return (
     <svg
@@ -394,7 +428,7 @@ function SvgPencil(): React.ReactElement {
   );
 }
 
-function SvgTrash(): React.ReactElement {
+function SvgTrash(): ReactElement {
   // Lucide "trash-2".
   return (
     <svg
@@ -413,7 +447,7 @@ function SvgTrash(): React.ReactElement {
   );
 }
 
-function SvgCheck(): React.ReactElement {
+function SvgCheck(): ReactElement {
   // Lucide "check".
   return (
     <svg
@@ -428,7 +462,7 @@ function SvgCheck(): React.ReactElement {
   );
 }
 
-function SvgUndo(): React.ReactElement {
+function SvgUndo(): ReactElement {
   // Lucide "rotate-ccw".
   return (
     <svg
@@ -444,7 +478,7 @@ function SvgUndo(): React.ReactElement {
   );
 }
 
-function SvgClock(): React.ReactElement {
+function SvgClock(): ReactElement {
   // Lucide "clock".
   return (
     <svg
@@ -460,7 +494,7 @@ function SvgClock(): React.ReactElement {
   );
 }
 
-function SvgArchive(): React.ReactElement {
+function SvgArchive(): ReactElement {
   // Lucide "archive".
   return (
     <svg

@@ -43,12 +43,14 @@ export function mergeFolderListing(
 ): LazyTreeState {
   const seenFiles = new Set(entry.files.map((f) => f.path));
   const mergedFiles = entry.files.slice();
+
   for (const f of payload.files) {
     if (!seenFiles.has(f.path)) {
       seenFiles.add(f.path);
       mergedFiles.push(f);
     }
   }
+
   // Drop the just-expanded folder; add new unloaded subfolders. Folder
   // paths arrive in two flavours across the host boundary (`/docs` vs
   // `docs`), so canonicalize every value to a "no leading slash" form
@@ -56,10 +58,13 @@ export function mergeFolderListing(
   const canonicalize = (p: string): string => p.replace(/^\/+/, "");
   const unloaded = new Set(entry.unloadedFolders.map(canonicalize));
   unloaded.delete(canonicalize(path));
+
   for (const sub of payload.folders) {
     unloaded.add(canonicalize(sub));
   }
+
   mergedFiles.sort((a, b) => a.path.localeCompare(b.path));
+
   return {
     repoId,
     files: mergedFiles,
@@ -86,6 +91,7 @@ export function pickSelectedRepo(
   const found = repos.find((r) => r.id === selectedRepoId);
   if (found) return found;
   if (cached?.id === selectedRepoId) return cached;
+
   return repos[0];
 }
 
@@ -99,6 +105,7 @@ export function buildSyntheticPr(
   lazyTree: LazyTreeState | undefined,
 ): PrInfo {
   const treeFiles = lazyTree ? lazyTree.files : repo.files;
+
   return {
     prId: repo.recentPr?.id ?? 0,
     title: `Documents in ${repo.name}`,
@@ -115,6 +122,7 @@ export function buildSyntheticPr(
 export function buildRoutedPr(repo: DocRepo | undefined): RoutedPrInfo | null {
   const rp = repo?.recentPr;
   if (!rp) return null;
+
   return {
     prId: rp.id,
     title: rp.title,
@@ -140,6 +148,7 @@ export function resolveCommentGating(
   // Disable commenting when there's no PR to route through. The rail then
   // renders a read-only banner and the article suppresses its selection bubble.
   const readOnly = !repo?.recentPr;
+
   if (!perDocumentMode) {
     return {
       readOnly,
@@ -150,10 +159,12 @@ export function resolveCommentGating(
           : undefined,
     };
   }
+
   // Per-document mode has no routing PR to gate on; instead commenting is
   // disabled only when ADO explicitly denied Contribute on the repo. The rail
   // surfaces the reason in its read-only banner (right panel).
   const denied = repo?.canComment === false;
+
   return {
     readOnly,
     shellReadOnly: denied,
@@ -173,7 +184,10 @@ export function buildMentionLinks(
   projectName: string | undefined,
   defaultRepoName: string | undefined,
 ): MentionLinkResolution | null {
-  return orgUrl && projectName
+  return orgUrl !== undefined &&
+    orgUrl !== "" &&
+    projectName !== undefined &&
+    projectName !== ""
     ? { orgUrl, projectName, defaultRepoName }
     : null;
 }
@@ -201,8 +215,10 @@ export function resolveShellTree(
   const unloadedFolders = lazyTree
     ? lazyTree.unloadedFolders
     : (repo.topLevelFolders ?? []);
+
   const loaded = repo.detailsLoaded !== false;
   const isEmptyRepo = loaded && fileCount === 0 && unloadedFolders.length === 0;
+
   return {
     unloadedFolders,
     isEmptyRepo,
@@ -224,6 +240,7 @@ export function pickDeepLinkSeeds(
   seeds: DeepLinkSeeds,
 ): DeepLinkSeeds {
   if (!active) return {};
+
   return {
     initialSelectedPath: seeds.initialSelectedPath,
     initialActiveThreadId: seeds.initialActiveThreadId,
@@ -246,9 +263,12 @@ export function menuFocusTarget(
     const dir = key === "ArrowDown" ? 1 : -1;
     // Coming from the filter box (or nothing focused): enter the list.
     if (current === -1) return dir === 1 ? 0 : count - 1;
+
     return (current + dir + count) % count;
   }
+
   if (key === "Home") return 0;
   if (key === "End") return count - 1;
+
   return undefined;
 }

@@ -1,17 +1,24 @@
 // Presentational pieces of the GeneratedSourceModal header and code pane.
 
-import * as React from "react";
+import { Fragment, type ReactElement } from "react";
 
-import { diffCharacters, diffWords } from "../../markdown/wordDiff";
+import {
+  diffCharacters,
+  diffWords,
+  type WordDiffOp,
+} from "../../markdown/wordDiff";
 import { WORD_ADDED_CLASS, removedRunClass } from "../../markdown/wordDiffDom";
 
 type GeneratedSourceKind = "mermaid" | "math";
 
 /** Kind glyph + title at the left of the modal header. */
-export function GeneratedSourceIdentity(props: {
-  kind: GeneratedSourceKind;
-}): React.ReactElement {
+export function GeneratedSourceIdentity(
+  props: Readonly<{
+    kind: GeneratedSourceKind;
+  }>,
+): ReactElement {
   const isMath = props.kind === "math";
+
   return (
     <div className="emr-generated-source-identity">
       <span className="emr-generated-source-kind" aria-hidden="true">
@@ -34,16 +41,20 @@ export function GeneratedSourceIdentity(props: {
 }
 
 /** Changes + Before toggles, shown only when the source changed in the PR. */
-export function GeneratedSourceViewControls(props: {
-  beforeShown: boolean;
-  changesShown: boolean;
-  onToggleBefore: () => void;
-  onToggleChanges: () => void;
-}): React.ReactElement {
+export function GeneratedSourceViewControls(
+  props: Readonly<{
+    beforeShown: boolean;
+    changesShown: boolean;
+    onToggleBefore: () => void;
+    onToggleChanges: () => void;
+  }>,
+): ReactElement {
   const { beforeShown, changesShown, onToggleBefore, onToggleChanges } = props;
+
   const changesLabel = changesShown
     ? "Hide source changes"
     : "Show source changes";
+
   return (
     <div className="emr-generated-source-view-controls">
       {!beforeShown ? (
@@ -87,32 +98,34 @@ export function GeneratedSourceViewControls(props: {
  * Word-level (character-level for math) diff of the definition, so reviewers
  * see exactly what moved in the PR.
  */
-export function GeneratedSourceDiff(props: {
-  kind: GeneratedSourceKind;
-  original: string;
-  current: string;
-}): React.ReactElement {
+export function GeneratedSourceDiff(
+  props: Readonly<{
+    kind: GeneratedSourceKind;
+    original: string;
+    current: string;
+  }>,
+): ReactElement {
   const { kind, original, current } = props;
   const diff = kind === "math" ? diffCharacters : diffWords;
+
   return (
     <code className="emr-generated-source-code-diff">
-      {diff(original, current).map((op, i) => {
-        if (op.kind === "added") {
-          return (
-            <ins key={i} className={WORD_ADDED_CLASS}>
-              {op.value}
-            </ins>
-          );
-        }
-        if (op.kind === "removed") {
-          return (
-            <del key={i} className={removedRunClass(op.value)}>
-              {op.value}
-            </del>
-          );
-        }
-        return <span key={i}>{op.value}</span>;
-      })}
+      {diff(original, current).map((op, i) => (
+        // eslint-disable-next-line @eslint-react/no-array-index-key -- Diff ops are a positional sequence recomputed wholesale from the two strings; runs have no identity beyond their position (values can repeat).
+        <Fragment key={i}>{renderDiffOp(op)}</Fragment>
+      ))}
     </code>
   );
+}
+
+function renderDiffOp(op: WordDiffOp): ReactElement {
+  if (op.kind === "added") {
+    return <ins className={WORD_ADDED_CLASS}>{op.value}</ins>;
+  }
+
+  if (op.kind === "removed") {
+    return <del className={removedRunClass(op.value)}>{op.value}</del>;
+  }
+
+  return <span>{op.value}</span>;
 }

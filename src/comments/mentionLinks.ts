@@ -10,7 +10,13 @@
 // later hydration can upgrade them. User mentions are intentionally left
 // non-navigable — only work-item and PR mentions get web URLs.
 
-import * as React from "react";
+import {
+  createContext,
+  type DependencyList,
+  type RefObject,
+  useContext,
+  useLayoutEffect,
+} from "react";
 
 import { parseMentionUrl } from "./mentions";
 
@@ -39,8 +45,9 @@ export interface MentionLinkResolution {
  * `null` means "no context available" — components fall back to a no-op
  * (mentions stay unnavigable rather than crashing the render).
  */
-export const MentionLinkContext =
-  React.createContext<MentionLinkResolution | null>(null);
+export const MentionLinkContext = createContext<MentionLinkResolution | null>(
+  null,
+);
 
 /**
  * Walk `root` and upgrade every work-item / pull-request mention link to a
@@ -56,6 +63,7 @@ export function hydrateMentionLinks(
   const links = root.querySelectorAll<HTMLAnchorElement>(
     'a.emr-mention[data-mention-kind="workitem"], a.emr-mention[data-mention-kind="pullrequest"]',
   );
+
   links.forEach((a) => {
     const current = a.getAttribute("href") ?? "";
     if (current.startsWith("http://") || current.startsWith("https://")) return;
@@ -64,7 +72,7 @@ export function hydrateMentionLinks(
     if (!parsed) return;
 
     const url = buildMentionWebUrl(parsed, ctx);
-    if (!url) return;
+    if (url === undefined || url === "") return;
     a.setAttribute("href", url);
     // New context so the user keeps their place; rel matches sanitize-urls.
     a.setAttribute("target", "_blank");
@@ -86,11 +94,13 @@ function buildMentionWebUrl(
   ctx: MentionLinkResolution,
 ): string | undefined {
   let base: URL;
+
   try {
     base = new URL(ctx.orgUrl);
   } catch {
     return undefined;
   }
+
   if (base.protocol !== "https:" && base.protocol !== "http:") return undefined;
 
   const orgUrl = `${base.origin}${base.pathname.replace(/\/+$/, "")}`;
@@ -100,13 +110,16 @@ function buildMentionWebUrl(
   switch (parsed.kind) {
     case "workitem":
       return `${orgUrl}/${project}/_workitems/edit/${id}`;
+
     case "pullrequest": {
       const repo = parsed.params["repo"] ?? ctx.defaultRepoName;
       if (!repo) return undefined;
+
       return `${orgUrl}/${project}/_git/${encodeURIComponent(
         repo,
       )}/pullrequest/${id}`;
     }
+
     default:
       return undefined;
   }
@@ -117,16 +130,16 @@ function buildMentionWebUrl(
  * whenever the dependency list changes. Pulls context from the nearest
  * `MentionLinkContext` provider.
  *
- * Use `React.useLayoutEffect` so the hydrated href is visible before the
+ * Use `useLayoutEffect` so the hydrated href is visible before the
  * browser paints — otherwise a fast click immediately after render would
  * find the placeholder `mention://` URL.
  */
 export function useMentionLinkHydration(
-  ref: React.RefObject<HTMLElement | null>,
-  deps: React.DependencyList,
+  ref: RefObject<HTMLElement | null>,
+  deps: DependencyList,
 ): void {
-  const ctx = React.useContext(MentionLinkContext);
-  React.useLayoutEffect(() => {
+  const ctx = useContext(MentionLinkContext);
+  useLayoutEffect(() => {
     hydrateMentionLinks(ref.current, ctx);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
   }, [ctx, ...deps]);

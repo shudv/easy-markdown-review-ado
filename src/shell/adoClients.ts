@@ -39,6 +39,7 @@ function createClient<T>(clientClass: {
   RESOURCE_AREA_ID: string;
 }): T {
   let lookup: Promise<string> | null = null;
+
   const resolveRoot = (): Promise<string> =>
     (lookup ??= SDK.getService<ILocationService>(
       CommonServiceIds.LocationService,
@@ -50,22 +51,29 @@ function createClient<T>(clientClass: {
         lookup = null;
         throw err;
       }));
+
   resolveRoot().catch(() => undefined);
+
   const rootPath: PromiseLike<string> = {
     then: (onResolved, onRejected) =>
       resolveRoot().then(onResolved, onRejected),
   };
+
   return getClient(clientClass, { rootPath: rootPath as Promise<string> });
 }
 
 /** The page's Git REST client (base URL resolved once). */
 export function sharedGitClient(): GitRestClient {
-  return (git ??= createClient(GitRestClient));
+  git ??= createClient(GitRestClient);
+
+  return git;
 }
 
 /** The page's Work Item Tracking REST client (base URL resolved once). */
 export function sharedWorkItemClient(): WorkItemTrackingRestClient {
-  return (workItems ??= createClient(WorkItemTrackingRestClient));
+  workItems ??= createClient(WorkItemTrackingRestClient);
+
+  return workItems;
 }
 
 /**
@@ -101,10 +109,13 @@ export async function resolveCurrentProject(): Promise<{
 }> {
   const fromContext = webContextProject(readWebContext());
   if (fromContext) return fromContext;
+
   const service = await SDK.getService<IProjectPageService>(
     CommonServiceIds.ProjectPageService,
   );
+
   const project = await service.getProject();
   if (!project) throw new Error("No active project on the page.");
+
   return { id: project.id, name: project.name };
 }

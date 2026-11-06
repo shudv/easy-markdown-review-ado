@@ -14,10 +14,13 @@ import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 /** A sleep spy that resolves immediately but records the requested delays. */
 function fakeSleep() {
   const delays: number[] = [];
+
   const sleep = (ms: number): Promise<void> => {
     delays.push(ms);
+
     return Promise.resolve();
   };
+
   return { sleep, delays };
 }
 
@@ -64,6 +67,7 @@ describe("parseRetryAfterMs", () => {
     const headers = {
       get: (name: string) => (name === "retry-after" ? "4" : null),
     };
+
     expect(parseRetryAfterMs({ headers })).toBe(4000);
   });
 
@@ -92,15 +96,18 @@ describe("withRetry", () => {
 
   it("retries a transient read failure then succeeds", async () => {
     const { sleep, delays } = fakeSleep();
+
     const fn = vi
       .fn()
       .mockRejectedValueOnce({ status: 503 })
       .mockResolvedValueOnce("recovered");
+
     const out = await withRetry(fn, {
       mode: "read",
       sleep,
       random: () => 0.5,
     });
+
     expect(out).toBe("recovered");
     expect(fn).toHaveBeenCalledTimes(2);
     expect(delays).toHaveLength(1);
@@ -158,10 +165,12 @@ describe("withRetry", () => {
     "%s mode does not retry an explicitly non-retryable failure",
     async (mode) => {
       const { sleep } = fakeSleep();
+
       const error = new SessionRefreshingError(
         "refreshing",
         Date.now() + 60_000,
       );
+
       const fn = vi.fn().mockRejectedValue(error);
       await expect(withRetry(fn, { mode, sleep })).rejects.toBe(error);
       expect(fn).toHaveBeenCalledTimes(1);
@@ -170,10 +179,12 @@ describe("withRetry", () => {
 
   it("read mode DOES retry a connection failure (idempotent)", async () => {
     const { sleep } = fakeSleep();
+
     const fn = vi
       .fn()
       .mockRejectedValueOnce(new Error("ECONNRESET"))
       .mockResolvedValueOnce("ok");
+
     await expect(
       withRetry(fn, { mode: "read", sleep, random: () => 0 }),
     ).resolves.toBe("ok");
@@ -183,10 +194,12 @@ describe("withRetry", () => {
   it("honors a Retry-After hint over computed backoff", async () => {
     const { sleep, delays } = fakeSleep();
     const headers = new Headers({ "Retry-After": "2" });
+
     const fn = vi
       .fn()
       .mockRejectedValueOnce({ status: 429, headers })
       .mockResolvedValueOnce("ok");
+
     await withRetry(fn, { mode: "read", sleep, random: () => 0.5 });
     expect(delays).toEqual([2000]);
   });
@@ -194,10 +207,12 @@ describe("withRetry", () => {
   it("fires the onRetry hook before each retry", async () => {
     const { sleep } = fakeSleep();
     const onRetry = vi.fn();
+
     const fn = vi
       .fn()
       .mockRejectedValueOnce({ status: 503 })
       .mockResolvedValueOnce("ok");
+
     await withRetry(fn, { mode: "read", sleep, random: () => 0, onRetry });
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onRetry.mock.calls[0]![0]).toMatchObject({ attempt: 1 });
@@ -206,11 +221,14 @@ describe("withRetry", () => {
   it("does not retry once the signal is aborted", async () => {
     const { sleep } = fakeSleep();
     const controller = new AbortController();
+
     const fn = vi.fn().mockImplementation(() => {
       controller.abort();
+
       // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- mimics ADO's plain `{ status }` REST error objects
       return Promise.reject({ status: 503 });
     });
+
     await expect(
       withRetry(fn, { mode: "read", sleep, signal: controller.signal }),
     ).rejects.toEqual({ status: 503 });
@@ -221,18 +239,22 @@ describe("withRetry", () => {
     // A sleep that only resolves when we manually fire it, so the abort must be
     // what settles withRetry — not the sleep completing.
     let releaseSleep: (() => void) | undefined;
+
     const neverEndingSleep = () =>
       new Promise<void>((resolve) => {
         releaseSleep = resolve;
       });
+
     const controller = new AbortController();
     const fn = vi.fn().mockRejectedValue({ status: 503 });
+
     const p = withRetry(fn, {
       mode: "read",
       sleep: neverEndingSleep,
       random: () => 1,
       signal: controller.signal,
     });
+
     // Let the first attempt fail and enter the backoff sleep.
     await Promise.resolve();
     await Promise.resolve();
@@ -300,23 +322,28 @@ describe("withRetry", () => {
   it("passes the 1-based attempt number to fn", async () => {
     const { sleep } = fakeSleep();
     const seen: number[] = [];
+
     const fn = vi.fn().mockImplementation((attempt: number) => {
       seen.push(attempt);
       // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- mimics ADO's plain `{ status }` REST error objects
       if (attempt < 3) return Promise.reject({ status: 503 });
+
       return Promise.resolve("done");
     });
+
     await withRetry(fn, { mode: "read", sleep, random: () => 0 });
     expect(seen).toEqual([1, 2, 3]);
   });
 
   it("uses the real setTimeout path when no sleep is injected", async () => {
     vi.useFakeTimers();
+
     try {
       const fn = vi
         .fn()
         .mockRejectedValueOnce({ status: 503 })
         .mockResolvedValueOnce("ok");
+
       const p = withRetry(fn, { mode: "read", random: () => 0 });
       await vi.runAllTimersAsync();
       await expect(p).resolves.toBe("ok");

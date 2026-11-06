@@ -8,6 +8,8 @@ import type {
   PullRequestStatus,
 } from "azure-devops-extension-api/Git";
 import type {
+  CommentPosition,
+  GitPullRequest,
   GitPullRequestCommentThread,
   Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
@@ -24,6 +26,7 @@ import { identityAvatarUrl } from "./adoGitData.helpers";
 import {
   mergeMentionIdentities,
   normalizeIdentityGuid,
+  type PullRequestSuggestion,
 } from "../comments/mentions";
 
 // The file-diff helpers live in `./adoFileDiffs.helpers`; re-exported here so
@@ -60,11 +63,14 @@ export function buildIdentitiesUrl(
   orgName: string | undefined,
   ids: readonly string[],
 ): string | null {
-  if (!orgName) return null;
+  if (orgName === undefined || orgName === "") return null;
+
   const clean = [
     ...new Set(ids.map((i) => i.trim().toLowerCase()).filter(Boolean)),
   ];
+
   if (clean.length === 0) return null;
+
   return (
     `https://vssps.dev.azure.com/${encodeURIComponent(orgName)}` +
     `/_apis/identities?identityIds=${clean.join(",")}&api-version=7.1-preview.1`
@@ -86,27 +92,35 @@ export function parseIdentitiesResponse(
   const value = (body as { value?: unknown } | null)?.value;
   if (!Array.isArray(value)) return out;
   const byId = new Map<string, string>();
+
   for (const entity of value) {
     // ADO returns a `null` slot for any requested id it can't resolve (e.g. a
     // cross-tenant AAD guest queried by its object id). Skip those — a single
     // null must NOT crash the whole batch and drop the ids that DID resolve.
-    if (!entity || typeof entity !== "object") continue;
+    if (entity === null || typeof entity !== "object") continue;
+
     const e = entity as {
       id?: unknown;
       providerDisplayName?: unknown;
       customDisplayName?: unknown;
     };
+
     const id = typeof e.id === "string" ? e.id.toLowerCase() : "";
+
     const name =
       (typeof e.providerDisplayName === "string" && e.providerDisplayName) ||
       (typeof e.customDisplayName === "string" && e.customDisplayName) ||
       "";
+
     if (id && name) byId.set(id, name);
   }
+
   for (const raw of requestedIds) {
     const name = byId.get(raw.trim().toLowerCase());
-    if (name) out[raw] = { displayName: name };
+    // `byId` only ever stores non-empty names, so a hit is always non-empty.
+    if (name !== undefined) out[raw] = { displayName: name };
   }
+
   return out;
 }
 
@@ -118,6 +132,7 @@ export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
@@ -133,10 +148,13 @@ export function initialsOf(name: string): string {
  */
 export function buildWorkItemWiql(query: string): string {
   const numeric = /^\d+$/.test(query) ? Number(query) : null;
+
   if (numeric !== null) {
     return `SELECT [System.Id] FROM WorkItems WHERE [System.Id] = ${numeric}`;
   }
+
   const escaped = query.replace(/'/g, "''");
+
   return (
     "SELECT [System.Id] FROM WorkItems " +
     `WHERE [System.Title] CONTAINS '${escaped}' ` +
@@ -161,14 +179,41 @@ const PR_STATUS_COMPLETED = 3 as PullRequestStatus;
 export function prStatusLabel(
   status: PullRequestStatus | undefined,
 ): "active" | "completed" | "abandoned" {
-  switch (status) {
-    case PR_STATUS_COMPLETED:
-      return "completed";
-    case PR_STATUS_ABANDONED:
-      return "abandoned";
-    default:
-      return "active";
-  }
+  if (status === PR_STATUS_COMPLETED) return "completed";
+  if (status === PR_STATUS_ABANDONED) return "abandoned";
+
+  return "active";
+}
+
+/**
+ * PR mention suggestions from a page of PRs: an exact id match for a numeric
+ * query, otherwise a case-insensitive title match, at most 10. ADO's typings
+ * don't guarantee `pullRequestId`; an entry without one can't be mentioned,
+ * so it is skipped rather than suggested as `!undefined`.
+ */
+export function matchPullRequestSuggestions(
+  prs: readonly Partial<GitPullRequest>[],
+  query: string,
+): PullRequestSuggestion[] {
+  const trimmed = query.trim();
+  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  const lower = trimmed.toLowerCase();
+
+  return prs
+    .filter((p): p is Partial<GitPullRequest> & { pullRequestId: number } => {
+      if (typeof p.pullRequestId !== "number") return false;
+      if (p.pullRequestId === numeric) return true;
+
+      return (p.title ?? "").toLowerCase().includes(lower);
+    })
+    .slice(0, 10)
+    .map((p) => ({
+      kind: "pullrequest",
+      id: String(p.pullRequestId),
+      title: p.title ?? "(untitled PR)",
+      status: prStatusLabel(p.status),
+      repository: p.repository?.name,
+    }));
 }
 
 // Thread/comment conversion. Numeric literals stand in for SDK enum values so
@@ -209,23 +254,34 @@ export function readMentionsProp(properties: unknown): MentionedIdentity[] {
   const raw = readProp(properties, PROP_MENTIONS);
   if (typeof raw !== "string" || raw.length === 0) return [];
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return [];
   }
+
   if (!Array.isArray(parsed)) return [];
   const out: MentionedIdentity[] = [];
+
   for (const e of parsed) {
-    const r = e as { id?: unknown; displayName?: unknown; avatarUrl?: unknown };
-    if (typeof r?.id !== "string" || typeof r.displayName !== "string")
+    const r = e as {
+      id?: unknown;
+      displayName?: unknown;
+      avatarUrl?: unknown;
+    } | null;
+
+    if (typeof r?.id !== "string" || typeof r.displayName !== "string") {
       continue;
+    }
+
     out.push({
       id: r.id,
       displayName: r.displayName,
       avatarUrl: typeof r.avatarUrl === "string" ? r.avatarUrl : undefined,
     });
   }
+
   return out;
 }
 
@@ -243,6 +299,7 @@ export function fromAdoStatus(s: number | undefined): ThreadStatus {
       return "pending";
     case 1 /* Active */:
     case 0 /* Unknown */:
+    case undefined:
     default:
       return "active";
   }
@@ -329,12 +386,14 @@ export function reactionClientMethod(
  * naked or wrapped.
  */
 export function readProp(properties: unknown, key: string): unknown {
-  if (!properties || typeof properties !== "object") return undefined;
+  if (properties === null || typeof properties !== "object") return undefined;
   const p = (properties as Record<string, unknown>)[key];
   if (p == null) return undefined;
+
   if (typeof p === "object" && "$value" in (p as object)) {
     return (p as { $value: unknown }).$value;
   }
+
   return p;
 }
 
@@ -356,13 +415,54 @@ export function pickerAvatarUrl(
   rawImage: string | undefined,
   selfImageUrl: string | undefined,
 ): string | undefined {
-  if (!rawImage) return undefined;
+  if (rawImage === undefined || rawImage === "") return undefined;
+
   return identityAvatarUrl({ id, imageUrl: selfImageUrl });
 }
+
+// ---------------------------------------------------------------------------
+// Honest wire shapes for thread REST payloads
+//
+// The SDK typings mark every field required, but ADO omits several in
+// practice: PR-level threads have no `threadContext`, left-side-only comments
+// have no `rightFileStart`, un-liked comments have no `usersLiked`, and so on.
+// These views make the fields we defensively read optional so the guards are
+// type-checked. SDK objects stay assignable to them.
+// ---------------------------------------------------------------------------
+
+/** ADO `CommentThreadContext` as actually returned over REST. */
+interface AdoThreadContextWire {
+  filePath?: string;
+  leftFileStart?: CommentPosition;
+  leftFileEnd?: CommentPosition;
+  rightFileStart?: CommentPosition;
+  rightFileEnd?: CommentPosition;
+}
+
+/** ADO `Comment` as actually returned over REST. */
+export type AdoCommentWire = Omit<
+  AdoComment,
+  "content" | "lastContentUpdatedDate" | "publishedDate" | "usersLiked"
+> & {
+  content?: string;
+  lastContentUpdatedDate?: Date;
+  publishedDate?: Date;
+  usersLiked?: AdoComment["usersLiked"];
+};
+
+/** ADO `GitPullRequestCommentThread` as actually returned over REST. */
+export type AdoThreadWire = Omit<
+  GitPullRequestCommentThread,
+  "comments" | "threadContext"
+> & {
+  comments?: AdoCommentWire[];
+  threadContext?: AdoThreadContextWire;
+};
 
 function authorFromAdo(a: AdoComment["author"] | undefined): CommentAuthor {
   const displayName = a?.displayName ?? "Unknown";
   const id = a?.id ?? "unknown";
+
   return {
     id,
     displayName,
@@ -397,10 +497,11 @@ export function editedAtOf(
   const updatedMs = new Date(lastContentUpdatedDate).getTime();
   const publishedMs = publishedDate ? new Date(publishedDate).getTime() : 0;
   if (updatedMs - publishedMs <= EDIT_TOLERANCE_MS) return undefined;
+
   return new Date(lastContentUpdatedDate).toISOString();
 }
 
-function adoCommentToLocal(c: AdoComment): Comment {
+function adoCommentToLocal(c: AdoCommentWire): Comment {
   const id = String(c.id);
   const createdAt = (c.publishedDate ?? new Date()).toString();
   // ADO stamps `lastContentUpdatedDate` on creation too (it equals
@@ -409,6 +510,7 @@ function adoCommentToLocal(c: AdoComment): Comment {
   // when the content was actually updated *after* it was published (allowing a
   // small clock-skew tolerance so the create-time pair isn't misread as edit).
   const updatedAt = editedAtOf(c.publishedDate, c.lastContentUpdatedDate);
+
   const reactions =
     c.usersLiked && c.usersLiked.length > 0
       ? [
@@ -421,6 +523,7 @@ function adoCommentToLocal(c: AdoComment): Comment {
           },
         ]
       : undefined;
+
   return {
     id,
     author: authorFromAdo(c.author),
@@ -439,18 +542,18 @@ function adoCommentToLocal(c: AdoComment): Comment {
  * personal-MSA orgs where the by-id identities endpoint returns null. Ids are
  * normalized to the dashed GUID so they key the same as the rendered pills.
  */
-export function collectThreadIdentities(
-  t: GitPullRequestCommentThread,
-): MentionedIdentity[] {
+export function collectThreadIdentities(t: AdoThreadWire): MentionedIdentity[] {
   const map = (t as { identities?: Record<string, unknown> }).identities;
   if (!map || typeof map !== "object") return [];
   const out: MentionedIdentity[] = [];
+
   for (const ref of Object.values(map)) {
     const r = ref as {
       id?: unknown;
       displayName?: unknown;
       imageUrl?: unknown;
     } | null;
+
     if (!r) continue;
     const rawId = typeof r.id === "string" ? r.id : "";
     const displayName = typeof r.displayName === "string" ? r.displayName : "";
@@ -461,6 +564,7 @@ export function collectThreadIdentities(
       avatarUrl: typeof r.imageUrl === "string" ? r.imageUrl : undefined,
     });
   }
+
   return out;
 }
 
@@ -471,9 +575,7 @@ export function collectThreadIdentities(
  * diff-anchored (synthesize a line anchor via the `data-source-line` bridge),
  * (3) general PR-level comments (no file/line; shown in the general tray).
  */
-export function adoThreadToLocal(
-  t: GitPullRequestCommentThread,
-): CommentThread | null {
+export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
   if (t.isDeleted) return null;
 
   // Drop ADO system/auto threads (votes, reviewer changes, status updates,
@@ -481,10 +583,12 @@ export function adoThreadToLocal(
   const comments = (t.comments ?? [])
     .filter((c) => !c.isDeleted && c.commentType !== COMMENT_TYPE_SYSTEM)
     .map(adoCommentToLocal);
+
   if (comments.length === 0) return null;
 
   const status = fromAdoStatus(t.status as number | undefined);
   const id = String(t.id);
+
   // ADO-resolved @mention identities (works even where by-id lookup can't).
   // Prefer the names WE persisted at compose time (PROP_MENTIONS) — the only
   // source guaranteed to carry cross-tenant guests — then fall back to ADO's
@@ -493,6 +597,7 @@ export function adoThreadToLocal(
     readMentionsProp(t.properties),
     collectThreadIdentities(t),
   );
+
   const withMentions = (thread: CommentThread): CommentThread =>
     mentionedIdentities.length > 0
       ? { ...thread, mentionedIdentities }
@@ -500,6 +605,7 @@ export function adoThreadToLocal(
 
   // (1) Extension-authored thread with a stored text-quote anchor.
   const extensionAnchor = readExtensionAnchor(t);
+
   if (extensionAnchor !== undefined) {
     return withMentions({
       id,
@@ -543,14 +649,14 @@ export function adoThreadToLocal(
  * `undefined` when the thread isn't ours or the anchor is malformed (so the
  * caller treats it as a native thread and the comment isn't silently lost).
  */
-function readExtensionAnchor(
-  t: GitPullRequestCommentThread,
-): TextQuoteAnchor | undefined {
+function readExtensionAnchor(t: AdoThreadWire): TextQuoteAnchor | undefined {
   const schema = readProp(t.properties, PROP_SCHEMA);
   const anchorJson = readProp(t.properties, PROP_ANCHOR);
+
   if (schema !== SCHEMA_VERSION || typeof anchorJson !== "string") {
     return undefined;
   }
+
   try {
     return JSON.parse(anchorJson) as TextQuoteAnchor;
   } catch {
@@ -560,12 +666,14 @@ function readExtensionAnchor(
 
 /** Synthesize a line anchor for a native diff-anchored thread. */
 function nativeDiffLineAnchor(
-  ctx: GitPullRequestCommentThread["threadContext"] | undefined,
+  ctx: AdoThreadContextWire | undefined,
 ): TextQuoteAnchor {
   const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
+
   if (typeof startLine !== "number" || startLine <= 0) {
     return { exact: "", prefix: "", suffix: "" };
   }
+
   return {
     exact: "",
     prefix: "",
@@ -589,6 +697,7 @@ export function buildThreadContext(
 } {
   const startLine =
     typeof anchor.line === "number" && anchor.line > 0 ? anchor.line : 1;
+
   const startOffset =
     typeof anchor.column === "number" && anchor.column > 0 ? anchor.column : 1;
 
@@ -596,12 +705,14 @@ export function buildThreadContext(
     typeof anchor.endLine === "number" && anchor.endLine > 0
       ? anchor.endLine
       : startLine;
+
   const endLine = Math.max(startLine, rawEndLine);
 
   const rawEndOffset =
     typeof anchor.endColumn === "number" && anchor.endColumn > 0
       ? anchor.endColumn
       : startOffset;
+
   const endOffset =
     endLine === startLine ? Math.max(startOffset, rawEndOffset) : rawEndOffset;
 

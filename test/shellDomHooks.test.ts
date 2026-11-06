@@ -2,7 +2,10 @@
 // rail-follow and document scrolling, links leaving the reader, pane resizing
 // and the too-narrow check — mounted in jsdom with a manual frame queue.
 
-import type * as React from "react";
+import type {
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   afterEach,
   beforeAll,
@@ -52,6 +55,7 @@ function threadElement(parentClass: string, childClass: string, tid: string) {
   el.scrollIntoView = scroll;
   parent.appendChild(el);
   document.body.appendChild(parent);
+
   return scroll;
 }
 
@@ -75,8 +79,10 @@ describe("useActiveThreadEffects", () => {
     const opts = effectsOptions(null);
     await mount(useActiveThreadEffects, opts);
     const field = document.body.appendChild(document.createElement("textarea"));
+
     const escape = () =>
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+
     field.dispatchEvent(escape());
     expect(opts.setActiveThreadId).not.toHaveBeenCalled();
     document.body.dispatchEvent(escape());
@@ -152,6 +158,7 @@ describe("useDocNavigation", () => {
       handleMissingDocRef: { current: () => "unexpected" as const },
       scrollDocToHash: vi.fn(),
     });
+
     expect(current.handleDocLink("diagram.png")).toBe(true);
     expect(current.handleDocLink("other.md#setup")).toBe(true);
   });
@@ -160,17 +167,20 @@ describe("useDocNavigation", () => {
 describe("usePaneResize", () => {
   it("ignores resize drags while the reader frame is unmounted", async () => {
     const setReaderPrefs = vi.fn();
+
     const { current } = await mount(
       (prefs: typeof DEFAULT_READER_PREFS) =>
         usePaneResize(prefs, setReaderPrefs),
       DEFAULT_READER_PREFS,
     );
+
     const pointer = {
       preventDefault: () => {},
       clientX: 0,
       pointerId: 1,
       currentTarget: { setPointerCapture: () => {} },
-    } as unknown as React.PointerEvent<HTMLDivElement>;
+    } as unknown as ReactPointerEvent<HTMLDivElement>;
+
     current.onNavResizeStart(pointer);
     current.onNavResizeMove({ ...pointer, clientX: 40 });
     current.onCommentResizeStart(pointer);
@@ -182,10 +192,11 @@ describe("usePaneResize", () => {
 describe("useTooNarrow", () => {
   it("stays usable while the reader frame is unmounted", async () => {
     const { current } = await mount(
-      (frame: React.MutableRefObject<HTMLDivElement | null>) =>
+      (frame: MutableRefObject<HTMLDivElement | null>) =>
         useTooNarrow(frame, false, true, DEFAULT_READER_PREFS),
       { current: null },
     );
+
     expect(current).toBe(false);
   });
 });

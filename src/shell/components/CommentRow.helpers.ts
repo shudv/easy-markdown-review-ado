@@ -29,6 +29,7 @@ export function commentRowPermissions(opts: {
   // nothing to offer (someone else's reply on a surface with no shareable URL),
   // in which case the ⋯ button is hidden rather than opening an empty menu.
   const hasMenuItems = opts.canLink || canEdit || canDelete || opts.isFirst;
+
   return { canEdit, canDelete, canReact: opts.interactive, hasMenuItems };
 }
 
@@ -42,8 +43,10 @@ export function summarizeLikes(
   reactions: Comment["reactions"],
   currentUserId: string,
 ): LikeSummary {
-  const likeReaction = (reactions ?? []).find((r) => r.kind === "like");
+  // `like` is the only ReactionKind, so the first reaction is the like.
+  const likeReaction = reactions?.[0];
   const likeUsers = likeReaction?.users ?? [];
+
   return {
     likedByMe: likeUsers.some((u) => u.id === currentUserId),
     likeCount: likeUsers.length,
@@ -54,6 +57,7 @@ export function summarizeLikes(
 export function commentLinkLabel(state: CommentLinkState): string {
   if (state === "copied") return "Link copied";
   if (state === "failed") return "Couldn't copy link";
+
   return "Link to comment";
 }
 
@@ -64,14 +68,17 @@ export function commentLinkLabel(state: CommentLinkState): string {
 export function formatFullTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+
   const date = d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+
   const time = d.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
+
   return `${date} at ${time}`;
 }

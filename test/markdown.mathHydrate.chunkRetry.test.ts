@@ -10,10 +10,12 @@ const retried = vi.fn();
 vi.mock("../src/markdown/chunkRetry", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../src/markdown/chunkRetry")>();
+
   return {
     ...actual,
     withChunkRetry: <T>(op: () => Promise<T>) => {
       retried();
+
       return actual.withChunkRetry(op);
     },
   };

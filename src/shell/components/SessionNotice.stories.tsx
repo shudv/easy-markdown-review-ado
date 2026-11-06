@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import type { ComponentType } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AdoSessionMonitor } from "../adoSession";
@@ -17,6 +17,7 @@ function refreshingMonitor(opts: {
     new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
     "poll",
   );
+
   for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
     void monitor
       .holdWrite(() =>
@@ -26,6 +27,7 @@ function refreshingMonitor(opts: {
       )
       .catch(() => {});
   }
+
   return monitor;
 }
 
@@ -33,7 +35,7 @@ const meta = {
   title: "Components/SessionNotice",
   component: SessionNotice,
   decorators: [
-    (Story: React.ComponentType) => (
+    (Story: ComponentType) => (
       <div className="emr-app" style={{ width: 640 }}>
         <Story />
       </div>

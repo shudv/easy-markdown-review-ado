@@ -26,11 +26,13 @@ export function rejectionTypeOf(reason: unknown): string {
   if (reason === null) return "null";
   const kind = typeof reason;
   if (kind !== "object" && kind !== "function") return kind;
+
   try {
     const proto: unknown = Object.getPrototypeOf(reason);
     if (proto === null) return `${kind}:null-prototype`;
     const ctor = (proto as { constructor?: { name?: unknown } }).constructor;
     const name = ctor?.name;
+
     return typeof name === "string" && name ? `${kind}:${name}` : kind;
   } catch {
     return `${kind}:opaque`;
@@ -57,6 +59,7 @@ function onUnhandledRejection(event: PromiseRejectionEvent): void {
   } catch {
     /* diagnostics must never throw from a global handler */
   }
+
   markAppReady("error");
 }
 

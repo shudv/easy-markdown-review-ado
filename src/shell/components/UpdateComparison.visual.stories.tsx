@@ -9,7 +9,13 @@
 // Screenshotted by visual/curated.visual.spec.ts.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { fn } from "storybook/test";
 
 import type { FileInfo } from "../../types";
@@ -49,18 +55,20 @@ function ThemeFrame({
   children,
 }: {
   theme?: "dark";
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
     else el.removeAttribute("data-emr-theme");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div style={{ background: "var(--emr-bg)", color: "var(--emr-fg)" }}>
       {children}
@@ -68,9 +76,10 @@ function ThemeFrame({
   );
 }
 
-function FileList({ theme }: { theme?: "dark" }): React.ReactElement {
-  const scrollRef = React.useRef<HTMLElement | null>(null);
-  const articleWrapRef = React.useRef<HTMLDivElement | null>(null);
+function FileList({ theme }: { theme?: "dark" }): ReactElement {
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const articleWrapRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <ThemeFrame theme={theme}>
       <div style={{ display: "flex", height: 240, width: 320 }}>
@@ -84,7 +93,7 @@ function FileList({ theme }: { theme?: "dark" }): React.ReactElement {
           threadCountsByPath={{}}
           rangeChanges={RANGE}
         />
-        <main ref={scrollRef as React.Ref<HTMLElement>} hidden>
+        <main ref={scrollRef as Ref<HTMLElement>} hidden>
           <div ref={articleWrapRef} className="emr-article-wrap" />
         </main>
       </div>

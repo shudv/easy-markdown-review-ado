@@ -16,6 +16,7 @@ describe("anchorKindOf", () => {
       suffix: "",
       line: 12,
     };
+
     expect(anchorKindOf(anchor)).toBe("line");
   });
 

@@ -3,8 +3,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react-dom/test-utils";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,8 +35,14 @@ function Harness(props: {
   selectedPath: string;
   loadFileSource: (path: string) => Promise<string>;
 }): null {
-  doc = useDocumentSource(props.selectedPath, props.loadFileSource);
-  doc.handleMissingDocRef.current = () => "unexpected";
+  const source = useDocumentSource(props.selectedPath, props.loadFileSource);
+  const missingDocRef = source.handleMissingDocRef;
+  // Publish after commit, before the hook's passive load effect reads the ref.
+  useLayoutEffect(() => {
+    doc = source;
+    missingDocRef.current = () => "unexpected";
+  });
+
   return null;
 }
 
@@ -46,7 +51,7 @@ async function show(
   loadFileSource: (path: string) => Promise<string>,
 ): Promise<void> {
   await act(async () => {
-    root.render(React.createElement(Harness, { selectedPath, loadFileSource }));
+    root.render(createElement(Harness, { selectedPath, loadFileSource }));
   });
   // Let the load and the Markdown render settle.
   await act(async () => {
@@ -113,8 +118,10 @@ describe("useDocumentSource", () => {
     settleSlow: (slow: Deferred<string>) => void,
   ): Promise<void> {
     const slow = deferred<string>();
+
     const loadFileSource = (path: string): Promise<string> =>
       path === "docs/slow.md" ? slow.promise : Promise.resolve("# A");
+
     await show("docs/slow.md", loadFileSource);
     await show("docs/a.md", loadFileSource);
     settleSlow(slow);
@@ -129,8 +136,10 @@ describe("useDocumentSource", () => {
 
   it("drops a render that finishes after the selection moved on", async () => {
     heldRender.gate = deferred<void>();
+
     const loadFileSource = (path: string): Promise<string> =>
       Promise.resolve(path === "docs/held.md" ? HELD_SOURCE : "# A");
+
     try {
       await show("docs/held.md", loadFileSource);
       await show("docs/a.md", loadFileSource);

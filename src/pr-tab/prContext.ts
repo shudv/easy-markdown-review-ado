@@ -36,6 +36,11 @@ import {
 
 type BootLog = (step: string, extra?: unknown) => void;
 
+/** A usable REST numeric id: absent (`null`/`undefined`), 0 and NaN are not. */
+function hasId(id: number | null | undefined): id is number {
+  return id != null && id !== 0 && !Number.isNaN(id);
+}
+
 /** What every PR REST call during context resolution is scoped to. */
 interface PrRequestScope {
   gitClient: GitRestClient;
@@ -63,16 +68,20 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
     configuredRepositoryId(config, pullRequestId),
     fileChangesLoader({ gitClient, pullRequestId, projectId, log }),
   );
+
   const repositoryId = pr.repository.id;
-  const repositoryName = pr.repository.name ?? "";
+  // Typed required, but the ADO REST payload can omit the repository name.
+  const repositoryName = (pr.repository.name as string | undefined) ?? "";
   const orgUrl = resolveOrgUrl();
   log("got pull request", { repositoryId, title: pr.title });
 
   const { iterations, latest, changes } = fileChanges;
+
   const reviewIterationStops = mapReviewIterationStops(
     iterations,
     pullRequestId,
   );
+
   const location = {
     projectId,
     projectName: project.name,
@@ -82,8 +91,10 @@ export async function resolvePrContext(log: BootLog): Promise<PrContext> {
     pullRequestId,
     pr,
   };
-  if (!latest?.id || !changes) {
+
+  if (latest === undefined || !hasId(latest.id) || !changes) {
     log("no iterations; returning empty file list");
+
     return { ...location, changedMdFiles: [], reviewIterationStops };
   }
 
@@ -115,18 +126,21 @@ function readPullRequestId(log: BootLog): {
   log("reading SDK configuration");
   const config = SDK.getConfiguration() as Record<string, unknown> | undefined;
   log("sdk configuration", config);
+
   const pullRequestId = pickPullRequestId(
     config,
     typeof document !== "undefined" ? document.referrer : "",
   );
-  if (!pullRequestId) {
+
+  if (!hasId(pullRequestId)) {
     throw new Error(
-      "Could not determine pull request id from SDK configuration. " +
-        "Raw configuration: " +
-        JSON.stringify(config, null, 2),
+      `Could not determine pull request id from SDK configuration. ` +
+        `Raw configuration: ${JSON.stringify(config, null, 2)}`,
     );
   }
+
   log("resolved pullRequestId", pullRequestId);
+
   return { config, pullRequestId };
 }
 
@@ -162,8 +176,10 @@ function requestPullRequest(
 // descriptions already carry the push's title, so commits aren't requested.
 function fileChangesLoader(scope: PrRequestScope) {
   const { gitClient, pullRequestId, projectId, log } = scope;
+
   return async (repositoryId: string) => {
     log("fetching pull request iterations", repositoryId);
+
     const iterations = await withRetry(
       () =>
         withAdoSessionRefreshDetection(
@@ -178,10 +194,17 @@ function fileChangesLoader(scope: PrRequestScope) {
         ),
       { mode: "read", label: "getPullRequestIterations" },
     );
-    const latest = iterations[iterations.length - 1];
-    if (!latest?.id) return { iterations, latest, changes: undefined };
+
+    const latest =
+      iterations.length > 0 ? iterations[iterations.length - 1] : undefined;
+
+    if (latest === undefined || !hasId(latest.id)) {
+      return { iterations, latest, changes: undefined };
+    }
+
     log("fetching iteration changes", latest.id);
     const latestId = latest.id;
+
     const changes = await fetchAllIterationChanges((top, skip) =>
       withRetry(
         () =>
@@ -200,6 +223,7 @@ function fileChangesLoader(scope: PrRequestScope) {
         { mode: "read", label: "getPullRequestIterationChanges" },
       ),
     );
+
     return { iterations, latest, changes };
   };
 }
@@ -214,6 +238,7 @@ export async function fetchRangeChangeTypes(
   params: IterationParams,
 ): Promise<Record<string, ChangeType>> {
   const gitClient = sharedGitClient();
+
   const entries = await fetchAllIterationChanges((top, skip) =>
     withRetry(
       () =>
@@ -229,6 +254,7 @@ export async function fetchRangeChangeTypes(
       { mode: "read", label: "getPullRequestIterationChanges.range" },
     ),
   );
+
   return rangeChangeTypes(entries);
 }
 
@@ -236,7 +262,7 @@ export async function fetchRangeChangeTypes(
 export function commitVersionDescriptor(
   commitId: string | undefined,
 ): GitVersionDescriptor | undefined {
-  return commitId
+  return commitId != null && commitId !== ""
     ? {
         version: commitId,
         versionType: GitVersionType.Commit,
@@ -259,6 +285,7 @@ export async function fetchFileContentAtCommit(
 ): Promise<string> {
   const gitClient = sharedGitClient();
   const versionDescriptor = commitVersionDescriptor(commitId);
+
   const ab = await withRetry(
     () =>
       gitClient.getItemContent(
@@ -275,6 +302,7 @@ export async function fetchFileContentAtCommit(
       ),
     { mode: "read", label: "fetchFileContent.getItemContent" },
   );
+
   return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
@@ -287,11 +315,14 @@ export async function fetchFileContentAtCommit(
  */
 function resolveOrgUrl(): string {
   try {
-    const host = SDK.getHost();
-    if (host?.name) return `https://dev.azure.com/${host.name}`;
+    // `getHost()` is typed non-null but is undefined until SDK init completes.
+    const host = SDK.getHost() as SDK.IHostContext | undefined;
+    const name = host?.name;
+    if (name != null && name !== "") return `https://dev.azure.com/${name}`;
   } catch {
     // Falls through to the referrer-based heuristic.
   }
+
   return orgUrlFromReferrer(
     typeof document !== "undefined" ? document.referrer : "",
   );

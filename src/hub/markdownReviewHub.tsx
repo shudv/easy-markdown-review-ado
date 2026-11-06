@@ -22,7 +22,7 @@
 import "../shell/styles.scss";
 import "./markdownReviewHub.scss";
 
-import * as React from "react";
+import { type ReactElement, useCallback } from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { createRoot } from "react-dom/client";
 import {
@@ -53,6 +53,7 @@ import {
 function basename(path: string): string {
   const clean = path.replace(/\/+$/, "");
   const idx = clean.lastIndexOf("/");
+
   return idx >= 0 ? clean.slice(idx + 1) : clean;
 }
 
@@ -60,10 +61,10 @@ function basename(path: string): string {
 function HubReader({
   config,
   onBack,
-}: {
+}: Readonly<{
   config: ReaderConfig;
   onBack: () => void;
-}): React.ReactElement {
+}>): ReactElement {
   return (
     <div className="emr-hub__reader">
       <div className="emr-hub__bar">
@@ -85,13 +86,13 @@ function HubApp({
   config,
   filesUrl,
   navService,
-}: {
+}: Readonly<{
   config: ReaderConfig | null;
   filesUrl: string | null;
   navService: IHostNavigationService;
-}): React.ReactElement {
-  const onBack = React.useCallback(() => {
-    if (filesUrl) navService.navigate(filesUrl);
+}>): ReactElement {
+  const onBack = useCallback(() => {
+    if (filesUrl !== null && filesUrl !== "") navService.navigate(filesUrl);
     else navService.reload();
   }, [filesUrl, navService]);
 
@@ -100,6 +101,7 @@ function HubApp({
   // reader + comments, with an in-hub repo selector — the experience the
   // standalone Documents hub used to provide.
   if (!config) return <DocumentsHubApp />;
+
   return <HubReader config={config} onBack={onBack} />;
 }
 
@@ -109,8 +111,12 @@ function HubApp({
  * a GUID), so it's only built when the menu action passed `repositoryName`.
  */
 function buildFilesUrl(org: string, config: ReaderConfig): string | null {
-  if (!config.repositoryName) return null;
+  if (config.repositoryName === undefined || config.repositoryName === "") {
+    return null;
+  }
+
   const params = new URLSearchParams({ path: config.path });
+
   return `/${encodeURIComponent(org)}/${encodeURIComponent(
     config.project,
   )}/_git/${encodeURIComponent(config.repositoryName)}?${params.toString()}`;
@@ -135,6 +141,7 @@ async function boot(): Promise<void> {
   if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
     installDevFaults();
   }
+
   // Start the boot-time clock before the SDK handshake so the measurement spans
   // the whole path to first rendered Markdown, not just React startup.
   // `markAppReady()` fires later — from Shell when the first document renders,
@@ -160,6 +167,7 @@ async function boot(): Promise<void> {
       const navService = await SDK.getService<IHostNavigationService>(
         CommonServiceIds.HostNavigationService,
       );
+
       const params = await navService.getQueryParams();
       const config = parseHubQuery(params);
       markBootPhase("context-ready");
@@ -170,6 +178,7 @@ async function boot(): Promise<void> {
         const layoutService = await SDK.getService<IHostPageLayoutService>(
           CommonServiceIds.HostPageLayoutService,
         );
+
         layoutService.setFullScreenMode(true);
       }
 

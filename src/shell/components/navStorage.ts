@@ -46,11 +46,13 @@ export function buildFolderStorageKey(
   if (files.length === 0) return "empty";
   const paths = files.map((f) => f.path).sort();
   let h = 5381;
+
   for (const p of paths) {
     for (let i = 0; i < p.length; i += 1) {
       h = ((h << 5) + h + p.charCodeAt(i)) | 0;
     }
   }
+
   return `${files.length}-${(h >>> 0).toString(36)}`;
 }
 
@@ -58,8 +60,9 @@ export function buildFolderStorageKey(
 export function readCollapsedDirs(key: string): Set<string> {
   try {
     const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
-    if (!raw) return new Set();
+    if (raw === null || raw === "") return new Set();
     const arr: unknown = JSON.parse(raw);
+
     return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
   } catch {
     return new Set();

@@ -1,6 +1,6 @@
 // Shell: loading and rendering the selected document.
 
-import * as React from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { renderMarkdown } from "../../markdown/render";
 import { markAppReady, trackUserFacingError } from "../../telemetry";
@@ -17,40 +17,44 @@ export function useDocumentSource(
   loadFileSource: (path: string) => Promise<string>,
 ) {
   // Per-file rendered HTML cache.
-  const [htmlByPath, setHtmlByPath] = React.useState<Record<string, string>>(
-    {},
-  );
+  const [htmlByPath, setHtmlByPath] = useState<Record<string, string>>({});
   // Per-file committed Markdown source cache; used to anchor comments against
   // the exact source that produced the rendered article.
-  const [sourceByPath, setSourceByPath] = React.useState<
-    Record<string, string>
-  >({});
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [sourceByPath, setSourceByPath] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // Documents hub: a remembered or linked document that's no longer in the
   // repo (renamed / deleted) was swapped for another one; tell the reader.
-  const [missingDoc, setMissingDoc] = React.useState<{
+  const [missingDoc, setMissingDoc] = useState<{
     missing: string;
     shown: string;
   } | null>(null);
-  // Decides what a "not found" document load means — assigned every render
-  // (by `useDocNavigation`, after the deep-link refs it resets), so the load
-  // effect can call it without depending on the file list.
-  const handleMissingDocRef = React.useRef<
-    (missing: string) => MissingDocOutcome
-  >(null!);
-  const [renderVersion, setRenderVersion] = React.useState(0);
 
-  React.useEffect(() => {
+  // Decides what a "not found" document load means — re-assigned after every
+  // commit (by `useDocNavigation`, which owns the deep-link refs it resets), so
+  // the load effect's async failure path can call it without depending on the
+  // file list.
+  const handleMissingDocRef = useRef<(missing: string) => MissingDocOutcome>(
+    null!,
+  );
+
+  const [renderVersion, setRenderVersion] = useState(0);
+
+  useEffect(() => {
     if (!selectedPath) return;
+
     if (htmlByPath[selectedPath]) {
       // A cache hit shows the cached document, so drop any error or spinner
       // left over from a file that failed or was still loading.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a cache hit must clear the previous file's spinner/error and bump renderVersion (which deep-link consumers key on) in the same pass as the load branch below; deriving them would change that cadence.
       setLoading(false);
       setError(null);
       setRenderVersion((v) => v + 1);
+
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -58,6 +62,7 @@ export function useDocumentSource(
       .then(async (source) => {
         if (cancelled) return;
         const html = await renderMarkdown(source);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the effect cleanup can cancel during the awaited render; TS wrongly keeps the narrowing from the pre-await check.
         if (cancelled) return;
         setSourceByPath((prev) => ({ ...prev, [selectedPath]: source }));
         setHtmlByPath((prev) => ({ ...prev, [selectedPath]: html }));
@@ -66,10 +71,13 @@ export function useDocumentSource(
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+
         const missing = isItemNotFoundError(err)
           ? handleMissingDocRef.current(selectedPath)
           : "unexpected";
+
         if (missing === "replaced") return;
+
         if (missing === "unexpected") {
           trackUserFacingError({
             error: err,
@@ -78,9 +86,11 @@ export function useDocumentSource(
             impact: "blocking",
           });
         }
+
         setError(errorMessage(err));
         setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -116,16 +126,18 @@ function useBootReadySignal(
   selectedPath: string,
   error: string | null,
 ): void {
-  const bootReadyFiredRef = React.useRef(false);
-  React.useEffect(() => {
+  const bootReadyFiredRef = useRef(false);
+  useEffect(() => {
     if (bootReadyFiredRef.current) return;
+
     const hasRenderedHtmlForSelected =
       !!selectedPath &&
       Object.prototype.hasOwnProperty.call(htmlByPath, selectedPath);
+
     if (hasRenderedHtmlForSelected) {
       bootReadyFiredRef.current = true;
       markAppReady("content");
-    } else if (error) {
+    } else if (error !== null && error !== "") {
       bootReadyFiredRef.current = true;
       markAppReady("error");
     }

@@ -28,6 +28,7 @@ function cookiesFromState(path: string): StateCookie[] {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as {
       cookies?: unknown;
     };
+
     return Array.isArray(parsed.cookies)
       ? (parsed.cookies as StateCookie[])
       : [];
@@ -67,6 +68,7 @@ setup("authenticate against Azure DevOps", async ({ page }) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("ERR_ABORTED")) throw err;
     }
+
     await page.waitForLoadState("domcontentloaded").catch(() => {});
   };
 
@@ -78,11 +80,14 @@ setup("authenticate against Azure DevOps", async ({ page }) => {
   // we fall through to the interactive login below.
   if (existsSync(AUTH_STATE)) {
     const ageMs = Date.now() - statSync(AUTH_STATE).mtimeMs;
+
     if (ageMs < MAX_STATE_AGE_MS) {
       await page.context().addCookies(cookiesFromState(AUTH_STATE));
       await gotoCollection();
+
       if (onAdoHost()) {
         setup.skip(true, "Reusing verified auth state.");
+
         return;
       }
       // Cookies were recent but no longer valid — force a fresh login.

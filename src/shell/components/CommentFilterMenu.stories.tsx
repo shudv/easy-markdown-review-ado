@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { CommentFilterMenu } from "./CommentFilterMenu";
@@ -49,10 +48,12 @@ export const OpenAndSelect: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: /Filter comments/ }),
     );
+
     // The current mode is checked; each option shows its count.
     const active = await waitFor(() =>
       canvas.getByRole("menuitemradio", { name: /Active comments/ }),
     );
+
     await expect(active).toHaveAttribute("aria-checked", "true");
     await expect(
       canvas.getByRole("menuitemradio", { name: /Resolved comments/ }),
@@ -118,11 +119,13 @@ export const OnlyThisFileScope: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole("button", { name: /Filter comments/ });
     await userEvent.click(trigger);
+
     const toggle = await waitFor(() =>
       canvas.getByRole("menuitemcheckbox", {
         name: /Hide comments not on this file/,
       }),
     );
+
     await expect(toggle).toHaveAttribute("aria-checked", "true");
     await userEvent.click(toggle);
     await expect(args.onOnlyThisFileChange).toHaveBeenCalledWith(false);

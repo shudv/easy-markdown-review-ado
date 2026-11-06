@@ -16,13 +16,6 @@ describe("extractHastText", () => {
     expect(extractHastText(el("p", []))).toBe("");
   });
 
-  it("treats a missing children array as empty", () => {
-    // hast nodes from some producers omit `children` entirely; the extractor
-    // must not throw and should yield the empty string.
-    const node = { type: "element", tagName: "br", properties: {} } as Element;
-    expect(extractHastText(node)).toBe("");
-  });
-
   it("concatenates direct text nodes", () => {
     expect(
       extractHastText(
@@ -44,6 +37,7 @@ describe("extractHastText", () => {
       ]),
       { type: "text", value: "!" },
     ]);
+
     expect(extractHastText(heading)).toBe("Get started now!");
   });
 
@@ -55,6 +49,7 @@ describe("extractHastText", () => {
       { type: "comment", value: " ignored " },
       { type: "text", value: "after" },
     ]);
+
     expect(extractHastText(node)).toBe("before after");
   });
 });

@@ -31,11 +31,14 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
 export function httpStatusOf(error: unknown): number | undefined {
   const e = asObject(error);
   if (!e) return undefined;
+
   for (const c of [e.status, e.statusCode, e.httpStatusCode]) {
     if (typeof c === "number" && c >= 100 && c <= 599) return c;
   }
+
   const se = asObject(e.serverError);
   if (se && typeof se.status === "number") return se.status;
+
   return undefined;
 }
 
@@ -49,6 +52,7 @@ export function adoErrorCodeOf(error: unknown): string | undefined {
     const m = ADO_CODE_RE.exec(t);
     if (m) return m[0];
   }
+
   return undefined;
 }
 
@@ -60,6 +64,7 @@ function errorTexts(error: unknown): string[] {
   // Not only `Error`s: the SDK can reject with a plain `{ message }` object
   // (e.g. a TF400893 network failure), or an Error from another realm.
   const se = asObject(e.serverError);
+
   return [e.message, e.responseText, se?.message, se?.typeKey].filter(
     (t): t is string => typeof t === "string",
   );
@@ -70,8 +75,10 @@ function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   const e = asObject(error);
+
   if (e) {
     if (typeof e.message === "string") return e.message;
+
     try {
       // Serialize for diagnosability, but strip `responseText`: an ADO error's
       // raw HTTP body can carry the failing user's identity GUID, and the
@@ -79,25 +86,31 @@ function messageOf(error: unknown): string {
       const json = JSON.stringify(error, (key, value) =>
         key === "responseText" ? undefined : (value as unknown),
       );
+
       if (json && json !== "{}") return json;
     } catch {
       /* circular / BigInt — fall through */
     }
+
     return Object.prototype.toString.call(error);
   }
+
   return String(error as string | number | boolean | null | undefined);
 }
 
 /** Extract the message, name, stack, HTTP status, and ADO code from any thrown value. */
 export function describeError(error: unknown): ErrorShape {
   const shape: ErrorShape = { message: messageOf(error) };
+
   if (error instanceof Error) {
     if (error.name) shape.name = error.name;
-    if (error.stack) shape.stack = error.stack;
+    if (error.stack != null && error.stack !== "") shape.stack = error.stack;
   }
+
   const status = httpStatusOf(error);
   if (status !== undefined) shape.httpStatus = status;
   const code = adoErrorCodeOf(error);
   if (code !== undefined) shape.adoErrorCode = code;
+
   return shape;
 }

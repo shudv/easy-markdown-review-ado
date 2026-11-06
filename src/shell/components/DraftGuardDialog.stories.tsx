@@ -55,6 +55,7 @@ export const DismissAffordances: Story = {
     const overlay = canvasElement.querySelector<HTMLElement>(
       ".emr-draft-guard-overlay",
     )!;
+
     overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
 

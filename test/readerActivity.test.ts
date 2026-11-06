@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   readerActivityKey,
   selectReaderActivity,
+  useDelayedReaderActivity,
+  type ReaderActivity,
 } from "../src/shell/components/readerActivity";
 import { buildReaderActivities } from "../src/shell/shellHelpers";
 
@@ -53,6 +59,7 @@ describe("buildReaderActivities", () => {
       historicalLoading: false,
       documentLoading: true,
     });
+
     expect(activities.map((activity) => activity.id)).toEqual([
       "search",
       "comment-sync",
@@ -70,6 +77,7 @@ describe("buildReaderActivities", () => {
       historicalLoading: true,
       documentLoading: true,
     });
+
     expect(activities.map((activity) => activity.id)).toEqual([
       "file-refresh",
       "history",
@@ -120,5 +128,63 @@ describe("buildReaderActivities", () => {
         documentLoading: false,
       }),
     ).toEqual([]);
+  });
+});
+
+describe("useDelayedReaderActivity", () => {
+  (
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("hides the shown activity when it changes, then shows the new one after the delay", () => {
+    vi.useFakeTimers();
+    const root = createRoot(document.createElement("div"));
+    const committed: (string | null)[] = [];
+
+    function Probe(props: { activity: ReaderActivity | null }) {
+      const visible = useDelayedReaderActivity(props.activity, 100);
+      committed.push(visible?.id ?? null);
+
+      return null;
+    }
+
+    const render = (activity: ReaderActivity | null) => {
+      act(() => {
+        root.render(createElement(Probe, { activity }));
+      });
+    };
+
+    const advance = (ms: number) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    };
+
+    const latest = () => committed[committed.length - 1];
+
+    render({ id: "first", label: "First…", priority: 10 });
+    expect(latest()).toBeNull();
+    advance(100);
+    expect(latest()).toBe("first");
+
+    render({ id: "second", label: "Second…", priority: 10 });
+    expect(latest()).toBeNull();
+    advance(99);
+    expect(latest()).toBeNull();
+    advance(1);
+    expect(latest()).toBe("second");
+
+    render(null);
+    expect(latest()).toBeNull();
+    advance(100);
+    expect(latest()).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
   });
 });

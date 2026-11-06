@@ -36,11 +36,13 @@ test.describe("Relative doc links (real ADO host)", () => {
   async function openLinkIndexDoc(page: Page) {
     await gotoDocumentsHub(page);
     await waitForFrameRoot(hubFrame(page));
+
     const repo = await selectRepoInPicker(
       page,
       hubFrame(page),
       E2E.docLinksRepo,
     );
+
     await gotoDocumentsHub(page, {
       repo,
       path: E2E.docLinksDoc.replace(/^\/+/, ""),
@@ -48,6 +50,7 @@ test.describe("Relative doc links (real ADO host)", () => {
     const frame = hubFrame(page);
     await waitForFrameRoot(frame);
     await expectReaderHeading(frame, /Getting Started/i);
+
     return frame;
   }
 
@@ -83,12 +86,14 @@ test.describe("Relative doc links (real ADO host)", () => {
       .locator(".markdown-body a")
       .filter({ hasText: "installation guide" })
       .first();
+
     await link.waitFor({ state: "visible", timeout: 45_000 });
 
     await expect
       .poll(
         async () => {
           await link.click().catch(() => {});
+
           return (
             await frame
               .locator(".markdown-body h1")
@@ -130,6 +135,7 @@ test.describe("Relative doc links (real ADO host)", () => {
       .locator(".markdown-body a")
       .filter({ hasText: "architecture diagram" })
       .first();
+
     await link.waitFor({ state: "visible", timeout: 45_000 });
 
     const before = context.pages().length;
@@ -143,6 +149,7 @@ test.describe("Relative doc links (real ADO host)", () => {
           if (context.pages().length === before) {
             await link.click().catch(() => {});
           }
+
           return context.pages().length;
         },
         {
@@ -175,6 +182,7 @@ test.describe("Relative doc links (real ADO host)", () => {
       E2E.docLinksPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.docLinksRepo, prId);
 
     const frame = prTabFrame(page);
@@ -185,6 +193,7 @@ test.describe("Relative doc links (real ADO host)", () => {
       .locator(".markdown-body a")
       .filter({ hasText: /getting started/i })
       .first();
+
     await link.waitFor({ state: "visible", timeout: 45_000 });
 
     const before = context.pages().length;
@@ -194,6 +203,7 @@ test.describe("Relative doc links (real ADO host)", () => {
           if (context.pages().length === before) {
             await link.click().catch(() => {});
           }
+
           return context.pages().length;
         },
         {
@@ -220,6 +230,7 @@ test.describe("Relative doc links (real ADO host)", () => {
       E2E.docLinksPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.docLinksRepo, prId);
 
     const frame = prTabFrame(page);
@@ -242,6 +253,7 @@ test.describe("Relative doc links (real ADO host)", () => {
       E2E.docLinksLfsPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.docLinksRepo, prId);
 
     const frame = prTabFrame(page);

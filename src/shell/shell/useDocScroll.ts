@@ -1,6 +1,6 @@
 // Shell: scrolling the document to threads, headings and quoted text.
 
-import * as React from "react";
+import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
 
 import {
   ANCHOR_TARGET_CUE_MS,
@@ -36,11 +36,11 @@ export function useDocScroll(initialStorageKey: string): {
   scrollDocToAnchor: (tid: string) => void;
   scrollDocToHash: ScrollDocToHash;
   scrollDocToText: ScrollDocToText;
-  activeStorageKeyRef: React.MutableRefObject<string>;
+  activeStorageKeyRef: MutableRefObject<string>;
 } {
   // Scroll the DOCUMENT so a thread's anchored highlight is centred in view.
   // (The rail-follow effect scrolls the rail to the balloon separately.)
-  const scrollDocToAnchor = React.useCallback((tid: string) => {
+  const scrollDocToAnchor = useCallback((tid: string) => {
     window.requestAnimationFrame(() => {
       document
         .querySelector(`.markdown-body [data-thread-id="${CSS.escape(tid)}"]`)
@@ -55,22 +55,24 @@ export function useDocScroll(initialStorageKey: string): {
   // highlights, diagrams, images) settles — used whenever the document was
   // just opened, where that async layout would otherwise push it off-screen.
   // Returns via rAF so the just-committed article is queryable.
-  const activeStorageKeyRef = React.useRef(initialStorageKey);
-  const releaseScrollHoldRef = React.useRef<(() => void) | null>(null);
-  const stopLandingCueRef = React.useRef<(() => void) | null>(null);
-  React.useEffect(
+  const activeStorageKeyRef = useRef(initialStorageKey);
+  const releaseScrollHoldRef = useRef<(() => void) | null>(null);
+  const stopLandingCueRef = useRef<(() => void) | null>(null);
+  useEffect(
     () => () => {
       releaseScrollHoldRef.current?.();
       stopLandingCueRef.current?.();
     },
     [],
   );
-  const scrollDocToHash = React.useCallback<ScrollDocToHash>((hash, opts) => {
+
+  const scrollDocToHash = useCallback<ScrollDocToHash>((hash, opts) => {
     if (!hash) return;
     window.requestAnimationFrame(() => {
       const article = document.querySelector<HTMLElement>(
         ".emr-article-wrap > .emr-rendered",
       );
+
       if (!article) return;
       const target = findAnchorTarget(article, hash);
       opts?.onResolved?.(target !== null);
@@ -83,6 +85,7 @@ export function useDocScroll(initialStorageKey: string): {
       const resolveTarget = () => findAnchorTarget(article, hash);
       stopLandingCueRef.current?.();
       stopLandingCueRef.current = flashAnchorTarget(article, resolveTarget);
+
       // A link the user followed moves focus to its target, as native
       // fragment navigation does, so the next Tab and screen readers continue
       // from there. (Not for a mount-time deep link: that would steal focus
@@ -91,6 +94,7 @@ export function useDocScroll(initialStorageKey: string): {
         if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
         target.focus({ preventScroll: true });
       }
+
       releaseScrollHoldRef.current?.();
       releaseScrollHoldRef.current = opts?.hold
         ? holdScrollOnTarget(article, resolveTarget)
@@ -103,7 +107,7 @@ export function useDocScroll(initialStorageKey: string): {
   // the words themselves, and hold it in view while late content settles.
   // `onResolved` reports whether the text was found (the caller then falls
   // back to the section heading).
-  const scrollDocToText = React.useCallback<ScrollDocToText>(
+  const scrollDocToText = useCallback<ScrollDocToText>(
     (serialized, onResolved) => {
       window.requestAnimationFrame(() =>
         landOnTextFragment(serialized, onResolved, {
@@ -125,9 +129,9 @@ export function useDocScroll(initialStorageKey: string): {
 }
 
 interface ScrollRefs {
-  activeStorageKeyRef: React.MutableRefObject<string>;
-  releaseScrollHoldRef: React.MutableRefObject<(() => void) | null>;
-  stopLandingCueRef: React.MutableRefObject<(() => void) | null>;
+  activeStorageKeyRef: MutableRefObject<string>;
+  releaseScrollHoldRef: MutableRefObject<(() => void) | null>;
+  stopLandingCueRef: MutableRefObject<(() => void) | null>;
 }
 
 /** The body of `scrollDocToText`, run once the article is queryable. */
@@ -139,6 +143,7 @@ function landOnTextFragment(
   const article = document.querySelector<HTMLElement>(
     ".emr-article-wrap > .emr-rendered",
   );
+
   if (!article) return;
   const fragment = parseTextFragment(serialized);
   const range = fragment ? findTextFragment(article, fragment) : null;

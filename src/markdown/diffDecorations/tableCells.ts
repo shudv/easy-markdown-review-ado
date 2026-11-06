@@ -29,7 +29,9 @@ export function resolveTableColumnAlignment(
   const headerRow = row
     .closest("table")!
     .querySelector<HTMLElement>("thead tr")!;
+
   const headerLine = numAttr(headerRow, "data-source-line");
+
   if (
     headerLine == null ||
     headerLine < range.start ||
@@ -37,14 +39,18 @@ export function resolveTableColumnAlignment(
   ) {
     return undefined;
   }
+
   const originalHeader =
     range.originalText!.split(/\r\n|\r|\n/)[headerLine - range.start]!;
+
   const originalHeaders = renderTableSourceTexts(originalHeader, renderInline);
+
   const currentHeaders = Array.from(
     headerRow.querySelectorAll<HTMLElement>("th, td"),
   )
     .filter((cell) => !cell.classList.contains(DIFF_CELL_REMOVED_CLASS))
     .map(readCurrentTableCellText);
+
   return alignTableColumns(originalHeaders, currentHeaders);
 }
 
@@ -53,6 +59,7 @@ function readCurrentTableCellText(cell: HTMLElement): string {
   clone
     .querySelectorAll(`.${WORD_REMOVED_CLASS}, .${DIFF_METADATA_CLASS}`)
     .forEach((element) => element.remove());
+
   return clone.textContent.trim();
 }
 
@@ -61,9 +68,12 @@ function renderTableSourceTexts(
   renderInline: (md: string) => string,
 ): string[] {
   const scratch = document.createElement("div");
+
   return splitTableRow(row).map((source) => {
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
     scratch.innerHTML = renderInline(source);
     const content = scratch.querySelector("p") ?? scratch;
+
     return content.textContent.trim();
   });
 }
@@ -87,22 +97,28 @@ export function diffTableRowCells(
   const cells = Array.from(tr.children).filter(
     (c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH",
   );
+
   const doc = tr.ownerDocument;
   const originals = renderOriginalTableCells(doc, originalRow, renderInline);
   const originalCells = originals.texts;
   const currentCells = cells.map((cell) => cell.textContent.trim());
+
   const rawAlignment =
     columnAlignment === undefined
       ? alignTableCells(originalCells, currentCells)
       : columnAlignment;
+
   if (!rawAlignment) return "ambiguous";
+
   if (
     alignmentOutOfRange(rawAlignment, originalCells.length, currentCells.length)
   ) {
     return "ambiguous";
   }
+
   const alignment = rawAlignment.map((item): TableCellAlignment => {
     if (item.kind === "added" || item.kind === "removed") return item;
+
     return {
       ...item,
       kind:
@@ -114,10 +130,13 @@ export function diffTableRowCells(
 
   const row: TableRowCells = { tr, doc, cells, originals };
   let marked = 0;
+
   for (const item of alignment) {
     if (markAlignedCell(row, item)) marked++;
   }
+
   if (marked > 0 || columnAlignment !== undefined) return "precise";
+
   return "unchanged";
 }
 
@@ -147,13 +166,17 @@ function renderOriginalTableCells(
   const scratch = doc.createElement("div");
   const signatures: string[] = [];
   const rendered: HTMLElement[] = [];
+
   const texts = splitTableRow(originalRow).map((source) => {
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
     scratch.innerHTML = renderInline(source);
     const content = scratch.querySelector("p") ?? scratch;
     signatures.push(tableCellStructureSignature(content));
     rendered.push(content.cloneNode(true) as HTMLElement);
+
     return content.textContent.trim();
   });
+
   return { texts, signatures, rendered };
 }
 
@@ -166,12 +189,14 @@ function alignmentOutOfRange(
     if (item.kind === "added") {
       return item.currentIndex >= currentLength;
     }
+
     if (item.kind === "removed") {
       return (
         item.originalIndex >= originalLength ||
         item.currentIndex > currentLength
       );
     }
+
     return (
       item.originalIndex >= originalLength || item.currentIndex >= currentLength
     );
@@ -184,24 +209,33 @@ function markAlignedCell(
   item: TableCellAlignment,
 ): boolean {
   if (item.kind === "equal") return markEqualCell(row, item);
+
   if (item.kind === "removed") {
     insertRemovedCell(row, item);
+
     return true;
   }
+
   const cell = row.cells[item.currentIndex]!;
+
   if (item.kind === "added") {
     cell.classList.add(DIFF_CELL_CLASS, DIFF_CELL_ADDED_CLASS);
+
     return true;
   }
+
   const contentDiff = diffInlineContent(
     row.originals.rendered[item.originalIndex]!,
     cell,
   );
+
   cell.classList.add(DIFF_CELL_CLASS);
   cell.classList.add(DIFF_CELL_INLINE_CLASS);
+
   if (contentDiff.metadataChanged) {
     cell.classList.add(DIFF_CELL_METADATA_CLASS);
   }
+
   return true;
 }
 
@@ -213,16 +247,21 @@ function markEqualCell(
   const cell = row.cells[item.currentIndex]!;
   const originalCell = row.originals.rendered[item.originalIndex]!;
   const contentDiff = diffInlineContent(originalCell, cell);
+
   if (contentDiff.handled) {
     cell.classList.add(DIFF_CELL_CLASS);
+
     if (contentDiff.formattingChanged) {
       cell.classList.add(DIFF_CELL_INLINE_CLASS);
     }
+
     if (contentDiff.metadataChanged) {
       cell.classList.add(DIFF_CELL_METADATA_CLASS);
     }
+
     return true;
   }
+
   if (
     row.originals.signatures[item.originalIndex] !==
     tableCellStructureSignature(cell)
@@ -232,8 +271,10 @@ function markEqualCell(
       cell,
       `Rendered structure changed from ${describeRenderedStructure(originalCell)} to ${describeRenderedStructure(cell)}`,
     );
+
     return true;
   }
+
   return false;
 }
 
@@ -263,17 +304,21 @@ function insertRemovedCell(
  */
 function tableCellStructureSignature(root: Element): string {
   const parts: string[] = [];
+
   const visit = (element: Element): void => {
     const semanticAttributes = ["href", "src", "title"]
       .map((name) => [name, element.getAttribute(name)] as const)
       .filter((entry): entry is readonly [string, string] => entry[1] != null)
       .map(([name, value]) => `${name}=${value}`)
       .join(",");
+
     parts.push(`<${element.tagName.toLowerCase()}${semanticAttributes}>`);
     for (const child of Array.from(element.children)) visit(child);
     parts.push(`</${element.tagName.toLowerCase()}>`);
   };
+
   for (const child of Array.from(root.children)) visit(child);
+
   return parts.join("");
 }
 
@@ -287,11 +332,14 @@ function describeRenderedStructure(root: Element): string {
     SPAN: "span",
     STRONG: "bold",
   };
+
   const names = Array.from(
     root.querySelectorAll("strong, em, code, del, a, img, span"),
   ).map((element) => nameByTag[element.tagName]!);
+
   const unique = Array.from(new Set(names));
   if (unique.length === 0) return "plain text";
   if (unique.length === 1) return unique[0]!;
+
   return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
 }

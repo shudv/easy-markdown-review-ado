@@ -20,19 +20,23 @@ interface ProjectNav {
   /** Last-visited repo id for the project. */
   repo?: string;
   /** Last-visited document path, keyed by repo id. */
-  paths?: Record<string, string>;
+  paths?: Partial<Record<string, string>>;
 }
 
-/** The persisted shape: project id → its last-visited record. */
-type NavMap = Record<string, ProjectNav>;
+/**
+ * The persisted shape: project id → its last-visited record. Parsed from
+ * localStorage, so any entry may be missing.
+ */
+type NavMap = Partial<Record<string, ProjectNav>>;
 
 /** Best-effort read + parse of the whole map. Returns `{}` on any failure. */
 function readMap(): NavMap {
   try {
     const raw = localStorage.getItem(LAST_VISITED_KEY);
-    if (!raw) return {};
+    if (raw === null || raw === "") return {};
     const parsed: unknown = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed as NavMap;
+    if (parsed !== null && typeof parsed === "object") return parsed as NavMap;
+
     return {};
   } catch {
     return {};

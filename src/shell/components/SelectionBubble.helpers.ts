@@ -14,6 +14,7 @@ export function selectionLinkResultLabel(
 ): string | null {
   if (state === "copied") return "Link copied";
   if (state === "failed") return "Couldn't copy link";
+
   return null;
 }
 

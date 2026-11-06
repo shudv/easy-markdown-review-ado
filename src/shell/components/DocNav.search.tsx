@@ -1,6 +1,6 @@
 // Flat DocNav search-results list shown while the file finder is active.
 
-import * as React from "react";
+import { type ReactElement, useContext } from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -56,8 +56,8 @@ interface SearchResultsListProps {
 
 // eslint-disable-next-line max-lines-per-function -- Navigation search results: result rows with keyboard selection and ARIA listbox semantics in one list.
 export function SearchResultsList(
-  props: SearchResultsListProps,
-): React.ReactElement {
+  props: Readonly<SearchResultsListProps>,
+): ReactElement {
   const {
     results,
     loading,
@@ -67,8 +67,10 @@ export function SearchResultsList(
     threadCountsByPath,
     onSelectFile,
   } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const rangeChanges = React.useContext(RangeChangesContext);
+
+  const showChangeIndicators = useContext(ChangeIndicatorContext);
+  const rangeChanges = useContext(RangeChangesContext);
+
   const banner = unavailable ? (
     <div
       className="emr-docnav-search-unavailable"
@@ -80,6 +82,7 @@ export function SearchResultsList(
       <span>{unavailableMessage(unavailable.reason)}</span>
     </div>
   ) : null;
+
   if (results.length === 0) {
     return (
       <>
@@ -94,6 +97,7 @@ export function SearchResultsList(
       </>
     );
   }
+
   return (
     <>
       {banner}
@@ -105,38 +109,40 @@ export function SearchResultsList(
       {results.map((file) => {
         const isActive = file.path === selectedPath;
         const fileName = basename(file.path);
+
         const parentPath = file.path
           .replace(/^\/+/, "")
           .replace(/\/[^/]*$/, "");
+
         const openComments = threadCountsByPath[file.path] ?? 0;
         const change = fileChangeView(file, rangeChanges);
+        const note = change.note ?? "";
+
         return (
           <div
             key={`search:${file.path}`}
-            className={
-              "emr-docnav-item emr-docnav-search-result" +
-              (isActive ? " is-active" : "") +
-              (change.unchanged ? " is-unchanged-in-range" : "")
-            }
+            className={`emr-docnav-item emr-docnav-search-result${
+              isActive ? " is-active" : ""
+            }${change.unchanged ? " is-unchanged-in-range" : ""}`}
             data-change-type={change.changeType}
           >
             <button
               type="button"
               className="emr-docnav-label emr-docnav-search-label"
               onClick={() => onSelectFile(file.path)}
-              title={file.path + (change.note ? ` \u2014 ${change.note}` : "")}
+              title={file.path + (note !== "" ? ` \u2014 ${note}` : "")}
             >
               {showChangeIndicators ? (
                 <span
-                  className={"emr-docnav-file-icon is-" + change.changeType}
+                  className={`emr-docnav-file-icon is-${change.changeType}`}
                   aria-hidden
                 >
                   {changeTypeGlyph(change.changeType)}
                 </span>
               ) : null}
               <span className="emr-docnav-search-name">{fileName}</span>
-              {change.note ? (
-                <span className="emr-sr-only">{` (${change.note})`}</span>
+              {note !== "" ? (
+                <span className="emr-sr-only">{` (${note})`}</span>
               ) : null}
               {parentPath ? (
                 <span className="emr-docnav-search-path" title={parentPath}>

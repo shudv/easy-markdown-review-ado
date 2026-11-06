@@ -39,6 +39,7 @@ const manifest = JSON.parse(
 ) as { contributions: Contribution[] };
 
 const contributions = manifest.contributions;
+
 const byId = (id: string): Contribution | undefined =>
   contributions.find((c) => c.id === id);
 
@@ -55,6 +56,7 @@ type WebpackFactory = (
     options?: { filename?: string; chunks?: string[] };
   }>;
 };
+
 const webpackConfig = (require("../webpack.config.cjs") as WebpackFactory)(
   {},
   { mode: "production" },
@@ -64,17 +66,26 @@ const entryNames = new Set(Object.keys(webpackConfig.entry));
 
 /** Map of emitted html filename (e.g. "hub/documents-hub.html") → chunk name. */
 const htmlOutputs = new Map<string, string>();
+
 for (const plugin of webpackConfig.plugins) {
   if (plugin.constructor.name !== "HtmlWebpackPlugin") continue;
   const opts = plugin.userOptions ?? plugin.options ?? {};
-  if (opts.filename && opts.chunks?.[0]) {
-    htmlOutputs.set(opts.filename, opts.chunks[0]);
+  const chunk = opts.chunks?.[0];
+
+  if (
+    opts.filename !== undefined &&
+    opts.filename !== "" &&
+    chunk !== undefined &&
+    chunk !== ""
+  ) {
+    htmlOutputs.set(opts.filename, chunk);
   }
 }
 
 describe("manifest ↔ webpack bundles", () => {
   const builtUriContribs = contributions.filter((c) => {
     const uri = c.properties?.uri;
+
     return typeof uri === "string" && uri.startsWith("dist/");
   });
 

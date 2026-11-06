@@ -1,6 +1,6 @@
 // Shared DocNav model: node/heading types, row contexts, and pure helpers.
 
-import * as React from "react";
+import { createContext } from "react";
 
 import type { ChangeType, FileInfo } from "../../types";
 
@@ -10,20 +10,20 @@ import type { ChangeType, FileInfo } from "../../types";
  * without drilling the flag through the recursive `NavTreeItem` tree. Defaults
  * to `true` so any renderer used outside a Provider keeps the PR-tab behaviour.
  */
-export const ChangeIndicatorContext = React.createContext<boolean>(true);
+export const ChangeIndicatorContext = createContext<boolean>(true);
 
 /** Files a comparison of PR updates touches; see `DocNavProps.rangeChanges`. */
 export interface RangeChanges {
   /** e.g. "Update 4 → 5". */
   label: string;
   /** Change type within the comparison, keyed by repo path. */
-  byPath: Readonly<Record<string, ChangeType>>;
+  byPath: Readonly<Partial<Record<string, ChangeType>>>;
 }
 
 /** The active `RangeChanges`, read by the nested file-row renderers. */
-export const RangeChangesContext = React.createContext<
-  RangeChanges | undefined
->(undefined);
+export const RangeChangesContext = createContext<RangeChanges | undefined>(
+  undefined,
+);
 
 /**
  * How a file row presents its change: within the selected updates when a
@@ -35,7 +35,8 @@ export function fileChangeView(
 ): { changeType: ChangeType; unchanged: boolean; note?: string } {
   if (!rangeChanges) return { changeType: file.changeType, unchanged: false };
   const inRange = rangeChanges.byPath[file.path];
-  return inRange
+
+  return inRange !== undefined
     ? { changeType: inRange, unchanged: false }
     : {
         changeType: file.changeType,
@@ -85,6 +86,7 @@ export type DirNavNode = Extract<NavNode, { kind: "dir" }>;
 
 export function basename(p: string): string {
   const idx = p.lastIndexOf("/");
+
   return idx === -1 ? p : p.slice(idx + 1);
 }
 
@@ -106,6 +108,7 @@ export function cssEscape(s: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(s);
   }
+
   return s.replace(/([^\w-])/g, "\\$1");
 }
 
@@ -124,6 +127,7 @@ export function shownActiveHeading(
 export function navNodeKey(node: NavNode): string {
   if (node.kind === "dir") return `dir:${node.path}`;
   if (node.kind === "file") return `file:${node.file.path}`;
+
   return `heading:${node.heading.id}`;
 }
 
@@ -139,9 +143,11 @@ export function pathAncestors(path: string): string[] {
   if (segments.length <= 1) return [];
   const out: string[] = [];
   let acc = "";
+
   for (let i = 0; i < segments.length - 1; i += 1) {
     acc = acc ? `${acc}/${segments[i]!}` : segments[i]!;
     out.push(acc);
   }
+
   return out;
 }

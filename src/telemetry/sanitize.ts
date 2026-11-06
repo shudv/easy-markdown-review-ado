@@ -74,10 +74,13 @@ const WHITESPACE_RE = /\s/;
 // Hostname / domain shape (e.g. `example.com`) — caught even without a slash.
 const DOMAIN_LIKE_RE = /[a-z0-9-]+\.[a-z]{2,}/i;
 // Property keys must be simple identifiers (dotted/camel allowed).
-const VALID_KEY_RE = /^[a-zA-Z][a-zA-Z0-9._]*$/;
+const VALID_KEY_RE = /^[a-z][\w.]*$/i;
+
+/** A property value that survived sanitization. */
+type SafeValue = string | number | boolean;
 
 export interface SanitizeResult {
-  clean: Record<string, string | number | boolean>;
+  clean: Record<string, SafeValue>;
   /** Keys that were dropped, for dev-time diagnostics. Never sent. */
   dropped: string[];
 }
@@ -86,20 +89,24 @@ function keyLooksSafe(key: string): boolean {
   if (ALLOW_KEYS.has(key)) return true;
   if (!VALID_KEY_RE.test(key)) return false;
   const lower = key.toLowerCase();
+
   return !DENY_KEY_SUBSTRINGS.some((bad) => lower.includes(bad));
 }
 
-function valueLooksSafe(value: unknown): value is string | number | boolean {
+function valueLooksSafe(value: unknown): value is SafeValue {
   if (typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
+
   if (typeof value === "string") {
     if (value.length === 0 || value.length > MAX_VALUE_LENGTH) return false;
     if (EMAIL_RE.test(value)) return false;
     if (PATH_LIKE_RE.test(value)) return false;
     if (WHITESPACE_RE.test(value)) return false;
     if (DOMAIN_LIKE_RE.test(value)) return false;
+
     return true;
   }
+
   return false;
 }
 
@@ -110,18 +117,20 @@ function valueLooksSafe(value: unknown): value is string | number | boolean {
 export function sanitizeProperties(
   props: Record<string, unknown> | undefined,
 ): SanitizeResult {
-  const clean: Record<string, string | number | boolean> = {};
+  const clean: Record<string, SafeValue> = {};
   const dropped: string[] = [];
   if (!props) return { clean, dropped };
 
   for (const [key, value] of Object.entries(props)) {
     if (value === null || value === undefined) continue;
+
     if (keyLooksSafe(key) && valueLooksSafe(value)) {
       clean[key] = value;
     } else {
       dropped.push(key);
     }
   }
+
   return { clean, dropped };
 }
 
@@ -136,14 +145,19 @@ export function sanitizeMeasurements(
 ): Record<string, number> {
   const clean: Record<string, number> = {};
   if (!measurements) return clean;
+
   for (const [key, value] of Object.entries(measurements)) {
     if (!VALID_KEY_RE.test(key)) continue;
     if (typeof value !== "number" || !Number.isFinite(value)) continue;
     const lower = key.toLowerCase();
-    if (MEASUREMENT_DENY_SUBSTRINGS.some((bad) => lower.includes(bad)))
+
+    if (MEASUREMENT_DENY_SUBSTRINGS.some((bad) => lower.includes(bad))) {
       continue;
+    }
+
     clean[key] = value;
   }
+
   return clean;
 }
 
@@ -152,7 +166,7 @@ export function sanitizeMeasurements(
 // address embedded in a path is not partially rewritten.
 const EMAIL_GLOBAL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
 const URL_GLOBAL_RE = /\b(?:https?|file):\/\/[^\s)]+/gi;
-const WIN_PATH_RE = /[A-Za-z]:\\[^\s:*?"<>|]+/g;
+const WIN_PATH_RE = /[a-z]:\\[^\s:*?"<>|]+/gi;
 const POSIX_PATH_RE = /(?:\/[\w.@-]+){2,}/g;
 
 /**
@@ -167,12 +181,15 @@ export function redactText(
   maxLength = 1024,
 ): string | undefined {
   if (input === undefined) return undefined;
+
   let out = input
     .replace(EMAIL_GLOBAL_RE, "[email]")
     .replace(URL_GLOBAL_RE, "[url]")
     .replace(WIN_PATH_RE, "[path]")
     .replace(POSIX_PATH_RE, "[path]");
-  if (out.length > maxLength) out = out.slice(0, maxLength) + "…";
+
+  if (out.length > maxLength) out = `${out.slice(0, maxLength)}…`;
+
   return out;
 }
 
@@ -185,6 +202,7 @@ export function redactText(
 export function hashId(value: string | number): string {
   const str = String(value);
   let hash = 0x811c9dc5;
+
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);
     // 32-bit FNV prime multiply via shifts to stay in integer range.
@@ -197,5 +215,6 @@ export function hashId(value: string | number): string {
           (hash << 24))) >>>
       0;
   }
+
   return hash.toString(16).padStart(8, "0");
 }

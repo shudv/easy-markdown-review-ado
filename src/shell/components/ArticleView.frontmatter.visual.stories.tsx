@@ -9,7 +9,7 @@
 // Screenshotted by visual/curated.visual.spec.ts.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { type ReactElement, type ReactNode, useLayoutEffect } from "react";
 import { fn, waitFor } from "storybook/test";
 
 import type { DiffRange } from "../../types";
@@ -47,9 +47,9 @@ function ThemeFrame({
   children,
 }: {
   theme?: "dark";
-  children: React.ReactNode;
-}): React.ReactElement {
-  React.useLayoutEffect(() => {
+  children: ReactNode;
+}): ReactElement {
+  useLayoutEffect(() => {
     const el = document.documentElement;
     const prev = el.getAttribute("data-emr-theme");
     if (theme) el.setAttribute("data-emr-theme", theme);
@@ -61,11 +61,13 @@ function ThemeFrame({
     // the heavy spacing seen in the real PR. Loading it here keeps the visual
     // loop faithful to production.
     setMarkdownDark(theme === "dark");
+
     return () => {
       if (prev) el.setAttribute("data-emr-theme", prev);
       else el.removeAttribute("data-emr-theme");
     };
   }, [theme]);
+
   return (
     <div
       style={{
@@ -188,6 +190,7 @@ async function waitForFrontmatterDiff(
       ) {
         throw new Error("frontmatter value word-diff (added) not applied yet");
       }
+
       if (
         !canvasElement.querySelector(".emr-frontmatter-value .emr-word-removed")
       ) {

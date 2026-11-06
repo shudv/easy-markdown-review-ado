@@ -62,15 +62,18 @@ export function thumbMetrics(
   if (trackPx <= 0 || scrollHeight <= clientHeight) {
     return { topPx: 0, heightPx: Math.max(0, trackPx) };
   }
+
   const heightPx = clamp(
     (clientHeight / scrollHeight) * trackPx,
     Math.min(minThumbPx, trackPx),
     trackPx,
   );
+
   const maxScroll = scrollHeight - clientHeight;
   const maxTop = trackPx - heightPx;
   // maxScroll > 0 here (the fits-in-view case returned above).
   const topPx = (scrollTop / maxScroll) * maxTop;
+
   return { topPx: clamp(topPx, 0, maxTop), heightPx };
 }
 
@@ -87,16 +90,19 @@ export function scrollFromThumbDrag(
 ): number {
   const maxScroll = scrollHeight - clientHeight;
   if (maxScroll <= 0 || trackPx <= 0) return startScrollTop;
+
   const heightPx = clamp(
     (clientHeight / scrollHeight) * trackPx,
     Math.min(minThumbPx, trackPx),
     trackPx,
   );
+
   const maxTop = trackPx - heightPx;
   // Degenerate case: a track shorter than the min thumb can't be dragged.
   if (maxTop <= 0) return startScrollTop;
   const startThumbTop = (startScrollTop / maxScroll) * maxTop;
   const nextThumbTop = clamp(startThumbTop + deltaY, 0, maxTop);
+
   return (nextThumbTop / maxTop) * maxScroll;
 }
 
@@ -109,6 +115,7 @@ export function classifyDiffElement(el: Element): DiffMarkerKind | null {
   if (el.classList.contains("emr-diff-deleted-marker")) return "deleted";
   if (el.classList.contains("emr-diff-block--added")) return "added";
   if (el.classList.contains("emr-diff-block--modified")) return "modified";
+
   return null;
 }
 
@@ -122,6 +129,7 @@ export function markerFraction(
   scrollHeight: number,
 ): { top: number; height: number } {
   if (scrollHeight <= 0) return { top: 0, height: 0 };
+
   return {
     top: clamp01(elTop / scrollHeight),
     height: clamp01(elHeight / scrollHeight),
@@ -141,15 +149,18 @@ export function mergeMarkers(
 ): DiffMarker[] {
   const sorted = [...markers].sort((a, b) => a.top - b.top);
   const out: DiffMarker[] = [];
+
   for (const m of sorted) {
-    const prev = out[out.length - 1];
-    if (prev && prev.kind === m.kind && m.top <= prev.top + prev.height + gap) {
+    const prev = out.length > 0 ? out[out.length - 1] : undefined;
+
+    if (prev?.kind === m.kind && m.top <= prev.top + prev.height + gap) {
       const bottom = Math.max(prev.top + prev.height, m.top + m.height);
       prev.height = bottom - prev.top;
     } else {
       out.push({ ...m });
     }
   }
+
   return out;
 }
 
@@ -163,14 +174,17 @@ function subtractSpan(
   cutBottom: number,
 ): Span[] {
   const out: Span[] = [];
+
   for (const s of spans) {
     if (cutBottom <= s.top || cutTop >= s.bottom) {
       out.push(s); // no overlap — keep as-is
       continue;
     }
+
     if (cutTop > s.top) out.push({ top: s.top, bottom: cutTop });
     if (cutBottom < s.bottom) out.push({ top: cutBottom, bottom: s.bottom });
   }
+
   return out;
 }
 
@@ -186,20 +200,27 @@ function subtractSpan(
  */
 export function resolveOverlaps(markers: readonly DiffMarker[]): DiffMarker[] {
   const rank = (k: DiffMarkerKind): number => (k === "deleted" ? 1 : 0);
+
   const ordered = [...markers].sort(
     (a, b) => rank(b.kind) - rank(a.kind) || a.top - b.top,
   );
+
   const occupied: Span[] = [];
   const kept: DiffMarker[] = [];
+
   for (const m of ordered) {
     let spans: Span[] = [{ top: m.top, bottom: m.top + m.height }];
-    for (const occ of occupied)
+
+    for (const occ of occupied) {
       spans = subtractSpan(spans, occ.top, occ.bottom);
+    }
+
     for (const s of spans) {
       kept.push({ top: s.top, height: s.bottom - s.top, kind: m.kind });
       occupied.push(s);
     }
   }
+
   return kept.sort((a, b) => a.top - b.top);
 }
 
@@ -210,6 +231,7 @@ export function viewportRange(
   scrollHeight: number,
 ): ViewportRange {
   if (scrollHeight <= 0) return { top: 0, height: 1 };
+
   return {
     top: clamp01(scrollTop / scrollHeight),
     height: clamp01(clientHeight / scrollHeight),
@@ -227,6 +249,7 @@ export function scrollTargetForFraction(
 ): number {
   const target = fraction * scrollHeight - clientHeight / 2;
   const max = Math.max(0, scrollHeight - clientHeight);
+
   return Math.max(0, Math.min(target, max));
 }
 
@@ -237,5 +260,6 @@ export function markerInViewport(
 ): boolean {
   const mBottom = marker.top + marker.height;
   const vBottom = viewport.top + viewport.height;
+
   return marker.top < vBottom && viewport.top < mBottom;
 }

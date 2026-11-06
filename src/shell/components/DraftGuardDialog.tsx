@@ -5,7 +5,7 @@
 // it. Shows the draft's file + a text snippet so they know exactly what's at
 // stake.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef } from "react";
 
 interface DraftGuardDialogProps {
   /** File the existing draft lives in (basename shown to the user). */
@@ -19,28 +19,31 @@ interface DraftGuardDialogProps {
 }
 
 export function DraftGuardDialog(
-  props: DraftGuardDialogProps,
-): React.ReactElement {
+  props: Readonly<DraftGuardDialogProps>,
+): ReactElement {
   const { fileName, snippet, onDiscard, onKeepEditing } = props;
 
-  const keepRef = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
+  const keepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
     keepRef.current?.focus();
   }, []);
 
   // Escape keeps the draft (the safe default).
-  React.useEffect(() => {
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onKeepEditing();
       }
     }
+
     document.addEventListener("keydown", onKey, true);
+
     return () => document.removeEventListener("keydown", onKey, true);
   }, [onKeepEditing]);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- modal backdrop: a click outside the card keeps the draft; the keyboard path is Escape (document keydown above) and the focused "Keep editing" button
     <div
       className="emr-draft-guard-overlay"
       role="dialog"

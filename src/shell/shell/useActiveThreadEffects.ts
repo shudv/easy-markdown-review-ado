@@ -1,18 +1,24 @@
 // Shell: document-level effects that follow the active comment thread.
 
-import * as React from "react";
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useEffect,
+  useRef,
+} from "react";
 
 import type { ThreadState } from "../../comments/store";
 import { events, track } from "../../telemetry";
 import type { AnchorLayout } from "../components/ArticleView";
 import { clearIfSet, isCommentUiClickTarget } from "../shellHelpers";
 
-type SetActiveThreadId = React.Dispatch<React.SetStateAction<string | null>>;
+type SetActiveThreadId = Dispatch<SetStateAction<string | null>>;
 
 interface ActiveThreadEffectsOptions {
   activeThreadId: string | null;
   setActiveThreadId: SetActiveThreadId;
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>;
+  dismissEmptyDraftRef: MutableRefObject<() => void>;
   initialActiveThreadId: string | undefined;
   onActiveThreadChange: ((threadId: string | null) => void) | undefined;
   selectedPath: string;
@@ -36,27 +42,29 @@ export function useActiveThreadEffects(opts: ActiveThreadEffectsOptions): void {
 
 function useDismissActiveThread(
   setActiveThreadId: SetActiveThreadId,
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>,
+  dismissEmptyDraftRef: MutableRefObject<() => void>,
 ): void {
   // ESC clears the active thread and dismisses an *empty* draft from anywhere
   // outside a text editor. A draft holding text is preserved (users must cancel
   // it explicitly). (Composer has its own ESC handler that stops propagation.)
-  React.useEffect(() => {
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       const target = e.target as HTMLElement | null;
-      if (target && target.matches("textarea, input")) return;
+      if (target?.matches("textarea, input")) return;
       setActiveThreadId(clearIfSet);
       dismissEmptyDraftRef.current();
     }
+
     document.addEventListener("keydown", onKey);
+
     return () => document.removeEventListener("keydown", onKey);
   }, [setActiveThreadId, dismissEmptyDraftRef]);
 
   // Clicking outside a highlight, balloon, or selection bubble dismisses the
   // active thread and any *empty* draft — the priority-stacked layout is
   // strictly transient. A draft with text survives a stray click.
-  React.useEffect(() => {
+  useEffect(() => {
     function onClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       // A target that its own click handler removed from the DOM (e.g. a
@@ -67,7 +75,9 @@ function useDismissActiveThread(
       setActiveThreadId(clearIfSet);
       dismissEmptyDraftRef.current();
     }
+
     document.addEventListener("click", onClick);
+
     return () => document.removeEventListener("click", onClick);
   }, [setActiveThreadId, dismissEmptyDraftRef]);
 }
@@ -77,8 +87,8 @@ function useRailFollow(activeThreadId: string | null): void {
   // OWN scroll (the rail scrolls independently of the document now). The
   // document is scrolled to the anchor by the selection handlers. One effect
   // centralises rail-follow for every activation path (click, cycle, deep link).
-  React.useEffect(() => {
-    if (!activeThreadId) return;
+  useEffect(() => {
+    if (activeThreadId === null || activeThreadId === "") return;
     const escaped = CSS.escape(activeThreadId);
     let cancelled = false;
     // rAF #1 lets React commit the list; rAF #2 lets layout settle.
@@ -95,6 +105,7 @@ function useRailFollow(activeThreadId: string | null): void {
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+
     return () => {
       cancelled = true;
     };
@@ -111,15 +122,17 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
     renderVersion,
     anchorLayout,
   } = opts;
+
   // Deep-link consumption (`?comment=`). Holds the thread to auto-open until
   // its anchor mounts — the linked document's threads may still be loading, or
   // the article may not have wrapped its highlights yet. Re-runs as the
   // document and thread set settle; once the anchor exists we activate +
   // center it and clear the seed so later navigation isn't hijacked.
-  const pendingActiveThreadIdRef = React.useRef<string | undefined>(
+  const pendingActiveThreadIdRef = useRef<string | undefined>(
     initialActiveThreadId,
   );
-  React.useEffect(() => {
+
+  useEffect(() => {
     // Latch the seed only when present. Hosts that gate the prop (e.g. the
     // Documents hub clears it after the first mount so it can't hijack later
     // navigation) flip it back to `undefined` on the next re-render — which
@@ -127,13 +140,14 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
     // Overwriting the ref with that `undefined` would drop the deep link and
     // the thread would never auto-open. So we never clear it from props; the
     // consumption effect below clears it once the anchor is found.
-    if (initialActiveThreadId) {
+    if (initialActiveThreadId !== undefined && initialActiveThreadId !== "") {
       pendingActiveThreadIdRef.current = initialActiveThreadId;
     }
   }, [initialActiveThreadId]);
-  React.useEffect(() => {
+  useEffect(() => {
     const tid = pendingActiveThreadIdRef.current;
-    if (!tid) return;
+    if (tid === undefined || tid === "") return;
+
     // One rAF lets React commit the current document + the highlight-wrapping
     // layout effect run, so the anchor (or balloon) is queryable. Cleanup
     // cancels the frame, so a superseded run never reaches its callback.
@@ -142,6 +156,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
       // it before interpolating into a selector — metacharacters like `"` or
       // `]` would otherwise make `querySelector` throw and break deep linking.
       const escaped = CSS.escape(tid);
+
       const target =
         document.querySelector<HTMLElement>(
           `.markdown-body [data-thread-id="${escaped}"]`,
@@ -149,23 +164,27 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
         document.querySelector<HTMLElement>(
           `.emr-rail-col .emr-balloon[data-thread-id="${escaped}"]`,
         );
+
       // Not mounted yet — leave the seed pending; a later threads/path change
       // or anchor re-resolution re-runs this effect once the linked document's
       // highlight has been wrapped into the DOM. But once a PR-wide thread
       // snapshot has arrived without it, the thread doesn't exist (deleted,
       // or a bad link): record that once and stop waiting.
       if (!target) {
-        if (prThreadSnapshots > 0 && !threadState.threadsById[tid]) {
+        if (prThreadSnapshots > 0 && !(tid in threadState.threadsById)) {
           pendingActiveThreadIdRef.current = undefined;
           track(events.linkOpened({ target: "comment", found: false }));
         }
+
         return;
       }
+
       pendingActiveThreadIdRef.current = undefined;
       setActiveThreadId(tid);
       track(events.linkOpened({ target: "comment", found: true }));
       target.scrollIntoView({ behavior: "smooth", block: "center" });
     });
+
     return () => window.cancelAnimationFrame(handle);
     // `anchorLayout` is the signal that ArticleView has (re)wrapped the
     // highlight spans — `renderVersion`/`threadState` change when the document
@@ -195,8 +214,8 @@ function useReportActiveThread(
   // initial `activeThreadId`) so mount doesn't clobber a freshly-read deep
   // link with an empty param; only genuine changes (deep-link consumption,
   // selection, or clear) propagate.
-  const lastReportedThreadRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
+  const lastReportedThreadRef = useRef<string | null>(null);
+  useEffect(() => {
     if (!onActiveThreadChange) return;
     if (activeThreadId === lastReportedThreadRef.current) return;
     lastReportedThreadRef.current = activeThreadId;

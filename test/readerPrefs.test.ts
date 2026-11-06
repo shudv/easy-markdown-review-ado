@@ -74,6 +74,7 @@ describe("readerPrefs — curated font list", () => {
     const available = await detectAvailableReaderFonts(async (family) =>
       ["Sitka Text", "Verdana"].includes(family),
     );
+
     expect(available.map((font) => font.id)).toEqual([
       "system",
       "sitka",
@@ -278,6 +279,7 @@ describe("readerPrefs — sanitize", () => {
       navWidthPct: "wide",
       commentWidthPct: "wide",
     });
+
     expect(out.fontId).toBe(DEFAULT_FONT_ID);
     expect(out.sizePct).toBe(DEFAULT_SIZE_PCT);
     expect(out.lineSpacingPct).toBe(DEFAULT_LINE_SPACING_PCT);
@@ -326,6 +328,7 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
       navWidthPct: 130,
       commentWidthPct: 90,
     };
+
     writeReaderPrefs("pr", prefs);
     expect(localStorage.getItem(READER_TYPE_KEY)).not.toBeNull();
     expect(localStorage.getItem(layoutStorageKey("pr"))).not.toBeNull();

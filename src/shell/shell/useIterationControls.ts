@@ -1,6 +1,6 @@
 // Shell: history chevrons, PR-update picker and comment blocker.
 
-import * as React from "react";
+import { type MutableRefObject, useCallback, useMemo } from "react";
 
 import type { TextQuoteAnchor } from "../../types";
 import { relocateAnchor } from "../../comments/anchor";
@@ -20,7 +20,7 @@ interface IterationControlsOptions {
   setCompletedHistoryStopIndex: (index: number) => void;
   setIterationRange: (range: ReviewIterationRange) => void;
   setActiveThreadId: (threadId: string | null) => void;
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>;
+  dismissEmptyDraftRef: MutableRefObject<() => void>;
 }
 
 /**
@@ -41,17 +41,20 @@ export function useIterationControls(opts: IterationControlsOptions) {
     setActiveThreadId,
     dismissEmptyDraftRef,
   } = opts;
+
   const historyNav = buildHistoryNav(
     opts.completedPrHistoryEnabled,
     historyStops,
     opts.clampedStopIndex,
+    // eslint-disable-next-line react-hooks/refs -- buildHistoryNav only wires this into the chevrons' click handlers, so the ref is read on click, never during render.
     (stopIndex) => {
       setCompletedHistoryStopIndex(stopIndex);
       setActiveThreadId(null);
       dismissEmptyDraftRef.current();
     },
   );
-  const iterationOptions = React.useMemo<ReaderIterationOption[]>(
+
+  const iterationOptions = useMemo<ReaderIterationOption[]>(
     () =>
       nativeIterationMode
         ? historyStops
@@ -65,7 +68,8 @@ export function useIterationControls(opts: IterationControlsOptions) {
         : [],
     [historyStops, nativeIterationMode],
   );
-  const changeIterationRange = React.useCallback(
+
+  const changeIterationRange = useCallback(
     (range: ReviewIterationRange) => {
       setIterationRange(range);
       setActiveThreadId(null);
@@ -78,10 +82,16 @@ export function useIterationControls(opts: IterationControlsOptions) {
   // version, so a selection can only be commented on if its text is still in
   // the latest version. Otherwise the selection bubble explains why and
   // offers to extend the comparison to the latest update (same start point).
-  const commentBlocker = React.useMemo(() => {
-    if (!nativeIterationMode || !viewingHistorical || !latestHtml) {
+  const commentBlocker = useMemo(() => {
+    if (
+      !nativeIterationMode ||
+      !viewingHistorical ||
+      latestHtml === undefined ||
+      latestHtml === ""
+    ) {
       return undefined;
     }
+
     return (anchor: TextQuoteAnchor) =>
       relocateAnchor(anchor, latestHtml)
         ? null

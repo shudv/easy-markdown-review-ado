@@ -21,11 +21,13 @@ import {
   parseIdentitiesResponse,
   pathsRequiringOriginalSource,
   pickerAvatarUrl,
+  matchPullRequestSuggestions,
   prStatusLabel,
   readMentionsProp,
   readProp,
 } from "../src/shell/adoCommentApi.helpers";
 import { identityAvatarUrl } from "../src/shell/adoGitData.helpers";
+
 // Numeric runtime values of `PullRequestStatus` (kept in-test so we don't
 // need to import the SDK enum, which uses an AMD bundle Node can't load).
 const PR_STATUS = {
@@ -38,6 +40,7 @@ const PR_STATUS = {
 
 describe("pickerAvatarUrl", () => {
   const ID = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
+
   const SELF =
     "https://dev.azure.com/contoso/_apis/GraphProfile/MemberAvatars/aad.self";
 
@@ -173,6 +176,79 @@ describe("prStatusLabel", () => {
   });
 });
 
+describe("matchPullRequestSuggestions", () => {
+  const pr = (pullRequestId: number | undefined, title?: string) => ({
+    pullRequestId,
+    title,
+    status: PR_STATUS.Active as never,
+    repository: { name: "docs" } as never,
+  });
+
+  it("matches a numeric query by exact id, regardless of title", () => {
+    const ids = matchPullRequestSuggestions(
+      [pr(41, "Other"), pr(42, "Unrelated"), pr(420, "Also other")],
+      "42",
+    ).map((s) => s.id);
+
+    expect(ids).toEqual(["42"]);
+  });
+
+  it("matches titles case-insensitively, including digits in a title", () => {
+    const ids = matchPullRequestSuggestions(
+      [pr(1, "Fix API v42 docs"), pr(2, "Polish the API"), pr(3, "Unrelated")],
+      "api",
+    ).map((s) => s.id);
+
+    expect(ids).toEqual(["1", "2"]);
+    expect(
+      matchPullRequestSuggestions([pr(7, "Bump to v42")], "42").map(
+        (s) => s.id,
+      ),
+    ).toEqual(["7"]);
+  });
+
+  it("skips entries without a numeric id instead of suggesting `undefined`", () => {
+    const suggestions = matchPullRequestSuggestions(
+      [pr(undefined, "Docs refresh"), pr(6), pr(5, "Docs cleanup")],
+      "docs",
+    );
+
+    expect(suggestions.map((s) => s.id)).toEqual(["5"]);
+  });
+
+  it("returns at most 10 suggestions, in input order", () => {
+    const prs = Array.from({ length: 12 }, (_, i) => pr(i + 1, "Docs"));
+    const ids = matchPullRequestSuggestions(prs, "docs").map((s) => s.id);
+    expect(ids).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+  });
+
+  it("maps fields, defaulting a missing title and repository", () => {
+    expect(matchPullRequestSuggestions([pr(9, "Docs")], "docs")).toEqual([
+      {
+        kind: "pullrequest",
+        id: "9",
+        title: "Docs",
+        status: "active",
+        repository: "docs",
+      },
+    ]);
+    expect(
+      matchPullRequestSuggestions(
+        [{ pullRequestId: 8, status: PR_STATUS.Completed as never }],
+        "8",
+      ),
+    ).toEqual([
+      {
+        kind: "pullrequest",
+        id: "8",
+        title: "(untitled PR)",
+        status: "completed",
+        repository: undefined,
+      },
+    ]);
+  });
+});
+
 describe("initialsOf", () => {
   it("handles a single word by taking the first two letters", () => {
     expect(initialsOf("Alice")).toBe("AL");
@@ -262,6 +338,7 @@ describe("parseIdentitiesResponse", () => {
         { id: B, providerDisplayName: "Alan Turing" },
       ],
     };
+
     expect(parseIdentitiesResponse(body, [A, B])).toEqual({
       [A]: { displayName: "Ada Lovelace" },
       [B]: { displayName: "Alan Turing" },
@@ -272,6 +349,7 @@ describe("parseIdentitiesResponse", () => {
     const body = {
       value: [{ id: A, customDisplayName: "Custom Name" }],
     };
+
     expect(parseIdentitiesResponse(body, [A])).toEqual({
       [A]: { displayName: "Custom Name" },
     });
@@ -289,6 +367,7 @@ describe("parseIdentitiesResponse", () => {
         { id: A, providerDisplayName: "" },
       ],
     };
+
     expect(parseIdentitiesResponse(body, [A])).toEqual({});
   });
 
@@ -300,6 +379,7 @@ describe("parseIdentitiesResponse", () => {
       count: 2,
       value: [{ id: A, providerDisplayName: "Ada Lovelace" }, null],
     };
+
     expect(parseIdentitiesResponse(body, [A, B])).toEqual({
       [A]: { displayName: "Ada Lovelace" },
     });
@@ -351,6 +431,7 @@ describe("readMentionsProp", () => {
     const out = readMentionsProp(
       wrap(JSON.stringify([{ id: "a", displayName: "A", avatarUrl: "x" }])),
     );
+
     expect(out).toEqual([{ id: "a", displayName: "A", avatarUrl: "x" }]);
   });
 
@@ -358,6 +439,7 @@ describe("readMentionsProp", () => {
     const out = readMentionsProp(
       wrap(JSON.stringify([{ id: "a", displayName: "A", avatarUrl: 5 }])),
     );
+
     expect(out).toEqual([{ id: "a", displayName: "A", avatarUrl: undefined }]);
   });
 
@@ -371,6 +453,7 @@ describe("readMentionsProp", () => {
         ]),
       ),
     );
+
     expect(out).toEqual([{ id: "c", displayName: "C", avatarUrl: undefined }]);
   });
 
@@ -386,6 +469,7 @@ describe("readMentionsProp", () => {
 
 describe("collectThreadIdentities", () => {
   const GUID = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
+
   const call = (t: Record<string, unknown>) =>
     collectThreadIdentities(t as any);
 
@@ -401,6 +485,7 @@ describe("collectThreadIdentities", () => {
         },
       }),
     );
+
     expect(out).toEqual([
       {
         id: GUID,
@@ -421,6 +506,7 @@ describe("collectThreadIdentities", () => {
         },
       }),
     );
+
     expect(out[0]!.id).toBe(GUID);
   });
 
@@ -437,6 +523,7 @@ describe("collectThreadIdentities", () => {
         },
       }),
     );
+
     expect(out).toEqual([]);
   });
 
@@ -449,6 +536,7 @@ describe("collectThreadIdentities", () => {
         identities: { "1": { id: "svc-account", displayName: "Service" } },
       }),
     );
+
     expect(out).toEqual([
       { id: "svc-account", displayName: "Service", avatarUrl: undefined },
     ]);
@@ -483,6 +571,7 @@ describe("adoThreadToLocal", () => {
         comments: [comment({ commentType: 3 }), comment({ id: 2 })],
       }),
     );
+
     expect(local).not.toBeNull();
     expect(local!.comments).toHaveLength(1);
     expect(local!.comments[0]!.id).toBe("2");
@@ -501,6 +590,7 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.reactions).toEqual([
       {
         kind: "like",
@@ -518,6 +608,7 @@ describe("adoThreadToLocal", () => {
         comments: [comment({ usersLiked: [{ id: "u9" }] })],
       }),
     );
+
     expect(local!.comments[0]!.reactions).toEqual([
       { kind: "like", users: [{ id: "u9", displayName: "u9" }] },
     ]);
@@ -530,11 +621,13 @@ describe("adoThreadToLocal", () => {
 
   it("attaches ADO-resolved mention identities to the local thread", () => {
     const GUID = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
+
     const local = conv(
       thread({
         identities: { "1": { id: GUID, displayName: "Shubham Dwivedi" } },
       }),
     );
+
     expect(local!.mentionedIdentities).toEqual([
       { id: GUID, displayName: "Shubham Dwivedi", avatarUrl: undefined },
     ]);
@@ -547,6 +640,7 @@ describe("adoThreadToLocal", () => {
 
   it("reads mention names WE persisted from the emrMentions property", () => {
     const GUID = "140e7feb-6e57-4d7b-8de6-474d9b9813db";
+
     const local = conv(
       thread({
         properties: {
@@ -559,6 +653,7 @@ describe("adoThreadToLocal", () => {
         },
       }),
     );
+
     expect(local!.mentionedIdentities).toEqual([
       { id: GUID, displayName: "Cross-Tenant Guest", avatarUrl: "g" },
     ]);
@@ -567,6 +662,7 @@ describe("adoThreadToLocal", () => {
   it("prefers our emrMentions names and unions ADO's thread.identities", () => {
     const OURS = "140e7feb-6e57-4d7b-8de6-474d9b9813db";
     const ADO = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
+
     const local = conv(
       thread({
         identities: { "1": { id: ADO, displayName: "Org Account" } },
@@ -578,6 +674,7 @@ describe("adoThreadToLocal", () => {
         },
       }),
     );
+
     expect(local!.mentionedIdentities).toEqual([
       { id: OURS, displayName: "Guest", avatarUrl: undefined },
       { id: ADO, displayName: "Org Account", avatarUrl: undefined },
@@ -586,9 +683,11 @@ describe("adoThreadToLocal", () => {
 
   it("falls back to the current time when a comment has no publishedDate", () => {
     const before = Date.now();
+
     const local = conv(
       thread({ comments: [comment({ publishedDate: undefined })] }),
     );
+
     const created = Date.parse(local!.comments[0]!.createdAt);
     // The synthesized timestamp is a valid ISO date at/after the call start.
     expect(Number.isNaN(created)).toBe(false);
@@ -623,6 +722,7 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.author.avatarUrl).toBe(
       "https://dev.azure.com/contoso/_api/_common/identityImage?id=u9",
     );
@@ -637,6 +737,7 @@ describe("adoThreadToLocal", () => {
       imageUrl:
         "https://dev.azure.com/contoso/_apis/GraphProfile/MemberAvatars/aad.abc",
     };
+
     const local = conv(
       thread({
         comments: [
@@ -646,6 +747,7 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.author.avatarUrl).toBe(
       identityAvatarUrl(identity),
     );
@@ -657,6 +759,7 @@ describe("adoThreadToLocal", () => {
         comments: [comment({ author: { id: "u2", displayName: "No Photo" } })],
       }),
     );
+
     expect(local!.comments[0]!.author.avatarUrl).toBeUndefined();
   });
 
@@ -672,6 +775,7 @@ describe("adoThreadToLocal", () => {
 
   it("bucket 1: extension thread without threadContext gets an empty filePath", () => {
     const anchor = { exact: "world", prefix: "", suffix: "" };
+
     const local = conv(
       thread({
         properties: {
@@ -681,6 +785,7 @@ describe("adoThreadToLocal", () => {
         // No threadContext ⇒ `t.threadContext?.filePath ?? ""` falls back.
       }),
     );
+
     expect(local!.origin).toBe("extension");
     expect(local!.filePath).toBe("");
     expect(local!.anchor).toEqual(anchor);
@@ -696,6 +801,7 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.updatedAt).toBe("2024-03-04T05:06:07.000Z");
   });
 
@@ -703,6 +809,7 @@ describe("adoThreadToLocal", () => {
     // ADO stamps `lastContentUpdatedDate` on creation too — equal to
     // `publishedDate`. That must NOT surface as an "edited" tag.
     const published = new Date("2024-01-01T00:00:00Z");
+
     const local = conv(
       thread({
         comments: [
@@ -713,6 +820,7 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.updatedAt).toBeUndefined();
   });
 
@@ -727,11 +835,13 @@ describe("adoThreadToLocal", () => {
         ],
       }),
     );
+
     expect(local!.comments[0]!.updatedAt).toBeUndefined();
   });
 
   it("bucket 1: extension-authored thread keeps its text-quote anchor", () => {
     const anchor = { exact: "world", prefix: "hello ", suffix: "!" };
+
     const local = conv(
       thread({
         properties: {
@@ -741,6 +851,7 @@ describe("adoThreadToLocal", () => {
         threadContext: { filePath: "/docs/a.md" },
       }),
     );
+
     expect(local!.origin).toBe("extension");
     expect(local!.filePath).toBe("/docs/a.md");
     expect(local!.anchor).toEqual(anchor);
@@ -761,6 +872,7 @@ describe("adoThreadToLocal", () => {
         },
       }),
     );
+
     expect(local!.origin).toBe("ado");
     expect(local!.anchor.line).toBe(7);
   });
@@ -775,6 +887,7 @@ describe("adoThreadToLocal", () => {
         },
       }),
     );
+
     expect(local!.origin).toBe("ado");
     expect(local!.filePath).toBe("/docs/a.md");
     expect(local!.anchor).toEqual({
@@ -796,6 +909,7 @@ describe("adoThreadToLocal", () => {
         },
       }),
     );
+
     expect(local!.anchor.line).toBe(9);
     expect(local!.anchor.endLine).toBe(9);
   });
@@ -945,6 +1059,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 0,
       },
     ]);
+
     expect(ranges).toEqual([
       {
         startLine: 10,
@@ -966,6 +1081,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 4,
       },
     ]);
+
     expect(ranges).toEqual([
       {
         startLine: 5,
@@ -981,6 +1097,7 @@ describe("lineDiffBlocksToRanges", () => {
 
   it("attaches originalText to a modified span when original lines are given", () => {
     const originalLines = ["l1", "l2", "l3", "old sentence here", "l5"];
+
     const ranges = lineDiffBlocksToRanges(
       [
         {
@@ -993,6 +1110,7 @@ describe("lineDiffBlocksToRanges", () => {
       ],
       originalLines,
     );
+
     expect(ranges[0]).toMatchObject({
       kind: "modified",
       originalText: "old sentence here",
@@ -1009,6 +1127,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 1,
       },
     ]);
+
     expect(ranges[0]).not.toHaveProperty("originalText");
   });
 
@@ -1022,6 +1141,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 3,
       },
     ]);
+
     expect(ranges).toEqual([
       {
         startLine: 8,
@@ -1050,6 +1170,7 @@ describe("lineDiffBlocksToRanges", () => {
       "The legacyRenderer flag is retained.",
       "line 11",
     ];
+
     const ranges = lineDiffBlocksToRanges(
       [
         {
@@ -1062,6 +1183,7 @@ describe("lineDiffBlocksToRanges", () => {
       ],
       originalLines,
     );
+
     expect(ranges[0]).toMatchObject({
       kind: "deleted-marker",
       linesDeleted: 3,
@@ -1072,6 +1194,7 @@ describe("lineDiffBlocksToRanges", () => {
 
   it("slices removed text for an Edit block that only removed lines", () => {
     const originalLines = ["a", "b", "gone one", "gone two", "c"];
+
     const ranges = lineDiffBlocksToRanges(
       [
         {
@@ -1084,6 +1207,7 @@ describe("lineDiffBlocksToRanges", () => {
       ],
       originalLines,
     );
+
     expect(ranges[0]).toMatchObject({
       kind: "deleted-marker",
       deletedContent: "gone one\ngone two",
@@ -1103,6 +1227,7 @@ describe("lineDiffBlocksToRanges", () => {
       ],
       ["only", "four", "short", "lines"],
     );
+
     expect(ranges[0]).not.toHaveProperty("deletedContent");
   });
 
@@ -1116,6 +1241,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 2,
       },
     ]);
+
     expect(ranges[0]).toMatchObject({
       startLine: 1,
       endLine: 1,
@@ -1133,6 +1259,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 5,
       },
     ]);
+
     expect(ranges[0]).toMatchObject({
       kind: "deleted-marker",
       linesDeleted: 5,
@@ -1151,6 +1278,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 0,
       },
     ]);
+
     expect(ranges).toEqual([
       {
         startLine: 9,
@@ -1197,6 +1325,7 @@ describe("lineDiffBlocksToRanges", () => {
         originalLinesCount: 1,
       },
     ]);
+
     expect(ranges.map((r) => r.kind)).toEqual([
       "added",
       "deleted-marker",
@@ -1213,6 +1342,7 @@ describe("lineDiffBlocksToCounts", () => {
       { changeType: 3, modifiedLinesCount: 4, originalLinesCount: 1 },
       { changeType: 0, modifiedLinesCount: 99, originalLinesCount: 99 },
     ]);
+
     expect(counts).toEqual({ linesAdded: 7, linesDeleted: 3 });
   });
 
@@ -1232,6 +1362,7 @@ describe("lineDiffBlocksToCounts", () => {
       { changeType: 3 }, // Edit, neither count present
       {}, // no changeType ⇒ default arm
     ]);
+
     expect(counts).toEqual({ linesAdded: 0, linesDeleted: 0 });
   });
 });

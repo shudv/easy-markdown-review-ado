@@ -22,9 +22,10 @@ export interface ParsedVersionSpec {
 export function parseVersionSpec(
   spec: string | undefined,
 ): ParsedVersionSpec | null {
-  if (!spec) return null;
+  if (spec === undefined || spec === "") return null;
   const value = spec.slice(2);
   if (!value) return null;
+
   switch (spec.slice(0, 2)) {
     case "GB":
       return { kind: "branch", value };

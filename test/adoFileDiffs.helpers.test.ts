@@ -8,6 +8,7 @@ import { loadFileDiffs } from "../src/shell/adoFileDiffs.helpers";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -35,6 +36,7 @@ function fakeClient(opts: { diffs?: unknown; text?: string | Error }): {
     getFileDiffs: vi.fn(async () => opts.diffs),
     getItemText: vi.fn(async () => {
       if (opts.text instanceof Error) throw opts.text;
+
       return opts.text ?? "";
     }),
   };
@@ -44,6 +46,7 @@ type FakeClient = ReturnType<typeof fakeClient>;
 
 function load(paths: string[], client: FakeClient) {
   const getClient = vi.fn(() => client as never);
+
   return { getClient, result: loadFileDiffs(diff, paths, getClient) };
 }
 
@@ -93,6 +96,7 @@ describe("loadFileDiffs", () => {
         },
       ],
     });
+
     const { result } = load(["/b.md", "/a.md"], client);
     const out = await result;
 
@@ -132,6 +136,7 @@ describe("loadFileDiffs", () => {
     const key = Object.keys(sessionStorage).find((k) =>
       k.startsWith("emr:fileDiffs:v6:proj:repo:base:target:"),
     );
+
     expect(key).toBeDefined();
     const stored = JSON.parse(sessionStorage.getItem(key!)!);
     expect(stored["/a.md"].originalSource).toBeUndefined();
@@ -153,6 +158,7 @@ describe("loadFileDiffs", () => {
         },
       ],
     });
+
     const out = await load(["/a.md"], client).result;
     expect(out["/a.md"]!.originalSource).toBeUndefined();
     expect(out["/a.md"]!.ranges[0]).not.toHaveProperty("deletedContent");
@@ -174,6 +180,7 @@ describe("loadFileDiffs", () => {
     const first = fakeClient({
       diffs: [{ path: "/a.md", lineDiffBlocks: [] }],
     });
+
     await load(["/a.md"], first).result;
 
     const second = fakeClient({});
@@ -188,6 +195,7 @@ describe("loadFileDiffs", () => {
     const blocks = [
       { changeType: 2, originalLineNumberStart: 1, originalLinesCount: 1 },
     ];
+
     await load(
       ["/a.md", "/b.md"],
       fakeClient({

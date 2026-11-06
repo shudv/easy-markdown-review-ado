@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { renderMarkdownSync } from "../../markdown/render";
@@ -9,11 +8,14 @@ import { ArticleView } from "./ArticleView";
 const ORIGINAL_LINE =
   "The authoritative directory layout and file conventions are documented in " +
   "[`docs/ReviewGuide/README.md`](../docs/ReviewGuide/README.md).";
+
 const CURRENT_LINE =
   "The authoritative directory layout and file conventions are documented in " +
   "[`docs/ReviewGuide/README.md`](https://example.visualstudio.com/Example%20Project/_git/SharedDocs?path=/docs/ReviewGuide/README.md)" +
   " — now hosted in the shared repository.";
+
 const SOURCE = ["# Review Guide", "", CURRENT_LINE, ""].join("\n");
+
 const DIFF: DiffRange[] = [
   {
     startLine: 3,
@@ -65,16 +67,20 @@ type Story = StoryObj<typeof meta>;
 export const TargetCalloutOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const trigger = await waitFor(() =>
       canvas.getByRole("button", { name: "Show link hostname change" }),
     );
+
     const paragraph = trigger.closest("p")!;
+
     const addedProse = Array.from(
       paragraph.querySelectorAll<HTMLElement>(".emr-word-added"),
     )
       .filter((mark) => !mark.closest(".emr-diff-metadata"))
       .map((mark) => mark.textContent)
       .join(" ");
+
     expect(addedProse).toContain("now hosted in the shared repository");
     expect(paragraph.querySelector(".emr-diff-before-trigger")).toBeNull();
 
@@ -82,9 +88,11 @@ export const TargetCalloutOpen: Story = {
     await waitFor(() =>
       expect(trigger.getAttribute("aria-expanded")).toBe("true"),
     );
+
     const targetDiff = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-metadata-target-diff",
     )!;
+
     expect(targetDiff.querySelector(".emr-word-removed")?.textContent).toBe(
       "..",
     );

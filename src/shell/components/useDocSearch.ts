@@ -3,7 +3,14 @@
 // cancellable remote ADO Code Search (when wired), merging and deduping the
 // two. Also owns the collapsible search-box open/close + focus behaviour.
 
-import * as React from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
@@ -62,6 +69,7 @@ function applySearchOutcome(
         failureReason: outcome.reason,
       }),
     );
+
     if (
       outcome.reason !== "extension-missing" &&
       outcome.reason !== "no-config"
@@ -100,10 +108,12 @@ function mergeSearchResults(
 ): FileInfo[] {
   const seen = new Set<string>();
   const out: FileInfo[] = [];
+
   for (const f of localHits) {
     seen.add(f.path);
     out.push(f);
   }
+
   // Only merge remote hits when they match the current query (else they'd
   // be stale between keystrokes).
   if (remoteHits.query === trimmedQuery) {
@@ -113,6 +123,7 @@ function mergeSearchResults(
       out.push(f);
     }
   }
+
   return out;
 }
 
@@ -124,48 +135,58 @@ function useSearchBox(
   searchQuery: string,
   setSearchQuery: (query: string) => void,
 ) {
-  const [searchOpen, setSearchOpen] = React.useState<boolean>(
+  const [searchOpen, setSearchOpen] = useState<boolean>(
     () => searchQuery.length > 0,
   );
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
-  React.useLayoutEffect(() => {
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
-  React.useEffect(() => {
-    if (searchQuery && !searchOpen) setSearchOpen(true);
-  }, [searchQuery, searchOpen]);
-  const closeSearch = React.useCallback(() => {
+  // Re-open if the query gets set externally while collapsed (adjusted during
+  // render so the collapsed state never paints with a query set).
+  if (searchQuery && !searchOpen) setSearchOpen(true);
+
+  const closeSearch = useCallback(() => {
     setSearchQuery("");
     setSearchOpen(false);
   }, [setSearchQuery]);
+
   return { searchOpen, setSearchOpen, closeSearch, searchInputRef };
 }
 
 /** Debounced, cancellable remote Code Search for `trimmedQuery`. */
 function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
-  const [remoteHits, setRemoteHits] = React.useState<RemoteHits>(() => ({
+  const [remoteHits, setRemoteHits] = useState<RemoteHits>(() => ({
     query: "",
     files: [],
   }));
-  const [remoteLoading, setRemoteLoading] = React.useState<boolean>(false);
+
+  const [remoteLoading, setRemoteLoading] = useState<boolean>(false);
+
   // Sticky once the search service is known unavailable; held until a later
   // call succeeds.
   const [searchUnavailable, setSearchUnavailable] =
-    React.useState<SearchUnavailable | null>(null);
+    useState<SearchUnavailable | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!onSearchFiles) return;
+
     if (trimmedQuery.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect owns the external debounced, abortable Code Search request; its loading/result state is reset and set in the same step that cancels or starts that request.
       setRemoteHits({ query: "", files: [] });
       setRemoteLoading(false);
+
       return;
     }
+
     let cancelled = false;
     // AbortController cancels the in-flight fetch on cleanup; the `cancelled`
     // flag additionally guards against stale-query state updates.
     const controller = new AbortController();
     const setters = { setRemoteHits, setSearchUnavailable };
     setRemoteLoading(true);
+
     const handle = window.setTimeout(() => {
       onSearchFiles(trimmedQuery, controller.signal)
         .then((outcome) => {
@@ -181,6 +202,7 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
           setRemoteLoading(false);
         });
     }, SEARCH_DEBOUNCE_MS);
+
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
@@ -192,27 +214,31 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
 }
 
 export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
-  const [searchQuery, setSearchQuery] = React.useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const trimmedQuery = searchQuery.trim();
   const isSearching = trimmedQuery.length > 0;
+
   const { searchOpen, setSearchOpen, closeSearch, searchInputRef } =
     useSearchBox(searchQuery, setSearchQuery);
+
   const { remoteHits, remoteLoading, searchUnavailable } = useRemoteSearch(
     trimmedQuery,
     onSearchFiles,
   );
 
   /** Local substring filter — runs synchronously every keystroke. */
-  const localHits = React.useMemo<FileInfo[]>(() => {
+  const localHits = useMemo<FileInfo[]>(() => {
     if (!isSearching) return [];
     const q = trimmedQuery.toLowerCase();
+
     return files.filter((f) => f.path.toLowerCase().includes(q));
   }, [files, isSearching, trimmedQuery]);
 
   /** Combined search results: local hits first (instant), then unique remote
    *  hits, deduped by path. */
-  const searchResults = React.useMemo<FileInfo[]>(() => {
+  const searchResults = useMemo<FileInfo[]>(() => {
     if (!isSearching) return [];
+
     return mergeSearchResults(localHits, remoteHits, trimmedQuery);
   }, [isSearching, localHits, remoteHits, trimmedQuery]);
 

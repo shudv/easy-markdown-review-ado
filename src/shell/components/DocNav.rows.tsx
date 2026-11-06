@@ -1,6 +1,6 @@
 // Recursive DocNav tree rows: folder, file, and heading rows.
 
-import * as React from "react";
+import { type CSSProperties, type ReactElement, useContext } from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -46,7 +46,7 @@ interface NavTreeItemProps {
   onExpandLazyDir: (path: string) => void;
 }
 
-export function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
+export function NavTreeItem(props: Readonly<NavTreeItemProps>): ReactElement {
   const { node, ...rowProps } = props;
 
   if (node.kind === "dir") return <DirNavRow {...props} node={node} />;
@@ -56,7 +56,7 @@ export function NavTreeItem(props: NavTreeItemProps): React.ReactElement {
       <FileNavRow
         file={node.file}
         openComments={node.openComments}
-        children={node.children}
+        childNodes={node.children}
         {...rowProps}
       />
     );
@@ -74,7 +74,7 @@ type HeadingNavNode = Extract<NavNode, { kind: "heading" }>;
 
 function HeadingNavRow(
   props: NavTreeItemProps & { node: HeadingNavNode },
-): React.ReactElement {
+): ReactElement {
   const {
     node,
     depth,
@@ -83,24 +83,26 @@ function HeadingNavRow(
     onSelectHeading,
     onToggleHeading,
   } = props;
+
   const h = node.heading;
   const hasChildren = node.children.length > 0;
   const isCollapsed = collapsedIds.has(h.id);
   const isActive = h.id === activeId;
+
   return (
     <div className="emr-docnav-branch">
       <div
         className={
-          "emr-docnav-item" +
-          ` lvl-${h.level}` +
-          (isActive ? " is-active" : "") +
-          (hasChildren ? " has-children" : "")
+          `emr-docnav-item` +
+          ` lvl-${h.level}${
+            isActive ? " is-active" : ""
+          }${hasChildren ? " has-children" : ""}`
         }
         data-nav-id={h.id}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         {hasChildren ? (
@@ -139,10 +141,9 @@ function HeadingNavRow(
 // stays visible whether or not the subpages are shown (or loaded yet).
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line max-lines-per-function -- Folder row in the navigation tree: twist button, label, badges and ARIA treeitem attributes for one row.
 function DirNavRow(
   props: NavTreeItemProps & { node: DirNavNode },
-): React.ReactElement {
+): ReactElement {
   const {
     node,
     depth,
@@ -154,21 +155,26 @@ function DirNavRow(
     onToggleDir,
     onExpandLazyDir,
   } = props;
+
   const page = node.page;
   const isLazy = node.lazy === true;
   const isLoading = loadingDirs.has(node.path);
   // Lazy folders are always "collapsed" until the user triggers a fetch
   // via the chevron or label.
   const isCollapsed = isLazy ? !isLoading : collapsedDirs.has(node.path);
+
   const onDirToggle = (): void => {
     if (isLazy) onExpandLazyDir(node.path);
     else onToggleDir(node.path);
   };
+
   const twist = dirTwistText(
     { lazy: isLazy, loading: isLoading, collapsed: isCollapsed },
     page ? "subpages" : "folder",
   );
+
   const isActivePage = page?.file.path === selectedPath && activeId === null;
+
   const rowClass = [
     "emr-docnav-item emr-docnav-dir",
     isLoading ? "is-loading" : "",
@@ -177,18 +183,17 @@ function DirNavRow(
   ]
     .filter(Boolean)
     .join(" ");
+
   return (
     <div
-      className={
-        "emr-docnav-branch emr-docnav-dir-branch" + (isLazy ? " is-lazy" : "")
-      }
+      className={`emr-docnav-branch emr-docnav-dir-branch${isLazy ? " is-lazy" : ""}`}
     >
       <div
         className={rowClass}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         <DirTwistButton
@@ -226,13 +231,16 @@ function DirNavRow(
 }
 
 /** A row's nested items, one level deeper; nothing when there are none. */
-function NavChildren(props: {
-  nodes: readonly NavNode[];
-  item: NavTreeItemProps;
-  className?: string;
-}): React.ReactElement | null {
+function NavChildren(
+  props: Readonly<{
+    nodes: readonly NavNode[];
+    item: NavTreeItemProps;
+    className?: string;
+  }>,
+): ReactElement | null {
   const { nodes, item, className = "emr-docnav-children" } = props;
   if (nodes.length === 0) return null;
+
   return (
     <div className={className}>
       {nodes.map((child) => (
@@ -257,15 +265,15 @@ function NavChildren(props: {
 interface FileNavRowProps extends Omit<NavTreeItemProps, "node"> {
   file: FileInfo;
   openComments: number;
-  children: NavNode[];
+  childNodes: NavNode[];
 }
 
 // eslint-disable-next-line max-lines-per-function -- File row in the navigation tree: label, change icon, comment badge, outline toggle and ARIA treeitem attributes for one row.
-function FileNavRow(props: FileNavRowProps): React.ReactElement {
+function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
   const {
     file,
     openComments,
-    children,
+    childNodes,
     depth,
     activeId,
     collapsedIds,
@@ -278,32 +286,35 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
     onToggleDir,
     onExpandLazyDir,
   } = props;
-  const showChangeIndicators = React.useContext(ChangeIndicatorContext);
-  const change = fileChangeView(file, React.useContext(RangeChangesContext));
+
+  const showChangeIndicators = useContext(ChangeIndicatorContext);
+  const change = fileChangeView(file, useContext(RangeChangesContext));
   // Single selection: the file row lights up only when no heading is
   // active (user is at the top of the current file). Everything else \u2014
   // "this file is loaded" \u2014 is implicit from which row carries its
   // heading children beneath it.
   const isActive = file.path === selectedPath && activeId === null;
   const fileName = basename(file.path);
-  const renamedFromName = file.renamedFrom ? basename(file.renamedFrom) : null;
+  const renamedFrom = file.renamedFrom ?? "";
+  const renamedFromName = renamedFrom !== "" ? basename(renamedFrom) : "";
+  const note = change.note ?? "";
+
   const titleText =
-    (file.changeType === "renamed" && renamedFromName
+    (file.changeType === "renamed" && renamedFromName !== ""
       ? `${renamedFromName} \u2192 ${fileName}`
-      : file.path) + (change.note ? ` \u2014 ${change.note}` : "");
+      : file.path) + (note !== "" ? ` \u2014 ${note}` : "");
+
   return (
     <div className="emr-docnav-branch emr-docnav-file-branch">
       <div
-        className={
-          "emr-docnav-item emr-docnav-file" +
-          (isActive ? " is-active" : "") +
-          (change.unchanged ? " is-unchanged-in-range" : "")
-        }
+        className={`emr-docnav-item emr-docnav-file${
+          isActive ? " is-active" : ""
+        }${change.unchanged ? " is-unchanged-in-range" : ""}`}
         data-change-type={change.changeType}
         style={
           {
-            ["--emr-nav-depth" as keyof React.CSSProperties]: depth,
-          } as React.CSSProperties
+            ["--emr-nav-depth" as keyof CSSProperties]: depth,
+          } as CSSProperties
         }
       >
         {/* The change-type icon is the leading affordance and fills the twist
@@ -321,15 +332,15 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
         >
           {showChangeIndicators ? (
             <span
-              className={"emr-docnav-file-icon is-" + change.changeType}
+              className={`emr-docnav-file-icon is-${change.changeType}`}
               aria-hidden
             >
               {changeTypeGlyph(change.changeType)}
             </span>
           ) : null}
           <span className="emr-docnav-file-name">{fileName}</span>
-          {change.note ? (
-            <span className="emr-sr-only">{` (${change.note})`}</span>
+          {note !== "" ? (
+            <span className="emr-sr-only">{` (${note})`}</span>
           ) : null}
           {openComments > 0 ? (
             <span
@@ -341,9 +352,9 @@ function FileNavRow(props: FileNavRowProps): React.ReactElement {
           ) : null}
         </button>
       </div>
-      {children.length > 0 ? (
+      {childNodes.length > 0 ? (
         <div className="emr-docnav-children emr-docnav-file-children">
-          {children.map((child) => (
+          {childNodes.map((child) => (
             <NavTreeItem
               key={navNodeKey(child)}
               node={child}

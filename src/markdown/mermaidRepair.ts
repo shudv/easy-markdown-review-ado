@@ -19,23 +19,29 @@
 export function repairSequenceSemicolons(src: string): string | null {
   const lines = src.split("\n");
   const header = firstStatementIndex(lines);
+
   if (header < 0 || !/^\s*sequenceDiagram\b/.test(lines[header]!)) {
     return null;
   }
+
   let changed = false;
+
   for (let i = header + 1; i < lines.length; i++) {
     const line = lines[i]!;
     const split = textStart(line);
     if (split < 0) continue;
     const text = line.slice(split);
+
     const escaped = text.replace(SEMICOLON_RE, (match, entity?: string) =>
-      entity ? match : "#59;",
+      entity !== undefined ? match : "#59;",
     );
+
     if (escaped !== text) {
       lines[i] = line.slice(0, split) + escaped;
       changed = true;
     }
   }
+
   return changed ? lines.join("\n") : null;
 }
 
@@ -44,8 +50,9 @@ export function repairSequenceSemicolons(src: string): string | null {
 const SEMICOLON_RE = /(#\w+|&#?\w+)?;(?=.*\S)/g;
 
 // Messages: `Alice->>Bob: text`, `A-)B: text`, `A<<->>B: text`, …
-const MESSAGE_ARROW_RE = /(?:<<)?-{1,2}(?:>>|>|x|\))/;
+const MESSAGE_ARROW_RE = /(?:<<)?-{1,2}(?:>>|[)>x])/;
 const NOTE_RE = /^\s*note\s+(?:left of|right of|over)\b[^:]*:/i;
+
 const BLOCK_RE =
   /^\s*(?:alt|else|opt|loop|par|and|critical|option|break|box)\b/i;
 
@@ -56,23 +63,28 @@ function textStart(line: string): number {
   const block = BLOCK_RE.exec(line);
   if (block) return block[0].length;
   const colon = line.indexOf(":");
+
   if (colon > 0 && MESSAGE_ARROW_RE.test(line.slice(0, colon))) {
     return colon + 1;
   }
+
   return -1;
 }
 
 /** The first line that isn't blank, a `%%` comment, or YAML frontmatter. */
 function firstStatementIndex(lines: readonly string[]): number {
   let i = 0;
+
   if (lines[0]?.trim() === "---") {
     const end = lines.findIndex((l, j) => j > 0 && l.trim() === "---");
     if (end < 0) return -1;
     i = end + 1;
   }
+
   for (; i < lines.length; i++) {
     const trimmed = lines[i]!.trim();
     if (trimmed && !trimmed.startsWith("%%")) return i;
   }
+
   return -1;
 }

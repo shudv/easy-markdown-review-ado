@@ -12,6 +12,14 @@ import {
 } from "../src/markdown/wordDiffDom";
 import type { DiffRange } from "../src/types";
 
+function renderRoot(md: string): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "markdown-body emr-rendered";
+  root.innerHTML = renderMarkdownSync(md);
+
+  return root;
+}
+
 // End-to-end check that content-level diff highlighting attaches to REAL
 // rendered blocks: render Markdown through the production pipeline (which
 // stamps `data-source-line` via rehypeSourcePositions), then decorate and
@@ -34,19 +42,14 @@ describe("diff highlighting over a real rendered document", () => {
     "Trailing unchanged paragraph.", // 9
   ].join("\n");
 
-  function renderRoot(): HTMLElement {
-    const root = document.createElement("div");
-    root.className = "markdown-body emr-rendered";
-    root.innerHTML = renderMarkdownSync(source);
-    return root;
-  }
-
   it("marks the added paragraph green and the edited one amber", () => {
-    const root = renderRoot();
+    const root = renderRoot(source);
+
     const ranges: DiffRange[] = [
       { startLine: 5, endLine: 5, kind: "added" },
       { startLine: 7, endLine: 7, kind: "modified" },
     ];
+
     const res = decorateDiffRanges(root, ranges);
     expect(res.decorated).toBe(2);
 
@@ -59,9 +62,11 @@ describe("diff highlighting over a real rendered document", () => {
 
     // Unchanged paragraphs carry no decoration.
     const paras = Array.from(root.querySelectorAll("p"));
+
     const untouched = paras.filter(
       (p) => !p.classList.contains(DIFF_BLOCK_CLASS),
     );
+
     expect(untouched.length).toBeGreaterThan(0);
   });
 
@@ -69,14 +74,15 @@ describe("diff highlighting over a real rendered document", () => {
     // The label is rendered via a CSS ::after using attr(), so decorating must
     // NOT inject any label text into the element — the anchor resolver reads
     // textContent and would break if 'Added'/'Edited' leaked in.
-    const root = renderRoot();
+    const root = renderRoot(source);
     decorateDiffRanges(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
     const added = root.querySelector<HTMLElement>(".emr-diff-block--added")!;
     expect(added.textContent).toBe("This paragraph was added.");
   });
 
   it("inserts a removed-lines marker anchored to the following block", () => {
-    const root = renderRoot();
+    const root = renderRoot(source);
+
     const res = decorateDiffRanges(root, [
       {
         startLine: 9,
@@ -86,10 +92,13 @@ describe("diff highlighting over a real rendered document", () => {
         deletedContent: "removed line a\nremoved line b\n",
       },
     ]);
+
     expect(res.markers).toBe(1);
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(marker.getAttribute("aria-label")).toBe("2 lines removed");
     // Sits directly before the trailing paragraph (source line 9).
     expect(marker.nextElementSibling?.textContent).toContain(
@@ -98,7 +107,7 @@ describe("diff highlighting over a real rendered document", () => {
   });
 
   it("clears every decoration when the diff is toggled off (empty ranges)", () => {
-    const root = renderRoot();
+    const root = renderRoot(source);
     decorateDiffRanges(root, [
       { startLine: 5, endLine: 5, kind: "added" },
       {
@@ -130,13 +139,6 @@ describe("inline word-level diff over a real rendered document", () => {
     document.body.innerHTML = "";
   });
 
-  function renderRoot(md: string): HTMLElement {
-    const root = document.createElement("div");
-    root.className = "markdown-body emr-rendered";
-    root.innerHTML = renderMarkdownSync(md);
-    return root;
-  }
-
   it("colours only the changed words in a reworded paragraph", () => {
     // Original line 3: "open the console and look for a stack trace"
     // Modified line 3: "open the console and check the network tab"
@@ -145,7 +147,9 @@ describe("inline word-level diff over a real rendered document", () => {
       "", // 2
       "If it fails, open the console and check the network tab.", // 3
     ].join("\n");
+
     const root = renderRoot(modified);
+
     const ranges: DiffRange[] = [
       {
         startLine: 3,
@@ -155,22 +159,26 @@ describe("inline word-level diff over a real rendered document", () => {
           "If it fails, open the console and look for a stack trace.",
       },
     ];
+
     const res = decorateDiffRanges(root, ranges, {
       renderInline: renderMarkdownSync,
     });
+
     expect(res.inlined).toBe(1);
 
     const block = root.querySelector<HTMLElement>(`.${DIFF_INLINE_CLASS}`)!;
     expect(block).not.toBeNull();
     // Unchanged words are NOT wrapped.
     expect(block.textContent).toContain("open the console");
+
     // Added words are green <ins>, removed words are struck <del>.
     const added =
       block.querySelector(`.${WORD_ADDED_CLASS}`)?.textContent ?? "";
-    const removed =
-      Array.from(block.querySelectorAll(`.${WORD_REMOVED_CLASS}`))
-        .map((n) => n.textContent)
-        .join(" ") ?? "";
+
+    const removed = Array.from(block.querySelectorAll(`.${WORD_REMOVED_CLASS}`))
+      .map((n) => n.textContent)
+      .join(" ");
+
     expect(added).toMatch(/network|check/);
     expect(removed).toMatch(/stack|trace|look/);
   });
@@ -180,6 +188,7 @@ describe("inline word-level diff over a real rendered document", () => {
     // its TEXT is unchanged, so bolding must NOT show as a word change.
     const modified = ["Make it **quick** and fast."].join("\n");
     const root = renderRoot(modified);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -192,6 +201,7 @@ describe("inline word-level diff over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     expect(res.inlined).toBe(1);
     const block = root.querySelector<HTMLElement>(`.${DIFF_INLINE_CLASS}`)!;
     // The bold survived as an element, its text unchanged and NOT marked.
@@ -199,12 +209,14 @@ describe("inline word-level diff over a real rendered document", () => {
     expect(
       block.querySelector("strong")?.classList.contains(WORD_ADDED_CLASS),
     ).toBe(false);
+
     // No asterisks leaked into any mark.
     const allMarks = Array.from(
       block.querySelectorAll(`.${WORD_ADDED_CLASS}, .${WORD_REMOVED_CLASS}`),
     )
       .map((n) => n.textContent)
       .join("");
+
     expect(allMarks).not.toContain("*");
     expect(allMarks).toMatch(/fast|and/);
   });
@@ -213,7 +225,9 @@ describe("inline word-level diff over a real rendered document", () => {
     const modified = ["Completely different sentence about widgets."].join(
       "\n",
     );
+
     const root = renderRoot(modified);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -226,6 +240,7 @@ describe("inline word-level diff over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     // Block is still decorated (amber wash) but NOT inlined.
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
@@ -235,6 +250,7 @@ describe("inline word-level diff over a real rendered document", () => {
   it("does not inline-diff a code block (keeps the wash)", () => {
     const modified = ["```", "const x = 2;", "```"].join("\n");
     const root = renderRoot(modified);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -247,12 +263,14 @@ describe("inline word-level diff over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     expect(res.inlined).toBe(0);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
   });
 
   it("skips inline diff when no renderInline is provided", () => {
     const root = renderRoot("Reworded sentence here now.");
+
     const res = decorateDiffRanges(root, [
       {
         startLine: 1,
@@ -261,6 +279,7 @@ describe("inline word-level diff over a real rendered document", () => {
         originalText: "Reworded sentence here.",
       },
     ]);
+
     expect(res.inlined).toBe(0);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
   });
@@ -313,13 +332,6 @@ describe("granular list + table diffs over a real rendered document", () => {
     document.body.innerHTML = "";
   });
 
-  function renderRoot(md: string): HTMLElement {
-    const root = document.createElement("div");
-    root.className = "markdown-body emr-rendered";
-    root.innerHTML = renderMarkdownSync(md);
-    return root;
-  }
-
   it("highlights only the ADDED list item, not the whole list", () => {
     // Lines 1-4 are a list; line 3 (`refresh`) is the newly added item.
     const md = [
@@ -328,20 +340,25 @@ describe("granular list + table diffs over a real rendered document", () => {
       "- refresh step", // 3 (added)
       "- teardown step", // 4
     ].join("\n");
+
     const root = renderRoot(md);
+
     const res = decorateDiffRanges(root, [
       { startLine: 3, endLine: 3, kind: "added" },
     ]);
+
     expect(res.decorated).toBe(1);
     // The <ul> itself is NOT decorated.
     expect(root.querySelector("ul")?.classList.contains(DIFF_BLOCK_CLASS)).toBe(
       false,
     );
     const items = Array.from(root.querySelectorAll("li"));
+
     const decorated = items.filter((li) =>
       li.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(decorated.length).toBe(1);
+
+    expect(decorated).toHaveLength(1);
     expect(decorated[0]!.textContent).toContain("refresh");
     expect(decorated[0]!.classList.contains("emr-diff-block--added")).toBe(
       true,
@@ -356,24 +373,29 @@ describe("granular list + table diffs over a real rendered document", () => {
       "| retries | 5 |", // 4 (edited)
       "| timeout | 5000 |", // 5 (unchanged)
     ].join("\n");
+
     const root = renderRoot(md);
+
     const res = decorateDiffRanges(root, [
       { startLine: 3, endLine: 4, kind: "modified" },
     ]);
+
     // Two rows decorated; the <table> itself is not.
     expect(res.decorated).toBe(2);
     expect(
       root.querySelector("table")?.classList.contains(DIFF_BLOCK_CLASS),
     ).toBe(false);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
+
     const decorated = rows.filter((tr) =>
       tr.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(decorated.length).toBe(2);
+
+    expect(decorated).toHaveLength(2);
     expect(decorated[0]!.textContent).toContain("theme");
     expect(decorated[1]!.textContent).toContain("retries");
     // The unchanged `timeout` row is untouched.
-    const timeoutRow = rows.find((r) => r.textContent?.includes("timeout"))!;
+    const timeoutRow = rows.find((r) => r.textContent.includes("timeout"))!;
     expect(timeoutRow.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
   });
 
@@ -383,6 +405,7 @@ describe("granular list + table diffs over a real rendered document", () => {
       "| --- | --- |", // 2
       "| 1 | 2 |", // 3
     ].join("\n");
+
     const root = renderRoot(md);
     decorateDiffRanges(root, [{ startLine: 1, endLine: 3, kind: "added" }]);
     const rows = Array.from(root.querySelectorAll("tr"));
@@ -402,22 +425,17 @@ describe("frontmatter value diffs over a real rendered document", () => {
     document.body.innerHTML = "";
   });
 
-  function renderRoot(md: string): HTMLElement {
-    const root = document.createElement("div");
-    root.className = "markdown-body emr-rendered";
-    root.innerHTML = renderMarkdownSync(md);
-    return root;
-  }
-
   /** The `<dd>` value cell for a given frontmatter key. */
   function valueFor(root: HTMLElement, key: string): HTMLElement {
     const row = Array.from(
       root.querySelectorAll<HTMLElement>(".emr-frontmatter-row"),
     ).find(
       (r) =>
-        r.querySelector(".emr-frontmatter-key")?.textContent?.trim() === key,
+        r.querySelector(".emr-frontmatter-key")?.textContent.trim() === key,
     );
+
     if (!row) throw new Error(`no frontmatter row for key "${key}"`);
+
     return row.querySelector<HTMLElement>(".emr-frontmatter-value")!;
   }
 
@@ -425,6 +443,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
     Array.from(el.querySelectorAll(`.${WORD_ADDED_CLASS}`))
       .map((n) => n.textContent)
       .join(" ");
+
   const removed = (el: HTMLElement): string =>
     Array.from(el.querySelectorAll(`.${WORD_REMOVED_CLASS}`))
       .map((n) => n.textContent)
@@ -440,7 +459,9 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 5
       "# Body", // 6
     ].join("\n");
+
     const root = renderRoot(md);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -453,6 +474,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     expect(res.decorated).toBe(1);
     const status = valueFor(root, "status");
     expect(added(status)).toContain("Published");
@@ -473,6 +495,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 5
       "# Body", // 6
     ].join("\n");
+
     const root = renderRoot(md);
     decorateDiffRanges(
       root,
@@ -506,6 +529,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 7
       "# Body", // 8
     ].join("\n");
+
     const root = renderRoot(md);
     // Sanity: the block list renders comma-joined.
     expect(valueFor(root, "maintainers").textContent).toBe(
@@ -525,6 +549,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     expect(res.decorated).toBe(1);
     const maint = valueFor(root, "maintainers");
     // Grace Hopper struck-through (removed), Alan Turing green (added).
@@ -546,7 +571,9 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 6
       "# Body", // 7
     ].join("\n");
+
     const root = renderRoot(md);
+
     const res = decorateDiffRanges(
       root,
       [
@@ -559,6 +586,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       ],
       { renderInline: renderMarkdownSync },
     );
+
     expect(res.decorated).toBe(1);
     const rev = valueFor(root, "reviewers");
     expect(removed(rev)).toContain("Ada Lovelace");
@@ -577,17 +605,19 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 5
       "# Body", // 6
     ].join("\n");
+
     const root = renderRoot(md);
     decorateDiffRanges(root, [{ startLine: 3, endLine: 3, kind: "added" }], {
       renderInline: renderMarkdownSync,
     });
+
     const ownerRow = Array.from(
       root.querySelectorAll<HTMLElement>(".emr-frontmatter-row"),
     ).find(
       (r) =>
-        r.querySelector(".emr-frontmatter-key")?.textContent?.trim() ===
-        "owner",
+        r.querySelector(".emr-frontmatter-key")?.textContent.trim() === "owner",
     )!;
+
     expect(ownerRow.classList.contains("emr-diff-block--added")).toBe(true);
     const owner = valueFor(root, "owner");
     expect(added(owner)).toContain("Platform Team");
@@ -603,6 +633,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 4
       "# Body", // 5
     ].join("\n");
+
     const root = renderRoot(md);
     decorateDiffRanges(
       root,
@@ -632,6 +663,7 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 4
       "Body paragraph.", // 5
     ].join("\n");
+
     const root = renderRoot(md);
     decorateDiffRanges(
       root,
@@ -655,13 +687,16 @@ describe("frontmatter value diffs over a real rendered document", () => {
       "", // 4
       "# Body", // 5
     ].join("\n");
+
     const root = renderRoot(md);
+
     const range: DiffRange = {
       startLine: 2,
       endLine: 2,
       kind: "modified",
       originalText: "status: Draft",
     };
+
     decorateDiffRanges(root, [range], { renderInline: renderMarkdownSync });
     const firstHtml = valueFor(root, "status").innerHTML;
     // Decorate again with the same range — output must be identical.
@@ -671,8 +706,8 @@ describe("frontmatter value diffs over a real rendered document", () => {
     // And clearing restores the plain rendered value.
     decorateDiffRanges(root, []);
     expect(valueFor(root, "status").textContent).toBe("Published");
-    expect(valueFor(root, "status").querySelector(`.${WORD_ADDED_CLASS}`)).toBe(
-      null,
-    );
+    expect(
+      valueFor(root, "status").querySelector(`.${WORD_ADDED_CLASS}`),
+    ).toBeNull();
   });
 });

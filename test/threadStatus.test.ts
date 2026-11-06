@@ -21,6 +21,7 @@ describe("isResolvedLike", () => {
       "closed",
       "pending",
     ];
+
     // Exactly the three terminal states are resolved-like.
     expect(all.filter(isResolvedLike)).toEqual([
       "resolved",

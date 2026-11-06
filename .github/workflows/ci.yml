@@ -48,6 +48,9 @@ jobs:
       - name: Check code duplication
         run: npm run duplication:check
 
+      - name: Check spelling
+        run: npm run spell:check
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

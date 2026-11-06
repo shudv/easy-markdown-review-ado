@@ -9,6 +9,7 @@ export const DRAFT_ID = "__draft__";
 export function threadCreatedAt(t: CommentThread): number {
   const iso = t.comments[0]?.createdAt;
   const ms = iso ? Date.parse(iso) : NaN;
+
   return Number.isFinite(ms) ? ms : 0;
 }
 
@@ -63,8 +64,10 @@ export function buildRailModel(params: {
   } = params;
 
   const kindById = new Map<string, "thread" | "draft">();
+
   const orderInput: Array<{ id: string; anchorY: number; createdAt: number }> =
     [];
+
   for (const t of currentThreads) {
     if (hiddenThreadIds.has(t.id)) continue;
     if (orphanedThreadIds.has(t.id)) continue;
@@ -73,6 +76,7 @@ export function buildRailModel(params: {
     kindById.set(t.id, "thread");
     orderInput.push({ id: t.id, anchorY: y, createdAt: threadCreatedAt(t) });
   }
+
   if (draftY !== null) {
     kindById.set(DRAFT_ID, "draft");
     // The draft is the freshest thing at its anchor, so it sorts as "newest".
@@ -82,21 +86,26 @@ export function buildRailModel(params: {
       createdAt: Number.MAX_SAFE_INTEGER,
     });
   }
+
   const orderedAnchoredIds = orderComments(orderInput);
+
   const hasAnchoredThreads = orderedAnchoredIds.some(
     (id) => kindById.get(id) === "thread",
   );
 
   const byNewest = (a: CommentThread, b: CommentThread): number =>
     threadCreatedAt(b) - threadCreatedAt(a);
+
   const notHidden = (t: CommentThread): boolean => !hiddenThreadIds.has(t.id);
 
   const orphanedThreads = currentThreads
     .filter((t) => orphanedThreadIds.has(t.id) && notHidden(t))
     .sort(byNewest);
+
   const visibleGeneralThreads = (
     onlyThisFile ? [] : generalThreads.filter(notHidden)
   ).sort(byNewest);
+
   const visibleOrphanedFileThreads = (
     onlyThisFile ? [] : orphanedFileThreads.filter(notHidden)
   ).sort(byNewest);
@@ -162,9 +171,11 @@ export function chooseRailEmptyMessage(opts: {
     hasOtherSections,
     readOnly,
   } = opts;
+
   if (commentQuery) return `No comments match “${commentQuery}”.`;
   if (fileThreadCount > 0 && filterMode !== "all") return null;
   if (hasOtherSections) return null;
+
   return readOnly
     ? "No comments on this file."
     : "No comments on this file yet. Select any text to start a thread.";

@@ -1,6 +1,12 @@
 // Status-bar picker for comparing pull-request updates.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   allReviewIterations,
@@ -20,13 +26,16 @@ import { useInertPopover, handlePopoverEscape } from "./ReaderStatusBar.hooks";
 
 function formatIterationAge(dateMs: number | undefined): string | null {
   if (dateMs === undefined) return null;
+
   const elapsedMinutes = Math.max(
     0,
     Math.floor((Date.now() - dateMs) / 60_000),
   );
+
   if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
   const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) return `${elapsedHours}h ago`;
+
   return `${Math.floor(elapsedHours / 24)}d ago`;
 }
 
@@ -53,24 +62,26 @@ function IterationStepButton({
   label,
   range,
   onStep,
-}: {
+}: Readonly<{
   direction: "left" | "right";
   label: string | null;
   range: ReviewIterationRange | null;
   onStep: (range: ReviewIterationRange) => void;
-}): React.ReactElement {
+}>): ReactElement {
   const word = direction === "left" ? "Previous" : "Next";
   const edge = direction === "left" ? "First" : "Last";
+
+  // `label` comes from reviewRangeLabel, which never returns "".
   return (
     <button
       type="button"
       className="emr-statusbar-iteration-step"
       aria-label={
-        label
+        label !== null
           ? `${word} comparison: ${label}`
           : `No ${word.toLowerCase()} comparison`
       }
-      title={label ? `${word}: ${label}` : `${edge} comparison`}
+      title={label !== null ? `${word}: ${label}` : `${edge} comparison`}
       disabled={!range}
       onClick={range ? () => onStep(range) : undefined}
     >
@@ -85,13 +96,15 @@ export function IterationPicker({
   baseCommit,
   range,
   onChange,
-}: IterationPickerProps): React.ReactElement {
-  const rootRef = React.useRef<HTMLDivElement>(null);
-  const listRef = React.useRef<HTMLDivElement>(null);
-  const anchorUpdateRef = React.useRef<number | null>(null);
-  const [open, setOpen] = React.useState(false);
+}: Readonly<IterationPickerProps>): ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const anchorUpdateRef = useRef<number | null>(null);
+  const [open, setOpen] = useState(false);
+
   const { triggerRef, popoverRef, restoreFocusAfterClose } =
     useInertPopover(open);
+
   const {
     resolved,
     allChangesSelected,
@@ -106,16 +119,20 @@ export function IterationPicker({
     triggerTitle,
   } = iterationPickerModel(options, range);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return undefined;
+
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current!.contains(event.target as Node)) setOpen(false);
     };
+
     const onKeyDown = (event: KeyboardEvent) => {
       handlePopoverEscape(event, restoreFocusAfterClose, () => setOpen(false));
     };
+
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
@@ -125,14 +142,16 @@ export function IterationPicker({
   // On open, bring the current selection into view: the list is newest-first,
   // so the first selected row is the comparison's newest update. A long PR
   // would otherwise open scrolled away from where the reviewer is.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const list = listRef.current!;
     const selected = list.querySelector<HTMLElement>('[aria-selected="true"]');
     /* v8 ignore next -- resolveReviewIterationRange clamps toUpdate into 1..updateCount, so either the All updates row or the toUpdate row is always aria-selected */
     if (!selected) return;
+
     const offset =
       selected.getBoundingClientRect().top - list.getBoundingClientRect().top;
+
     list.scrollTop += offset - (list.clientHeight - selected.offsetHeight) / 2;
   }, [open]);
 
@@ -192,6 +211,7 @@ export function IterationPicker({
               ) {
                 anchorUpdateRef.current = resolved.range.toUpdate;
               }
+
               setOpen((value) => !value);
             }}
           >
@@ -267,7 +287,9 @@ export function IterationPicker({
               !allChangesSelected &&
               option.number >= firstSelectedUpdate &&
               option.number <= resolved.range.toUpdate;
+
             const age = formatIterationAge(option.dateMs);
+
             return (
               <button
                 key={option.stopIndex}
@@ -300,7 +322,7 @@ export function IterationPicker({
                 <span className="emr-statusbar-iteration-title">
                   {option.title}
                 </span>
-                {age ? (
+                {age !== null ? (
                   <time
                     className="emr-statusbar-iteration-date"
                     dateTime={new Date(option.dateMs!).toISOString()}

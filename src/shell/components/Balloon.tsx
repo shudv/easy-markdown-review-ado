@@ -5,7 +5,7 @@
 // ADO, which lets you keep discussing a resolved thread without reopening it.
 // Positioning is the parent's job — it passes `topPx`.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef } from "react";
 import type { CommentThread, CommentAuthor, ReactionKind } from "../../types";
 import { isResolvedLike } from "../../types";
 import {
@@ -70,7 +70,7 @@ interface BalloonProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
-export function Balloon(props: BalloonProps): React.ReactElement {
+export function Balloon(props: Readonly<BalloonProps>): ReactElement {
   const {
     thread,
     topPx,
@@ -98,15 +98,18 @@ export function Balloon(props: BalloonProps): React.ReactElement {
     onCancelReply,
   } = props;
 
-  const ref = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
     if (!ref.current || !onHeightChange) return;
     const el = ref.current;
     onHeightChange(thread.id, el.getBoundingClientRect().height);
+
     const ro = new ResizeObserver(() => {
       onHeightChange(thread.id, el.getBoundingClientRect().height);
     });
+
     ro.observe(el);
+
     return () => ro.disconnect();
   }, [
     thread.id,
@@ -135,11 +138,13 @@ export function Balloon(props: BalloonProps): React.ReactElement {
   // Orphaned threads are still live conversations (only the in-doc highlight is
   // missing).
   const isInteractive = !readOnly;
+
   const canDeleteThread =
     isInteractive &&
     thread.comments.every((comment) => comment.author.id === currentUser.id);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- pointer shortcut only: the card hosts its own buttons and composer (a role="button" here would nest interactive controls), and keyboard users select an anchored thread via its role="button" highlight in the article
     <div
       ref={ref}
       className={className}

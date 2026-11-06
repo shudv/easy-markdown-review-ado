@@ -6734,6 +6734,12 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
   border-radius: 10px;
   box-shadow: var(--emr-balloon-shadow-active);
   overflow: hidden;
+
+  // Focus lands on the panel programmatically when the dialog opens; its
+  // controls show their own focus rings.
+  &:focus {
+    outline: none;
+  }
 }
 
 .emr-generated-source-header {

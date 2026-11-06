@@ -44,17 +44,25 @@ declare global {
 /** Record the text of every `execCommand("copy")` / `clipboard.writeText`. */
 async function recordCopies(context: BrowserContext): Promise<void> {
   await context.addInitScript(() => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the app under test still uses execCommand("copy") as its clipboard fallback, so the spy must wrap it to observe copies
     const exec = document.execCommand.bind(document);
+
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- replaces the app's execCommand("copy") fallback with a recording wrapper (see above)
     document.execCommand = (command: string, ...rest: unknown[]) => {
       if (command === "copy") {
         const el = document.activeElement as HTMLTextAreaElement | null;
         window.__emrLastCopy = el?.value ?? String(document.getSelection());
       }
+
       return (exec as (...args: unknown[]) => boolean)(command, ...rest);
     };
-    const clip = navigator.clipboard;
-    if (clip?.writeText) {
+
+    // navigator.clipboard is undefined at runtime in insecure contexts.
+    const clip = navigator.clipboard as Clipboard | undefined;
+
+    if (clip?.writeText !== undefined) {
       const write = clip.writeText.bind(clip);
+
       clip.writeText = async (text: string) => {
         await write(text);
         window.__emrLastCopy = text;
@@ -68,7 +76,9 @@ async function lastCopy(page: Page, bundle: string): Promise<string> {
   const frame = page
     .frames()
     .find((f) => f.url().includes(DEV_ORIGIN_HOST) && f.url().includes(bundle));
+
   expect(frame, `no ${bundle} frame`).toBeTruthy();
+
   return (await frame!.evaluate(() => window.__emrLastCopy)) ?? "";
 }
 
@@ -104,6 +114,7 @@ async function selectText(
                   n.nodeType === Node.TEXT_NODE &&
                   (n as Text).data.trim().length >= 8,
               );
+
               if (!node) return null;
               const range = document.createRange();
               range.setStart(node, 0);
@@ -112,9 +123,11 @@ async function selectText(
               sel.removeAllRanges();
               sel.addRange(range);
               el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
               return range.toString();
             }, selLen)
             .catch(() => null)) ?? "";
+
         return selected.trim().length > 0 && (await bubble.isVisible());
       },
       {
@@ -124,6 +137,7 @@ async function selectText(
       },
     )
     .toBe(true);
+
   return squash(selected);
 }
 
@@ -133,9 +147,11 @@ async function selectText(
  */
 async function copySelectionLink(frame: FrameLocator): Promise<void> {
   const bubble = frame.locator(".emr-selection-bubble");
+
   const button = bubble.getByRole("button", {
     name: "Copy link to selection",
   });
+
   await expect(button).toBeVisible();
   // The quieter action sits after "Add comment", behind a divider.
   await expect(
@@ -162,22 +178,29 @@ async function landingCue(
           "[data-emr-text-cue].emr-anchor-target",
         ),
       );
+
       if (cues.length === 0) return { text: "", inView: false };
       let scroller: HTMLElement | null = article.parentElement;
+
       while (scroller) {
         const { overflowY } = getComputedStyle(scroller);
+
         if (
-          /(auto|scroll)/.test(overflowY) &&
+          /auto|scroll/.test(overflowY) &&
           scroller.scrollHeight > scroller.clientHeight
         ) {
           break;
         }
+
         scroller = scroller.parentElement;
       }
+
       const box = (
         scroller ?? document.documentElement
       ).getBoundingClientRect();
+
       const rect = cues[0]!.getBoundingClientRect();
+
       return {
         text: cues.map((cue) => cue.textContent).join(""),
         inView: rect.top >= box.top && rect.bottom <= box.bottom,
@@ -233,6 +256,7 @@ test.describe("Selection links (real ADO host)", () => {
       .locator(".emr-rendered p")
       .filter({ hasText: "Returns the full PR object" })
       .first();
+
     const selected = await selectText(frame, para, 26);
     expect(selected).toBe("Returns the full PR object");
     await copySelectionLink(frame);
@@ -279,15 +303,18 @@ test.describe("Selection links (real ADO host)", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1400, height: 700 });
+
     const prId = await discoverPullRequestId(
       page,
       E2E.diffRepo,
       E2E.diffPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.diffRepo, prId);
     let frame = prTabFrame(page);
     await waitForFrameRoot(frame);
+
     // A changed paragraph/list item showing struck-out removed words followed
     // by added ones (the inline word diff of an edited line).
     const block = frame
@@ -299,6 +326,7 @@ test.describe("Selection links (real ADO host)", () => {
       })
       .filter({ has: frame.locator("ins.emr-word-added") })
       .first();
+
     await block.waitFor({ state: "visible", timeout: 45_000 });
 
     // Select from a few live characters before the first removed run through
@@ -313,42 +341,55 @@ test.describe("Selection links (real ADO host)", () => {
               const del = el.querySelector<HTMLElement>(
                 "del.emr-word-removed:not(.emr-word-removed--tight)",
               )!;
+
               const all = Array.from(el.querySelectorAll("ins.emr-word-added"));
+
               const ins = all.find(
                 (i) =>
                   del.compareDocumentPosition(i) &
                   Node.DOCUMENT_POSITION_FOLLOWING,
               );
+
               if (!ins) return null;
               const range = document.createRange();
               const before = del.previousSibling;
+
               if (before instanceof Text && before.data.trim().length > 0) {
                 range.setStart(before, Math.max(0, before.data.length - 12));
               } else {
                 range.setStartBefore(del);
               }
+
               range.setEndAfter(ins);
+
               const walker = document.createTreeWalker(
                 range.commonAncestorContainer,
                 NodeFilter.SHOW_TEXT,
               );
+
               let live = "";
+
               for (let n = walker.nextNode(); n; n = walker.nextNode()) {
                 if (!range.intersectsNode(n)) continue;
                 if (n.parentElement!.closest("del")) continue;
                 const t = n as Text;
                 const from = n === range.startContainer ? range.startOffset : 0;
+
                 const to =
                   n === range.endContainer ? range.endOffset : t.length;
+
                 live += t.data.slice(from, to);
               }
+
               const sel = window.getSelection()!;
               sel.removeAllRanges();
               sel.addRange(range);
               el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-              return { live, removed: del.textContent ?? "" };
+
+              return { live, removed: del.textContent };
             })
             .catch(() => null);
+
           return picked !== null && (await bubble.isVisible());
         },
         {
@@ -390,12 +431,14 @@ test.describe("Selection links (real ADO host)", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1400, height: 560 });
+
     const prId = await discoverPullRequestId(
       page,
       E2E.docLinksRepo,
       E2E.docLinksPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.docLinksRepo, prId);
     let frame = prTabFrame(page);
     await waitForFrameRoot(frame);
@@ -416,6 +459,7 @@ test.describe("Selection links (real ADO host)", () => {
       .locator(".emr-rendered li")
       .filter({ hasText: "Sibling in this folder" })
       .first();
+
     const selected = await selectText(frame, item, 23);
     expect(selected).toBe("Sibling in this folder:");
     await copySelectionLink(frame);

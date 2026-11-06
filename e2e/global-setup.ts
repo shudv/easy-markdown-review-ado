@@ -23,11 +23,14 @@ function headOf(
       // Drain so the socket can close; we only need status + headers.
       res.resume();
       const headers: Record<string, string> = {};
+
       for (const [k, v] of Object.entries(res.headers)) {
         headers[k.toLowerCase()] = Array.isArray(v) ? v.join(", ") : (v ?? "");
       }
+
       resolve({ status: res.statusCode ?? 0, headers });
     });
+
     req.on("error", reject);
     req.setTimeout(5000, () => req.destroy(new Error("timeout")));
   });
@@ -37,6 +40,7 @@ export default async function globalSetup(): Promise<void> {
   const url = `${E2E.devOrigin}/pr-tab/pr-tab.html`;
 
   let res: { status: number; headers: Record<string, string> };
+
   try {
     res = await headOf(url);
   } catch (err) {
@@ -68,16 +72,21 @@ export default async function globalSetup(): Promise<void> {
   // `dev:https` loop sends no CSP at all, so an empty/missing header is the
   // tell-tale that the wrong server is running.
   const scriptSrc = /(?:^|;)\s*script-src\s+([^;]+)/i.exec(csp)?.[1] ?? "";
+
   const scriptAllowsSelfOnly =
     /'self'/.test(scriptSrc) &&
     !/'unsafe-inline'/.test(scriptSrc) &&
     !/'unsafe-eval'/.test(scriptSrc);
 
   if (!csp || !scriptAllowsSelfOnly) {
+    const got = csp
+      ? `Content-Security-Policy: ${csp}`
+      : "no Content-Security-Policy header";
+
     throw new Error(
       "e2e: the dev server is not running in STRICT verification mode.\n" +
         `  expected a Content-Security-Policy with "script-src 'self'" (no inline/eval) at ${url}\n` +
-        `  got: ${csp ? `Content-Security-Policy: ${csp}` : "no Content-Security-Policy header"}\n` +
+        `  got: ${got}\n` +
         "Restart the dev server in strict mode (it mirrors the ADO host CSP):\n" +
         "  npm run dev:verify\n" +
         "(plain `npm run dev:https` is not accepted for e2e — it doesn't enforce the production security posture.)",

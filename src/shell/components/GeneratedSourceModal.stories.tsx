@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -30,6 +31,7 @@ function stubClipboard(impl: { writeText: () => Promise<void> } | undefined) {
     value: impl,
     configurable: true,
   });
+
   return () => {
     if (original) Object.defineProperty(navigator, "clipboard", original);
   };
@@ -44,6 +46,37 @@ export const Closed: Story = {
     await expect(
       canvasElement.querySelector(".emr-generated-source-modal"),
     ).toBeNull();
+  },
+};
+
+/** Opening moves focus into the dialog; closing gives it back to the opener. */
+export const MovesFocusInAndBack: Story = {
+  args: { source: null },
+  render: function Render(args) {
+    const [source, setSource] = useState<string | null>(null);
+
+    return (
+      <>
+        <button type="button" onClick={() => setSource(SOURCE)}>
+          Source
+        </button>
+        <GeneratedSourceModal
+          {...args}
+          source={source}
+          onClose={() => setSource(null)}
+        />
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const opener = canvas.getByRole("button", { name: "Source" });
+    await userEvent.click(opener);
+    await expect(document.activeElement).toBe(
+      canvasElement.querySelector(".emr-generated-source-modal"),
+    );
+    await userEvent.keyboard("{Escape}");
+    await expect(document.activeElement).toBe(opener);
   },
 };
 
@@ -62,6 +95,7 @@ export const ClosesOnOverlayClick: Story = {
     const overlay = canvasElement.querySelector<HTMLElement>(
       ".emr-generated-source-overlay",
     )!;
+
     await userEvent.click(overlay);
     await expect(args.onClose).toHaveBeenCalledTimes(1);
   },
@@ -79,6 +113,7 @@ export const ClosesOnButton: Story = {
 export const CopySucceeds: Story = {
   play: async ({ canvasElement }) => {
     const restore = stubClipboard({ writeText: () => Promise.resolve() });
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -106,6 +141,7 @@ export const CopyFails: Story = {
     const restore = stubClipboard({
       writeText: () => Promise.reject(new Error("blocked")),
     });
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -126,6 +162,7 @@ export const CopyFails: Story = {
 export const CopyWithoutClipboard: Story = {
   play: async ({ canvasElement }) => {
     const restore = stubClipboard(undefined);
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(
@@ -182,9 +219,11 @@ export const WithSourceDiff: Story = {
           canvasElement.querySelector(".emr-generated-source-code code")
             ?.textContent,
         ).toBe("graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Do it]");
+
         const preview = canvasElement.querySelector<HTMLElement>(
           ".emr-generated-source-preview .emr-mermaid",
         );
+
         expect(preview?.dataset.mermaidSrc).toBe(
           encodeURIComponent(
             "graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Do it]",
@@ -211,13 +250,16 @@ export const StableHeightAcrossToggles: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const modal = canvasElement.querySelector<HTMLElement>(
       ".emr-generated-source-modal",
     )!;
+
     const hydratedSrc = () =>
       canvasElement.querySelector<HTMLElement>(
         '.emr-generated-source-preview .emr-mermaid[data-hydrated="true"]',
       )?.dataset.mermaidSrc;
+
     await waitFor(() => expect(hydratedSrc()).toBeTruthy(), LAZY_RENDER);
 
     // The frame height is keyed off this, so a diagram would silently get the
@@ -228,6 +270,7 @@ export const StableHeightAcrossToggles: Story = {
     ).toBe("mermaid");
 
     const baseline = modal.getBoundingClientRect();
+
     const measure = () => {
       const { height, top } = modal.getBoundingClientRect();
       expect(height).toBe(baseline.height);
@@ -349,6 +392,7 @@ export const EquationSource: Story = {
         ).toBeTruthy(),
       LAZY_RENDER,
     );
+
     // An equation that fits must not scroll: the radical's tail overhangs, so a
     // shrink-wrapped host would show a scrollbar with room to spare.
     for (const selector of [
@@ -358,6 +402,7 @@ export const EquationSource: Story = {
       const el = canvasElement.querySelector<HTMLElement>(selector)!;
       expect(el.scrollWidth).toBeLessThanOrEqual(el.clientWidth);
     }
+
     await expect(
       canvasElement.querySelector<HTMLElement>(".emr-generated-source-body")
         ?.dataset.kind,
@@ -372,6 +417,7 @@ export const EquationCopySucceeds: Story = {
   },
   play: async ({ canvasElement }) => {
     const restore = stubClipboard({ writeText: () => Promise.resolve() });
+
     try {
       const canvas = within(canvasElement);
       await userEvent.click(

@@ -1,6 +1,6 @@
 // Documents hub: which document is open, kept in sync with the route.
 
-import * as React from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { PrInfo } from "../types";
 import {
@@ -20,18 +20,19 @@ export function useActiveDocPath(
   initialSelectedPathForShell: string | undefined,
   onSelectPath: DocumentsAppProps["onSelectPath"],
 ) {
-  const [activeDocPath, setActiveDocPath] = React.useState<string>(
+  const [activeDocPath, setActiveDocPath] = useState<string>(
     resolveInitialDocPath(
       initialSelectedPathForShell,
       syntheticPr?.files[0]?.path,
     ),
   );
+
   // The repo whose open document we've already published to the route. It
   // trails `selectedRepoId` until that repo's files resolve, then we publish
   // its initial/default document exactly once.
-  const activeDocRepoRef = React.useRef(selectedRepoId);
-  const publishedRepoRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
+  const activeDocRepoRef = useRef(selectedRepoId);
+  const publishedRepoRef = useRef<string | null>(null);
+  useEffect(() => {
     // Repo switch: clear the active path immediately so the comment-link
     // builder (and `activeDocPath`) never momentarily point at the *previous*
     // repo's document while the new repo's default document resolves.
@@ -57,10 +58,12 @@ export function useActiveDocPath(
     // Republishing is idempotent — `setRouteQuery` merges, preserving
     // `?comment=`.
     if (publishedRepoRef.current === selectedRepoId) return;
+
     const nextPath = resolveInitialDocPath(
       initialSelectedPathForShell,
       syntheticPr?.files[0]?.path,
     );
+
     if (
       !shouldPublishDefaultPath(
         publishedRepoRef.current,
@@ -70,6 +73,7 @@ export function useActiveDocPath(
     ) {
       return; // files not resolved yet — retry on the next render
     }
+
     publishedRepoRef.current = selectedRepoId;
     setActiveDocPath(nextPath);
     onSelectPath?.(selectedRepoId, nextPath);

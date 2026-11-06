@@ -42,17 +42,25 @@ declare global {
 /** Record the text of every `execCommand("copy")` / `clipboard.writeText`. */
 async function recordCopies(context: BrowserContext): Promise<void> {
   await context.addInitScript(() => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the app under test still uses execCommand("copy") as its clipboard fallback, so the spy must wrap it to observe copies
     const exec = document.execCommand.bind(document);
+
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- replaces the app's execCommand("copy") fallback with a recording wrapper (see above)
     document.execCommand = (command: string, ...rest: unknown[]) => {
       if (command === "copy") {
         const el = document.activeElement as HTMLTextAreaElement | null;
         window.__emrLastCopy = el?.value ?? String(document.getSelection());
       }
+
       return (exec as (...args: unknown[]) => boolean)(command, ...rest);
     };
-    const clip = navigator.clipboard;
-    if (clip?.writeText) {
+
+    // navigator.clipboard is undefined at runtime in insecure contexts.
+    const clip = navigator.clipboard as Clipboard | undefined;
+
+    if (clip?.writeText !== undefined) {
       const write = clip.writeText.bind(clip);
+
       clip.writeText = async (text: string) => {
         await write(text);
         window.__emrLastCopy = text;
@@ -66,7 +74,9 @@ async function lastCopy(page: Page, bundle: string): Promise<string> {
   const frame = page
     .frames()
     .find((f) => f.url().includes(DEV_ORIGIN_HOST) && f.url().includes(bundle));
+
   expect(frame, `no ${bundle} frame`).toBeTruthy();
+
   return (await frame!.evaluate(() => window.__emrLastCopy)) ?? "";
 }
 
@@ -89,6 +99,7 @@ function expectPrTabLink(link: string, repo: string, prId: number): URL {
     decodeURIComponent(prPageUrl(repo, prId)).toLowerCase(),
   );
   expect(url.searchParams.get("_a")).toBe(`${E2E.extensionId}.${E2E.prTabId}`);
+
   return url;
 }
 
@@ -105,6 +116,7 @@ async function clickUntil(
     .poll(
       async () => {
         if (!(await done())) await target.click().catch(() => {});
+
         return done();
       },
       { timeout: 20_000, intervals: [500, 750, 1000], message },
@@ -120,17 +132,22 @@ async function offsetFromReaderTop(
   return frame.locator(selector).evaluate((el) => {
     // The nearest scrolling ancestor (the reader's own scroll container).
     let scroller: HTMLElement | null = el.parentElement;
+
     while (scroller) {
       const { overflowY } = getComputedStyle(scroller);
+
       if (
-        /(auto|scroll)/.test(overflowY) &&
+        /auto|scroll/.test(overflowY) &&
         scroller.scrollHeight > scroller.clientHeight
       ) {
         break;
       }
+
       scroller = scroller.parentElement;
     }
+
     const box = scroller ?? document.scrollingElement!;
+
     return {
       offset: el.getBoundingClientRect().top - box.getBoundingClientRect().top,
       scrollTop: box.scrollTop,
@@ -204,12 +221,14 @@ test.describe("Shareable links (real ADO host)", () => {
     // Short enough a viewport that the linked heading starts below the fold,
     // so landing on it requires a real scroll.
     await page.setViewportSize({ width: 1400, height: 560 });
+
     const prId = await discoverPullRequestId(
       page,
       E2E.docLinksRepo,
       E2E.docLinksPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.docLinksRepo, prId);
     let frame = prTabFrame(page);
     await waitForFrameRoot(frame);
@@ -261,6 +280,7 @@ test.describe("Shareable links (real ADO host)", () => {
             frame,
             ".emr-rendered #see-also",
           );
+
           return scrollTop > 0 && offset >= 0 && offset < 120;
         },
         {
@@ -285,9 +305,11 @@ test.describe("Shareable links (real ADO host)", () => {
     await sections.first().waitFor({ state: "visible", timeout: 30_000 });
     const count = await sections.count();
     expect(count, "commentable doc needs a few h2 sections").toBeGreaterThan(2);
+
     const anchor = (await sections
       .nth(Math.floor(count / 2))
       .getAttribute("id"))!;
+
     // Re-found by id on every use: the article is re-wrapped (its elements
     // replaced) as threads, images and permissions land after first paint.
     // The click scrolls to the hover-revealed button and `clickUntil` retries.
@@ -320,6 +342,7 @@ test.describe("Shareable links (real ADO host)", () => {
             reopened,
             `.emr-rendered [id="${anchor}"]`,
           );
+
           return scrollTop > 0 && offset >= 0 && offset < 120;
         },
         {

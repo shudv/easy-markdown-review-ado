@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +30,7 @@ const trackMock = vi.fn();
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     track: (...args: unknown[]) => trackMock(...args),
@@ -54,12 +54,14 @@ function b64url(input: string): string {
 /** A host token whose ADO grant ends at `adoExpMs` and AAD token at `expMs`. */
 function token(adoExpMs: number, expMs: number): string {
   const header = b64url(JSON.stringify({ typ: "JWT", alg: "RS256" }));
+
   const body = b64url(
     JSON.stringify({
       exp: Math.floor(expMs / 1000),
       xms_attr: { host: { ado_exp: Math.floor(adoExpMs / 1000) } },
     }),
   );
+
   return `${header}.${body}.sig`;
 }
 
@@ -201,6 +203,7 @@ describe("AdoSessionMonitor — early resume", () => {
     m.configure({
       getToken: async () => {
         if (fail) throw new Error("host busy");
+
         return FRESH;
       },
     });
@@ -301,6 +304,7 @@ describe("AdoSessionMonitor — held writes", () => {
     let current = DEAD;
     const m = new AdoSessionMonitor();
     m.configure({ getToken: async () => current });
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(refreshing())
@@ -328,9 +332,10 @@ describe("AdoSessionMonitor — held writes", () => {
     const err = refreshing();
     const attempt = vi.fn(() => Promise.reject(err));
     const write = m.holdWrite(attempt, 30_000);
-    const assertion = expect(write).rejects.toBe(err);
-    await vi.advanceTimersByTimeAsync(30_000);
-    await assertion;
+    await Promise.all([
+      expect(write).rejects.toBe(err),
+      vi.advanceTimersByTimeAsync(30_000),
+    ]);
     expect(attempt).toHaveBeenCalledOnce();
     expect(m.getSnapshot().heldWrites).toBe(0);
   });
@@ -349,10 +354,12 @@ describe("AdoSessionMonitor — held writes", () => {
   it("retries only once: a second rejection fails and starts a new spell", async () => {
     const m = new AdoSessionMonitor();
     const second = refreshing();
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(refreshing())
       .mockRejectedValueOnce(second);
+
     const write = m.holdWrite(attempt);
     await vi.advanceTimersByTimeAsync(0);
     m.noteSuccess(Date.now());
@@ -405,10 +412,12 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
   it("keeps a held write held through a reload request", async () => {
     const m = new AdoSessionMonitor();
     m.configure({ reloadHost: vi.fn() });
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(refreshing())
       .mockResolvedValueOnce("posted");
+
     const write = m.holdWrite(attempt);
     await vi.advanceTimersByTimeAsync(0);
     await m.reloadHost("user");
@@ -453,10 +462,12 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
     m.configure({ getToken: async () => current });
     m.configure({ getToken: async () => current });
     m.report(refreshing(), "boot");
+
     // Other monitors in this file also listen on the shared jsdom window, so
     // count only this spell's events.
     const bootEnds = () =>
       eventsNamed("end").filter((e) => e.properties.trigger === "boot");
+
     window.dispatchEvent(new Event("pagehide"));
     expect(bootEnds()).toHaveLength(1);
     expect(bootEnds()[0]!.properties.outcome).toBe("left");
@@ -475,13 +486,16 @@ describe("useAdoSession", () => {
   it("re-renders with the monitor's snapshot", () => {
     const m = new AdoSessionMonitor();
     const seen: string[] = [];
+
     function Probe(): null {
       seen.push(useAdoSession(m).state);
+
       return null;
     }
+
     const el = document.createElement("div");
     const root = createRoot(el);
-    act(() => root.render(React.createElement(Probe)));
+    act(() => root.render(createElement(Probe)));
     act(() => {
       m.report(refreshing(), "poll");
     });
@@ -492,12 +506,15 @@ describe("useAdoSession", () => {
 
   it("defaults to the app-wide monitor", () => {
     let state: string | undefined;
+
     function Probe(): null {
       state = useAdoSession().state;
+
       return null;
     }
+
     const root = createRoot(document.createElement("div"));
-    act(() => root.render(React.createElement(Probe)));
+    act(() => root.render(createElement(Probe)));
     expect(state).toBe(adoSession.getSnapshot().state);
     act(() => root.unmount());
   });
@@ -507,6 +524,7 @@ describe("claimAutoReload", () => {
   function memoryStorage(initial?: string) {
     const map = new Map<string, string>();
     if (initial !== undefined) map.set(AUTO_RELOAD_STORAGE_KEY, initial);
+
     return {
       map,
       getItem: (k: string) => map.get(k) ?? null,
@@ -532,16 +550,19 @@ describe("claimAutoReload", () => {
 
   it("refuses without durable storage, so a reload can never loop", () => {
     expect(claimAutoReload(undefined, 1)).toBe(false);
+
     const throwing = {
       getItem: () => {
         throw new Error("SecurityError");
       },
       setItem: () => {},
     };
+
     expect(claimAutoReload(throwing, 1)).toBe(false);
     // Storage that silently drops writes can't hold the guard either.
     const dropping = { getItem: () => null, setItem: () => {} };
     expect(claimAutoReload(dropping, 1)).toBe(false);
+
     // Nor can storage that refuses writes (quota / private mode).
     const full = {
       getItem: () => null,
@@ -549,6 +570,7 @@ describe("claimAutoReload", () => {
         throw new Error("QuotaExceededError");
       },
     };
+
     expect(claimAutoReload(full, 1)).toBe(false);
   });
 });
@@ -556,10 +578,12 @@ describe("claimAutoReload", () => {
 describe("autoReloadAllowed", () => {
   it("peeks without recording a claim", () => {
     const map = new Map<string, string>();
+
     const storage = {
       getItem: (k: string) => map.get(k) ?? null,
       setItem: (k: string, v: string) => void map.set(k, v),
     };
+
     expect(autoReloadAllowed(storage, 1_000)).toBe(true);
     expect(map.size).toBe(0);
     claimAutoReload(storage, 1_000);
@@ -581,6 +605,7 @@ describe("sessionStorageOrUndefined", () => {
       .mockImplementation(() => {
         throw new DOMException("denied", "SecurityError");
       });
+
     try {
       expect(sessionStorageOrUndefined()).toBeUndefined();
     } finally {
@@ -593,6 +618,7 @@ describe("followsRecentAutoReload", () => {
   const storageWith = (claimedAt: string | null) => {
     const map = new Map<string, string>();
     if (claimedAt !== null) map.set(AUTO_RELOAD_STORAGE_KEY, claimedAt);
+
     return {
       map,
       getItem: (k: string) => map.get(k) ?? null,
@@ -636,12 +662,14 @@ describe("followsRecentAutoReload", () => {
 
   it("is false without readable storage", () => {
     expect(followsRecentAutoReload(undefined, 1)).toBe(false);
+
     const throwing = {
       getItem: () => {
         throw new Error("SecurityError");
       },
       setItem: () => {},
     };
+
     expect(followsRecentAutoReload(throwing, 1)).toBe(false);
   });
 });

@@ -5,8 +5,14 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react-dom/test-utils";
+import {
+  act,
+  createElement,
+  type ReactElement,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -40,6 +46,7 @@ const NEW_TARGET: DraftTarget = {
   threadId: NEW_DRAFT_THREAD_ID,
   anchor,
 };
+
 const REPLY_TARGET: DraftTarget = {
   path: "docs/a.md",
   threadId: "t-7",
@@ -67,13 +74,13 @@ let handle: Handle;
 function Harness(props: {
   scope?: DraftScope;
   initialTarget?: DraftTarget | null;
-}): React.ReactElement {
-  const [activeDraft, setTarget] = React.useState<DraftTarget | null>(
+}): ReactElement {
+  const [activeDraft, setTarget] = useState<DraftTarget | null>(
     props.initialTarget ?? null,
   );
-  const restoredRef = React.useRef<
-    Array<{ target: DraftTarget; body: string }>
-  >([]);
+
+  const restoredRef = useRef<Array<{ target: DraftTarget; body: string }>>([]);
+
   const api = useDraftPersistence({
     scope: props.scope,
     activeDraft,
@@ -82,8 +89,12 @@ function Harness(props: {
       setTarget(target);
     },
   });
-  handle = { api, setTarget, restored: restoredRef.current };
-  return React.createElement("div", null, api.initialBody);
+
+  useLayoutEffect(() => {
+    handle = { api, setTarget, restored: restoredRef.current };
+  }, [api]);
+
+  return createElement("div", null, api.initialBody);
 }
 
 let container: HTMLDivElement | null = null;
@@ -97,7 +108,7 @@ function mount(props: {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root!.render(React.createElement(Harness, props));
+    root!.render(createElement(Harness, props));
   });
 }
 
@@ -106,6 +117,7 @@ function unmount(): void {
     act(() => root!.unmount());
     root = null;
   }
+
   container?.remove();
   container = null;
 }
@@ -119,7 +131,7 @@ describe("persistence disabled (no scope)", () => {
   it("never touches storage", () => {
     mount({ initialTarget: NEW_TARGET });
     act(() => handle.api.handleChange("typed"));
-    expect(window.localStorage.length).toBe(0);
+    expect(window.localStorage).toHaveLength(0);
     expect(handle.api.getSnapshot()).toBe("typed");
   });
 });

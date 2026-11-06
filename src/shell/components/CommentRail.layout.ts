@@ -27,8 +27,10 @@ export function isRailTrayExpanded(opts: {
   searchActive: boolean;
 }): boolean {
   const { collapsed, threads, activeThreadId, searchActive } = opts;
+
   const activeInTray =
     activeThreadId != null && threads.some((t) => t.id === activeThreadId);
+
   return !collapsed || activeInTray || (searchActive && threads.length > 0);
 }
 
@@ -70,6 +72,7 @@ export function railEmptyMessageFor(
   },
 ): string | null {
   if (model.orderedAnchoredIds.length > 0 || opts.hasDraft) return null;
+
   return chooseRailEmptyMessage({
     commentQuery: opts.commentQuery,
     filterMode: opts.filterMode,

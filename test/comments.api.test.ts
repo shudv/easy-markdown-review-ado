@@ -6,17 +6,19 @@ import { filterByQuery, LocalOnlyCommentApi } from "../src/comments/api";
 
 describe("filterByQuery", () => {
   type Row = { name: string; tags: string };
+
   const items: Row[] = [
     { name: "alpha", tags: "first" },
     { name: "beta", tags: "second" },
     { name: "gamma", tags: "alpha-prefix" },
     { name: "delta", tags: "" },
   ];
+
   const keys = (r: Row): string[] => [r.name, r.tags];
 
   it("returns the first 8 items when the query is empty", () => {
     expect(filterByQuery(items, "", keys).length).toBeLessThanOrEqual(8);
-    expect(filterByQuery(items, "   ", keys).length).toBe(items.length);
+    expect(filterByQuery(items, "   ", keys)).toHaveLength(items.length);
   });
 
   it("matches case-insensitively across all key fields", () => {
@@ -39,6 +41,7 @@ describe("filterByQuery", () => {
       { name: "x" }, //  "x" at offset 0
       { name: "wwx" }, // "x" at offset 2
     ];
+
     const ranked = filterByQuery(rows, "x", (r) => [r.name]);
     expect(ranked.map((r) => r.name)).toEqual(["x", "wx", "wwx"]);
   });
@@ -56,7 +59,8 @@ describe("filterByQuery", () => {
       name: `match-${i}`,
       tags: "",
     }));
-    expect(filterByQuery(many, "match", (r) => [r.name]).length).toBe(8);
+
+    expect(filterByQuery(many, "match", (r) => [r.name])).toHaveLength(8);
   });
 
   it("returns an empty array when nothing matches", () => {
@@ -67,16 +71,19 @@ describe("filterByQuery", () => {
 describe("LocalOnlyCommentApi", () => {
   it("mints unique thread ids on each createThread call", async () => {
     const api = new LocalOnlyCommentApi();
+
     const a = await api.createThread({
       filePath: "f.md",
       anchor: { exact: "x", prefix: "", suffix: "" },
       bodyMarkdown: "hi",
     });
+
     const b = await api.createThread({
       filePath: "f.md",
       anchor: { exact: "y", prefix: "", suffix: "" },
       bodyMarkdown: "bye",
     });
+
     expect(a.threadId).not.toBe(b.threadId);
     expect(a.firstCommentId).toBe(`${a.threadId}-c1`);
     expect(Number.isFinite(Date.parse(a.createdAt))).toBe(true);
@@ -84,16 +91,19 @@ describe("LocalOnlyCommentApi", () => {
 
   it("numbers thread and comment ids from 1 with a pre-increment counter", async () => {
     const api = new LocalOnlyCommentApi();
+
     const t1 = await api.createThread({
       filePath: "f.md",
       anchor: { exact: "x", prefix: "", suffix: "" },
       bodyMarkdown: "hi",
     });
+
     const t2 = await api.createThread({
       filePath: "f.md",
       anchor: { exact: "y", prefix: "", suffix: "" },
       bodyMarkdown: "bye",
     });
+
     // Exact ids pin the pre-increment (first call yields 1, not 0).
     expect(t1.threadId).toBe("t-local-1");
     expect(t2.threadId).toBe("t-local-2");

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   mermaidInitialize: vi.fn(),
   mermaidRender: vi.fn(async () => ({ svg: "<svg></svg>" })),
 }));
+
 vi.mock("katex", () => ({
   default: undefined,
   renderToString: mocks.katexRender,

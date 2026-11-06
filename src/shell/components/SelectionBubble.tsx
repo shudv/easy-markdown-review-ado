@@ -4,7 +4,7 @@
 // update where the text no longer exists in the latest version), it explains
 // why and offers a way forward instead. Read-only surfaces show only the link.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 import { selectionLinkResultLabel } from "./SelectionBubble.helpers";
 import {
   BlockedSelectionBubble,
@@ -31,10 +31,11 @@ interface SelectionBubbleProps {
 }
 
 export function SelectionBubble(
-  props: SelectionBubbleProps,
-): React.ReactElement {
+  props: Readonly<SelectionBubbleProps>,
+): ReactElement {
   const { top, left, onAddComment, onCopyLink, onCopyLinkSettled, block } =
     props;
+
   const { linkState, copyLink } = useSelectionCopyLink(
     onCopyLink,
     onCopyLinkSettled,
@@ -47,6 +48,7 @@ export function SelectionBubble(
   const linkResult = selectionLinkResultLabel(linkState);
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- Event-stopper: mousedown is only prevented so clicking the bubble keeps the text selection; the buttons inside are the interactive controls.
     <div
       className="emr-selection-bubble"
       style={{ top, left }}

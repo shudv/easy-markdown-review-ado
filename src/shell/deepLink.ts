@@ -20,7 +20,7 @@
 // the URL read/write helpers, and the React context plumbing. The host wiring
 // that constructs the base URL lives in the (SDK-coupled) app shells.
 
-import * as React from "react";
+import { createContext, useContext } from "react";
 
 /**
  * Query-string parameter that carries the linked thread id on a surface URL,
@@ -75,13 +75,11 @@ export type DeepLinkBuilder = (target: DeepLinkTarget) => string | undefined;
  * React context carrying the active surface's link builder. `null` means "no
  * shareable URL available" — link affordances are then hidden.
  */
-export const DeepLinkContext = React.createContext<DeepLinkBuilder | null>(
-  null,
-);
+export const DeepLinkContext = createContext<DeepLinkBuilder | null>(null);
 
 /** Read the nearest `DeepLinkContext` builder (or `null`). */
 export function useDeepLink(): DeepLinkBuilder | null {
-  return React.useContext(DeepLinkContext);
+  return useContext(DeepLinkContext);
 }
 
 /** The `{ param: value }` pairs a target writes into a URL. */
@@ -91,11 +89,15 @@ function targetParams(target: DeepLinkTarget): Record<string, string> {
       return { [COMMENT_LINK_PARAM]: target.threadId.trim() };
     case "heading":
       return { [ANCHOR_LINK_PARAM]: target.anchor.trim() };
+
     case "text": {
       const anchor = target.anchor?.trim();
+
       return {
         [TEXT_LINK_PARAM]: target.text.trim(),
-        ...(anchor ? { [ANCHOR_LINK_PARAM]: anchor } : {}),
+        ...(anchor !== undefined && anchor !== ""
+          ? { [ANCHOR_LINK_PARAM]: anchor }
+          : {}),
       };
     }
   }
@@ -117,21 +119,26 @@ export function withDeepLinkTarget(
   const primary = Object.values(params)[0]!;
   if (!baseUrl || !primary) return undefined;
   let url: URL;
+
   try {
     url = new URL(baseUrl);
   } catch {
     return undefined;
   }
+
   for (const param of TARGET_LINK_PARAMS) url.searchParams.delete(param);
+
   for (const [param, value] of Object.entries(params)) {
     url.searchParams.set(param, value);
   }
+
   // Quoted text is mostly spaces: spell them `%20`, not the form-style `+`,
   // which a host that decodes with `decodeURIComponent` would keep literally.
   // (A literal `+` is always serialized as `%2B`, so this is lossless.)
   if (target.kind === "text") {
     url.search = url.searchParams.toString().replace(/\+/g, "%20");
   }
+
   return url.toString();
 }
 
@@ -142,6 +149,7 @@ function readTrimmed(params: RouteParams, key: string): string | undefined {
   const raw = params[key];
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -160,7 +168,8 @@ export function readCommentParam(params: RouteParams): string | undefined {
  */
 export function readAnchorParam(params: RouteParams): string | undefined {
   const anchor = readTrimmed(params, ANCHOR_LINK_PARAM)?.replace(/^#+/, "");
-  return anchor ? anchor : undefined;
+
+  return anchor === "" ? undefined : anchor;
 }
 
 /**
@@ -178,5 +187,6 @@ export function readTextParam(params: RouteParams): string | undefined {
  */
 export function readPathParam(params: RouteParams): string | undefined {
   const bare = readTrimmed(params, PATH_LINK_PARAM)?.replace(/^\/+/, "");
-  return bare ? `/${bare}` : undefined;
+
+  return bare !== undefined && bare !== "" ? `/${bare}` : undefined;
 }

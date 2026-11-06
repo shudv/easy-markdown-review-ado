@@ -45,6 +45,7 @@ describe("formatLikeTooltip", () => {
       u("f", "Fin"),
       u("g", "Gus"),
     ];
+
     expect(formatLikeTooltip(users, "me")).toBe(
       "Ada, Bob, Cy, Dee, Eve and 2 others liked this",
     );
@@ -59,6 +60,7 @@ describe("formatLikeTooltip", () => {
       u("e", "Eve"),
       u("f", "Fin"),
     ];
+
     expect(formatLikeTooltip(users, "me")).toBe(
       "Ada, Bob, Cy, Dee, Eve and 1 other liked this",
     );
@@ -68,6 +70,7 @@ describe("formatLikeTooltip", () => {
     // Five very long names would blow past the 120-char budget, so the
     // formatter shows fewer names and folds the rest into "and N others".
     const long = (n: number) => "X".repeat(40) + n;
+
     const users = [
       u("a", long(1)),
       u("b", long(2)),
@@ -75,6 +78,7 @@ describe("formatLikeTooltip", () => {
       u("d", long(4)),
       u("e", long(5)),
     ];
+
     const out = formatLikeTooltip(users, "me");
     expect(out.endsWith(" liked this")).toBe(true);
     // Budget keeps the body (excluding the fixed suffix) within 120 chars.

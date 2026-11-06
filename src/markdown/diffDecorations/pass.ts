@@ -91,6 +91,7 @@ export function ownSpanEnd(
   if (el.tagName !== "LI" && el.tagName !== "BLOCKQUOTE") return end;
   const lead = inlineProseTarget(el);
   let ownEnd = end;
+
   for (const child of Array.from(el.children)) {
     if (!isChildBlock(child)) continue;
     const childStart = numAttr(child, "data-source-line");
@@ -99,6 +100,7 @@ export function ownSpanEnd(
     ownEnd = childStart - 1;
     break;
   }
+
   // Blank separator lines (bare `>` in a quote) before a child block carry no
   // lead content: adding a second paragraph adds one, and must not paint the
   // unchanged lead as added.
@@ -109,6 +111,7 @@ export function ownSpanEnd(
   ) {
     ownEnd--;
   }
+
   return ownEnd;
 }
 
@@ -132,19 +135,23 @@ export function coveredByDecoratedAncestor(el: HTMLElement): boolean {
   ) {
     if (ancestorPaintCovers(ancestor, el)) return true;
   }
+
   return false;
 }
 
 function ancestorPaintCovers(ancestor: HTMLElement, el: HTMLElement): boolean {
   const target = inlineProseTarget(ancestor);
+
   if (ancestor.dataset.diffInline === "true") {
     return target === ancestor || target.contains(el);
   }
+
   if (ancestor.dataset.diffLineWash === "true") {
     return target === ancestor
       ? el.closest(`.${DIFF_LINE_WASH_CLASS}`) !== null
       : target.contains(el);
   }
+
   return el.tagName !== "LI" || ancestor.tagName !== "LI";
 }
 
@@ -158,11 +165,13 @@ export function classifyBlock(
   ranges: readonly ChangeRange[],
 ): "added" | "modified" | null {
   let sawAdded = false;
+
   for (const r of ranges) {
     if (!overlaps(start, end, r.start, r.end)) continue;
     if (r.kind === "modified") return "modified";
     sawAdded = true;
   }
+
   return sawAdded ? "added" : null;
 }
 
@@ -174,13 +183,16 @@ export function classifyBlock(
  */
 export function applyLineWash(block: HTMLElement): boolean {
   if (!LINE_WASH_TAGS.has(block.tagName)) return false;
+
   const target =
     block.tagName === "PRE"
       ? block.querySelector<HTMLElement>("code")
       : inlineProseTarget(block);
+
   if (!target) return false;
 
   const nodes: ChildNode[] = [];
+
   for (const child of Array.from(target.childNodes)) {
     if (
       child instanceof HTMLElement &&
@@ -191,20 +203,24 @@ export function applyLineWash(block: HTMLElement): boolean {
     ) {
       continue;
     }
+
     if (child instanceof HTMLElement && isChildBlock(child)) break;
     nodes.push(child);
   }
+
   // Media in the lead can't follow line boxes (child blocks paint themselves).
   const media = "img, .emr-mermaid, .katex";
+
   if (
     nodes.some(
       (node) =>
         node instanceof Element &&
-        (node.matches(media) || node.querySelector(media)),
+        (node.matches(media) || node.querySelector(media) !== null),
     )
   ) {
     return false;
   }
+
   if (
     nodes.length === 0 ||
     nodes.every((node) => (node.textContent ?? "").trim().length === 0)
@@ -217,6 +233,7 @@ export function applyLineWash(block: HTMLElement): boolean {
   target.insertBefore(wrapper, nodes[0]!);
   wrapper.append(...nodes);
   block.dataset.diffLineWash = "true";
+
   return true;
 }
 
@@ -255,9 +272,10 @@ export function createDecorationPass(
 ): DecorationPass {
   const changeRanges: ChangeRange[] = [];
   const deletedRanges: DiffRange[] = [];
+
   for (const r of ranges) {
     if (r.kind === "deleted-marker") deletedRanges.push(r);
-    else
+    else {
       changeRanges.push({
         start: r.startLine,
         end: r.endLine,
@@ -266,7 +284,9 @@ export function createDecorationPass(
         originalStart: r.originalStartLine,
         originalEnd: r.originalEndLine,
       });
+    }
   }
+
   return {
     root,
     renderInline: options?.renderInline,
@@ -295,6 +315,7 @@ export function findInteriorEdit(
   end: number,
 ): InteriorEdit | null {
   if (!pass.renderInline || !pass.currentLines) return null;
+
   const interiorEdit = reconstructEditedBlock(
     el,
     { start, end },
@@ -305,9 +326,11 @@ export function findInteriorEdit(
       renderInline: pass.renderInline,
     },
   );
+
   for (const deletion of interiorEdit?.deletions ?? []) {
     pass.absorbedDeletions.add(deletion);
   }
+
   return interiorEdit;
 }
 
@@ -396,6 +419,7 @@ export function markContiguousGroups(els: readonly HTMLElement[]): void {
       delete el.dataset.diffGroup;
       continue;
     }
+
     const kind = el.dataset.diffKind;
     const samePrev = groupable(el.previousElementSibling, kind);
     const sameNext = groupable(el.nextElementSibling, kind);

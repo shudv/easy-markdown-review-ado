@@ -1,7 +1,7 @@
 // Shell's props: everything the shell's hosts (the PR tab, the Documents
 // hub, the side panel and the standalone preview) pass in.
 
-import type * as React from "react";
+import type { ReactNode } from "react";
 
 import type {
   ChangeType,
@@ -75,7 +75,7 @@ export interface ShellProps {
     signal?: AbortSignal,
   ) => Promise<FileSearchOutcome>;
   /** Replaces the static "Documents" title in the doc-nav header. */
-  docNavTitleSlot?: React.ReactNode;
+  docNavTitleSlot?: ReactNode;
   /**
    * Host-provided reload of the file list / repo contents. Wired into the
    * reading toolbar's unified refresh (which also re-syncs comments); omitted

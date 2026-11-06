@@ -32,10 +32,14 @@ const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = {
 
 export function repositoryImageMimeType(path: string): string {
   const normalized = path.toLowerCase();
+
   const extension = Object.keys(IMAGE_MIME_TYPES).find((candidate) =>
     normalized.endsWith(candidate),
   );
-  return extension ? IMAGE_MIME_TYPES[extension]! : "application/octet-stream";
+
+  return extension !== undefined
+    ? IMAGE_MIME_TYPES[extension]!
+    : "application/octet-stream";
 }
 
 export function resolveRepositoryImagePath(
@@ -50,8 +54,10 @@ export function resolveRepositoryImagePath(
     const normalizedDocument = documentPath.startsWith("/")
       ? documentPath
       : `/${documentPath}`;
+
     const documentUrl = new URL(normalizedDocument, REPOSITORY_BASE);
     const resolved = new URL(source, documentUrl);
+
     return decodeURIComponent(resolved.pathname);
   } catch {
     return null;
@@ -71,7 +77,9 @@ export function hydrateDocumentImages(
       documentPath,
       image.getAttribute("src")!,
     );
-    if (!repositoryPath) continue;
+
+    // Never "": a resolved URL's pathname always starts with "/".
+    if (repositoryPath === null) continue;
 
     const frame = document.createElement("span");
     frame.className = "emr-repo-image-frame is-loading";
@@ -82,11 +90,13 @@ export function hydrateDocumentImages(
     if (isExcalidrawPath(repositoryPath)) image.classList.add(EXCALIDRAW_CLASS);
     image.setAttribute("aria-busy", "true");
     let errorReported = false;
+
     const onLoad = () => {
       frame.classList.remove("is-loading", "is-error");
       image.classList.remove("is-loading", "is-error");
       image.removeAttribute("aria-busy");
     };
+
     const showError = (error: unknown) => {
       frame.classList.remove("is-loading");
       frame.classList.add("is-error");
@@ -94,8 +104,10 @@ export function hydrateDocumentImages(
       image.classList.remove("is-loading");
       image.classList.add("is-error");
       image.removeAttribute("aria-busy");
+
       if (!errorReported) {
         errorReported = true;
+
         // An image path the document links to but the repo doesn't have, or
         // an `.excalidraw` file that isn't a scene, is a problem in the
         // author's content — not an extension failure (the frame still shows
@@ -104,6 +116,7 @@ export function hydrateDocumentImages(
           httpStatusOf(error) === 404 ||
           adoErrorCodeOf(error) === "TF401174" ||
           error instanceof ExcalidrawSceneError;
+
         if (!authorContentProblem) {
           trackUserFacingError({
             error,
@@ -114,24 +127,29 @@ export function hydrateDocumentImages(
         }
       }
     };
+
     // Distinct messages so triage can tell "fetched but not displayable"
     // (e.g. not really an image) from "nothing came back".
     const onError = () =>
       showError(new Error("Repository image couldn't be displayed"));
+
     image.addEventListener("load", onLoad);
     image.addEventListener("error", onError);
     cleanups.push(() => {
       image.removeEventListener("load", onLoad);
       image.removeEventListener("error", onError);
     });
+
     const settle = (objectUrl: string | undefined, error?: unknown) => {
       if (disposed) return;
-      if (objectUrl) {
+
+      if (objectUrl !== undefined && objectUrl !== "") {
         image.src = objectUrl;
       } else {
         showError(error ?? new Error("Repository image not available"));
       }
     };
+
     void resolveImage(repositoryPath).then(
       (objectUrl) => settle(objectUrl),
       (error: unknown) => settle(undefined, error),

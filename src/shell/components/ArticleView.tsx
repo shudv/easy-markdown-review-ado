@@ -3,7 +3,19 @@
 // orphaned thread IDs to Shell, and shows a floating "Add comment" bubble on
 // text selection.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
 import { captureAnchorFromSelection } from "../../comments/anchor";
 import {
@@ -130,7 +142,7 @@ interface ArticleViewProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree.
-export function ArticleView(props: ArticleViewProps): React.ReactElement {
+export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
   const {
     pristineHtml,
     documentPath,
@@ -153,69 +165,82 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     onCopySelectionLink,
     commentBlocker,
   } = props;
+
   const hasHeadingLinks = onCopyHeadingLink !== undefined;
   const hasSelectionLinks = onCopySelectionLink !== undefined;
 
-  const wrapRef = React.useRef<HTMLDivElement>(null);
-  const articleRef = React.useRef<HTMLDivElement>(null);
-  const mentionCtx = React.useContext(MentionLinkContext);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLDivElement>(null);
+  const mentionCtx = useContext(MentionLinkContext);
   // Polite announcement for the heading link button's copy outcome (the
   // button's own label change is not reliably announced).
-  const [linkAnnouncement, setLinkAnnouncementText] = React.useState("");
-  const setLinkAnnouncement = React.useCallback((text: string) => {
+  const [linkAnnouncementText, setLinkAnnouncementText] = useState("");
+
+  const setLinkAnnouncement = useCallback((text: string) => {
     // Clear first so repeating the same outcome is announced again.
     setLinkAnnouncementText("");
     window.requestAnimationFrame(() => setLinkAnnouncementText(text));
   }, []);
-  const [bubble, setBubble] = React.useState<SelectionBubbleState | null>(null);
+
+  const [bubble, setBubble] = useState<SelectionBubbleState | null>(null);
+
   // Generated block whose Source action was clicked. `original` carries the
   // pre-PR source so the modal can show an internal source-level diff.
   const [generatedSource, setGeneratedSource] =
-    React.useState<GeneratedSourceView | null>(null);
+    useState<GeneratedSourceView | null>(null);
 
-  // Keep stable refs so the layout effect's dep array can stay simple.
-  const callbacksRef = React.useRef({
+  // Keep stable refs so the layout effect's dep array can stay simple. Synced
+  // in a layout effect declared before the wrap pass, so that pass (and every
+  // later event handler) reads this render's callbacks.
+  const callbacksRef = useRef({
     onAnchorsResolved,
     onHighlightClick,
     onSelection,
     commentBlocker,
   });
-  callbacksRef.current = {
-    onAnchorsResolved,
-    onHighlightClick,
-    onSelection,
-    commentBlocker,
-  };
+
+  useLayoutEffect(() => {
+    callbacksRef.current = {
+      onAnchorsResolved,
+      onHighlightClick,
+      onSelection,
+      commentBlocker,
+    };
+  });
 
   // Build a stable signature so the wrap effect only re-runs when anchors change.
-  const threadsKey = React.useMemo(
+  const threadsKey = useMemo(
     () =>
       threads
         .map((t) => `${t.id}|${t.status}|${anchorSignature(t.anchor)}`)
         .join("\n"),
     [threads],
   );
+
   const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
-  const previousActiveThreadIdRef = React.useRef<string | null>(null);
+  const previousActiveThreadIdRef = useRef<string | null>(null);
 
   // Signature so the layout effect re-runs when the diff ranges (or the
   // show/hide toggle) change, without re-running on unrelated renders.
-  const diffKey = React.useMemo(() => {
+  const diffKey = useMemo(() => {
     if (!hasVisibleDiff(showDiff, diff)) return "";
+
     return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
   }, [diff, showDiff]);
 
   // -------------------------------------------------------------------------
   // Wrap pass: reset innerHTML, then wrap each anchor.
   // -------------------------------------------------------------------------
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const article = articleRef.current!;
     const wrap = wrapRef.current!;
+
     const focusedThreadId = focusedDatasetValue(
       article,
       '.emr-highlight[role="button"]',
       "threadId",
     );
+
     // A keyboard user on a heading link button keeps their place when a
     // thread poll / diff / image load re-wraps the article.
     const focusedHeadingLinkId = focusedDatasetValue(
@@ -225,10 +250,12 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     );
 
     // Reset to pristine HTML — easiest way to undo previous wraps.
+    // eslint-disable-next-line no-unsanitized/property -- pristineHtml is the output of renderMarkdown (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); fillSubpagesMacros only adds DOM-built nodes
     article.innerHTML = pristineHtml;
 
     // Upgrade mention placeholder hrefs to real ADO web URLs before wrapping.
     hydrateMentionLinks(article, mentionCtx);
+
     const cleanupDocumentImages = resolveDocumentImage
       ? hydrateDocumentImages(
           article,
@@ -300,7 +327,9 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     function onSectionsChanged() {
       measureAll();
     }
+
     wrap.addEventListener("emr-sections-changed", onSectionsChanged);
+
     return () => {
       wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
       cleanupDocumentImages?.();
@@ -326,7 +355,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   // when the reader flips light↔dark (`data-emr-theme` on <html>) the diagrams
   // must be re-hydrated to recolour. Font changes rerun the wrap effect above.
   // -------------------------------------------------------------------------
-  React.useEffect(() => {
+  useEffect(() => {
     const observer = new MutationObserver(() => {
       const article = articleRef.current;
       /* v8 ignore next -- the article div is always rendered, and unmount disconnects this observer, which discards queued records, so the ref is never null here */
@@ -339,10 +368,12 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
         );
       });
     });
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-emr-theme"],
     });
+
     return () => observer.disconnect();
   }, [readerFontFamily]);
 
@@ -350,10 +381,11 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   // Active thread changes do not rewrap the article. Synchronize the persistent
   // selection and play one landing cue on the newly active range.
   // -------------------------------------------------------------------------
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const activeChanged =
       activeThreadId !== null &&
       activeThreadId !== previousActiveThreadIdRef.current;
+
     syncActiveHighlights(articleRef.current!, activeThreadId, activeChanged);
     previousActiveThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
@@ -363,11 +395,12 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   // sharing one listener. The heading branch yields when a text selection
   // exists so users can still select+comment heading text.
   // -------------------------------------------------------------------------
-  const onClick = React.useCallback(
-    (e: React.MouseEvent) => {
+  const onClick = useCallback(
+    (e: ReactMouseEvent) => {
       const target = e.target as HTMLElement;
       if (handleDocLinkClick(e, target, onDocLink)) return;
       if (handleGeneratedSourceClick(e, target, setGeneratedSource)) return;
+
       if (
         handleHeadingLinkClick(
           e,
@@ -378,12 +411,15 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       ) {
         return;
       }
+
       if (handleSectionToggleClick(target, storageKey, wrapRef)) return;
+
       const threadId = nextClickedThreadId(
         target,
         articleRef.current,
         activeThreadId,
       );
+
       if (threadId === null) return;
       syncHoveredHighlights(articleRef.current!, null);
       callbacksRef.current.onHighlightClick(threadId);
@@ -397,16 +433,20 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     ],
   );
 
-  const onKeyDown = React.useCallback(
-    (event: React.KeyboardEvent) => {
+  const onKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         '.emr-highlight[role="button"]',
       );
+
       if (!target) return;
+
       if (event.key === " ") {
         event.preventDefault();
+
         return;
       }
+
       if (event.key !== "Enter" || event.repeat) return;
       const threadIds = containedThreadIds(target);
       event.preventDefault();
@@ -418,12 +458,14 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     [activeThreadId],
   );
 
-  const onKeyUp = React.useCallback(
-    (event: React.KeyboardEvent) => {
+  const onKeyUp = useCallback(
+    (event: ReactKeyboardEvent) => {
       if (event.key !== " ") return;
+
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         '.emr-highlight[role="button"]',
       );
+
       if (!target) return;
       event.preventDefault();
       const threadIds = containedThreadIds(target);
@@ -435,19 +477,23 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
     [activeThreadId],
   );
 
-  const onPointerOver = React.useCallback((event: React.PointerEvent) => {
+  const onPointerOver = useCallback((event: ReactPointerEvent) => {
     const article = articleRef.current!;
+
     const highlight = (event.target as HTMLElement).closest<HTMLElement>(
       ".emr-highlight",
     );
+
     const threadId = highlight?.dataset.threadId;
     syncHoveredHighlights(
       article,
-      threadId && threadId !== DRAFT_THREAD_ID ? threadId : null,
+      threadId !== undefined && threadId !== "" && threadId !== DRAFT_THREAD_ID
+        ? threadId
+        : null,
     );
   }, []);
 
-  const onPointerLeave = React.useCallback(() => {
+  const onPointerLeave = useCallback(() => {
     syncHoveredHighlights(articleRef.current!, null);
   }, []);
 
@@ -456,41 +502,52 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   // selection inside the article. Read-only surfaces still get the bubble
   // when the selection can be linked to (its only action is then the link).
   // -------------------------------------------------------------------------
-  const onMouseUp = React.useCallback(() => {
+  const onMouseUp = useCallback(() => {
     if (readOnly && !hasSelectionLinks) return;
     // Wait for the selection to settle (click can clear it).
     window.requestAnimationFrame(() => {
       const article = articleRef.current!;
       const wrap = wrapRef.current!;
       const anchor = captureAnchorFromSelection(article);
+
       if (!anchor) {
         setBubble(null);
+
         return;
       }
+
       const sel = window.getSelection();
       /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
       if (!sel || sel.rangeCount === 0) return;
+
       // Removed (deleted-diff) content is shown for reference only; it isn't
       // part of the document, so a comment anchored there orphans immediately.
       // Don't offer the bubble when the selection lands in a deletion marker.
       if (selectionTouchesDeletedDiff(sel.anchorNode, sel.focusNode)) {
         setBubble(null);
+
         return;
       }
+
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
+
       const block = readOnly
         ? null
         : (callbacksRef.current.commentBlocker?.(anchor) ?? null);
+
       const link =
         hasSelectionLinks && !block
           ? selectionLinkTarget(article, range)
           : null;
+
       if (readOnly && !link) {
         setBubble(null);
+
         return;
       }
+
       // Approx bubble width (button label + chrome). Used to clamp horizontal.
       const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
       setBubble({
@@ -503,19 +560,22 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
   }, [readOnly, hasSelectionLinks]);
 
   // Clear bubble if user clicks elsewhere or selection collapses.
-  React.useEffect(() => {
+  useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
       // If click is inside the bubble, ignore (its own button handler runs).
       const target = e.target as HTMLElement;
       if (target.closest(".emr-selection-bubble")) return;
       setBubble(null);
     }
+
     document.addEventListener("mousedown", onDocMouseDown);
+
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
   return (
     <div className="emr-article-wrap" ref={wrapRef}>
+      {/* eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- event-delegation container for rendered document content: its keyboard targets are the native section/heading-link buttons and the tabIndex'd role="button" highlights, whose Enter/Space this onKeyDown/onKeyUp handles */}
       <div
         ref={articleRef}
         className="markdown-body emr-rendered"
@@ -544,7 +604,7 @@ export function ArticleView(props: ArticleViewProps): React.ReactElement {
       />
       {hasHeadingLinks ? (
         <span className="emr-sr-only" role="status" aria-live="polite">
-          {linkAnnouncement}
+          {linkAnnouncementText}
         </span>
       ) : null}
     </div>

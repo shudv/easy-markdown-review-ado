@@ -52,6 +52,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(model.orderedAnchoredIds).toEqual(["high", "low"]);
     expect(model.hasAnchoredThreads).toBe(true);
     // Cycle order: anchored (by position) then the general tray.
@@ -69,6 +70,7 @@ describe("buildRailModel", () => {
       draftY: 100,
       onlyThisFile: false,
     });
+
     // Same Y as "a" → draft (newest) sorts first.
     expect(model.orderedAnchoredIds).toEqual([DRAFT_ID, "a"]);
     expect(model.kindById.get(DRAFT_ID)).toBe("draft");
@@ -96,6 +98,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(model.orderedAnchoredIds).toEqual(["shown"]);
     // The orphaned-anchor thread surfaces in its own tray.
     expect(model.orphanedThreads.map((t) => t.id)).toEqual(["orphan"]);
@@ -116,6 +119,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(model.visibleGeneralThreads.map((t) => t.id)).toEqual([
       "new",
       "mid",
@@ -138,6 +142,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: true,
     });
+
     expect(model.visibleGeneralThreads).toEqual([]);
     expect(model.visibleOrphanedFileThreads).toEqual([]);
     expect(model.hasVisibleComments).toBe(false);
@@ -157,6 +162,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(model.visibleOrphanedFileThreads.map((t) => t.id)).toEqual([
       "of-new",
       "of-old",
@@ -176,6 +182,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(empty.hasVisibleComments).toBe(false);
 
     const withOrphanTray = buildRailModel({
@@ -188,6 +195,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     expect(withOrphanTray.hasAnchoredThreads).toBe(false);
     expect(withOrphanTray.hasVisibleComments).toBe(true);
   });
@@ -206,6 +214,7 @@ describe("buildRailModel", () => {
       draftY: null,
       onlyThisFile: false,
     });
+
     // No timestamp → epoch 0 → sorts below the dated thread.
     expect(model.visibleGeneralThreads.map((t) => t.id)).toEqual([
       "dated",

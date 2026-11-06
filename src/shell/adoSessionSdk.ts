@@ -18,6 +18,7 @@ import { hostTokenOverride } from "./hostToken";
  */
 export function readHostToken(): Promise<string> {
   const fake = hostTokenOverride();
+
   return fake !== null ? Promise.resolve(fake) : SDK.getAccessToken();
 }
 
@@ -31,6 +32,7 @@ export function configureAdoSession(): void {
       const nav = await SDK.getService<IHostNavigationService>(
         CommonServiceIds.HostNavigationService,
       );
+
       nav.reload();
     },
   });

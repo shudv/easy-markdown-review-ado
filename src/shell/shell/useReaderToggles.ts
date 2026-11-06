@@ -1,6 +1,6 @@
 // Shell: comment filter/search and change-highlight toggles.
 
-import * as React from "react";
+import { useCallback, useState } from "react";
 
 import { events, track } from "../../telemetry";
 import type { CommentFilterMode } from "../components/commentFilter";
@@ -11,16 +11,17 @@ import type { CommentFilterMode } from "../components/commentFilter";
  */
 export function useReaderToggles() {
   const [commentFilter, setCommentFilter] =
-    React.useState<CommentFilterMode>("active");
+    useState<CommentFilterMode>("active");
+
   // Scope toggle paired with the filter: hide comments not on the current file
   // (General/Overview + comments on files no longer in the PR).
-  const [onlyThisFile, setOnlyThisFile] = React.useState(false);
+  const [onlyThisFile, setOnlyThisFile] = useState(false);
   // Reader preference: whether the PR change highlights are shown. Defaults to
   // visible; the global toggle in the DocNav header flips it so a reader can
   // drop to the clean, latest version of every document at any time.
-  const [diffHidden, setDiffHidden] = React.useState(false);
+  const [diffHidden, setDiffHidden] = useState(false);
   // Comment rail search query (filters comments by body / author).
-  const [commentQuery, setCommentQuery] = React.useState("");
+  const [commentQuery, setCommentQuery] = useState("");
 
   // Global "show / hide changes" switch, rendered in the DocNav header so it
   // reads as a single preference over the whole document set rather than a
@@ -34,14 +35,14 @@ export function useReaderToggles() {
   //
   // Telemetry-wrapped UI toggles. The presentational children stay oblivious;
   // the container records the engagement action alongside the state change.
-  const handleToggleDiff = React.useCallback(() => {
+  const handleToggleDiff = useCallback(() => {
     // After the flip, the diff is visible iff it was hidden beforehand.
     const nowVisible = diffHidden;
     setDiffHidden((v) => !v);
     track(events.diffToggled({ visible: nowVisible }));
   }, [diffHidden]);
 
-  const handleFilterModeChange = React.useCallback(
+  const handleFilterModeChange = useCallback(
     (mode: CommentFilterMode) => {
       setCommentFilter(mode);
       track(events.commentFiltered({ mode, scoped: onlyThisFile }));
@@ -49,7 +50,7 @@ export function useReaderToggles() {
     [onlyThisFile],
   );
 
-  const handleOnlyThisFileChange = React.useCallback(
+  const handleOnlyThisFileChange = useCallback(
     (value: boolean) => {
       setOnlyThisFile(value);
       track(events.commentFiltered({ mode: commentFilter, scoped: value }));

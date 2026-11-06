@@ -8,6 +8,7 @@ const sdk = vi.hoisted(() => ({
   getHost: vi.fn(),
   getUser: vi.fn(),
 }));
+
 vi.mock("azure-devops-extension-sdk", () => sdk);
 vi.mock("azure-devops-extension-api", () => ({
   CommonServiceIds: { HostNavigationService: "nav-service" },
@@ -104,6 +105,7 @@ describe("buildHubDeepLinkUrl", () => {
     repoId: "r1",
     path: "/docs/a.md",
   };
+
   const target = { kind: "comment", threadId: "t1" } as const;
 
   it("assembles the URL from the extension identity", () => {

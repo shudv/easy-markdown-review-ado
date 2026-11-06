@@ -33,6 +33,7 @@ function b64url(input: string): string {
 function makeJwt(payload: Record<string, unknown>): string {
   const header = b64url(JSON.stringify({ typ: "JWT", alg: "RS256" }));
   const body = b64url(JSON.stringify(payload));
+
   return `${header}.${body}.${"sig".repeat(4)}`;
 }
 
@@ -85,6 +86,7 @@ describe("parseJwtPayload", () => {
   it("returns null when atob is unavailable", () => {
     const token = makeJwt({ exp: 123 });
     vi.stubGlobal("atob", undefined);
+
     try {
       expect(parseJwtPayload(token)).toBeNull();
     } finally {
@@ -111,6 +113,7 @@ describe("readAdoTokenExpiry", () => {
         hostB: { ado_exp: 1200 },
       },
     });
+
     expect(readAdoTokenExpiry(token).adoExpMs).toBe(1200 * 1000);
   });
 
@@ -130,6 +133,7 @@ describe("readAdoTokenExpiry", () => {
       exp: 2000,
       xms_attr: { bad: "not-an-object", empty: null, good: { ado_exp: 1200 } },
     });
+
     expect(readAdoTokenExpiry(token).adoExpMs).toBe(1200 * 1000);
   });
 
@@ -219,6 +223,7 @@ describe("isAdoAuthError", () => {
     const msg =
       "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not " +
       "authorized to access this resource.";
+
     expect(isAdoAuthError(new Error(msg))).toBe(true);
     expect(isAdoAuthError(msg)).toBe(true);
     expect(isAdoAuthError({ message: msg })).toBe(true);
@@ -250,34 +255,40 @@ describe("SessionRefreshingError", () => {
 describe("planSessionRefreshRetry", () => {
   it("waits until recoverAtMs (+buffer) when known", () => {
     const now = 1_000_000;
+
     const plan = planSessionRefreshRetry({
       recoverAtMs: now + 120_000,
       nowMs: now,
       attempt: 1,
     });
+
     expect(plan.giveUp).toBe(false);
     expect(plan.delayMs).toBe(120_000 + 2_000);
   });
 
   it("clamps a past recoverAtMs up to the minimum delay (expired case)", () => {
     const now = 1_000_000;
+
     const plan = planSessionRefreshRetry({
       recoverAtMs: now - 5_000, // already past
       nowMs: now,
       attempt: 1,
       minDelayMs: 3_000,
     });
+
     expect(plan.delayMs).toBe(3_000);
   });
 
   it("caps an absurdly distant recoverAtMs at the ceiling", () => {
     const now = 0;
+
     const plan = planSessionRefreshRetry({
       recoverAtMs: 60 * 60_000, // 1 hour out
       nowMs: now,
       attempt: 1,
       ceilingMs: 11 * 60_000,
     });
+
     expect(plan.delayMs).toBe(11 * 60_000);
   });
 
@@ -301,6 +312,7 @@ describe("planSessionRefreshRetry", () => {
       attempt: 7,
       maxAttempts: 6,
     });
+
     expect(plan.giveUp).toBe(true);
   });
 });
@@ -352,6 +364,7 @@ describe("detectSessionRefreshing", () => {
       "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not " +
         "authorized to access this resource.",
     );
+
     const getToken = vi.fn().mockResolvedValue(deadToken);
     const result = await detectSessionRefreshing(err, getToken, deadNow);
     expect(result?.grantState).toBe("refreshing");
@@ -424,18 +437,24 @@ describe("withAdoSessionRefreshDetection", () => {
 
   it("samples the clock after the operation rejects and the token resolves", async () => {
     const order: string[] = [];
+
     const op = vi.fn().mockImplementation(async () => {
       order.push("operation");
       throw auth401;
     });
+
     const getToken = vi.fn().mockImplementation(async () => {
       order.push("token");
+
       return token;
     });
+
     const nowMs = vi.fn().mockImplementation(() => {
       order.push("clock");
+
       return deadNow;
     });
+
     await expect(
       withAdoSessionRefreshDetection(op, getToken, nowMs),
     ).rejects.toBeInstanceOf(SessionRefreshingError);

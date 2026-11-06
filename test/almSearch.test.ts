@@ -78,11 +78,13 @@ describe("AlmSearchRestClient", () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ count: 0, results: [] }),
     );
+
     const client = new AlmSearchRestClient(
       "my org",
       async () => "TOK",
       fetchImpl,
     );
+
     await client.searchCode(REQ, "Spaces Project");
     expect(fetchImpl).toHaveBeenCalledOnce();
     const [url, init] = fetchImpl.mock.calls[0]!;
@@ -105,6 +107,7 @@ describe("AlmSearchRestClient", () => {
         results: [{ fileName: "a.md", path: "/a.md" }],
       }),
     );
+
     const client = new AlmSearchRestClient("org", async () => "TOK", fetchImpl);
     const res = await client.searchCode(REQ, "P");
     expect(res.count).toBe(1);
@@ -114,6 +117,7 @@ describe("AlmSearchRestClient", () => {
   it("defaults to the global fetch when none is injected", async () => {
     const globalFetch = vi.fn(async () => jsonResponse({ count: 2 }));
     vi.stubGlobal("fetch", globalFetch);
+
     try {
       const client = new AlmSearchRestClient("org", async () => "TOK");
       const res = await client.searchCode(REQ, "P");
@@ -127,8 +131,10 @@ describe("AlmSearchRestClient", () => {
   it("propagates an AbortSignal through to fetch", async () => {
     const fetchImpl = vi.fn(async (_url, init) => {
       expect((init as RequestInit).signal).toBeDefined();
+
       return jsonResponse({});
     });
+
     const client = new AlmSearchRestClient("org", async () => "TOK", fetchImpl);
     const ac = new AbortController();
     await client.searchCode(REQ, "P", ac.signal);
@@ -136,18 +142,21 @@ describe("AlmSearchRestClient", () => {
 
   it("preserves an AbortError instead of reporting it as a network failure", async () => {
     const ac = new AbortController();
+
     const fetchImpl = vi.fn(async () => {
       ac.abort();
       const e = new Error("aborted");
       e.name = "AbortError";
       throw e;
     });
+
     const client = new AlmSearchRestClient(
       "org",
       async () => "TOK",
       fetchImpl,
       noSleep,
     );
+
     await expect(client.searchCode(REQ, "P", ac.signal)).rejects.toMatchObject({
       name: "AbortError",
     });
@@ -161,6 +170,7 @@ describe("AlmSearchRestClient", () => {
         throw new Error("cannot stringify");
       },
     };
+
     const client = new AlmSearchRestClient(
       "org",
       async () => "TOK",
@@ -169,6 +179,7 @@ describe("AlmSearchRestClient", () => {
       }),
       noSleep,
     );
+
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "network",
       message: "unknown error",
@@ -184,6 +195,7 @@ describe("AlmSearchRestClient", () => {
       vi.fn(),
       noSleep,
     );
+
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "auth",
       message: "token boom",
@@ -197,6 +209,7 @@ describe("AlmSearchRestClient", () => {
       vi.fn(),
       noSleep,
     );
+
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "auth",
       message: "empty access token",
@@ -207,12 +220,14 @@ describe("AlmSearchRestClient", () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError("offline");
     });
+
     const client = new AlmSearchRestClient(
       "org",
       async () => "TOK",
       fetchImpl,
       noSleep,
     );
+
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "network",
       message: "offline",
@@ -235,12 +250,14 @@ describe("AlmSearchRestClient", () => {
             statusText: `status ${status}`,
           }),
       );
+
       const client = new AlmSearchRestClient(
         "org",
         async () => "TOK",
         fetchImpl,
         noSleep,
       );
+
       const err: unknown = await client.searchCode(REQ, "P").catch((e) => e);
       expect(err).toBeInstanceOf(AlmSearchError);
       expect(err).toMatchObject({
@@ -260,6 +277,7 @@ describe("AlmSearchRestClient", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
+
     const client = new AlmSearchRestClient("org", async () => "TOK", fetchImpl);
     await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
       kind: "unknown",
@@ -276,21 +294,27 @@ describe("AlmSearchRestClient", () => {
         .fn<() => Promise<string>>()
         .mockResolvedValueOnce("STALE")
         .mockResolvedValueOnce("FRESH");
+
       const seenAuth: string[] = [];
+
       const fetchImpl = vi.fn(async (_url, init) => {
         const auth = (init as RequestInit).headers as Record<string, string>;
         seenAuth.push(auth.Authorization!);
+
         if (seenAuth.length === 1) {
           return new Response("no", { status: 401, statusText: "unauth" });
         }
+
         return jsonResponse({ count: 1, results: [] });
       });
+
       const client = new AlmSearchRestClient(
         "org",
         getToken,
         fetchImpl,
         noSleep,
       );
+
       const res = await client.searchCode(REQ, "P");
       expect(res.count).toBe(1);
       expect(getToken).toHaveBeenCalledTimes(2);
@@ -304,13 +328,16 @@ describe("AlmSearchRestClient", () => {
         .fn<() => Promise<string>>()
         .mockRejectedValueOnce(new Error("token boom"))
         .mockResolvedValueOnce("TOK");
+
       const fetchImpl = vi.fn(async () => jsonResponse({ count: 0 }));
+
       const client = new AlmSearchRestClient(
         "org",
         getToken,
         fetchImpl,
         noSleep,
       );
+
       const res = await client.searchCode(REQ, "P");
       expect(res.count).toBe(0);
       expect(getToken).toHaveBeenCalledTimes(2);
@@ -329,15 +356,18 @@ describe("AlmSearchRestClient", () => {
 
     it("does not retry a terminal 400 despite re-acquiring", async () => {
       const getToken = vi.fn(async () => "TOK");
+
       const fetchImpl = vi.fn(
         async () => new Response("bad", { status: 400, statusText: "bad" }),
       );
+
       const client = new AlmSearchRestClient(
         "org",
         getToken,
         fetchImpl,
         noSleep,
       );
+
       await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({
         kind: "bad-request",
         status: 400,
@@ -364,11 +394,12 @@ describe("createAlmSearchClient", () => {
       orgName: "org",
       getToken: async () => "TOK",
     });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.source).toBe("rest");
-      expect(r.client).toBeInstanceOf(AlmSearchRestClient);
-    }
+
+    expect(r).toEqual({
+      ok: true,
+      source: "rest",
+      client: expect.any(AlmSearchRestClient),
+    });
   });
 });
 

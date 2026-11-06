@@ -19,6 +19,7 @@ export function attachTableBeforeDisclosure(
   row.dataset.diffAmberMode = "comparison";
   const table = row.closest<HTMLTableElement>("table");
   let parent = table!.parentElement!;
+
   if (!parent.classList.contains(DIFF_TABLE_COMPARISON_CLASS)) {
     const wrapper = table!.ownerDocument.createElement("div");
     wrapper.className = DIFF_TABLE_COMPARISON_CLASS;
@@ -26,7 +27,9 @@ export function attachTableBeforeDisclosure(
     wrapper.appendChild(table!);
     parent = wrapper;
   }
+
   const key = `${range.start}:${range.end}`;
+
   if (
     Array.from(
       parent.querySelectorAll<HTMLElement>(".emr-diff-before-control"),
@@ -38,10 +41,12 @@ export function attachTableBeforeDisclosure(
   const control = document.createElement("div");
   control.className = "emr-diff-before-control";
   control.dataset.diffBeforeKey = key;
+
   const { trigger, panel, content } = createBeforeToggle(
     `emr-diff-before-table-${range.start}-${range.end}`,
     "emr-diff-before-panel markdown-body",
   );
+
   content.appendChild(
     buildBeforeTableContent(
       range.originalText,
@@ -93,6 +98,7 @@ function createBeforeToggle(
     );
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
   });
+
   return { trigger, panel, content };
 }
 
@@ -103,39 +109,49 @@ function buildBeforeTableContent(
 ): DocumentFragment {
   const fragment = doc.createDocumentFragment();
   const rendered = doc.createElement("div");
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   rendered.innerHTML = renderInline(markdown);
+
   if (rendered.querySelector("table")) {
     while (rendered.firstChild) fragment.appendChild(rendered.firstChild);
+
     return fragment;
   }
 
   const lines = markdown.split(/\r\n|\r|\n/);
   const rows = lines.map(splitTableRow);
   const columnCount = rows[0]!.length;
+
   const isRowFragment =
     columnCount >= 2 &&
     lines.every((line) => /^\s*\|.*\|\s*$/.test(line)) &&
     rows.every((cells) => cells.length === columnCount);
+
   if (!isRowFragment) {
     while (rendered.firstChild) fragment.appendChild(rendered.firstChild);
+
     return fragment;
   }
 
   const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
+  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
   rendered.innerHTML = renderInline(
     [lines[0]!, delimiter, ...lines.slice(1)].join("\n"),
   );
   const table = rendered.querySelector<HTMLTableElement>("table")!;
   const headerRow = table.querySelector<HTMLTableRowElement>("thead tr")!;
+
   for (const header of Array.from(headerRow.querySelectorAll("th"))) {
     const cell = doc.createElement("td");
-    cell.innerHTML = header.innerHTML;
+    cell.append(...Array.from(header.childNodes));
     header.replaceWith(cell);
   }
-  const body = table.tBodies[0] ?? table.createTBody();
+
+  const body = table.tBodies.item(0) ?? table.createTBody();
   body.prepend(headerRow);
   table.tHead?.remove();
   fragment.appendChild(table);
+
   return fragment;
 }
 
@@ -148,16 +164,20 @@ export function attachBlockBeforeDisclosure(
   block.dataset.diffAmberMode = "comparison";
   const control = document.createElement("div");
   control.className = "emr-diff-before-control emr-diff-before-control--block";
+
   const { trigger, panel, content } = createBeforeToggle(
     `emr-diff-before-${block.tagName.toLowerCase()}-${span.start}-${span.end}`,
     "emr-diff-before-panel emr-diff-before-panel--block markdown-body",
   );
+
   const scratch = renderOriginalStandalone(
     block,
     originalMarkdown,
     renderInline,
   );
+
   const originalBlock = scratch.querySelector<HTMLElement>(block.tagName);
+
   if (originalBlock) {
     if (block.tagName === "LI") {
       while (originalBlock.firstChild) {
@@ -169,6 +189,7 @@ export function attachBlockBeforeDisclosure(
   } else {
     while (scratch.firstChild) content.appendChild(scratch.firstChild);
   }
+
   control.appendChild(trigger);
 
   if (block.tagName === "LI") {

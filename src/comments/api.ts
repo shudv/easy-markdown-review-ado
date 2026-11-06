@@ -14,7 +14,7 @@
 //   - Errors from the remote write can be surfaced inline without leaving
 //     stale optimistic state behind.
 
-import * as React from "react";
+import { createContext, useContext } from "react";
 
 import type {
   MentionedIdentity,
@@ -132,6 +132,7 @@ export class LocalOnlyCommentApi implements CommentApi {
   async createThread(_input: NewThreadInput): Promise<CreatedThreadIds> {
     const n = ++this.threadCounter;
     const threadId = `t-local-${n}`;
+
     return {
       threadId,
       firstCommentId: `${threadId}-c1`,
@@ -219,12 +220,15 @@ export function filterByQuery<T>(
   // fast path doesn't change the output.
   if (!q) return items.slice(0, 8);
   const matches: { item: T; score: number }[] = [];
+
   for (const item of items) {
     const hay = keys(item).join(" ").toLowerCase();
     const idx = hay.indexOf(q);
     if (idx >= 0) matches.push({ item, score: idx });
   }
+
   matches.sort((a, b) => a.score - b.score);
+
   return matches.slice(0, 8).map((m) => m.item);
 }
 
@@ -237,7 +241,7 @@ export function filterByQuery<T>(
 // need to fire ad-hoc requests (today: mention typeahead inside Composer).
 // ---------------------------------------------------------------------------
 
-const CommentApiContext = React.createContext<CommentApi | null>(null);
+const CommentApiContext = createContext<CommentApi | null>(null);
 
 export const CommentApiProvider = CommentApiContext.Provider;
 
@@ -246,11 +250,13 @@ export const CommentApiProvider = CommentApiContext.Provider;
  * misuse is loud rather than silent.
  */
 export function useCommentApi(): CommentApi {
-  const api = React.useContext(CommentApiContext);
+  const api = useContext(CommentApiContext);
+
   if (!api) {
     throw new Error(
       "useCommentApi must be used inside <CommentApiProvider value={...}>",
     );
   }
+
   return api;
 }

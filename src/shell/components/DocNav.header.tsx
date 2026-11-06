@@ -1,6 +1,6 @@
 // Header of the document navigation rail: title or search box + toggle.
 
-import * as React from "react";
+import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { SearchIcon } from "./icons";
 import { SvgX } from "./DocNav.icons";
@@ -16,20 +16,31 @@ interface DocNavHeaderProps {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   closeSearch: () => void;
-  searchInputRef: React.RefObject<HTMLInputElement>;
+  searchInputRef: RefObject<HTMLInputElement>;
   /** Offer the search toggle (enough documents, or a search in progress). */
   showSearchToggle: boolean;
-  titleSlot?: React.ReactNode;
-  headerActions?: React.ReactNode;
+  titleSlot?: ReactNode;
+  headerActions?: ReactNode;
 }
 
-export function DocNavHeader(props: DocNavHeaderProps): React.ReactElement {
-  const { searchQuery, setSearchQuery, searchOpen, setSearchOpen } = props;
+export function DocNavHeader(props: Readonly<DocNavHeaderProps>): ReactElement {
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchOpen,
+    setSearchOpen,
+    closeSearch,
+    searchInputRef,
+    showSearchToggle,
+    titleSlot,
+    headerActions,
+  } = props;
+
   return (
     <div className="emr-docnav-header">
       {searchOpen ? (
         <input
-          ref={props.searchInputRef}
+          ref={searchInputRef}
           type="search"
           className="emr-docnav-search-inline"
           placeholder="Find a document or folder..."
@@ -53,13 +64,13 @@ export function DocNavHeader(props: DocNavHeaderProps): React.ReactElement {
           spellCheck={false}
         />
       ) : (
-        (props.titleSlot ?? <span className="emr-docnav-title">Documents</span>)
+        (titleSlot ?? <span className="emr-docnav-title">Documents</span>)
       )}
-      {props.headerActions}
-      {props.showSearchToggle ? (
+      {headerActions}
+      {showSearchToggle ? (
         <SearchToggleButton
           searchOpen={searchOpen}
-          closeSearch={props.closeSearch}
+          closeSearch={closeSearch}
           setSearchOpen={setSearchOpen}
         />
       ) : null}
@@ -67,12 +78,15 @@ export function DocNavHeader(props: DocNavHeaderProps): React.ReactElement {
   );
 }
 
-function SearchToggleButton(props: {
-  searchOpen: boolean;
-  closeSearch: () => void;
-  setSearchOpen: (open: boolean) => void;
-}): React.ReactElement {
+function SearchToggleButton(
+  props: Readonly<{
+    searchOpen: boolean;
+    closeSearch: () => void;
+    setSearchOpen: (open: boolean) => void;
+  }>,
+): ReactElement {
   const { searchOpen, closeSearch, setSearchOpen } = props;
+
   return (
     <button
       type="button"

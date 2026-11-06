@@ -1,12 +1,12 @@
 // Loading placeholders for Shell's article and comment rail.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 // A subtle placeholder shown in the article column while the next file's
 // source is fetched and rendered. Mirrors the article's max-width/gutter so
 // the layout doesn't shift when the real content arrives. Shimmer is purely
 // decorative and disabled under `prefers-reduced-motion` (see styles.scss).
-export function ArticleSkeleton(): React.ReactElement {
+export function ArticleSkeleton(): ReactElement {
   return (
     <div className="emr-article-wrap emr-skeleton" aria-hidden="true">
       <div className="emr-skel-line emr-skel-title" />
@@ -23,7 +23,7 @@ export function ArticleSkeleton(): React.ReactElement {
 
 // Matching placeholder for the comment rail so the right column keeps its
 // width (no reflow of the article) while threads for the new file resolve.
-export function RailSkeleton(): React.ReactElement {
+export function RailSkeleton(): ReactElement {
   return (
     <aside className="emr-rail-col emr-skeleton" aria-hidden="true">
       <div className="emr-rail-header emr-skel-header" aria-hidden="true">

@@ -35,6 +35,7 @@ export function focusedDatasetValue(
   key: string,
 ): string | undefined {
   const active = article.ownerDocument.activeElement;
+
   return article.contains(active)
     ? (active as HTMLElement).closest<HTMLElement>(selector)?.dataset[key]
     : undefined;
@@ -46,14 +47,15 @@ export function restoreRewrapFocus(
   focusedThreadId: string | undefined,
   focusedHeadingLinkId: string | undefined,
 ): void {
-  if (focusedThreadId) {
+  if (focusedThreadId !== undefined && focusedThreadId !== "") {
     article
       .querySelector<HTMLElement>(
         `.emr-highlight[role="button"][data-thread-id="${CSS.escape(focusedThreadId)}"]`,
       )
       ?.focus();
   }
-  if (focusedHeadingLinkId) {
+
+  if (focusedHeadingLinkId !== undefined && focusedHeadingLinkId !== "") {
     article
       .querySelector<HTMLElement>(
         `.${HEADING_LINK_CLASS}[data-heading-id="${CSS.escape(focusedHeadingLinkId)}"]`,
@@ -75,26 +77,32 @@ function hydrateSection(
   const heading = s.querySelector<HTMLElement>(
     ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
   );
+
   // A shareable link to the section, appended after the heading text so it
   // sits where ADO's native preview shows its anchor glyph. Icon-only (no
   // text node), so it never leaks into anchoring, outline labels, or the
   // heading's accessible name below.
-  if (heading?.id && hasHeadingLinks) {
+  if (heading != null && heading.id !== "" && hasHeadingLinks) {
     heading.setAttribute("aria-label", heading.textContent.trim());
     heading.append(createHeadingLinkButton(article.ownerDocument, heading.id));
   }
+
   // The document-title section is never collapsible (it has no chevron),
   // so ignore any persisted state and keep it open.
   if (s.classList.contains("emr-section--doc-title")) {
     s.removeAttribute("data-collapsed");
+
     return;
   }
+
   const sid = s.dataset.sectionId;
-  if (sid && readSectionState(storageKey, sid)) {
+
+  if (sid !== undefined && sid !== "" && readSectionState(storageKey, sid)) {
     s.setAttribute("data-collapsed", "true");
   } else {
     s.removeAttribute("data-collapsed");
   }
+
   if (!heading) return;
   // The icon button lives inside the heading for stable gutter geometry;
   // pin the heading's accessible name to its document text so the button's
@@ -132,11 +140,13 @@ function wrapOne(
   classes: string,
 ): boolean {
   const range = resolveAnchor(article, anchor);
+
   if (anchor.implicit) {
     const marker = document.createElement("span");
     marker.className = "emr-implicit-anchor";
     marker.dataset.threadId = threadId;
     marker.setAttribute("aria-hidden", "true");
+
     if (range) {
       const insertion = range.cloneRange();
       insertion.collapse(true);
@@ -144,13 +154,17 @@ function wrapOne(
     } else {
       article.prepend(marker);
     }
+
     return true;
   }
+
   if (!range) return false;
+
   const spans = wrapRangeWithHighlight(range, {
     className: `emr-highlight ${classes}`.trim(),
     threadId,
   });
+
   return spans.length > 0;
 }
 
@@ -161,6 +175,7 @@ export function wrapAnchors(
   draftAnchor: TextQuoteAnchor | null,
 ): { orphaned: string[]; hasDraft: boolean } {
   const orphaned: string[] = [];
+
   for (const t of threads) {
     const cls = isResolvedLike(t.status) ? "is-resolved" : "";
     const ok = wrapOne(article, t.id, t.anchor, cls);
@@ -168,9 +183,11 @@ export function wrapAnchors(
   }
 
   let hasDraft = false;
+
   if (draftAnchor) {
     hasDraft = wrapOne(article, DRAFT_THREAD_ID, draftAnchor, "is-active");
   }
+
   return { orphaned, hasDraft };
 }
 
@@ -188,27 +205,34 @@ export function measureAnchorYs(
   let draftY: number | null = null;
 
   const seen = new Set<string>();
+
   const highlights = article.querySelectorAll<HTMLElement>(
     ".emr-highlight, .emr-implicit-anchor",
   );
+
   highlights.forEach((el) => {
     const tid = el.dataset.threadId;
-    if (!tid || seen.has(tid)) return;
+    if (tid === undefined || tid === "" || seen.has(tid)) return;
     seen.add(tid);
     const rect = el.getBoundingClientRect();
     let y: number;
+
     if (rect.width === 0 && rect.height === 0) {
       // Hidden inside a collapsed section — fall back to heading y.
       const section = el.closest<HTMLElement>(".emr-section");
+
       const heading = section?.querySelector<HTMLElement>(
         "h1, h2, h3, h4, h5, h6",
       );
+
       y = heading ? heading.getBoundingClientRect().top - wrapRect.top : 0;
     } else {
       y = rect.top - wrapRect.top;
     }
+
     if (tid === DRAFT_THREAD_ID) draftY = y;
     else yByThreadId.set(tid, y);
   });
+
   return { yByThreadId, draftY };
 }

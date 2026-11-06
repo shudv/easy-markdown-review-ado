@@ -1,6 +1,6 @@
 // Shell: the shown article (live or historical) and its load state.
 
-import * as React from "react";
+import { type MutableRefObject, useLayoutEffect, useMemo } from "react";
 
 import type { DiffRange, FileInfo } from "../../types";
 import type { DocumentImageResolver } from "../../markdown/documentImages";
@@ -28,7 +28,7 @@ interface ActiveArticleOptions {
   historicalAbsentByKey: Record<string, true>;
   listFolder: FolderLister | undefined;
   resolveDocumentImage: DocumentImageResolver | undefined;
-  activeStorageKeyRef: React.MutableRefObject<string>;
+  activeStorageKeyRef: MutableRefObject<string>;
 }
 
 /**
@@ -40,21 +40,25 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
   const pristineHtml = opts.htmlByPath[selectedPath] ?? "";
   const currentFileDiff = opts.diffsByFile[selectedPath];
   const currentOriginalSource = opts.originalSourcesByFile?.[selectedPath];
+
   // A file added or removed wholesale in the PR has no meaningful "what
   // changed" story — every line is the same colour — so we suppress the diff
   // layer and its toggle for those and just show the clean document.
-  const currentFileChangeType = React.useMemo(
+  const currentFileChangeType = useMemo(
     () => files.find((f) => f.path === selectedPath)?.changeType,
     [files, selectedPath],
   );
+
   const isWholeFileChange =
     currentFileChangeType === "added" || currentFileChangeType === "deleted";
+
   // ---- comment-history stepper: active-stop render values ----
   // A historical stop swaps the whole document view atomically — content,
   // threads, routed-PR pill and read-only state all follow the active stop, so
   // the existing anchor/positioning pipeline simply re-resolves against the
   // historical snapshot.
   const status = historicalStatus({ ...opts, currentFileChangeType });
+
   const { activePristineHtml, activeStorageKey, articleReady } =
     activeArticleState({ ...opts, status, pristineHtml });
 
@@ -65,10 +69,16 @@ export function useActiveArticle(opts: ActiveArticleOptions) {
     commitId: activeStop.commitId,
     listFolder: opts.listFolder,
   });
-  opts.activeStorageKeyRef.current = activeStorageKey;
+
+  // Read only by the scroll helpers' rAF callbacks, which run after commit.
+  const { activeStorageKeyRef } = opts;
+  useLayoutEffect(() => {
+    activeStorageKeyRef.current = activeStorageKey;
+  });
 
   const resolveDocumentImage = opts.resolveDocumentImage;
-  const activeDocumentImageResolver = React.useMemo(
+
+  const activeDocumentImageResolver = useMemo(
     () =>
       bindRepositoryImageResolver(
         resolveDocumentImage,

@@ -4,8 +4,7 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,7 +17,7 @@ import { SvgRefresh } from "../src/hub/hubIcons";
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-type PickerProps = React.ComponentProps<typeof RepoPicker>;
+type PickerProps = ComponentProps<typeof RepoPicker>;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -55,18 +54,24 @@ function render(props: Partial<PickerProps> = {}): PickerProps {
     onSelect: vi.fn(),
     ...props,
   };
+
   act(() => root.render(<RepoPicker {...full} />));
+
   return full;
 }
 
 const trigger = () =>
   container.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!;
+
 const menu = () =>
   container.querySelector<HTMLElement>(".emr-docnav-repo-menu");
+
 const list = () =>
   container.querySelector<HTMLElement>(".emr-docnav-repo-list")!;
+
 const options = () =>
   Array.from(container.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+
 const filterInput = () =>
   container.querySelector<HTMLInputElement>(".emr-docnav-repo-filter-input")!;
 
@@ -94,6 +99,7 @@ function type(input: HTMLInputElement, value: string): void {
     HTMLInputElement.prototype,
     "value",
   )!;
+
   act(() => {
     descriptor.set!.bind(input)(value);
     input.dispatchEvent(new Event("input", { bubbles: true }));

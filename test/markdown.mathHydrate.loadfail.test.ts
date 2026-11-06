@@ -12,6 +12,7 @@ let loadAttempts = 0;
 vi.mock("katex", () => {
   loadAttempts += 1;
   if (loadAttempts === 1) throw new Error("chunk load failed");
+
   return {
     default: {
       renderToString: (source: string) =>
@@ -25,6 +26,7 @@ import { hydrateMath } from "../src/markdown/mathHydrate";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -46,8 +48,7 @@ describe("hydrateMath — library load failure", () => {
     expect(element.dataset.mathError).toBe("load-failed");
     // Not hydrated — the fallback stays readable and eligible for a retry.
     expect(element.dataset.hydrated).toBeUndefined();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
       error: expect.anything(),
       source: "Math.hydrate",
       operation: "math-library-load",

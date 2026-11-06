@@ -9,6 +9,7 @@ import { listMarkdownLevel } from "../src/shell/adoFolderListing.helpers";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -29,10 +30,12 @@ function fakeClient(opts: {
   return {
     getItems: vi.fn(async () => {
       if (opts.items instanceof Error) throw opts.items;
+
       return opts.items ?? [];
     }),
     getItemText: vi.fn(async () => {
       if (opts.orderText instanceof Error) throw opts.orderText;
+
       return opts.orderText ?? "";
     }),
   };
@@ -99,12 +102,14 @@ describe("listMarkdownLevel", () => {
 
   it("pins the read to a commit when one is given", async () => {
     const client = fakeClient({ items: [{ path: "/a.md" }] });
+
     const listing = await listMarkdownLevel(
       scopeFor(client),
       { ...repo, defaultBranch: "" },
       "/",
       { atCommitId: "c0ffee" },
     );
+
     expect(client.getItems.mock.calls[0]![8]).toEqual({
       version: "c0ffee",
       versionType: 2,
@@ -120,6 +125,7 @@ describe("listMarkdownLevel", () => {
       repo,
       "/",
     );
+
     expect(listing).toEqual({ files: [], folders: [] });
     expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "folder-listing-load" }),
@@ -133,6 +139,7 @@ describe("listMarkdownLevel", () => {
       "/Gone",
       { missingOk: true, propagate: true },
     );
+
     expect(listing).toEqual({ files: [], folders: [] });
     expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
   });
@@ -152,6 +159,7 @@ describe("listMarkdownLevel", () => {
       repo,
       "/Guides",
     );
+
     expect(listing).not.toHaveProperty("order");
     expect(listing.files.map((f) => f.path)).toEqual([
       "/Guides/Intro.md",
@@ -168,6 +176,7 @@ describe("listMarkdownLevel", () => {
       repo,
       "/Guides",
     );
+
     expect(listing).not.toHaveProperty("order");
     expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
   });

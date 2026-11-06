@@ -1,5 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -8,6 +14,7 @@ import { ArticleView } from "./ArticleView";
 
 const SELECTED_LINE =
   "Triple-click selects this entire line for an inline review comment.";
+
 const SOURCE = [
   "# Selection behavior",
   "",
@@ -23,16 +30,18 @@ const meta = {
   parameters: { layout: "fullscreen" },
   decorators: [
     (Story) => {
-      React.useLayoutEffect(() => {
+      useLayoutEffect(() => {
         const root = document.documentElement;
         const previous = root.getAttribute("data-emr-theme");
         root.setAttribute("data-emr-theme", "dark");
+
         return () => {
           if (previous) root.setAttribute("data-emr-theme", previous);
           else root.removeAttribute("data-emr-theme");
           window.getSelection()?.removeAllRanges();
         };
       }, []);
+
       return (
         <div style={{ width: 760, padding: 32 }}>
           <Story />
@@ -154,19 +163,22 @@ export const ReadOnlyRemovedWordsOfferNoLink: Story = {
  * hydration settles.
  */
 function UnmountOnThemeFlip(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [mounted, setMounted] = React.useState(true);
-  React.useEffect(() => {
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [mounted, setMounted] = useState(true);
+  useEffect(() => {
     const observer = new MutationObserver(() =>
       flushSync(() => setMounted(false)),
     );
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-emr-theme"],
     });
+
     return () => observer.disconnect();
   }, []);
+
   return mounted ? <ArticleView {...props} /> : <p>Article closed</p>;
 }
 

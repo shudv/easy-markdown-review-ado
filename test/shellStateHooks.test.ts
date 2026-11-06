@@ -2,8 +2,7 @@
 // and identity resolution, the per-document first thread load, the
 // historical thread view — plus the draft-guard notice's file label.
 
-import * as React from "react";
-import { act } from "react";
+import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -55,6 +54,7 @@ describe("useCommentApiRouting", () => {
         [GUID]: { displayName: "Ada" },
       })),
     };
+
     const hook = await mount(useCommentApiRouting, routing(api, "a.md"));
     hook.current.identityStore.ensure([GUID]);
     await settle();
@@ -66,6 +66,7 @@ describe("useCommentApiRouting", () => {
       useCommentApiRouting,
       routing(stubCommentApi(), "a.md"),
     );
+
     hook.current.identityStore.ensure([GUID]);
     await settle();
     expect(hook.current.identityStore.get(GUID)).toBeUndefined();
@@ -83,6 +84,7 @@ const thread = (id: string, filePath: string): CommentThread => ({
 describe("useThreadStore", () => {
   it("drops a document's first thread load that resolves after leaving it", async () => {
     const first = deferred<CommentThread[]>();
+
     const base = {
       initialThreads: [],
       currentUser: { id: "me", displayName: "Me", initials: "ME" },
@@ -98,6 +100,7 @@ describe("useThreadStore", () => {
       threadSyncIntervalMs: undefined,
       onRefreshFiles: undefined,
     };
+
     const hook = await mount(useThreadStore, base);
     await hook.rerender({ ...base, selectedPath: "docs/b.md" });
     first.resolve([thread("t1", "docs/a.md")]);
@@ -108,6 +111,7 @@ describe("useThreadStore", () => {
 
 describe("useThreadViews", () => {
   const t7 = thread("t7", "docs/a.md");
+
   async function historicalThreads(activeStopPrId: number | null) {
     const hook = await mount(useThreadViews, {
       threadState: { threadsById: {}, order: [] },
@@ -122,6 +126,7 @@ describe("useThreadViews", () => {
       commentFilter: "all",
       currentUserId: "me",
     });
+
     return hook.current.currentThreadsRaw;
   }
 
@@ -142,7 +147,7 @@ describe("ShellNotices", () => {
     });
     await act(async () => {
       root.render(
-        React.createElement(ShellNotices, {
+        createElement(ShellNotices, {
           persistError: null,
           onDismissPersistError: vi.fn(),
           reloadAllowed: true,

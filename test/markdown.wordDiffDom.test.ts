@@ -12,6 +12,7 @@ function block(html: string): HTMLElement {
   const p = document.createElement("p");
   p.innerHTML = html;
   document.body.appendChild(p);
+
   return p;
 }
 
@@ -31,7 +32,8 @@ function marks(el: HTMLElement) {
 function modifiedText(el: HTMLElement): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(`.${WORD_REMOVED_CLASS}`).forEach((n) => n.remove());
-  return clone.textContent ?? "";
+
+  return clone.textContent;
 }
 
 describe("applyInlineWordDiff", () => {
@@ -66,6 +68,26 @@ describe("applyInlineWordDiff", () => {
       diffWords("const a = 1;\nx", "const a = 1;\nconst b = 2;\n  x"),
     );
     expect(el.querySelector(`.${WORD_LINE_BREAK_CLASS}`)).toBeNull();
+  });
+
+  it.each([
+    [" \n\t", true],
+    ["\r\n", true],
+    ["\t\r", true],
+    ["\n x", false],
+    ["  ", false],
+  ])("flags an added %j mark as a line break: %s", (value, flagged) => {
+    // textContent, not innerHTML: HTML parsing would normalize `\r` to `\n`.
+    const el = block("");
+    el.textContent = `a${value}b`;
+    applyInlineWordDiff(el, [
+      { kind: "equal", value: "a" },
+      { kind: "added", value },
+      { kind: "equal", value: "b" },
+    ]);
+    const mark = el.querySelector(`.${WORD_ADDED_CLASS}`)!;
+    expect(mark.textContent).toBe(value);
+    expect(mark.classList.contains(WORD_LINE_BREAK_CLASS)).toBe(flagged);
   });
 
   it("wraps a single added word in an <ins>", () => {
@@ -124,6 +146,7 @@ describe("applyInlineWordDiff", () => {
     const el = block(
       'Keep <span class="emr-highlight" data-thread-id="t1">this</span> words',
     );
+
     // Only "word" → "words" changes; the anchored "this" is untouched.
     const ops = diffWords("Keep this word", "Keep this words");
     const res = applyInlineWordDiff(el, ops);
@@ -220,7 +243,7 @@ describe("applyInlineWordDiff", () => {
     expect(res).not.toBeNull();
     const del = el.querySelector(`.${WORD_REMOVED_CLASS}`)!;
     // The removed run is punctuation + whitespace only (no letters/digits).
-    expect(/[\p{L}\p{N}]/u.test(del.textContent ?? "")).toBe(false);
+    expect(/[\p{L}\p{N}]/u.test(del.textContent)).toBe(false);
     expect(del.classList.contains(WORD_REMOVED_TIGHT_CLASS)).toBe(true);
   });
 

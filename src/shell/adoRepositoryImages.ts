@@ -18,6 +18,7 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
   versionDescriptor?: GitVersionDescriptor;
 }): Promise<string | undefined> {
   const { repositoryId, project, path, versionDescriptor } = input;
+
   const key = [
     project,
     repositoryId,
@@ -25,6 +26,7 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
     versionDescriptor?.version ?? "",
     path,
   ].join("\u0000");
+
   const cached = objectUrls.get(key);
   if (cached) return cached;
 
@@ -43,15 +45,19 @@ export function resolveAdoRepositoryImageObjectUrl(input: {
         label: "resolveAdoRepositoryImageObjectUrl.getItemContent",
       },
     );
+
     const blob = isExcalidrawPath(path)
       ? await renderExcalidrawSvgBlob(content)
       : new Blob([content], { type: repositoryImageMimeType(path) });
+
     return URL.createObjectURL(blob);
   })();
+
   // Surface the real failure (status + ADO code) to the reader's telemetry
   // instead of a bare "failed to load", and don't cache it — a transient
   // failure must not keep the image broken for the rest of the session.
   pending.catch(() => objectUrls.delete(key));
   objectUrls.set(key, pending);
+
   return pending;
 }

@@ -63,6 +63,7 @@ function readHostColorSignals(): { forced: boolean; prefersDark: boolean } {
   ) {
     return { forced: false, prefersDark: false };
   }
+
   try {
     return {
       forced: window.matchMedia("(forced-colors: active)").matches,
@@ -86,6 +87,7 @@ export function resolveHostTheme(): EmrTheme {
   // ADO's picker HC injects a real HC background, so luminance still tells
   // hc-dark from hc-light there; only OS forced-colors freezes the background.
   const dark = forced ? prefersDark : isHostDark();
+
   return pickTheme(dark, forced || isAdoHighContrast());
 }
 
@@ -168,12 +170,15 @@ export function syncHostTheme(): () => void {
 
   if (typeof MutationObserver !== "undefined") {
     const observer = new MutationObserver(evaluate);
-    if (document.body) {
-      observer.observe(document.body, {
+    const body = documentBody();
+
+    if (body !== null) {
+      observer.observe(body, {
         attributes: true,
         attributeFilter: ["class", "style"],
       });
     }
+
     // `evaluate()` above already wrote to documentElement, so it exists.
     observer.observe(document.documentElement, {
       attributes: true,
@@ -188,18 +193,29 @@ export function syncHostTheme(): () => void {
 }
 
 /**
+ * `document.body`, typed honestly: the DOM typings say it always exists, but it
+ * is `null` until the parser reaches `<body>` (and in detached documents).
+ */
+function documentBody(): HTMLElement | null {
+  return document.body as HTMLElement | null;
+}
+
+/**
  * True if the host background reads as dark (Rec.709 luminance < 50%). Falls
  * back to light outside a DOM context or when no background is resolvable.
  */
 function isHostDark(): boolean {
-  if (typeof document === "undefined" || !document.body) return false;
+  if (typeof document === "undefined" || documentBody() === null) return false;
   if (typeof getComputedStyle !== "function") return false;
+
   try {
     const cs = getComputedStyle(document.body);
+
     const raw =
       cs.getPropertyValue("--background-color").trim() ||
       cs.backgroundColor ||
       "";
+
     return isDarkLuminance(parseLuminance(raw));
   } catch {
     // getComputedStyle can throw in detached frames; treat as light.
@@ -213,12 +229,14 @@ function isHostDark(): boolean {
  * back to false outside a DOM context or when the value can't be read.
  */
 function isAdoHighContrast(): boolean {
-  if (typeof document === "undefined" || !document.body) return false;
+  if (typeof document === "undefined" || documentBody() === null) return false;
   if (typeof getComputedStyle !== "function") return false;
+
   try {
     const primary = getComputedStyle(document.body).getPropertyValue(
       "--palette-primary",
     );
+
     return isHighContrastPrimary(primary);
   } catch {
     return false;

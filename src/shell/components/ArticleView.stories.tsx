@@ -1,5 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useEffect,
+  useState,
+} from "react";
 import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
@@ -28,6 +33,7 @@ const SOURCE = [
 ].join("\n");
 
 const HTML = renderMarkdownSync(SOURCE);
+
 const SECTION_IDS = [...HTML.matchAll(/data-section-id="([^"]+)"/g)].map(
   (m) => m[1]!,
 );
@@ -196,12 +202,11 @@ const EXACT_OVERLAPPING_THREADS: CommentThread[] = [
 ];
 
 function OverlappingAnchorArticle(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [activeThreadId, setActiveThreadId] = React.useState<string | null>(
-    null,
-  );
-  const [currentSource, setCurrentSource] = React.useState<string>();
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [currentSource, setCurrentSource] = useState<string>();
+
   return (
     <>
       <button type="button" onClick={() => setCurrentSource(SOURCE)}>
@@ -239,12 +244,16 @@ export const OverlappingAnchors: Story = {
       const element = canvasElement.querySelector<HTMLElement>(
         '[data-thread-id="overlap-outer"]',
       );
+
       if (!element) throw new Error("outer overlap anchor missing");
+
       return element;
     });
+
     const inner = outer.querySelector<HTMLElement>(
       '[data-thread-id="overlap-inner"]',
     )!;
+
     await expect(inner).toBeTruthy();
     await expect(outer.getAttribute("role")).toBe("button");
     await expect(outer.tabIndex).toBe(0);
@@ -253,10 +262,12 @@ export const OverlappingAnchors: Story = {
     const innerTextRange = document.createRange();
     innerTextRange.selectNodeContents(inner);
     const innerTextRect = innerTextRange.getBoundingClientRect();
+
     const underlineHit = document.elementFromPoint(
       innerTextRect.left + innerTextRect.width / 2,
       innerTextRect.bottom + 2,
     );
+
     await expect(
       underlineHit?.closest<HTMLElement>(".emr-highlight")?.dataset.threadId,
     ).toBe("overlap-inner");
@@ -267,14 +278,17 @@ export const OverlappingAnchors: Story = {
       "underline",
     );
     await expect(getComputedStyle(outer).textDecorationStyle).toBe("dotted");
+
     const decorationAtScale = (scale: number) => {
       canvasElement.style.setProperty("--emr-reader-scale", String(scale));
       const style = getComputedStyle(outer);
+
       return {
         thickness: Number.parseFloat(style.textDecorationThickness),
         offset: Number.parseFloat(style.textUnderlineOffset),
       };
     };
+
     await expect(decorationAtScale(0.5)).toEqual({ thickness: 2.5, offset: 3 });
     await expect(decorationAtScale(1).thickness).toBeCloseTo(3.48, 3);
     await expect(decorationAtScale(1).offset).toBeCloseTo(3.9875, 3);
@@ -302,15 +316,19 @@ export const OverlappingAnchors: Story = {
       ).toBeTruthy(),
     );
     await expect(getComputedStyle(outer).textDecorationLine).toBe("none");
+
     const selectedInner = canvasElement.querySelector<HTMLElement>(
       '[data-thread-id="overlap-inner"]',
     )!;
+
     const selectedThicknessAtScale = (scale: number) => {
       canvasElement.style.setProperty("--emr-reader-scale", String(scale));
+
       return Number.parseFloat(
         getComputedStyle(selectedInner).textDecorationThickness,
       );
     };
+
     await expect(selectedThicknessAtScale(0.5)).toBe(3);
     await expect(selectedThicknessAtScale(1)).toBeCloseTo(3.9875, 3);
     await expect(selectedThicknessAtScale(1.5)).toBe(5);
@@ -332,20 +350,26 @@ export const OverlappingAnchors: Story = {
     within(canvasElement)
       .getByRole("button", { name: "Rewrap article" })
       .click();
+
     const rewrappedInner = await waitFor(() => {
       const element = canvasElement.querySelector<HTMLElement>(
         '[data-thread-id="overlap-inner"].is-active',
       );
+
       if (!element || element === selectedInner) {
         throw new Error("active overlap not replaced after rewrap");
       }
+
       return element;
     });
+
     await expect(rewrappedInner.classList.contains("is-landing")).toBe(false);
     await expect(getComputedStyle(rewrappedInner).animationName).toBe("none");
+
     const rewrappedOuter = rewrappedInner.closest<HTMLElement>(
       '[data-thread-id="overlap-outer"]',
     )!;
+
     await expect(document.activeElement).toBe(rewrappedOuter);
     const outerBeforeLanding = rewrappedOuter;
     const outerRectBeforeLanding = outerBeforeLanding.getBoundingClientRect();
@@ -361,9 +385,11 @@ export const OverlappingAnchors: Story = {
         ),
       ).toBeTruthy(),
     );
+
     const selectedOuter = canvasElement.querySelector<HTMLElement>(
       '[data-thread-id="overlap-outer"].is-active',
     )!;
+
     const outerTextRange = document.createRange();
     outerTextRange.selectNodeContents(selectedOuter);
     await expect(outerTextRange.getClientRects().length).toBeGreaterThan(1);
@@ -395,21 +421,28 @@ export const PartialOverlappingAnchors: Story = {
       const element = canvasElement.querySelector<HTMLElement>(
         '[data-thread-id="partial-leading"]',
       );
+
       if (!element) throw new Error("leading partial anchor missing");
+
       return element;
     });
+
     const trailing = Array.from(
       canvasElement.querySelectorAll<HTMLElement>(
         '[data-thread-id="partial-trailing"]',
       ),
     );
+
     await expect(trailing).toHaveLength(2);
+
     const overlapFragment = trailing.find((element) =>
       leading.contains(element),
     )!;
+
     const trailingOnlyFragment = trailing.find(
       (element) => !leading.contains(element),
     )!;
+
     await expect(overlapFragment).toBeTruthy();
     await expect(trailingOnlyFragment).toBeTruthy();
     await expect(leading.getAttribute("role")).toBe("button");
@@ -472,12 +505,16 @@ export const ExactOverlappingAnchors: Story = {
       const element = canvasElement.querySelector<HTMLElement>(
         '[data-thread-id="exact-first"]',
       );
+
       if (!element) throw new Error("first exact anchor missing");
+
       return element;
     });
+
     const second = first.querySelector<HTMLElement>(
       '[data-thread-id="exact-second"]',
     )!;
+
     await expect(second).toBeTruthy();
     await expect(getComputedStyle(first).textDecorationLine).toContain(
       "underline",
@@ -497,9 +534,11 @@ export const ExactOverlappingAnchors: Story = {
         }),
       ),
     ).toBe(true);
+
     const sectionToggle = canvasElement.querySelector<HTMLButtonElement>(
       ".emr-section-toggle",
     )!;
+
     await expect(
       sectionToggle.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -524,17 +563,21 @@ export const ExactOverlappingAnchors: Story = {
     await expect(
       Number.parseFloat(getComputedStyle(first).textDecorationThickness),
     ).toBeCloseTo(3.9875, 3);
+
     const initialSpace = new KeyboardEvent("keydown", {
       key: " ",
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(initialSpace)).toBe(false);
+
     const initialSpaceUp = new KeyboardEvent("keyup", {
       key: " ",
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(initialSpaceUp)).toBe(false);
     await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
       "exact-second",
@@ -549,11 +592,13 @@ export const ExactOverlappingAnchors: Story = {
       expect(second.classList.contains("is-active")).toBe(false),
     );
     first.focus();
+
     const initialEnter = new KeyboardEvent("keydown", {
       key: "Enter",
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(initialEnter)).toBe(false);
     await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
       "exact-second",
@@ -561,11 +606,13 @@ export const ExactOverlappingAnchors: Story = {
     await waitFor(() =>
       expect(second.classList.contains("is-active")).toBe(true),
     );
+
     const enter = new KeyboardEvent("keydown", {
       key: "Enter",
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(enter)).toBe(false);
     await expect(args.onHighlightClick).toHaveBeenLastCalledWith("exact-first");
     await waitFor(() =>
@@ -580,13 +627,16 @@ export const ExactOverlappingAnchors: Story = {
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(space)).toBe(false);
     await expect(args.onHighlightClick).toHaveBeenLastCalledWith("exact-first");
+
     const spaceUp = new KeyboardEvent("keyup", {
       key: " ",
       bubbles: true,
       cancelable: true,
     });
+
     await expect(first.dispatchEvent(spaceUp)).toBe(false);
     await expect(args.onHighlightClick).toHaveBeenLastCalledWith(
       "exact-second",
@@ -709,11 +759,14 @@ export const RepositoryImage: Story = {
     const image = await waitFor(() => {
       const element =
         canvasElement.querySelector<HTMLImageElement>(".emr-repo-image");
+
       if (!element?.src.startsWith("blob:")) {
         throw new Error("repository image has not hydrated");
       }
+
       return element;
     });
+
     await expect(args.resolveDocumentImage).toHaveBeenCalledWith(
       "/assets/architecture.svg",
     );
@@ -787,13 +840,16 @@ export const ExcalidrawDrawing: Story = {
       () => {
         const element =
           canvasElement.querySelector<HTMLImageElement>(".emr-excalidraw");
+
         if (!element?.src.startsWith("blob:")) {
           throw new Error("drawing has not rendered");
         }
+
         return element;
       },
       { timeout: 15_000 },
     );
+
     await expect(args.resolveDocumentImage).toHaveBeenCalledWith(
       "/docs/review-flow.excalidraw",
     );
@@ -810,14 +866,18 @@ export const ClickHighlight: Story = {
         canvasElement.querySelector('.emr-highlight[data-thread-id="t1"]'),
       ).toBeTruthy(),
     );
+
     const hl = canvasElement.querySelector<HTMLElement>(
       '.emr-highlight[data-thread-id="t1"]',
     )!;
+
     hl.click();
     await expect(args.onHighlightClick).toHaveBeenCalledWith("t1");
+
     const draft = canvasElement.querySelector<HTMLElement>(
       '.emr-highlight[data-thread-id="__draft__"]',
     );
+
     draft?.click();
     // Clicking empty article space hits no highlight (early return).
     canvasElement.querySelector<HTMLElement>(".emr-rendered")!.click();
@@ -830,11 +890,14 @@ export const CollapseSection: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelector(".emr-section h2")).toBeTruthy(),
     );
+
     const heading =
       canvasElement.querySelector<HTMLElement>(".emr-section > h2")!;
+
     const toggle = heading.querySelector<HTMLButtonElement>(
       ".emr-section-toggle",
     )!;
+
     heading.click();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(heading.parentElement?.getAttribute("data-collapsed")).toBeNull();
@@ -865,9 +928,12 @@ export const TitleNotCollapsible: Story = {
       const h1 = canvasElement.querySelector<HTMLElement>(
         ".emr-section--doc-title > h1",
       );
+
       if (!h1) throw new Error("no doc-title heading");
+
       return h1;
     });
+
     title.click();
     // It never gains a collapsed state.
     await new Promise((r) => setTimeout(r, 50));
@@ -885,7 +951,9 @@ async function liveHeadings(
         ".emr-rendered > .emr-section h1, .emr-rendered > .emr-section h2",
       ),
     ).filter((h) => !h.closest(".emr-diff-before-panel"));
+
     if (hs.length < 2) throw new Error("headings not rendered yet");
+
     return hs;
   });
 }
@@ -903,10 +971,12 @@ export const HeadingLinkCopies: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const [title, approach] = await liveHeadings(canvasElement);
+
     for (const heading of [title!, approach!]) {
       const button = heading.querySelector<HTMLButtonElement>(
         ":scope > .emr-heading-link",
       )!;
+
       await expect(button).toBeTruthy();
       await expect(button.getAttribute("aria-label")).toBe(
         "Copy link to section",
@@ -922,6 +992,7 @@ export const HeadingLinkCopies: Story = {
 
     const button =
       approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+
     button.click();
     await expect(args.onCopyHeadingLink).toHaveBeenCalledWith("approach");
     await waitFor(() =>
@@ -956,8 +1027,10 @@ export const HeadingLinkCopyFails: Story = {
   },
   play: async ({ canvasElement }) => {
     const [title] = await liveHeadings(canvasElement);
+
     const button =
       title!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+
     button.click();
     await waitFor(() =>
       expect(button.classList.contains("is-failed")).toBe(true),
@@ -995,11 +1068,14 @@ export const MermaidSource: Story = {
         const b = canvasElement.querySelector<HTMLElement>(
           ".emr-mermaid-source-btn",
         );
+
         if (!b) throw new Error("no button yet");
+
         return b;
       },
       { timeout: 15000 },
     );
+
     btn.click();
     await waitFor(() =>
       expect(
@@ -1038,6 +1114,7 @@ export const MermaidThemeSwap: Story = {
     // Flip the host mode; the ArticleView observer re-hydrates every diagram in
     // the dark palette.
     document.documentElement.setAttribute("data-emr-theme", "dark");
+
     try {
       await waitFor(
         () =>
@@ -1058,13 +1135,16 @@ export const MermaidThemeSwap: Story = {
 export const SelectionBubble: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+
     const para = await waitFor(() => {
       const ps = canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p");
       const p = ps[ps.length - 1];
       if (!p || !(p.firstChild instanceof Text) || p.firstChild.length < 8)
         throw new Error("no selectable paragraph");
+
       return p;
     });
+
     const textNode = para.firstChild as Text;
     const range = document.createRange();
     range.setStart(textNode, 0);
@@ -1073,9 +1153,11 @@ export const SelectionBubble: Story = {
     sel.removeAllRanges();
     sel.addRange(range);
     para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
     const addBtn = await waitFor(() =>
       canvas.getByRole("button", { name: /add comment/i }),
     );
+
     // A mousedown inside the bubble must NOT dismiss it.
     addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     addBtn.click();
@@ -1110,15 +1192,20 @@ export const SelectionInDeletedRegion: Story = {
       const b = canvasElement.querySelector<HTMLElement>(
         ".emr-diff-deleted-body",
       );
+
       if (!b || (b.textContent?.length ?? 0) < 12)
         throw new Error("no deleted body yet");
+
       return b;
     });
+
     // Reveal the removed lines (as a user would), then select inside them.
     canvasElement.querySelector<HTMLElement>(".emr-diff-deleted-chip")!.click();
+
     const textNode = document
       .createTreeWalker(body, NodeFilter.SHOW_TEXT)
       .nextNode() as Text;
+
     const range = document.createRange();
     range.setStart(textNode, 4);
     range.setEnd(textNode, 16);
@@ -1145,6 +1232,7 @@ export const PreCollapsed: Story = {
         `emr.section.story-precollapsed.md.${SECTION_IDS[1]}`,
         "1",
       );
+
       return <Story />;
     },
   ],
@@ -1164,8 +1252,10 @@ export const ReadOnly: Story = {
     const para = await waitFor(() => {
       const p = canvasElement.querySelector<HTMLElement>(".emr-rendered p");
       if (!p) throw new Error("no paragraph");
+
       return p;
     });
+
     para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     await expect(
@@ -1201,13 +1291,17 @@ export const SelectionLinkCopies: Story = {
   args: { onCopySelectionLink: fn(() => Promise.resolve(true)) },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+
     const para = await waitFor(() => {
       const p = Array.from(
         canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
       ).find((el) => el.textContent?.startsWith("Reviewers comment"));
+
       if (!p) throw new Error("no paragraph");
+
       return p;
     });
+
     selectAndRelease(canvasElement, para.firstChild!, 0, 9);
     await waitFor(() => canvas.getByRole("button", { name: /add comment/i }));
     canvas.getByRole("button", { name: "Copy link to selection" }).click();
@@ -1241,15 +1335,20 @@ export const SelectionLinkReadOnly: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+
     const para = await waitFor(() => {
       const p = canvasElement.querySelector<HTMLElement>(".emr-rendered p");
       if (!p) throw new Error("no paragraph");
+
       return p;
     });
+
     selectAndRelease(canvasElement, para, 0, para.childNodes.length);
+
     const link = await waitFor(() =>
       canvas.getByRole("button", { name: "Copy link to selection" }),
     );
+
     await expect(canvas.queryByRole("button", { name: /add comment/i })).toBe(
       null,
     );
@@ -1274,13 +1373,17 @@ export const SelectionLinkBlocked: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const para = await waitFor(() => {
       const p = Array.from(
         canvasElement.querySelectorAll<HTMLElement>(".emr-rendered p"),
       ).find((el) => el.textContent?.startsWith("Reviewers comment"));
+
       if (!p) throw new Error("no paragraph");
+
       return p;
     });
+
     selectAndRelease(canvasElement, para.firstChild!, 0, 9);
     await waitFor(() =>
       canvas.getByText("This text changed in a later update."),
@@ -1293,14 +1396,16 @@ export const SelectionLinkBlocked: Story = {
 
 /** Re-renders its ArticleView with a changed thread set on `emr-story-rewrap`. */
 function RewrapHarness(
-  props: React.ComponentProps<typeof ArticleView>,
-): React.ReactElement {
-  const [threads, setThreads] = React.useState(props.threads);
-  React.useEffect(() => {
+  props: ComponentProps<typeof ArticleView>,
+): ReactElement {
+  const [threads, setThreads] = useState(props.threads);
+  useEffect(() => {
     const onRewrap = () => setThreads((current) => current.slice(1));
     window.addEventListener("emr-story-rewrap", onRewrap);
+
     return () => window.removeEventListener("emr-story-rewrap", onRewrap);
   }, []);
+
   return <ArticleView {...props} threads={threads} />;
 }
 
@@ -1316,8 +1421,10 @@ export const HeadingLinkKeepsFocusOnRewrap: Story = {
   render: (args) => <RewrapHarness {...args} />,
   play: async ({ canvasElement }) => {
     const [, approach] = await liveHeadings(canvasElement);
+
     const before =
       approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+
     before.focus();
     await expect(document.activeElement).toBe(before);
 

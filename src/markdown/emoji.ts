@@ -112,26 +112,31 @@ export const EMOJI_SHORTCODES: Readonly<Record<string, string>> = {
 // A shortcode is `:` + name + `:`. Names are letters, digits, `_`, `+`, `-`.
 // Requiring at least one char and bounding the length keeps the scan cheap and
 // avoids matching things like `::` or `a:b:c` time ranges greedily.
-const SHORTCODE_RE = /:([a-z0-9_+-]{1,40}):/gi;
+const SHORTCODE_RE = /:([\w+-]{1,40}):/g;
+
+// A Map, not the object: `:constructor:` or `:__proto__:` must not resolve to
+// an Object.prototype member.
+const SHORTCODE_LOOKUP: ReadonlyMap<string, string> = new Map(
+  Object.entries(EMOJI_SHORTCODES),
+);
 
 /** Replace known `:shortcode:` runs in a string; unknown codes pass through. */
 export function replaceEmojiShortcodes(text: string): string {
   if (text.indexOf(":") === -1) return text;
-  return text.replace(SHORTCODE_RE, (whole, name: string) => {
-    const emoji = EMOJI_SHORTCODES[name.toLowerCase()];
-    return emoji ?? whole;
-  });
+
+  return text.replace(
+    SHORTCODE_RE,
+    (whole, name: string) => SHORTCODE_LOOKUP.get(name.toLowerCase()) ?? whole,
+  );
 }
 
 /**
  * remark plugin: rewrite emoji shortcodes inside `text` nodes. Skips code
  * (fenced + inline) automatically since those are not `text` nodes.
  */
-export const remarkEmoji: Plugin<[], Root> = () => {
-  return (tree) => {
-    visit(tree, "text", (node: Text) => {
-      const next = replaceEmojiShortcodes(node.value);
-      if (next !== node.value) node.value = next;
-    });
-  };
+export const remarkEmoji: Plugin<[], Root> = () => (tree) => {
+  visit(tree, "text", (node: Text) => {
+    const next = replaceEmojiShortcodes(node.value);
+    if (next !== node.value) node.value = next;
+  });
 };

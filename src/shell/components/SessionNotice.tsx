@@ -6,7 +6,7 @@
 // 4 times and costs the reader their place). While changes are waiting to be
 // saved, or an inline edit is open, the link is hidden: a reload would drop them.
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
 import {
   adoSession,
@@ -17,16 +17,17 @@ import {
 export function SessionNotice({
   monitor = adoSession,
   reloadAllowed = true,
-}: {
+}: Readonly<{
   monitor?: AdoSessionMonitor;
   /**
    * False while the user has unsaved work a reload would drop (an open inline
    * edit — new comments and replies are kept as drafts).
    */
   reloadAllowed?: boolean;
-}): React.ReactElement | null {
+}>): ReactElement | null {
   const session = useAdoSession(monitor);
   if (session.state !== "refreshing") return null;
+
   return (
     <div className="emr-toast emr-toast--info" role="status">
       <span className="emr-toast-msg">

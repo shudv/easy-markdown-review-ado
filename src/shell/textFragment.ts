@@ -75,10 +75,12 @@ export function isContentText(node: Text): boolean {
 function flatten(root: Element): { text: string; runs: TextRun[] } {
   const runs: TextRun[] = [];
   let text = "";
+
   const walker = root.ownerDocument.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT,
   );
+
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const node = n as Text;
     if (node.data.length === 0 || !isContentText(node)) continue;
@@ -89,12 +91,14 @@ function flatten(root: Element): { text: string; runs: TextRun[] } {
     });
     text += node.data;
   }
+
   return { text, runs };
 }
 
 /** Case fold one character without changing its length. */
 function foldChar(ch: string): string {
   const lower = ch.toLowerCase();
+
   return lower.length === ch.length ? lower : ch;
 }
 
@@ -110,16 +114,23 @@ interface KeyIndex {
 function keyIndex(text: string): KeyIndex {
   let key = "";
   const at: number[] = [];
+
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     if (/\s/.test(ch)) continue;
     key += foldChar(ch);
     at.push(i);
   }
+
   return { key, at };
 }
 
 const matchKey = (text: string): string => keyIndex(text).key;
+
+/** Whether an optional fragment piece is present and non-empty. */
+function hasPiece(piece: string | undefined): piece is string {
+  return piece !== undefined && piece !== "";
+}
 
 /** Flat-text [start, end) of the first match of `fragment`, or null. */
 function matchFragment(
@@ -128,9 +139,10 @@ function matchFragment(
 ): { start: number; end: number } | null {
   const startKey = matchKey(fragment.start);
   if (!startKey) return null;
-  const endKey = fragment.end ? matchKey(fragment.end) : "";
-  const prefixKey = fragment.prefix ? matchKey(fragment.prefix) : "";
-  const suffixKey = fragment.suffix ? matchKey(fragment.suffix) : "";
+  const endKey = hasPiece(fragment.end) ? matchKey(fragment.end) : "";
+  const prefixKey = hasPiece(fragment.prefix) ? matchKey(fragment.prefix) : "";
+  const suffixKey = hasPiece(fragment.suffix) ? matchKey(fragment.suffix) : "";
+
   for (
     let i = key.indexOf(startKey);
     i >= 0;
@@ -139,8 +151,10 @@ function matchFragment(
     if (!hasPrefixAt(key, i, prefixKey)) continue;
     const stop = matchStop(key, i + startKey.length, endKey, suffixKey);
     if (stop < 0) continue;
+
     return { start: at[i]!, end: at[stop - 1]! + 1 };
   }
+
   return null;
 }
 
@@ -165,10 +179,13 @@ function matchStop(
   if (!endKey) {
     return !suffixKey || key.startsWith(suffixKey, stop) ? stop : -1;
   }
+
   let j = key.indexOf(endKey, stop);
+
   while (j >= 0 && suffixKey && !key.startsWith(suffixKey, j + endKey.length)) {
     j = key.indexOf(endKey, j + 1);
   }
+
   return j < 0 ? -1 : j + endKey.length;
 }
 
@@ -183,6 +200,7 @@ function toRange(
   const range = doc.createRange();
   range.setStart(startRun.node, start - startRun.start);
   range.setEnd(endRun.node, end - endRun.start);
+
   return range;
 }
 
@@ -196,6 +214,7 @@ export function findTextFragment(
 ): Range | null {
   const { text, runs } = flatten(root);
   const hit = matchFragment(keyIndex(text), fragment);
+
   return hit ? toRange(root.ownerDocument, runs, hit.start, hit.end) : null;
 }
 
@@ -207,16 +226,21 @@ function rangeOffsets(
 ): { start: number; end: number } | null {
   let start = -1;
   let end = -1;
+
   for (const run of runs) {
     if (!range.intersectsNode(run.node)) continue;
     const from = range.startContainer === run.node ? range.startOffset : 0;
+
     const to =
       range.endContainer === run.node ? range.endOffset : run.node.data.length;
+
     if (to <= from) continue;
     if (start < 0) start = run.start + from;
     end = run.start + to;
   }
+
   if (start < 0) return null;
+
   return trimOffsets(text, start, end);
 }
 
@@ -228,6 +252,7 @@ function trimOffsets(
 ): { start: number; end: number } | null {
   while (start < end && /\s/.test(text[start]!)) start++;
   while (end > start && /\s/.test(text[end - 1]!)) end--;
+
   return end > start ? { start, end } : null;
 }
 
@@ -237,10 +262,12 @@ const collapse = (s: string): string => s.replace(/\s+/g, " ").trim();
 function leadingWords(text: string, minChars: number): string {
   const words = collapse(text).split(" ");
   let out = "";
+
   for (const word of words) {
     out = out ? `${out} ${word}` : word;
     if (out.length >= minChars) break;
   }
+
   return out;
 }
 
@@ -248,20 +275,24 @@ function leadingWords(text: string, minChars: number): string {
 function trailingWords(text: string, minChars: number): string {
   const words = collapse(text).split(" ").reverse();
   let out = "";
+
   for (const word of words) {
     out = out ? `${word} ${out}` : word;
     if (out.length >= minChars) break;
   }
+
   return out;
 }
 
 function lastWords(text: string, count: number): string {
   if (count === 0) return "";
+
   return collapse(text).split(" ").slice(-count).join(" ");
 }
 
 function firstWords(text: string, count: number): string {
   if (count === 0) return "";
+
   return collapse(text).split(" ").slice(0, count).join(" ");
 }
 
@@ -279,16 +310,19 @@ export function buildTextFragment(
   if (!own) return null;
   const quote = collapse(text.slice(own.start, own.end));
   let base: TextFragment = { start: quote };
+
   if (quote.length > WHOLE_QUOTE_MAX) {
     const start = leadingWords(quote, EDGE_QUOTE_CHARS);
     const end = trailingWords(quote, EDGE_QUOTE_CHARS);
     // A single huge "word" (e.g. a URL) can't be split; quote it whole.
     if (start.length + end.length < quote.length) base = { start, end };
   }
+
   const before = text.slice(0, own.start);
   const after = text.slice(own.end);
   const index = keyIndex(text);
   let fragment = base;
+
   for (const words of CONTEXT_WORD_STEPS) {
     const prefix = lastWords(before, words);
     const suffix = firstWords(after, words);
@@ -298,8 +332,9 @@ export function buildTextFragment(
       ...(suffix ? { suffix } : {}),
     };
     const hit = matchFragment(index, fragment);
-    if (hit && hit.start === own.start && hit.end === own.end) break;
+    if (hit?.start === own.start && hit.end === own.end) break;
   }
+
   return fragment;
 }
 
@@ -315,10 +350,18 @@ function encodePiece(piece: string): string {
 /** Serialize to the `[prefix-,]start[,end][,-suffix]` link value. */
 export function serializeTextFragment(fragment: TextFragment): string {
   const parts: string[] = [];
-  if (fragment.prefix) parts.push(`${encodePiece(fragment.prefix)}-`);
+
+  if (hasPiece(fragment.prefix)) {
+    parts.push(`${encodePiece(fragment.prefix)}-`);
+  }
+
   parts.push(encodePiece(fragment.start));
-  if (fragment.end) parts.push(encodePiece(fragment.end));
-  if (fragment.suffix) parts.push(`-${encodePiece(fragment.suffix)}`);
+  if (hasPiece(fragment.end)) parts.push(encodePiece(fragment.end));
+
+  if (hasPiece(fragment.suffix)) {
+    parts.push(`-${encodePiece(fragment.suffix)}`);
+  }
+
   return parts.join(",");
 }
 
@@ -330,17 +373,22 @@ export function parseTextFragment(value: string): TextFragment | null {
   const parts = value.split(",");
   let prefix: string | undefined;
   let suffix: string | undefined;
+
   if (parts.length > 1 && parts[0]!.endsWith("-")) {
     prefix = parts.shift()!.slice(0, -1);
   }
+
   if (parts.length > 1 && parts[parts.length - 1]!.startsWith("-")) {
     suffix = parts.pop()!.slice(1);
   }
+
   if (parts.length < 1 || parts.length > 2) return null;
+
   // The serializer escapes a quote's edge dashes, so a raw one is malformed.
   if (parts.some((part) => part.startsWith("-") || part.endsWith("-"))) {
     return null;
   }
+
   try {
     return decodeTextFragment(parts, prefix, suffix);
   } catch {
@@ -359,13 +407,14 @@ function decodeTextFragment(
 ): TextFragment | null {
   const decode = (piece: string): string => decodeURIComponent(piece).trim();
   const start = decode(parts[0]!);
-  const end = parts[1] !== undefined ? decode(parts[1]) : undefined;
+  const end = parts.length > 1 ? decode(parts[1]!) : undefined;
   if (!start || end === "") return null;
   const fragment: TextFragment = { start };
-  if (end) fragment.end = end;
+  if (end !== undefined) fragment.end = end;
   const p = prefix !== undefined ? decode(prefix) : "";
   const s = suffix !== undefined ? decode(suffix) : "";
   if (p) fragment.prefix = p;
   if (s) fragment.suffix = s;
+
   return fragment;
 }

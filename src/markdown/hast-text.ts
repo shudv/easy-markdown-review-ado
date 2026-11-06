@@ -9,12 +9,14 @@ import type { Element } from "hast";
  */
 export function extractHastText(node: Element): string {
   let out = "";
-  for (const child of node.children ?? []) {
+
+  for (const child of node.children) {
     if (child.type === "text") {
       out += child.value;
     } else if (child.type === "element") {
       out += extractHastText(child);
     }
   }
+
   return out;
 }

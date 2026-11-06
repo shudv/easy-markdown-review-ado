@@ -44,6 +44,7 @@ describe("repoSkeleton", () => {
     const skeleton = repoSkeleton(
       repo({ id: "b", name: "bravo", defaultBranch: undefined }),
     );
+
     expect(skeleton.defaultBranch).toBe("main");
   });
 });
@@ -70,6 +71,6 @@ describe("normalizeRepoFilter", () => {
   it("maps blank/undefined to undefined (unfiltered first page)", () => {
     expect(normalizeRepoFilter("   ")).toBeUndefined();
     expect(normalizeRepoFilter("")).toBeUndefined();
-    expect(normalizeRepoFilter(undefined)).toBeUndefined();
+    expect(normalizeRepoFilter()).toBeUndefined();
   });
 });

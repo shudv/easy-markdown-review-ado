@@ -109,6 +109,7 @@ describe("countCommentFilters", () => {
       thread("c", "closed", [ME]),
       thread("m", "active", [ME, OTHER]),
     ];
+
     expect(countCommentFilters(threads, ME)).toEqual({
       all: 5,
       active: 3, // a, p, m
@@ -143,6 +144,7 @@ describe("commentFilterOptions + labels", () => {
 
   it("labels every mode", () => {
     const modes: CommentFilterMode[] = ["all", "active", "resolved", "mine"];
+
     for (const m of modes) {
       expect(commentFilterLabel(m).length).toBeGreaterThan(0);
     }

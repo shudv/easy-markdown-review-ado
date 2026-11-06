@@ -58,10 +58,11 @@ export const BLOCK_SELECTOR =
 /** An image by itself (optionally wrapped in a link/span) owns the whole block. */
 export function isImageOnlyBlock(el: HTMLElement): boolean {
   if (el.tagName === "IMG") return true;
+
   return (
     el.tagName === "P" &&
     el.querySelector("img") !== null &&
-    el.textContent?.trim() === ""
+    el.textContent.trim() === ""
   );
 }
 
@@ -139,6 +140,7 @@ export function numAttr(el: Element, name: string): number | null {
   const raw = el.getAttribute(name);
   if (raw == null) return null;
   const n = Number.parseInt(raw, 10);
+
   return Number.isFinite(n) ? n : null;
 }
 
@@ -156,6 +158,7 @@ export function overlaps(
 export function readSourceSpan(el: Element): SourceSpan | null {
   const start = numAttr(el, "data-source-line");
   const end = numAttr(el, "data-source-end-line");
+
   return start == null || end == null ? null : { start, end };
 }
 
@@ -176,13 +179,17 @@ export function inlineProseTarget(block: HTMLElement): HTMLElement {
         child.tagName === "P" &&
         !child.classList.contains("markdown-alert-title"),
     );
+
     if (body) return body as HTMLElement;
   }
+
   if (block.tagName === "LI") {
     const prose = Array.from(block.children).find(
       (child) => child.tagName === "P",
     );
+
     if (prose) return prose as HTMLElement;
   }
+
   return block;
 }

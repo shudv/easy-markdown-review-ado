@@ -1,4 +1,4 @@
-import * as React from "react";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ErrorBoundary } from "../src/telemetry/ErrorBoundary";
@@ -29,6 +29,7 @@ function fakeSink() {
     trackException: vi.fn((info) => sink.exceptionCalls.push(info)),
     flush: vi.fn(),
   };
+
   return sink;
 }
 
@@ -58,8 +59,9 @@ describe("error reliability denominator", () => {
   it("keeps a React boundary failure in the loaded-session cohort", () => {
     const boundary = new ErrorBoundary({
       source: "unit",
-      children: React.createElement("div"),
+      children: createElement("div"),
     });
+
     boundary.componentDidCatch(new Error("render failed"), {
       componentStack: "at Unit",
     });
@@ -165,7 +167,8 @@ describe("unhandled rejection reasons with no primitive conversion", () => {
     rejectWith(reason);
 
     const [info] = sink.exceptionCalls as { properties?: object }[];
-    expect(info?.properties ?? {}).not.toHaveProperty("rejectionType");
+    expect(info).toBeDefined();
+    expect(info.properties ?? {}).not.toHaveProperty("rejectionType");
   });
 });
 
@@ -197,6 +200,7 @@ describe("rejectionTypeOf", () => {
         },
       },
     );
+
     expect(rejectionTypeOf(hostile)).toBe("object:opaque");
   });
 });

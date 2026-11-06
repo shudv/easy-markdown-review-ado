@@ -48,6 +48,7 @@ export function planRootAutoExpand(opts: {
   if (remaining <= 0) return { folders: [], keys: [], used };
   const folders: string[] = [];
   const keys: string[] = [];
+
   for (const folder of unloadedFolders) {
     if (remaining <= 0) break;
     const key = autoExpandKey(repoId, folder);
@@ -56,5 +57,6 @@ export function planRootAutoExpand(opts: {
     keys.push(key);
     remaining -= 1;
   }
+
   return { folders, keys, used: max - remaining };
 }

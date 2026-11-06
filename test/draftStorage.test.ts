@@ -60,6 +60,7 @@ describe("add comment draft targets", () => {
       threadId: NEW_DRAFT_THREAD_ID,
       anchor,
     };
+
     expect(addCommentDraftTarget(selected, "docs/a.md")).toBe(selected);
   });
 
@@ -122,18 +123,12 @@ describe("save / load / clear round-trip", () => {
 });
 
 describe("loadDraft validation", () => {
-  it("rejects malformed JSON", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), "{not json");
-    expect(loadDraft("pr")).toBeNull();
-  });
-
-  it("rejects a non-object payload", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), '"a string"');
-    expect(loadDraft("pr")).toBeNull();
-  });
-
-  it("rejects a null payload", () => {
-    window.localStorage.setItem(draftStorageKey("pr"), "null");
+  it.each([
+    ["malformed JSON", "{not json"],
+    ["a non-object payload", '"a string"'],
+    ["a null payload", "null"],
+  ])("rejects %s", (_label, raw) => {
+    window.localStorage.setItem(draftStorageKey("pr"), raw);
     expect(loadDraft("pr")).toBeNull();
   });
 
@@ -218,6 +213,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("blocked");
       });
+
     expect(loadDraft("pr")).toBeNull();
     spy.mockRestore();
   });
@@ -228,6 +224,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("quota");
       });
+
     expect(() => saveDraft("pr", newDraft())).not.toThrow();
     spy.mockRestore();
   });
@@ -238,6 +235,7 @@ describe("storage-error tolerance", () => {
       .mockImplementation(() => {
         throw new Error("blocked");
       });
+
     expect(() => clearDraft("pr")).not.toThrow();
     spy.mockRestore();
   });

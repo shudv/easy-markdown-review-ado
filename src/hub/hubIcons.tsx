@@ -1,9 +1,11 @@
 // Small monochrome glyphs shared by the Documents hub chrome (DocNav header,
 // repo picker, empty state).
 
-import * as React from "react";
+import type { ReactElement } from "react";
 
-export function SvgRefresh(props: { spinning?: boolean }): React.ReactElement {
+export function SvgRefresh(
+  props: Readonly<{ spinning?: boolean }>,
+): ReactElement {
   return (
     <svg
       className={`emr-icon ${props.spinning ? "is-spinning" : ""}`}
@@ -29,7 +31,7 @@ export function SvgRefresh(props: { spinning?: boolean }): React.ReactElement {
  * `currentColor` at reduced opacity via CSS so it reads as a quiet affordance
  * rather than a bright brand mark — keeping with the app's minimal aesthetic.
  */
-export function SvgRepo(): React.ReactElement {
+export function SvgRepo(): ReactElement {
   // Azure DevOps Repos glyph (the git-branch "bowtie-git" mark the product uses
   // for repositories), drawn in currentColor so it inherits the picker's tone.
   return (

@@ -31,13 +31,16 @@ export function repoSecurityToken(projectId: string, repoId: string): string {
  */
 export function isAzureDevOpsOrgUrl(orgUrl: string): boolean {
   let parsed: URL;
+
   try {
     parsed = new URL(orgUrl);
   } catch {
     return false;
   }
+
   if (parsed.protocol !== "https:") return false;
   const host = parsed.hostname.toLowerCase();
+
   return host === "dev.azure.com" || host.endsWith(".visualstudio.com");
 }
 
@@ -69,9 +72,11 @@ export function commentPermissionFromResponse(
   body: { value?: unknown } | null | undefined,
 ): CommentPermission {
   const value = body?.value;
+
   if (Array.isArray(value) && value.length > 0) {
     return { canComment: value.every((v) => v === true), resolved: true };
   }
+
   return { canComment: true, resolved: false };
 }
 

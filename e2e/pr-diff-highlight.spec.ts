@@ -32,6 +32,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
       E2E.diffPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.diffRepo, prId);
 
     const frame = prTabFrame(page);
@@ -47,6 +48,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     const toggle = frame
       .locator(".emr-statusbar-btn.is-toggle")
       .filter({ hasText: "Changes" });
+
     await expect(toggle).toBeVisible({ timeout: 30_000 });
 
     // With changes shown, at least one block carries a content-level wash
@@ -64,6 +66,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     const firstKind = await changedBlocks
       .first()
       .getAttribute("data-diff-kind");
+
     expect(["added", "modified"]).toContain(firstKind);
 
     // Table edits resolve to CELL-precise highlights: a single changed cell (or
@@ -74,6 +77,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     const diffCells = frame.locator(
       ".emr-rendered td.emr-diff-cell, .emr-rendered th.emr-diff-cell",
     );
+
     await expect
       .poll(async () => diffCells.count(), {
         timeout: 20_000,
@@ -114,6 +118,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
       E2E.rewriteDiffPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.rewriteDiffRepo, prId);
 
     const frame = prTabFrame(page);
@@ -128,20 +133,23 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     // a nested list item, not the top-level item that contains it.
     const block = (selector: string, text: string) =>
       article.locator(selector).filter({ hasText: text }).last();
+
     const row = (firstCell: string) =>
       article.locator("tr").filter({
         has: frame
           .locator("td:first-child")
           .getByText(firstCell, { exact: true }),
       });
+
     const removedTexts = () =>
       article
         .locator(".emr-diff-deleted-marker")
-        .evaluateAll((markers) => markers.map((m) => m.textContent ?? ""));
+        .evaluateAll((markers) => markers.map((m) => m.textContent));
+
     const marks = (scope: Locator, kind: "added" | "removed") =>
       scope.locator(`.emr-word-${kind}`).evaluateAll((els) =>
         els
-          .map((el) => el.textContent ?? "")
+          .map((el) => el.textContent)
           .join(" ")
           .replace(/\s+/g, " ")
           .trim(),
@@ -161,12 +169,14 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
       "added",
     );
     await expect(row("EUPL")).toHaveAttribute("data-diff-kind", "added");
+
     for (const nested of ["Locally against", "Capture latency numbers"]) {
       await expect(block("li", nested)).toHaveAttribute(
         "data-diff-kind",
         "added",
       );
     }
+
     expect((await removedTexts()).join("\n")).toContain(
       "Can this impact our topline perf metrics",
     );
@@ -231,6 +241,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
       E2E.equationPrTitle,
       "active",
     );
+
     await gotoPrTab(page, E2E.equationRepo, prId);
 
     const frame = prTabFrame(page);
@@ -247,6 +258,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
         has: frame.locator("annotation").filter({ hasText: "g_i^2" }),
       })
       .first();
+
     await expect(equation.locator(".katex")).toBeVisible({ timeout: 30_000 });
     await expect(equation).toHaveAttribute("data-diff-kind", "modified");
     await expect(
@@ -256,6 +268,7 @@ test.describe("Markdown Review PR tab — change highlighting", () => {
     const added = frame
       .locator(".emr-math annotation")
       .filter({ hasText: String.raw`F_{\mathrm{scro}\parallel}` });
+
     await expect(added).toHaveCount(1);
 
     await equation.getByTitle("View equation source").click();

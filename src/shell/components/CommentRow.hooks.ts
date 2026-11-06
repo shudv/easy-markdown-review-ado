@@ -1,7 +1,7 @@
 // State + effect clusters behind a CommentRow: the inline edit session, the
 // ⋯ menu (with its delete confirmation), and the "Link to comment" copy.
 
-import * as React from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { copyText } from "../../comments/clipboard";
 import { events, track, trackUserFacingError } from "../../telemetry";
 import { useDeepLink } from "../deepLink";
@@ -20,14 +20,14 @@ export function useCommentEditSession(
   threadId: string,
   commentId: string,
 ) {
-  const [editing, setEditing] = React.useState(false);
+  const [editing, setEditing] = useState(false);
   // Each open of the editor is a new session; a save that lands later (e.g.
   // held through an Azure DevOps reconnect) may only close the session it
   // came from, and only while that editor still shows exactly what was saved.
-  const editSessionRef = React.useRef(0);
-  const editTextRef = React.useRef("");
-  const registerEditor = React.useContext(RegisterEditorContext);
-  React.useEffect(
+  const editSessionRef = useRef(0);
+  const editTextRef = useRef("");
+  const registerEditor = useContext(RegisterEditorContext);
+  useEffect(
     () => (editing ? registerEditor() : undefined),
     [editing, registerEditor],
   );
@@ -64,17 +64,19 @@ export function useCommentEditSession(
 }
 
 export function useCommentRowMenu() {
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const [confirm, setConfirm] = React.useState<ConfirmMode>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmMode>(null);
 
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  const menuBtnRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   // Close menu on outside click / Escape.
-  React.useEffect(() => {
+  useEffect(() => {
     if (!menuOpen) return;
+
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
+
       if (
         menuRef.current &&
         target &&
@@ -86,6 +88,7 @@ export function useCommentRowMenu() {
         setConfirm(null);
       }
     }
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -93,8 +96,10 @@ export function useCommentRowMenu() {
         setConfirm(null);
       }
     }
+
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
@@ -115,7 +120,7 @@ export function useCommentRowMenu() {
 }
 
 export function useCommentLinkCopy(threadId: string) {
-  const [linkState, setLinkState] = React.useState<CommentLinkState>("idle");
+  const [linkState, setLinkState] = useState<CommentLinkState>("idle");
   // Host-supplied builder for a shareable deep link to this thread. Absent on
   // surfaces with no shareable URL, where the "Link to comment" item is hidden
   // (the iframe's own URL is a CDN asset that opens a blank page).
@@ -128,21 +133,24 @@ export function useCommentLinkCopy(threadId: string) {
     // resolves to a boolean (never rejects), so a host iframe blocking the
     // async Clipboard API can't surface as an unhandled rejection — and we only
     // claim success when a copy is actually confirmed.
-    const copied = url ? copyText(url) : Promise.resolve(false);
+    const hasUrl = url !== undefined && url !== "";
+    const copied = hasUrl ? copyText(url) : Promise.resolve(false);
     void copied.then((ok) => {
       setLinkState(ok ? "copied" : "failed");
+
       if (ok) {
         track(events.linkCopied({ target: "comment" }));
       } else {
         trackUserFacingError({
           error: new Error(
-            url ? "Comment link copy failed" : "Comment link unavailable",
+            hasUrl ? "Comment link copy failed" : "Comment link unavailable",
           ),
           source: "CommentRow.copyLink",
           operation: "comment-link-copy",
           impact: "action-failed",
         });
       }
+
       window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
     });
   };

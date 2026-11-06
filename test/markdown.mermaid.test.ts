@@ -21,6 +21,7 @@ describe("preprocessMermaidBlocks", () => {
       "",
       "After.",
     ].join("\n");
+
     const out = preprocessMermaidBlocks(src);
     expect(out).toContain("```mermaid");
     expect(out).toContain("flowchart LR");
@@ -39,6 +40,7 @@ describe("preprocessMermaidBlocks", () => {
       "    A --> B",
       "  :::",
     ].join("\n");
+
     const out = preprocessMermaidBlocks(src);
     const lines = out.split("\n");
     expect(lines).toContain("  ```mermaid");
@@ -78,6 +80,7 @@ describe("renderMarkdown — mermaid placeholders", () => {
       '  Validate --> Semantic["semantic review"]',
       ":::",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     expect(html).toContain('class="emr-mermaid"');
     expect(html).toContain("data-mermaid-src=");
@@ -99,6 +102,7 @@ describe("renderMarkdown — mermaid placeholders", () => {
   it("carries the source-line span onto the placeholder (for diffing)", async () => {
     const md =
       "# Title\n\nIntro.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n";
+
     const html = await renderMarkdown(md);
     const div = document.createElement("div");
     div.innerHTML = html;
@@ -116,6 +120,7 @@ describe("renderMarkdown — mermaid placeholders", () => {
       '  A["He said \\"hi\\""] --> B',
       ":::",
     ].join("\n");
+
     const html = await renderMarkdown(md);
     // Encoded newline (%0A) should appear.
     expect(html).toMatch(/data-mermaid-src="[^"]*%0A[^"]*"/);
@@ -162,6 +167,7 @@ describe("rehypeMermaidPlaceholder — non-pipeline input", () => {
       properties: {},
       children: [{ type: "text", value: "graph TD" }],
     };
+
     expect(run([pre]).children[0]).toBe(pre);
   });
 
@@ -181,6 +187,7 @@ describe("rehypeMermaidPlaceholder — non-pipeline input", () => {
         ],
       },
     ]);
+
     const placeholder = tree.children[0] as Element;
     expect(placeholder.properties.className).toEqual(["emr-mermaid"]);
     expect(placeholder.properties).not.toHaveProperty("dataSourceLine");

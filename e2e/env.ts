@@ -5,7 +5,8 @@
 
 function env(name: string, fallback: string): string {
   const v = process.env[name];
-  return v && v.trim() ? v.trim() : fallback;
+
+  return v !== undefined && v.trim() !== "" ? v.trim() : fallback;
 }
 
 const ORG_URL = env("AZDO_ORG_URL", "https://dev.azure.com/your-org").replace(
@@ -191,6 +192,7 @@ export function contribTitleRe(base: string): RegExp {
   const b = escapeRe(base);
   const suffix = E2E.titleSuffix;
   if (!suffix.trim()) return new RegExp(`^${b}$`, "i");
+
   // " (dev)" → require the suffix but tolerate flexible whitespace before it.
   return new RegExp(`^${b}\\s*${escapeRe(suffix.trim())}$`, "i");
 }
@@ -198,6 +200,7 @@ export function contribTitleRe(base: string): RegExp {
 /** Repos → Files URL for a given file path on the default branch. */
 export function filesUrl(repo: string, path: string): string {
   const enc = encodeURIComponent(path);
+
   return `${E2E.orgUrl}/${E2E.project}/_git/${repo}?path=${enc}`;
 }
 

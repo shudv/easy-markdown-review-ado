@@ -81,6 +81,7 @@ describe("assembleHubDeepLinkUrl", () => {
       EXT,
       { kind: "comment", threadId: "42" },
     );
+
     expect(url).toBeDefined();
     const parsed = new URL(url!);
     expect(parsed.pathname).toBe(
@@ -99,6 +100,7 @@ describe("assembleHubDeepLinkUrl", () => {
         { kind: "heading", anchor: "goals" },
       )!,
     );
+
     expect(parsed.searchParams.get("path")).toBe("docs/a.md");
     expect(parsed.searchParams.get("anchor")).toBe("goals");
     expect(parsed.searchParams.has("comment")).toBe(false);
@@ -125,6 +127,7 @@ describe("assembleHubDeepLinkUrl", () => {
         },
       )!,
     );
+
     expect(url.searchParams.has("repo")).toBe(false);
     expect(url.searchParams.has("path")).toBe(false);
     expect(url.searchParams.get("anchor")).toBe("goals");

@@ -2,7 +2,7 @@
 // into (a) a reported exception and (b) a readable fallback, instead of an
 // unmounted white screen. Wraps each app root in the entry points.
 
-import * as React from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 import { markAppReady } from "./bootTiming";
 import { trackException } from "./telemetry";
@@ -10,16 +10,16 @@ import { trackException } from "./telemetry";
 interface ErrorBoundaryProps {
   /** Logical area name for the report, e.g. "pr-tab" | "documents-hub". */
   source: string;
-  children: React.ReactNode;
+  children: ReactNode;
   /** Optional custom fallback; defaults to a minimal inline message. */
-  fallback?: React.ReactNode;
+  fallback?: ReactNode;
 }
 
 interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-export class ErrorBoundary extends React.Component<
+export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
@@ -29,7 +29,7 @@ export class ErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  override componentDidCatch(error: Error, info: React.ErrorInfo): void {
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
     trackException({
       error,
       severity: "critical",
@@ -44,9 +44,10 @@ export class ErrorBoundary extends React.Component<
     markAppReady("error");
   }
 
-  override render(): React.ReactNode {
+  override render(): ReactNode {
     if (!this.state.hasError) return this.props.children;
     if (this.props.fallback !== undefined) return this.props.fallback;
+
     return (
       <div
         role="alert"

@@ -1,10 +1,10 @@
 // Icons and the separator used by the reader status bar.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 
 // ---- Icons (24-viewBox, stroke = currentColor) ----------------------------
 
-export function IconNav(): React.ReactElement {
+export function IconNav(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -18,7 +18,7 @@ export function IconNav(): React.ReactElement {
   );
 }
 
-export function IconComments(): React.ReactElement {
+export function IconComments(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -32,7 +32,7 @@ export function IconComments(): React.ReactElement {
   );
 }
 
-export function IconChanges(): React.ReactElement {
+export function IconChanges(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -49,7 +49,7 @@ export function IconChanges(): React.ReactElement {
   );
 }
 
-export function IconCaret(): React.ReactElement {
+export function IconCaret(): ReactElement {
   return (
     <svg
       className="emr-statusbar-caret"
@@ -68,9 +68,9 @@ export function IconCaret(): React.ReactElement {
 
 export function IconChevron({
   direction,
-}: {
+}: Readonly<{
   direction: "left" | "right";
-}): React.ReactElement {
+}>): ReactElement {
   return (
     <svg
       className="emr-statusbar-iteration-chevron"
@@ -87,11 +87,11 @@ export function IconChevron({
   );
 }
 
-export function StatusBarSeparator(): React.ReactElement {
+export function StatusBarSeparator(): ReactElement {
   return <div className="emr-statusbar-sep" aria-hidden="true" />;
 }
 
-export function IconOutline(): React.ReactElement {
+export function IconOutline(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -107,7 +107,7 @@ export function IconOutline(): React.ReactElement {
   );
 }
 
-export function IconCheck(): React.ReactElement {
+export function IconCheck(): ReactElement {
   return (
     <svg
       className="emr-statusbar-font-check"
@@ -124,7 +124,7 @@ export function IconCheck(): React.ReactElement {
   );
 }
 
-export function IconPullRequest(): React.ReactElement {
+export function IconPullRequest(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -145,9 +145,11 @@ export function IconPullRequest(): React.ReactElement {
 }
 
 /** Frame shared by the 1.7-weight, round-jointed status-bar icons. */
-function RoundStrokeSvg(props: {
-  children: React.ReactNode;
-}): React.ReactElement {
+function RoundStrokeSvg(
+  props: Readonly<{
+    children: ReactNode;
+  }>,
+): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -162,7 +164,7 @@ function RoundStrokeSvg(props: {
   );
 }
 
-export function IconFeedback(): React.ReactElement {
+export function IconFeedback(): ReactElement {
   return (
     <RoundStrokeSvg>
       <path d="m8 3 1.5 1.7" />
@@ -180,7 +182,7 @@ export function IconFeedback(): React.ReactElement {
   );
 }
 
-export function IconRefresh(): React.ReactElement {
+export function IconRefresh(): ReactElement {
   return (
     <RoundStrokeSvg>
       <path d="M21 12a9 9 0 1 1-2.64-6.36" />

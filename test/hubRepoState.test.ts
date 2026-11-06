@@ -53,6 +53,7 @@ describe("withRepoDetails", () => {
   it("folds the resolved details into the matching repo only", () => {
     const pr = { pullRequestId: 9 } as GitPullRequest;
     const other = repo("r2");
+
     const next = withRepoDetails(
       discovery([repo("r1"), other]),
       "r1",
@@ -65,6 +66,7 @@ describe("withRepoDetails", () => {
       },
       false,
     )!;
+
     expect(next.repos[0]).toEqual({
       ...repo("r1"),
       files,
@@ -85,6 +87,7 @@ describe("withRepoDetails", () => {
       { files, topLevelFolders: [], recentPr: null, pr: null },
       true,
     )!;
+
     expect("r1" in next.prByRepo).toBe(true);
     expect(next.prByRepo.r1).toBeUndefined();
     expect(next.repos[0]!.canComment).toBe(true);
@@ -124,6 +127,7 @@ describe("withoutKeyPrefix", () => {
       "r1\u0000/b.md": null,
       "r2\u0000/a.md": 3,
     };
+
     expect(withoutKeyPrefix(prev, "r1\u0000")).toEqual({ "r2\u0000/a.md": 3 });
   });
 });

@@ -14,6 +14,7 @@ describe("orderComments", () => {
       { id: "a", anchorY: 100, createdAt: 1 },
       { id: "c", anchorY: 900, createdAt: 1 },
     ];
+
     expect(orderComments(items)).toEqual(["a", "b", "c"]);
   });
 
@@ -23,6 +24,7 @@ describe("orderComments", () => {
       { id: "anchored-low", anchorY: 800, createdAt: 1 },
       { id: "anchored-high", anchorY: 50, createdAt: 1 },
     ];
+
     expect(orderComments(items)).toEqual([
       "anchored-high",
       "anchored-low",
@@ -35,6 +37,7 @@ describe("orderComments", () => {
       { id: "older", anchorY: 200, createdAt: 1000 },
       { id: "newer", anchorY: 200, createdAt: 5000 },
     ];
+
     expect(orderComments(items)).toEqual(["newer", "older"]);
   });
 
@@ -44,6 +47,7 @@ describe("orderComments", () => {
       { id: "newest", anchorY: null, createdAt: 900 },
       { id: "middle", anchorY: null, createdAt: 500 },
     ];
+
     expect(orderComments(items)).toEqual(["newest", "middle", "oldest"]);
   });
 
@@ -55,6 +59,7 @@ describe("orderComments", () => {
       { id: "a-bottom", anchorY: 700, createdAt: 5 },
       { id: "g-old", anchorY: null, createdAt: 1000 },
     ];
+
     expect(orderComments(items)).toEqual([
       "a-top-new", // anchored @100, newer of the tie
       "a-top-old", // anchored @100, older of the tie
@@ -69,6 +74,7 @@ describe("orderComments", () => {
       { id: "b", anchorY: 500, createdAt: 1 },
       { id: "a", anchorY: 100, createdAt: 1 },
     ];
+
     const snapshot = items.map((i) => i.id);
     orderComments(items);
     expect(items.map((i) => i.id)).toEqual(snapshot);

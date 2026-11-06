@@ -1,6 +1,12 @@
 // Shell: opening documents and scrolling to their pending deep-link target.
 
-import * as React from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 import type { FileInfo } from "../../types";
 import {
@@ -30,10 +36,8 @@ interface DocNavigationOptions {
   setActiveThreadId: (threadId: string | null) => void;
   setMissingDoc: (doc: { missing: string; shown: string } | null) => void;
   setLoading: (loading: boolean) => void;
-  dismissEmptyDraftRef: React.MutableRefObject<() => void>;
-  handleMissingDocRef: React.MutableRefObject<
-    (missing: string) => MissingDocOutcome
-  >;
+  dismissEmptyDraftRef: MutableRefObject<() => void>;
+  handleMissingDocRef: MutableRefObject<(missing: string) => MissingDocOutcome>;
   scrollDocToHash: ScrollDocToHash;
 }
 
@@ -55,27 +59,22 @@ export function useDocNavigation(opts: DocNavigationOptions) {
     dismissEmptyDraftRef,
     scrollDocToHash,
   } = opts;
+
   // Heading to scroll to once the selected document renders: a cross-document
   // `#anchor` link, or the `?anchor=` deep link seeded at mount (a `?comment=`
   // link wins when both are present — the thread's own scroll would fight the
-  // heading's).
-  const pendingScrollHashRef = React.useRef<string | null>(
-    opts.initialActiveThreadId ? null : (opts.initialAnchor ?? null),
-  );
-  const pendingHashIsDeepLinkRef = React.useRef(
-    pendingScrollHashRef.current !== null,
-  );
-  // Text to flash once the selected document renders (the `?text=` deep link
-  // seeded at mount); the heading above is its fallback.
-  const pendingTextRef = React.useRef<string | null>(
-    opts.initialActiveThreadId ? null : (opts.initialTextFragment ?? null),
-  );
+  // heading's). Plus text to flash once it renders (the `?text=` deep link
+  // seeded at mount), with the heading as its fallback.
+  const initial = initialDeepLinkTargets(opts);
+  const pendingScrollHashRef = useRef<string | null>(initial.hash);
+  const pendingHashIsDeepLinkRef = useRef(initial.hash !== null);
+  const pendingTextRef = useRef<string | null>(initial.text);
 
   // Open a document in THIS reader (shared by the nav and in-document link
   // clicks): select it, drop the active thread, tear down an empty draft, and
   // report the change up so the host can reflect it in the route. A deep-link
   // heading still waiting on the previous document no longer applies.
-  const selectDocPath = React.useCallback(
+  const selectDocPath = useCallback(
     (path: string) => {
       pendingScrollHashRef.current = null;
       pendingHashIsDeepLinkRef.current = false;
@@ -101,26 +100,33 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   // is an expected state, not a failure: open the repo's first other document
   // instead — reporting it up so the route and the remembered path move on —
   // and say what happened. Elsewhere (the PR tab) it stays an error.
-  opts.handleMissingDocRef.current = (missing) =>
-    replaceMissingDoc(missing, opts, {
-      pendingScrollHashRef,
-      pendingHashIsDeepLinkRef,
-      pendingTextRef,
-    });
+  // Only the async document-load failure path calls it, always after commit,
+  // so it is kept current from a layout effect.
+  const { handleMissingDocRef } = opts;
+  useLayoutEffect(() => {
+    handleMissingDocRef.current = (missing) =>
+      replaceMissingDoc(missing, opts, {
+        pendingScrollHashRef,
+        pendingHashIsDeepLinkRef,
+        pendingTextRef,
+      });
+  });
 
   // A relative in-document link was clicked. Resolve it against the open file
   // and route it (see `routeDocLink`): scroll (in-page / self), select in place
   // (a PR file, or anywhere in the hub), open the Documents hub (Markdown
   // outside the PR), or hand a non-Markdown file to ADO's native Files view.
   // Returns true when consumed; external links return false and fall through.
-  const handleDocLink = React.useCallback(
+  const handleDocLink = useCallback(
     (href: string): boolean => {
       const action = routeDocLink(resolveDocLink(selectedPath, href), {
         isHub,
         currentPath: selectedPath,
         isInReader: (p) => files.some((f) => samePath(f.path, p)),
       });
+
       if (action.type === "external") return false;
+
       if (action.type === "scroll") {
         scrollDocToHash(action.hash, { focus: true });
       } else if (action.type === "select") {
@@ -131,6 +137,7 @@ export function useDocNavigation(opts: DocNavigationOptions) {
       } else {
         navigateOutOfReader(action, onDocNavigate);
       }
+
       return true;
     },
     [selectedPath, isHub, files, onDocNavigate, selectDocPath, scrollDocToHash],
@@ -145,10 +152,27 @@ export function useDocNavigation(opts: DocNavigationOptions) {
   };
 }
 
+/** The `?anchor=` / `?text=` deep-link targets seeded at mount. */
+function initialDeepLinkTargets(opts: DocNavigationOptions): {
+  hash: string | null;
+  text: string | null;
+} {
+  const commentLinkWins =
+    opts.initialActiveThreadId !== undefined &&
+    opts.initialActiveThreadId !== "";
+
+  if (commentLinkWins) return { hash: null, text: null };
+
+  return {
+    hash: opts.initialAnchor ?? null,
+    text: opts.initialTextFragment ?? null,
+  };
+}
+
 interface PendingTargetRefs {
-  pendingScrollHashRef: React.MutableRefObject<string | null>;
-  pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
-  pendingTextRef: React.MutableRefObject<string | null>;
+  pendingScrollHashRef: MutableRefObject<string | null>;
+  pendingHashIsDeepLinkRef: MutableRefObject<boolean>;
+  pendingTextRef: MutableRefObject<string | null>;
 }
 
 /** `handleMissingDocRef`'s body: open a replacement for a missing document. */
@@ -162,7 +186,7 @@ function replaceMissingDoc(
   // than bouncing between missing documents.
   if (opts.missingDoc?.shown === missing) return "expected";
   const next = opts.files.find((f) => f.path !== missing)?.path;
-  if (!next) return "expected";
+  if (next === undefined || next === "") return "expected";
   // A deep-link heading/text targeted the missing document; drop it.
   pending.pendingScrollHashRef.current = null;
   pending.pendingHashIsDeepLinkRef.current = false;
@@ -171,6 +195,7 @@ function replaceMissingDoc(
   opts.setLoading(false);
   opts.setSelectedPath(next);
   opts.onSelectPath?.(next);
+
   return "replaced";
 }
 
@@ -194,9 +219,9 @@ interface PendingDocScrollOptions {
   articleReady: boolean;
   selectedPath: string;
   activePristineHtml: string;
-  pendingScrollHashRef: React.MutableRefObject<string | null>;
-  pendingHashIsDeepLinkRef: React.MutableRefObject<boolean>;
-  pendingTextRef: React.MutableRefObject<string | null>;
+  pendingScrollHashRef: MutableRefObject<string | null>;
+  pendingHashIsDeepLinkRef: MutableRefObject<boolean>;
+  pendingTextRef: MutableRefObject<string | null>;
   scrollDocToHash: ScrollDocToHash;
   scrollDocToText: ScrollDocToText;
 }
@@ -217,22 +242,29 @@ export function usePendingDocScroll(opts: PendingDocScrollOptions): void {
     scrollDocToHash,
     scrollDocToText,
   } = opts;
-  React.useEffect(() => {
+
+  useEffect(() => {
     if (!articleReady) return;
     const text = pendingTextRef.current;
-    if (text) {
+
+    if (text !== null && text !== "") {
       pendingTextRef.current = null;
       const fallback = pendingScrollHashRef.current;
       pendingScrollHashRef.current = null;
       pendingHashIsDeepLinkRef.current = false;
       scrollDocToText(text, (found) => {
         track(events.linkOpened({ target: "text", found }));
-        if (!found && fallback) scrollDocToHash(fallback, { hold: true });
+
+        if (!found && fallback !== null && fallback !== "") {
+          scrollDocToHash(fallback, { hold: true });
+        }
       });
+
       return;
     }
+
     const hash = pendingScrollHashRef.current;
-    if (!hash) return;
+    if (hash === null || hash === "") return;
     pendingScrollHashRef.current = null;
     const fromDeepLink = pendingHashIsDeepLinkRef.current;
     pendingHashIsDeepLinkRef.current = false;

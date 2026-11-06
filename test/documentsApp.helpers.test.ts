@@ -44,11 +44,13 @@ const recentPr = {
 describe("seedLazyTree", () => {
   it("seeds files, a copy of the top-level folders, and the root order", () => {
     const folders = ["docs"];
+
     const r = repo({
       files: [file("a.md")],
       topLevelFolders: folders,
       rootOrder: ["a"],
     });
+
     const tree = seedLazyTree(r);
     expect(tree).toEqual({
       repoId: "r1",
@@ -82,6 +84,7 @@ describe("mergeFolderListing", () => {
       files: [file("docs/b.md"), file("docs/a.md"), file("docs/a.md")],
       folders: ["/docs/sub", "docs/sub", "/other"],
     });
+
     expect(next.repoId).toBe("r1");
     expect(next.files.map((f) => f.path)).toEqual([
       "docs/a.md",
@@ -100,6 +103,7 @@ describe("mergeFolderListing", () => {
       folders: [],
       order: ["b", "a"],
     });
+
     expect(next.folderOrders).toEqual({ "": ["z"], docs: ["b", "a"] });
   });
 });
@@ -126,12 +130,14 @@ describe("pickSelectedRepo", () => {
 describe("buildSyntheticPr", () => {
   it("uses the lazy tree's files and the recent PR's details", () => {
     const r = repo({ files: [file("root.md")], recentPr });
+
     const pr = buildSyntheticPr(r, {
       repoId: "r1",
       files: [file("b.md"), file("a.md")],
       unloadedFolders: [],
       folderOrders: {},
     });
+
     expect(pr).toEqual({
       prId: 7,
       title: "Documents in Repo One",

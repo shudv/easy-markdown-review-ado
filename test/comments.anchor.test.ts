@@ -17,6 +17,7 @@ function makeArticle(html: string): HTMLElement {
   const root = document.createElement("article");
   root.innerHTML = html;
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -28,11 +29,13 @@ afterEach(() => {
 describe("resolveAnchor", () => {
   it("returns null when the article has no text nodes", () => {
     const root = makeArticle("");
+
     const range = resolveAnchor(root, {
       exact: "hello",
       prefix: "",
       suffix: "",
     });
+
     expect(range).toBeNull();
   });
 
@@ -45,22 +48,26 @@ describe("resolveAnchor", () => {
 
   it("locates a unique exact match via the composite prefix+exact+suffix path", () => {
     const root = makeArticle("<p>Hello world from the team</p>");
+
     const range = resolveAnchor(root, {
       exact: "world",
       prefix: "Hello ",
       suffix: " from",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("world");
   });
 
   it("disambiguates duplicate exact matches by prefix/suffix scoring", () => {
     const root = makeArticle("<p>Once apple twice apple thrice apple</p>");
+
     const range = resolveAnchor(root, {
       exact: "apple",
       prefix: "twice ",
       suffix: " thrice",
     });
+
     expect(range).not.toBeNull();
     // The "twice apple thrice" instance is the middle one.
     expect(range!.startOffset).toBe("Once apple twice ".length);
@@ -72,22 +79,26 @@ describe("resolveAnchor", () => {
     // Guards the `score > bestScore` (strictly-greater) comparison against a
     // `>=` regression that would silently prefer the last match.
     const root = makeArticle("<p>apple then apple</p>");
+
     const range = resolveAnchor(root, {
       exact: "apple",
       prefix: "",
       suffix: "",
     });
+
     expect(range).not.toBeNull();
     expect(range!.startOffset).toBe(0);
   });
 
   it("falls back to the bare exact match when prefix/suffix don't appear in the document", () => {
     const root = makeArticle("<p>Just plain text</p>");
+
     const range = resolveAnchor(root, {
       exact: "plain",
       prefix: "MISSING_CONTEXT_ABC",
       suffix: "ALSO_MISSING_XYZ",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("plain");
   });
@@ -97,11 +108,13 @@ describe("resolveAnchor", () => {
     // remembers, so the match falls back to scoring how much of the prefix and
     // suffix still line up around each candidate.
     const root = makeArticle("<p>x cat ran y</p>");
+
     const range = resolveAnchor(root, {
       exact: "cat",
       prefix: "the ",
       suffix: " ran fast",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("cat");
   });
@@ -117,11 +130,13 @@ describe("resolveAnchor", () => {
     const root = makeArticle(
       "<p>Hello <em>brave</em> new <strong>world</strong></p>",
     );
+
     const range = resolveAnchor(root, {
       exact: "brave new world",
       prefix: "Hello ",
       suffix: "",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("brave new world");
   });
@@ -134,12 +149,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
         '<p data-source-line="2" data-source-end-line="2">Second line</p>' +
         '<p data-source-line="3" data-source-end-line="3">Third line</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 2,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("Second line");
   });
@@ -150,12 +167,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
     const root = makeArticle(
       '<p data-source-line="1" data-source-end-line="1">Hello <strong>bold</strong> world</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 1,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("Hello bold world");
   });
@@ -166,6 +185,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
         '<p data-source-line="2" data-source-end-line="2">Second line</p>' +
         '<p data-source-line="3" data-source-end-line="3">Third line</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
@@ -173,6 +193,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       line: 2,
       endLine: 3,
     });
+
     expect(range).not.toBeNull();
     // Range should start at "Second" and end at "Third line".
     expect(range!.toString()).toContain("Second line");
@@ -185,12 +206,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
         '<p data-source-line="2" data-source-end-line="2">Inner quoted</p>' +
         "</blockquote>",
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 2,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("Inner quoted");
   });
@@ -204,12 +227,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
 
   it("falls back to the last block when no block spans the line", () => {
     const root = makeArticle('<p data-source-line="1">Only line</p>');
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 99,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("Only line");
   });
@@ -222,12 +247,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       '<p data-source-line="2" data-source-end-line="2">Early</p>' +
         '<p data-source-line="10" data-source-end-line="10">Later</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 5,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("Later");
   });
@@ -236,12 +263,14 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
     const root = makeArticle(
       '<p data-source-line="1" data-source-end-line="1"><img src="x"></p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 1,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("");
     // The fallback selects the whole block so the caller can still measure it.
@@ -253,6 +282,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       '<p data-source-line="1" data-source-end-line="1">Start</p>' +
         '<p data-source-line="2" data-source-end-line="2"><img src="x"></p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
@@ -260,6 +290,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       line: 1,
       endLine: 2,
     });
+
     expect(range).not.toBeNull();
     const frag = range!.cloneContents();
     expect(frag.querySelectorAll("p")).toHaveLength(2);
@@ -271,6 +302,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       '<p data-source-line="1" data-source-end-line="1"><img src="x"></p>' +
         '<p data-source-line="2" data-source-end-line="2">End</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
@@ -278,6 +310,7 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
       line: 1,
       endLine: 2,
     });
+
     expect(range).not.toBeNull();
     const frag = range!.cloneContents();
     expect(frag.querySelectorAll("p")).toHaveLength(2);
@@ -290,6 +323,7 @@ describe("isWithinGeneratedContent", () => {
     const root = makeArticle(
       '<div class="emr-mermaid"><svg><text>Alpha</text></svg></div>',
     );
+
     // Query the container itself so `closest` matches on the element (not an
     // ancestor): this pins the `instanceof Element ? node : parentElement`
     // branch — a mutant that always climbed to `parentElement` would step OUT
@@ -303,6 +337,7 @@ describe("isWithinGeneratedContent", () => {
     const root = makeArticle(
       '<div class="emr-mermaid"><pre>graph TD; A--&gt;B</pre></div>',
     );
+
     expect(
       isWithinGeneratedContent(root.querySelector("pre")!.firstChild!),
     ).toBe(true);
@@ -312,6 +347,7 @@ describe("isWithinGeneratedContent", () => {
     const root = makeArticle(
       '<span class="katex"><span class="katex-html">x²</span></span>',
     );
+
     expect(
       isWithinGeneratedContent(root.querySelector(".katex-html")!.firstChild!),
     ).toBe(true);
@@ -323,6 +359,7 @@ describe("isWithinGeneratedContent", () => {
     const root = makeArticle(
       '<div class="emr-math"><pre class="emr-math-fallback"><code>x^2</code></pre></div>',
     );
+
     expect(
       isWithinGeneratedContent(root.querySelector("code")!.firstChild!),
     ).toBe(true);
@@ -345,6 +382,7 @@ describe("isWithinGeneratedContent", () => {
     const root = makeArticle(
       '<nav class="emr-wiki-macro emr-wiki-toc"><ul><li><a href="#goals">Goals</a></li></ul></nav>',
     );
+
     expect(isWithinGeneratedContent(root.querySelector("a")!.firstChild!)).toBe(
       true,
     );
@@ -395,6 +433,7 @@ describe("captureAnchorFromSelection", () => {
     const mermaidRoot = makeArticle(
       '<p>before</p><div class="emr-mermaid"><svg><text>Alpha</text></svg></div>',
     );
+
     const label = mermaidRoot.querySelector("text")!.firstChild! as Text;
     const range = document.createRange();
     range.setStart(label, 0);
@@ -409,6 +448,7 @@ describe("captureAnchorFromSelection", () => {
     const mathRoot = makeArticle(
       '<p>before</p><div class="emr-math"><span class="katex">x²</span></div>',
     );
+
     const glyphs = mathRoot.querySelector(".katex")!.firstChild! as Text;
     const range = document.createRange();
     range.setStart(glyphs, 0);
@@ -512,10 +552,12 @@ describe("captureAnchorFromSelection", () => {
 
   it("captures a triple-click line selection ending at the next block boundary", () => {
     document.body.innerHTML = "";
+
     const r = makeArticle(
       '<p data-source-line="3">Reviewers comment on rendered prose.</p>' +
         '<p data-source-line="5">Next paragraph</p>',
     );
+
     const firstText = r.querySelectorAll("p")[0]!.firstChild! as Text;
     const nextParagraph = r.querySelectorAll("p")[1]!;
     const range = document.createRange();
@@ -580,9 +622,11 @@ describe("captureAnchorFromSelection", () => {
 
   it("captures source line/endLine from the nearest data-source-line ancestor", () => {
     document.body.innerHTML = "";
+
     const r = makeArticle(
       '<p data-source-line="3" data-source-end-line="3">The quick brown fox</p>',
     );
+
     const text = r.querySelector("p")!.firstChild! as Text;
     const range = document.createRange();
     range.setStart(text, 4); // "quick"
@@ -599,10 +643,12 @@ describe("captureAnchorFromSelection", () => {
 
   it("spans line..endLine when the selection crosses blocks on different lines", () => {
     document.body.innerHTML = "";
+
     const r = makeArticle(
       '<p data-source-line="2" data-source-end-line="2">First para</p>' +
         '<p data-source-line="4" data-source-end-line="4">Second para</p>',
     );
+
     const first = r.querySelectorAll("p")[0]!.firstChild! as Text;
     const second = r.querySelectorAll("p")[1]!.firstChild! as Text;
     const range = document.createRange();
@@ -638,10 +684,12 @@ describe("captureAnchorFromSelection", () => {
     // sibling paragraph that carries NO data-source-line, so endLine defaults
     // to the start line rather than going undefined.
     document.body.innerHTML = "";
+
     const r = makeArticle(
       '<p data-source-line="5" data-source-end-line="5">Lined para</p>' +
         "<p>Unlined para</p>",
     );
+
     const first = r.querySelectorAll("p")[0]!.firstChild! as Text;
     const second = r.querySelectorAll("p")[1]!.firstChild! as Text;
     const range = document.createRange();
@@ -663,6 +711,7 @@ describe("withSourceLocation", () => {
       "| # | Mechanism | Scope |\n" +
       "|---|---|---|\n" +
       "| 1 | OData admin export* all tenants | Whole tenant |";
+
     const out = withSourceLocation(
       {
         exact: "Mechanism",
@@ -671,6 +720,7 @@ describe("withSourceLocation", () => {
       },
       source,
     );
+
     expect(out.line).toBe(1);
     expect(out.endLine).toBe(1);
     expect(out.column).toBe(7);
@@ -679,6 +729,7 @@ describe("withSourceLocation", () => {
 
   it("maps a multi-line text quote to start/end line+column", () => {
     const source = "alpha\nbeta gamma\ndelta";
+
     const out = withSourceLocation(
       {
         exact: "beta gamma\ndel",
@@ -687,6 +738,7 @@ describe("withSourceLocation", () => {
       },
       source,
     );
+
     expect(out.line).toBe(2);
     expect(out.column).toBe(1);
     expect(out.endLine).toBe(3);
@@ -707,10 +759,12 @@ describe("withSourceLocation", () => {
     // "apple" appears twice; only the second is followed by " tart", so the
     // remembered suffix picks it out even though the exact text is ambiguous.
     const source = "apple pie\napple tart";
+
     const out = withSourceLocation(
       { exact: "apple", prefix: "X\n", suffix: " tart Y" },
       source,
     );
+
     expect(out.line).toBe(2);
     expect(out.column).toBe(1);
     expect(out.endColumn).toBe(5);
@@ -720,10 +774,12 @@ describe("withSourceLocation", () => {
     // Two identical "apple" runs; the first is surrounded by the context the
     // anchor remembers, so it wins even though a later candidate also matches.
     const source = "apple tart\napple pie";
+
     const out = withSourceLocation(
       { exact: "apple", prefix: "X\n", suffix: " tart Y" },
       source,
     );
+
     expect(out.line).toBe(1);
     expect(out.column).toBe(1);
     expect(out.endColumn).toBe(5);
@@ -734,6 +790,7 @@ describe("withSourceLocation", () => {
     // normalize line endings yet map offsets back to the original source so the
     // computed line/column stay correct instead of falling back to line 1.
     const source = "alpha\r\nbeta gamma\r\ndelta\r\nomega";
+
     const out = withSourceLocation(
       {
         exact: "beta gamma\ndelta",
@@ -742,6 +799,7 @@ describe("withSourceLocation", () => {
       },
       source,
     );
+
     expect(out.line).toBe(2);
     expect(out.column).toBe(1);
     expect(out.endLine).toBe(3);
@@ -752,10 +810,12 @@ describe("withSourceLocation", () => {
     // The remembered prefix doesn't appear verbatim, so the match relies on
     // scoring; it must still work when the source uses CRLF line endings.
     const source = "one\r\ntwo\r\nbeta gamma\r\ntwo";
+
     const out = withSourceLocation(
       { exact: "beta gamma", prefix: "X\n", suffix: "\ntwo" },
       source,
     );
+
     expect(out.line).toBe(3);
     expect(out.column).toBe(1);
     expect(out.endColumn).toBe(10);
@@ -765,10 +825,12 @@ describe("withSourceLocation", () => {
     // DOM quote uses '\n'; source uses a lone '\r'. Normalization must still
     // locate the span and map offsets back to the original source.
     const source = "x a\rb y";
+
     const out = withSourceLocation(
       { exact: "a\nb", prefix: "x ", suffix: " y" },
       source,
     );
+
     expect(out.line).toBe(1);
     expect(out.column).toBe(3);
     expect(out.endColumn).toBe(5);
@@ -779,10 +841,12 @@ describe("withSourceLocation", () => {
     // CRLF lookahead were mutated to always skip 2, the 'b' right after the
     // CR would be swallowed and the offsets (and endColumn) would shift.
     const source = "a\rbcd";
+
     const out = withSourceLocation(
       { exact: "bcd", prefix: "a\n", suffix: "" },
       source,
     );
+
     // A wrongly-widened CRLF skip would swallow 'b', leaving the quote
     // unresolvable (offsets unchanged / no line). Column is measured in the
     // original source, where a lone '\r' is not a newline, so "bcd" sits at
@@ -801,12 +865,14 @@ describe("resolveAnchor tier selection", () => {
     const root = makeArticle(
       '<p data-source-line="1">alpha</p><p data-source-line="2">beta gamma</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "gamma",
       prefix: "beta ",
       suffix: "",
       line: 1,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("gamma");
   });
@@ -817,12 +883,14 @@ describe("resolveAnchor tier selection", () => {
     const root = makeArticle(
       '<p data-source-line="1">alpha</p><p data-source-line="2">beta gamma</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "not-in-document",
       prefix: "",
       suffix: "",
       line: 2,
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toContain("beta gamma");
   });
@@ -847,11 +915,13 @@ describe("flattenText edge cases (via resolveAnchor)", () => {
     // Empty text nodes (created by adjacent tags) must be skipped so offsets
     // stay contiguous. The match spans an inline boundary with no gap.
     const root = makeArticle("<p><span></span>alpha<span></span>beta</p>");
+
     const range = resolveAnchor(root, {
       exact: "alphabeta",
       prefix: "",
       suffix: "",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("alphabeta");
   });
@@ -866,11 +936,13 @@ describe("flattenText edge cases (via resolveAnchor)", () => {
     root.appendChild(document.createTextNode(""));
     root.appendChild(document.createTextNode("beta"));
     document.body.appendChild(root);
+
     const range = resolveAnchor(root, {
       exact: "alphabeta",
       prefix: "",
       suffix: "",
     });
+
     expect(range).not.toBeNull();
     expect(range!.toString()).toBe("alphabeta");
   });
@@ -885,40 +957,29 @@ describe("resolveAnchor graded scoring (kills scoring math mutants)", () => {
   // the resolved start offset.
   const text = "aaaTARGETbbbcccTARGETdddeeeTARGETfff";
 
-  it("selects the occurrence with the strongest combined overlap (the middle one)", () => {
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+  // "prefix only": the suffix is absent from the document, so the winner is
+  // driven purely by the trailing-prefix score. "suffix only" is the mirror.
+  it.each([
+    {
+      name: "selects the occurrence with the strongest combined overlap (the middle one)",
       prefix: "Zccc",
       suffix: "dddZ",
-    });
-    expect(range).not.toBeNull();
-    // Middle "TARGET" starts at index 15 within the single text node.
-    expect(range!.startOffset).toBe(15);
-  });
-
-  it("lets a strong prefix overlap alone decide the winner", () => {
-    // Only the prefix distinguishes candidates; the suffix is absent from the
-    // document, so the winner is driven purely by the trailing-prefix score.
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+    },
+    {
+      name: "lets a strong prefix overlap alone decide the winner",
       prefix: "Zccc",
       suffix: "NOPE",
-    });
-    expect(range).not.toBeNull();
-    expect(range!.startOffset).toBe(15);
-  });
-
-  it("lets a strong suffix overlap alone decide the winner", () => {
-    // Mirror of the above: only the leading-suffix score separates candidates.
-    const root = makeArticle(`<p>${text}</p>`);
-    const range = resolveAnchor(root, {
-      exact: "TARGET",
+    },
+    {
+      name: "lets a strong suffix overlap alone decide the winner",
       prefix: "NOPE",
       suffix: "dddZ",
-    });
+    },
+  ])("$name", ({ prefix, suffix }) => {
+    const root = makeArticle(`<p>${text}</p>`);
+    const range = resolveAnchor(root, { exact: "TARGET", prefix, suffix });
     expect(range).not.toBeNull();
+    // Middle "TARGET" starts at index 15 within the single text node.
     expect(range!.startOffset).toBe(15);
   });
 });
@@ -933,6 +994,7 @@ describe("withSourceLocation graded scoring (kills scoring math mutants)", () =>
       { exact: "TARGET", prefix: "Zccc", suffix: "dddZ" },
       source,
     );
+
     // Middle "TARGET" is at 0-based index 15 => 1-based column 16.
     expect(out.line).toBe(1);
     expect(out.column).toBe(16);
@@ -944,6 +1006,7 @@ describe("withSourceLocation graded scoring (kills scoring math mutants)", () =>
       { exact: "TARGET", prefix: "Zccc", suffix: "NOPE" },
       source,
     );
+
     expect(out.column).toBe(16);
   });
 
@@ -952,6 +1015,7 @@ describe("withSourceLocation graded scoring (kills scoring math mutants)", () =>
       { exact: "TARGET", prefix: "NOPE", suffix: "dddZ" },
       source,
     );
+
     expect(out.column).toBe(16);
   });
 });
@@ -970,6 +1034,7 @@ describe("relocateAnchor", () => {
       line: 5,
       endLine: 5,
     };
+
     expect(relocateAnchor(fromOlder, LATEST)).toEqual({
       exact: "comments on the rendered",
       prefix: "Leave ",
@@ -1007,6 +1072,7 @@ describe("relocateAnchor", () => {
   it("spans lines when the quote crosses blocks", () => {
     const html =
       '<p data-source-line="1">first block</p><p data-source-line="3">second block</p>';
+
     expect(
       relocateAnchor({ exact: "blocksecond", prefix: "", suffix: "" }, html),
     ).toMatchObject({ line: 1, endLine: 3 });
@@ -1015,6 +1081,7 @@ describe("relocateAnchor", () => {
   it("ends on the start line when the quote runs into unsourced content", () => {
     const html =
       '<p data-source-line="4">sourced block</p><div>generated tail</div>';
+
     expect(
       relocateAnchor({ exact: "blockgenerated", prefix: "", suffix: "" }, html),
     ).toMatchObject({ line: 4, endLine: 4 });
@@ -1025,6 +1092,7 @@ describe("relocateAnchor", () => {
     // the END of the previous text node — on an earlier source line.
     const html =
       '<p data-source-line="1">Intro\n<strong data-source-line="2">rendered</strong> <a data-source-line="2" href="#">text</a></p>';
+
     expect(
       relocateAnchor({ exact: "rendered text", prefix: "", suffix: "" }, html),
     ).toMatchObject({ line: 2, endLine: 2 });
@@ -1067,6 +1135,7 @@ describe("anchor guards against malformed DOM input", () => {
   it("skips a non-numeric data-source-line when capturing source lines", () => {
     const html =
       '<div data-source-line="7"><p data-source-line="x">hello there</p></div>';
+
     expect(
       relocateAnchor({ exact: "hello", prefix: "", suffix: "" }, html),
     ).toMatchObject({ line: 7, endLine: 7 });
@@ -1077,12 +1146,14 @@ describe("anchor guards against malformed DOM input", () => {
       '<p data-source-line="x" data-source-end-line="x">bad</p>' +
         '<p data-source-line="5" data-source-end-line="5">good</p>',
     );
+
     const range = resolveAnchor(root, {
       exact: "",
       prefix: "",
       suffix: "",
       line: 5,
     });
+
     expect(range?.toString()).toBe("good");
   });
 });

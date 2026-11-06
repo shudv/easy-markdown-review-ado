@@ -38,6 +38,7 @@ describe("planRootAutoExpand", () => {
       fileCount: 0,
       unloadedFolders: ["/docs", "/guides"],
     });
+
     expect(plan.folders).toEqual(["/docs", "/guides"]);
     expect(plan.keys).toEqual([
       autoExpandKey("repo-docsonly", "/docs"),
@@ -52,6 +53,7 @@ describe("planRootAutoExpand", () => {
       fileCount: 1,
       unloadedFolders: ["/docs"],
     });
+
     expect(plan.folders).toEqual([]);
     expect(plan.keys).toEqual([]);
     expect(plan.used).toBe(0);
@@ -64,6 +66,7 @@ describe("planRootAutoExpand", () => {
       unloadedFolders: ["/docs", "/guides"],
       expandedKeys: new Set([autoExpandKey("repo-docsonly", "/docs")]),
     });
+
     expect(plan.folders).toEqual(["/guides"]);
     expect(plan.used).toBe(1);
   });
@@ -76,6 +79,7 @@ describe("planRootAutoExpand", () => {
       used: 38,
       max: 40,
     });
+
     expect(plan.folders).toEqual(["/a", "/b"]);
     expect(plan.used).toBe(40);
   });
@@ -88,6 +92,7 @@ describe("planRootAutoExpand", () => {
       used: 40,
       max: 40,
     });
+
     expect(plan.folders).toEqual([]);
     expect(plan.keys).toEqual([]);
     expect(plan.used).toBe(40);
@@ -101,6 +106,7 @@ describe("planRootAutoExpand", () => {
       used: 41,
       max: 40,
     });
+
     expect(plan).toEqual({ folders: [], keys: [], used: 41 });
   });
 
@@ -110,6 +116,7 @@ describe("planRootAutoExpand", () => {
       fileCount: 0,
       unloadedFolders: [],
     });
+
     expect(plan.folders).toEqual([]);
     expect(plan.used).toBe(0);
   });

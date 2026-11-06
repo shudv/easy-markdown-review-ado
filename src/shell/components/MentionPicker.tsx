@@ -3,7 +3,12 @@
 // owns query/suggestions/selectedIndex state and drives keyboard nav via props
 // so it can intercept keys before the textarea sees them.
 
-import * as React from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useEffect,
+  useRef,
+} from "react";
 
 import type { MentionKind, MentionSuggestion } from "../../comments/mentions";
 import { Avatar } from "./Avatar";
@@ -25,7 +30,9 @@ export interface MentionPickerProps {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Mention typeahead: suggestion list, highlighted row and keyboard selection for one ARIA listbox.
-export function MentionPicker(props: MentionPickerProps): React.ReactElement {
+export function MentionPicker(
+  props: Readonly<MentionPickerProps>,
+): ReactElement {
   const {
     kind,
     query,
@@ -41,28 +48,32 @@ export function MentionPicker(props: MentionPickerProps): React.ReactElement {
   } = props;
 
   // Scroll the selected row into view when it changes (for arrow-key nav).
-  const listRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
     const list = listRef.current!;
+
     const sel = list.querySelector<HTMLElement>(
       `[data-mp-index="${selectedIndex}"]`,
     );
+
     if (sel) sel.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
   // Close on outside click. We don't close on textarea focus loss — the parent
   // handles that via its own state.
-  React.useEffect(() => {
+  useEffect(() => {
     function onDocMouseDown(e: MouseEvent): void {
       const root = listRef.current!;
       if (!root.contains(e.target as Node)) onCancel();
     }
+
     document.addEventListener("mousedown", onDocMouseDown, true);
+
     return () =>
       document.removeEventListener("mousedown", onDocMouseDown, true);
   }, [onCancel]);
 
-  const style: React.CSSProperties = {
+  const style: CSSProperties = {
     position: "fixed",
     top,
     left,
@@ -78,6 +89,7 @@ export function MentionPicker(props: MentionPickerProps): React.ReactElement {
         : "Pull requests";
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/interactive-supports-focus -- Typeahead popup: focus deliberately stays in the composer textarea (mousedown is prevented below) and the Composer drives the highlighted option through selectedIndex.
     <div
       ref={listRef}
       className={`emr-mention-picker emr-mention-picker-${kind}`}
@@ -102,10 +114,9 @@ export function MentionPicker(props: MentionPickerProps): React.ReactElement {
               role="option"
               aria-selected={i === selectedIndex}
               data-mp-index={i}
-              className={
-                "emr-mention-picker-row" +
-                (i === selectedIndex ? " is-selected" : "")
-              }
+              className={`emr-mention-picker-row${
+                i === selectedIndex ? " is-selected" : ""
+              }`}
               onMouseEnter={() => onSelectedIndexChange(i)}
               onClick={() => onSelect(s)}
             >
@@ -125,9 +136,9 @@ export function MentionPicker(props: MentionPickerProps): React.ReactElement {
 // eslint-disable-next-line max-lines-per-function -- One mention suggestion: avatar, name, secondary text and match highlighting with its ARIA option attributes.
 function SuggestionRow({
   suggestion,
-}: {
+}: Readonly<{
   suggestion: MentionSuggestion;
-}): React.ReactElement {
+}>): ReactElement {
   switch (suggestion.kind) {
     case "user":
       return (
@@ -144,7 +155,7 @@ function SuggestionRow({
             <span className="emr-mention-picker-primary">
               {suggestion.displayName}
             </span>
-            {suggestion.secondary ? (
+            {hasText(suggestion.secondary) ? (
               <span className="emr-mention-picker-secondary">
                 {suggestion.secondary}
               </span>
@@ -171,7 +182,7 @@ function SuggestionRow({
               <span
                 className="emr-mention-state-dot"
                 style={
-                  suggestion.stateColor
+                  hasText(suggestion.stateColor)
                     ? { background: suggestion.stateColor }
                     : undefined
                 }
@@ -200,13 +211,11 @@ function SuggestionRow({
             </span>
             <span className="emr-mention-picker-secondary">
               <span
-                className={
-                  "emr-mention-state-dot emr-pr-state-" + suggestion.status
-                }
+                className={`emr-mention-state-dot emr-pr-state-${suggestion.status}`}
                 aria-hidden="true"
               />
               {prStatusLabel(suggestion.status)}
-              {suggestion.repository ? (
+              {hasText(suggestion.repository) ? (
                 <>
                   <span className="emr-mention-picker-sep">·</span>
                   {suggestion.repository}
@@ -219,6 +228,10 @@ function SuggestionRow({
   }
 }
 
+function hasText(value: string | undefined): value is string {
+  return value !== undefined && value !== "";
+}
+
 function workItemGlyph(type: string): string {
   // Map common WI types to a single letter so we don't ship a sprite sheet.
   // The CSS uses `data-wi-type` to tint each type appropriately.
@@ -228,6 +241,7 @@ function workItemGlyph(type: string): string {
   if (t.includes("story") || t.includes("scenario")) return "S";
   if (t.includes("feature")) return "F";
   if (t.includes("epic")) return "E";
+
   return type.charAt(0).toUpperCase();
 }
 

@@ -18,9 +18,11 @@ export function decorateMermaidBlock(
   if (coveredByDecoratedAncestor(el)) return;
   const { start, end } = span;
   const interiorEdit = findInteriorEdit(pass, el, start, end);
+
   const kind = interiorEdit
     ? "modified"
     : classifyBlock(start, end, pass.changeRanges);
+
   if (!kind) return;
   el.classList.add(
     DIFF_BLOCK_CLASS,
@@ -28,6 +30,7 @@ export function decorateMermaidBlock(
     DIFF_MERMAID_CLASS,
   );
   el.dataset.diffKind = kind;
+
   // Prefer reconstructing the complete pre-edit fence from the original
   // document so even a one-line edit gets a useful Source > Before view.
   const originalBlock = reconstructBlockOriginal(
@@ -36,7 +39,12 @@ export function decorateMermaidBlock(
     start,
     end,
   );
-  const originalSource = originalBlock ? stripMermaidFence(originalBlock) : "";
+
+  const originalSource =
+    originalBlock !== null && originalBlock !== ""
+      ? stripMermaidFence(originalBlock)
+      : "";
+
   if (originalSource) el.dataset.diffOriginal = originalSource;
   pass.decorated++;
 }
@@ -49,8 +57,10 @@ export function decorateMermaidBlock(
  */
 export function stripMermaidFence(text: string): string {
   const lines = text.replace(/\s+$/, "").split(/\r\n|\r|\n/);
+
   if (lines.length > 0 && /^\s*(?:`{3,}|:{3,})\s*mermaid\b/i.test(lines[0]!)) {
     lines.shift();
+
     if (
       lines.length > 0 &&
       /^\s*(?:`{3,}|:{3,})\s*$/.test(lines[lines.length - 1]!)
@@ -58,5 +68,6 @@ export function stripMermaidFence(text: string): string {
       lines.pop();
     }
   }
+
   return lines.join("\n").trim();
 }

@@ -20,7 +20,7 @@ describe("lastVisited cache", () => {
     expect(LAST_VISITED_KEY).toBe("emr.docs.lastVisited");
     writeLastRepo("proj", "repoA");
     writeLastPath("proj", "repoA", "/docs/x.md");
-    expect(localStorage.length).toBe(1);
+    expect(localStorage).toHaveLength(1);
     const raw = localStorage.getItem(LAST_VISITED_KEY);
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw!)).toEqual({

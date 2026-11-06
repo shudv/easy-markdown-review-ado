@@ -46,11 +46,11 @@ function showsCommentStepper(input: StatusBarVisibilityInput): boolean {
 }
 
 function showsIterationPicker(input: StatusBarVisibilityInput): boolean {
-  return !!(
-    input.iterationCount &&
+  return (
+    input.iterationCount !== undefined &&
     input.iterationCount > 1 &&
     input.hasIterationRange &&
-    input.onIterationRangeChange
+    input.onIterationRangeChange !== undefined
   );
 }
 
@@ -60,6 +60,7 @@ export function statusBarVisibility(
 ): StatusBarVisibility {
   const { wordCount, wordDelta, changesAvailable, changesShown } = input;
   const showIterationPicker = showsIterationPicker(input);
+
   return {
     hasCount: typeof wordCount === "number" && wordCount > 0,
     deltaParts:
@@ -84,15 +85,18 @@ export function adjacentIterationRange(
 
   if (direction < 0) {
     const previousUpdate = resolved.range.fromUpdate;
+
     return previousUpdate >= 1
       ? oneReviewUpdate(previousUpdate, updateCount)
       : null;
   }
 
   const nextUpdate = resolved.range.toUpdate + 1;
+
   if (nextUpdate <= updateCount) {
     return oneReviewUpdate(nextUpdate, updateCount);
   }
+
   return allReviewIterations(updateCount);
 }
 
@@ -161,11 +165,14 @@ export function iterationPickerModel(
   const allChangesSelected = resolved.isAllChanges;
   const previousRange = adjacentIterationRange(resolved, count, -1);
   const nextRange = adjacentIterationRange(resolved, count, 1);
+
   const fromTitle =
     resolved.range.fromUpdate === 0
       ? "Pull request base"
       : iterationTitle(options, resolved.range.fromUpdate);
+
   const toTitle = iterationTitle(options, resolved.range.toUpdate);
+
   return {
     resolved,
     allChangesSelected,
@@ -185,7 +192,9 @@ export function iterationPickerModel(
 
 /** Tooltip of the base-commit glyph. */
 export function baseCommitTitle(baseCommit: string | undefined): string {
-  return baseCommit ? `Base commit ${baseCommit.slice(0, 7)}` : "Base commit";
+  return baseCommit !== undefined && baseCommit !== ""
+    ? `Base commit ${baseCommit.slice(0, 7)}`
+    : "Base commit";
 }
 
 /** Range-edge modifier classes for an update row in the picker list. */
@@ -196,6 +205,8 @@ export function iterationOptionClassName(
 ): string {
   const start =
     isSelected && update === range.firstSelectedUpdate ? " is-range-start" : "";
+
   const end = isSelected && update === range.toUpdate ? " is-range-end" : "";
+
   return `emr-statusbar-iteration-option${start}${end}`;
 }

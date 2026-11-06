@@ -17,6 +17,7 @@ import { hydrateMermaid } from "../src/markdown/mermaidHydrate";
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/telemetry")>();
+
   return {
     ...actual,
     trackUserFacingError: (...args: unknown[]) =>
@@ -41,8 +42,8 @@ describe("hydrateMermaid — library load failure", () => {
       // Not hydrated — the fallback stays in place for a retry/readability.
       expect(el.getAttribute("data-hydrated")).toBeNull();
     }
-    expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+
+    expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
       error: expect.objectContaining({
         message: expect.stringContaining("error when mocking a module"),
         cause: expect.objectContaining({ message: "chunk load failed" }),

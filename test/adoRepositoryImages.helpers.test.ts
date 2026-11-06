@@ -8,6 +8,7 @@ describe("fetchRepositoryImageContent", () => {
     const content = new ArrayBuffer(4);
     const getItemContent = vi.fn().mockResolvedValue(content);
     const client = { getItemContent } as Pick<GitRestClient, "getItemContent">;
+
     const versionDescriptor = {
       version: "target-commit",
       versionType: 2,

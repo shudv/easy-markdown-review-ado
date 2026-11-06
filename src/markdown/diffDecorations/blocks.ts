@@ -57,11 +57,14 @@ export function decorateBlock(pass: DecorationPass, el: HTMLElement): void {
   // decorate themselves (see ownSpanEnd).
   const ownEnd = ownSpanEnd(el, start, end, pass.currentLines);
   if (ownEnd < start) return;
+
   const interiorEdit =
     ownEnd === end ? findInteriorEdit(pass, el, start, end) : null;
+
   const kind = interiorEdit
     ? "modified"
     : classifyBlock(start, ownEnd, pass.changeRanges);
+
   if (!kind) return;
   markChangedBlock(pass, el, kind);
   const block: ChangedBlock = { el, kind, start, end, ownEnd, interiorEdit };
@@ -70,12 +73,14 @@ export function decorateBlock(pass: DecorationPass, el: HTMLElement): void {
   if (kind === "modified" && pass.renderInline && lacksOwnComparison(el)) {
     attachOriginalComparison(pass, block, pass.renderInline);
   }
+
   if (kind === "modified" && needsUnavailableTooltip(el)) {
     applyDiffTooltip(
       el,
       "Previous content unavailable; exact comparison cannot be shown",
     );
   }
+
   if (canLineWash(el)) applyLineWash(el);
 }
 
@@ -88,6 +93,7 @@ function decorateBlockContent(
   block: ChangedBlock,
 ): boolean {
   const { el, kind } = block;
+
   if (kind === "modified" && pass.renderInline) {
     // For a reworded prose block, overlay an inline word-level diff so only
     // the changed words are coloured. Requires the caller's `renderInline` so
@@ -98,6 +104,7 @@ function decorateBlockContent(
     ) {
       return false;
     }
+
     // For an edited TABLE ROW, highlight only the CELLS that changed rather
     // than the whole row. The line-based diff can't isolate a cell on its own,
     // but the original row's source is available, so we split both rows into
@@ -106,6 +113,7 @@ function decorateBlockContent(
     if (el.tagName === "TR") {
       decorateModifiedTableRow(pass, block, pass.renderInline);
     }
+
     if (el.tagName === "PRE") {
       decorateModifiedCode(pass, block, pass.renderInline);
     }
@@ -127,6 +135,7 @@ function decorateBlockContent(
   ) {
     el.dataset.diffInline = "true";
   }
+
   return true;
 }
 
@@ -146,15 +155,18 @@ function resolveOriginalMarkdown(
   // the unchanged remainder as "added". When only part of a multi-line
   // block changed, fall back to the block wash.
   const coversBlock = range != null && range.start <= start && range.end >= end;
+
   const reconstructed = reconstructBlockOriginal(
     pass,
     block.interiorEdit,
     start,
     end,
   );
+
   if (reconstructed == null && coversBlock) {
     return range!.originalText ?? null;
   }
+
   return reconstructed;
 }
 
@@ -167,6 +179,7 @@ function originalDocumentOf(
     pass.originalSource,
     renderInline,
   );
+
   return pass.originalDocument;
 }
 
@@ -179,6 +192,7 @@ function compareProseRendering(
   if (originalMarkdown == null) return null;
   const comparison = compareRendering(block.el, originalMarkdown, renderInline);
   if (comparison.kind === "different") return comparison;
+
   // The item reads the same, but may now sit at a different list depth.
   const nesting = listNestingChange(
     block.el,
@@ -186,6 +200,7 @@ function compareProseRendering(
     pass.changeRanges,
     () => originalDocumentOf(pass, renderInline),
   );
+
   return nesting ?? comparison;
 }
 
@@ -197,19 +212,23 @@ function decorateModifiedProse(
 ): boolean {
   const { el } = block;
   const originalMarkdown = resolveOriginalMarkdown(pass, block);
+
   const rendering = compareProseRendering(
     pass,
     block,
     originalMarkdown,
     renderInline,
   );
+
   if (rendering?.kind === "identical") {
     // A source-only edit — a renumbered list item, re-wrapped lines,
     // `*a*` → `_a_` — changes nothing a reader can see, so it isn't shown
     // as an edit.
     unmarkChangedBlock(pass, el, DIFF_IMAGE_CLASS, DIFF_MATH_CLASS);
+
     return false;
   }
+
   if (rendering?.kind === "nesting") {
     // Same text, different structure: tint the item's own text amber and
     // explain it, as a heading-level change does. The bullet stays amber.
@@ -234,6 +253,7 @@ function decorateModifiedProse(
     el.classList.add(DIFF_INLINE_CLASS);
     markInlined(pass, el);
   }
+
   return true;
 }
 
@@ -244,6 +264,7 @@ function decorateModifiedTableRow(
 ): void {
   const { el, start } = block;
   const range = soleModifiedRange(start, block.ownEnd, pass.changeRanges);
+
   // `soleModifiedRange`/`overlaps` guarantees the range covers this row's
   // line, so `start - range.start` indexes the row's original source. A
   // range without `originalText` (or an out-of-range index) yields a falsy
@@ -252,16 +273,20 @@ function decorateModifiedTableRow(
     range?.originalText != null
       ? range.originalText.split(/\r\n|\r|\n/)[start - range.start]
       : undefined;
-  if (!originalRow || !range) return;
+
+  if (originalRow === undefined || originalRow === "" || !range) return;
+
   const columnAlignment = el.closest("thead")
     ? undefined
     : resolveTableColumnAlignment(el, range, renderInline);
+
   const tableDiff = diffTableRowCells(
     el,
     originalRow,
     renderInline,
     columnAlignment,
   );
+
   if (tableDiff === "precise") {
     el.dataset.diffCells = "true";
   } else if (tableDiff === "unchanged") {
@@ -278,13 +303,16 @@ function decorateModifiedCode(
 ): void {
   const { el } = block;
   const originalMarkdown = resolveOriginalMarkdown(pass, block);
+
   const metadataChange =
     originalMarkdown != null
       ? readCodeMetadataChange(el, originalMarkdown, renderInline)
       : null;
+
   const hasInlineDiff =
     originalMarkdown != null &&
     tryInlineWordDiff(el, originalMarkdown, renderInline);
+
   if (metadataChange) {
     applySimpleMetadataIndicator(
       el,
@@ -293,6 +321,7 @@ function decorateModifiedCode(
       metadataChange.after,
     );
   }
+
   if (hasInlineDiff || metadataChange?.contentUnchanged) {
     el.classList.add(DIFF_INLINE_CLASS);
     markInlined(pass, el);
@@ -316,18 +345,22 @@ function attachOriginalComparison(
   renderInline: (md: string) => string,
 ): void {
   const { el } = block;
+
   const originalBlock = reconstructBlockOriginal(
     pass,
     block.interiorEdit,
     block.start,
     block.end,
   );
-  if (!originalBlock) return;
+
+  if (originalBlock === null || originalBlock === "") return;
+
   if (el.classList.contains(DIFF_MATH_CLASS)) {
     const encoded = renderOriginalStandalone(el, originalBlock, renderInline)
       .querySelector<HTMLElement>(".emr-math[data-math-src]")
       ?.getAttribute("data-math-src");
-    if (encoded) {
+
+    if (encoded != null && encoded !== "") {
       el.dataset.diffOriginal = decodeURIComponent(encoded);
     }
   } else {

@@ -37,9 +37,11 @@ function shape(ranges: readonly DiffRange[]): string[] {
     if (range.kind === "deleted-marker") {
       return `deleted@${range.startLine} ${JSON.stringify(range.deletedContent)}`;
     }
+
     if (range.kind === "added") {
       return `added ${range.startLine}-${range.endLine}`;
     }
+
     return `modified ${range.startLine}-${range.endLine} <- ${range.originalStartLine}-${range.originalEndLine} ${JSON.stringify(range.originalText)}`;
   });
 }
@@ -145,9 +147,11 @@ describe("refineDiffRanges", () => {
     expect(missing).toEqual(ranges);
     expect(missing).not.toBe(ranges);
     expect(refineDiffRanges(ranges, "x", undefined)).toEqual(ranges);
+
     const deletions: DiffRange[] = [
       { startLine: 1, endLine: 1, kind: "deleted-marker", linesDeleted: 1 },
     ];
+
     expect(refineDiffRanges(deletions, "gone\nkept", "kept")).toEqual(
       deletions,
     );
@@ -163,6 +167,7 @@ describe("refineDiffRanges", () => {
       "",
       "### Security",
     );
+
     const current = md(
       "### Performance",
       "",
@@ -181,6 +186,7 @@ describe("refineDiffRanges", () => {
       "",
       "### Security",
     );
+
     // ADO reports each replacement as one coarse Edit block; the blank line
     // between them is the only unchanged line.
     const ado = lineDiffBlocksToRanges(
@@ -202,6 +208,7 @@ describe("refineDiffRanges", () => {
       ],
       original.split("\n"),
     );
+
     // Both hunks are one rewritten region: the old placeholder and TODO are
     // removed, and every new block — table, list and nested items — is added.
     expect(shape(refineDiffRanges(ado, original, current))).toEqual([
@@ -212,16 +219,19 @@ describe("refineDiffRanges", () => {
 
   it("keeps a one-block-for-one-block hunk exactly as it was", () => {
     const range = { ...modified(1, 2, 1, 1), originalText: "old line" };
+
     const [kept] = refineDiffRanges(
       [range],
       "old line",
       "new wrapped\nparagraph",
     );
+
     expect(kept).toBe(range);
   });
 
   it("pairs an edited paragraph and marks an inserted one as added", () => {
     const original = md("Intro explains the purpose of this doc.", "", "Tail");
+
     const current = md(
       "Intro explains the goal of this doc.",
       "",
@@ -229,6 +239,7 @@ describe("refineDiffRanges", () => {
       "",
       "Tail",
     );
+
     expect(
       shape(refineDiffRanges([modified(1, 3, 1, 1)], original, current)),
     ).toEqual([
@@ -256,6 +267,7 @@ describe("refineDiffRanges", () => {
       "",
       "Old end.",
     );
+
     const current = md(
       "Totally different start.",
       "",
@@ -265,6 +277,7 @@ describe("refineDiffRanges", () => {
       "",
       "Brand new ending.",
     );
+
     expect(
       shape(refineDiffRanges([modified(1, 7, 1, 5)], original, current)),
     ).toEqual([
@@ -291,11 +304,13 @@ describe("refineDiffRanges", () => {
 
     it("aligns rows when the header is unchanged", () => {
       const original = table("| Parser | Ana |", "| Renderer | Bo |");
+
       const current = table(
         "| Parser | Ana |",
         "| Renderer | Bo Smith |",
         "| Exporter | Cy |",
       );
+
       expect(
         shape(refineDiffRanges([modified(4, 5, 4, 4)], original, current)),
       ).toEqual([`modified 4-4 <- 4-4 "| Renderer | Bo |"`, "added 5-5"]);
@@ -311,12 +326,14 @@ describe("refineDiffRanges", () => {
 
     it("keeps a table whole when its header changed", () => {
       const original = table("| Parser | Ana |");
+
       const current = md(
         "| Component | Owner |",
         "| --- | --- |",
         "| Parser | Ana |",
         "| Exporter | Cy |",
       );
+
       const range = modified(1, 4, 1, 3);
       expect(refineDiffRanges([range], original, current)).toEqual([range]);
     });
@@ -347,6 +364,7 @@ describe("refineDiffRanges", () => {
       "",
       "- Which teams should join the pilot?",
     );
+
     const current = md(
       "## Launch follow-up",
       "",
@@ -356,6 +374,7 @@ describe("refineDiffRanges", () => {
       "",
       "The pilot covers design notes and runbooks.",
     );
+
     // A line diff pins the blank lines and pairs unrelated blocks 1:1.
     const lineDiff = [
       modified(1, 1, 1, 1),
@@ -389,6 +408,7 @@ describe("refineDiffRanges", () => {
       { startLine: 2, endLine: 2, kind: "added", linesAdded: 1 },
       { startLine: 4, endLine: 4, kind: "added", linesAdded: 1 },
     ];
+
     expect(refineDiffRanges(ranges, "a\n\nb", "a\nnew\n\nnewer\nb")).toEqual(
       ranges,
     );
@@ -402,6 +422,7 @@ describe("refineDiffRanges", () => {
       "",
       "End.",
     );
+
     const current = md(
       "Context.",
       "",
@@ -409,6 +430,7 @@ describe("refineDiffRanges", () => {
       "",
       "End.",
     );
+
     const ranges: DiffRange[] = [
       {
         startLine: 3,
@@ -419,6 +441,7 @@ describe("refineDiffRanges", () => {
       },
       { startLine: 3, endLine: 3, kind: "added", linesAdded: 1 },
     ];
+
     expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
       `modified 3-3 <- 3-3 "The old guidance about retries."`,
     ]);
@@ -429,6 +452,7 @@ describe("refineDiffRanges", () => {
       { startLine: 1, endLine: 1, kind: "added", linesAdded: 1 },
       { startLine: 3, endLine: 3, kind: "deleted-marker", linesDeleted: 1 },
     ];
+
     // The deletion has no recorded text, so it's placed by offset alone.
     expect(refineDiffRanges(ranges, "x\n\nold", "new\nx\n")).toEqual(ranges);
   });
@@ -506,12 +530,15 @@ describe("refineDiffRanges", () => {
 
   it("leaves a region too large to align coarse", () => {
     const size = Math.ceil(Math.sqrt(MAX_ALIGNMENT_CELLS)) + 1;
+
     const original = Array.from({ length: size }, (_, i) => `old ${i}`).join(
       "\n\n",
     );
+
     const current = Array.from({ length: size }, (_, i) => `new ${i}`).join(
       "\n\n",
     );
+
     const lines = size * 2 - 1;
     const range = modified(1, lines, 1, lines);
     expect(refineDiffRanges([range], original, current)).toEqual([range]);
@@ -530,6 +557,7 @@ describe("refineDiffRanges", () => {
 
   it("still refines each hunk on its own when ranges can't be placed", () => {
     const original = md("Intro explains the purpose of this doc.", "", "Tail");
+
     const current = md(
       "Intro explains the goal of this doc.",
       "",
@@ -537,11 +565,13 @@ describe("refineDiffRanges", () => {
       "",
       "Tail",
     );
+
     const ranges: DiffRange[] = [
       modified(1, 3, 1, 1),
       // Overlaps the first range, so the ranges can't be placed together.
       { startLine: 2, endLine: 2, kind: "added", linesAdded: 1 },
     ];
+
     expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
       `modified 1-1 <- 1-1 "Intro explains the purpose of this doc."`,
       "added 3-3",
@@ -551,8 +581,10 @@ describe("refineDiffRanges", () => {
 
   it("keeps a table too large to align row by row as one pair", () => {
     const rows = Math.ceil(Math.sqrt(MAX_ALIGNMENT_CELLS)) + 1;
+
     const body = (value: string) =>
       Array.from({ length: rows }, (_, i) => `| r${i} | ${value} |`);
+
     const original = md(
       "| K | V |",
       "| - | - |",
@@ -562,6 +594,7 @@ describe("refineDiffRanges", () => {
       "",
       "Second old para.",
     );
+
     const current = md(
       "| K | V |",
       "| - | - |",
@@ -569,6 +602,7 @@ describe("refineDiffRanges", () => {
       "",
       "New tail words.",
     );
+
     const end = rows + 2;
     expect(
       shape(
@@ -584,7 +618,9 @@ describe("refineDiffRanges", () => {
   it("places a multi-line CRLF deletion and still merges the region", () => {
     const original =
       "Keep.\r\n\r\nGone one\r\nGone two\r\n\r\nThe old guidance about retries.\r\n";
+
     const current = "Keep.\r\n\r\nThe new guidance about retries.\r\n";
+
     const ranges: DiffRange[] = [
       {
         startLine: 3,
@@ -595,6 +631,7 @@ describe("refineDiffRanges", () => {
       },
       modified(3, 3, 6, 6),
     ];
+
     expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
       `deleted@3 "Gone one\\nGone two"`,
       `modified 3-3 <- 6-6 "The old guidance about retries."`,
@@ -606,6 +643,7 @@ describe("refineDiffRanges", () => {
       modified(1, 1, 1, 1),
       { startLine: 4, endLine: 4, kind: "deleted-marker", linesDeleted: 1 },
     ];
+
     expect(refineDiffRanges(ranges, "a\nb\nc\nd", "x\n")).toEqual(ranges);
   });
 
@@ -624,11 +662,14 @@ describe("refineDiffRanges", () => {
       dirname(fileURLToPath(import.meta.url)),
       "../sandbox/repos/rewrite-diff-showcase",
     );
+
     const original = readFileSync(`${repo}/main/design-review.md`, "utf8");
+
     const current = readFileSync(
       `${repo}/prs/restructure-design-doc/design-review.md`,
       "utf8",
     );
+
     // [changeType, originalStart, originalCount, modifiedStart, modifiedCount]
     const blocks = [
       [3, 15, 1, 15, 1],
@@ -652,6 +693,7 @@ describe("refineDiffRanges", () => {
       modifiedLineNumberStart: ms,
       modifiedLinesCount: mc,
     }));
+
     const ado = lineDiffBlocksToRanges(blocks, original.split(/\r?\n/));
     expect(shape(refineDiffRanges(ado, original, current))).toEqual([
       // Performance: placeholder + TODO → metrics guidance, table, nested list.

@@ -130,6 +130,7 @@ describe("buildMentionMarkdown", () => {
       ...USER,
       displayName: "Smart [Inc] \\ Guy",
     };
+
     // The name never enters the token (ADO + our renderer resolve it from the
     // id), so no label escaping is needed and the output is name-independent.
     expect(buildMentionMarkdown(u)).toBe("@<user-abc> ");
@@ -199,11 +200,14 @@ describe("parseMentionUrl", () => {
   it("round-trips work item / PR mentions through buildMentionMarkdown → parseMentionUrl", () => {
     function urlFromMd(md: string): string {
       const m = md.match(/\]\((mention:\/\/[^)]+)\)/);
+
       return m?.[1] ?? "";
     }
+
     // User mentions now persist as the ADO-native `@<GUID>` token (covered by
     // preprocessUserMentions), so only work item / PR mentions are link-shaped.
     const all: MentionSuggestion[] = [WI, PR];
+
     for (const s of all) {
       const parsed = parseMentionUrl(urlFromMd(buildMentionMarkdown(s)));
       expect(parsed?.kind).toBe(s.kind);
@@ -245,6 +249,7 @@ describe("preprocessUserMentions", () => {
       displayName: "Ignored",
       initials: "IG",
     }).trim();
+
     expect(token).toBe(`@<${GUID}>`);
     const link = preprocessUserMentions(token);
     const url = link.match(/\]\((mention:\/\/[^)]+)\)/)?.[1] ?? "";
@@ -316,6 +321,7 @@ describe("collectMentionIdentities", () => {
 
   it("resolves picked names for a body's @mentions (normalizing the id)", () => {
     const body = `hi @<${A.toUpperCase()}> and @<${B}> [@x](mention://user/u-alex)`;
+
     const out = collectMentionIdentities(
       body,
       lookup({
@@ -324,6 +330,7 @@ describe("collectMentionIdentities", () => {
         ["u-alex"]: { displayName: "Legacy Link User" },
       }),
     );
+
     expect(out).toEqual([
       { id: A, displayName: "Shubham Dwivedi", avatarUrl: "a" },
       { id: B, displayName: "Alex", avatarUrl: undefined },
@@ -341,10 +348,12 @@ describe("collectMentionIdentities", () => {
     // `@<GUID>` token) collapse to one entry via normalizeIdentityGuid.
     const entity = "vss.ds.v1.ims.user.6b71186cc2e66813b4e0ffcd511163f4";
     const body = `[@s](mention://user/${entity}) @<${A}>`;
+
     const out = collectMentionIdentities(
       body,
       lookup({ [A]: { displayName: "S" } }),
     );
+
     expect(out).toEqual([{ id: A, displayName: "S", avatarUrl: undefined }]);
   });
 });
@@ -361,6 +370,7 @@ describe("encodePickedMentions", () => {
     const out = encodePickedMentions("cc @Shubham Dwivedi please", [
       { label: "Shubham Dwivedi", id: A },
     ]);
+
     expect(out).toBe(`cc @<${A}> please`);
   });
 
@@ -375,6 +385,7 @@ describe("encodePickedMentions", () => {
       { label: "Sam", id: A },
       { label: "Sam Lee", id: B },
     ]);
+
     expect(out).toBe(`hi @<${B}> and @<${A}>`);
   });
 
@@ -394,6 +405,7 @@ describe("encodePickedMentions", () => {
         encodePickedMentions(`hi @Sam${suffix}`, [{ label: "Sam", id: A }]),
       ).toBe(`hi @Sam${suffix}`);
     }
+
     // But a true punctuation boundary still encodes.
     expect(
       encodePickedMentions("hi @Sam! done", [{ label: "Sam", id: A }]),
@@ -421,6 +433,7 @@ describe("encodePickedMentions", () => {
         { label: "Shubham Dwivedi 2", id: B },
       ],
     );
+
     expect(out).toBe(`cc @<${A}> and @<${B}>`);
   });
 });
@@ -453,6 +466,7 @@ describe("mergeMentionIdentities", () => {
         { id: "u-alex", displayName: "Alex" },
       ],
     );
+
     expect(out).toEqual([
       { id: A, displayName: "First" },
       { id: "u-alex", displayName: "Alex" },
@@ -472,6 +486,7 @@ describe("authorToUserSuggestion", () => {
       initials: "SA",
       avatarUrl: "https://example.com/a.png",
     };
+
     expect(authorToUserSuggestion(a)).toEqual({
       kind: "user",
       id: "x",

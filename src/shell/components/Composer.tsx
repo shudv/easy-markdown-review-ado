@@ -3,7 +3,17 @@
 // `@` / `#` / `!` trigger; matching suggestions surface in a floating
 // MentionPicker, and Enter/Tab splices the canonical mention markdown in.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  type RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useCommentApi } from "../../comments/api";
 import {
@@ -54,9 +64,55 @@ interface MentionState {
   requestId: number;
 }
 
+/**
+ * Pixel coords of the mention picker, anchored just below the textarea's left
+ * edge and recomputed on trigger / scroll / resize. Null while closed.
+ */
+function useMentionPickerPosition(
+  mention: MentionState | null,
+  taRef: RefObject<HTMLTextAreaElement>,
+): { top: number; left: number; width: number } | null {
+  const [pickerPos, setPickerPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  const recomputePickerPos = useCallback(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const rect = ta.getBoundingClientRect();
+    setPickerPos({
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, [taRef]);
+
+  // A closed picker drops its stale position, so a reopened picker waits for
+  // the effect below to measure it afresh.
+  if (!mention && pickerPos !== null) setPickerPos(null);
+
+  useEffect(() => {
+    if (!mention) return;
+    recomputePickerPos();
+    const onMove = () => recomputePickerPos();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [mention, recomputePickerPos]);
+
+  return pickerPos;
+}
+
 // eslint-disable-next-line max-lines-per-function -- Comment editor: textarea, @-mention typeahead, keyboard shortcuts and image paste all act on the same text and caret. Splitting would pass the caret state around.
-export function Composer(props: ComposerProps): React.ReactElement {
-  const busy = React.useContext(ComposerBusyContext);
+export function Composer(props: Readonly<ComposerProps>): ReactElement {
+  const busy = useContext(ComposerBusyContext);
+
   const {
     initial = "",
     placeholder = "Write a comment… Markdown supported.",
@@ -72,96 +128,96 @@ export function Composer(props: ComposerProps): React.ReactElement {
   const commentApi = useCommentApi();
   const identityStore = useIdentityStore();
 
-  const [value, setValue] = React.useState<string>(initial);
-  const [tab, setTab] = React.useState<"write" | "preview">("write");
+  const [value, setValue] = useState<string>(initial);
+  const [tab, setTab] = useState<"write" | "preview">("write");
 
   // Report text changes to the host (draft persistence) without re-subscribing
   // the effect when the parent passes a fresh callback each render. See the
   // `encodedValue` effect below — we emit the canonical `@<GUID>` form, not the
   // readable display text, so a persisted/restored draft keeps its mentions.
-  const onChangeRef = React.useRef(onChange);
-  onChangeRef.current = onChange;
-  const taRef = React.useRef<HTMLTextAreaElement>(null);
+  const onChangeRef = useRef(onChange);
+  // Layout effect: runs before the emit effect below in the same commit.
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+  });
+  const taRef = useRef<HTMLTextAreaElement>(null);
   // Composer root, scrolled into the rail's container when the textarea grows.
-  const rootRef = React.useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Mention picker state. Null when the picker is closed.
-  const [mention, setMention] = React.useState<MentionState | null>(null);
-  // Pixel coords of the picker, recomputed on trigger / scroll / resize.
-  const [pickerPos, setPickerPos] = React.useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
+  const [mention, setMention] = useState<MentionState | null>(null);
 
-  const requestSeq = React.useRef(0);
-  const mentionDebounceRef = React.useRef<number | null>(null);
+  const requestSeqRef = useRef(0);
+  const mentionDebounceRef = useRef<number | null>(null);
 
   // User mentions the author picked from the typeahead, tracked so their
   // readable `@Display Name` (shown while typing) can be re-encoded to the
   // ADO-native `@<GUID>` token on submit / in the preview. Never persisted as
   // names — only the GUID token is stored.
-  const pickedMentionsRef = React.useRef<Array<{ label: string; id: string }>>(
-    [],
-  );
+  const [pickedMentions, setPickedMentions] = useState<
+    Array<{ label: string; id: string }>
+  >([]);
 
   // The value with picked `@Display Name` tokens re-encoded to `@<GUID>`. This
   // is the canonical text: what the preview renders and what gets persisted.
-  const encodedValue = React.useMemo(
-    () => encodePickedMentions(value, pickedMentionsRef.current),
-    [value],
+  const encodedValue = useMemo(
+    () => encodePickedMentions(value, pickedMentions),
+    [value, pickedMentions],
   );
 
   // Emit the canonical value to the host on every change. Persisting the
   // encoded form (rather than the readable display text) means a restored draft
   // still carries its `@<GUID>` mention tokens even though the picked-mention
   // map from the typeahead is gone after a reload.
-  React.useEffect(() => {
+  useEffect(() => {
     onChangeRef.current?.(encodedValue);
   }, [encodedValue]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
   // Drop any pending debounced search when the composer unmounts.
-  React.useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (mentionDebounceRef.current !== null) {
         window.clearTimeout(mentionDebounceRef.current);
         mentionDebounceRef.current = null;
       }
-    };
-  }, []);
+    },
+    [],
+  );
 
   // Auto-grow the textarea to fit content (with a sensible cap).
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const ta = taRef.current;
     if (!ta || tab !== "write") return;
     ta.style.height = "auto";
     const next = Math.min(ta.scrollHeight, 320);
     ta.style.height = `${Math.max(next, 70)}px`;
+
     // Keep the composer visible inside the scroll container. Deferred into a
     // rAF so it runs after other scrolls scheduled by the opening click
     // (notably the article-highlight re-center), which would otherwise win.
     const raf = requestAnimationFrame(() => {
       rootRef.current?.scrollIntoView({ block: "nearest" });
     });
+
     return () => cancelAnimationFrame(raf);
   }, [value, tab]);
 
-  const previewHtml = React.useMemo(
+  const previewHtml = useMemo(
     () => (encodedValue.trim() ? renderMarkdownSync(encodedValue) : ""),
     [encodedValue],
   );
 
   // Mention links in the preview need the same href hydration as rendered
   // bodies, else they show as non-navigable `mention://` chips.
-  const previewRef = React.useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   useMentionLinkHydration(previewRef, [previewHtml, tab]);
   // Resolve `@<GUID>` user mentions in the preview to display names too.
   useUserMentionHydration(previewRef, [previewHtml, tab]);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const preview = previewRef.current;
     if (!preview || tab !== "preview") return;
     void hydrateMath(preview);
@@ -169,10 +225,11 @@ export function Composer(props: ComposerProps): React.ReactElement {
 
   const canSubmit = value.trim().length > 0 && !busy;
 
-  const fetchSuggestions = React.useCallback(
+  const fetchSuggestions = useCallback(
     async (trigger: ActiveTrigger, requestId: number) => {
       try {
         let result: MentionSuggestion[];
+
         switch (trigger.kind) {
           case "user":
             result = await commentApi.searchUsers(trigger.query);
@@ -184,14 +241,17 @@ export function Composer(props: ComposerProps): React.ReactElement {
             result = await commentApi.searchPullRequests(trigger.query);
             break;
         }
+
         // Drop stale responses.
-        if (requestId !== requestSeq.current) return;
+        if (requestId !== requestSeqRef.current) return;
         setMention((prev) => {
-          if (!prev || prev.requestId !== requestId) return prev;
+          if (prev?.requestId !== requestId) return prev;
+
           const clamped = Math.min(
             prev.selectedIndex,
             Math.max(0, result.length - 1),
           );
+
           return {
             ...prev,
             suggestions: result,
@@ -207,7 +267,7 @@ export function Composer(props: ComposerProps): React.ReactElement {
           operation: "suggestion-search",
           impact: "degraded",
         });
-        if (requestId !== requestSeq.current) return;
+        if (requestId !== requestSeqRef.current) return;
         setMention(null);
       }
     },
@@ -218,23 +278,28 @@ export function Composer(props: ComposerProps): React.ReactElement {
    * Re-evaluate the caret position and open / update / close the mention
    * picker. Called after every event that might move the caret.
    */
-  const reevaluateTrigger = React.useCallback(
+  const reevaluateTrigger = useCallback(
     (text: string, caret: number) => {
       const trigger = detectActiveTrigger(text, caret);
+
       if (!trigger) {
         setMention(null);
+
         if (mentionDebounceRef.current !== null) {
           window.clearTimeout(mentionDebounceRef.current);
           mentionDebounceRef.current = null;
         }
+
         return;
       }
+
       setMention((prev) => {
         const sameRun =
-          prev &&
-          prev.trigger.start === trigger.start &&
+          prev?.trigger.start === trigger.start &&
           prev.trigger.kind === trigger.kind;
-        const requestId = ++requestSeq.current;
+
+        const requestId = ++requestSeqRef.current;
+
         const nextState: MentionState = {
           trigger,
           suggestions: sameRun ? prev!.suggestions : [],
@@ -242,57 +307,33 @@ export function Composer(props: ComposerProps): React.ReactElement {
           selectedIndex: sameRun ? prev!.selectedIndex : 0,
           requestId,
         };
+
         // Debounce the REST call — each keystroke replaces the pending timer.
         if (mentionDebounceRef.current !== null) {
           window.clearTimeout(mentionDebounceRef.current);
         }
+
         mentionDebounceRef.current = window.setTimeout(() => {
           mentionDebounceRef.current = null;
           void fetchSuggestions(trigger, requestId);
         }, MENTION_DEBOUNCE_MS);
+
         return nextState;
       });
     },
     [fetchSuggestions],
   );
 
-  /**
-   * Compute pixel coordinates for the picker, anchored just below the
-   * textarea's left edge.
-   */
-  const recomputePickerPos = React.useCallback(() => {
-    const ta = taRef.current;
-    if (!ta) return;
-    const rect = ta.getBoundingClientRect();
-    setPickerPos({
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-    });
-  }, []);
-
-  React.useEffect(() => {
-    if (!mention) {
-      setPickerPos(null);
-      return;
-    }
-    recomputePickerPos();
-    const onMove = () => recomputePickerPos();
-    window.addEventListener("scroll", onMove, true);
-    window.addEventListener("resize", onMove);
-    return () => {
-      window.removeEventListener("scroll", onMove, true);
-      window.removeEventListener("resize", onMove);
-    };
-  }, [mention, recomputePickerPos]);
+  const pickerPos = useMentionPickerPosition(mention, taRef);
 
   /**
    * Commit the currently selected suggestion by splicing the mention's
    * markdown into the textarea value, then close the picker.
    */
-  const commitSelection = React.useCallback(() => {
+  const commitSelection = useCallback(() => {
     const m = mention!;
     const suggestion = m.suggestions[m.selectedIndex]!;
+
     // Seed the identity store so the just-picked person's `@<GUID>` renders as
     // their name immediately (in the preview and the posted comment) with no
     // lookup — we already know it here.
@@ -305,6 +346,7 @@ export function Composer(props: ComposerProps): React.ReactElement {
         },
       ]);
     }
+
     const before = value.slice(0, m.trigger.start);
     const after = value.slice(m.trigger.end);
     // For user mentions, insert the READABLE `@Display Name` so the author sees
@@ -312,19 +354,22 @@ export function Composer(props: ComposerProps): React.ReactElement {
     // `@<GUID>` token in the preview and on submit via `encodePickedMentions`.
     // Work-item / PR mentions keep their canonical link markdown.
     let insertion: string;
+
     if (suggestion.kind === "user") {
       // Disambiguate against already-picked labels so two different people who
       // share a display name each get a distinct, deterministically-matchable
       // label (the " 2" suffix is transient — it becomes a pill on submit).
       const label = uniqueMentionLabel(
         suggestion.displayName,
-        pickedMentionsRef.current.map((p) => p.label),
+        pickedMentions.map((p) => p.label),
       );
+
       insertion = `@${label} `;
-      pickedMentionsRef.current.push({ label, id: suggestion.id });
+      setPickedMentions([...pickedMentions, { label, id: suggestion.id }]);
     } else {
       insertion = buildMentionMarkdown(suggestion);
     }
+
     const next = before + insertion + after;
     const nextCaret = before.length + insertion.length;
     setValue(next);
@@ -340,9 +385,9 @@ export function Composer(props: ComposerProps): React.ReactElement {
       el.focus();
       el.setSelectionRange(nextCaret, nextCaret);
     });
-  }, [mention, value, identityStore]);
+  }, [mention, value, identityStore, pickedMentions]);
 
-  const cancelMention = React.useCallback(() => {
+  const cancelMention = useCallback(() => {
     setMention(null);
   }, []);
 
@@ -390,8 +435,10 @@ export function Composer(props: ComposerProps): React.ReactElement {
                       (prev.selectedIndex + 1) % prev.suggestions.length,
                   })),
                 );
+
                 return;
               }
+
               if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setMention(
@@ -402,18 +449,23 @@ export function Composer(props: ComposerProps): React.ReactElement {
                       prev.suggestions.length,
                   })),
                 );
+
                 return;
               }
+
               if (e.key === "Enter" || e.key === "Tab") {
                 e.preventDefault();
                 e.stopPropagation();
                 commitSelection();
+
                 return;
               }
+
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
                 cancelMention();
+
                 return;
               }
             }
@@ -422,6 +474,7 @@ export function Composer(props: ComposerProps): React.ReactElement {
               e.preventDefault();
               onSubmit(encodedValue.trim());
             }
+
             if (e.key === "Escape" && onCancel) {
               e.preventDefault();
               // Cancel only this composer, not the thread — don't bubble to the
@@ -454,6 +507,7 @@ export function Composer(props: ComposerProps): React.ReactElement {
         <div
           ref={previewRef}
           className="emr-preview markdown-body"
+          // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- previewHtml is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); the fallback is a constant
           dangerouslySetInnerHTML={{
             __html:
               previewHtml || "<em style='color:#888'>Nothing to preview</em>",

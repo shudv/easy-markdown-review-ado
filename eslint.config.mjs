@@ -11,7 +11,54 @@ import reactHooks from "eslint-plugin-react-hooks";
 import noOnlyTests from "eslint-plugin-no-only-tests";
 import sonarjs from "eslint-plugin-sonarjs";
 import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
+import regexp from "eslint-plugin-regexp";
+import noUnsanitized from "eslint-plugin-no-unsanitized";
+import jsxA11y from "eslint-plugin-jsx-a11y-x";
+import eslintReact from "@eslint-react/eslint-plugin";
+import vitest from "@vitest/eslint-plugin";
+import stylistic from "@stylistic/eslint-plugin";
 import emrRules from "./scripts/eslint-rules/coverage-ignore-rationale.mjs";
+
+// Every TypeScript file that is type-checked and linted.
+const TYPED = [
+  "src/**/*.{ts,tsx}",
+  "e2e/**/*.ts",
+  "visual/**/*.ts",
+  "test/**/*.{ts,tsx}",
+];
+const JSX = ["src/**/*.tsx", "test/**/*.tsx"];
+const UNIT_TESTS = ["test/**/*.{ts,tsx}"];
+// Stories and Storybook config get only the React import rule below, not the
+// type-aware rule set.
+const STORIES = ["**/*.stories.tsx", ".storybook/**/*.{ts,tsx}"];
+
+// React is imported by name (`import { useState, type ReactElement } from
+// "react"`), never as a namespace or default object, and JSX uses the
+// automatic runtime. React types that share a DOM name are aliased, e.g.
+// `type MouseEvent as ReactMouseEvent`.
+const REACT_NAMED_IMPORTS = [
+  "error",
+  {
+    selector:
+      "ImportDeclaration[source.value='react'] > :matches(ImportNamespaceSpecifier, ImportDefaultSpecifier)",
+    message:
+      'Import React APIs and types by name: `import { useState, type ReactElement } from "react"`.',
+  },
+  {
+    selector:
+      ":matches(MemberExpression, JSXMemberExpression)[object.name='React'], TSQualifiedName[left.name='React']",
+    message:
+      "Use the named import instead of `React.x` (alias DOM-clashing types, e.g. `type MouseEvent as ReactMouseEvent`).",
+  },
+];
+
+// @eslint-react re-implements several React Compiler rules that
+// eslint-plugin-react-hooks already enforces; keep the official ones.
+const eslintReactRules = Object.fromEntries(
+  Object.entries(eslintReact.configs["recommended-type-checked"].rules).filter(
+    ([name]) => !(name.replace("@eslint-react/", "") in reactHooks.rules),
+  ),
+);
 
 // Complexity and size limits for production source (src/, excluding stories
 // and type declarations), enforced as lint errors. Line limits count code
@@ -25,7 +72,7 @@ const LIMITS = {
 };
 const CODE_LINES_ONLY = { skipBlankLines: true, skipComments: true };
 
-export default tseslint.config(
+const config = tseslint.config(
   {
     // An `eslint-disable` the code no longer needs is an error, so documented
     // exceptions can't outlive the problem they excuse.
@@ -48,8 +95,7 @@ export default tseslint.config(
       "storybook-static/**",
       "node_modules/**",
       "**/*.d.ts",
-      "**/*.stories.tsx",
-      ".storybook/**",
+
       "*.config.{js,cjs,mjs,ts}",
       "webpack.config.cjs",
       "scripts/**",
@@ -58,7 +104,7 @@ export default tseslint.config(
 
   // Base JS + type-aware TS recommendations, applied only to the typed
   // source/test/e2e files below.
-  js.configs.recommended,
+  { ...js.configs.recommended, files: TYPED },
   ...tseslint.configs.recommendedTypeChecked.map((c) => ({
     ...c,
     files: [
@@ -100,6 +146,8 @@ export default tseslint.config(
       // No stray console in shipped code — the codebase already annotates the
       // intentional ones with `// eslint-disable-next-line no-console`.
       "no-console": ["error", { allow: ["warn", "error"] }],
+
+      "no-restricted-syntax": REACT_NAMED_IMPORTS,
 
       // A stray `.only` silently disables the 100% coverage gate. Hard-fail.
       "no-only-tests/no-only-tests": "error",
@@ -143,6 +191,153 @@ export default tseslint.config(
       "no-useless-escape": "error",
       "no-useless-assignment": "error",
       "preserve-caught-error": "error",
+
+      // React Compiler rules (react-hooks v7): purity, refs, immutability,
+      // effects that set state, and the rest of the recommended set.
+      ...reactHooks.configs["recommended-latest"].rules,
+
+      // Stricter type-aware rules.
+      "@typescript-eslint/no-unnecessary-condition": "error",
+      // `0`, `""` and nullable strings/numbers/objects must be checked
+      // explicitly; an optional boolean may stand in for `false`.
+      "@typescript-eslint/strict-boolean-expressions": [
+        "error",
+        { allowNullableBoolean: true },
+      ],
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "@typescript-eslint/prefer-nullish-coalescing": "error",
+      "@typescript-eslint/prefer-optional-chain": "error",
+      "@typescript-eslint/no-deprecated": "error",
+      "@typescript-eslint/return-await": "error",
+      "@typescript-eslint/no-misused-spread": "error",
+      "@typescript-eslint/no-unnecessary-type-parameters": "error",
+      "@typescript-eslint/no-unnecessary-type-arguments": "error",
+      "@typescript-eslint/no-unnecessary-template-expression": "error",
+      "@typescript-eslint/no-useless-default-assignment": "error",
+      "@typescript-eslint/no-meaningless-void-operator": "error",
+      "@typescript-eslint/no-confusing-non-null-assertion": "error",
+      "@typescript-eslint/no-non-null-asserted-nullish-coalescing": "error",
+      "@typescript-eslint/no-dynamic-delete": "error",
+      "@typescript-eslint/no-extraneous-class": "error",
+      "@typescript-eslint/no-mixed-enums": "error",
+      "@typescript-eslint/no-useless-constructor": "error",
+      "@typescript-eslint/no-inferrable-types": "error",
+      "@typescript-eslint/adjacent-overload-signatures": "error",
+      "@typescript-eslint/ban-tslint-comment": "error",
+      "@typescript-eslint/class-literal-property-style": "error",
+      "@typescript-eslint/consistent-generic-constructors": "error",
+      "@typescript-eslint/consistent-type-assertions": "error",
+      "@typescript-eslint/prefer-find": "error",
+      "@typescript-eslint/prefer-for-of": "error",
+      "@typescript-eslint/prefer-function-type": "error",
+      "@typescript-eslint/prefer-literal-enum-member": "error",
+      "@typescript-eslint/prefer-readonly": "error",
+      "@typescript-eslint/prefer-reduce-type-parameter": "error",
+      "@typescript-eslint/prefer-return-this-type": "error",
+      "@typescript-eslint/related-getter-setter-pairs": "error",
+      "@typescript-eslint/require-array-sort-compare": "error",
+      "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "inline-type-imports",
+          // `typeof import("…")` is the vi.importActual / vi.mock idiom.
+          disallowTypeAnnotations: false,
+        },
+      ],
+
+      // Core correctness and clarity rules.
+      eqeqeq: ["error", "smart"],
+      "array-callback-return": "error",
+      "arrow-body-style": ["error", "as-needed"],
+      curly: ["error", "multi-line"],
+      "default-case-last": "error",
+      "logical-assignment-operators": "error",
+      "no-alert": "error",
+      "no-constructor-return": "error",
+      "no-else-return": "error",
+      "no-eval": "error",
+      "no-new-func": "error",
+      "no-extend-native": "error",
+      "no-proto": "error",
+      "no-lone-blocks": "error",
+      "no-lonely-if": "error",
+      "no-return-assign": "error",
+      "no-self-compare": "error",
+      "no-sequences": "error",
+      "no-template-curly-in-string": "error",
+      "no-useless-concat": "error",
+      "no-useless-rename": "error",
+      "no-useless-return": "error",
+      "object-shorthand": "error",
+      "prefer-template": "error",
+      radix: "error",
+      yoda: "error",
+    },
+  },
+
+  {
+    // SonarJS recommended set. Rules that duplicate a stricter rule above, or
+    // that fight an idiom this codebase uses on purpose, are off.
+    files: TYPED,
+    rules: {
+      ...sonarjs.configs.recommended.rules,
+      "sonarjs/cognitive-complexity": "off", // configured above / in the gate
+      "sonarjs/deprecation": "off", // @typescript-eslint/no-deprecated
+      "sonarjs/no-unused-vars": "off", // @typescript-eslint/no-unused-vars
+      "sonarjs/prefer-regexp-exec": "off", // regexp plugin + TS rules
+      "sonarjs/super-linear-regex": "off", // regexp/no-super-linear-backtracking is precise
+      "sonarjs/different-types-comparison": "off", // misfires on `T | undefined`; TS checks types
+      "sonarjs/function-return-type": "off", // components return element | null
+      "sonarjs/void-use": "off", // `void promise` marks deliberate fire-and-forget
+      "sonarjs/todo-tag": "off", // TODOs are tracked in review, not lint
+      "sonarjs/no-alphabetical-sort": "off", // code-unit order is the deterministic order we want
+      "sonarjs/no-nested-conditional": "off", // complexity gates bound nesting
+    },
+  },
+
+  {
+    // Regular expressions: correctness, catastrophic backtracking, clarity.
+    files: TYPED,
+    ...regexp.configs["flat/recommended"],
+  },
+
+  {
+    // React correctness beyond the hooks rules, and accessibility.
+    files: JSX,
+    plugins: { ...eslintReact.configs["recommended-type-checked"].plugins },
+    settings: eslintReact.configs["recommended-type-checked"].settings,
+    rules: eslintReactRules,
+  },
+  {
+    files: JSX,
+    plugins: jsxA11y.configs.strict.plugins,
+    rules: jsxA11y.configs.strict.rules,
+  },
+
+  {
+    // Every HTML sink in shipped code (`innerHTML`, `insertAdjacentHTML`, …)
+    // must be sanitized or carry a documented exception. Tests build fixtures
+    // from literal HTML, so the rule covers production source only.
+    files: ["src/**/*.{ts,tsx}"],
+    ...noUnsanitized.configs.recommended,
+  },
+  {
+    // Props are read-only: a component must not mutate what it is given.
+    files: ["src/**/*.tsx"],
+    rules: { "sonarjs/prefer-read-only-props": "error" },
+  },
+
+  {
+    // Unit tests: every test asserts, titles are unique and valid, and
+    // async assertions are awaited.
+    files: UNIT_TESTS,
+    plugins: vitest.configs.recommended.plugins,
+    rules: {
+      ...vitest.configs.recommended.rules,
+      "vitest/no-conditional-in-test": "error",
+      "vitest/prefer-to-be": "error",
     },
   },
 
@@ -233,3 +428,45 @@ export default tseslint.config(
     },
   },
 );
+
+// Every block that targets source files skips stories; stories get a light,
+// non-type-aware block with just the React import rule.
+export default [
+  ...config.map((block) =>
+    block.files
+      ? { ...block, ignores: [...(block.ignores ?? []), ...STORIES] }
+      : block,
+  ),
+  {
+    files: STORIES,
+    languageOptions: { parser: tseslint.parser },
+    rules: { "no-restricted-syntax": REACT_NAMED_IMPORTS },
+  },
+  {
+    // Blank lines split a body into readable steps: around multi-line
+    // declarations and blocks, and before `return`. Short declarations stay
+    // next to the guard that checks them. Prettier keeps single blank lines,
+    // and the size limits above don't count them.
+    files: [...TYPED, ...STORIES],
+    plugins: { "@stylistic": stylistic },
+    rules: {
+      "@stylistic/padding-line-between-statements": [
+        "error",
+        {
+          blankLine: "always",
+          prev: "*",
+          next: ["multiline-const", "multiline-let"],
+        },
+        {
+          blankLine: "always",
+          prev: ["multiline-const", "multiline-let"],
+          next: "*",
+        },
+        { blankLine: "always", prev: "*", next: "multiline-block-like" },
+        { blankLine: "always", prev: "multiline-block-like", next: "*" },
+        { blankLine: "always", prev: "*", next: "return" },
+        { blankLine: "always", prev: "directive", next: "*" },
+      ],
+    },
+  },
+];

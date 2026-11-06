@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useEffect, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { RailToolbar } from "./RailToolbar";
@@ -52,9 +52,11 @@ export const Default: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Search comments" }),
     );
+
     const input = await waitFor(() =>
       canvas.getByRole("searchbox", { name: "Search comments" }),
     );
+
     await userEvent.type(input, "abc");
     await expect(args.onCommentQueryChange).toHaveBeenCalled();
     // Non-Escape keys are ignored; Escape with no text collapses the field.
@@ -75,9 +77,11 @@ export const BlurCollapsesSearch: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Search comments" }),
     );
+
     const input = await waitFor(() =>
       canvas.getByRole("searchbox", { name: "Search comments" }),
     );
+
     (input as HTMLInputElement).blur();
     await waitFor(() =>
       expect(
@@ -223,11 +227,13 @@ export const SearchPreopen: Story = {
 /** A query set externally while collapsed re-opens the search field. */
 export const ExternalQueryReopens: Story = {
   render: (args) => {
-    const [query, setQuery] = React.useState("");
-    React.useEffect(() => {
+    const [query, setQuery] = useState("");
+    useEffect(() => {
       const id = setTimeout(() => setQuery("external"), 0);
+
       return () => clearTimeout(id);
     }, []);
+
     return (
       <RailToolbar
         {...args}
@@ -258,21 +264,25 @@ export const FilterDropdownFromHeader: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: /Filter comments/ }),
     );
+
     // Pick a status mode.
     const resolved = await waitFor(() =>
       canvas.getByRole("menuitemradio", { name: /Resolved comments/ }),
     );
+
     await userEvent.click(resolved);
     await expect(args.onFilterModeChange).toHaveBeenCalledWith("resolved");
     // Re-open and flip the independent "only this file" scope.
     await userEvent.click(
       canvas.getByRole("button", { name: /Filter comments/ }),
     );
+
     const scope = await waitFor(() =>
       canvas.getByRole("menuitemcheckbox", {
         name: /Hide comments not on this file/,
       }),
     );
+
     await userEvent.click(scope);
     await expect(args.onOnlyThisFileChange).toHaveBeenCalledWith(true);
   },

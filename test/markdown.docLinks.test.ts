@@ -216,6 +216,7 @@ describe("routeDocLink", () => {
     isInReader: () => false,
     ...over,
   });
+
   const md = (path: string, hash = "") =>
     ({ kind: "repo-file", path, hash, isMarkdown: true }) as const;
 

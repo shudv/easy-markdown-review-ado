@@ -46,6 +46,7 @@ function assignClasses(properties: Properties, value: string): void {
   const classes = value
     .split(/\s+/)
     .filter((token) => SAFE_HTML_CLASS.test(token));
+
   if (classes.length > 0) properties.className = classes;
 }
 
@@ -92,9 +93,11 @@ function safeProperties(
   attrs: ReadonlyArray<{ name: string; value: string }>,
 ): Element["properties"] {
   const properties: Properties = {};
+
   for (const { name, value } of attrs) {
     ATTRIBUTE_HANDLERS.get(name)?.(properties, value, tagName);
   }
+
   return properties;
 }
 
@@ -102,11 +105,13 @@ function convertNode(node: ParseNode): RootContent[] {
   if ("value" in node) {
     return [{ type: "text", value: node.value }];
   }
+
   if (!("tagName" in node)) return [];
   const tagName = node.tagName.toLowerCase();
   if (DROP_HTML_SUBTREE_TAGS.has(tagName)) return [];
   const children = node.childNodes.flatMap(convertNode);
   if (!SAFE_HTML_TAGS.has(tagName)) return children;
+
   return [
     {
       type: "element",
@@ -126,7 +131,8 @@ function closingTag(value: string): string | null {
 function openingContainer(value: string): string | null {
   const match = /^\s*<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.exec(value);
   const tagName = match?.[1]?.toLowerCase();
-  return tagName &&
+
+  return tagName !== undefined &&
     SAFE_HTML_TAGS.has(tagName) &&
     !VOID_HTML_TAGS.has(tagName) &&
     !new RegExp(`<\\/${tagName}\\s*>`, "i").test(value)
@@ -145,11 +151,15 @@ function closeContainer(
   close: string,
   raw: RawNode,
 ): void {
-  const active = state.stack[state.stack.length - 1];
+  const active =
+    state.stack.length > 0 ? state.stack[state.stack.length - 1] : undefined;
+
   if (active?.element.tagName !== close) return;
+
   if (raw.position && active.element.position) {
     active.element.position.end = raw.position.end;
   }
+
   state.current = active.parent;
   state.stack.pop();
 }
@@ -161,15 +171,19 @@ function closeContainer(
 function appendRawFragment(state: TransformState, raw: RawNode): void {
   const parsed = parseFragment(raw.value);
   const converted = parsed.childNodes.flatMap(convertNode);
+
   for (const node of converted) {
     node.position = raw.position;
     state.current.push(node);
   }
+
   const open = openingContainer(raw.value);
+
   const container = converted.find(
     (node): node is Element => node.type === "element" && node.tagName === open,
   );
-  if (open && container) {
+
+  if (open !== null && container !== undefined) {
     state.stack.push({ element: container, parent: state.current });
     state.current = container.children;
   }
@@ -183,7 +197,7 @@ function transformChildren(children: RootContent[]): RootContent[] {
     if (child.type === "raw") {
       const raw = child as RawNode;
       const close = closingTag(raw.value);
-      if (close) closeContainer(state, close, raw);
+      if (close !== null) closeContainer(state, close, raw);
       else appendRawFragment(state, raw);
       continue;
     }
@@ -193,14 +207,14 @@ function transformChildren(children: RootContent[]): RootContent[] {
         child.children as RootContent[],
       ) as ElementContent[];
     }
+
     state.current.push(child);
   }
+
   return output;
 }
 
 /** Parse raw HTML, retain only inert documentation markup, and drop all else. */
-export const rehypeSafeHtml: Plugin<[], Root> = () => {
-  return (tree) => {
-    tree.children = transformChildren(tree.children);
-  };
+export const rehypeSafeHtml: Plugin<[], Root> = () => (tree) => {
+  tree.children = transformChildren(tree.children);
 };

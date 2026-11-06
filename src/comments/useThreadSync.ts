@@ -24,7 +24,13 @@
 //     failure streak — production saw one long-lived tab emit a 401 every 30s
 //     for 88 hours.
 
-import * as React from "react";
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { CommentThread } from "../types";
 import { trackUserFacingError } from "../telemetry";
@@ -43,6 +49,7 @@ export const RECOVER_BUFFER_MS = 2_000;
 function recoverAtMsOf(err: unknown): number | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   const value = (err as { recoverAtMs?: unknown }).recoverAtMs;
+
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
@@ -68,17 +75,21 @@ export function nextPollDelayMs(opts: {
     intervalMs,
     maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
   } = opts;
+
   if (failureStreak <= 0) return intervalMs;
+
   const backoffMs = Math.min(
     Math.max(intervalMs, maxBackoffMs),
     intervalMs * 2 ** (failureStreak - 1),
   );
+
   // `recoverAtMs` is a floor on top of the backoff, not a replacement: once it
   // has passed and the host still serves the dead token (bursts of up to 76 min
   // were seen), the streak must keep backing off rather than poll every 30s.
   const recoverAtMs = recoverAtMsOf(error);
   if (recoverAtMs === undefined) return backoffMs;
   const untilRecovery = recoverAtMs + RECOVER_BUFFER_MS - nowMs;
+
   return Math.min(MAX_RECOVER_WAIT_MS, Math.max(backoffMs, untilRecovery));
 }
 
@@ -128,15 +139,15 @@ export interface ThreadSyncControls {
 
 /** Refs shared between the hook and its polling session. */
 interface ThreadSyncRefs {
-  fetchRef: React.MutableRefObject<UseThreadSyncOptions["fetchThreads"]>;
-  onThreadsRef: React.MutableRefObject<UseThreadSyncOptions["onThreads"]>;
-  onErrorRef: React.MutableRefObject<UseThreadSyncOptions["onError"]>;
-  subscribeRecoveredRef: React.MutableRefObject<
+  fetchRef: MutableRefObject<UseThreadSyncOptions["fetchThreads"]>;
+  onThreadsRef: MutableRefObject<UseThreadSyncOptions["onThreads"]>;
+  onErrorRef: MutableRefObject<UseThreadSyncOptions["onError"]>;
+  subscribeRecoveredRef: MutableRefObject<
     UseThreadSyncOptions["subscribeRecovered"]
   >;
-  generationRef: React.MutableRefObject<number>;
-  inFlightRef: React.MutableRefObject<AbortController | null>;
-  refreshNowRef: React.MutableRefObject<() => void>;
+  generationRef: MutableRefObject<number>;
+  inFlightRef: MutableRefObject<AbortController | null>;
+  refreshNowRef: MutableRefObject<() => void>;
 }
 
 /** Mutable state of one polling session (one run of the polling effect). */
@@ -176,6 +187,7 @@ function clearTimer(session: PollSession): void {
 function scheduleNext(session: PollSession, delayMs: number): void {
   clearTimer(session);
   session.nextDueAtMs = Date.now() + delayMs;
+
   if (isVisible()) {
     session.timerId = window.setTimeout(() => runFetch(session), delayMs);
   }
@@ -193,6 +205,7 @@ function handleFetchFailure(session: PollSession, err: unknown): void {
       maxBackoffMs: session.maxBackoffMs,
     }),
   );
+
   if (session.failureStreak === 1) {
     trackUserFacingError({
       error: err,
@@ -201,6 +214,7 @@ function handleFetchFailure(session: PollSession, err: unknown): void {
       impact: "degraded",
     });
   }
+
   (
     session.refs.onErrorRef.current ??
     ((e: unknown) => console.warn("[useThreadSync] fetch failed", e))
@@ -238,6 +252,7 @@ function runFetch(session: PollSession): void {
       if (refs.inFlightRef.current === controller) {
         refs.inFlightRef.current = null;
       }
+
       // A torn-down session must not clear a newer session's spinner.
       if (!session.cancelled) session.setIsRefreshing(false);
     });
@@ -250,12 +265,14 @@ function pollUnlessBackingOff(session: PollSession): void {
     session.failureStreak > 0 && session.nextDueAtMs !== null
       ? session.nextDueAtMs - Date.now()
       : 0;
+
   if (remainingMs > 0) scheduleNext(session, remainingMs);
   else runFetch(session);
 }
 
 function handleVisibilityChange(session: PollSession): void {
   const { refs } = session;
+
   if (isVisible()) {
     // Coming back to the tab — abort any stale in-flight, then fetch
     // immediately (or resume a pending backoff).
@@ -297,9 +314,11 @@ function startThreadPolling(
   refs.refreshNowRef.current = () => runFetch(session);
 
   const onVisibilityChange = (): void => handleVisibilityChange(session);
+
   const onFocus = (): void => {
     if (isVisible()) pollUnlessBackingOff(session);
   };
+
   const unsubscribeRecovered = refs.subscribeRecoveredRef.current?.(() =>
     handleRecovered(session),
   );
@@ -334,34 +353,39 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
     maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
   } = opts;
 
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Refs let the listeners see the latest callbacks without
   // re-subscribing every render.
-  const fetchRef = React.useRef(fetchThreads);
-  const onThreadsRef = React.useRef(onThreads);
-  const onErrorRef = React.useRef(onError);
-  React.useEffect(() => {
+  const fetchRef = useRef(fetchThreads);
+  const onThreadsRef = useRef(onThreads);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
     fetchRef.current = fetchThreads;
     onThreadsRef.current = onThreads;
     onErrorRef.current = onError;
   }, [fetchThreads, onThreads, onError]);
   // Read once per polling session (the effect below); a host passes a stable
-  // subscribe function, so its identity must not restart polling.
-  const subscribeRecoveredRef = React.useRef(opts.subscribeRecovered);
-  subscribeRecoveredRef.current = opts.subscribeRecovered;
+  // subscribe function, so its identity must not restart polling. Synced in an
+  // effect declared before the polling effect so a new session sees it.
+  const subscribeRecovered = opts.subscribeRecovered;
+  const subscribeRecoveredRef = useRef(subscribeRecovered);
+  useEffect(() => {
+    subscribeRecoveredRef.current = subscribeRecovered;
+  }, [subscribeRecovered]);
 
   // Generation counter increments on each visibility loss / unmount.
   // Responses from older generations are discarded so a slow request
   // begun before a tab-hide can't overwrite state after a fresh
   // request finishes.
-  const generationRef = React.useRef(0);
-  const inFlightRef = React.useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
+  const inFlightRef = useRef<AbortController | null>(null);
   // No-op until the first polling session installs its trigger.
-  const refreshNowRef = React.useRef<() => void>(() => {});
+  const refreshNowRef = useRef<() => void>(() => {});
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!enabled) return;
+
     return startThreadPolling(
       {
         fetchRef,
@@ -376,7 +400,7 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
     );
   }, [enabled, intervalMs, maxBackoffMs]);
 
-  const refreshNow = React.useCallback(() => {
+  const refreshNow = useCallback(() => {
     refreshNowRef.current();
   }, []);
 

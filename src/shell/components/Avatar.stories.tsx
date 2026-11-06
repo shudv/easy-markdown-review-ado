@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import type { ComponentType, ReactElement } from "react";
 import { expect, waitFor, within } from "storybook/test";
 
 import { Avatar, AvatarImageContext } from "./Avatar";
@@ -49,9 +49,12 @@ export const Photo: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe(PHOTO);
   },
 };
@@ -76,7 +79,7 @@ export const PhotoBroken: Story = {
 };
 
 function withResolver(resolve: AvatarImageResolver) {
-  return function Decorator(Story: React.ComponentType): React.ReactElement {
+  return function Decorator(Story: ComponentType): ReactElement {
     return (
       <AvatarImageContext.Provider value={resolve}>
         <Story />
@@ -98,9 +101,12 @@ export const Resolved: Story = {
     const img = await waitFor(() => {
       const el =
         canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+
       expect(el).toBeTruthy();
+
       return el!;
     });
+
     expect(img.getAttribute("src")).toBe(PHOTO);
   },
 };

@@ -24,6 +24,7 @@ function mountHtml(html: string): HTMLElement {
   const wrap = document.createElement("div");
   wrap.innerHTML = html;
   document.body.appendChild(wrap);
+
   return wrap;
 }
 
@@ -40,73 +41,57 @@ describe("hydrateMentionLinks — no-op guards", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, null);
     expect(root.querySelector("a")!.getAttribute("href")).toBe(
       "mention://workitem/42",
     );
   });
 
-  it("leaves anchors that already point at an https URL alone", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="https://example.com/already">#42</a>',
-    );
+  it.each([
+    {
+      name: "leaves anchors that already point at an https URL alone",
+      html: '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="https://example.com/already">#42</a>',
+      href: "https://example.com/already",
+    },
+    {
+      name: "leaves anchors with http:// hrefs alone too",
+      html: '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="9" href="http://legacy.example/9">!9</a>',
+      href: "http://legacy.example/9",
+    },
+    {
+      // User mentions are not on the query selector — href is unchanged.
+      name: "ignores anchors without our kind data attr",
+      html: '<a class="emr-mention" data-mention-kind="user" data-mention-id="alice" href="mention://user/alice">@alice</a>',
+      href: "mention://user/alice",
+    },
+    {
+      // The DOM walker uses the data-mention-kind selector, but the href
+      // itself may be corrupt; parseMentionUrl returns null and the
+      // walker bails on that anchor.
+      name: "skips anchors whose href fails parseMentionUrl",
+      html: '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="not-a-mention-url">#42</a>',
+      href: "not-a-mention-url",
+    },
+    {
+      // The selector matches on data-mention-kind, but the href's own kind
+      // decides the URL shape; a user href has no web URL to build.
+      name: "leaves a workitem-tagged anchor whose href is a user mention",
+      html: '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://user/alice">#42</a>',
+      href: "mention://user/alice",
+    },
+  ])("$name", ({ html, href }) => {
+    const root = mountHtml(html);
     hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "https://example.com/already",
-    );
-  });
-
-  it("leaves anchors with http:// hrefs alone too", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="9" href="http://legacy.example/9">!9</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "http://legacy.example/9",
-    );
-  });
-
-  it("ignores anchors without our kind data attr", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="user" data-mention-id="alice" href="mention://user/alice">@alice</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    // User mentions are not on the query selector — href is unchanged.
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "mention://user/alice",
-    );
-  });
-
-  it("skips anchors whose href fails parseMentionUrl", () => {
-    // The DOM walker uses the data-mention-kind selector, but the href
-    // itself may be corrupt; parseMentionUrl returns null and the
-    // walker bails on that anchor.
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="not-a-mention-url">#42</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "not-a-mention-url",
-    );
+    expect(root.querySelector("a")!.getAttribute("href")).toBe(href);
   });
 
   it("handles an empty href without throwing", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42">#42</a>',
     );
-    expect(() => hydrateMentionLinks(root, CTX)).not.toThrow();
-  });
 
-  it("leaves a workitem-tagged anchor whose href is a user mention", () => {
-    // The selector matches on data-mention-kind, but the href's own kind
-    // decides the URL shape; a user href has no web URL to build.
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://user/alice">#42</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "mention://user/alice",
-    );
+    expect(() => hydrateMentionLinks(root, CTX)).not.toThrow();
   });
 });
 
@@ -115,6 +100,7 @@ describe("hydrateMentionLinks — workitem rewrites", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, CTX);
     const a = root.querySelector("a")!;
     expect(a.getAttribute("href")).toBe(
@@ -128,6 +114,7 @@ describe("hydrateMentionLinks — workitem rewrites", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "https://dev.azure.com/contoso///",
       projectName: "P",
@@ -139,30 +126,35 @@ describe("hydrateMentionLinks — workitem rewrites", () => {
 });
 
 describe("hydrateMentionLinks — pullrequest rewrites", () => {
-  it("uses repo from URL params when present", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="100" href="mention://pullrequest/100?repo=widgets&status=active">!100</a>',
-    );
+  it.each([
+    {
+      name: "uses repo from URL params when present",
+      html: '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="100" href="mention://pullrequest/100?repo=widgets&status=active">!100</a>',
+      href: "https://dev.azure.com/contoso/Awesome%20Project/_git/widgets/pullrequest/100",
+    },
+    {
+      name: "falls back to defaultRepoName from ctx when the URL omits repo",
+      html: '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="50" href="mention://pullrequest/50">!50</a>',
+      href: "https://dev.azure.com/contoso/Awesome%20Project/_git/main-repo/pullrequest/50",
+    },
+    {
+      // URLSearchParams decodes the param to "Repo With Spaces"; the
+      // hydrator re-encodes via encodeURIComponent.
+      name: "encodes a repo name containing spaces / special chars",
+      html: '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="3" href="mention://pullrequest/3?repo=Repo%20With%20Spaces">!3</a>',
+      href: "https://dev.azure.com/contoso/Awesome%20Project/_git/Repo%20With%20Spaces/pullrequest/3",
+    },
+  ])("$name", ({ html, href }) => {
+    const root = mountHtml(html);
     hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "https://dev.azure.com/contoso/Awesome%20Project/_git/widgets/pullrequest/100",
-    );
-  });
-
-  it("falls back to defaultRepoName from ctx when the URL omits repo", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="50" href="mention://pullrequest/50">!50</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "https://dev.azure.com/contoso/Awesome%20Project/_git/main-repo/pullrequest/50",
-    );
+    expect(root.querySelector("a")!.getAttribute("href")).toBe(href);
   });
 
   it("leaves the placeholder href when neither repo source resolves", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="50" href="mention://pullrequest/50">!50</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "https://dev.azure.com/contoso",
       projectName: "P",
@@ -171,18 +163,6 @@ describe("hydrateMentionLinks — pullrequest rewrites", () => {
     const a = root.querySelector("a")!;
     expect(a.getAttribute("href")).toBe("mention://pullrequest/50");
     expect(a.getAttribute("target")).toBeNull();
-  });
-
-  it("encodes a repo name containing spaces / special chars", () => {
-    const root = mountHtml(
-      '<a class="emr-mention" data-mention-kind="pullrequest" data-mention-id="3" href="mention://pullrequest/3?repo=Repo%20With%20Spaces">!3</a>',
-    );
-    hydrateMentionLinks(root, CTX);
-    // URLSearchParams decodes the param to "Repo With Spaces"; the
-    // hydrator re-encodes via encodeURIComponent.
-    expect(root.querySelector("a")!.getAttribute("href")).toBe(
-      "https://dev.azure.com/contoso/Awesome%20Project/_git/Repo%20With%20Spaces/pullrequest/3",
-    );
   });
 });
 
@@ -197,6 +177,7 @@ describe("hydrateMentionLinks — bulk + idempotency", () => {
         "</p>",
       ].join(""),
     );
+
     hydrateMentionLinks(root, CTX);
     const anchors = root.querySelectorAll("a");
     expect(anchors[0]!.getAttribute("href")).toBe(
@@ -211,6 +192,7 @@ describe("hydrateMentionLinks — bulk + idempotency", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="42" href="mention://workitem/42">#42</a>',
     );
+
     hydrateMentionLinks(root, CTX);
     const firstHref = root.querySelector("a")!.getAttribute("href");
     hydrateMentionLinks(root, CTX);
@@ -223,6 +205,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
     );
+
     hydrateMentionLinks(root, {
       orgUrl: "javascript:alert(1)",
       projectName: "P",
@@ -238,6 +221,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
     );
+
     hydrateMentionLinks(root, { orgUrl: "not a url", projectName: "P" });
     expect(root.querySelector("a")!.getAttribute("href")).toBe(
       "mention://workitem/1",
@@ -253,6 +237,7 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
       const root = mountHtml(
         '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
       );
+
       hydrateMentionLinks(root, { orgUrl, projectName: "P" });
       expect(root.querySelector("a")!.getAttribute("href")).toBe(
         "mention://workitem/1",
@@ -264,11 +249,14 @@ describe("hydrateMentionLinks — orgUrl scheme validation", () => {
     const root = mountHtml(
       '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
     );
+
     hydrateMentionLinks(root, {
+      // eslint-disable-next-line sonarjs/no-clear-text-protocols -- test fixture: on-prem ADO Server deployments are served over http, and the hydrator must accept them
       orgUrl: "http://tfs.contoso.local:8080/tfs/DefaultCollection",
       projectName: "P",
     });
     expect(root.querySelector("a")!.getAttribute("href")).toBe(
+      // eslint-disable-next-line sonarjs/no-clear-text-protocols -- expected link built from the on-prem http orgUrl fixture above
       "http://tfs.contoso.local:8080/tfs/DefaultCollection/P/_workitems/edit/7",
     );
   });

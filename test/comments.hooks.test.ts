@@ -5,8 +5,14 @@
 //
 // @vitest-environment jsdom
 
-import * as React from "react";
-import { act } from "react-dom/test-utils";
+import {
+  act,
+  Component,
+  createElement,
+  type ReactElement,
+  type ReactNode,
+  useRef,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -25,7 +31,7 @@ import {
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
-function mount(element: React.ReactElement): void {
+function mount(element: ReactElement): void {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -39,14 +45,15 @@ afterEach(() => {
     act(() => root!.unmount());
     root = null;
   }
+
   container?.remove();
   container = null;
 });
 
 // Minimal error boundary so a hook that throws during render is captured as a
 // value instead of crashing the test runner.
-class Boundary extends React.Component<
-  { onError: (e: Error) => void; children: React.ReactNode },
+class Boundary extends Component<
+  { onError: (e: Error) => void; children: ReactNode },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -56,7 +63,7 @@ class Boundary extends React.Component<
   componentDidCatch(error: Error): void {
     this.props.onError(error);
   }
-  render(): React.ReactNode {
+  render(): ReactNode {
     return this.state.failed ? null : this.props.children;
   }
 }
@@ -65,15 +72,18 @@ describe("useCommentApi", () => {
   it("returns the provider's value to descendants", () => {
     const api = { marker: "the-api" } as unknown as CommentApi;
     let seen: CommentApi | null = null;
+
     function Consumer(): null {
       seen = useCommentApi();
+
       return null;
     }
+
     mount(
-      React.createElement(
+      createElement(
         CommentApiProvider,
         { value: api },
-        React.createElement(Consumer),
+        createElement(Consumer),
       ),
     );
     expect(seen).toBe(api);
@@ -81,15 +91,18 @@ describe("useCommentApi", () => {
 
   it("throws when used without a provider", () => {
     let captured: Error | null = null;
+
     function Consumer(): null {
       useCommentApi();
+
       return null;
     }
+
     mount(
-      React.createElement(
+      createElement(
         Boundary,
         { onError: (e: Error) => (captured = e) },
-        React.createElement(Consumer),
+        createElement(Consumer),
       ),
     );
     expect(captured).not.toBeNull();
@@ -106,10 +119,11 @@ describe("useMentionLinkHydration", () => {
 
   // The hook reads MentionLinkContext from ABOVE it, so the provider must be
   // an ancestor of the component that calls the hook.
-  function Inner(): React.ReactElement {
-    const ref = React.useRef<HTMLDivElement>(null);
+  function Inner(): ReactElement {
+    const ref = useRef<HTMLDivElement>(null);
     useMentionLinkHydration(ref, []);
-    return React.createElement("div", {
+
+    return createElement("div", {
       ref,
       dangerouslySetInnerHTML: {
         __html:
@@ -118,18 +132,16 @@ describe("useMentionLinkHydration", () => {
     });
   }
 
-  function Host(props: {
-    ctx: MentionLinkResolution | null;
-  }): React.ReactElement {
-    return React.createElement(
+  function Host(props: { ctx: MentionLinkResolution | null }): ReactElement {
+    return createElement(
       MentionLinkContext.Provider,
       { value: props.ctx },
-      React.createElement(Inner),
+      createElement(Inner),
     );
   }
 
   it("rewrites placeholder mention hrefs after mount using context", () => {
-    mount(React.createElement(Host, { ctx: CTX }));
+    mount(createElement(Host, { ctx: CTX }));
     const a = container!.querySelector("a")!;
     expect(a.getAttribute("href")).toBe(
       "https://dev.azure.com/contoso/Proj/_workitems/edit/7",
@@ -137,7 +149,7 @@ describe("useMentionLinkHydration", () => {
   });
 
   it("leaves placeholders untouched when context is absent", () => {
-    mount(React.createElement(Host, { ctx: null }));
+    mount(createElement(Host, { ctx: null }));
     const a = container!.querySelector("a")!;
     expect(a.getAttribute("href")).toBe("mention://workitem/7");
   });

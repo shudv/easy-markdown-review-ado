@@ -138,10 +138,12 @@ function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
 
 function appLoadedMeasurements(p: AppLoadedPayload): TelemetryMeasurements {
   const measurements: TelemetryMeasurements = { bootTimeMs: p.bootTimeMs };
+
   for (const key of OPTIONAL_BOOT_MEASUREMENTS) {
     const value = p[key];
     if (value !== undefined) measurements[key] = value;
   }
+
   return measurements;
 }
 
@@ -219,7 +221,9 @@ export const events = {
       name: EVENT.SearchPerformed,
       properties: {
         succeeded: p.succeeded,
-        ...(p.failureReason ? { failureReason: p.failureReason } : {}),
+        ...(p.failureReason !== undefined && p.failureReason !== ""
+          ? { failureReason: p.failureReason }
+          : {}),
       },
       // Query *length* only — never the query string.
       measurements: { queryLength: p.queryLength, resultCount: p.resultCount },
@@ -249,7 +253,7 @@ export const events = {
     return {
       name: EVENT.AuthFailure,
       properties: {
-        ...(p.api ? { api: p.api } : {}),
+        ...(p.api !== undefined && p.api !== "" ? { api: p.api } : {}),
         ...(p.legacyHost !== undefined ? { legacyHost: p.legacyHost } : {}),
         ...(p.fedAuthRedirect !== undefined
           ? { fedAuthRedirect: p.fedAuthRedirect }
@@ -294,6 +298,7 @@ export const events = {
     heldWrites?: number;
   }): TelemetryEvent {
     const measurements: Record<string, number> = {};
+
     for (const key of [
       "secsUntilExpAtStart",
       "secsSinceAdoExpAtStart",
@@ -304,12 +309,15 @@ export const events = {
       const value = p[key];
       if (value !== undefined) measurements[key] = Math.round(value);
     }
+
     return {
       name: EVENT.AuthSessionRefresh,
       properties: {
         phase: p.phase,
         trigger: p.trigger,
-        ...(p.grantState ? { grantState: p.grantState } : {}),
+        ...(p.grantState !== undefined && p.grantState !== ""
+          ? { grantState: p.grantState }
+          : {}),
         ...(p.outcome ? { outcome: p.outcome } : {}),
       },
       measurements,

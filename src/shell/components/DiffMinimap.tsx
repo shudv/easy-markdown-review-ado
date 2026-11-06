@@ -10,7 +10,16 @@
 // active. Reads the already-decorated article DOM out of the scroll container.
 // Pure geometry lives in `./diffMinimap.helpers`.
 
-import * as React from "react";
+import {
+  type ReactElement,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   classifyDiffElement,
@@ -27,7 +36,7 @@ import {
 
 interface DiffMinimapProps {
   /** The reader's scroll container whose decorated diffs we chart. */
-  scrollRef: React.RefObject<HTMLElement | null>;
+  scrollRef: RefObject<HTMLElement | null>;
   /** Bumped when the article HTML / diff decorations change → remeasure. */
   version: number;
   /**
@@ -67,22 +76,25 @@ export function DiffMinimap({
   scrollRef,
   version,
   showDiff,
-}: DiffMinimapProps): React.ReactElement | null {
-  const [markers, setMarkers] = React.useState<DiffMarker[]>([]);
-  const [metrics, setMetrics] = React.useState<Metrics>({
+}: Readonly<DiffMinimapProps>): ReactElement | null {
+  const [markers, setMarkers] = useState<DiffMarker[]>([]);
+
+  const [metrics, setMetrics] = useState<Metrics>({
     scrollTop: 0,
     clientHeight: 0,
     scrollHeight: 0,
   });
-  const [scrollable, setScrollable] = React.useState(false);
-  const trackRef = React.useRef<HTMLDivElement>(null);
 
-  const measure = React.useCallback(() => {
+  const [scrollable, setScrollable] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const measure = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const m = readMetrics(scroller);
     const scRect = scroller.getBoundingClientRect();
     const raw: DiffMarker[] = [];
+
     if (showDiff) {
       scroller.querySelectorAll<HTMLElement>(MARKER_SELECTOR).forEach((el) => {
         const kind = classifyDiffElement(el);
@@ -92,41 +104,46 @@ export function DiffMinimap({
         raw.push({ ...markerFraction(elTop, r.height, m.scrollHeight), kind });
       });
     }
+
     setMarkers(resolveOverlaps(mergeMarkers(raw, MERGE_GAP)));
     setMetrics(m);
     setScrollable(m.scrollHeight > m.clientHeight + 1);
   }, [scrollRef, showDiff]);
 
-  const syncScroll = React.useCallback(() => {
+  const syncScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     setMetrics(readMetrics(scroller));
   }, [scrollRef]);
 
   // Remeasure whenever the document / diff decorations / toggle change.
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     measure();
   }, [measure, version]);
 
   // Follow ArticleView's post-decoration signal, plus scroll + resize.
-  React.useEffect(() => {
+  useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     let raf = 0;
+
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(syncScroll);
     };
+
     // Coalesce resize / zoom / re-decoration bursts into ONE measure on the next
     // frame. Measuring synchronously mid-reflow (a zoom fires many resize events
     // while layout is still settling) reads an inconsistent scrollHeight vs the
     // element rects, so the ticks jumped around before snapping back; deferring
     // to a frame reads a settled, self-consistent layout.
     let measureRaf = 0;
+
     const scheduleMeasure = () => {
       cancelAnimationFrame(measureRaf);
       measureRaf = requestAnimationFrame(measure);
     };
+
     scroller.addEventListener("scroll", onScroll, { passive: true });
     const wrap = scroller.querySelector(".emr-article-wrap");
     wrap?.addEventListener("emr-sections-changed", scheduleMeasure);
@@ -137,6 +154,7 @@ export function DiffMinimap({
     // ResizeObserver can miss it. A window resize fires on every zoom step, so
     // re-measure there too to keep the tick fractions correct at any zoom.
     window.addEventListener("resize", scheduleMeasure);
+
     return () => {
       cancelAnimationFrame(raf);
       cancelAnimationFrame(measureRaf);
@@ -151,8 +169,8 @@ export function DiffMinimap({
   // an unmount mid-drag can run it even if `pointerup`/`pointercancel` never
   // fire (otherwise the listeners would leak and keep closing over a stale
   // scroller).
-  const dragCleanupRef = React.useRef<(() => void) | null>(null);
-  React.useEffect(
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(
     () => () => {
       dragCleanupRef.current?.();
       dragCleanupRef.current = null;
@@ -164,12 +182,14 @@ export function DiffMinimap({
   // margins (plus the ruler's CSS top offset) already inset it to align with the
   // reading surface, so no extra inset is subtracted here.
   const rulerH = metrics.clientHeight;
+
   const thumb = thumbMetrics(metrics.scrollTop, {
     clientHeight: metrics.clientHeight,
     scrollHeight: metrics.scrollHeight,
     trackPx: rulerH,
     minThumbPx: MIN_THUMB,
   });
+
   const viewportFrac = viewportRange(
     metrics.scrollTop,
     metrics.clientHeight,
@@ -193,7 +213,7 @@ export function DiffMinimap({
   };
 
   // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
-  const onThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onThumbPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     // Tear down any listeners a previous drag left attached (defensive).
@@ -204,6 +224,7 @@ export function DiffMinimap({
     const startScroll = scroller.scrollTop;
     const ch = scroller.clientHeight;
     const sh = scroller.scrollHeight;
+
     const onMove = (ev: PointerEvent) => {
       scroller.scrollTop = scrollFromThumbDrag(
         startScroll,
@@ -217,6 +238,7 @@ export function DiffMinimap({
         },
       );
     };
+
     // End the drag on pointerup OR pointercancel, and expose the teardown via a
     // ref so an unmount mid-drag can also run it — otherwise these document
     // listeners would leak and keep closing over a stale scroller.
@@ -226,6 +248,7 @@ export function DiffMinimap({
       document.removeEventListener("pointercancel", cleanup);
       dragCleanupRef.current = null;
     };
+
     dragCleanupRef.current = cleanup;
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", cleanup);
@@ -256,6 +279,7 @@ export function DiffMinimap({
         two-tone blob. Ticks are pointer-events:none, so the thumb underneath
         still receives drags.
       */}
+      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only (keeps a thumb click from paging the track) inside the aria-hidden ruler, a pointer aid whose keyboard equivalent is the scroll container's native scrolling */}
       <div
         className="emr-diff-ruler-thumb"
         style={{ top: `${thumb.topPx}px`, height: `${thumb.heightPx}px` }}
@@ -264,11 +288,11 @@ export function DiffMinimap({
       />
       {markers.map((m, i) => (
         <div
+          // eslint-disable-next-line @eslint-react/no-array-index-key -- ticks are stateless, identity-free positions recomputed wholesale on every measure; index keys update nodes in place so the is-active opacity transition survives a re-measure
           key={i}
-          className={
-            `emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}` +
-            (markerInViewport(m, viewportFrac) ? " is-active" : "")
-          }
+          className={`emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}${
+            markerInViewport(m, viewportFrac) ? " is-active" : ""
+          }`}
           title={KIND_TITLE[m.kind]}
           style={{ top: `${m.top * 100}%`, height: `${m.height * 100}%` }}
         />

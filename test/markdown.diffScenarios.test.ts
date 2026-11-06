@@ -45,6 +45,7 @@ function render(md: string): HTMLElement {
   const root = document.createElement("div");
   root.className = "markdown-body emr-rendered";
   root.innerHTML = renderMarkdownSync(md);
+
   return root;
 }
 
@@ -109,12 +110,15 @@ describe("headings", () => {
     ["h5", "##### Minor Caveat Here", "##### Minor Caveat", "Here"],
     ["h6", "###### Footnote Updated", "###### Footnote", "Updated"],
   ];
+
   for (const [tag, modified, original, addedWord] of cases) {
     it(`inline word-diffs an edited ${tag}`, () => {
       const root = render(modified);
+
       const res = decorate(root, [
         { startLine: 1, endLine: 1, kind: "modified", originalText: original },
       ]);
+
       expect(res.inlined).toBe(1);
       const h = root.querySelector<HTMLElement>(tag)!;
       expect(h.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -135,6 +139,7 @@ describe("headings", () => {
 
   it("marks only heading text for a heading-level-only change", () => {
     const root = render("### Approval workflow");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -143,6 +148,7 @@ describe("headings", () => {
         originalText: "## Approval workflow",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const heading = root.querySelector<HTMLElement>("h3")!;
     expect(heading.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -161,6 +167,7 @@ describe("headings", () => {
 describe("paragraphs", () => {
   it("inline word-diffs a small edit", () => {
     const root = render(["# Doc", "", "The quick brown fox jumps."].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -169,6 +176,7 @@ describe("paragraphs", () => {
         originalText: "The quick red fox jumps.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const p = root.querySelector<HTMLElement>(".emr-diff-block--modified")!;
     expect(words(p).added).toContain("brown");
@@ -181,6 +189,7 @@ describe("paragraphs", () => {
         "\n",
       ),
     );
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -189,6 +198,7 @@ describe("paragraphs", () => {
         originalText: "Nothing in common at all here.",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
   });
@@ -212,9 +222,11 @@ describe("paragraphs", () => {
       original,
     );
     expectComparisonAmber(root);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     const panel = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
     expect(trigger.textContent).toBe("Before");
     expect(trigger.getAttribute("aria-label")).toBe("Show previous version");
@@ -230,11 +242,14 @@ describe("paragraphs", () => {
       "The incident commander records the current impact and the affected",
       "regions before choosing the next mitigation step.",
     ].join("\n");
+
     const current = [
       "The incident commander records the current impact and all affected",
       "regions before choosing the next mitigation step.",
     ].join("\n");
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -250,6 +265,7 @@ describe("paragraphs", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(1);
     const paragraph = root.querySelector("p")!;
     expect(words(paragraph).removed).toContain("the");
@@ -263,12 +279,15 @@ describe("paragraphs", () => {
       "through a stable middle line for reviewers",
       "before the old ending closes the paragraph.",
     ].join("\n");
+
     const current = [
       "Alpha new wording remains on the first line and continues",
       "through a stable middle line for reviewers",
       "before the new ending closes the paragraph.",
     ].join("\n");
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -292,6 +311,7 @@ describe("paragraphs", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(1);
     expect(
       words(root.querySelector(`p.${DIFF_INLINE_CLASS}`)!).removed,
@@ -302,10 +322,13 @@ describe("paragraphs", () => {
     const original = ["## Legacy heading", "Legacy body remains useful."].join(
       "\n",
     );
+
     const current = ["## Current heading", "Current body remains useful."].join(
       "\n",
     );
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -320,6 +343,7 @@ describe("paragraphs", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(2);
     expect(words(root.querySelector("h2")!).removed).toContain("Legacy");
     expect(words(root.querySelector("p")!).removed).toContain("Legacy");
@@ -329,6 +353,7 @@ describe("paragraphs", () => {
     const root = render(
       ["# Doc", "", "First para.", "", "Second added para."].join("\n"),
     );
+
     const res = decorate(root, [{ startLine: 5, endLine: 5, kind: "added" }]);
     expect(res.decorated).toBe(1);
     const ps = root.querySelectorAll("p");
@@ -338,6 +363,7 @@ describe("paragraphs", () => {
 
   it("inserts a marker for a deleted paragraph", () => {
     const root = render(["# Doc", "", "Kept para."].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -347,12 +373,14 @@ describe("paragraphs", () => {
         deletedContent: "Old removed para.\n",
       },
     ]);
+
     expect(res.markers).toBe(1);
     expect(root.querySelector(`.${DIFF_DELETED_MARKER_CLASS}`)).not.toBeNull();
   });
 
   it("marks only newly bold text amber", () => {
     const root = render(["This is **bold** now."].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -361,13 +389,16 @@ describe("paragraphs", () => {
         originalText: "This is bold now.",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(1);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
     expect(root.querySelector(`.${WORD_REMOVED_CLASS}`)).toBeNull();
+
     const paragraph = root.querySelector<HTMLElement>(
       "p.emr-diff-block--modified",
     )!;
+
     expect(paragraph.classList.contains("emr-diff-block--modified")).toBe(true);
     expect(paragraph.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
     expect(paragraph.querySelector(`.${DIFF_METADATA_CLASS}`)).toBeNull();
@@ -379,6 +410,7 @@ describe("paragraphs", () => {
 
   it("marks only text whose bold formatting was removed", () => {
     const root = render("The release owner confirms the window.");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -387,6 +419,7 @@ describe("paragraphs", () => {
         originalText: "The **release owner** confirms the window.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!;
     expect(mark.textContent).toBe("release owner");
@@ -406,8 +439,8 @@ describe("paragraphs", () => {
     ]);
     const marks = root.querySelectorAll(`.${DIFF_FORMAT_CLASS}`);
     expect(marks).toHaveLength(1);
-    expect(marks[0]?.textContent).toBe("regional rollout");
-    expect(marks[0]?.parentElement?.tagName).toBe("EM");
+    expect(marks[0]!.textContent).toBe("regional rollout");
+    expect(marks[0]!.parentElement?.tagName).toBe("EM");
     expectPreciseAmber(
       marks[0] as HTMLElement,
       "Formatting changed from bold to italic",
@@ -424,9 +457,11 @@ describe("paragraphs", () => {
         originalText: "Alpha remains separate from beta.",
       },
     ]);
+
     const marks = Array.from(
       root.querySelectorAll<HTMLElement>(`.${DIFF_FORMAT_CLASS}`),
     );
+
     expect(marks.map((mark) => mark.textContent)).toEqual(["Alpha", "beta"]);
     expect(marks.map((mark) => mark.dataset.diffTooltip)).toEqual([
       "Bold formatting added",
@@ -442,6 +477,7 @@ describe("paragraphs", () => {
     const root = render(
       "Read the [incident guide](https://example.com/guide-v2) before responding.",
     );
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -451,10 +487,13 @@ describe("paragraphs", () => {
           "Read the [incident guide](https://example.com/guide-v1) before responding.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
+
     const paragraph = root.querySelector<HTMLElement>(
       "p.emr-diff-block--modified",
     )!;
+
     expect(paragraph.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
     const visibleContent = paragraph.cloneNode(true) as HTMLElement;
     visibleContent
@@ -478,6 +517,7 @@ describe("paragraphs", () => {
     const root = render(
       "Read the [response guide](https://example.com/guide-v2) before responding.",
     );
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -487,6 +527,7 @@ describe("paragraphs", () => {
           "Read the [legacy guide](https://example.com/guide-v1) before responding.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const paragraph = root.querySelector("p")!;
     expect(words(paragraph).removed).toContain("legacy");
@@ -498,6 +539,7 @@ describe("paragraphs", () => {
     const root = render(
       "Open the [support guide](https://support.fabrikam.test/guide).",
     );
+
     decorate(root, [
       {
         startLine: 1,
@@ -507,9 +549,11 @@ describe("paragraphs", () => {
           "Open the [support guide](https://docs.contoso.test/guide).",
       },
     ]);
+
     const indicator = root.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(indicator.classList.contains("is-warning")).toBe(true);
     expect(indicator.querySelector("button")?.getAttribute("aria-label")).toBe(
       "Show link hostname change",
@@ -527,9 +571,11 @@ describe("paragraphs", () => {
         originalText: "Open the [guide](javascript:alert(1)).",
       },
     ]);
+
     const indicator = root.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(indicator.classList.contains("is-warning")).toBe(true);
     expect(
       indicator.querySelector(".emr-diff-metadata-target-diff")?.textContent,
@@ -546,17 +592,21 @@ describe("paragraphs", () => {
         originalText: "Open the [guide](http://[broken/guide).",
       },
     ]);
+
     const indicator = root.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(indicator.classList.contains("is-warning")).toBe(true);
   });
 
   it("keeps the block wash when the previous line was only whitespace", () => {
     const root = render("Hello brave new world.");
+
     const res = decorate(root, [
       { startLine: 1, endLine: 1, kind: "modified", originalText: "   " },
     ]);
+
     const paragraph = root.querySelector<HTMLElement>("p")!;
     expect(res.inlined).toBe(0);
     expect(paragraph.classList.contains("emr-diff-block--modified")).toBe(true);
@@ -584,9 +634,11 @@ describe("paragraphs", () => {
     const root = render("Retry policy changed.");
     root.classList.remove("emr-rendered");
     decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
+
     const paragraph = root.querySelector<HTMLElement>(
       `.${DIFF_TOOLTIP_CLASS}`,
     )!;
+
     const className = paragraph.className;
     paragraph.dispatchEvent(new Event("focus"));
     expect(paragraph.className).toBe(className);
@@ -594,11 +646,14 @@ describe("paragraphs", () => {
 
   it("combines a cross-host link target change with added trailing prose", () => {
     const linkLabel = "`docs/ReviewGuide/README.md`";
+
     const current =
       `The authoritative directory layout and file conventions are documented in [${linkLabel}]` +
       "(https://example.visualstudio.com/Example%20Project/_git/SharedDocs?path=/docs/ReviewGuide/README.md)" +
       " — now hosted in the shared repository.";
+
     const root = render(current);
+
     const result = decorate(root, [
       {
         startLine: 1,
@@ -615,9 +670,11 @@ describe("paragraphs", () => {
     expect(words(paragraph).added).toContain(
       "now hosted in the shared repository",
     );
+
     const indicator = paragraph.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(indicator.classList.contains("is-warning")).toBe(true);
     expect(indicator.previousElementSibling?.textContent).toContain(
       "docs/ReviewGuide/README.md",
@@ -637,6 +694,7 @@ describe("paragraphs", () => {
     const root = render(
       "[Changed](https://example.com/v2) and [Stable](https://example.com/stable)",
     );
+
     decorate(root, [
       {
         startLine: 1,
@@ -666,6 +724,7 @@ describe("paragraphs", () => {
 
   it("marks only text that becomes a link", () => {
     const root = render("Read the [guide](https://example.com/guide).");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -674,10 +733,13 @@ describe("paragraphs", () => {
         originalText: "Read the guide.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
+
     const paragraph = root.querySelector<HTMLElement>(
       "p.emr-diff-block--modified",
     )!;
+
     expect(paragraph.classList.contains("emr-diff-block--modified")).toBe(true);
     expect(paragraph.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
     expect(paragraph.querySelector(`.${DIFF_METADATA_CLASS}`)).toBeNull();
@@ -694,6 +756,7 @@ describe("paragraphs", () => {
     const root = render(
       'Read the [guide](https://example.com/guide "Native link title").',
     );
+
     const link = root.querySelector<HTMLAnchorElement>("a")!;
     expect(link.title).toBe("Native link title");
     decorate(root, [
@@ -717,6 +780,7 @@ describe("paragraphs", () => {
     const root = render(
       'Read [**Alpha** and *beta*](https://example.com/rich "Rich title").',
     );
+
     const link = root.querySelector<HTMLAnchorElement>("a")!;
     decorate(root, [
       {
@@ -744,10 +808,9 @@ describe("paragraphs", () => {
         originalText: "Read the [guide](https://example.com/legacy).",
       },
     ]);
-    expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Link removed: https://example.com/legacy",
-    );
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Link removed: https://example.com/legacy");
   });
 
   it("bounds long link destinations in the callout", () => {
@@ -761,8 +824,10 @@ describe("paragraphs", () => {
         originalText: "Read the guide.",
       },
     ]);
+
     const label = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!
       .dataset.diffTooltip!;
+
     expect(label).toMatch(/^Link added: https:\/\/example\.com\//);
     expect(label.endsWith("…")).toBe(true);
     expect(label.length).toBeLessThanOrEqual(108);
@@ -775,6 +840,7 @@ describe("paragraphs", () => {
     const root = render(
       "Read the [**deployment guide**](https://example.com/deploy).",
     );
+
     decorate(root, [
       {
         startLine: 1,
@@ -783,8 +849,10 @@ describe("paragraphs", () => {
         originalText: "Read the deployment guide.",
       },
     ]);
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
     expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
+      mark!,
       "Bold and link to https://example.com/deploy formatting added",
     );
   });
@@ -794,6 +862,7 @@ describe("paragraphs", () => {
     // <p> but the original renders to an <h2>, so the tag-match lookup misses
     // and we fall back to the whole rendered original's text.
     const root = render(["Now this is plain body text here."].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -802,6 +871,7 @@ describe("paragraphs", () => {
         originalText: "## Now this is heading text here",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     const p = root.querySelector<HTMLElement>("p")!;
     expect(p.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -819,10 +889,9 @@ describe("paragraphs", () => {
         originalText: "> Definition",
       },
     ]);
-    expectPreciseAmber(
-      root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Block changed from quote to paragraph",
-    );
+    const mark = root.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Block changed from quote to paragraph");
   });
 
   it("shows Before for a low-confidence block-type rewrite", () => {
@@ -835,9 +904,11 @@ describe("paragraphs", () => {
         originalText: "## Legacy approval workflow",
       },
     ]);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.click();
     expect(root.querySelector(".emr-diff-before-content h2")?.textContent).toBe(
       "Legacy approval workflow",
@@ -857,18 +928,22 @@ describe("unordered lists", () => {
       false,
     );
     const items = Array.from(root.querySelectorAll("li"));
+
     const marked = items.filter((li) =>
       li.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(marked.length).toBe(1);
+
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("beta");
   });
 
   it("inline word-diffs an edited item", () => {
     const root = render(["- alpha", "- beta changed", "- gamma"].join("\n"));
+
     const res = decorate(root, [
       { startLine: 2, endLine: 2, kind: "modified", originalText: "- beta" },
     ]);
+
     expect(res.inlined).toBe(1);
     const li = root.querySelectorAll("li")[1]!;
     expect(li.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -878,6 +953,7 @@ describe("unordered lists", () => {
 
   it("inserts a marker for a deleted item", () => {
     const root = render(["- alpha", "- gamma"].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 2,
@@ -887,11 +963,13 @@ describe("unordered lists", () => {
         deletedContent: "- beta\n",
       },
     ]);
+
     expect(res.markers).toBe(1);
   });
 
   it("marks only the list marker when an item changes list type", () => {
     const root = render("1. beta");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -900,6 +978,7 @@ describe("unordered lists", () => {
         originalText: "- beta",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const item = root.querySelector("li")!;
     expect(item.classList.contains("emr-diff-block--modified")).toBe(true);
@@ -922,6 +1001,7 @@ describe("unordered lists", () => {
         "- parent two",
       ].join("\n"),
     );
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -930,12 +1010,15 @@ describe("unordered lists", () => {
         originalText: "  - child b",
       },
     ]);
+
     expect(res.decorated).toBe(1);
+
     // Select by source line, not text: parent one's textContent CONTAINS the
     // nested "child b" text, so a text match would wrongly find the parent.
     const parentOne = root.querySelector<HTMLElement>(
       'li[data-source-line="1"]',
     )!;
+
     const childB = root.querySelector<HTMLElement>('li[data-source-line="3"]')!;
     expect(childB.textContent).toContain("child b");
     expect(parentOne.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
@@ -944,6 +1027,7 @@ describe("unordered lists", () => {
 
   it("marks list-item formatting without inventing marker semantics", () => {
     const root = render("- **beta** remains stable");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -952,6 +1036,7 @@ describe("unordered lists", () => {
         originalText: "- beta remains stable",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const item = root.querySelector<HTMLElement>("li")!;
     expect(item.classList.contains("emr-diff-list-marker-change")).toBe(false);
@@ -973,10 +1058,12 @@ describe("ordered lists", () => {
     expect(root.querySelector("ol")?.classList.contains(DIFF_BLOCK_CLASS)).toBe(
       false,
     );
+
     const marked = Array.from(root.querySelectorAll("li")).filter((li) =>
       li.classList.contains(DIFF_BLOCK_CLASS),
     );
-    expect(marked.length).toBe(1);
+
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("two");
   });
 
@@ -984,6 +1071,7 @@ describe("ordered lists", () => {
     const root = render(
       ["1. one", "2. second step complete", "3. three"].join("\n"),
     );
+
     const res = decorate(root, [
       {
         startLine: 2,
@@ -992,6 +1080,7 @@ describe("ordered lists", () => {
         originalText: "2. second step pending",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const li = root.querySelectorAll("li")[1]!;
     expect(words(li).added).toContain("complete");
@@ -1017,6 +1106,7 @@ describe("ordered lists", () => {
         "3. Have you considered risks around code upgrade (schema changes, N-1)?",
       ].join("\n"),
     );
+
     // Item 2 spans source lines 5–6; both lines were part of the edit.
     const res = decorate(root, [
       {
@@ -1027,6 +1117,7 @@ describe("ordered lists", () => {
           "2. Does this work make breaking API changes? To private ip APIs, or\n   public grab them?",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(1);
     const item2 = root.querySelector<HTMLElement>('li[data-source-line="5"]')!;
@@ -1056,6 +1147,7 @@ describe("ordered lists", () => {
         "3. Third item stays exactly the same too.",
       ].join("\n"),
     );
+
     // Only the continuation line (3) changed; the item spans lines 2–3.
     const res = decorate(root, [
       {
@@ -1065,6 +1157,7 @@ describe("ordered lists", () => {
         originalText: "   API only, or neither of them?",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(res.inlined).toBe(0);
     const item2 = root.querySelector<HTMLElement>('li[data-source-line="2"]')!;
@@ -1089,6 +1182,7 @@ describe("ordered lists", () => {
         "3. Third item stays exactly the same too across the edit.",
       ].join("\n"),
     );
+
     const li2 = root.querySelector<HTMLElement>('li[data-source-line="3"]')!;
     // Precondition: the item really is loose (prose wrapped in a <p>).
     expect(li2.firstElementChild?.tagName).toBe("P");
@@ -1102,6 +1196,7 @@ describe("ordered lists", () => {
           "2. Does this work make breaking API changes? To private 1p APIs?",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     expect(li2.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
 
@@ -1110,7 +1205,7 @@ describe("ordered lists", () => {
     expect(p.querySelector(`.${WORD_ADDED_CLASS}`)).not.toBeNull();
     expect(p.querySelector(`.${WORD_REMOVED_CLASS}`)).not.toBeNull();
     // …and NONE escape to the item level as the blank-line-inducing marks.
-    expect(li2.querySelectorAll(":scope > ins, :scope > del").length).toBe(0);
+    expect(li2.querySelectorAll(":scope > ins, :scope > del")).toHaveLength(0);
     expect(words(li2).added).toContain("v4");
     expect(words(li2).removed).toContain("private");
   });
@@ -1156,6 +1251,7 @@ describe("ordered lists", () => {
   it("still marks a first item whose number changes the list's start", () => {
     const original = ["1. Install", "2. Configure"].join("\n");
     const root = render(["3. Install", "4. Configure"].join("\n"));
+
     const res = decorate(
       root,
       [
@@ -1170,6 +1266,7 @@ describe("ordered lists", () => {
       ],
       original,
     );
+
     expect(res.decorated).toBe(1);
     const item = root.querySelector<HTMLElement>("li")!;
     expectPreciseAmber(item, "List numbering changed from 1 to 3");
@@ -1184,13 +1281,16 @@ describe("ordered lists", () => {
       "      2. Middle step.",
       "      3. Keep this step.",
     ].join("\n");
+
     const current = [
       "1. Parent",
       "   1. Child",
       "      1. Middle step.",
       "      2. Keep this step.",
     ].join("\n");
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -1205,6 +1305,7 @@ describe("ordered lists", () => {
       ],
       original,
     );
+
     expect(res.decorated).toBe(0);
   });
 
@@ -1214,11 +1315,13 @@ describe("ordered lists", () => {
       "   1. Child",
       "      1. Run the old step.",
     ].join("\n");
+
     const current = [
       "1. Parent",
       "   1. Child",
       "      1. Run the new step.",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,
@@ -1242,6 +1345,7 @@ describe("ordered lists", () => {
     const original = "1. [ ] Ship it";
     const current = "1. [x] Ship it";
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -1256,6 +1360,7 @@ describe("ordered lists", () => {
       ],
       original,
     );
+
     expect(res.decorated).toBe(1);
   });
 });
@@ -1269,6 +1374,7 @@ describe("nested and mixed lists", () => {
     const root = render(
       ["- a", "  - b", "    - c updated deeply", "- d"].join("\n"),
     );
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -1277,16 +1383,21 @@ describe("nested and mixed lists", () => {
         originalText: "    - c pending deeply",
       },
     ]);
+
     expect(res.decorated).toBe(1);
+
     const changed = root.querySelector<HTMLElement>(
       'li[data-source-line="3"]',
     )!;
+
     const parentB = root.querySelector<HTMLElement>(
       'li[data-source-line="2"]',
     )!;
+
     const parentA = root.querySelector<HTMLElement>(
       'li[data-source-line="1"]',
     )!;
+
     expect(changed.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     expect(parentB.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
     expect(parentA.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
@@ -1296,6 +1407,7 @@ describe("nested and mixed lists", () => {
     const root = render(
       ["1. first", "   - sub a", "   - sub b added", "2. second"].join("\n"),
     );
+
     const res = decorate(root, [{ startLine: 3, endLine: 3, kind: "added" }]);
     expect(res.decorated).toBe(1);
     expect(
@@ -1314,6 +1426,7 @@ describe("nested and mixed lists", () => {
     const root = render(
       ["- alpha", "  1. one", "  2. two changed", "- beta"].join("\n"),
     );
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -1322,6 +1435,7 @@ describe("nested and mixed lists", () => {
         originalText: "  2. two pending",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     expect(
       root
@@ -1347,8 +1461,10 @@ describe("nested and mixed lists", () => {
         "   2. Capture latency numbers from an e2e plan.",
       ].join("\n"),
     );
+
     const res = decorate(root, [{ startLine: 3, endLine: 6, kind: "added" }]);
     expect(res.decorated).toBe(3);
+
     for (const line of [3, 5, 6]) {
       expect(
         root
@@ -1356,6 +1472,7 @@ describe("nested and mixed lists", () => {
           .classList.contains("emr-diff-block--added"),
       ).toBe(true);
     }
+
     // The parent's own prose <p> is still covered by the parent alone.
     expect(
       root
@@ -1387,7 +1504,7 @@ describe("nested and mixed lists", () => {
     expect(parent.dataset.diffInline).toBe("true");
     expect(child.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
     // One word diff, not two stacked on the child's text.
-    expect(child.querySelectorAll(`.${WORD_ADDED_CLASS}`).length).toBe(1);
+    expect(child.querySelectorAll(`.${WORD_ADDED_CLASS}`)).toHaveLength(1);
   });
 });
 
@@ -1399,10 +1516,12 @@ describe("task lists", () => {
     const root = render(
       ["- [ ] write tests", "- [ ] ship it", "- [ ] celebrate"].join("\n"),
     );
+
     // First item checked off: `[ ]` → `[x]`.
     const res = decorate(root, [
       { startLine: 1, endLine: 1, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(1);
     const items = Array.from(root.querySelectorAll("li"));
     expect(items[0]!.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
@@ -1416,6 +1535,7 @@ describe("task lists", () => {
     const root = render(
       ["- [ ] alpha", "- [ ] beta added", "- [ ] gamma"].join("\n"),
     );
+
     const res = decorate(root, [{ startLine: 2, endLine: 2, kind: "added" }]);
     expect(res.decorated).toBe(1);
     expect(
@@ -1426,6 +1546,7 @@ describe("task lists", () => {
   });
   it("marks only the checkbox when checklist state changes", () => {
     const root = render("- [x] Run tests");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -1434,14 +1555,17 @@ describe("task lists", () => {
         originalText: "- [ ] Run tests",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const item = root.querySelector("li")!;
     expect(item.classList.contains("emr-diff-block--modified")).toBe(true);
     expect(item.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
     expect(item.querySelector(`.${DIFF_METADATA_CLASS}`)).toBeNull();
+
     const checkbox = item.querySelector<HTMLInputElement>(
       'input[type="checkbox"]',
     )!;
+
     expect(checkbox.classList.contains("emr-diff-task-state-change")).toBe(
       true,
     );
@@ -1468,8 +1592,14 @@ describe("task lists", () => {
         originalText: "- [x] Confirm release",
       },
     ]);
+
+    const anchor = root.querySelector<HTMLElement>(
+      ".emr-diff-task-tooltip-anchor",
+    );
+
+    expect(anchor).not.toBeNull();
     expectPreciseAmber(
-      root.querySelector<HTMLElement>(".emr-diff-task-tooltip-anchor")!,
+      anchor!,
       "Checklist item changed from checked to unchecked",
     );
   });
@@ -1508,9 +1638,11 @@ describe("task lists", () => {
       },
     ]);
     const item = root.querySelector<HTMLElement>("li")!;
+
     const trigger = item.querySelector<HTMLButtonElement>(
       ":scope > .emr-diff-before-control .emr-diff-before-trigger",
     )!;
+
     trigger.click();
     expect(trigger.textContent).toBe("Hide");
     expect(trigger.getAttribute("aria-label")).toBe("Hide previous version");
@@ -1577,11 +1709,13 @@ describe("source-only changes", () => {
       "",
       "Continue with [Chapter 16][ch16].",
     ].join("\n");
+
     const current = [
       "[ch16]: ch16-00-concurrency.html",
       "",
       "Continue with [Chapter 16][ch16].",
     ].join("\n");
+
     const root = render(current);
 
     const result = decorate(
@@ -1600,17 +1734,21 @@ describe("source-only changes", () => {
     );
 
     expect(result.decorated).toBe(1);
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_SOURCE_ONLY_CLASS}`,
     )!;
+
     expect(
       marker.querySelector(".emr-diff-source-only-current code")?.textContent,
     ).toBe("[ch16]: ch16-00-concurrency.html");
     expect(marker.nextElementSibling?.tagName).toBe("P");
     expect(selectionTouchesDeletedDiff(marker, marker)).toBe(true);
+
     const trigger = marker.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     expect(trigger.getAttribute("aria-label")).toBe("Show previous source");
     trigger.click();
     expect(
@@ -1637,6 +1775,7 @@ describe("source-only changes", () => {
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_SOURCE_ONLY_CLASS}`,
     )!;
+
     expect(marker.dataset.diffKind).toBe("added");
     expect(marker.textContent).toContain("<Feature enabled />");
     expect(marker.querySelector(".emr-diff-before-trigger")).toBeNull();
@@ -1644,12 +1783,14 @@ describe("source-only changes", () => {
 
   it("appends a source-only change when the document has no rendered blocks", () => {
     const root = render("<!-- current directive -->");
+
     const result = decorate(
       root,
       [{ startLine: 1, endLine: 1, kind: "added" }],
       undefined,
       "<!-- current directive -->",
     );
+
     expect(result.decorated).toBe(1);
     expect(
       root.lastElementChild?.classList.contains(DIFF_SOURCE_ONLY_CLASS),
@@ -1658,12 +1799,14 @@ describe("source-only changes", () => {
 
   it("does not invent a source strip for a changed blank line", () => {
     const root = render("Visible prose.\n\n");
+
     const result = decorate(
       root,
       [{ startLine: 2, endLine: 2, kind: "added" }],
       undefined,
       "Visible prose.\n\n",
     );
+
     expect(result.decorated).toBe(0);
     expect(root.querySelector(`.${DIFF_SOURCE_ONLY_CLASS}`)).toBeNull();
   });
@@ -1683,6 +1826,7 @@ describe("tables", () => {
 
   it("highlights ONLY the changed cell when a single cell changed", () => {
     const root = render(table);
+
     // Live row renders `theme | light`; the original was `theme | dark`, so
     // only the second cell (Default) changed.
     const res = decorate(root, [
@@ -1693,6 +1837,7 @@ describe("tables", () => {
         originalText: "| theme | dark |",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
     const row = rows[0]!;
@@ -1712,7 +1857,9 @@ describe("tables", () => {
       "| --- | --- |",
       "| theme | the widget colour scheme |",
     ].join("\n");
+
     const root = render(multi);
+
     // Live cell reads "the widget colour scheme"; the original said
     // "...colour palette" — only the last word changed, so the rest of the
     // cell must stay neutral while just that word is marked.
@@ -1724,6 +1871,7 @@ describe("tables", () => {
         originalText: "| theme | the widget colour palette |",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     const cell = root.querySelectorAll("tbody td")[1] as HTMLElement;
     expect(cell.classList.contains(DIFF_CELL_CLASS)).toBe(true);
@@ -1742,6 +1890,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| Guide | [Open guide](https://example.com/v2) | Platform |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -1759,9 +1908,11 @@ describe("tables", () => {
     expect(cells[1]!.querySelector("a")?.getAttribute("href")).toBe(
       "https://example.com/v2",
     );
+
     const indicator = cells[1]!.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     const trigger = indicator.querySelector<HTMLButtonElement>("button")!;
     expect(trigger.getAttribute("aria-label")).toBe("Show link target change");
     expect(trigger.querySelector("svg")).not.toBeNull();
@@ -1790,6 +1941,7 @@ describe("tables", () => {
       "| --- | --- |",
       "| Guide | [Incident response](https://example.com/v2) |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -1819,6 +1971,7 @@ describe("tables", () => {
         "| Guide | [**Incident guide**](https://example.com/v2) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -1845,6 +1998,7 @@ describe("tables", () => {
         "| Guide | [Incident guide](https://support.fabrikam.test/v2) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -1854,9 +2008,11 @@ describe("tables", () => {
           "| Guide | [Incident guide](https://docs.contoso.test/v1) |",
       },
     ]);
+
     const indicator = root.querySelector<HTMLElement>(
       `tbody td:nth-child(2) .${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(indicator.classList.contains("is-warning")).toBe(true);
     expect(indicator.querySelector("button")?.getAttribute("aria-label")).toBe(
       "Show link hostname change",
@@ -1871,6 +2027,7 @@ describe("tables", () => {
         "| Guide | [Incident guide](https://example.com/guide) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -1880,10 +2037,9 @@ describe("tables", () => {
       },
     ]);
     const cell = root.querySelectorAll<HTMLElement>("tbody td")[1]!;
-    expectPreciseAmber(
-      cell.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`)!,
-      "Link added: https://example.com/guide",
-    );
+    const mark = cell.querySelector<HTMLElement>(`.${DIFF_FORMAT_CLASS}`);
+    expect(mark).not.toBeNull();
+    expectPreciseAmber(mark!, "Link added: https://example.com/guide");
   });
 
   it("changes one table link while leaving a sibling stable", () => {
@@ -1894,6 +2050,7 @@ describe("tables", () => {
         "| [Changed](https://example.com/v2) and [Stable](https://example.com/stable) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -1905,7 +2062,7 @@ describe("tables", () => {
     ]);
     const cell = root.querySelector<HTMLElement>("tbody td")!;
     expect(cell.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-    expect(cell.querySelectorAll("a")[1]?.getAttribute("href")).toBe(
+    expect(cell.querySelectorAll("a")[1]!.getAttribute("href")).toBe(
       "https://example.com/stable",
     );
   });
@@ -1916,6 +2073,7 @@ describe("tables", () => {
       "| --- | --- |",
       "| Retry | Set `retry.mode` to **adaptive**. |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -1939,6 +2097,7 @@ describe("tables", () => {
       "| --- | --- |",
       "| Guide | [**Current guide**](https://example.com/v2) |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -1961,6 +2120,7 @@ describe("tables", () => {
         "| Diagram | ![Architecture](https://example.com/v2.png) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -1988,6 +2148,7 @@ describe("tables", () => {
         "| Current ![Architecture](https://example.com/v2.png) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -2014,6 +2175,7 @@ describe("tables", () => {
         "| ![Changed](https://example.com/v2.png) ![Stable](https://example.com/stable.png) |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 3,
@@ -2025,7 +2187,7 @@ describe("tables", () => {
     ]);
     const cell = root.querySelector<HTMLElement>("tbody td")!;
     expect(cell.querySelectorAll(`.${DIFF_METADATA_CLASS}`)).toHaveLength(1);
-    expect(cell.querySelectorAll("img")[1]?.getAttribute("src")).toBe(
+    expect(cell.querySelectorAll("img")[1]!.getAttribute("src")).toBe(
       "https://example.com/stable.png",
     );
   });
@@ -2084,6 +2246,7 @@ describe("tables", () => {
     expect(cell.tabIndex).toBe(-1);
   });
 
+  // eslint-disable-next-line vitest/expect-expect -- asserts through the expectPreciseAmber helper, which runs seven expect() checks on the cell
   it("describes multiple unsupported rendered structures", () => {
     const root = render(table);
     const cell = root.querySelector<HTMLElement>("tbody td:nth-child(2)")!;
@@ -2111,6 +2274,7 @@ describe("tables", () => {
       "| --- | --- |",
       "| Runbook | **incident guide** |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -2138,6 +2302,7 @@ describe("tables", () => {
       "| --- | --- |",
       "| Retry | **adaptive mode** |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -2161,6 +2326,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       '| Escalation | Notify after the first failed mitigation attempt and include affected regions in the response log. | `state == "active" \\| state == "waiting"` |',
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -2187,6 +2353,7 @@ describe("tables", () => {
       "| Checkout | Pager |",
       "| Search | |",
     ].join("\n");
+
     const root = render(rich);
     decorate(root, [
       {
@@ -2209,6 +2376,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| palette | light | Runtime |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2218,9 +2386,11 @@ describe("tables", () => {
         originalText: "| theme | dark | Platform |",
       },
     ]);
+
     const row = Array.from(root.querySelectorAll("table"))
       .at(-1)!
       .querySelector("tbody tr") as HTMLElement;
+
     const cells = Array.from(row.querySelectorAll("td"));
     expect(row.dataset.diffCells).toBe("true");
     expect(cells).toHaveLength(3);
@@ -2237,6 +2407,7 @@ describe("tables", () => {
 
   it("highlights only the changed column across rows", () => {
     const root = render(table);
+
     // The Default column changed in the theme + retries rows (lines 3-4);
     // the Option column is unchanged in both.
     const res = decorate(root, [
@@ -2253,13 +2424,16 @@ describe("tables", () => {
         originalText: "| retries | 1 |",
       },
     ]);
+
     expect(res.decorated).toBe(2);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
+
     for (const row of [rows[0]!, rows[1]!]) {
       const cells = Array.from(row.querySelectorAll("td"));
       expect(cells[0]!.classList.contains(DIFF_CELL_CLASS)).toBe(false);
       expect(cells[1]!.classList.contains(DIFF_CELL_CLASS)).toBe(true);
     }
+
     expect(rows[2]!.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
   });
 
@@ -2270,6 +2444,7 @@ describe("tables", () => {
       "| theme | On change | Platform |",
       "| retries | Every minute | Runtime |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2286,12 +2461,14 @@ describe("tables", () => {
     ]);
     const rows = Array.from(root.querySelectorAll("tr"));
     expect(rows).toHaveLength(3);
+
     for (const row of rows) {
       expect((row as HTMLElement).dataset.diffCells).toBe("true");
       const added = row.querySelectorAll(`.${DIFF_CELL_ADDED_CLASS}`);
       expect(added).toHaveLength(1);
       expect(added[0]!.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
     }
+
     expect(
       rows[0]!.querySelector(`.${DIFF_CELL_ADDED_CLASS}`)?.textContent,
     ).toBe("Cadence");
@@ -2312,6 +2489,7 @@ describe("tables", () => {
         "| retries | Runtime |",
       ].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 1,
@@ -2330,6 +2508,7 @@ describe("tables", () => {
     expect(words(rows[0]!).removed).toContain("Legacy");
     expect(words(rows[1]!).removed).toContain("dark");
     expect(words(rows[2]!).removed).toContain("1");
+
     for (const row of rows) {
       expect(row.querySelectorAll(`.${DIFF_CELL_REMOVED_CLASS}`)).toHaveLength(
         1,
@@ -2339,6 +2518,7 @@ describe("tables", () => {
 
   it("shows an inserted cell as added when an unchanged cell anchors the row", () => {
     const root = render(table);
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -2347,10 +2527,13 @@ describe("tables", () => {
         originalText: "| theme |",
       },
     ]);
+
     expect(res.decorated).toBe(1);
+
     const row = Array.from(root.querySelectorAll("table"))
       .at(-1)!
       .querySelector("tbody tr") as HTMLElement;
+
     expect(row.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     expect(row.dataset.diffCells).toBe("true");
     const cells = Array.from(row.querySelectorAll("td"));
@@ -2402,6 +2585,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| Columns restructured | On material change | Communications lead |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2430,20 +2614,26 @@ describe("tables", () => {
         originalText: "| palette | dark | inherited |",
       },
     ]);
+
     const row = Array.from(root.querySelectorAll("table"))
       .at(-1)!
       .querySelector("tbody tr") as HTMLElement;
+
     expect(row.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     expect(row.dataset.diffCells).toBeUndefined();
     expect(row.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
     expectComparisonAmber(root);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     const panel = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
+
     const comparison = root.querySelector<HTMLElement>(
       ".emr-diff-table-comparison",
     )!;
+
     expect(Array.from(comparison.children)).toEqual(
       expect.arrayContaining([
         trigger.parentElement,
@@ -2482,14 +2672,16 @@ describe("tables", () => {
 
   it("falls back to the whole row when no original text is available", () => {
     const root = render(table);
+
     // Without originalText we can't tell which cell changed → whole row.
     const res = decorate(root, [
       { startLine: 3, endLine: 3, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(1);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
     const marked = rows.filter((tr) => tr.classList.contains(DIFF_BLOCK_CLASS));
-    expect(marked.length).toBe(1);
+    expect(marked).toHaveLength(1);
     expect(marked[0]!.textContent).toContain("theme");
     const markedRow = marked[0] as HTMLElement;
     expect(markedRow.dataset.diffCells).toBeUndefined();
@@ -2511,9 +2703,11 @@ describe("tables", () => {
         originalText: "Original row unavailable as structured Markdown",
       },
     ]);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.click();
     const panel = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
     expect(panel.querySelector("table")).toBeNull();
@@ -2558,10 +2752,12 @@ describe("tables", () => {
 
   it("highlights each affected row when a COLUMN changed across rows", () => {
     const root = render(table);
+
     // The Default column changed in the theme + retries rows (lines 3-4).
     const res = decorate(root, [
       { startLine: 3, endLine: 4, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(2);
     const rows = Array.from(root.querySelectorAll("tbody tr"));
     expect(rows[0]!.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
@@ -2571,9 +2767,11 @@ describe("tables", () => {
 
   it("highlights the header row when the header changed", () => {
     const root = render(table);
+
     const res = decorate(root, [
       { startLine: 1, endLine: 1, kind: "modified" },
     ]);
+
     expect(res.decorated).toBe(1);
     const headRow = root.querySelector("thead tr")!;
     expect(headRow.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
@@ -2589,6 +2787,7 @@ describe("tables", () => {
 
   it("inserts a visible removed row directly in the table", () => {
     const root = render(table);
+
     const res = decorate(root, [
       {
         startLine: 5,
@@ -2598,10 +2797,13 @@ describe("tables", () => {
         deletedContent: "| extra | 9 |\n",
       },
     ]);
+
     expect(res.markers).toBe(1);
+
     const removedRow = root.querySelector<HTMLTableRowElement>(
       `tr.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(removedRow.classList.contains("emr-diff-deleted-table-row")).toBe(
       true,
     );
@@ -2623,9 +2825,11 @@ describe("tables", () => {
         deletedContent: "| too | many | cells |\n",
       },
     ]);
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(marker.tagName).toBe("DIV");
     expect(
       marker.querySelector(".emr-diff-deleted-body")?.textContent,
@@ -2648,9 +2852,11 @@ describe("tables", () => {
       { renderInline: (md) => `<p>${md}</p>` },
     );
     expect(root.querySelector(".emr-diff-deleted-table-row")).toBeNull();
+
     const marker = root.querySelector<HTMLElement>(
       `.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(marker.tagName).toBe("DIV");
     expect(
       marker.querySelector(".emr-diff-deleted-body")?.textContent,
@@ -2667,9 +2873,11 @@ describe("tables", () => {
         deletedContent: "| legacy | 1 |\n| obsolete | 0 |\n",
       },
     ]);
+
     const removedRows = root.querySelectorAll(
       "tbody tr.emr-diff-deleted-table-row",
     );
+
     expect(removedRows).toHaveLength(2);
   });
 
@@ -2704,11 +2912,13 @@ describe("tables", () => {
         deletedContent: "| legacy | 1 |\n| obsolete | 0 |\n",
       },
     ]);
+
     const removedRows = Array.from(
       root.querySelectorAll<HTMLTableRowElement>(
         "tbody tr.emr-diff-deleted-table-row",
       ),
     );
+
     expect(removedRows).toHaveLength(2);
     expect(
       removedRows.map((row) =>
@@ -2748,6 +2958,7 @@ describe("tables", () => {
     const root = render(
       [table, "", "After the table.", "", "Next section."].join("\n"),
     );
+
     decorate(root, [
       {
         startLine: 9,
@@ -2758,9 +2969,11 @@ describe("tables", () => {
       },
     ]);
     expect(root.querySelector("tbody .emr-diff-deleted-table-row")).toBeNull();
+
     const marker = root.querySelector<HTMLElement>(
       `div.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(
       marker.querySelector(".emr-diff-deleted-body")?.textContent,
     ).toContain("legacy");
@@ -2768,6 +2981,7 @@ describe("tables", () => {
 
   it("does NOT word-diff a table row (row source isn't reconstructable)", () => {
     const root = render(table);
+
     const res = decorate(root, [
       {
         startLine: 3,
@@ -2776,6 +2990,7 @@ describe("tables", () => {
         originalText: "| theme | light |",
       },
     ]);
+
     // Row washed, never inlined.
     expect(res.inlined).toBe(0);
     expect(root.querySelector(`.${WORD_ADDED_CLASS}`)).toBeNull();
@@ -2783,6 +2998,7 @@ describe("tables", () => {
 
   it("marks only the changed header (TH) cell", () => {
     const root = render(table);
+
     // Header was `| Choice | Default |`; the first column label changed.
     const res = decorate(root, [
       {
@@ -2792,6 +3008,7 @@ describe("tables", () => {
         originalText: "| Choice | Default |",
       },
     ]);
+
     expect(res.decorated).toBe(1);
     const headCells = Array.from(root.querySelectorAll("thead th"));
     expect(headCells[0]!.classList.contains(DIFF_CELL_CLASS)).toBe(true);
@@ -2821,6 +3038,7 @@ describe("tables", () => {
       "| Checkout | Platform |",
       "| Search | Discovery |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2847,6 +3065,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| Yes | New | Yes |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2870,6 +3089,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| Checkout | Continuous | Platform |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2883,9 +3103,11 @@ describe("tables", () => {
         ].join("\n"),
       },
     ]);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.click();
     const before = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
     expect(before.querySelectorAll("table")).toHaveLength(1);
@@ -2900,6 +3122,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| Checkout | Platform | Gold |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2913,9 +3136,11 @@ describe("tables", () => {
         ].join("\n"),
       },
     ]);
+
     const row = Array.from(root.querySelectorAll<HTMLElement>("tbody tr")).at(
       -1,
     )!;
+
     expect(row.classList.contains("emr-diff-block--modified")).toBe(true);
     expect(row.dataset.diffCells).toBeUndefined();
     expect(row.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
@@ -2929,6 +3154,7 @@ describe("tables", () => {
       "| Platform | Every hour |",
       "| Operations | Every day |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2948,6 +3174,7 @@ describe("tables", () => {
     const headers = Array.from(rows[0]!.querySelectorAll("th"));
     expect(headers.every((cell) => words(cell).added.length > 0)).toBe(true);
     expect(headers.every((cell) => words(cell).removed.length > 0)).toBe(true);
+
     for (const row of rows.slice(1)) {
       expect(row.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
       expect((row as HTMLElement).dataset.diffCells).toBe("true");
@@ -2962,6 +3189,7 @@ describe("tables", () => {
       "| Checkout | Platform |",
       "| Billing | Finance |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -2973,16 +3201,20 @@ describe("tables", () => {
       },
       { startLine: 4, endLine: 4, kind: "added", linesAdded: 1 },
     ]);
+
     const marker = root.querySelector<HTMLTableRowElement>(
       `tr.${DIFF_DELETED_MARKER_CLASS}`,
     )!;
+
     expect(Array.from(marker.cells).map((cell) => cell.textContent)).toEqual([
       "Checkout",
       "Platform",
     ]);
+
     const added = Array.from(root.querySelectorAll("tbody tr")).find((row) =>
       row.classList.contains("emr-diff-block--added"),
     );
+
     expect(added?.textContent).toContain("Checkout");
   });
 
@@ -2992,6 +3224,7 @@ describe("tables", () => {
       "| --- | --- | --- |",
       "| theme | On change | Platform |",
     ].join("\n");
+
     const root = render(matrix);
     decorate(root, [
       {
@@ -3025,6 +3258,7 @@ describe("tables", () => {
   });
   it("marks nothing (returns whole-row fallback off) when no cell differs", () => {
     const root = render(table);
+
     // originalText matches the live row exactly, so no rendered cell changed
     // and the line hunk must not leave a phantom amber row wash.
     const res = decorate(root, [
@@ -3035,10 +3269,13 @@ describe("tables", () => {
         originalText: "| theme | light |",
       },
     ]);
+
     expect(res.decorated).toBe(0);
+
     const row = Array.from(root.querySelectorAll("table"))
       .at(-1)!
       .querySelector("tbody tr") as HTMLElement;
+
     expect(row.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
     expect(row.dataset.diffCells).toBeUndefined();
     expect(row.querySelector(`.${DIFF_CELL_CLASS}`)).toBeNull();
@@ -3223,6 +3460,7 @@ describe("alignTableColumns", () => {
 describe("code blocks", () => {
   it("washes an edited code block when its complete original is unavailable", () => {
     const root = render(["```", "const x = 2;", "```"].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 2,
@@ -3231,6 +3469,7 @@ describe("code blocks", () => {
         originalText: "const x = 1;",
       },
     ]);
+
     expect(res.inlined).toBe(0);
     const pre = root.querySelector<HTMLElement>("pre")!;
     expect(pre.classList.contains("emr-diff-block--modified")).toBe(true);
@@ -3270,6 +3509,7 @@ describe("code blocks", () => {
     const root = render(
       ["```js", "const value = 2;", "```", "Stable."].join("\n"),
     );
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -3280,6 +3520,7 @@ describe("code blocks", () => {
         ),
       },
     ]);
+
     expect(res.inlined).toBe(1);
     expect(words(root.querySelector("pre")!).removed).toContain("1");
     expect(words(root.querySelector("pre")!).added).toContain("2");
@@ -3289,9 +3530,11 @@ describe("code blocks", () => {
     const root = render(
       ["```js", "const value = 2;", "```", "Stable."].join("\n"),
     );
+
     const res = decorate(root, [
       { startLine: 1, endLine: 4, kind: "modified" },
     ]);
+
     expect(res.inlined).toBe(0);
     expect(
       root.querySelector("pre")?.classList.contains("emr-diff-block--modified"),
@@ -3308,11 +3551,13 @@ describe("code blocks", () => {
       "Remove-Item legacy.cache -Force",
       "```",
     ].join("\n");
+
     const current = [
       "```powershell",
       "Invoke-RestMethod $healthEndpoint",
       "```",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,
@@ -3329,9 +3574,11 @@ describe("code blocks", () => {
       original,
     );
     expectComparisonAmber(root);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.click();
     expect(root.querySelector(".emr-diff-before-panel pre")?.textContent).toBe(
       "Remove-Item legacy.cache -Force\n",
@@ -3345,13 +3592,16 @@ describe("code blocks", () => {
       "const timeout = 15;",
       "```",
     ].join("\n");
+
     const current = [
       "```ts",
       "const retries = 4;",
       "const timeout = 30;",
       "```",
     ].join("\n");
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -3368,6 +3618,7 @@ describe("code blocks", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(1);
     const pre = root.querySelector<HTMLElement>("pre")!;
     expect(words(pre).removed).toContain("3");
@@ -3380,6 +3631,7 @@ describe("code blocks", () => {
     const original = ["```bash", "echo deployment old", "```"].join("\n");
     const current = ["```powershell", "echo deployment new", "```"].join("\n");
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -3394,6 +3646,7 @@ describe("code blocks", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(1);
     const pre = root.querySelector<HTMLElement>("pre")!;
     expect(words(pre).removed).toContain("old");
@@ -3408,12 +3661,15 @@ describe("code blocks", () => {
 
   it("keeps Before when language metadata accompanies a code rewrite", () => {
     const original = ["```bash", "rm legacy.cache --force", "```"].join("\n");
+
     const current = [
       "```powershell",
       "Invoke-RestMethod $healthEndpoint",
       "```",
     ].join("\n");
+
     const root = render(current);
+
     const res = decorate(
       root,
       [
@@ -3428,12 +3684,16 @@ describe("code blocks", () => {
       ],
       original,
     );
+
     expect(res.inlined).toBe(0);
+
     const pre = root.querySelector<HTMLElement>(
       "pre.emr-diff-block--modified",
     )!;
+
     expect(pre.classList.contains(DIFF_INLINE_CLASS)).toBe(false);
     const metadata = pre.querySelector(`.${DIFF_METADATA_CLASS}`);
+    // eslint-disable-next-line vitest/valid-expect -- vitest's expect(value, message) overload: the rendered <pre> HTML is the failure message
     expect(metadata, pre.outerHTML).not.toBeNull();
     expect(metadata?.textContent).toContain("Before bash");
     expect(root.querySelector(".emr-diff-before-trigger")).not.toBeNull();
@@ -3450,6 +3710,7 @@ describe("code blocks", () => {
 
   it("shows a language indicator when code text is unchanged", () => {
     const root = render(["```powershell", "Get-Service", "```"].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -3458,6 +3719,7 @@ describe("code blocks", () => {
         originalText: ["```bash", "Get-Service", "```"].join("\n"),
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const pre = root.querySelector("pre")!;
     expect(pre.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -3467,9 +3729,11 @@ describe("code blocks", () => {
     expect(pre.querySelector(`.${DIFF_METADATA_CLASS}`)?.textContent).toContain(
       "After powershell",
     );
+
     const trigger = pre.querySelector<HTMLButtonElement>(
       ".emr-diff-metadata-trigger",
     )!;
+
     trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     trigger.click();
@@ -3482,12 +3746,15 @@ describe("code blocks", () => {
       '"use client";',
       "```",
     ].join("\n");
+
     const current = [
       '```js [[1, 3, "updateName"], [2, 25, "submitAction"]]',
       '"use client";',
       "```",
     ].join("\n");
+
     const root = render(current);
+
     const result = decorate(
       root,
       [
@@ -3505,9 +3772,11 @@ describe("code blocks", () => {
     );
 
     expect(result.inlined).toBe(1);
+
     const metadata = root.querySelector<HTMLElement>(
       `.${DIFF_METADATA_CLASS}`,
     )!;
+
     expect(metadata.textContent).toContain(
       'Before [[1, 3, "updateName"], [2, 23, "submitAction"]]',
     );
@@ -3626,6 +3895,7 @@ describe("images", () => {
     const root = render(
       '![Current architecture](https://example.com/v2.png "Current")',
     );
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -3635,6 +3905,7 @@ describe("images", () => {
           '![Legacy architecture](https://example.com/v1.png "Legacy")',
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const image = root.querySelector("img")!;
     expect(root.querySelector("p")?.classList.contains(DIFF_IMAGE_CLASS)).toBe(
@@ -3674,6 +3945,7 @@ describe("images", () => {
     const root = render(
       "![Current](https://example.com/v2.png) ![Stable](https://example.com/stable.png)",
     );
+
     decorate(root, [
       {
         startLine: 1,
@@ -3688,6 +3960,7 @@ describe("images", () => {
 
   it("shows removed text when an image is introduced with no image to pair", () => {
     const root = render("![Architecture](https://example.com/v2.png)");
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -3696,6 +3969,7 @@ describe("images", () => {
         originalText: "Architecture",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     expect(words(root).removed).toContain("Architecture");
     expect(root.querySelector(`.${DIFF_METADATA_CLASS}`)).toBeNull();
@@ -3708,6 +3982,7 @@ describe("images", () => {
 describe("blockquotes", () => {
   it("inline word-diffs an edited blockquote", () => {
     const root = render(["> Updated note here."].join("\n"));
+
     const res = decorate(root, [
       {
         startLine: 1,
@@ -3716,6 +3991,7 @@ describe("blockquotes", () => {
         originalText: "> Original note here.",
       },
     ]);
+
     expect(res.inlined).toBe(1);
     const bq = root.querySelector<HTMLElement>("blockquote")!;
     expect(bq.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
@@ -3747,9 +4023,11 @@ describe("blockquotes", () => {
       },
     ]);
     expectComparisonAmber(root);
+
     const trigger = root.querySelector<HTMLButtonElement>(
       ".emr-diff-before-trigger",
     )!;
+
     trigger.click();
     expect(
       root.querySelector(".emr-diff-before-panel blockquote")?.textContent,
@@ -3761,10 +4039,12 @@ describe("blockquotes", () => {
       "> [!NOTE]",
       "> The browser may omit capabilities from the map.",
     ].join("\n");
+
     const current = [
       "> [!NOTE]",
       "> The browser may omit capabilities from the object.",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,
@@ -3792,6 +4072,7 @@ describe("blockquotes", () => {
   it("diffs a blockquote whose safe HTML has no prose paragraph", () => {
     const original =
       "> <details><summary>Previous question</summary></details>";
+
     const current = "> <details><summary>Current question</summary></details>";
     const root = render(current);
     decorate(root, [
@@ -3812,10 +4093,12 @@ describe("blockquotes", () => {
       "- `browserBoundKeyHardware`",
       "  - : Returns support from the user agent.",
     ].join("\n");
+
     const current = [
       "- `browserBoundKeyHardware`",
       "  - : Returns support from the current browser.",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,
@@ -3846,11 +4129,13 @@ describe("blockquotes", () => {
       '    git config --global user.name "Your Name"',
       "    ```",
     ].join("\n");
+
     const current = [
       "```bash",
       'git config --global user.name "Your Name"',
       "```",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,
@@ -3889,7 +4174,9 @@ describe("blockquotes", () => {
       "",
       "Moved body.",
     ].join("\n");
+
     const root = render(current);
+
     const result = decorate(
       root,
       [
@@ -3905,6 +4192,7 @@ describe("blockquotes", () => {
       undefined,
       current,
     );
+
     expect(result.markers).toBe(1);
     expect(
       root.querySelector(`.${DIFF_DELETED_MARKER_CLASS}`)?.textContent,
@@ -3926,6 +4214,7 @@ describe("identically rendered edits", () => {
     const root = render(current);
     const lines = current.split("\n").length;
     const originalLines = original.split("\n").length;
+
     const res = decorate(
       root,
       [
@@ -3940,6 +4229,7 @@ describe("identically rendered edits", () => {
       ],
       original,
     );
+
     return { root, res };
   };
 
@@ -3954,6 +4244,7 @@ describe("identically rendered edits", () => {
       ["One two three", "four five six."].join("\n"),
       ["One two", "three four five six."].join("\n"),
     );
+
     expect(res.decorated).toBe(0);
   });
 
@@ -3987,11 +4278,13 @@ describe("nested items under a word-diffed loose parent", () => {
       "",
       "   - Child item one.",
     ].join("\n");
+
     const current = [
       "1. Parent item says new words.",
       "",
       "   - Child item uno.",
     ].join("\n");
+
     const root = render(current);
     decorate(
       root,

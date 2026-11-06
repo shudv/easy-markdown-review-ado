@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { CommentApiProvider } from "../../comments/api";
@@ -44,9 +44,8 @@ const meta = {
     // state so the stories can open/close it via the real request/cancel
     // callbacks (the shell owns this state in production).
     (Story, ctx) => {
-      const [replyOpen, setReplyOpen] = React.useState(
-        ctx.args.replyOpen ?? false,
-      );
+      const [replyOpen, setReplyOpen] = useState(ctx.args.replyOpen ?? false);
+
       return (
         <CommentApiProvider value={api}>
           <div style={{ position: "relative", width: 360, minHeight: 320 }}>
@@ -106,9 +105,11 @@ export const Active: Story = {
     // The reply trigger requests the composer, which the decorator opens.
     await userEvent.click(canvas.getByText("@mention or reply"));
     await expect(args.onRequestReply).toHaveBeenCalledWith("t1");
+
     const ta = await waitFor(
       () => canvas.getByRole("textbox") as HTMLTextAreaElement,
     );
+
     await userEvent.type(ta, "Sounds good");
     await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
     await expect(args.onReply).toHaveBeenCalledWith("t1", "Sounds good");
@@ -171,7 +172,7 @@ export const Orphaned: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Was anchored to:")).toBeTruthy();
     await expect(canvas.getByText(/the quick brown fox/)).toBeTruthy();
-    // Still replyable (only the in-doc highlight is gone).
+    // Still repliable (only the in-doc highlight is gone).
     await expect(canvas.getByText("@mention or reply")).toBeTruthy();
   },
 };
@@ -202,6 +203,7 @@ export const ReportsHeightOnResize: Story = {
     const card = canvasElement.querySelector<HTMLElement>(
       "[data-thread-id='t1']",
     )!;
+
     const before = card.getBoundingClientRect().height;
     card.style.minHeight = `${before + 60}px`;
     await waitFor(() => {
@@ -235,6 +237,7 @@ export const NativeMedia: Story = {
     const media = await waitFor(() =>
       canvasElement.querySelector<HTMLElement>(".emr-comment-media"),
     );
+
     await expect(media?.hasAttribute("role")).toBe(false);
     await expect(media?.hasAttribute("tabindex")).toBe(false);
     await expect(

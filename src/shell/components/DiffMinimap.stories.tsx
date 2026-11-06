@@ -1,5 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as React from "react";
+import {
+  createRef,
+  type ReactElement,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { expect, waitFor, within } from "storybook/test";
 
 import { DiffMinimap } from "./DiffMinimap";
@@ -55,10 +61,10 @@ function Reader({
   spec?: BlockSpec[];
   /** Height of the scrollable content the blocks are positioned within. */
   contentHeight?: number;
-}): React.ReactElement {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [version, setVersion] = React.useState(0);
-  React.useEffect(() => setVersion(1), []);
+}): ReactElement {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => setVersion(1), []);
 
   const blocks = spec ? (
     <>
@@ -117,6 +123,7 @@ function Reader({
       {blocks}
     </div>
   );
+
   const content = withWrap ? (
     <div className="emr-article-wrap" style={{ position: "relative" }}>
       {inner}
@@ -159,7 +166,7 @@ const meta = {
   // so these args are placeholders only — present to satisfy the required-props
   // type on the meta.
   args: {
-    scrollRef: React.createRef<HTMLElement>(),
+    scrollRef: createRef<HTMLElement>(),
     version: 0,
     showDiff: true,
   },
@@ -174,11 +181,14 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const ruler = await waitFor(() => {
       const el = canvasElement.querySelector(".emr-diff-ruler");
       if (!el) throw new Error("scrollbar not rendered yet");
+
       return el as HTMLElement;
     });
+
     // Every hue is charted; the two adjacent adds merged into a single bar.
     await expect(
       canvasElement.querySelectorAll(".emr-diff-ruler-mark--added"),
@@ -189,9 +199,11 @@ export const Default: Story = {
     await expect(
       canvasElement.querySelector(".emr-diff-ruler-mark--deleted"),
     ).toBeTruthy();
+
     const thumb = canvasElement.querySelector<HTMLElement>(
       ".emr-diff-ruler-thumb",
     )!;
+
     await expect(thumb).toBeTruthy();
 
     const scroller = canvas.getByTestId("scroller");
@@ -295,6 +307,7 @@ async function marksOf(root: ParentNode, n: number) {
   return await waitFor(() => {
     const marks = readMarks(root);
     expect(marks).toHaveLength(n);
+
     return marks;
   });
 }
@@ -444,9 +457,10 @@ function DetachableReader({
   initiallyMounted,
 }: {
   initiallyMounted: boolean;
-}): React.ReactElement {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = React.useState(initiallyMounted);
+}): ReactElement {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(initiallyMounted);
+
   return (
     <div style={{ position: "relative", width: 420, height: 360 }}>
       {mounted ? (
@@ -483,11 +497,14 @@ export const ScrollerRemovedAfterMount: Story = {
   render: () => <DetachableReader initiallyMounted />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+
     const ruler = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>(".emr-diff-ruler");
       if (!el) throw new Error("scrollbar not rendered yet");
+
       return el;
     });
+
     const thumb = ruler.querySelector<HTMLElement>(".emr-diff-ruler-thumb")!;
     const scroller = canvas.getByTestId("scroller");
     const thumbTop = thumb.style.top;

@@ -43,6 +43,7 @@ describe("orchestrateBoot", () => {
   it("does not render (run) or notify success before ready resolves", async () => {
     const calls: string[] = [];
     let readyResolved = false;
+
     const deps = makeDeps(calls, {
       ready: vi.fn(async () => {
         // A microtask hop; run must not have executed yet.
@@ -55,6 +56,7 @@ describe("orchestrateBoot", () => {
         calls.push("run");
       }),
     });
+
     await orchestrateBoot(deps);
     expect(calls).toEqual(["init", "ready", "run", "notifySucceeded"]);
   });
@@ -62,11 +64,13 @@ describe("orchestrateBoot", () => {
   it("skips ready/run/success and notifies failure when init rejects", async () => {
     const calls: string[] = [];
     const boom = new Error("init failed");
+
     const deps = makeDeps(calls, {
       init: vi.fn(async () => {
         throw boom;
       }),
     });
+
     await orchestrateBoot(deps);
     expect(calls).toEqual(["onError", "notifyFailed"]);
     expect(deps.ready).not.toHaveBeenCalled();
@@ -79,11 +83,13 @@ describe("orchestrateBoot", () => {
   it("notifies failure (not success) when run rejects after ready", async () => {
     const calls: string[] = [];
     const boom = new Error("render failed");
+
     const deps = makeDeps(calls, {
       run: vi.fn(async () => {
         throw boom;
       }),
     });
+
     await orchestrateBoot(deps);
     expect(calls).toEqual(["init", "ready", "onError", "notifyFailed"]);
     expect(deps.notifySucceeded).not.toHaveBeenCalled();
@@ -92,14 +98,18 @@ describe("orchestrateBoot", () => {
 
   it("wraps a non-Error rejection into an Error for notifyFailed", async () => {
     const calls: string[] = [];
+
     const deps = makeDeps(calls, {
       run: vi.fn(async () => {
         throw "string failure";
       }),
     });
+
     await orchestrateBoot(deps);
+
     const arg = (deps.notifyFailed as ReturnType<typeof vi.fn>).mock
       .calls[0][0];
+
     expect(arg).toBeInstanceOf(Error);
     expect((arg as Error).message).toBe("string failure");
   });
@@ -113,11 +123,13 @@ describe("orchestrateBoot", () => {
         throw new Error("SDK not initialised");
       }),
     });
+
     await expect(orchestrateBoot(deps)).resolves.toBeUndefined();
   });
 
   it("still notifies failure when the error sink itself throws", async () => {
     const boom = new Error("run failed");
+
     const deps = makeDeps([], {
       run: vi.fn(async () => {
         throw boom;
@@ -126,6 +138,7 @@ describe("orchestrateBoot", () => {
         throw new Error("telemetry down");
       }),
     });
+
     await orchestrateBoot(deps);
     expect(deps.notifyFailed).toHaveBeenCalledWith(boom);
   });

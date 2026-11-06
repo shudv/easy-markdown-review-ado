@@ -34,7 +34,7 @@ To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
 2. Mutation testing must stay at or above 85%.
-3. Function complexity and function and file size are [capped by lint](eslint.config.mjs), with any exception documented next to the code.
+3. [Strict type-aware lint](eslint.config.mjs) with no warnings: complexity and size caps, strict boolean and null checks, React Compiler rules, accessibility, HTML-sink and regex safety, and test-validity rules, with any exception documented next to the code.
 4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
 5. End-to-end tests covering the Azure DevOps integration boundary.
 6. Visual regression tests to protect the UI.
@@ -68,7 +68,8 @@ Before opening a PR, run:
 
 ```pwsh
 npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run duplication:check; npm run test:coverage
+npm run depcruise; npm run duplication:check; npm run spell:check
+npm run test:coverage
 npm run build
 npm run test:visual:docker
 ```
@@ -89,11 +90,30 @@ Use `/* eslint-disable max-lines -- <reason> */` at the top of a long file. Lint
 fails on any `eslint-disable` without a `-- <reason>`, and on one the code no
 longer needs.
 
+Every lint rule is an error; there are no warnings to ignore. Beyond the
+complexity and size limits, lint enforces:
+
+| Area               | Rules                                                                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Types and nullness | `typescript-eslint` recommended type-checked, plus `strict-boolean-expressions`, `no-unnecessary-condition`, `switch-exhaustiveness-check`, `prefer-nullish-coalescing` and `no-deprecated`                                                      |
+| React              | `react-hooks` including the React Compiler rules (`refs`, `purity`, `set-state-in-effect`, …), `@eslint-react`, read-only props, and named React imports (`import { useState, type ReactElement } from "react"`; no `React.x`), stories included |
+| Accessibility      | `jsx-a11y-x` strict                                                                                                                                                                                                                              |
+| Security           | `no-unsanitized`: every `innerHTML`-style sink in shipped code is sanitized or documented                                                                                                                                                        |
+| Correctness        | SonarJS recommended, `eslint-plugin-regexp` (including catastrophic backtracking), selected core rules                                                                                                                                           |
+| Tests              | `@vitest/eslint-plugin` recommended: every test asserts and async assertions are awaited                                                                                                                                                         |
+
 CI also fails on copy-pasted code. `duplication:check` runs
 [jscpd](https://github.com/kucherenko/jscpd) twice and lists every clone it
 finds. Product code ([`.jscpd.json`](.jscpd.json)) fails above 0.25% duplicated
 lines. Stories and tests ([`.jscpd.fixtures.json`](.jscpd.fixtures.json)) fail
 above 3%. Extract a shared helper or fixture rather than raising a threshold.
+
+`spell:check` runs [cspell](https://cspell.org) with
+[`cspell.json`](cspell.json): in CI, on staged files in the pre-commit hook,
+and in the editor through the recommended Code Spell Checker extensions. US and
+British English are both accepted. Fix a misspelling rather than accepting it.
+Add a genuine project term (a product name, an API identifier) to `words`, and
+test-only strings to the `test/**` override.
 
 Code that genuinely can't be reached or tested may be left out of coverage with
 `/* v8 ignore next -- <why it can't be reached or tested> */` (or a

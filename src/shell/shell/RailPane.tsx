@@ -1,10 +1,14 @@
 // Shell comment rail column with its resize handle.
 
-import * as React from "react";
+import type {
+  ReactElement,
+  ReactNode,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 
 import { RailSkeleton } from "./Skeletons";
 
-type PointerHandler = (e: React.PointerEvent<HTMLDivElement>) => void;
+type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface RailPaneProps {
   /** Show the rail skeleton while the document (or its version) loads. */
@@ -12,7 +16,7 @@ interface RailPaneProps {
   /** Full reader with a comments UI: the rail's left border resizes it. */
   resizable: boolean;
   /** The CommentRail shown once the document is ready. */
-  children: React.ReactNode;
+  children: ReactNode;
   onResizeStart: PointerHandler;
   onResizeMove: PointerHandler;
   onResizeEnd: () => void;
@@ -27,7 +31,7 @@ interface RailPaneProps {
  * inside, so the rail's scroll position survives the load. Its own left-border
  * handle (full reader only) drag-resizes it live, INDEPENDENTLY of the nav.
  */
-export function RailPane(props: RailPaneProps): React.ReactElement {
+export function RailPane(props: Readonly<RailPaneProps>): ReactElement {
   return (
     <div className="emr-rail">
       <div className="emr-rail-scroll">

@@ -19,6 +19,7 @@ function mount(html: string): HTMLElement {
   root.className = "markdown-body emr-rendered";
   root.innerHTML = html;
   document.body.appendChild(root);
+
   return root;
 }
 
@@ -27,24 +28,30 @@ function rangeOf(root: HTMLElement, text: string, nth = 0): Range {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const runs: { node: Text; start: number }[] = [];
   let flat = "";
+
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     runs.push({ node: n as Text, start: flat.length });
     flat += (n as Text).data;
   }
+
   let at = -1;
   for (let i = 0; i <= nth; i++) at = flat.indexOf(text, at + 1);
   if (at < 0) throw new Error(`"${text}" not found`);
+
   const locate = (offset: number, isEnd: boolean) => {
     const run = runs.findLast((r) =>
       isEnd ? r.start < offset : r.start <= offset,
     )!;
+
     return { node: run.node, offset: offset - run.start };
   };
+
   const start = locate(at, false);
   const end = locate(at + text.length, true);
   const range = document.createRange();
   range.setStart(start.node, start.offset);
   range.setEnd(end.node, end.offset);
+
   return range;
 }
 
@@ -55,6 +62,7 @@ function roundTrip(root: HTMLElement, text: string, nth = 0): string | null {
   const parsed = parseTextFragment(serializeTextFragment(fragment!));
   expect(parsed).toEqual(fragment);
   const found = findTextFragment(root, parsed!);
+
   return found ? found.toString() : null;
 }
 
@@ -80,6 +88,7 @@ describe("buildTextFragment", () => {
   it("quotes a long selection by its first and last words", () => {
     const sentence =
       "Error budgets are evaluated per region every five minutes, and a breach blocks every pending deployment until the owner signs off.";
+
     const root = mount(`<p>Intro. ${sentence} Outro.</p>`);
     const fragment = buildTextFragment(root, rangeOf(root, sentence))!;
     expect(fragment.end).toBeDefined();
@@ -101,10 +110,12 @@ describe("buildTextFragment", () => {
     const root = mount(
       `<p>First we deploy the service.</p><p>Later we deploy the service again.</p>`,
     );
+
     const fragment = buildTextFragment(
       root,
       rangeOf(root, "deploy the service", 1),
     )!;
+
     expect(fragment.prefix ?? fragment.suffix).toBeTruthy();
     // Resolves to the SECOND occurrence, not the first.
     const found = findTextFragment(root, fragment)!;
@@ -115,6 +126,7 @@ describe("buildTextFragment", () => {
     const root = mount(
       `<p>Keep <strong>bold words</strong> and <em>italics</em>.</p><ul><li>next item</li></ul>`,
     );
+
     expect(roundTrip(root, "bold words and italics")).toBe(
       "bold words and italics",
     );
@@ -127,6 +139,7 @@ describe("buildTextFragment", () => {
         `<div class="emr-diff-deleted-marker"><p>shared phrase</p></div>` +
         `<p>Live shared phrase here.</p>`,
     );
+
     const fragment = buildTextFragment(root, rangeOf(root, "shared phrase", 1));
     // The removed copy doesn't count, so no context is needed.
     expect(fragment).toEqual({ start: "shared phrase" });
@@ -141,6 +154,7 @@ describe("buildTextFragment", () => {
     const root = mount(
       `<p>Text</p><div class="emr-diff-deleted-marker"><p>gone</p></div>`,
     );
+
     expect(buildTextFragment(root, rangeOf(root, "gone"))).toBeNull();
   });
 });
@@ -239,6 +253,7 @@ describe("serialize / parse", () => {
     { prefix: "before", start: "-dash-", suffix: "after" },
     { prefix: "p", start: "s", end: "e", suffix: "x" },
   ];
+
   it.each(cases)("round-trips %o", (fragment) => {
     expect(parseTextFragment(serializeTextFragment(fragment))).toEqual(
       fragment,
@@ -276,6 +291,7 @@ describe("with diff decorations (added + removed words)", () => {
     "| EU | Ana | 20% |",
     "",
   ].join("\n");
+
   const CURRENT = [
     "# Doc",
     "",
@@ -290,6 +306,7 @@ describe("with diff decorations (added + removed words)", () => {
   /** The live article: current Markdown, with or without the PR diff shown. */
   function article(showDiff: boolean): HTMLElement {
     const root = mount(renderMarkdownSync(CURRENT));
+
     if (showDiff) {
       decorateDiffRanges(
         root,
@@ -318,6 +335,7 @@ describe("with diff decorations (added + removed words)", () => {
         },
       );
     }
+
     return root;
   }
 
@@ -329,13 +347,17 @@ describe("with diff decorations (added + removed words)", () => {
   ): Range {
     const nodes: Text[] = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode())
+
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       nodes.push(n as Text);
+    }
+
     const from = nodes.find((n) => n.data.includes(fromText))!;
-    const to = nodes.findLast((n) => n.data.includes(toText))!;
+    const to = nodes.filter((n) => n.data.includes(toText)).pop()!;
     const range = document.createRange();
     range.setStart(from, from.data.indexOf(fromText));
     range.setEnd(to, to.data.indexOf(toText) + toText.length);
+
     return range;
   }
 
@@ -358,15 +380,19 @@ describe("with diff decorations (added + removed words)", () => {
 
   it("resolves the same link whether the diff is shown or hidden", () => {
     const shown = article(true);
+
     const madeShown = buildTextFragment(
       shown,
       spanRange(shown, "rollout", "budgets"),
     )!;
+
     const hidden = article(false);
+
     const madeHidden = buildTextFragment(
       hidden,
       spanRange(hidden, "rollout", "budgets"),
     )!;
+
     // Same selection, same link, either way…
     expect(madeShown).toEqual(madeHidden);
     // …and each resolves on the other view onto exactly the live words.
@@ -381,9 +407,11 @@ describe("with diff decorations (added + removed words)", () => {
   });
   it("ignores a removed table cell spliced into a live row", () => {
     const root = article(true);
+
     const removed = Array.from(
       root.querySelectorAll(".emr-diff-cell--removed"),
     ).map((cell) => cell.textContent);
+
     expect(removed.join(" ")).toContain("Ana");
     const fragment = buildTextFragment(root, spanRange(root, "EU", "20%"))!;
     expect(serializeTextFragment(fragment)).not.toContain("Ana");

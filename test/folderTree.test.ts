@@ -15,8 +15,10 @@ interface F {
 function pp<N extends F>(nodes: ReadonlyArray<TreeNode<N>>, depth = 0): string {
   // Compact pretty-print for snapshot-style assertions.
   let out = "";
+
   for (const n of nodes) {
     const pad = "  ".repeat(depth);
+
     if (n.kind === "dir") {
       out += `${pad}DIR ${n.displayName} (${n.path})\n`;
       out += pp(n.children, depth + 1);
@@ -24,6 +26,7 @@ function pp<N extends F>(nodes: ReadonlyArray<TreeNode<N>>, depth = 0): string {
       out += `${pad}FILE ${n.file.path}\n`;
     }
   }
+
   return out;
 }
 
@@ -47,6 +50,7 @@ describe("buildFolderTree", () => {
       { path: "docs/api.md" },
       { path: "docs/guide.md" },
     ]);
+
     // Two files share `docs/`, so `docs/` is one dir with two file children.
     expect(pp(tree)).toBe(
       [
@@ -63,6 +67,7 @@ describe("buildFolderTree", () => {
       { path: "docs/api/v2/specs/auth.md" },
       { path: "docs/api/v2/specs/sso.md" },
     ]);
+
     // The two leaves share `docs/api/v2/specs/`, so the three intermediate
     // single-child folders collapse into one row labelled
     // `docs/api/v2/specs`.
@@ -82,6 +87,7 @@ describe("buildFolderTree", () => {
       { path: "docs/api/v2/bar.md" },
       { path: "docs/legal/terms.md" },
     ]);
+
     // `docs/` cannot collapse — it has two child folders (`api` and `legal`).
     // `docs/api/v2/` collapses because each intermediate has exactly one
     // child folder. `docs/legal/` stays a single folder.
@@ -103,6 +109,7 @@ describe("buildFolderTree", () => {
       { path: "docs/index.md" },
       { path: "docs/specs/auth.md" },
     ]);
+
     // `docs/` has a file child AND a folder child — collapsing would lose
     // the index file's home, so we keep both folders distinct.
     expect(pp(tree)).toBe(
@@ -121,6 +128,7 @@ describe("buildFolderTree", () => {
       { path: "/docs/a.md" },
       { path: "docs//b.md" },
     ]);
+
     expect(pp(tree)).toBe(
       ["DIR docs (docs)", "  FILE /docs/a.md", "  FILE docs//b.md", ""].join(
         "\n",
@@ -135,9 +143,11 @@ describe("buildFolderTree", () => {
       { path: "src/a.md" },
       { path: "Bravo.md" },
     ]);
+
     const names = tree.map((n) =>
       n.kind === "dir" ? n.displayName : n.file.path,
     );
+
     expect(names).toEqual(["src", "Alpha.md", "Bravo.md", "zeta.md"]);
   });
 
@@ -147,6 +157,7 @@ describe("buildFolderTree", () => {
       { path: "docs/api/v2/specs/sso.md" },
       { path: "docs/index.md" },
     ]);
+
     expect(collectDirPaths(tree).sort()).toEqual(
       ["docs", "docs/api/v2/specs"].sort(),
     );
@@ -163,6 +174,7 @@ describe("buildFolderTree — extraFolders (lazy branches)", () => {
     const tree = buildFolderTree<F>([], {
       extraFolders: ["a/b/c"],
     });
+
     expect(pp(tree)).toBe(["DIR a/b/c (a/b/c)", ""].join("\n"));
   });
 
@@ -170,6 +182,7 @@ describe("buildFolderTree — extraFolders (lazy branches)", () => {
     const tree = buildFolderTree<F>([{ path: "docs/readme.md" }], {
       extraFolders: ["docs"],
     });
+
     // The real file wins; `docs` appears once with its file child.
     expect(pp(tree)).toBe(
       ["DIR docs (docs)", "  FILE docs/readme.md", ""].join("\n"),
@@ -185,6 +198,7 @@ describe("buildFolderTree — extraFolders (lazy branches)", () => {
     const tree = buildFolderTree<F>([{ path: "a.md" }], {
       extraFolders: ["///"],
     });
+
     expect(pp(tree)).toBe(["FILE a.md", ""].join("\n"));
   });
 
@@ -213,6 +227,7 @@ describe("buildFolderTree — wiki .order", () => {
         Guides: ["Install", "Configure"],
       },
     });
+
     // Root: Overview, then the Guides page + its subpage folder (folder
     // first, as elsewhere), then Zeta; the unlisted Archive folder follows.
     expect(pp(tree)).toBe(
@@ -239,6 +254,7 @@ describe("buildFolderTree — wiki .order", () => {
       [{ path: "a.md" }, { path: "deep/er/x.md" }, { path: "deep/er/y.md" }],
       { folderOrders: { "": ["deep", "a"] } },
     );
+
     expect(pp(tree)).toBe(
       [
         "DIR deep/er (deep/er)",
@@ -259,9 +275,11 @@ describe("buildFolderTree — wiki .order", () => {
     const named: F[] = ["constructor", "__proto__", "toString"].flatMap(
       (folder) => [{ path: `/${folder}/b.md` }, { path: `/${folder}/a.md` }],
     );
+
     const tree = buildFolderTree<F>(named, {
       folderOrders: { toString: ["b"] },
     });
+
     expect(pp(tree)).toBe(
       [
         "DIR __proto__ (__proto__)",
@@ -301,8 +319,10 @@ describe("mergeWikiPages", () => {
   /** Pretty-print with merged pages shown as `PAGE+DIR`. */
   function ppMerged(nodes: ReadonlyArray<TreeNode<F>>, depth = 0): string {
     let out = "";
+
     for (const n of nodes) {
       const pad = "  ".repeat(depth);
+
       if (n.kind === "dir") {
         out += n.page
           ? `${pad}PAGE+DIR ${n.displayName} (${n.page.path})\n`
@@ -312,6 +332,7 @@ describe("mergeWikiPages", () => {
         out += `${pad}FILE ${n.file.path}\n`;
       }
     }
+
     return out;
   }
 
@@ -326,6 +347,7 @@ describe("mergeWikiPages", () => {
         { path: "/Guides/Configure.md" },
       ]),
     );
+
     expect(ppMerged(tree)).toBe(
       [
         "PAGE+DIR Guides (/Guides.md)",
@@ -345,6 +367,7 @@ describe("mergeWikiPages", () => {
         extraFolders: ["/Lazy"],
       }),
     );
+
     expect(ppMerged(tree)).toBe(
       [
         "DIR Archive",
@@ -362,6 +385,7 @@ describe("mergeWikiPages", () => {
         extraFolders: ["/Guides"],
       }),
     );
+
     expect(ppMerged(tree)).toBe("PAGE+DIR Guides (/Guides.md)\n");
   });
 
@@ -374,6 +398,7 @@ describe("mergeWikiPages", () => {
         { path: "/Assets/logo.md" },
       ]),
     );
+
     expect(ppMerged(tree)).toBe(
       [
         "DIR Assets",
@@ -391,6 +416,7 @@ describe("mergeWikiPages", () => {
     const tree = mergeWikiPages(
       buildFolderTree<F>([{ path: "/a.md" }, { path: "/a/b/c.md" }]),
     );
+
     expect(ppMerged(tree)).toBe(
       ["DIR a/b", "  FILE /a/b/c.md", "FILE /a.md", ""].join("\n"),
     );

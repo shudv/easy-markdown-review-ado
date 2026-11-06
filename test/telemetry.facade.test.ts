@@ -33,6 +33,7 @@ function fakeSink() {
     ),
     flush: vi.fn(),
   };
+
   return sink;
 }
 
@@ -76,10 +77,12 @@ describe("telemetry facade", () => {
     });
 
     const { event } = sink.eventCalls[0]!;
+
     const e = event as {
       properties: Record<string, unknown>;
       measurements: Record<string, number>;
     };
+
     expect(e.properties).toEqual({ anchorKind: "line" });
     expect(e.properties).not.toHaveProperty("repoName");
     expect(e.measurements).toEqual({ count: 3 });
@@ -197,6 +200,7 @@ describe("telemetry facade", () => {
       debug: true,
     };
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
     try {
       initTelemetry({ appName: "pr-tab" });
       track(events.appLoaded());
@@ -228,6 +232,7 @@ describe("telemetry facade", () => {
       value: {},
       configurable: true,
     });
+
     try {
       initTelemetry({ appName: "pr-tab" });
       expect(getTelemetryContext().sessionId).toMatch(/^s-/);

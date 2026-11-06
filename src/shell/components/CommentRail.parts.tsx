@@ -1,14 +1,16 @@
 // Presentational pieces of the CommentRail: the read-only banner, the draft
 // balloon, and the collapsible cross-file tray chrome.
 
-import * as React from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { CommentAuthor, TextQuoteAnchor } from "../../types";
 import { Composer } from "./Composer";
 import { DRAFT_ID } from "./CommentRail.helpers";
 
-export function RailReadOnlyBanner(props: {
-  message: string | undefined;
-}): React.ReactElement {
+export function RailReadOnlyBanner(
+  props: Readonly<{
+    message: string | undefined;
+  }>,
+): ReactElement {
   return (
     <div className="emr-rail-readonly-banner" role="status">
       {props.message ??
@@ -18,14 +20,16 @@ export function RailReadOnlyBanner(props: {
 }
 
 /** The in-progress new-comment balloon, positioned among anchored threads. */
-export function RailDraftBalloon(props: {
-  draftAnchor: TextQuoteAnchor;
-  currentUser: CommentAuthor;
-  draftInitialBody?: string;
-  onDraftChange?: (body: string) => void;
-  onSubmitDraft: (body: string) => void;
-  onCancelDraft: () => void;
-}): React.ReactElement {
+export function RailDraftBalloon(
+  props: Readonly<{
+    draftAnchor: TextQuoteAnchor;
+    currentUser: CommentAuthor;
+    draftInitialBody?: string;
+    onDraftChange?: (body: string) => void;
+    onSubmitDraft: (body: string) => void;
+    onCancelDraft: () => void;
+  }>,
+): ReactElement {
   const {
     draftAnchor,
     currentUser,
@@ -34,6 +38,7 @@ export function RailDraftBalloon(props: {
     onSubmitDraft,
     onCancelDraft,
   } = props;
+
   return (
     <div
       className="emr-balloon inline is-active is-draft"
@@ -50,6 +55,7 @@ export function RailDraftBalloon(props: {
       <Composer
         submitLabel="Comment"
         placeholder={`Comment as ${currentUser.displayName}…`}
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the draft balloon only mounts once the user starts a comment (Add comment / selection bubble), so focus moves to where they are about to type
         autoFocus
         initial={draftInitialBody}
         onChange={onDraftChange}
@@ -64,14 +70,17 @@ export function RailDraftBalloon(props: {
  * A collapsible PR-wide tray (General comments / comments on removed files):
  * a toggle header with a twisty + count, and the body while expanded.
  */
-export function RailCollapsibleTray(props: {
-  title: string;
-  count: number;
-  expanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
+export function RailCollapsibleTray(
+  props: Readonly<{
+    title: string;
+    count: number;
+    expanded: boolean;
+    onToggle: () => void;
+    children: ReactNode;
+  }>,
+): ReactElement {
   const { title, count, expanded, onToggle, children } = props;
+
   return (
     <div className="emr-rail-section emr-rail-section--general">
       <button
@@ -99,7 +108,7 @@ export function RailCollapsibleTray(props: {
   );
 }
 
-function SvgChevronRight(): React.ReactElement {
+function SvgChevronRight(): ReactElement {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -119,5 +128,6 @@ function SvgChevronRight(): React.ReactElement {
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n - 1) + "…";
+
+  return `${s.slice(0, n - 1)}…`;
 }

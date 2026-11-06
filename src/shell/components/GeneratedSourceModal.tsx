@@ -2,7 +2,7 @@
 // Before selects the historical version; Changes independently annotates the
 // current source and is hidden while Before is active.
 
-import * as React from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 
 import { hydrateMath } from "../../markdown/mathHydrate";
 import { hydrateMermaid } from "../../markdown/mermaidHydrate";
@@ -26,56 +26,84 @@ interface GeneratedSourceModalProps {
   onClose: () => void;
 }
 
-// eslint-disable-next-line max-lines-per-function -- Generated-source dialog: header, view toggle and source/diff panes share the dialog state and focus trap.
+// eslint-disable-next-line max-lines-per-function -- Generated-source dialog: header, view toggle and source/diff panes share the dialog state and focus handling.
 export function GeneratedSourceModal(
-  props: GeneratedSourceModalProps,
-): React.ReactElement | null {
+  props: Readonly<GeneratedSourceModalProps>,
+): ReactElement | null {
   const { kind = "mermaid", source, originalSource, onClose } = props;
-  const previewRef = React.useRef<HTMLDivElement | null>(null);
-  const [copied, setCopied] = React.useState(false);
-  const [beforeShown, setBeforeShown] = React.useState(false);
-  const [changesShown, setChangesShown] = React.useState(true);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
   const hasDiff =
     source !== null && originalSource != null && originalSource !== source;
+
+  const {
+    copied,
+    setCopied,
+    beforeShown,
+    setBeforeShown,
+    changesShown,
+    setChangesShown,
+  } = useGeneratedSourceViewState(hasDiff, kind, source);
+
   const selectedSource =
     beforeShown && originalSource != null ? originalSource : source;
 
+  // Move focus into the dialog when it opens and give it back to whatever
+  // opened it (the article's "Source" button) when it closes.
+  const isOpen = source !== null;
+  useEffect(() => {
+    if (!isOpen) return;
+    // `activeElement` is at least <body> while a document is loaded.
+    const opener = document.activeElement as HTMLElement;
+    panelRef.current!.focus();
+
+    return () => opener.focus();
+  }, [isOpen]);
+
   // Close on Escape.
-  React.useEffect(() => {
+  useEffect(() => {
     if (source === null) return;
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
       }
     }
+
     document.addEventListener("keydown", onKey, true);
+
     return () => document.removeEventListener("keydown", onKey, true);
   }, [source, onClose]);
 
   // Render the selected version in the preview pane.
-  React.useEffect(() => {
+  useEffect(() => {
     const el = previewRef.current;
     if (!el || selectedSource === null) return;
     const encoded = encodeURIComponent(selectedSource);
+
     if (kind === "math") {
-      el.innerHTML =
-        `<div class="emr-math emr-math--display" ` +
-        `data-math-src="${encoded}" data-math-display="true">` +
-        `<pre class="emr-math-fallback"><code></code></pre></div>`;
-      el.querySelector("code")!.textContent = selectedSource;
+      const code = document.createElement("code");
+      code.textContent = selectedSource;
+      const fallback = document.createElement("pre");
+      fallback.className = "emr-math-fallback";
+      fallback.append(code);
+      const math = document.createElement("div");
+      math.className = "emr-math emr-math--display";
+      math.setAttribute("data-math-src", encoded);
+      math.setAttribute("data-math-display", "true");
+      math.append(fallback);
+      el.replaceChildren(math);
       void hydrateMath(el);
     } else {
-      el.innerHTML = `<div class="emr-mermaid" data-mermaid-src="${encoded}"></div>`;
+      const mermaid = document.createElement("div");
+      mermaid.className = "emr-mermaid";
+      mermaid.setAttribute("data-mermaid-src", encoded);
+      el.replaceChildren(mermaid);
       void hydrateMermaid(el);
     }
   }, [kind, selectedSource]);
-
-  React.useEffect(() => {
-    setCopied(false);
-    setBeforeShown(false);
-    setChangesShown(hasDiff);
-  }, [hasDiff, kind, source]);
 
   if (source === null) return null;
 
@@ -85,7 +113,10 @@ export function GeneratedSourceModal(
         ? events.mathSourceCopied()
         : events.mermaidSourceCopied(),
     );
-    void navigator.clipboard?.writeText(selectedSource!).then(
+    // `navigator.clipboard` is undefined at runtime outside secure contexts,
+    // although the DOM typings declare it always present.
+    const clipboard = navigator.clipboard as Clipboard | undefined;
+    void clipboard?.writeText(selectedSource!).then(
       () => {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1500);
@@ -97,6 +128,7 @@ export function GeneratedSourceModal(
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- Modal backdrop: the click only closes on clicks outside the dialog panel. Keyboard users get focus moved into the panel on open and close with Escape.
     <div
       className="emr-generated-source-overlay"
       role="dialog"
@@ -108,7 +140,7 @@ export function GeneratedSourceModal(
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="emr-generated-source-modal">
+      <div className="emr-generated-source-modal" ref={panelRef} tabIndex={-1}>
         <div className="emr-generated-source-header">
           <GeneratedSourceIdentity kind={kind} />
           <div className="emr-generated-source-actions">
@@ -167,4 +199,40 @@ export function GeneratedSourceModal(
       </div>
     </div>
   );
+}
+
+/**
+ * View toggles + copy feedback, reset whenever the shown source changes. Uses
+ * the "adjust state during render" pattern so a new source never renders
+ * with the previous source's toggles.
+ */
+function useGeneratedSourceViewState(
+  hasDiff: boolean,
+  kind: string,
+  source: string | null,
+) {
+  const [copied, setCopied] = useState(false);
+  const [beforeShown, setBeforeShown] = useState(false);
+  const [changesShown, setChangesShown] = useState(hasDiff);
+  const [shown, setShown] = useState({ hasDiff, kind, source });
+
+  if (
+    shown.hasDiff !== hasDiff ||
+    shown.kind !== kind ||
+    shown.source !== source
+  ) {
+    setShown({ hasDiff, kind, source });
+    setCopied(false);
+    setBeforeShown(false);
+    setChangesShown(hasDiff);
+  }
+
+  return {
+    copied,
+    setCopied,
+    beforeShown,
+    setBeforeShown,
+    changesShown,
+    setChangesShown,
+  };
 }

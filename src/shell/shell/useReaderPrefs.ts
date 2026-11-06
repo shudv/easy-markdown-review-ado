@@ -1,6 +1,6 @@
 // Shell: persisted reader preferences and their setters.
 
-import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { DraftScope } from "../draftStorage";
 import {
@@ -20,33 +20,41 @@ import {
  */
 export function useReaderPrefs(draftScope: DraftScope | undefined) {
   const prefsScope: DraftScope = draftScope ?? "pr";
-  const [readerPrefs, setReaderPrefs] = React.useState<ReaderPrefs>(() =>
+
+  const [readerPrefs, setReaderPrefs] = useState<ReaderPrefs>(() =>
     readReaderPrefs(prefsScope),
   );
-  React.useEffect(() => {
+
+  useEffect(() => {
     writeReaderPrefs(prefsScope, readerPrefs);
   }, [prefsScope, readerPrefs]);
-  const toggleReaderNav = React.useCallback(
+
+  const toggleReaderNav = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showNav: !p.showNav })),
     [],
   );
-  const toggleReaderOutline = React.useCallback(
+
+  const toggleReaderOutline = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showOutline: !p.showOutline })),
     [],
   );
-  const toggleReaderComments = React.useCallback(
+
+  const toggleReaderComments = useCallback(
     () => setReaderPrefs((p) => ({ ...p, showComments: !p.showComments })),
     [],
   );
-  const setReaderFont = React.useCallback(
+
+  const setReaderFont = useCallback(
     (fontId: string) => setReaderPrefs((p) => ({ ...p, fontId })),
     [],
   );
-  const setReaderSize = React.useCallback(
+
+  const setReaderSize = useCallback(
     (sizePct: number) => setReaderPrefs((p) => ({ ...p, sizePct })),
     [],
   );
-  const setReaderSpacing = React.useCallback(
+
+  const setReaderSpacing = useCallback(
     (spacingPct: number) =>
       setReaderPrefs((p) => ({
         ...p,
@@ -57,11 +65,13 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
       })),
     [],
   );
-  const resetNavWidth = React.useCallback(
+
+  const resetNavWidth = useCallback(
     () => setReaderPrefs((p) => ({ ...p, navWidthPct: DEFAULT_NAV_WIDTH_PCT })),
     [],
   );
-  const resetCommentWidth = React.useCallback(
+
+  const resetCommentWidth = useCallback(
     () =>
       setReaderPrefs((p) => ({
         ...p,
@@ -69,16 +79,18 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
       })),
     [],
   );
+
   // Reveal the comments pane if it's hidden — called when the reader starts (or
   // restores) a comment/reply draft, whose composer lives in the rail, so the
   // pane always shows the moment there is something to write.
-  const revealComments = React.useCallback(
+  const revealComments = useCallback(
     () =>
       setReaderPrefs((p) =>
         p.showComments ? p : { ...p, showComments: true },
       ),
     [],
   );
+
   return {
     readerPrefs,
     setReaderPrefs,

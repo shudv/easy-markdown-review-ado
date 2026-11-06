@@ -7,6 +7,7 @@ const ADO_PR_ATTACHMENT_PATH =
 
 function isAzureDevOpsHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
+
   return (
     normalized === "dev.azure.com" || normalized.endsWith(".visualstudio.com")
   );
@@ -15,6 +16,7 @@ function isAzureDevOpsHost(hostname: string): boolean {
 export function isAdoPullRequestAttachmentUrl(raw: string): boolean {
   try {
     const url = new URL(raw, "https://dev.azure.com/");
+
     return (
       url.protocol === "https:" &&
       isAzureDevOpsHost(url.hostname) &&
@@ -27,12 +29,14 @@ export function isAdoPullRequestAttachmentUrl(raw: string): boolean {
 
 function ensureMediaFrame(image: HTMLImageElement): HTMLElement {
   let frame = image.parentElement;
+
   if (!frame?.classList.contains("emr-comment-media")) {
     frame = document.createElement("span");
     frame.className = "emr-comment-media";
     image.replaceWith(frame);
     frame.append(image);
   }
+
   return frame;
 }
 
@@ -47,6 +51,7 @@ function decorateImage(
 
   const isNativeAttachment =
     resolveImage !== undefined && isAdoPullRequestAttachmentUrl(originalSrc);
+
   let resolving = isNativeAttachment;
   let errorReported = false;
   let resolutionError: unknown;
@@ -56,12 +61,14 @@ function decorateImage(
     image.classList.remove("is-loading");
     frame.removeAttribute("aria-disabled");
   };
+
   const onError = () => {
     if (resolving) return;
     frame.classList.remove("is-loading");
     frame.classList.add("is-error");
     image.classList.remove("is-loading");
     frame.removeAttribute("aria-disabled");
+
     if (isNativeAttachment && !errorReported) {
       errorReported = true;
       trackUserFacingError({
@@ -72,6 +79,7 @@ function decorateImage(
       });
     }
   };
+
   const settleIfComplete = () => {
     if (!image.complete) return;
     if (image.naturalWidth > 0) onLoad();
@@ -85,14 +93,16 @@ function decorateImage(
     frame.classList.add("is-loading");
     image.classList.add("is-loading");
     frame.setAttribute("aria-disabled", "true");
+
     const settle = (objectUrl: string | undefined, error?: unknown) => {
       if (isDisposed()) return;
       resolving = false;
       resolutionError = error;
-      if (objectUrl) {
+      if (objectUrl !== undefined && objectUrl !== "") {
         image.src = objectUrl;
       } else settleIfComplete();
     };
+
     void resolveImage(originalSrc).then(
       (objectUrl) => settle(objectUrl),
       (error: unknown) => settle(undefined, error),
@@ -113,10 +123,11 @@ function decorateAttachmentLinks(root: HTMLElement): void {
     ) {
       continue;
     }
+
     link.classList.add("emr-comment-attachment");
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    const label = link.textContent?.trim() || "Attachment";
+    const label = link.textContent.trim() || "Attachment";
     link.setAttribute("aria-label", `${label} (attachment, opens in new tab)`);
     link.title = "Open attachment in a new tab";
   }
@@ -133,6 +144,7 @@ export function decorateCommentMedia(
   for (const image of root.querySelectorAll<HTMLImageElement>("img")) {
     cleanups.push(decorateImage(image, resolveImage, isDisposed));
   }
+
   decorateAttachmentLinks(root);
 
   return () => {

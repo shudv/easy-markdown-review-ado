@@ -33,6 +33,7 @@ describe("adoErrorCodeOf", () => {
       ),
       { name: "TFS.WebApi.Exception" },
     );
+
     expect(adoErrorCodeOf(err)).toBe("TF400813");
   });
 
@@ -70,6 +71,7 @@ describe("describeError", () => {
       status: 403,
       responseText: '{"message":"TF400813: not authorized"}',
     });
+
     const shape = describeError(err);
     expect(shape).toMatchObject({
       name: "TFS.WebApi.Exception",
@@ -99,6 +101,7 @@ describe("describeError", () => {
       responseText:
         '{"message":"TF400813: The user \'12345678-1234-1234-1234-123456789012\' is not authorized"}',
     };
+
     const shape = describeError(err);
     expect(shape.message).not.toContain("responseText");
     expect(shape.message).not.toContain("12345678-1234-1234-1234-123456789012");
@@ -111,6 +114,7 @@ describe("describeError", () => {
     const shape = describeError({
       message: "TF400893: Unable to contact the server.",
     });
+
     expect(shape.message).toBe("TF400893: Unable to contact the server.");
     expect(shape.adoErrorCode).toBe("TF400893");
   });

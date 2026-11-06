@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState, type ReactElement } from "react";
+import {
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReaderActivity } from "../shellHelpers";
 
 export type { ReaderActivity } from "../shellHelpers";
@@ -8,11 +14,13 @@ export function selectReaderActivity(
   activities: readonly ReaderActivity[],
 ): ReaderActivity | null {
   let selected: ReaderActivity | null = null;
+
   for (const activity of activities) {
     if (!selected || activity.priority >= selected.priority) {
       selected = activity;
     }
   }
+
   return selected;
 }
 
@@ -29,16 +37,27 @@ export function useDelayedReaderActivity(
 ): ReaderActivity | null {
   const [visible, setVisible] = useState<ReaderActivity | null>(null);
   const activityRef = useRef(activity);
-  activityRef.current = activity;
+  useLayoutEffect(() => {
+    activityRef.current = activity;
+  });
   const activityKey = readerActivityKey(activity);
+  // Hide the previous activity as soon as the activity (or delay) changes,
+  // adjusted during render rather than after the commit.
+  const [shown, setShown] = useState({ activityKey, delayMs });
+
+  if (shown.activityKey !== activityKey || shown.delayMs !== delayMs) {
+    setShown({ activityKey, delayMs });
+    setVisible(null);
+  }
 
   useEffect(() => {
-    setVisible(null);
     if (!activityRef.current) return undefined;
+
     const timeout = window.setTimeout(
       () => setVisible(activityRef.current),
       delayMs,
     );
+
     return () => window.clearTimeout(timeout);
   }, [activityKey, delayMs]);
 
@@ -48,14 +67,15 @@ export function useDelayedReaderActivity(
 export function ReaderActivityIndicator({
   activity,
   activeCount = 1,
-}: {
+}: Readonly<{
   activity: ReaderActivity;
   activeCount?: number;
-}): ReactElement {
+}>): ReactElement {
   const title =
     activeCount > 1
       ? `${activity.label} (${activeCount} operations running)`
       : activity.label;
+
   return (
     <div
       className="emr-statusbar-activity"

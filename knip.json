@@ -1,26 +1,26 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "test/**/*.test.{ts,tsx}",
-    "src/**/*.stories.tsx",
-    "e2e/**/*.spec.ts",
-    "visual/**/*.spec.ts",
-    "e2e/auth.setup.ts"
-  ],
-  "project": ["src/**/*.{ts,tsx}"],
-  "ignore": ["src/comments/fixtures.ts"],
-  "ignoreDependencies": [
-    "hast",
-    "mdast",
-    "istanbul-lib-report",
-    "tfx-cli",
-    "@vitejs/plugin-react"
-  ],
-  "ignoreBinaries": ["pwsh"],
-  "vitest": {
-    "config": ["vitest.config.ts"]
-  },
-  "playwright": {
-    "config": ["playwright.config.ts"]
-  }
+    "$schema": "https://unpkg.com/knip@5/schema.json",
+    "entry": [
+        "test/**/*.test.{ts,tsx}",
+        "src/**/*.stories.tsx",
+        "e2e/**/*.spec.ts",
+        "visual/**/*.spec.ts",
+        "e2e/auth.setup.ts"
+    ],
+    "project": ["src/**/*.{ts,tsx}"],
+    "ignore": ["src/comments/fixtures.ts"],
+    "ignoreDependencies": [
+        "hast",
+        "mdast",
+        "istanbul-lib-report",
+        "tfx-cli",
+        "@vitejs/plugin-react"
+    ],
+    "ignoreBinaries": ["pwsh"],
+    "vitest": {
+        "config": ["vitest.config.ts"]
+    },
+    "playwright": {
+        "config": ["playwright.config.ts"]
+    }
 }

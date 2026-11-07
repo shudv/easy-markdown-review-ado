@@ -25,11 +25,11 @@ import { expect, test } from "./fixtures";
 
 import { E2E } from "./env";
 import {
-  expectReaderHeading,
-  gotoDocumentsHub,
-  hubFrame,
-  selectRepoInPicker,
-  waitForFrameRoot,
+    expectReaderHeading,
+    gotoDocumentsHub,
+    hubFrame,
+    selectRepoInPicker,
+    waitForFrameRoot,
 } from "./helpers";
 
 // Slash-free route form (`?path=docs/x.md`) — the hub stores paths without a
@@ -45,59 +45,56 @@ const HEADING_A2 = /Repositories$/i; // api-reference  /api/rest/repositories.md
 const HEADING_B = /^Code review$/i; //  team-handbook  /handbook/.../code-review.md
 
 test.describe("Documents hub: path deep-link + per-repo persistence (real ADO host)", () => {
-  // One end-to-end journey: localStorage must accumulate across the navigations,
-  // and a fresh test context would wipe it — so all behaviours live in a single
-  // test that drives one browser context.
-  test("`?path=` deep-links, last-visited restore, and independent per-repo path memory", async ({
-    page,
-  }) => {
-    // --- Learn both repos' GUIDs via the picker --------------------------
-    await gotoDocumentsHub(page);
-    await waitForFrameRoot(hubFrame(page));
+    // One end-to-end journey: localStorage must accumulate across the navigations,
+    // and a fresh test context would wipe it — so all behaviours live in a single
+    // test that drives one browser context.
+    test("`?path=` deep-links, last-visited restore, and independent per-repo path memory", async ({
+        page,
+    }) => {
+        // --- Learn both repos' GUIDs via the picker --------------------------
+        await gotoDocumentsHub(page);
+        await waitForFrameRoot(hubFrame(page));
 
-    const guidA = await selectRepoInPicker(page, hubFrame(page), E2E.repoA);
-    const guidB = await selectRepoInPicker(page, hubFrame(page), E2E.repoB);
-    expect(
-      guidA,
-      "the two sandbox repos must resolve to distinct GUIDs",
-    ).not.toBe(guidB);
+        const guidA = await selectRepoInPicker(page, hubFrame(page), E2E.repoA);
+        const guidB = await selectRepoInPicker(page, hubFrame(page), E2E.repoB);
+        expect(guidA, "the two sandbox repos must resolve to distinct GUIDs").not.toBe(guidB);
 
-    // --- Behaviour 3: an explicit `?path=` opens that exact document ------
-    // Also seeds repoA's last-visited path (used by Behaviour 1/2 below).
-    await test.step("?repo=A&path=A opens document A", async () => {
-      await gotoDocumentsHub(page, { repo: guidA, path: pathA });
-      await waitForFrameRoot(hubFrame(page));
-      await expectReaderHeading(hubFrame(page), HEADING_A);
+        // --- Behaviour 3: an explicit `?path=` opens that exact document ------
+        // Also seeds repoA's last-visited path (used by Behaviour 1/2 below).
+        await test.step("?repo=A&path=A opens document A", async () => {
+            await gotoDocumentsHub(page, { repo: guidA, path: pathA });
+            await waitForFrameRoot(hubFrame(page));
+            await expectReaderHeading(hubFrame(page), HEADING_A);
+        });
+
+        // Seed repoB's last-visited path; repoB is now the most-recent repo too.
+        await test.step("?repo=B&path=B opens document B", async () => {
+            await gotoDocumentsHub(page, { repo: guidB, path: pathB });
+            await waitForFrameRoot(hubFrame(page));
+            await expectReaderHeading(hubFrame(page), HEADING_B);
+        });
+
+        // --- Behaviour 1: bare root restores last repo + its last path -------
+        await test.step("bare root restores the last repo + path (B)", async () => {
+            await gotoDocumentsHub(page);
+            await waitForFrameRoot(hubFrame(page));
+            await expectReaderHeading(hubFrame(page), HEADING_B);
+        });
+
+        // --- Behaviour 2 + per-repo memory: `?repo=` reopens THAT repo's own --
+        // remembered document, proving each repo persists its path independently
+        // (repoA still points at pathA even though repoB was visited last).
+        await test.step("?repo=A (no path) reopens repoA's own remembered doc (A)", async () => {
+            await gotoDocumentsHub(page, { repo: guidA });
+            await waitForFrameRoot(hubFrame(page));
+            await expectReaderHeading(hubFrame(page), HEADING_A);
+        });
+
+        // --- Behaviour 3 again: explicit `?path=` overrides the remembered path
+        await test.step("?repo=A&path=A2 overrides repoA's remembered path", async () => {
+            await gotoDocumentsHub(page, { repo: guidA, path: pathA2 });
+            await waitForFrameRoot(hubFrame(page));
+            await expectReaderHeading(hubFrame(page), HEADING_A2);
+        });
     });
-
-    // Seed repoB's last-visited path; repoB is now the most-recent repo too.
-    await test.step("?repo=B&path=B opens document B", async () => {
-      await gotoDocumentsHub(page, { repo: guidB, path: pathB });
-      await waitForFrameRoot(hubFrame(page));
-      await expectReaderHeading(hubFrame(page), HEADING_B);
-    });
-
-    // --- Behaviour 1: bare root restores last repo + its last path -------
-    await test.step("bare root restores the last repo + path (B)", async () => {
-      await gotoDocumentsHub(page);
-      await waitForFrameRoot(hubFrame(page));
-      await expectReaderHeading(hubFrame(page), HEADING_B);
-    });
-
-    // --- Behaviour 2 + per-repo memory: `?repo=` reopens THAT repo's own --
-    // remembered document, proving each repo persists its path independently
-    // (repoA still points at pathA even though repoB was visited last).
-    await test.step("?repo=A (no path) reopens repoA's own remembered doc (A)", async () => {
-      await gotoDocumentsHub(page, { repo: guidA });
-      await waitForFrameRoot(hubFrame(page));
-      await expectReaderHeading(hubFrame(page), HEADING_A);
-    });
-
-    // --- Behaviour 3 again: explicit `?path=` overrides the remembered path
-    await test.step("?repo=A&path=A2 overrides repoA's remembered path", async () => {
-      await gotoDocumentsHub(page, { repo: guidA, path: pathA2 });
-      await waitForFrameRoot(hubFrame(page));
-      await expectReaderHeading(hubFrame(page), HEADING_A2);
-    });
-  });
 });

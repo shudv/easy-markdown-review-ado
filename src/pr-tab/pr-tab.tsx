@@ -18,30 +18,27 @@ import { initWithHandshakeRetry } from "../shell/sdkHandshake";
 import { configureAdoSession } from "../shell/adoSessionSdk";
 import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
-import {
-  followsRecentAutoReload,
-  sessionStorageOrUndefined,
-} from "../shell/adoSession";
+import { followsRecentAutoReload, sessionStorageOrUndefined } from "../shell/adoSession";
 import { bootErrorDetail, renderBootErrorInto } from "../shell/bootError";
 import { syncHostTheme } from "../theme/theme";
 import {
-  ErrorBoundary,
-  initTelemetry,
-  installGlobalErrorHandlers,
-  installAuthFailureCapture,
-  markAppReady,
-  markBootAfterAutoReload,
-  markBootPhase,
-  markBootStart,
-  setTelemetryContext,
-  trackUserFacingError,
+    ErrorBoundary,
+    initTelemetry,
+    installGlobalErrorHandlers,
+    installAuthFailureCapture,
+    markAppReady,
+    markBootAfterAutoReload,
+    markBootPhase,
+    markBootStart,
+    setTelemetryContext,
+    trackUserFacingError,
 } from "../telemetry";
 
 // Dev builds only: reproduce failure conditions (token dead window, slow host,
 // background tab…) on demand. Must run before anything fetches. Compiled out
 // of production builds.
 if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
-  installDevFaults();
+    installDevFaults();
 }
 
 // Start the boot-time clock as early as possible so the measurement spans the
@@ -53,7 +50,7 @@ markBootStart();
 // Tag this boot if it is the reload we triggered to escape the token dead
 // window, so telemetry shows whether that reload actually worked.
 if (followsRecentAutoReload(sessionStorageOrUndefined(), Date.now())) {
-  markBootAfterAutoReload();
+    markBootAfterAutoReload();
 }
 
 /**
@@ -62,11 +59,11 @@ if (followsRecentAutoReload(sessionStorageOrUndefined(), Date.now())) {
  * Best-effort — telemetry must never break boot, so any failure is swallowed.
  */
 function installedExtensionVersion(): string | undefined {
-  try {
-    return SDK.getExtensionContext().version;
-  } catch {
-    return undefined;
-  }
+    try {
+        return SDK.getExtensionContext().version;
+    } catch {
+        return undefined;
+    }
 }
 
 // Start telemetry before the SDK handshake so init/ready failures count
@@ -76,56 +73,56 @@ installGlobalErrorHandlers();
 installAuthFailureCapture();
 
 void orchestrateBoot({
-  // loaded: false means the host frame keeps showing the loading spinner until
-  // we call notifyLoadSucceeded() ourselves. This gives us a chance to render
-  // before the user sees the tab.
-  //
-  // applyTheme: true asks the SDK to inject the host's theme CSS variables
-  // onto <body>; syncHostTheme() reads --background-color luminance off that
-  // and swaps our markdown stylesheet (and chrome palette via cascade) to
-  // match. The MutationObserver inside syncHostTheme keeps us in sync if
-  // the user toggles their ADO theme without reloading.
-  init: () =>
-    initWithHandshakeRetry({
-      init: () => SDK.init({ loaded: false, applyTheme: true }),
-    }),
-  ready: async () => {
-    await SDK.ready();
-    markBootPhase("sdk-ready");
-    setTelemetryContext({ extensionVersion: installedExtensionVersion() });
-    configureAdoSession();
-    // Resolve the Git client's location and fetch a token now, overlapping
-    // React mounting, instead of stalling the first REST call.
-    warmAdoClients();
-  },
-  run: async () => {
-    syncHostTheme();
+    // loaded: false means the host frame keeps showing the loading spinner until
+    // we call notifyLoadSucceeded() ourselves. This gives us a chance to render
+    // before the user sees the tab.
+    //
+    // applyTheme: true asks the SDK to inject the host's theme CSS variables
+    // onto <body>; syncHostTheme() reads --background-color luminance off that
+    // and swaps our markdown stylesheet (and chrome palette via cascade) to
+    // match. The MutationObserver inside syncHostTheme keeps us in sync if
+    // the user toggles their ADO theme without reloading.
+    init: () =>
+        initWithHandshakeRetry({
+            init: () => SDK.init({ loaded: false, applyTheme: true }),
+        }),
+    ready: async () => {
+        await SDK.ready();
+        markBootPhase("sdk-ready");
+        setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+        configureAdoSession();
+        // Resolve the Git client's location and fetch a token now, overlapping
+        // React mounting, instead of stalling the first REST call.
+        warmAdoClients();
+    },
+    run: async () => {
+        syncHostTheme();
 
-    const rootEl = document.getElementById("root");
-    if (!rootEl) throw new Error("Root element not found");
-    createRoot(rootEl).render(
-      <ErrorBoundary source="pr-tab">
-        <PrTabApp />
-      </ErrorBoundary>,
-    );
-  },
-  notifySucceeded: () => {
-    void SDK.notifyLoadSucceeded();
-  },
-  notifyFailed: (err) => {
-    void SDK.notifyLoadFailed(err);
-  },
-  onError: (err) => {
-    console.error("Markdown Review tab failed to boot", err);
-    trackUserFacingError({
-      error: err,
-      source: "pr-tab.boot",
-      operation: "boot",
-      impact: "blocking",
-      severity: "critical",
-    });
-    markAppReady("error");
-    const root = document.getElementById("root");
-    if (root) renderBootErrorInto(root, bootErrorDetail(err));
-  },
+        const rootEl = document.getElementById("root");
+        if (!rootEl) throw new Error("Root element not found");
+        createRoot(rootEl).render(
+            <ErrorBoundary source="pr-tab">
+                <PrTabApp />
+            </ErrorBoundary>,
+        );
+    },
+    notifySucceeded: () => {
+        void SDK.notifyLoadSucceeded();
+    },
+    notifyFailed: (err) => {
+        void SDK.notifyLoadFailed(err);
+    },
+    onError: (err) => {
+        console.error("Markdown Review tab failed to boot", err);
+        trackUserFacingError({
+            error: err,
+            source: "pr-tab.boot",
+            operation: "boot",
+            impact: "blocking",
+            severity: "critical",
+        });
+        markAppReady("error");
+        const root = document.getElementById("root");
+        if (root) renderBootErrorInto(root, bootErrorDetail(err));
+    },
 });

@@ -7,70 +7,66 @@
 // the first line of defence — there is simply no field here to put a name,
 // path, email, or document text into.
 
-import type {
-  TelemetryEvent,
-  TelemetryMeasurements,
-  TelemetryProperties,
-} from "./types";
+import type { TelemetryEvent, TelemetryMeasurements, TelemetryProperties } from "./types";
 
 export const EVENT = {
-  AppLoaded: "app.loaded",
-  CommentCreated: "comment.created",
-  CommentReplied: "comment.replied",
-  CommentEdited: "comment.edited",
-  CommentDeleted: "comment.deleted",
-  ThreadResolved: "thread.resolved",
-  ThreadReopened: "thread.reopened",
-  ThreadDeleted: "thread.deleted",
-  FileOpened: "file.opened",
-  RepoSwitched: "repo.switched",
-  SearchPerformed: "search.performed",
-  /** User reacted to (liked) a comment, or removed their reaction. */
-  CommentReacted: "comment.reacted",
-  /** User changed the comment rail's filter (mode and/or file scope). */
-  CommentFiltered: "comment.filtered",
-  /** User marked a thread as "pending" (a lightweight revisit-later state). */
-  ThreadMarkedPending: "thread.markedPending",
-  /** User closed a thread (a terminal, non-resolution state). */
-  ThreadClosed: "thread.closed",
-  /** User toggled the PR change-highlight (diff) layer on/off. */
-  DiffToggled: "diff.toggled",
-  /** User cycled to the previous/next comment via the rail toolbar. */
-  CommentNavigated: "comment.navigated",
-  /** User manually refreshed the comment threads. */
-  CommentsRefreshed: "comment.refreshed",
-  /** User opened the "view source" modal for a rendered Mermaid diagram. */
-  MermaidSourceViewed: "mermaid.sourceViewed",
-  /** User copied a Mermaid diagram's source from that modal. */
-  MermaidSourceCopied: "mermaid.sourceCopied",
-  /** User opened the source modal for a rendered equation. */
-  MathSourceViewed: "math.sourceViewed",
-  /** User copied an equation's TeX source from that modal. */
-  MathSourceCopied: "math.sourceCopied",
-  /** User copied a shareable link to a comment thread, a heading, or text. */
-  LinkCopied: "link.copied",
-  /** A shared `?comment=` / `?anchor=` / `?text=` link was opened and resolved (or not). */
-  LinkOpened: "link.opened",
-  /** An ADO API call was rejected with an auth status (401/403). */
-  AuthFailure: "auth.failure",
-  /**
-   * An author's Mermaid diagram didn't parse as written — content health, not
-   * an extension failure: either it was auto-repaired and rendered, or it has
-   * a genuine syntax error and stays readable as source.
-   */
-  DiagramRenderIssue: "diagram.renderIssue",
-  /**
-   * A confirmed ADO token dead-window spell started or ended. Carries the
-   * token timing needed to see how long the host takes to re-mint.
-   */
-  AuthSessionRefresh: "auth.sessionRefresh",
-  /**
-   * A handled or uncaught exception. Not user-triggered and not emitted via an
-   * `events.*` builder — it is produced by `trackException` (see
-   * `errorHandlers.ts` / `ErrorBoundary.tsx`). Listed here so every emitted
-   * event has one typed identity in this catalog.
-   */
-  AppException: "app.exception",
+    AppLoaded: "app.loaded",
+    CommentCreated: "comment.created",
+    CommentReplied: "comment.replied",
+    CommentEdited: "comment.edited",
+    CommentDeleted: "comment.deleted",
+    ThreadResolved: "thread.resolved",
+    ThreadReopened: "thread.reopened",
+    ThreadDeleted: "thread.deleted",
+    FileOpened: "file.opened",
+    RepoSwitched: "repo.switched",
+    SearchPerformed: "search.performed",
+    /** User reacted to (liked) a comment, or removed their reaction. */
+    CommentReacted: "comment.reacted",
+    /** User changed the comment rail's filter (mode and/or file scope). */
+    CommentFiltered: "comment.filtered",
+    /** User marked a thread as "pending" (a lightweight revisit-later state). */
+    ThreadMarkedPending: "thread.markedPending",
+    /** User closed a thread (a terminal, non-resolution state). */
+    ThreadClosed: "thread.closed",
+    /** User toggled the PR change-highlight (diff) layer on/off. */
+    DiffToggled: "diff.toggled",
+    /** User cycled to the previous/next comment via the rail toolbar. */
+    CommentNavigated: "comment.navigated",
+    /** User manually refreshed the comment threads. */
+    CommentsRefreshed: "comment.refreshed",
+    /** User opened the "view source" modal for a rendered Mermaid diagram. */
+    MermaidSourceViewed: "mermaid.sourceViewed",
+    /** User copied a Mermaid diagram's source from that modal. */
+    MermaidSourceCopied: "mermaid.sourceCopied",
+    /** User opened the source modal for a rendered equation. */
+    MathSourceViewed: "math.sourceViewed",
+    /** User copied an equation's TeX source from that modal. */
+    MathSourceCopied: "math.sourceCopied",
+    /** User copied a shareable link to a comment thread, a heading, or text. */
+    LinkCopied: "link.copied",
+    /** A shared `?comment=` / `?anchor=` / `?text=` link was opened and resolved (or not). */
+    LinkOpened: "link.opened",
+    /** An ADO API call was rejected with an auth status (401/403). */
+    AuthFailure: "auth.failure",
+    /**
+     * An author's Mermaid diagram didn't parse as written — content health, not
+     * an extension failure: either it was auto-repaired and rendered, or it has
+     * a genuine syntax error and stays readable as source.
+     */
+    DiagramRenderIssue: "diagram.renderIssue",
+    /**
+     * A confirmed ADO token dead-window spell started or ended. Carries the
+     * token timing needed to see how long the host takes to re-mint.
+     */
+    AuthSessionRefresh: "auth.sessionRefresh",
+    /**
+     * A handled or uncaught exception. Not user-triggered and not emitted via an
+     * `events.*` builder — it is produced by `trackException` (see
+     * `errorHandlers.ts` / `ErrorBoundary.tsx`). Listed here so every emitted
+     * event has one typed identity in this catalog.
+     */
+    AppException: "app.exception",
 } as const;
 
 export type EventName = (typeof EVENT)[keyof typeof EVENT];
@@ -103,309 +99,302 @@ export type AppReadyReason = "content" | "empty" | "error";
 
 /** Boot-time payload for {@link events.appLoaded}. */
 interface AppLoadedPayload {
-  bootTimeMs: number;
-  activeBootTimeMs?: number;
-  hiddenTimeMs?: number;
-  authRefreshWaitMs?: number;
-  sdkReadyMs?: number;
-  contextReadyMs?: number;
-  renderReadyMs?: number;
-  readyReason?: AppReadyReason;
-  bootHadHiddenInterval?: boolean;
-  /** This load followed an automatic host reload (dead-window recovery). */
-  afterAutoReload?: boolean;
+    bootTimeMs: number;
+    activeBootTimeMs?: number;
+    hiddenTimeMs?: number;
+    authRefreshWaitMs?: number;
+    sdkReadyMs?: number;
+    contextReadyMs?: number;
+    renderReadyMs?: number;
+    readyReason?: AppReadyReason;
+    bootHadHiddenInterval?: boolean;
+    /** This load followed an automatic host reload (dead-window recovery). */
+    afterAutoReload?: boolean;
 }
 
 /** Optional `app.loaded` measurements, in the order they're emitted. */
 const OPTIONAL_BOOT_MEASUREMENTS = [
-  "activeBootTimeMs",
-  "hiddenTimeMs",
-  "authRefreshWaitMs",
-  "sdkReadyMs",
-  "contextReadyMs",
-  "renderReadyMs",
+    "activeBootTimeMs",
+    "hiddenTimeMs",
+    "authRefreshWaitMs",
+    "sdkReadyMs",
+    "contextReadyMs",
+    "renderReadyMs",
 ] as const;
 
 function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
-  return {
-    ...(p.readyReason ? { readyReason: p.readyReason } : {}),
-    ...(p.bootHadHiddenInterval !== undefined
-      ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
-      : {}),
-    ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
-  };
+    return {
+        ...(p.readyReason ? { readyReason: p.readyReason } : {}),
+        ...(p.bootHadHiddenInterval !== undefined
+            ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
+            : {}),
+        ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
+    };
 }
 
 function appLoadedMeasurements(p: AppLoadedPayload): TelemetryMeasurements {
-  const measurements: TelemetryMeasurements = { bootTimeMs: p.bootTimeMs };
+    const measurements: TelemetryMeasurements = { bootTimeMs: p.bootTimeMs };
 
-  for (const key of OPTIONAL_BOOT_MEASUREMENTS) {
-    const value = p[key];
-    if (value !== undefined) measurements[key] = value;
-  }
+    for (const key of OPTIONAL_BOOT_MEASUREMENTS) {
+        const value = p[key];
+        if (value !== undefined) measurements[key] = value;
+    }
 
-  return measurements;
+    return measurements;
 }
 
 export const events = {
-  appLoaded(p?: AppLoadedPayload): TelemetryEvent {
-    return {
-      name: EVENT.AppLoaded,
-      properties: p ? appLoadedProperties(p) : undefined,
-      measurements: p ? appLoadedMeasurements(p) : undefined,
-    };
-  },
+    appLoaded(p?: AppLoadedPayload): TelemetryEvent {
+        return {
+            name: EVENT.AppLoaded,
+            properties: p ? appLoadedProperties(p) : undefined,
+            measurements: p ? appLoadedMeasurements(p) : undefined,
+        };
+    },
 
-  commentCreated(p: {
-    anchorKind: AnchorKind;
-    bodyLength: number;
-  }): TelemetryEvent {
-    return {
-      name: EVENT.CommentCreated,
-      properties: { anchorKind: p.anchorKind },
-      // Length bucket only — never the body. Drives "how long are comments".
-      measurements: { bodyLength: p.bodyLength },
-    };
-  },
+    commentCreated(p: { anchorKind: AnchorKind; bodyLength: number }): TelemetryEvent {
+        return {
+            name: EVENT.CommentCreated,
+            properties: { anchorKind: p.anchorKind },
+            // Length bucket only — never the body. Drives "how long are comments".
+            measurements: { bodyLength: p.bodyLength },
+        };
+    },
 
-  commentReplied(p: { bodyLength: number }): TelemetryEvent {
-    return {
-      name: EVENT.CommentReplied,
-      measurements: { bodyLength: p.bodyLength },
-    };
-  },
+    commentReplied(p: { bodyLength: number }): TelemetryEvent {
+        return {
+            name: EVENT.CommentReplied,
+            measurements: { bodyLength: p.bodyLength },
+        };
+    },
 
-  commentEdited(): TelemetryEvent {
-    return { name: EVENT.CommentEdited };
-  },
+    commentEdited(): TelemetryEvent {
+        return { name: EVENT.CommentEdited };
+    },
 
-  commentDeleted(): TelemetryEvent {
-    return { name: EVENT.CommentDeleted };
-  },
+    commentDeleted(): TelemetryEvent {
+        return { name: EVENT.CommentDeleted };
+    },
 
-  threadResolved(p?: { durationMs?: number }): TelemetryEvent {
-    return {
-      name: EVENT.ThreadResolved,
-      measurements:
-        p?.durationMs !== undefined ? { durationMs: p.durationMs } : undefined,
-    };
-  },
+    threadResolved(p?: { durationMs?: number }): TelemetryEvent {
+        return {
+            name: EVENT.ThreadResolved,
+            measurements: p?.durationMs !== undefined ? { durationMs: p.durationMs } : undefined,
+        };
+    },
 
-  threadReopened(): TelemetryEvent {
-    return { name: EVENT.ThreadReopened };
-  },
+    threadReopened(): TelemetryEvent {
+        return { name: EVENT.ThreadReopened };
+    },
 
-  threadDeleted(p: { commentCount: number }): TelemetryEvent {
-    return {
-      name: EVENT.ThreadDeleted,
-      measurements: { commentCount: p.commentCount },
-    };
-  },
+    threadDeleted(p: { commentCount: number }): TelemetryEvent {
+        return {
+            name: EVENT.ThreadDeleted,
+            measurements: { commentCount: p.commentCount },
+        };
+    },
 
-  fileOpened(p: { source: FileOpenSource }): TelemetryEvent {
-    return { name: EVENT.FileOpened, properties: { source: p.source } };
-  },
+    fileOpened(p: { source: FileOpenSource }): TelemetryEvent {
+        return { name: EVENT.FileOpened, properties: { source: p.source } };
+    },
 
-  repoSwitched(): TelemetryEvent {
-    return { name: EVENT.RepoSwitched };
-  },
+    repoSwitched(): TelemetryEvent {
+        return { name: EVENT.RepoSwitched };
+    },
 
-  searchPerformed(p: {
-    queryLength: number;
-    resultCount: number;
-    succeeded: boolean;
-    /** Failure category when !succeeded, e.g. "unavailable" | "unknown". */
-    failureReason?: string;
-  }): TelemetryEvent {
-    return {
-      name: EVENT.SearchPerformed,
-      properties: {
-        succeeded: p.succeeded,
-        ...(p.failureReason !== undefined && p.failureReason !== ""
-          ? { failureReason: p.failureReason }
-          : {}),
-      },
-      // Query *length* only — never the query string.
-      measurements: { queryLength: p.queryLength, resultCount: p.resultCount },
-    };
-  },
+    searchPerformed(p: {
+        queryLength: number;
+        resultCount: number;
+        succeeded: boolean;
+        /** Failure category when !succeeded, e.g. "unavailable" | "unknown". */
+        failureReason?: string;
+    }): TelemetryEvent {
+        return {
+            name: EVENT.SearchPerformed,
+            properties: {
+                succeeded: p.succeeded,
+                ...(p.failureReason !== undefined && p.failureReason !== ""
+                    ? { failureReason: p.failureReason }
+                    : {}),
+            },
+            // Query *length* only — never the query string.
+            measurements: {
+                queryLength: p.queryLength,
+                resultCount: p.resultCount,
+            },
+        };
+    },
 
-  /**
-   * An ADO API call returned an auth status (401/403). Captures the coarse API
-   * area plus which auth-diagnostic response headers were present — booleans
-   * only, never the header values, so a `TF400813` in the field is diagnosable
-   * (session-expired `fedAuthRedirect` vs token-rejected `wwwAuthenticate`)
-   * without a live repro. No URL, no identity, no trace ids.
-   */
-  authFailure(p: {
-    status: number;
-    /** Dot-joined API area, e.g. "git.pullrequests". No ids. */
-    api?: string;
-    /** Request targeted a legacy `{org}.visualstudio.com` host (vs dev.azure.com). */
-    legacyHost?: boolean;
-    /** `X-TFS-FedAuthRedirect` present — the host wanted a sign-in redirect. */
-    fedAuthRedirect?: boolean;
-    /** `X-TFS-ServiceError` present. */
-    serviceError?: boolean;
-    /** `WWW-Authenticate` present — the token was rejected outright. */
-    wwwAuthenticate?: boolean;
-  }): TelemetryEvent {
-    return {
-      name: EVENT.AuthFailure,
-      properties: {
-        ...(p.api !== undefined && p.api !== "" ? { api: p.api } : {}),
-        ...(p.legacyHost !== undefined ? { legacyHost: p.legacyHost } : {}),
-        ...(p.fedAuthRedirect !== undefined
-          ? { fedAuthRedirect: p.fedAuthRedirect }
-          : {}),
-        ...(p.serviceError !== undefined
-          ? { serviceError: p.serviceError }
-          : {}),
-        ...(p.wwwAuthenticate !== undefined
-          ? { wwwAuthenticate: p.wwwAuthenticate }
-          : {}),
-      },
-      measurements: { status: p.status },
-    };
-  },
+    /**
+     * An ADO API call returned an auth status (401/403). Captures the coarse API
+     * area plus which auth-diagnostic response headers were present — booleans
+     * only, never the header values, so a `TF400813` in the field is diagnosable
+     * (session-expired `fedAuthRedirect` vs token-rejected `wwwAuthenticate`)
+     * without a live repro. No URL, no identity, no trace ids.
+     */
+    authFailure(p: {
+        status: number;
+        /** Dot-joined API area, e.g. "git.pullrequests". No ids. */
+        api?: string;
+        /** Request targeted a legacy `{org}.visualstudio.com` host (vs dev.azure.com). */
+        legacyHost?: boolean;
+        /** `X-TFS-FedAuthRedirect` present — the host wanted a sign-in redirect. */
+        fedAuthRedirect?: boolean;
+        /** `X-TFS-ServiceError` present. */
+        serviceError?: boolean;
+        /** `WWW-Authenticate` present — the token was rejected outright. */
+        wwwAuthenticate?: boolean;
+    }): TelemetryEvent {
+        return {
+            name: EVENT.AuthFailure,
+            properties: {
+                ...(p.api !== undefined && p.api !== "" ? { api: p.api } : {}),
+                ...(p.legacyHost !== undefined ? { legacyHost: p.legacyHost } : {}),
+                ...(p.fedAuthRedirect !== undefined ? { fedAuthRedirect: p.fedAuthRedirect } : {}),
+                ...(p.serviceError !== undefined ? { serviceError: p.serviceError } : {}),
+                ...(p.wwwAuthenticate !== undefined ? { wwwAuthenticate: p.wwwAuthenticate } : {}),
+            },
+            measurements: { status: p.status },
+        };
+    },
 
-  /**
-   * One ADO token dead-window spell, emitted at `start` (a request was
-   * rejected with a lapsed embedded grant) and at `end`. Timing only — seconds
-   * relative to the token's `ado_exp` / AAD `exp` claims, never the token.
-   *
-   * `outcome` on `end`:
-   *   - `remint`      — the host handed out a fresh token (seen by polling);
-   *   - `success`     — an ADO call succeeded again;
-   *   - `reload-auto` / `reload-user` — we / the user reloaded the host page;
-   *   - `left`        — the page was closed while still refreshing.
-   */
-  authSessionRefresh(p: {
-    phase: "start" | "end";
-    /** What first hit the dead window: "boot" | "poll" | "write". */
-    trigger: string;
-    grantState?: string;
-    outcome?: "remint" | "success" | "reload-auto" | "reload-user" | "left";
-    /** Seconds from the start of the spell until the AAD `exp`. */
-    secsUntilExpAtStart?: number;
-    /** Seconds the embedded `ado_exp` had already passed at the start. */
-    secsSinceAdoExpAtStart?: number;
-    /** Spell duration (end only). */
-    durationSec?: number;
-    /** Seconds before the AAD `exp` the spell ended (negative = after). */
-    secsBeforeExpAtEnd?: number;
-    /** Comment writes held for the session at the end. */
-    heldWrites?: number;
-  }): TelemetryEvent {
-    const measurements: Record<string, number> = {};
+    /**
+     * One ADO token dead-window spell, emitted at `start` (a request was
+     * rejected with a lapsed embedded grant) and at `end`. Timing only — seconds
+     * relative to the token's `ado_exp` / AAD `exp` claims, never the token.
+     *
+     * `outcome` on `end`:
+     *   - `remint`      — the host handed out a fresh token (seen by polling);
+     *   - `success`     — an ADO call succeeded again;
+     *   - `reload-auto` / `reload-user` — we / the user reloaded the host page;
+     *   - `left`        — the page was closed while still refreshing.
+     */
+    authSessionRefresh(p: {
+        phase: "start" | "end";
+        /** What first hit the dead window: "boot" | "poll" | "write". */
+        trigger: string;
+        grantState?: string;
+        outcome?: "remint" | "success" | "reload-auto" | "reload-user" | "left";
+        /** Seconds from the start of the spell until the AAD `exp`. */
+        secsUntilExpAtStart?: number;
+        /** Seconds the embedded `ado_exp` had already passed at the start. */
+        secsSinceAdoExpAtStart?: number;
+        /** Spell duration (end only). */
+        durationSec?: number;
+        /** Seconds before the AAD `exp` the spell ended (negative = after). */
+        secsBeforeExpAtEnd?: number;
+        /** Comment writes held for the session at the end. */
+        heldWrites?: number;
+    }): TelemetryEvent {
+        const measurements: Record<string, number> = {};
 
-    for (const key of [
-      "secsUntilExpAtStart",
-      "secsSinceAdoExpAtStart",
-      "durationSec",
-      "secsBeforeExpAtEnd",
-      "heldWrites",
-    ] as const) {
-      const value = p[key];
-      if (value !== undefined) measurements[key] = Math.round(value);
-    }
+        for (const key of [
+            "secsUntilExpAtStart",
+            "secsSinceAdoExpAtStart",
+            "durationSec",
+            "secsBeforeExpAtEnd",
+            "heldWrites",
+        ] as const) {
+            const value = p[key];
+            if (value !== undefined) measurements[key] = Math.round(value);
+        }
 
-    return {
-      name: EVENT.AuthSessionRefresh,
-      properties: {
-        phase: p.phase,
-        trigger: p.trigger,
-        ...(p.grantState !== undefined && p.grantState !== ""
-          ? { grantState: p.grantState }
-          : {}),
-        ...(p.outcome ? { outcome: p.outcome } : {}),
-      },
-      measurements,
-    };
-  },
+        return {
+            name: EVENT.AuthSessionRefresh,
+            properties: {
+                phase: p.phase,
+                trigger: p.trigger,
+                ...(p.grantState !== undefined && p.grantState !== ""
+                    ? { grantState: p.grantState }
+                    : {}),
+                ...(p.outcome ? { outcome: p.outcome } : {}),
+            },
+            measurements,
+        };
+    },
 
-  commentReacted(p: { active: boolean; kind: string }): TelemetryEvent {
-    return {
-      name: EVENT.CommentReacted,
-      // `active` = reaction added (true) vs removed (false); `kind` is the
-      // reaction type (only "like" today). Never who reacted.
-      properties: { active: p.active, kind: p.kind },
-    };
-  },
+    commentReacted(p: { active: boolean; kind: string }): TelemetryEvent {
+        return {
+            name: EVENT.CommentReacted,
+            // `active` = reaction added (true) vs removed (false); `kind` is the
+            // reaction type (only "like" today). Never who reacted.
+            properties: { active: p.active, kind: p.kind },
+        };
+    },
 
-  /**
-   * @param mode   Filter mode, e.g. "all" | "active" | "resolved" | "mine".
-   * @param scoped Whether the rail is scoped to the current file only.
-   */
-  commentFiltered(p: { mode: string; scoped: boolean }): TelemetryEvent {
-    return {
-      name: EVENT.CommentFiltered,
-      properties: { mode: p.mode, scoped: p.scoped },
-    };
-  },
+    /**
+     * @param mode   Filter mode, e.g. "all" | "active" | "resolved" | "mine".
+     * @param scoped Whether the rail is scoped to the current file only.
+     */
+    commentFiltered(p: { mode: string; scoped: boolean }): TelemetryEvent {
+        return {
+            name: EVENT.CommentFiltered,
+            properties: { mode: p.mode, scoped: p.scoped },
+        };
+    },
 
-  threadMarkedPending(): TelemetryEvent {
-    return { name: EVENT.ThreadMarkedPending };
-  },
+    threadMarkedPending(): TelemetryEvent {
+        return { name: EVENT.ThreadMarkedPending };
+    },
 
-  threadClosed(): TelemetryEvent {
-    return { name: EVENT.ThreadClosed };
-  },
+    threadClosed(): TelemetryEvent {
+        return { name: EVENT.ThreadClosed };
+    },
 
-  diffToggled(p: { visible: boolean }): TelemetryEvent {
-    return { name: EVENT.DiffToggled, properties: { visible: p.visible } };
-  },
+    diffToggled(p: { visible: boolean }): TelemetryEvent {
+        return { name: EVENT.DiffToggled, properties: { visible: p.visible } };
+    },
 
-  commentNavigated(): TelemetryEvent {
-    return { name: EVENT.CommentNavigated };
-  },
+    commentNavigated(): TelemetryEvent {
+        return { name: EVENT.CommentNavigated };
+    },
 
-  commentsRefreshed(): TelemetryEvent {
-    return { name: EVENT.CommentsRefreshed };
-  },
+    commentsRefreshed(): TelemetryEvent {
+        return { name: EVENT.CommentsRefreshed };
+    },
 
-  /** @param changed The diagram was modified in this PR (had a pre-PR source). */
-  mermaidSourceViewed(p: { changed: boolean }): TelemetryEvent {
-    return {
-      name: EVENT.MermaidSourceViewed,
-      properties: { changed: p.changed },
-    };
-  },
+    /** @param changed The diagram was modified in this PR (had a pre-PR source). */
+    mermaidSourceViewed(p: { changed: boolean }): TelemetryEvent {
+        return {
+            name: EVENT.MermaidSourceViewed,
+            properties: { changed: p.changed },
+        };
+    },
 
-  mermaidSourceCopied(): TelemetryEvent {
-    return { name: EVENT.MermaidSourceCopied };
-  },
+    mermaidSourceCopied(): TelemetryEvent {
+        return { name: EVENT.MermaidSourceCopied };
+    },
 
-  mathSourceViewed(p: { changed: boolean }): TelemetryEvent {
-    return {
-      name: EVENT.MathSourceViewed,
-      properties: { changed: p.changed },
-    };
-  },
+    mathSourceViewed(p: { changed: boolean }): TelemetryEvent {
+        return {
+            name: EVENT.MathSourceViewed,
+            properties: { changed: p.changed },
+        };
+    },
 
-  mathSourceCopied(): TelemetryEvent {
-    return { name: EVENT.MathSourceCopied };
-  },
+    mathSourceCopied(): TelemetryEvent {
+        return { name: EVENT.MathSourceCopied };
+    },
 
-  linkCopied(p: { target: LinkTarget }): TelemetryEvent {
-    return { name: EVENT.LinkCopied, properties: { target: p.target } };
-  },
+    linkCopied(p: { target: LinkTarget }): TelemetryEvent {
+        return { name: EVENT.LinkCopied, properties: { target: p.target } };
+    },
 
-  /**
-   * @param found Whether the linked thread/heading was located in the opened
-   *              document (a renamed heading or deleted thread can't be).
-   */
-  linkOpened(p: { target: LinkTarget; found: boolean }): TelemetryEvent {
-    return {
-      name: EVENT.LinkOpened,
-      properties: { target: p.target, found: p.found },
-    };
-  },
+    /**
+     * @param found Whether the linked thread/heading was located in the opened
+     *              document (a renamed heading or deleted thread can't be).
+     */
+    linkOpened(p: { target: LinkTarget; found: boolean }): TelemetryEvent {
+        return {
+            name: EVENT.LinkOpened,
+            properties: { target: p.target, found: p.found },
+        };
+    },
 
-  diagramRenderIssue(p: { outcome: DiagramRenderOutcome }): TelemetryEvent {
-    return {
-      name: EVENT.DiagramRenderIssue,
-      properties: { outcome: p.outcome },
-    };
-  },
+    diagramRenderIssue(p: { outcome: DiagramRenderOutcome }): TelemetryEvent {
+        return {
+            name: EVENT.DiagramRenderIssue,
+            properties: { outcome: p.outcome },
+        };
+    },
 } as const;

@@ -9,19 +9,13 @@
 // file; how that config is obtained (URL query params for the hub) is the
 // caller's concern.
 
-import {
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useState } from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import {
-  GitVersionOptions,
-  GitVersionType,
-  type GitPullRequest,
-  type GitRepository,
+    GitVersionOptions,
+    GitVersionType,
+    type GitPullRequest,
+    type GitRepository,
 } from "azure-devops-extension-api/Git";
 import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages";
 import { Shell, type RoutedPrInfo } from "../shell/Shell";
@@ -29,9 +23,9 @@ import { AvatarImageContext } from "../shell/components/Avatar";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AdoCommentApi } from "../shell/adoCommentApi";
 import {
-  loadRepoPrRouting,
-  loadThreadsForRepo,
-  resolveAdoAvatarObjectUrl,
+    loadRepoPrRouting,
+    loadThreadsForRepo,
+    resolveAdoAvatarObjectUrl,
 } from "../shell/adoGitData";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import { parseVersionSpec } from "./markdownReader.helpers";
@@ -42,21 +36,21 @@ import { sharedGitClient } from "../shell/adoClients";
 
 /** Target descriptor handed to the reader by the launching surface. */
 export interface ReaderConfig {
-  repositoryId: string;
-  repositoryName?: string;
-  project: string;
-  path: string;
-  /** ADO version spec, e.g. "GBmain" (branch), "GCsha" (commit), "GTtag". */
-  version?: string;
+    repositoryId: string;
+    repositoryName?: string;
+    project: string;
+    path: string;
+    /** ADO version spec, e.g. "GBmain" (branch), "GCsha" (commit), "GTtag". */
+    version?: string;
 }
 
 interface ResolvedReader {
-  config: ReaderConfig;
-  rawRepo: GitRepository;
-  /** Routing PR the comments thread through, or null for a read-only reader. */
-  pr: GitPullRequest | null;
-  routedPr?: RoutedPrInfo;
-  initialThreads: CommentThread[];
+    config: ReaderConfig;
+    rawRepo: GitRepository;
+    /** Routing PR the comments thread through, or null for a read-only reader. */
+    pr: GitPullRequest | null;
+    routedPr?: RoutedPrInfo;
+    initialThreads: CommentThread[];
 }
 
 /**
@@ -65,79 +59,77 @@ interface ResolvedReader {
  * branch when the spec is missing or unrecognised.
  */
 function versionDescriptorFor(
-  spec: string | undefined,
-  rawRepo: GitRepository,
+    spec: string | undefined,
+    rawRepo: GitRepository,
 ): {
-  version: string;
-  versionType: GitVersionType;
-  versionOptions: GitVersionOptions;
+    version: string;
+    versionType: GitVersionType;
+    versionOptions: GitVersionOptions;
 } {
-  const fallback = {
-    version: stripRefsHeads(rawRepo.defaultBranch) || "main",
-    versionType: GitVersionType.Branch,
-    versionOptions: GitVersionOptions.None,
-  };
+    const fallback = {
+        version: stripRefsHeads(rawRepo.defaultBranch) || "main",
+        versionType: GitVersionType.Branch,
+        versionOptions: GitVersionOptions.None,
+    };
 
-  const parsed = parseVersionSpec(spec);
-  if (!parsed) return fallback;
+    const parsed = parseVersionSpec(spec);
+    if (!parsed) return fallback;
 
-  const versionType =
-    parsed.kind === "commit"
-      ? GitVersionType.Commit
-      : parsed.kind === "tag"
-        ? GitVersionType.Tag
-        : GitVersionType.Branch;
+    const versionType =
+        parsed.kind === "commit"
+            ? GitVersionType.Commit
+            : parsed.kind === "tag"
+              ? GitVersionType.Tag
+              : GitVersionType.Branch;
 
-  return {
-    version: parsed.value,
-    versionType,
-    versionOptions: GitVersionOptions.None,
-  };
+    return {
+        version: parsed.value,
+        versionType,
+        versionOptions: GitVersionOptions.None,
+    };
 }
 
 function stripRefsHeads(ref: string | undefined): string {
-  // `defaultBranch` comes from the ADO REST repository payload.
-  if (ref == null || ref === "") return "";
+    // `defaultBranch` comes from the ADO REST repository payload.
+    if (ref == null || ref === "") return "";
 
-  return ref.replace(/^refs\/heads\//, "");
+    return ref.replace(/^refs\/heads\//, "");
 }
 
-async function fetchReaderFileContent(
-  resolved: ResolvedReader,
-): Promise<string> {
-  const { config, rawRepo } = resolved;
-  const gitClient = sharedGitClient();
-  const descriptor = versionDescriptorFor(config.version, rawRepo);
+async function fetchReaderFileContent(resolved: ResolvedReader): Promise<string> {
+    const { config, rawRepo } = resolved;
+    const gitClient = sharedGitClient();
+    const descriptor = versionDescriptorFor(config.version, rawRepo);
 
-  const ab = await gitClient.getItemContent(
-    config.repositoryId,
-    config.path,
-    config.project,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    descriptor,
-    true,
-  );
+    const ab = await gitClient.getItemContent(
+        config.repositoryId,
+        config.path,
+        config.project,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        descriptor,
+        true,
+    );
 
-  return new TextDecoder("utf-8").decode(new Uint8Array(ab));
+    return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
 function basename(path: string): string {
-  const clean = path.replace(/\/+$/, "");
-  const idx = clean.lastIndexOf("/");
+    const clean = path.replace(/\/+$/, "");
+    const idx = clean.lastIndexOf("/");
 
-  return idx >= 0 ? clean.slice(idx + 1) : clean;
+    return idx >= 0 ? clean.slice(idx + 1) : clean;
 }
 
 function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
 
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
 /**
@@ -146,219 +138,207 @@ function initialsOf(name: string): string {
  */
 // eslint-disable-next-line max-lines-per-function -- Hub reader container: connects file loading, history and routing to Shell. Mostly prop wiring with little branching.
 export function MarkdownReader({
-  config,
+    config,
 }: Readonly<{
-  config: ReaderConfig;
+    config: ReaderConfig;
 }>): ReactElement {
-  const [resolved, setResolved] = useState<ResolvedReader | null>(null);
-  const [user, setUser] = useState<CommentAuthor | null>(null);
-  const [error, setError] = useState<string | null>(null);
+    const [resolved, setResolved] = useState<ResolvedReader | null>(null);
+    const [user, setUser] = useState<CommentAuthor | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const gitClient = sharedGitClient();
+    useEffect(() => {
+        void (async () => {
+            try {
+                const gitClient = sharedGitClient();
 
-        const rawRepo = await gitClient.getRepository(
-          config.repositoryId,
-          config.project,
-        );
+                const rawRepo = await gitClient.getRepository(config.repositoryId, config.project);
 
-        // Route comments through the repo's most recent completed PR,
-        // exactly like the Documents hub. No PR → read-only reader.
-        const { recentPr, pr } = await loadRepoPrRouting(
-          rawRepo,
-          config.project,
-        );
+                // Route comments through the repo's most recent completed PR,
+                // exactly like the Documents hub. No PR → read-only reader.
+                const { recentPr, pr } = await loadRepoPrRouting(rawRepo, config.project);
 
-        let initialThreads: CommentThread[] = [];
+                let initialThreads: CommentThread[] = [];
 
-        if (pr && typeof pr.pullRequestId === "number") {
-          const prByRepo = { [config.repositoryId]: pr };
+                if (pr && typeof pr.pullRequestId === "number") {
+                    const prByRepo = { [config.repositoryId]: pr };
 
-          const all = await loadThreadsForRepo(
-            config.repositoryId,
-            config.project,
-            prByRepo,
-          );
+                    const all = await loadThreadsForRepo(
+                        config.repositoryId,
+                        config.project,
+                        prByRepo,
+                    );
 
-          // Single-file reader: only threads anchored to this file.
-          initialThreads = all.filter((t) => t.filePath === config.path);
-        }
+                    // Single-file reader: only threads anchored to this file.
+                    initialThreads = all.filter((t) => t.filePath === config.path);
+                }
 
-        const routedPr: RoutedPrInfo | undefined = recentPr
-          ? {
-              prId: recentPr.id,
-              title: recentPr.title,
-              status: recentPr.status,
-              url: recentPr.url,
+                const routedPr: RoutedPrInfo | undefined = recentPr
+                    ? {
+                          prId: recentPr.id,
+                          title: recentPr.title,
+                          status: recentPr.status,
+                          url: recentPr.url,
+                      }
+                    : undefined;
+
+                setResolved({
+                    config,
+                    rawRepo,
+                    pr: pr && typeof pr.pullRequestId === "number" ? pr : null,
+                    routedPr,
+                    initialThreads,
+                });
+
+                const u = SDK.getUser();
+                setUser({
+                    id: u.id,
+                    displayName: u.displayName,
+                    initials: initialsOf(u.displayName),
+                    avatarUrl: identityAvatarUrl(u),
+                });
+            } catch (err: unknown) {
+                console.error("[MarkdownReader] load failed", err);
+                trackUserFacingError({
+                    error: err,
+                    source: "MarkdownReader.load",
+                    operation: "reader-context-load",
+                    impact: "blocking",
+                });
+                setError(err instanceof Error ? err.message : String(err));
             }
-          : undefined;
+        })();
+    }, [config]);
 
-        setResolved({
-          config,
-          rawRepo,
-          pr: pr && typeof pr.pullRequestId === "number" ? pr : null,
-          routedPr,
-          initialThreads,
+    const loadFileSource = useCallback(
+        (_path: string): Promise<string> => {
+            if (!resolved) return Promise.reject(new Error("Reader not ready"));
+
+            return fetchReaderFileContent(resolved);
+        },
+        [resolved],
+    );
+
+    const resolveDocumentImage = useCallback(
+        async (
+            _documentPath: string,
+            repositoryPath: string,
+            atCommitId?: string,
+        ): Promise<string | undefined> => {
+            if (!resolved) return undefined;
+
+            const versionDescriptor =
+                atCommitId !== undefined && atCommitId !== ""
+                    ? {
+                          version: atCommitId,
+                          versionType: GitVersionType.Commit,
+                          versionOptions: GitVersionOptions.None,
+                      }
+                    : versionDescriptorFor(resolved.config.version, resolved.rawRepo);
+
+            return resolveAdoRepositoryImageObjectUrl({
+                repositoryId: resolved.config.repositoryId,
+                project: resolved.config.project,
+                path: repositoryPath,
+                versionDescriptor,
+            });
+        },
+        [resolved],
+    );
+
+    const commentApi = useMemo<CommentApi | undefined>(() => {
+        if (!resolved?.pr) return undefined;
+
+        return new AdoCommentApi({
+            repositoryId: resolved.config.repositoryId,
+            pullRequestId: resolved.pr.pullRequestId,
+            project: resolved.config.project,
         });
+    }, [resolved]);
 
-        const u = SDK.getUser();
-        setUser({
-          id: u.id,
-          displayName: u.displayName,
-          initials: initialsOf(u.displayName),
-          avatarUrl: identityAvatarUrl(u),
-        });
-      } catch (err: unknown) {
-        console.error("[MarkdownReader] load failed", err);
-        trackUserFacingError({
-          error: err,
-          source: "MarkdownReader.load",
-          operation: "reader-context-load",
-          impact: "blocking",
-        });
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-  }, [config]);
+    const fetchRemoteThreads = useMemo<
+        ((signal: AbortSignal) => Promise<CommentThread[]>) | undefined
+    >(() => {
+        if (!resolved?.pr) return undefined;
+        const { config: cfg, pr } = resolved;
+        const prByRepo = { [cfg.repositoryId]: pr };
 
-  const loadFileSource = useCallback(
-    (_path: string): Promise<string> => {
-      if (!resolved) return Promise.reject(new Error("Reader not ready"));
+        const abortError = (): Error =>
+            typeof DOMException !== "undefined"
+                ? new DOMException("Aborted", "AbortError")
+                : Object.assign(new Error("Aborted"), { name: "AbortError" });
 
-      return fetchReaderFileContent(resolved);
-    },
-    [resolved],
-  );
+        return async (signal: AbortSignal): Promise<CommentThread[]> => {
+            if (signal.aborted) throw abortError();
 
-  const resolveDocumentImage = useCallback(
-    async (
-      _documentPath: string,
-      repositoryPath: string,
-      atCommitId?: string,
-    ): Promise<string | undefined> => {
-      if (!resolved) return undefined;
+            const all = await loadThreadsForRepo(cfg.repositoryId, cfg.project, prByRepo);
 
-      const versionDescriptor =
-        atCommitId !== undefined && atCommitId !== ""
-          ? {
-              version: atCommitId,
-              versionType: GitVersionType.Commit,
-              versionOptions: GitVersionOptions.None,
-            }
-          : versionDescriptorFor(resolved.config.version, resolved.rawRepo);
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the signal can abort during the awaited load; TS wrongly keeps the narrowing from the pre-await check.
+            if (signal.aborted) throw abortError();
 
-      return resolveAdoRepositoryImageObjectUrl({
-        repositoryId: resolved.config.repositoryId,
-        project: resolved.config.project,
-        path: repositoryPath,
-        versionDescriptor,
-      });
-    },
-    [resolved],
-  );
+            return all.filter((t) => t.filePath === cfg.path);
+        };
+    }, [resolved]);
 
-  const commentApi = useMemo<CommentApi | undefined>(() => {
-    if (!resolved?.pr) return undefined;
+    // Boot-time completion for the reader's terminal error state, which bypasses
+    // Shell (whose "content"/"error" signal covers the success + render-failure
+    // paths). Without this a data-load failure here would drop the boot event.
+    // Idempotent + no-ops outside a real boot.
+    useEffect(() => {
+        if (error !== null && error !== "") markAppReady("error");
+    }, [error]);
 
-    return new AdoCommentApi({
-      repositoryId: resolved.config.repositoryId,
-      pullRequestId: resolved.pr.pullRequestId,
-      project: resolved.config.project,
-    });
-  }, [resolved]);
+    if (error !== null && error !== "") {
+        return (
+            <div className="emr-error" role="alert">
+                <h2>Couldn’t open Markdown Review</h2>
+                <pre>{error}</pre>
+            </div>
+        );
+    }
 
-  const fetchRemoteThreads = useMemo<
-    ((signal: AbortSignal) => Promise<CommentThread[]>) | undefined
-  >(() => {
-    if (!resolved?.pr) return undefined;
-    const { config: cfg, pr } = resolved;
-    const prByRepo = { [cfg.repositoryId]: pr };
+    if (!resolved || !user) {
+        return <ReaderLoadingShell scope="hub" ariaLabel="Loading document" hideDocNav />;
+    }
 
-    const abortError = (): Error =>
-      typeof DOMException !== "undefined"
-        ? new DOMException("Aborted", "AbortError")
-        : Object.assign(new Error("Aborted"), { name: "AbortError" });
+    const fileName = basename(resolved.config.path);
 
-    return async (signal: AbortSignal): Promise<CommentThread[]> => {
-      if (signal.aborted) throw abortError();
-
-      const all = await loadThreadsForRepo(
-        cfg.repositoryId,
-        cfg.project,
-        prByRepo,
-      );
-
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the signal can abort during the awaited load; TS wrongly keeps the narrowing from the pre-await check.
-      if (signal.aborted) throw abortError();
-
-      return all.filter((t) => t.filePath === cfg.path);
+    const pr: PrInfo = {
+        prId: resolved.pr?.pullRequestId ?? 0,
+        title: fileName,
+        authorName: user.displayName,
+        files: [
+            {
+                path: resolved.config.path,
+                changeType: "modified",
+                linesAdded: 0,
+                linesDeleted: 0,
+            },
+        ],
     };
-  }, [resolved]);
 
-  // Boot-time completion for the reader's terminal error state, which bypasses
-  // Shell (whose "content"/"error" signal covers the success + render-failure
-  // paths). Without this a data-load failure here would drop the boot event.
-  // Idempotent + no-ops outside a real boot.
-  useEffect(() => {
-    if (error !== null && error !== "") markAppReady("error");
-  }, [error]);
+    const readOnly = !resolved.pr;
 
-  if (error !== null && error !== "") {
+    const readOnlyMessage = readOnly
+        ? `${resolved.config.repositoryName ?? "This repository"} has no completed pull request — commenting is disabled until one is completed.`
+        : undefined;
+
     return (
-      <div className="emr-error" role="alert">
-        <h2>Couldn’t open Markdown Review</h2>
-        <pre>{error}</pre>
-      </div>
+        <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
+            <Shell
+                hideDocNav
+                pr={pr}
+                loadFileSource={loadFileSource}
+                resolveDocumentImage={resolveDocumentImage}
+                diffsByFile={{}}
+                initialThreads={resolved.initialThreads}
+                currentUser={user}
+                commentApi={commentApi}
+                routedPr={resolved.routedPr}
+                draftScope="hub"
+                readOnly={readOnly}
+                readOnlyMessage={readOnlyMessage}
+                fetchRemoteThreads={fetchRemoteThreads}
+            />
+        </AvatarImageContext.Provider>
     );
-  }
-
-  if (!resolved || !user) {
-    return (
-      <ReaderLoadingShell scope="hub" ariaLabel="Loading document" hideDocNav />
-    );
-  }
-
-  const fileName = basename(resolved.config.path);
-
-  const pr: PrInfo = {
-    prId: resolved.pr?.pullRequestId ?? 0,
-    title: fileName,
-    authorName: user.displayName,
-    files: [
-      {
-        path: resolved.config.path,
-        changeType: "modified",
-        linesAdded: 0,
-        linesDeleted: 0,
-      },
-    ],
-  };
-
-  const readOnly = !resolved.pr;
-
-  const readOnlyMessage = readOnly
-    ? `${resolved.config.repositoryName ?? "This repository"} has no completed pull request — commenting is disabled until one is completed.`
-    : undefined;
-
-  return (
-    <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
-      <Shell
-        hideDocNav
-        pr={pr}
-        loadFileSource={loadFileSource}
-        resolveDocumentImage={resolveDocumentImage}
-        diffsByFile={{}}
-        initialThreads={resolved.initialThreads}
-        currentUser={user}
-        commentApi={commentApi}
-        routedPr={resolved.routedPr}
-        draftScope="hub"
-        readOnly={readOnly}
-        readOnlyMessage={readOnlyMessage}
-        fetchRemoteThreads={fetchRemoteThreads}
-      />
-    </AvatarImageContext.Provider>
-  );
 }

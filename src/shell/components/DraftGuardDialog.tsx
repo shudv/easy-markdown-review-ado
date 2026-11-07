@@ -8,76 +8,72 @@
 import { type ReactElement, useEffect, useRef } from "react";
 
 interface DraftGuardDialogProps {
-  /** File the existing draft lives in (basename shown to the user). */
-  fileName: string;
-  /** One-line snippet of the existing draft's text. */
-  snippet: string;
-  /** Discard the existing draft and proceed with the new composer. */
-  onDiscard: () => void;
-  /** Dismiss the dialog and keep the existing draft intact. */
-  onKeepEditing: () => void;
+    /** File the existing draft lives in (basename shown to the user). */
+    fileName: string;
+    /** One-line snippet of the existing draft's text. */
+    snippet: string;
+    /** Discard the existing draft and proceed with the new composer. */
+    onDiscard: () => void;
+    /** Dismiss the dialog and keep the existing draft intact. */
+    onKeepEditing: () => void;
 }
 
-export function DraftGuardDialog(
-  props: Readonly<DraftGuardDialogProps>,
-): ReactElement {
-  const { fileName, snippet, onDiscard, onKeepEditing } = props;
+export function DraftGuardDialog(props: Readonly<DraftGuardDialogProps>): ReactElement {
+    const { fileName, snippet, onDiscard, onKeepEditing } = props;
 
-  const keepRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    keepRef.current?.focus();
-  }, []);
+    const keepRef = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        keepRef.current?.focus();
+    }, []);
 
-  // Escape keeps the draft (the safe default).
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onKeepEditing();
-      }
-    }
+    // Escape keeps the draft (the safe default).
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") {
+                e.stopPropagation();
+                onKeepEditing();
+            }
+        }
 
-    document.addEventListener("keydown", onKey, true);
+        document.addEventListener("keydown", onKey, true);
 
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [onKeepEditing]);
+        return () => document.removeEventListener("keydown", onKey, true);
+    }, [onKeepEditing]);
 
-  return (
-    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- modal backdrop: a click outside the card keeps the draft; the keyboard path is Escape (document keydown above) and the focused "Keep editing" button
-    <div
-      className="emr-draft-guard-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Unsaved comment draft"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onKeepEditing();
-      }}
-    >
-      <div className="emr-draft-guard">
-        <div className="emr-draft-guard-title">
-          You already have an unsaved comment
+    return (
+        // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- modal backdrop: a click outside the card keeps the draft; the keyboard path is Escape (document keydown above) and the focused "Keep editing" button
+        <div
+            className="emr-draft-guard-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Unsaved comment draft"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onKeepEditing();
+            }}
+        >
+            <div className="emr-draft-guard">
+                <div className="emr-draft-guard-title">You already have an unsaved comment</div>
+                <div className="emr-draft-guard-body">
+                    <p>
+                        There's an unsaved draft in <strong>{fileName}</strong>. Starting a new one
+                        will discard it.
+                    </p>
+                    <blockquote className="emr-draft-guard-snippet">{snippet}</blockquote>
+                </div>
+                <div className="emr-draft-guard-actions">
+                    <button type="button" className="emr-btn subtle" onClick={onDiscard}>
+                        Discard draft
+                    </button>
+                    <button
+                        ref={keepRef}
+                        type="button"
+                        className="emr-btn primary"
+                        onClick={onKeepEditing}
+                    >
+                        Keep editing
+                    </button>
+                </div>
+            </div>
         </div>
-        <div className="emr-draft-guard-body">
-          <p>
-            There's an unsaved draft in <strong>{fileName}</strong>. Starting a
-            new one will discard it.
-          </p>
-          <blockquote className="emr-draft-guard-snippet">{snippet}</blockquote>
-        </div>
-        <div className="emr-draft-guard-actions">
-          <button type="button" className="emr-btn subtle" onClick={onDiscard}>
-            Discard draft
-          </button>
-          <button
-            ref={keepRef}
-            type="button"
-            className="emr-btn primary"
-            onClick={onKeepEditing}
-          >
-            Keep editing
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }

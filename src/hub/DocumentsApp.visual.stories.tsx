@@ -25,127 +25,129 @@ const ONBOARDING = "/onboarding.md";
 const API = "/api/rest/pull-requests.md";
 
 const SOURCES: Record<string, string> = {
-  [HANDBOOK]: [
-    "# Code Review",
-    "",
-    "We review Markdown the same way we review code: in the open, kindly, and",
-    "with an eye on the reader who comes after us.",
-    "",
-    "## Principles",
-    "",
-    "- Prefer small, focused changes.",
-    "- Leave the document better than you found it.",
-    "- Explain the *why*, not just the *what*.",
-    "",
-    "## Checklist",
-    "",
-    "1. Does the change read clearly out loud?",
-    "2. Are headings and lists consistent?",
-    "3. Did links and code fences survive the edit?",
-    "",
-  ].join("\n"),
-  [ONBOARDING]: [
-    "# Onboarding",
-    "",
-    "Welcome! Start here on your first day.",
-    "",
-  ].join("\n"),
-  [API]: ["# Pull requests", "", "REST reference for pull requests.", ""].join(
-    "\n",
-  ),
+    [HANDBOOK]: [
+        "# Code Review",
+        "",
+        "We review Markdown the same way we review code: in the open, kindly, and",
+        "with an eye on the reader who comes after us.",
+        "",
+        "## Principles",
+        "",
+        "- Prefer small, focused changes.",
+        "- Leave the document better than you found it.",
+        "- Explain the *why*, not just the *what*.",
+        "",
+        "## Checklist",
+        "",
+        "1. Does the change read clearly out loud?",
+        "2. Are headings and lists consistent?",
+        "3. Did links and code fences survive the edit?",
+        "",
+    ].join("\n"),
+    [ONBOARDING]: ["# Onboarding", "", "Welcome! Start here on your first day.", ""].join("\n"),
+    [API]: ["# Pull requests", "", "REST reference for pull requests.", ""].join("\n"),
 };
 
 const REPOS: DocRepo[] = [
-  {
-    id: "repo-handbook",
-    name: "team-handbook",
-    description: "How we build and review",
-    defaultBranch: "main",
-    files: [
-      {
-        path: HANDBOOK,
-        changeType: "modified",
-        linesAdded: 6,
-        linesDeleted: 1,
-      },
-      {
-        path: ONBOARDING,
-        changeType: "modified",
-        linesAdded: 0,
-        linesDeleted: 0,
-      },
-    ],
-    recentPr: {
-      id: 128,
-      title: "Clarify the review checklist",
-      author: shubhd.displayName,
-      status: "completed",
-      url: "https://example.test/team-handbook/pullrequest/128",
+    {
+        id: "repo-handbook",
+        name: "team-handbook",
+        description: "How we build and review",
+        defaultBranch: "main",
+        files: [
+            {
+                path: HANDBOOK,
+                changeType: "modified",
+                linesAdded: 6,
+                linesDeleted: 1,
+            },
+            {
+                path: ONBOARDING,
+                changeType: "modified",
+                linesAdded: 0,
+                linesDeleted: 0,
+            },
+        ],
+        recentPr: {
+            id: 128,
+            title: "Clarify the review checklist",
+            author: shubhd.displayName,
+            status: "completed",
+            url: "https://example.test/team-handbook/pullrequest/128",
+        },
+        detailsLoaded: true,
     },
-    detailsLoaded: true,
-  },
-  {
-    id: "repo-api",
-    name: "api-reference",
-    description: "Generated REST docs",
-    defaultBranch: "main",
-    files: [
-      { path: API, changeType: "modified", linesAdded: 3, linesDeleted: 0 },
-    ],
-    recentPr: null,
-    detailsLoaded: true,
-  },
+    {
+        id: "repo-api",
+        name: "api-reference",
+        description: "Generated REST docs",
+        defaultBranch: "main",
+        files: [
+            {
+                path: API,
+                changeType: "modified",
+                linesAdded: 3,
+                linesDeleted: 0,
+            },
+        ],
+        recentPr: null,
+        detailsLoaded: true,
+    },
 ];
 
 function threadsFor(): CommentThread[] {
-  return [
-    {
-      id: "t-active",
-      filePath: HANDBOOK,
-      status: "active",
-      anchor: {
-        exact: "small, focused changes",
-        prefix: "Prefer ",
-        suffix: ".",
-      },
-      comments: [
+    return [
         {
-          id: "c1",
-          author: alex,
-          bodyMarkdown: "Can we link the style guide from here?",
-          createdAt: "2026-01-01T10:00:00.000Z",
+            id: "t-active",
+            filePath: HANDBOOK,
+            status: "active",
+            anchor: {
+                exact: "small, focused changes",
+                prefix: "Prefer ",
+                suffix: ".",
+            },
+            comments: [
+                {
+                    id: "c1",
+                    author: alex,
+                    bodyMarkdown: "Can we link the style guide from here?",
+                    createdAt: "2026-01-01T10:00:00.000Z",
+                },
+            ],
         },
-      ],
-    },
-  ];
+    ];
 }
 
 const meta = {
-  title: "Visual/DocumentsHub",
-  component: DocumentsApp,
-  parameters: { layout: "fullscreen" },
-  decorators: [
-    (Story) => (
-      // Fill the viewport so the full navigator + reader + rail are captured
-      // (a fixed short height clips content). The spec screenshots `#storybook-root`.
-      <div
-        style={{ height: "100vh", display: "flex", flexDirection: "column" }}
-      >
-        <Story />
-      </div>
-    ),
-  ],
-  args: {
-    repos: REPOS,
-    currentUser: shubhd,
-    loadFileSource: async (_repoId: string, path: string) => {
-      const src = SOURCES[path];
-      if (src == null) throw new Error(`No source for ${path}`);
+    title: "Visual/DocumentsHub",
+    component: DocumentsApp,
+    parameters: { layout: "fullscreen" },
+    decorators: [
+        (Story) => (
+            // Fill the viewport so the full navigator + reader + rail are captured
+            // (a fixed short height clips content). The spec screenshots `#storybook-root`.
+            <div
+                style={{
+                    height: "100vh",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+            >
+                <Story />
+            </div>
+        ),
+    ],
+    args: {
+        repos: REPOS,
+        currentUser: shubhd,
+        loadFileSource: async (_repoId: string, path: string) => {
+            const src = SOURCES[path];
+            if (src == null) throw new Error(`No source for ${path}`);
 
-      return src;
+            return src;
+        },
+        loadThreadsFor: async () => threadsFor(),
     },
-    loadThreadsFor: async () => threadsFor(),
-  },
 } satisfies Meta<typeof DocumentsApp>;
 
 export default meta;
@@ -158,85 +160,84 @@ type Story = StoryObj<typeof meta>;
  * `.emr-highlight` before shooting.
  */
 export const Default: Story = {
-  play: async ({ canvasElement }) => {
-    await waitFor(
-      () => {
-        if (!canvasElement.querySelector(".markdown-body")) {
-          throw new Error("reader not rendered yet");
-        }
+    play: async ({ canvasElement }) => {
+        await waitFor(
+            () => {
+                if (!canvasElement.querySelector(".markdown-body")) {
+                    throw new Error("reader not rendered yet");
+                }
 
-        if (!canvasElement.querySelector(".emr-highlight")) {
-          throw new Error("highlight not wrapped yet");
-        }
-      },
-      { timeout: 5000 },
-    );
-    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
-    const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
-    expect(getComputedStyle(nav).paddingLeft).toBe("24px");
-    expect(getComputedStyle(docNav).paddingRight).toBe("12px");
-    expect(
-      within(canvasElement).getByRole("link", {
-        name: "Latest completed PR for this file: #128 Clarify the review checklist",
-      }),
-    ).toBeTruthy();
-  },
+                if (!canvasElement.querySelector(".emr-highlight")) {
+                    throw new Error("highlight not wrapped yet");
+                }
+            },
+            { timeout: 5000 },
+        );
+        const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+        const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        expect(getComputedStyle(nav).paddingLeft).toBe("24px");
+        expect(getComputedStyle(docNav).paddingRight).toBe("12px");
+        expect(
+            within(canvasElement).getByRole("link", {
+                name: "Latest completed PR for this file: #128 Clarify the review checklist",
+            }),
+        ).toBeTruthy();
+    },
 };
 
 /** Without a completed PR, Documents Hub removes all unavailable comment UI. */
 export const NoCompletedPullRequest: Story = {
-  args: {
-    initialRepoId: "repo-api",
-  },
-  play: async ({ canvasElement }) => {
-    await waitFor(() => {
-      if (!canvasElement.querySelector(".markdown-body")) {
-        throw new Error("reader not rendered yet");
-      }
-    });
-    const canvas = within(canvasElement);
-    await expect(canvasElement.querySelector(".emr-app")?.classList).toContain(
-      "is-comments-hidden",
-    );
-    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
-    await expect(
-      canvasElement.querySelector(".emr-statusbar-resolved-pr"),
-    ).toBeNull();
-    await expect(
-      getComputedStyle(canvasElement.querySelector<HTMLElement>(".emr-rail")!)
-        .display,
-    ).toBe("none");
-  },
+    args: {
+        initialRepoId: "repo-api",
+    },
+    play: async ({ canvasElement }) => {
+        await waitFor(() => {
+            if (!canvasElement.querySelector(".markdown-body")) {
+                throw new Error("reader not rendered yet");
+            }
+        });
+        const canvas = within(canvasElement);
+        await expect(canvasElement.querySelector(".emr-app")?.classList).toContain(
+            "is-comments-hidden",
+        );
+        await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+        await expect(canvasElement.querySelector(".emr-statusbar-resolved-pr")).toBeNull();
+        await expect(
+            getComputedStyle(canvasElement.querySelector<HTMLElement>(".emr-rail")!).display,
+        ).toBe("none");
+    },
 };
 
 /** High contrast: both pane dividers align to the document's inset card. */
 export const HighContrastDark: Story = {
-  decorators: [
-    (Story) => {
-      useLayoutEffect(() => {
-        const root = document.documentElement;
-        const previous = root.getAttribute("data-emr-theme");
-        root.setAttribute("data-emr-theme", "hc-dark");
+    decorators: [
+        (Story) => {
+            useLayoutEffect(() => {
+                const root = document.documentElement;
+                const previous = root.getAttribute("data-emr-theme");
+                root.setAttribute("data-emr-theme", "hc-dark");
 
-        return () => {
-          if (previous) root.setAttribute("data-emr-theme", previous);
-          else root.removeAttribute("data-emr-theme");
-        };
-      }, []);
+                return () => {
+                    if (previous) root.setAttribute("data-emr-theme", previous);
+                    else root.removeAttribute("data-emr-theme");
+                };
+            }, []);
 
-      return <Story />;
+            return <Story />;
+        },
+    ],
+    play: async ({ canvasElement }) => {
+        await Default.play!({ canvasElement } as never);
+        const body = canvasElement.querySelector<HTMLElement>(".emr-body")!;
+        const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
+
+        const rail = canvasElement.querySelector<HTMLElement>(".emr-rail-scroll")!;
+
+        const bodyRect = body.getBoundingClientRect();
+
+        expect(nav.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+        expect(rail.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
+        expect(nav.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
+        expect(rail.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
     },
-  ],
-  play: async ({ canvasElement }) => {
-    await Default.play!({ canvasElement } as never);
-    const body = canvasElement.querySelector<HTMLElement>(".emr-body")!;
-    const nav = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
-    const rail = canvasElement.querySelector<HTMLElement>(".emr-rail-scroll")!;
-    const bodyRect = body.getBoundingClientRect();
-
-    expect(nav.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
-    expect(rail.getBoundingClientRect().top).toBeCloseTo(bodyRect.top, 1);
-    expect(nav.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
-    expect(rail.getBoundingClientRect().bottom).toBeCloseTo(bodyRect.bottom, 1);
-  },
 };

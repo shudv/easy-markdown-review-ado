@@ -26,9 +26,9 @@ import { type ReactElement, useCallback } from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { createRoot } from "react-dom/client";
 import {
-  CommonServiceIds,
-  type IHostNavigationService,
-  type IHostPageLayoutService,
+    CommonServiceIds,
+    type IHostNavigationService,
+    type IHostPageLayoutService,
 } from "azure-devops-extension-api";
 import { MarkdownReader, type ReaderConfig } from "./markdownReader";
 import { DocumentsHubApp } from "./DocumentsHubApp";
@@ -40,70 +40,70 @@ import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
 import { syncHostTheme } from "../theme/theme";
 import {
-  ErrorBoundary,
-  initTelemetry,
-  installGlobalErrorHandlers,
-  installAuthFailureCapture,
-  markAppReady,
-  markBootPhase,
-  markBootStart,
-  setTelemetryContext,
-  trackUserFacingError,
+    ErrorBoundary,
+    initTelemetry,
+    installGlobalErrorHandlers,
+    installAuthFailureCapture,
+    markAppReady,
+    markBootPhase,
+    markBootStart,
+    setTelemetryContext,
+    trackUserFacingError,
 } from "../telemetry";
 
 function basename(path: string): string {
-  const clean = path.replace(/\/+$/, "");
-  const idx = clean.lastIndexOf("/");
+    const clean = path.replace(/\/+$/, "");
+    const idx = clean.lastIndexOf("/");
 
-  return idx >= 0 ? clean.slice(idx + 1) : clean;
+    return idx >= 0 ? clean.slice(idx + 1) : clean;
 }
 
 /** Reader state: a file was passed via query params. */
 function HubReader({
-  config,
-  onBack,
+    config,
+    onBack,
 }: Readonly<{
-  config: ReaderConfig;
-  onBack: () => void;
+    config: ReaderConfig;
+    onBack: () => void;
 }>): ReactElement {
-  return (
-    <div className="emr-hub__reader">
-      <div className="emr-hub__bar">
-        <button type="button" className="emr-hub__back" onClick={onBack}>
-          ← Back to Files
-        </button>
-        <span className="emr-hub__path" title={config.path}>
-          {basename(config.path)}
-        </span>
-      </div>
-      <div className="emr-hub__content">
-        <MarkdownReader config={config} />
-      </div>
-    </div>
-  );
+    return (
+        <div className="emr-hub__reader">
+            <div className="emr-hub__bar">
+                <button type="button" className="emr-hub__back" onClick={onBack}>
+                    ← Back to Files
+                </button>
+                <span className="emr-hub__path" title={config.path}>
+                    {basename(config.path)}
+                </span>
+            </div>
+            <div className="emr-hub__content">
+                <MarkdownReader config={config} />
+            </div>
+        </div>
+    );
 }
 
 function HubApp({
-  config,
-  filesUrl,
-  navService,
+    config,
+    filesUrl,
+    navService,
 }: Readonly<{
-  config: ReaderConfig | null;
-  filesUrl: string | null;
-  navService: IHostNavigationService;
+    config: ReaderConfig | null;
+    filesUrl: string | null;
+    navService: IHostNavigationService;
 }>): ReactElement {
-  const onBack = useCallback(() => {
-    if (filesUrl !== null && filesUrl !== "") navService.navigate(filesUrl);
-    else navService.reload();
-  }, [filesUrl, navService]);
+    const onBack = useCallback(() => {
+        if (filesUrl !== null && filesUrl !== "") navService.navigate(filesUrl);
+        else navService.reload();
+    }, [filesUrl, navService]);
 
-  // Direct navigation (no file passed): show the Documents browser. It lists
-  // every repo in the project and renders the selected repo's file view +
-  // reader + comments, with an in-hub repo selector — the experience the
-  // standalone Documents hub used to provide.
-  if (!config) return <DocumentsHubApp />;
+    // Direct navigation (no file passed): show the Documents browser. It lists
+    // every repo in the project and renders the selected repo's file view +
+    // reader + comments, with an in-hub repo selector — the experience the
+    // standalone Documents hub used to provide.
+    if (!config) return <DocumentsHubApp />;
 
-  return <HubReader config={config} onBack={onBack} />;
+    return <HubReader config={config} onBack={onBack} />;
 }
 
 /**
@@ -112,15 +112,15 @@ function HubApp({
  * a GUID), so it's only built when the menu action passed `repositoryName`.
  */
 function buildFilesUrl(org: string, config: ReaderConfig): string | null {
-  if (config.repositoryName === undefined || config.repositoryName === "") {
-    return null;
-  }
+    if (config.repositoryName === undefined || config.repositoryName === "") {
+        return null;
+    }
 
-  const params = new URLSearchParams({ path: config.path });
+    const params = new URLSearchParams({ path: config.path });
 
-  return `/${encodeURIComponent(org)}/${encodeURIComponent(
-    config.project,
-  )}/_git/${encodeURIComponent(config.repositoryName)}?${params.toString()}`;
+    return `/${encodeURIComponent(org)}/${encodeURIComponent(
+        config.project,
+    )}/_git/${encodeURIComponent(config.repositoryName)}?${params.toString()}`;
 }
 
 /**
@@ -129,93 +129,93 @@ function buildFilesUrl(org: string, config: ReaderConfig): string | null {
  * Best-effort — telemetry must never break boot, so any failure is swallowed.
  */
 function installedExtensionVersion(): string | undefined {
-  try {
-    return SDK.getExtensionContext().version;
-  } catch {
-    return undefined;
-  }
+    try {
+        return SDK.getExtensionContext().version;
+    } catch {
+        return undefined;
+    }
 }
 
 async function boot(): Promise<void> {
-  // Dev builds only: reproduce failure conditions on demand (see
-  // src/dev/faults.ts). Must run before anything fetches.
-  if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
-    installDevFaults();
-  }
+    // Dev builds only: reproduce failure conditions on demand (see
+    // src/dev/faults.ts). Must run before anything fetches.
+    if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
+        installDevFaults();
+    }
 
-  // Start the boot-time clock before the SDK handshake so the measurement spans
-  // the whole path to first rendered Markdown, not just React startup.
-  // `markAppReady()` fires later — from Shell when the first document renders,
-  // or from HubApp for the empty landing state.
-  markBootStart();
-  initTelemetry({ appName: "documents-hub" });
-  installGlobalErrorHandlers();
-  installAuthFailureCapture();
-  await orchestrateBoot({
-    init: () =>
-      initWithHandshakeRetry({
-        init: () => SDK.init({ loaded: false, applyTheme: true }),
-      }),
-    ready: async () => {
-      await SDK.ready();
-      markBootPhase("sdk-ready");
-      setTelemetryContext({ extensionVersion: installedExtensionVersion() });
-      configureAdoSession();
-      // Resolve the Git client's location and fetch a token now, overlapping
-      // the rest of boot, instead of stalling the first REST call.
-      warmAdoClients();
-    },
-    run: async () => {
-      syncHostTheme();
+    // Start the boot-time clock before the SDK handshake so the measurement spans
+    // the whole path to first rendered Markdown, not just React startup.
+    // `markAppReady()` fires later — from Shell when the first document renders,
+    // or from HubApp for the empty landing state.
+    markBootStart();
+    initTelemetry({ appName: "documents-hub" });
+    installGlobalErrorHandlers();
+    installAuthFailureCapture();
+    await orchestrateBoot({
+        init: () =>
+            initWithHandshakeRetry({
+                init: () => SDK.init({ loaded: false, applyTheme: true }),
+            }),
+        ready: async () => {
+            await SDK.ready();
+            markBootPhase("sdk-ready");
+            setTelemetryContext({
+                extensionVersion: installedExtensionVersion(),
+            });
+            configureAdoSession();
+            // Resolve the Git client's location and fetch a token now, overlapping
+            // the rest of boot, instead of stalling the first REST call.
+            warmAdoClients();
+        },
+        run: async () => {
+            syncHostTheme();
 
-      const navService = await SDK.getService<IHostNavigationService>(
-        CommonServiceIds.HostNavigationService,
-      );
+            const navService = await SDK.getService<IHostNavigationService>(
+                CommonServiceIds.HostNavigationService,
+            );
 
-      const params = await navService.getQueryParams();
-      const config = parseHubQuery(params);
-      markBootPhase("context-ready");
+            const params = await navService.getQueryParams();
+            const config = parseHubQuery(params);
+            markBootPhase("context-ready");
 
-      // Only collapse the nav for the actual reader; the empty/landing state is
-      // a normal hub page so the user can still navigate away.
-      if (config) {
-        const layoutService = await SDK.getService<IHostPageLayoutService>(
-          CommonServiceIds.HostPageLayoutService,
-        );
+            // Only collapse the nav for the actual reader; the empty/landing state is
+            // a normal hub page so the user can still navigate away.
+            if (config) {
+                const layoutService = await SDK.getService<IHostPageLayoutService>(
+                    CommonServiceIds.HostPageLayoutService,
+                );
 
-        layoutService.setFullScreenMode(true);
-      }
+                layoutService.setFullScreenMode(true);
+            }
 
-      const filesUrl = config
-        ? buildFilesUrl(SDK.getHost().name, config)
-        : null;
+            const filesUrl = config ? buildFilesUrl(SDK.getHost().name, config) : null;
 
-      const rootEl = document.getElementById("root");
-      if (!rootEl) throw new Error("Root element not found");
-      createRoot(rootEl).render(
-        <ErrorBoundary source="documents-hub">
-          <HubApp config={config} filesUrl={filesUrl} navService={navService} />
-        </ErrorBoundary>,
-      );
-    },
-    notifySucceeded: () => {
-      void SDK.notifyLoadSucceeded();
-    },
-    notifyFailed: (err) => {
-      void SDK.notifyLoadFailed(err);
-    },
-    onError: (err) => {
-      console.error("[MarkdownReviewHub] startup failed", err);
-      trackUserFacingError({
-        error: err,
-        source: "documents-hub.boot",
-        operation: "boot",
-        impact: "blocking",
-        severity: "critical",
-      });
-      markAppReady("error");
-    },
-  });
+            const rootEl = document.getElementById("root");
+            if (!rootEl) throw new Error("Root element not found");
+            createRoot(rootEl).render(
+                <ErrorBoundary source="documents-hub">
+                    <HubApp config={config} filesUrl={filesUrl} navService={navService} />
+                </ErrorBoundary>,
+            );
+        },
+        notifySucceeded: () => {
+            void SDK.notifyLoadSucceeded();
+        },
+        notifyFailed: (err) => {
+            void SDK.notifyLoadFailed(err);
+        },
+        onError: (err) => {
+            console.error("[MarkdownReviewHub] startup failed", err);
+            trackUserFacingError({
+                error: err,
+                source: "documents-hub.boot",
+                operation: "boot",
+                impact: "blocking",
+                severity: "critical",
+            });
+            markAppReady("error");
+        },
+    });
 }
 
 void boot();

@@ -11,23 +11,23 @@ import { RegisterEditorContext } from "../components/editorRegistry";
  * (see ComposerBusyContext), provided together at one tree level.
  */
 export function CommentApiScope({
-  api,
-  busy,
-  registerEditor,
-  children,
+    api,
+    busy,
+    registerEditor,
+    children,
 }: Readonly<{
-  api: CommentApi;
-  busy: boolean;
-  registerEditor: () => () => void;
-  children: ReactNode;
+    api: CommentApi;
+    busy: boolean;
+    registerEditor: () => () => void;
+    children: ReactNode;
 }>): ReactElement {
-  return (
-    <CommentApiProvider value={api}>
-      <ComposerBusyContext.Provider value={busy}>
-        <RegisterEditorContext.Provider value={registerEditor}>
-          {children}
-        </RegisterEditorContext.Provider>
-      </ComposerBusyContext.Provider>
-    </CommentApiProvider>
-  );
+    return (
+        <CommentApiProvider value={api}>
+            <ComposerBusyContext.Provider value={busy}>
+                <RegisterEditorContext.Provider value={registerEditor}>
+                    {children}
+                </RegisterEditorContext.Provider>
+            </ComposerBusyContext.Provider>
+        </CommentApiProvider>
+    );
 }

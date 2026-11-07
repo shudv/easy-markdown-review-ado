@@ -12,14 +12,14 @@ import type { DraftScope } from "./draftStorage";
 
 /** A curated reading font: a stable id, a display name, and its CSS stack. */
 export interface ReaderFont {
-  /** Stable id persisted in prefs (never shown to the user). */
-  id: string;
-  /** Display name shown in the font list (rendered in its own face). */
-  name: string;
-  /** The `font-family` stack applied to the document prose. */
-  stack: string;
-  /** Primary local family name to probe; absent means always available. */
-  localFamily?: string;
+    /** Stable id persisted in prefs (never shown to the user). */
+    id: string;
+    /** Display name shown in the font list (rendered in its own face). */
+    name: string;
+    /** The `font-family` stack applied to the document prose. */
+    stack: string;
+    /** Primary local family name to probe; absent means always available. */
+    localFamily?: string;
 }
 
 // A deliberately small, role-based set rather than an arbitrary font picker:
@@ -27,36 +27,35 @@ export interface ReaderFont {
 // options when installed. Mono is intentionally absent — code always renders
 // in its own monospace face regardless of this choice.
 export const READER_FONTS: readonly ReaderFont[] = [
-  {
-    id: "system",
-    name: "System",
-    stack:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif',
-  },
-  {
-    id: "atkinson",
-    name: "Atkinson Hyperlegible",
-    stack: '"Atkinson Hyperlegible", "Segoe UI", system-ui, Arial, sans-serif',
-    localFamily: "Atkinson Hyperlegible Regular",
-  },
-  {
-    id: "sitka",
-    name: "Sitka",
-    stack: '"Sitka Text", Sitka, Cambria, Georgia, serif',
-    localFamily: "Sitka Text",
-  },
-  {
-    id: "georgia",
-    name: "Georgia",
-    stack: 'Georgia, "Times New Roman", serif',
-    localFamily: "Georgia",
-  },
-  {
-    id: "verdana",
-    name: "Verdana",
-    stack: "Verdana, Geneva, Tahoma, sans-serif",
-    localFamily: "Verdana",
-  },
+    {
+        id: "system",
+        name: "System",
+        stack: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Arial, sans-serif',
+    },
+    {
+        id: "atkinson",
+        name: "Atkinson Hyperlegible",
+        stack: '"Atkinson Hyperlegible", "Segoe UI", system-ui, Arial, sans-serif',
+        localFamily: "Atkinson Hyperlegible Regular",
+    },
+    {
+        id: "sitka",
+        name: "Sitka",
+        stack: '"Sitka Text", Sitka, Cambria, Georgia, serif',
+        localFamily: "Sitka Text",
+    },
+    {
+        id: "georgia",
+        name: "Georgia",
+        stack: 'Georgia, "Times New Roman", serif',
+        localFamily: "Georgia",
+    },
+    {
+        id: "verdana",
+        name: "Verdana",
+        stack: "Verdana, Geneva, Tahoma, sans-serif",
+        localFamily: "Verdana",
+    },
 ];
 
 /** The out-of-the-box reading font (the system UI sans). */
@@ -104,46 +103,46 @@ export const DEFAULT_COMMENT_WIDTH_PCT = 100;
 
 /** The persisted reader-preferences shape. */
 export interface ReaderPrefs {
-  /** Selected reading font id (see `READER_FONTS`). */
-  fontId: string;
-  /** Selected text size as a continuous percentage (50–150). */
-  sizePct: number;
-  /** Line-height preference as a continuous percentage (50–150). */
-  lineSpacingPct: number;
-  /** Paragraph-spacing preference as a continuous percentage (50–150). */
-  paragraphSpacingPct: number;
-  /** Letter-spacing preference as a continuous percentage (50–150). */
-  letterSpacingPct: number;
-  /** Word-spacing preference as a continuous percentage (50–150). */
-  wordSpacingPct: number;
-  /** Whether the document-navigation panel is shown. */
-  showNav: boolean;
-  /**
-   * Whether the open document's heading outline is listed under it in the
-   * navigation panel. On by default; readers can turn it off.
-   */
-  showOutline: boolean;
-  /** Whether the comments panel is shown. */
-  showComments: boolean;
-  /** Document-navigation width as a percentage of the default rail (50–130). */
-  navWidthPct: number;
-  /** Comment-rail width as a percentage of the default rail (70–130). */
-  commentWidthPct: number;
+    /** Selected reading font id (see `READER_FONTS`). */
+    fontId: string;
+    /** Selected text size as a continuous percentage (50–150). */
+    sizePct: number;
+    /** Line-height preference as a continuous percentage (50–150). */
+    lineSpacingPct: number;
+    /** Paragraph-spacing preference as a continuous percentage (50–150). */
+    paragraphSpacingPct: number;
+    /** Letter-spacing preference as a continuous percentage (50–150). */
+    letterSpacingPct: number;
+    /** Word-spacing preference as a continuous percentage (50–150). */
+    wordSpacingPct: number;
+    /** Whether the document-navigation panel is shown. */
+    showNav: boolean;
+    /**
+     * Whether the open document's heading outline is listed under it in the
+     * navigation panel. On by default; readers can turn it off.
+     */
+    showOutline: boolean;
+    /** Whether the comments panel is shown. */
+    showComments: boolean;
+    /** Document-navigation width as a percentage of the default rail (50–130). */
+    navWidthPct: number;
+    /** Comment-rail width as a percentage of the default rail (70–130). */
+    commentWidthPct: number;
 }
 
 /** The defaults applied when nothing is stored (or storage is unreadable). */
 export const DEFAULT_READER_PREFS: ReaderPrefs = {
-  fontId: DEFAULT_FONT_ID,
-  sizePct: DEFAULT_SIZE_PCT,
-  lineSpacingPct: DEFAULT_LINE_SPACING_PCT,
-  paragraphSpacingPct: DEFAULT_PARAGRAPH_SPACING_PCT,
-  letterSpacingPct: DEFAULT_LETTER_SPACING_PCT,
-  wordSpacingPct: DEFAULT_WORD_SPACING_PCT,
-  showNav: true,
-  showOutline: true,
-  showComments: true,
-  navWidthPct: DEFAULT_NAV_WIDTH_PCT,
-  commentWidthPct: DEFAULT_COMMENT_WIDTH_PCT,
+    fontId: DEFAULT_FONT_ID,
+    sizePct: DEFAULT_SIZE_PCT,
+    lineSpacingPct: DEFAULT_LINE_SPACING_PCT,
+    paragraphSpacingPct: DEFAULT_PARAGRAPH_SPACING_PCT,
+    letterSpacingPct: DEFAULT_LETTER_SPACING_PCT,
+    wordSpacingPct: DEFAULT_WORD_SPACING_PCT,
+    showNav: true,
+    showOutline: true,
+    showComments: true,
+    navWidthPct: DEFAULT_NAV_WIDTH_PCT,
+    commentWidthPct: DEFAULT_COMMENT_WIDTH_PCT,
 };
 
 // Typography (font + text size) is GLOBAL — reading comfort follows the reader
@@ -153,118 +152,112 @@ export const DEFAULT_READER_PREFS: ReaderPrefs = {
 export const READER_TYPE_KEY = "emr.reader.type";
 
 export function layoutStorageKey(scope: DraftScope): string {
-  return `emr.reader.layout.${scope}`;
+    return `emr.reader.layout.${scope}`;
 }
 
 /** Resolve a font id to its definition, falling back to the default font. */
 export function resolveReaderFont(id: string): ReaderFont {
-  // `READER_FONTS[0]` IS the default (system) font, so an unknown id falls back
-  // to it. The non-null assertion is safe: the list is a non-empty literal.
-  return READER_FONTS.find((f) => f.id === id) ?? READER_FONTS[0]!;
+    // `READER_FONTS[0]` IS the default (system) font, so an unknown id falls back
+    // to it. The non-null assertion is safe: the list is a non-empty literal.
+    return READER_FONTS.find((f) => f.id === id) ?? READER_FONTS[0]!;
 }
 
 /** Resolve the curated registry against an asynchronous local-font probe. */
 export async function detectAvailableReaderFonts(
-  loadLocal: (family: string, id: string) => Promise<boolean>,
+    loadLocal: (family: string, id: string) => Promise<boolean>,
 ): Promise<readonly ReaderFont[]> {
-  const availability = await Promise.all(
-    READER_FONTS.map(async (font) => {
-      if (font.localFamily === undefined || font.localFamily === "") {
-        return true;
-      }
+    const availability = await Promise.all(
+        READER_FONTS.map(async (font) => {
+            if (font.localFamily === undefined || font.localFamily === "") {
+                return true;
+            }
 
-      try {
-        return await loadLocal(font.localFamily, font.id);
-      } catch {
-        return false;
-      }
-    }),
-  );
+            try {
+                return await loadLocal(font.localFamily, font.id);
+            } catch {
+                return false;
+            }
+        }),
+    );
 
-  return READER_FONTS.filter((_font, index) => availability[index]);
+    return READER_FONTS.filter((_font, index) => availability[index]);
 }
 
 /** Clamp and round a finite reader percentage within the supplied bounds. */
 export function clampReaderPct(
-  pct: number,
-  min = READER_PERCENT_MIN,
-  max = READER_PERCENT_MAX,
+    pct: number,
+    min = READER_PERCENT_MIN,
+    max = READER_PERCENT_MAX,
 ): number {
-  return Math.round(Math.max(min, Math.min(max, pct)));
+    return Math.round(Math.max(min, Math.min(max, pct)));
 }
 
 /** Snap percentages near the default to exactly 100%, then clamp. */
 export function snapReaderPct(
-  pct: number,
-  min = READER_PERCENT_MIN,
-  max = READER_PERCENT_MAX,
+    pct: number,
+    min = READER_PERCENT_MIN,
+    max = READER_PERCENT_MAX,
 ): number {
-  const clamped = clampReaderPct(pct, min, max);
+    const clamped = clampReaderPct(pct, min, max);
 
-  return Math.abs(clamped - 100) <= READER_PERCENT_SNAP_RADIUS ? 100 : clamped;
+    return Math.abs(clamped - 100) <= READER_PERCENT_SNAP_RADIUS ? 100 : clamped;
 }
 
 /** Nudge a percentage by 5 points in either direction. */
 export function nudgeReaderPct(
-  pct: number,
-  dir: number,
-  min = READER_PERCENT_MIN,
-  max = READER_PERCENT_MAX,
+    pct: number,
+    dir: number,
+    min = READER_PERCENT_MIN,
+    max = READER_PERCENT_MAX,
 ): number {
-  return snapReaderPct(
-    pct + (dir < 0 ? -1 : 1) * READER_PERCENT_NUDGE,
-    min,
-    max,
-  );
+    return snapReaderPct(pct + (dir < 0 ? -1 : 1) * READER_PERCENT_NUDGE, min, max);
 }
 
 export interface ReaderSpacingValues {
-  lineHeight: number;
-  letterSpacingEm: number;
-  wordSpacingEm: number;
-  paragraphSpacingPx: number;
+    lineHeight: number;
+    letterSpacingEm: number;
+    wordSpacingEm: number;
+    paragraphSpacingPx: number;
 }
 
 export interface ReaderSpacingPrefs {
-  lineSpacingPct: number;
-  paragraphSpacingPct: number;
-  letterSpacingPct: number;
-  wordSpacingPct: number;
+    lineSpacingPct: number;
+    paragraphSpacingPct: number;
+    letterSpacingPct: number;
+    wordSpacingPct: number;
 }
 
 /** Resolve four independent preferences into their prose-spacing dimensions. */
-export function readerSpacingValues(
-  prefs: ReaderSpacingPrefs,
-): ReaderSpacingValues {
-  const spacingDelta = (pct: number) =>
-    clampReaderPct(pct, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX) - 100;
+export function readerSpacingValues(prefs: ReaderSpacingPrefs): ReaderSpacingValues {
+    const spacingDelta = (pct: number) =>
+        clampReaderPct(pct, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX) - 100;
 
-  const lineDelta = spacingDelta(prefs.lineSpacingPct);
-  const paragraphDelta = spacingDelta(prefs.paragraphSpacingPct);
-  const letterDelta = spacingDelta(prefs.letterSpacingPct);
-  const wordDelta = spacingDelta(prefs.wordSpacingPct);
-  const decimal = (value: number) => Number(value.toFixed(4));
+    const lineDelta = spacingDelta(prefs.lineSpacingPct);
+    const paragraphDelta = spacingDelta(prefs.paragraphSpacingPct);
+    const letterDelta = spacingDelta(prefs.letterSpacingPct);
+    const wordDelta = spacingDelta(prefs.wordSpacingPct);
+    const decimal = (value: number) => Number(value.toFixed(4));
 
-  return {
-    lineHeight: decimal(1.6 + lineDelta * 0.003),
-    paragraphSpacingPx: decimal(16 + paragraphDelta * 0.064),
-    letterSpacingEm: decimal(Math.max(0, letterDelta) * 0.0008),
-    wordSpacingEm: decimal(Math.max(0, wordDelta) * 0.0016),
-  };
+    return {
+        lineHeight: decimal(1.6 + lineDelta * 0.003),
+        paragraphSpacingPx: decimal(16 + paragraphDelta * 0.064),
+        letterSpacingEm: decimal(Math.max(0, letterDelta) * 0.0008),
+        wordSpacingEm: decimal(Math.max(0, wordDelta) * 0.0016),
+    };
 }
 
 function clampWidthPct(pct: number, minPct: number): number {
-  return Math.round(Math.max(minPct, Math.min(NAV_WIDTH_MAX_PCT, pct)));
+    return Math.round(Math.max(minPct, Math.min(NAV_WIDTH_MAX_PCT, pct)));
 }
 
 /** Clamp a (drag-derived) percentage into the resizable nav-width range. */
 export function clampNavWidthPct(pct: number): number {
-  return clampWidthPct(pct, NAV_WIDTH_MIN_PCT);
+    return clampWidthPct(pct, NAV_WIDTH_MIN_PCT);
 }
 
 /** Clamp a comment-rail percentage — the nav's ceiling, but a higher floor. */
 export function clampCommentWidthPct(pct: number): number {
-  return clampWidthPct(pct, COMMENT_WIDTH_MIN_PCT);
+    return clampWidthPct(pct, COMMENT_WIDTH_MIN_PCT);
 }
 
 /**
@@ -274,9 +267,7 @@ export function clampCommentWidthPct(pct: number): number {
  * factor into the layout `calc()` (which would collapse or balloon the pane).
  */
 export function widthScale(pct: number): number {
-  return (
-    clampNavWidthPct(Number.isFinite(pct) ? pct : DEFAULT_NAV_WIDTH_PCT) / 100
-  );
+    return clampNavWidthPct(Number.isFinite(pct) ? pct : DEFAULT_NAV_WIDTH_PCT) / 100;
 }
 
 // Pane collapse/reopen by drag. Dragging a rail's resize handle so its target
@@ -291,86 +282,77 @@ export const PANE_REOPEN_TRIGGER_PX = 24;
 
 /** True when a resize drag's target width pct is small enough to auto-close. */
 export function dragClosesPane(targetPct: number): boolean {
-  return targetPct < PANE_CLOSE_AT_PCT;
+    return targetPct < PANE_CLOSE_AT_PCT;
 }
 
 /** True when an inward reopen-grab drag (px) is far enough to reopen a pane. */
 export function dragReopensPane(inwardPx: number): boolean {
-  return inwardPx >= PANE_REOPEN_TRIGGER_PX;
+    return inwardPx >= PANE_REOPEN_TRIGGER_PX;
 }
 
 /** Coerce an unknown parsed value into a valid `ReaderPrefs` (never throws). */
 export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
-  if (value === null || typeof value !== "object") {
-    return { ...DEFAULT_READER_PREFS };
-  }
+    if (value === null || typeof value !== "object") {
+        return { ...DEFAULT_READER_PREFS };
+    }
 
-  const v = value as Partial<Record<keyof ReaderPrefs, unknown>>;
+    const v = value as Partial<Record<keyof ReaderPrefs, unknown>>;
 
-  const fontId =
-    typeof v.fontId === "string" && READER_FONTS.some((f) => f.id === v.fontId)
-      ? v.fontId
-      : DEFAULT_FONT_ID;
+    const fontId =
+        typeof v.fontId === "string" && READER_FONTS.some((f) => f.id === v.fontId)
+            ? v.fontId
+            : DEFAULT_FONT_ID;
 
-  const sizePct =
-    typeof v.sizePct === "number" && Number.isFinite(v.sizePct)
-      ? snapReaderPct(v.sizePct)
-      : DEFAULT_SIZE_PCT;
+    const sizePct =
+        typeof v.sizePct === "number" && Number.isFinite(v.sizePct)
+            ? snapReaderPct(v.sizePct)
+            : DEFAULT_SIZE_PCT;
 
-  const readSpacingPct = (
-    key: keyof Pick<
-      ReaderPrefs,
-      | "lineSpacingPct"
-      | "paragraphSpacingPct"
-      | "letterSpacingPct"
-      | "wordSpacingPct"
-    >,
-    fallback: number,
-  ) =>
-    typeof v[key] === "number" && Number.isFinite(v[key])
-      ? snapReaderPct(v[key], READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)
-      : fallback;
+    const readSpacingPct = (
+        key: keyof Pick<
+            ReaderPrefs,
+            "lineSpacingPct" | "paragraphSpacingPct" | "letterSpacingPct" | "wordSpacingPct"
+        >,
+        fallback: number,
+    ) =>
+        typeof v[key] === "number" && Number.isFinite(v[key])
+            ? snapReaderPct(v[key], READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)
+            : fallback;
 
-  const navWidthPct =
-    typeof v.navWidthPct === "number" && Number.isFinite(v.navWidthPct)
-      ? clampNavWidthPct(v.navWidthPct)
-      : DEFAULT_NAV_WIDTH_PCT;
+    const navWidthPct =
+        typeof v.navWidthPct === "number" && Number.isFinite(v.navWidthPct)
+            ? clampNavWidthPct(v.navWidthPct)
+            : DEFAULT_NAV_WIDTH_PCT;
 
-  const commentWidthPct =
-    typeof v.commentWidthPct === "number" && Number.isFinite(v.commentWidthPct)
-      ? clampCommentWidthPct(v.commentWidthPct)
-      : DEFAULT_COMMENT_WIDTH_PCT;
+    const commentWidthPct =
+        typeof v.commentWidthPct === "number" && Number.isFinite(v.commentWidthPct)
+            ? clampCommentWidthPct(v.commentWidthPct)
+            : DEFAULT_COMMENT_WIDTH_PCT;
 
-  return {
-    fontId,
-    sizePct,
-    lineSpacingPct: readSpacingPct("lineSpacingPct", DEFAULT_LINE_SPACING_PCT),
-    paragraphSpacingPct: readSpacingPct(
-      "paragraphSpacingPct",
-      DEFAULT_PARAGRAPH_SPACING_PCT,
-    ),
-    letterSpacingPct: readSpacingPct(
-      "letterSpacingPct",
-      DEFAULT_LETTER_SPACING_PCT,
-    ),
-    wordSpacingPct: readSpacingPct("wordSpacingPct", DEFAULT_WORD_SPACING_PCT),
-    showNav: typeof v.showNav === "boolean" ? v.showNav : true,
-    showOutline: typeof v.showOutline === "boolean" ? v.showOutline : true,
-    showComments: typeof v.showComments === "boolean" ? v.showComments : true,
-    navWidthPct,
-    commentWidthPct,
-  };
+    return {
+        fontId,
+        sizePct,
+        lineSpacingPct: readSpacingPct("lineSpacingPct", DEFAULT_LINE_SPACING_PCT),
+        paragraphSpacingPct: readSpacingPct("paragraphSpacingPct", DEFAULT_PARAGRAPH_SPACING_PCT),
+        letterSpacingPct: readSpacingPct("letterSpacingPct", DEFAULT_LETTER_SPACING_PCT),
+        wordSpacingPct: readSpacingPct("wordSpacingPct", DEFAULT_WORD_SPACING_PCT),
+        showNav: typeof v.showNav === "boolean" ? v.showNav : true,
+        showOutline: typeof v.showOutline === "boolean" ? v.showOutline : true,
+        showComments: typeof v.showComments === "boolean" ? v.showComments : true,
+        navWidthPct,
+        commentWidthPct,
+    };
 }
 
 /** Best-effort JSON read from `key`; null on missing / unreadable / bad JSON. */
 function readStored(key: string): unknown {
-  try {
-    const raw = localStorage.getItem(key);
+    try {
+        const raw = localStorage.getItem(key);
 
-    return raw !== null && raw !== "" ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+        return raw !== null && raw !== "" ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -379,10 +361,10 @@ function readStored(key: string): unknown {
  * (panel visibility + nav width). Missing / unreadable halves use defaults.
  */
 export function readReaderPrefs(scope: DraftScope): ReaderPrefs {
-  return sanitizeReaderPrefs({
-    ...(readStored(READER_TYPE_KEY) as Record<string, unknown> | null),
-    ...(readStored(layoutStorageKey(scope)) as Record<string, unknown> | null),
-  });
+    return sanitizeReaderPrefs({
+        ...(readStored(READER_TYPE_KEY) as Record<string, unknown> | null),
+        ...(readStored(layoutStorageKey(scope)) as Record<string, unknown> | null),
+    });
 }
 
 /**
@@ -390,31 +372,31 @@ export function readReaderPrefs(scope: DraftScope): ReaderPrefs {
  * key, the layout half to this surface's own key. Silent on failure.
  */
 export function writeReaderPrefs(scope: DraftScope, prefs: ReaderPrefs): void {
-  try {
-    localStorage.setItem(
-      READER_TYPE_KEY,
-      JSON.stringify({
-        fontId: prefs.fontId,
-        sizePct: prefs.sizePct,
-        lineSpacingPct: prefs.lineSpacingPct,
-        paragraphSpacingPct: prefs.paragraphSpacingPct,
-        letterSpacingPct: prefs.letterSpacingPct,
-        wordSpacingPct: prefs.wordSpacingPct,
-      }),
-    );
-    localStorage.setItem(
-      layoutStorageKey(scope),
-      JSON.stringify({
-        showNav: prefs.showNav,
-        showOutline: prefs.showOutline,
-        showComments: prefs.showComments,
-        navWidthPct: prefs.navWidthPct,
-        commentWidthPct: prefs.commentWidthPct,
-      }),
-    );
-  } catch {
-    /* ignore */
-  }
+    try {
+        localStorage.setItem(
+            READER_TYPE_KEY,
+            JSON.stringify({
+                fontId: prefs.fontId,
+                sizePct: prefs.sizePct,
+                lineSpacingPct: prefs.lineSpacingPct,
+                paragraphSpacingPct: prefs.paragraphSpacingPct,
+                letterSpacingPct: prefs.letterSpacingPct,
+                wordSpacingPct: prefs.wordSpacingPct,
+            }),
+        );
+        localStorage.setItem(
+            layoutStorageKey(scope),
+            JSON.stringify({
+                showNav: prefs.showNav,
+                showOutline: prefs.showOutline,
+                showComments: prefs.showComments,
+                navWidthPct: prefs.navWidthPct,
+                commentWidthPct: prefs.commentWidthPct,
+            }),
+        );
+    } catch {
+        /* ignore */
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -443,17 +425,17 @@ const READER_SCROLLBAR_W = 12;
  * hiding a panel as well as by widening.
  */
 export function readerMinWidth(
-  navShown: boolean,
-  commentsShown: boolean,
-  navWidthPct: number = DEFAULT_NAV_WIDTH_PCT,
-  commentWidthPct: number = DEFAULT_COMMENT_WIDTH_PCT,
+    navShown: boolean,
+    commentsShown: boolean,
+    navWidthPct: number = DEFAULT_NAV_WIDTH_PCT,
+    commentWidthPct: number = DEFAULT_COMMENT_WIDTH_PCT,
 ): number {
-  return (
-    (navShown ? Math.round((READER_NAV_W * navWidthPct) / 100) : 0) +
-    READER_DOC_MIN_W +
-    READER_SCROLLBAR_W +
-    (commentsShown ? Math.round((READER_RAIL_W * commentWidthPct) / 100) : 0)
-  );
+    return (
+        (navShown ? Math.round((READER_NAV_W * navWidthPct) / 100) : 0) +
+        READER_DOC_MIN_W +
+        READER_SCROLLBAR_W +
+        (commentsShown ? Math.round((READER_RAIL_W * commentWidthPct) / 100) : 0)
+    );
 }
 
 /**
@@ -464,16 +446,12 @@ export function readerMinWidth(
  * this so the resize STOPS at the edge of the usable space instead of tipping
  * the whole reader into the too-narrow ("more room needed") state.
  */
-export function maxRailWidthPct(
-  frameWidth: number,
-  otherRailWidthPx: number,
-): number {
-  const availPx =
-    frameWidth - READER_DOC_MIN_W - READER_SCROLLBAR_W - otherRailWidthPx;
+export function maxRailWidthPct(frameWidth: number, otherRailWidthPx: number): number {
+    const availPx = frameWidth - READER_DOC_MIN_W - READER_SCROLLBAR_W - otherRailWidthPx;
 
-  // Floor so the resolved pixel width can't round back up over the available
-  // space and re-trip the too-narrow guard by a pixel.
-  const pct = Math.floor((availPx / READER_NAV_W) * 100);
+    // Floor so the resolved pixel width can't round back up over the available
+    // space and re-trip the too-narrow guard by a pixel.
+    const pct = Math.floor((availPx / READER_NAV_W) * 100);
 
-  return Math.max(NAV_WIDTH_MIN_PCT, Math.min(NAV_WIDTH_MAX_PCT, pct));
+    return Math.max(NAV_WIDTH_MIN_PCT, Math.min(NAV_WIDTH_MAX_PCT, pct));
 }

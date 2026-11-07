@@ -24,47 +24,47 @@ export type TelemetrySeverity = "info" | "warning" | "error" | "critical";
  * boot by the entry point and updated when the active repo/PR changes.
  */
 export interface TelemetryContext {
-  /** Logical surface emitting the event, e.g. "pr-tab" | "documents-hub". */
-  appName?: string;
-  /** Extension version (from the build). */
-  appVersion?: string;
-  /**
-   * Installed extension version as reported by the host at runtime
-   * (`SDK.getExtensionContext().version`), e.g. `0.0.1.<timestamp>`. Unlike
-   * {@link appVersion} — the base version baked into the bundle at build time
-   * (always `0.0.1`) — this is the actual Marketplace build the user is running,
-   * so triage can tell a report on a stale deployment from one on the current
-   * build. The trailing segment is a Unix publish timestamp.
-   */
-  extensionVersion?: string;
-  /** Deployment ring: "production" | "development". For prod/dev slicing. */
-  environment?: string;
-  /** ADO project GUID. Never the project name. */
-  projectId?: string;
-  /** ADO repository GUID. Never the repo name. */
-  repositoryId?: string;
-  /** Pseudonymised pull-request id (hashed, not the raw integer). */
-  pullRequestId?: string;
-  /** Random per-load id correlating a single session's events. Not a user id. */
-  sessionId?: string;
+    /** Logical surface emitting the event, e.g. "pr-tab" | "documents-hub". */
+    appName?: string;
+    /** Extension version (from the build). */
+    appVersion?: string;
+    /**
+     * Installed extension version as reported by the host at runtime
+     * (`SDK.getExtensionContext().version`), e.g. `0.0.1.<timestamp>`. Unlike
+     * {@link appVersion} — the base version baked into the bundle at build time
+     * (always `0.0.1`) — this is the actual Marketplace build the user is running,
+     * so triage can tell a report on a stale deployment from one on the current
+     * build. The trailing segment is a Unix publish timestamp.
+     */
+    extensionVersion?: string;
+    /** Deployment ring: "production" | "development". For prod/dev slicing. */
+    environment?: string;
+    /** ADO project GUID. Never the project name. */
+    projectId?: string;
+    /** ADO repository GUID. Never the repo name. */
+    repositoryId?: string;
+    /** Pseudonymised pull-request id (hashed, not the raw integer). */
+    pullRequestId?: string;
+    /** Random per-load id correlating a single session's events. Not a user id. */
+    sessionId?: string;
 }
 
 export interface TelemetryEvent {
-  /** Dotted event name from the catalog in `events.ts`. */
-  name: string;
-  properties?: TelemetryProperties;
-  measurements?: TelemetryMeasurements;
+    /** Dotted event name from the catalog in `events.ts`. */
+    name: string;
+    properties?: TelemetryProperties;
+    measurements?: TelemetryMeasurements;
 }
 
 export interface TelemetryExceptionInfo {
-  /** The thrown value. Stack/message are extracted; never sent verbatim as a property. */
-  error: unknown;
-  severity?: TelemetrySeverity;
-  /** Where the error was observed, e.g. "global.onerror" or "Create comment". */
-  source?: string;
-  /** Whether the app caught and recovered from this (true) or it was uncaught (false). */
-  handled?: boolean;
-  properties?: TelemetryProperties;
+    /** The thrown value. Stack/message are extracted; never sent verbatim as a property. */
+    error: unknown;
+    severity?: TelemetrySeverity;
+    /** Where the error was observed, e.g. "global.onerror" or "Create comment". */
+    source?: string;
+    /** Whether the app caught and recovered from this (true) or it was uncaught (false). */
+    handled?: boolean;
+    properties?: TelemetryProperties;
 }
 
 /**
@@ -73,10 +73,10 @@ export interface TelemetryExceptionInfo {
  * may never break the host app.
  */
 export interface TelemetrySink {
-  readonly name: string;
-  init(context: TelemetryContext): void;
-  setContext(context: TelemetryContext): void;
-  trackEvent(event: TelemetryEvent, context: TelemetryContext): void;
-  trackException(info: TelemetryExceptionInfo, context: TelemetryContext): void;
-  flush(): void | Promise<void>;
+    readonly name: string;
+    init(context: TelemetryContext): void;
+    setContext(context: TelemetryContext): void;
+    trackEvent(event: TelemetryEvent, context: TelemetryContext): void;
+    trackException(info: TelemetryExceptionInfo, context: TelemetryContext): void;
+    flush(): void | Promise<void>;
 }

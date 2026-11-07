@@ -17,34 +17,34 @@ export const BOOT_ERROR_HEADING = "Markdown Review failed to load";
  * markup in `detail` renders as literal characters, not nodes.
  */
 export function renderBootErrorInto(root: HTMLElement, detail: string): void {
-  // Clear any partially-rendered content.
-  root.replaceChildren();
+    // Clear any partially-rendered content.
+    root.replaceChildren();
 
-  const container = document.createElement("div");
-  container.style.padding = "24px";
-  container.style.fontFamily = "'Segoe UI', system-ui, sans-serif";
-  container.style.color = "#cd3030";
+    const container = document.createElement("div");
+    container.style.padding = "24px";
+    container.style.fontFamily = "'Segoe UI', system-ui, sans-serif";
+    container.style.color = "#cd3030";
 
-  const heading = document.createElement("h2");
-  heading.style.marginTop = "0";
-  heading.textContent = BOOT_ERROR_HEADING;
+    const heading = document.createElement("h2");
+    heading.style.marginTop = "0";
+    heading.textContent = BOOT_ERROR_HEADING;
 
-  const pre = document.createElement("pre");
-  pre.style.whiteSpace = "pre-wrap";
-  pre.style.background = "#f7f7f7";
-  pre.style.padding = "12px";
-  pre.style.borderRadius = "4px";
-  pre.style.color = "#333";
-  // The one line that matters: textContent, so `detail` can never inject nodes.
-  pre.textContent = detail;
+    const pre = document.createElement("pre");
+    pre.style.whiteSpace = "pre-wrap";
+    pre.style.background = "#f7f7f7";
+    pre.style.padding = "12px";
+    pre.style.borderRadius = "4px";
+    pre.style.color = "#333";
+    // The one line that matters: textContent, so `detail` can never inject nodes.
+    pre.textContent = detail;
 
-  container.append(heading, pre);
-  root.append(container);
+    container.append(heading, pre);
+    root.append(container);
 }
 
 /** Reduce an unknown thrown value to the detail string shown in the panel. */
 export function bootErrorDetail(err: unknown): string {
-  if (!(err instanceof Error)) return String(err);
+    if (!(err instanceof Error)) return String(err);
 
-  return err.stack !== undefined && err.stack !== "" ? err.stack : err.message;
+    return err.stack !== undefined && err.stack !== "" ? err.stack : err.message;
 }

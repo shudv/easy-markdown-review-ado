@@ -14,56 +14,58 @@ import type { DocumentsAppProps } from "./documentsAppProps";
  * the choice (deep link > last-visited > first repo on page one).
  */
 export function useSelectedRepo(
-  repos: DocRepo[],
-  initialRepoId: string,
-  onSelectRepo: DocumentsAppProps["onSelectRepo"],
-  onLoadRepoDetails: DocumentsAppProps["onLoadRepoDetails"],
+    repos: DocRepo[],
+    initialRepoId: string,
+    onSelectRepo: DocumentsAppProps["onSelectRepo"],
+    onLoadRepoDetails: DocumentsAppProps["onLoadRepoDetails"],
 ) {
-  const [selectedRepoId, setSelectedRepoId] = useState<string>(initialRepoId);
+    const [selectedRepoId, setSelectedRepoId] = useState<string>(initialRepoId);
 
-  // Resolve the active repo from the accumulated `repos` union. The last
-  // resolution is kept in state so that when the picker's *view* is narrowed by
-  // a server-side filter — which can momentarily drop the selected repo out of
-  // the visible list — the open document doesn't snap to `repos[0]`. The
-  // selected repo only changes when the user actually picks a new one.
-  // Re-resolved during render whenever `repos` or the selected id changes.
-  const [resolution, setResolution] = useState(() => ({
-    repos,
-    repoId: selectedRepoId,
-    repo: pickSelectedRepo(repos, selectedRepoId, undefined),
-  }));
+    // Resolve the active repo from the accumulated `repos` union. The last
+    // resolution is kept in state so that when the picker's *view* is narrowed by
+    // a server-side filter — which can momentarily drop the selected repo out of
+    // the visible list — the open document doesn't snap to `repos[0]`. The
+    // selected repo only changes when the user actually picks a new one.
+    // Re-resolved during render whenever `repos` or the selected id changes.
+    const [resolution, setResolution] = useState(() => ({
+        repos,
+        repoId: selectedRepoId,
+        repo: pickSelectedRepo(repos, selectedRepoId, undefined),
+    }));
 
-  let selectedRepo = resolution.repo;
+    let selectedRepo = resolution.repo;
 
-  if (resolution.repos !== repos || resolution.repoId !== selectedRepoId) {
-    selectedRepo = pickSelectedRepo(repos, selectedRepoId, resolution.repo);
-    setResolution({ repos, repoId: selectedRepoId, repo: selectedRepo });
-  }
-
-  const handleSelectRepo = useCallback(
-    (repoId: string) => {
-      setSelectedRepoId(repoId);
-      onSelectRepo?.(repoId);
-      track(events.repoSwitched());
-    },
-    [onSelectRepo],
-  );
-
-  // Keep telemetry's de-identified repo context in sync with the active repo
-  // (covers both the initial selection and later switches). Repo *id* only.
-  useEffect(() => {
-    if (selectedRepoId) setTelemetryContext({ repositoryId: selectedRepoId });
-  }, [selectedRepoId]);
-
-  // Trigger the host's deferred per-repo PR-routing load on selection. The
-  // host dedupes, so firing on every selectedRepo change is safe.
-  useEffect(() => {
-    if (!selectedRepo || !onLoadRepoDetails) return;
-
-    if (selectedRepo.detailsLoaded === false) {
-      void onLoadRepoDetails(selectedRepo.id);
+    if (resolution.repos !== repos || resolution.repoId !== selectedRepoId) {
+        selectedRepo = pickSelectedRepo(repos, selectedRepoId, resolution.repo);
+        setResolution({ repos, repoId: selectedRepoId, repo: selectedRepo });
     }
-  }, [selectedRepo, onLoadRepoDetails]);
 
-  return { selectedRepoId, selectedRepo, handleSelectRepo };
+    const handleSelectRepo = useCallback(
+        (repoId: string) => {
+            setSelectedRepoId(repoId);
+            onSelectRepo?.(repoId);
+            track(events.repoSwitched());
+        },
+        [onSelectRepo],
+    );
+
+    // Keep telemetry's de-identified repo context in sync with the active repo
+    // (covers both the initial selection and later switches). Repo *id* only.
+    useEffect(() => {
+        if (selectedRepoId) {
+            setTelemetryContext({ repositoryId: selectedRepoId });
+        }
+    }, [selectedRepoId]);
+
+    // Trigger the host's deferred per-repo PR-routing load on selection. The
+    // host dedupes, so firing on every selectedRepo change is safe.
+    useEffect(() => {
+        if (!selectedRepo || !onLoadRepoDetails) return;
+
+        if (selectedRepo.detailsLoaded === false) {
+            void onLoadRepoDetails(selectedRepo.id);
+        }
+    }, [selectedRepo, onLoadRepoDetails]);
+
+    return { selectedRepoId, selectedRepo, handleSelectRepo };
 }

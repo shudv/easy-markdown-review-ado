@@ -24,22 +24,22 @@
  * before any response — a pure connection failure).
  */
 export function extractStatus(err: unknown): number | undefined {
-  if (typeof err !== "object" || err === null) return undefined;
-  const e = err as Record<string, unknown>;
-  const candidates = [e.status, e.statusCode, e.httpStatusCode];
+    if (typeof err !== "object" || err === null) return undefined;
+    const e = err as Record<string, unknown>;
+    const candidates = [e.status, e.statusCode, e.httpStatusCode];
 
-  for (const c of candidates) {
-    if (typeof c === "number" && c >= 100 && c <= 599) return c;
-  }
+    for (const c of candidates) {
+        if (typeof c === "number" && c >= 100 && c <= 599) return c;
+    }
 
-  // Some SDK errors nest the status inside a `serverError` payload.
-  const serverError = e.serverError as Record<string, unknown> | undefined;
+    // Some SDK errors nest the status inside a `serverError` payload.
+    const serverError = e.serverError as Record<string, unknown> | undefined;
 
-  if (serverError && typeof serverError.status === "number") {
-    return serverError.status;
-  }
+    if (serverError && typeof serverError.status === "number") {
+        return serverError.status;
+    }
 
-  return undefined;
+    return undefined;
 }
 
 /**
@@ -48,10 +48,10 @@ export function extractStatus(err: unknown): number | undefined {
  * result.
  */
 export function isAbortError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const e = err as Record<string, unknown>;
+    if (typeof err !== "object" || err === null) return false;
+    const e = err as Record<string, unknown>;
 
-  return e.name === "AbortError" || e.code === 20 /* DOMException.ABORT_ERR */;
+    return e.name === "AbortError" || e.code === 20 /* DOMException.ABORT_ERR */;
 }
 
 /**
@@ -63,14 +63,14 @@ export function isAbortError(err: unknown): boolean {
  * as retryable.
  */
 const TERMINAL_STATUSES = new Set<number>([
-  400, // Bad Request
-  404, // Not Found
-  405, // Method Not Allowed
-  409, // Conflict
-  410, // Gone
-  412, // Precondition Failed
-  422, // Unprocessable Entity
-  501, // Not Implemented
+    400, // Bad Request
+    404, // Not Found
+    405, // Method Not Allowed
+    409, // Conflict
+    410, // Gone
+    412, // Precondition Failed
+    422, // Unprocessable Entity
+    501, // Not Implemented
 ]);
 
 /**
@@ -79,13 +79,13 @@ const TERMINAL_STATUSES = new Set<number>([
  * signals it did NOT act on the request (throttled / temporarily unavailable).
  */
 const TRANSIENT_STATUSES = new Set<number>([
-  408, // Request Timeout
-  425, // Too Early
-  429, // Too Many Requests
-  500, // Internal Server Error
-  502, // Bad Gateway
-  503, // Service Unavailable
-  504, // Gateway Timeout
+    408, // Request Timeout
+    425, // Too Early
+    429, // Too Many Requests
+    500, // Internal Server Error
+    502, // Bad Gateway
+    503, // Service Unavailable
+    504, // Gateway Timeout
 ]);
 
 /**
@@ -94,8 +94,8 @@ const TRANSIENT_STATUSES = new Set<number>([
  * cannot produce a second write.
  */
 const WRITE_SAFE_TRANSIENT_STATUSES = new Set<number>([
-  429, // Too Many Requests — rejected pre-processing
-  503, // Service Unavailable — rejected pre-processing
+    429, // Too Many Requests — rejected pre-processing
+    503, // Service Unavailable — rejected pre-processing
 ]);
 
 export type RetryMode = "read" | "write";
@@ -109,57 +109,57 @@ export type RetryMode = "read" | "write";
  *             did not mutate server state, to avoid duplicate writes).
  */
 export function isRetryable(err: unknown, mode: RetryMode): boolean {
-  // Caller cancelled — never retry.
-  if (isAbortError(err)) return false;
+    // Caller cancelled — never retry.
+    if (isAbortError(err)) return false;
 
-  // Domain-specific classifiers may know that retrying is futile even when
-  // the original transport failure looked transient.
-  if (
-    typeof err === "object" &&
-    err !== null &&
-    (err as { retryable?: unknown }).retryable === false
-  ) {
-    return false;
-  }
+    // Domain-specific classifiers may know that retrying is futile even when
+    // the original transport failure looked transient.
+    if (
+        typeof err === "object" &&
+        err !== null &&
+        (err as { retryable?: unknown }).retryable === false
+    ) {
+        return false;
+    }
 
-  const status = extractStatus(err);
+    const status = extractStatus(err);
 
-  if (mode === "write") {
-    // Writes are non-idempotent, so we only retry when the server PROVABLY did
-    // not act on the request — otherwise a retry risks a duplicate mutation:
-    //   - 429 / 503: throttled / unavailable, rejected pre-processing.
-    //   - 401 / 403: rejected at the auth layer before any handler ran (the
-    //     transient `TF400813` case). Reissuing is safe.
-    // Everything else is refused, including:
-    //   - `status === undefined` (connection reset / lost response): AMBIGUOUS.
-    //     The write may have committed server-side with only the response lost,
-    //     so retrying could duplicate it.
-    //   - ambiguous 5xx (500/502/504) after the request was sent.
-    //   - terminal 4xx verdicts.
-    if (status === undefined) return false;
+    if (mode === "write") {
+        // Writes are non-idempotent, so we only retry when the server PROVABLY did
+        // not act on the request — otherwise a retry risks a duplicate mutation:
+        //   - 429 / 503: throttled / unavailable, rejected pre-processing.
+        //   - 401 / 403: rejected at the auth layer before any handler ran (the
+        //     transient `TF400813` case). Reissuing is safe.
+        // Everything else is refused, including:
+        //   - `status === undefined` (connection reset / lost response): AMBIGUOUS.
+        //     The write may have committed server-side with only the response lost,
+        //     so retrying could duplicate it.
+        //   - ambiguous 5xx (500/502/504) after the request was sent.
+        //   - terminal 4xx verdicts.
+        if (status === undefined) return false;
+        if (TERMINAL_STATUSES.has(status)) return false;
+        if (WRITE_SAFE_TRANSIENT_STATUSES.has(status)) return true;
+
+        return status === 401 || status === 403;
+    }
+
+    // Reads are idempotent — safe to retry broadly.
+
+    // No status at all → the request never got a response (connection reset,
+    // DNS, offline, CORS preflight failure). Safe to retry for a read.
+    if (status === undefined) return true;
+
+    // Definitive server verdict — never retry.
     if (TERMINAL_STATUSES.has(status)) return false;
-    if (WRITE_SAFE_TRANSIENT_STATUSES.has(status)) return true;
 
-    return status === 401 || status === 403;
-  }
+    // Reads: retry the explicit transient set…
+    if (TRANSIENT_STATUSES.has(status)) return true;
+    // …plus transient auth blips (401/403) that motivated this work.
+    if (status === 401 || status === 403) return true;
 
-  // Reads are idempotent — safe to retry broadly.
-
-  // No status at all → the request never got a response (connection reset,
-  // DNS, offline, CORS preflight failure). Safe to retry for a read.
-  if (status === undefined) return true;
-
-  // Definitive server verdict — never retry.
-  if (TERMINAL_STATUSES.has(status)) return false;
-
-  // Reads: retry the explicit transient set…
-  if (TRANSIENT_STATUSES.has(status)) return true;
-  // …plus transient auth blips (401/403) that motivated this work.
-  if (status === 401 || status === 403) return true;
-
-  // Any other classified status (e.g. a 3xx that surfaced as an error, or an
-  // unusual 4xx we didn't enumerate) is treated as terminal for reads: we only
-  // retry things we have positive reason to believe are transient once a
-  // concrete status is present.
-  return false;
+    // Any other classified status (e.g. a 3xx that surfaced as an error, or an
+    // unusual 4xx we didn't enumerate) is treated as terminal for reads: we only
+    // retry things we have positive reason to believe are transient once a
+    // concrete status is present.
+    return false;
 }

@@ -12,41 +12,36 @@ import { SessionNotice } from "./SessionNotice";
  * writes.
  */
 function refreshingMonitor(opts: {
-  reloadHost?: () => void;
-  heldWrites?: number;
-  quiet?: boolean;
+    reloadHost?: () => void;
+    heldWrites?: number;
+    quiet?: boolean;
 }): AdoSessionMonitor {
-  const monitor = new AdoSessionMonitor();
-  if (opts.reloadHost) monitor.configure({ reloadHost: opts.reloadHost });
-  monitor.report(
-    new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
-    "poll",
-  );
-  if (opts.quiet !== true) monitor.surface("refresh");
+    const monitor = new AdoSessionMonitor();
+    if (opts.reloadHost) monitor.configure({ reloadHost: opts.reloadHost });
+    monitor.report(new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000), "poll");
+    if (opts.quiet !== true) monitor.surface("refresh");
 
-  for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
-    void monitor
-      .holdWrite(() =>
-        Promise.reject(
-          new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
-        ),
-      )
-      .catch(() => {});
-  }
+    for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
+        void monitor
+            .holdWrite(() =>
+                Promise.reject(new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000)),
+            )
+            .catch(() => {});
+    }
 
-  return monitor;
+    return monitor;
 }
 
 const meta = {
-  title: "Components/SessionNotice",
-  component: SessionNotice,
-  decorators: [
-    (Story: ComponentType) => (
-      <div className="emr-app" style={{ width: 640 }}>
-        <Story />
-      </div>
-    ),
-  ],
+    title: "Components/SessionNotice",
+    component: SessionNotice,
+    decorators: [
+        (Story: ComponentType) => (
+            <div className="emr-app" style={{ width: 640 }}>
+                <Story />
+            </div>
+        ),
+    ],
 } satisfies Meta<typeof SessionNotice>;
 
 export default meta;
@@ -55,10 +50,10 @@ type Story = StoryObj<typeof meta>;
 
 /** Nothing renders while the session is live. */
 export const Live: Story = {
-  args: { monitor: new AdoSessionMonitor() },
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
-  },
+    args: { monitor: new AdoSessionMonitor() },
+    play: async ({ canvasElement }) => {
+        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+    },
 };
 
 /**
@@ -66,86 +61,82 @@ export const Live: Story = {
  * only once the user waits on the session (here: a manual refresh).
  */
 export const QuietUntilUserWaits: Story = {
-  args: { monitor: refreshingMonitor({ reloadHost: fn(), quiet: true }) },
-  play: async ({ args, canvasElement }) => {
-    await expect(args.monitor!.getSnapshot().state).toBe("refreshing");
-    await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
-    args.monitor!.claimPollFailure(
-      new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
-      true,
-    );
-    await waitFor(() =>
-      expect(within(canvasElement).getByRole("status").textContent).toContain(
-        "this usually fixes itself",
-      ),
-    );
-  },
+    args: { monitor: refreshingMonitor({ reloadHost: fn(), quiet: true }) },
+    play: async ({ args, canvasElement }) => {
+        await expect(args.monitor!.getSnapshot().state).toBe("refreshing");
+        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+        args.monitor!.claimPollFailure(
+            new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
+            true,
+        );
+        await waitFor(() =>
+            expect(within(canvasElement).getByRole("status").textContent).toContain(
+                "this usually fixes itself",
+            ),
+        );
+    },
 };
 
 const reloadSpy = fn();
 
 /** Reconnecting: says it clears by itself; "Reload page" is a quiet link. */
 export const Reconnecting: Story = {
-  args: { monitor: refreshingMonitor({ reloadHost: reloadSpy }) },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("status").textContent).toBe(
-      "Reconnecting to Azure DevOps — this usually fixes itself within a few minutes.Reload page",
-    );
-    await userEvent.click(canvas.getByRole("button", { name: "Reload page" }));
-    await expect(reloadSpy).toHaveBeenCalled();
-    // A reload is only requested; the notice stays until the session is back.
-    await expect(canvas.getByRole("status")).toBeTruthy();
-    args.monitor!.noteSuccess(Date.now());
-    await waitFor(() =>
-      expect(canvasElement.querySelector(".emr-toast")).toBeNull(),
-    );
-  },
+    args: { monitor: refreshingMonitor({ reloadHost: reloadSpy }) },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("status").textContent).toBe(
+            "Reconnecting to Azure DevOps — this usually fixes itself within a few minutes.Reload page",
+        );
+        await userEvent.click(canvas.getByRole("button", { name: "Reload page" }));
+        await expect(reloadSpy).toHaveBeenCalled();
+        // A reload is only requested; the notice stays until the session is back.
+        await expect(canvas.getByRole("status")).toBeTruthy();
+        args.monitor!.noteSuccess(Date.now());
+        await waitFor(() => expect(canvasElement.querySelector(".emr-toast")).toBeNull());
+    },
 };
 
 /** With a change waiting: reassures it will be saved; hides the reload link, which would drop it. */
 export const ChangeWaiting: Story = {
-  args: { monitor: refreshingMonitor({ heldWrites: 1, reloadHost: fn() }) },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await waitFor(() =>
-      expect(canvas.getByRole("status").textContent).toBe(
-        "Reconnecting to Azure DevOps — your changes will be saved automatically.",
-      ),
-    );
-    await expect(canvas.queryByRole("button")).toBeNull();
-  },
+    args: { monitor: refreshingMonitor({ heldWrites: 1, reloadHost: fn() }) },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await waitFor(() =>
+            expect(canvas.getByRole("status").textContent).toBe(
+                "Reconnecting to Azure DevOps — your changes will be saved automatically.",
+            ),
+        );
+        await expect(canvas.queryByRole("button")).toBeNull();
+    },
 };
 
 /** An open inline edit (not kept as a draft) hides the reload link too. */
 export const UnsavedEditOpen: Story = {
-  args: {
-    monitor: refreshingMonitor({ reloadHost: fn() }),
-    reloadAllowed: false,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("status").textContent).toContain(
-      "this usually fixes itself",
-    );
-    await expect(canvas.queryByRole("button")).toBeNull();
-  },
+    args: {
+        monitor: refreshingMonitor({ reloadHost: fn() }),
+        reloadAllowed: false,
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("status").textContent).toContain("this usually fixes itself");
+        await expect(canvas.queryByRole("button")).toBeNull();
+    },
 };
 
 /** Without a wired host reload there is no reload link at all. */
 export const NoReloadAvailable: Story = {
-  args: { monitor: refreshingMonitor({}) },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("status")).toBeTruthy();
-    await expect(canvas.queryByRole("button")).toBeNull();
-  },
+    args: { monitor: refreshingMonitor({}) },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("status")).toBeTruthy();
+        await expect(canvas.queryByRole("button")).toBeNull();
+    },
 };
 
 /** Defaults to the app-wide monitor, which is live in the story harness. */
 export const AppWideMonitor: Story = {
-  args: {},
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
-  },
+    args: {},
+    play: async ({ canvasElement }) => {
+        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+    },
 };

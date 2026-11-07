@@ -11,14 +11,8 @@
 // The sink is enabled only when a non-empty ingestion key is injected at build
 // time (see ../config.ts). With no key, the facade never constructs this sink.
 
-import {
-  AppInsightsCore,
-  type IExtendedConfiguration,
-} from "@microsoft/1ds-core-js";
-import {
-  PostChannel,
-  type IChannelConfiguration,
-} from "@microsoft/1ds-post-js";
+import { AppInsightsCore, type IExtendedConfiguration } from "@microsoft/1ds-core-js";
+import { PostChannel, type IChannelConfiguration } from "@microsoft/1ds-post-js";
 
 import type { TelemetryBuildConfig } from "../buildConfig";
 import { redactText } from "../sanitize";
@@ -26,24 +20,24 @@ import { describeError } from "../errorShape";
 import { EVENT } from "../events";
 import { toTableEvent } from "../eventTables";
 import type {
-  TelemetryContext,
-  TelemetryEvent,
-  TelemetryExceptionInfo,
-  TelemetrySink,
+    TelemetryContext,
+    TelemetryEvent,
+    TelemetryExceptionInfo,
+    TelemetrySink,
 } from "../types";
 
 /** Flatten the ambient context into a property bag for a 1DS item. */
 function contextData(ctx: TelemetryContext): Record<string, unknown> {
-  return {
-    appName: ctx.appName,
-    appVersion: ctx.appVersion,
-    extensionVersion: ctx.extensionVersion,
-    environment: ctx.environment,
-    projectId: ctx.projectId,
-    repositoryId: ctx.repositoryId,
-    pullRequestId: ctx.pullRequestId,
-    sessionId: ctx.sessionId,
-  };
+    return {
+        appName: ctx.appName,
+        appVersion: ctx.appVersion,
+        extensionVersion: ctx.extensionVersion,
+        environment: ctx.environment,
+        projectId: ctx.projectId,
+        repositoryId: ctx.repositoryId,
+        pullRequestId: ctx.pullRequestId,
+        sessionId: ctx.sessionId,
+    };
 }
 
 /**
@@ -51,105 +45,101 @@ function contextData(ctx: TelemetryContext): Record<string, unknown> {
  * the caller can fall back gracefully. Returning null (rather than throwing)
  * keeps telemetry strictly best-effort.
  */
-export function createOneDsSink(
-  config: TelemetryBuildConfig,
-): TelemetrySink | null {
-  let core: AppInsightsCore;
+export function createOneDsSink(config: TelemetryBuildConfig): TelemetrySink | null {
+    let core: AppInsightsCore;
 
-  try {
-    core = new AppInsightsCore();
-    const channel = new PostChannel();
+    try {
+        core = new AppInsightsCore();
+        const channel = new PostChannel();
 
-    const channelConfig: IChannelConfiguration = {
-      // Route to a custom collector if one was provided at build time.
-      ...(config.endpoint !== undefined && config.endpoint !== ""
-        ? { overrideEndpointUrl: config.endpoint }
-        : {}),
-    };
-
-    const coreConfig: IExtendedConfiguration = {
-      instrumentationKey: config.key,
-      channels: [[channel]],
-      extensionConfig: {
-        [channel.identifier]: channelConfig,
-      },
-      // Privacy belt-and-braces: the facade already de-identifies payloads, but
-      // keep cookies and any ambient PII collection off at the SDK level too.
-      disableCookiesUsage: true,
-    };
-
-    core.initialize(coreConfig, []);
-  } catch {
-    return null;
-  }
-
-  return {
-    name: "1ds",
-    init() {
-      // Initialisation already happened above; nothing further to do.
-    },
-    setContext() {
-      // Context is attached per-event via contextData(), so no-op here.
-    },
-    trackEvent(event: TelemetryEvent, ctx: TelemetryContext) {
-      try {
-        // Context is spread last so a stray event property/measurement can
-        // never overwrite an authoritative context field (e.g. sessionId).
-        const data = {
-          ...event.properties,
-          ...event.measurements,
-          ...contextData(ctx),
+        const channelConfig: IChannelConfiguration = {
+            // Route to a custom collector if one was provided at build time.
+            ...(config.endpoint !== undefined && config.endpoint !== ""
+                ? { overrideEndpointUrl: config.endpoint }
+                : {}),
         };
 
-        // The telemetry layer owns table routing (see ../eventTables.ts).
-        core.track(toTableEvent(event.name, data));
-      } catch {
-        /* never throw from telemetry */
-      }
-    },
-    trackException(info: TelemetryExceptionInfo, ctx: TelemetryContext) {
-      try {
-        const shape = describeError(info.error);
-        // Exception text leaks paths/usernames/URLs — scrub before egress.
-        const message = redactText(shape.message, 256);
-        const stack = redactText(shape.stack, 2048);
-
-        // Custom properties first; the computed exception fields and context
-        // are spread after so a property named `message`/`stack`/etc. or a
-        // collision with a context key cannot clobber the real value.
-        const data = {
-          ...info.properties,
-          ...contextData(ctx),
-          message,
-          stack,
-          // Structured, privacy-safe failure discriminators (added so a
-          // TF400813/401 is diagnosable in the backend without a live repro).
-          ...(shape.name !== undefined && shape.name !== ""
-            ? { errorName: shape.name }
-            : {}),
-          ...(shape.httpStatus !== undefined
-            ? { httpStatus: shape.httpStatus }
-            : {}),
-          ...(shape.adoErrorCode !== undefined && shape.adoErrorCode !== ""
-            ? { adoErrorCode: shape.adoErrorCode }
-            : {}),
-          severity: info.severity ?? "error",
-          source: info.source,
-          handled: info.handled ?? true,
+        const coreConfig: IExtendedConfiguration = {
+            instrumentationKey: config.key,
+            channels: [[channel]],
+            extensionConfig: {
+                [channel.identifier]: channelConfig,
+            },
+            // Privacy belt-and-braces: the facade already de-identifies payloads, but
+            // keep cookies and any ambient PII collection off at the SDK level too.
+            disableCookiesUsage: true,
         };
 
-        // Exceptions are a Diagnostics signal, routed like any other event.
-        core.track(toTableEvent(EVENT.AppException, data));
-      } catch {
-        /* never throw from telemetry */
-      }
-    },
-    flush() {
-      try {
-        core.flush();
-      } catch {
-        /* never throw from telemetry */
-      }
-    },
-  };
+        core.initialize(coreConfig, []);
+    } catch {
+        return null;
+    }
+
+    return {
+        name: "1ds",
+        init() {
+            // Initialisation already happened above; nothing further to do.
+        },
+        setContext() {
+            // Context is attached per-event via contextData(), so no-op here.
+        },
+        trackEvent(event: TelemetryEvent, ctx: TelemetryContext) {
+            try {
+                // Context is spread last so a stray event property/measurement can
+                // never overwrite an authoritative context field (e.g. sessionId).
+                const data = {
+                    ...event.properties,
+                    ...event.measurements,
+                    ...contextData(ctx),
+                };
+
+                // The telemetry layer owns table routing (see ../eventTables.ts).
+                core.track(toTableEvent(event.name, data));
+            } catch {
+                /* never throw from telemetry */
+            }
+        },
+        trackException(info: TelemetryExceptionInfo, ctx: TelemetryContext) {
+            try {
+                const shape = describeError(info.error);
+                // Exception text leaks paths/usernames/URLs — scrub before egress.
+                const message = redactText(shape.message, 256);
+                const stack = redactText(shape.stack, 2048);
+
+                // Custom properties first; the computed exception fields and context
+                // are spread after so a property named `message`/`stack`/etc. or a
+                // collision with a context key cannot clobber the real value.
+                const data = {
+                    ...info.properties,
+                    ...contextData(ctx),
+                    message,
+                    stack,
+                    // Structured, privacy-safe failure discriminators (added so a
+                    // TF400813/401 is diagnosable in the backend without a live repro).
+                    ...(shape.name !== undefined && shape.name !== ""
+                        ? { errorName: shape.name }
+                        : {}),
+                    ...(shape.httpStatus !== undefined ? { httpStatus: shape.httpStatus } : {}),
+                    ...(shape.adoErrorCode !== undefined && shape.adoErrorCode !== ""
+                        ? { adoErrorCode: shape.adoErrorCode }
+                        : {}),
+                    severity: info.severity ?? "error",
+                    source: info.source,
+                    handled: info.handled ?? true,
+                };
+
+                // Exceptions are a Diagnostics signal, routed like any other event.
+                core.track(toTableEvent(EVENT.AppException, data));
+            } catch {
+                /* never throw from telemetry */
+            }
+        },
+        flush() {
+            try {
+                core.flush();
+            } catch {
+                /* never throw from telemetry */
+            }
+        },
+    };
 }

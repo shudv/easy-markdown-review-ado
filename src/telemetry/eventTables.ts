@@ -21,14 +21,13 @@ import { EVENT } from "./events";
 
 /** The thematic destination tables. The value is the 1DS envelope event name. */
 export const TELEMETRY_TABLE = {
-  /** Deliberate, user-triggered actions. */
-  Engagement: "Engagement",
-  /** Non-triggered app/system observations (health, performance, reliability). */
-  Diagnostics: "Diagnostics",
+    /** Deliberate, user-triggered actions. */
+    Engagement: "Engagement",
+    /** Non-triggered app/system observations (health, performance, reliability). */
+    Diagnostics: "Diagnostics",
 } as const;
 
-export type TelemetryTable =
-  (typeof TELEMETRY_TABLE)[keyof typeof TELEMETRY_TABLE];
+export type TelemetryTable = (typeof TELEMETRY_TABLE)[keyof typeof TELEMETRY_TABLE];
 
 /**
  * Event names that describe app/system health rather than a deliberate user
@@ -44,26 +43,26 @@ export type TelemetryTable =
  * call-site or schema churn.
  */
 const DIAGNOSTIC_EVENTS: ReadonlySet<string> = new Set([
-  EVENT.AppLoaded,
-  EVENT.AuthFailure,
-  EVENT.AuthSessionRefresh,
-  EVENT.DiagramRenderIssue,
-  EVENT.AppException,
+    EVENT.AppLoaded,
+    EVENT.AuthFailure,
+    EVENT.AuthSessionRefresh,
+    EVENT.DiagramRenderIssue,
+    EVENT.AppException,
 ]);
 
 /** Resolve the thematic table an event belongs to. */
 export function tableFor(eventName: string): TelemetryTable {
-  return DIAGNOSTIC_EVENTS.has(eventName)
-    ? TELEMETRY_TABLE.Diagnostics
-    : TELEMETRY_TABLE.Engagement;
+    return DIAGNOSTIC_EVENTS.has(eventName)
+        ? TELEMETRY_TABLE.Diagnostics
+        : TELEMETRY_TABLE.Engagement;
 }
 
 /** A single event ready to hand to `core.track`: envelope name + property bag. */
 export interface OneDsTableEvent {
-  /** 1DS envelope event name — this is what becomes the destination table. */
-  name: string;
-  /** Custom property bag (already sanitised + context-merged by the caller). */
-  data: Record<string, unknown>;
+    /** 1DS envelope event name — this is what becomes the destination table. */
+    name: string;
+    /** Custom property bag (already sanitised + context-merged by the caller). */
+    data: Record<string, unknown>;
 }
 
 /**
@@ -74,8 +73,8 @@ export interface OneDsTableEvent {
  * of the same name can never clobber the authoritative event name.
  */
 export function toTableEvent(
-  eventName: string,
-  data: Readonly<Record<string, unknown>>,
+    eventName: string,
+    data: Readonly<Record<string, unknown>>,
 ): OneDsTableEvent {
-  return { name: tableFor(eventName), data: { ...data, name: eventName } };
+    return { name: tableFor(eventName), data: { ...data, name: eventName } };
 }

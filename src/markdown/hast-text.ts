@@ -8,15 +8,15 @@ import type { Element } from "hast";
  * Returns the empty string when there are none.
  */
 export function extractHastText(node: Element): string {
-  let out = "";
+    let out = "";
 
-  for (const child of node.children) {
-    if (child.type === "text") {
-      out += child.value;
-    } else if (child.type === "element") {
-      out += extractHastText(child);
+    for (const child of node.children) {
+        if (child.type === "text") {
+            out += child.value;
+        } else if (child.type === "element") {
+            out += extractHastText(child);
+        }
     }
-  }
 
-  return out;
+    return out;
 }

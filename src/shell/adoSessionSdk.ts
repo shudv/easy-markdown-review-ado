@@ -3,10 +3,7 @@
 // stays SDK-free and unit-testable.
 
 import * as SDK from "azure-devops-extension-sdk";
-import {
-  CommonServiceIds,
-  type IHostNavigationService,
-} from "azure-devops-extension-api";
+import { CommonServiceIds, type IHostNavigationService } from "azure-devops-extension-api";
 
 import { adoSession } from "./adoSession";
 import { hostTokenOverride } from "./hostToken";
@@ -17,23 +14,23 @@ import { hostTokenOverride } from "./hostToken";
  * substitute a synthetic dead-window token (see hostToken.ts).
  */
 export function readHostToken(): Promise<string> {
-  const fake = hostTokenOverride();
+    const fake = hostTokenOverride();
 
-  return fake !== null ? Promise.resolve(fake) : SDK.getAccessToken();
+    return fake !== null ? Promise.resolve(fake) : SDK.getAccessToken();
 }
 
 /** Call once after `SDK.ready()` in each entry point. */
 export function configureAdoSession(): void {
-  adoSession.configure({
-    getToken: readHostToken,
-    // Reload the HOST page (not our iframe): only that makes the host
-    // re-initialise its token cache and mint a fresh token immediately.
-    reloadHost: async () => {
-      const nav = await SDK.getService<IHostNavigationService>(
-        CommonServiceIds.HostNavigationService,
-      );
+    adoSession.configure({
+        getToken: readHostToken,
+        // Reload the HOST page (not our iframe): only that makes the host
+        // re-initialise its token cache and mint a fresh token immediately.
+        reloadHost: async () => {
+            const nav = await SDK.getService<IHostNavigationService>(
+                CommonServiceIds.HostNavigationService,
+            );
 
-      nav.reload();
-    },
-  });
+            nav.reload();
+        },
+    });
 }

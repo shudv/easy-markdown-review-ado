@@ -15,72 +15,66 @@ export type CommentFilterMode = "all" | "active" | "resolved" | "mine";
 
 /** The modes in display order — the single source of truth for iteration. */
 export const COMMENT_FILTER_MODES: readonly CommentFilterMode[] = [
-  "all",
-  "active",
-  "resolved",
-  "mine",
+    "all",
+    "active",
+    "resolved",
+    "mine",
 ];
 
 /** Human-readable label per mode (used by the trigger + menu items). */
 const FILTER_LABELS: Record<CommentFilterMode, string> = {
-  all: "All comments",
-  active: "Active comments",
-  resolved: "Resolved comments",
-  mine: "My comments",
+    all: "All comments",
+    active: "Active comments",
+    resolved: "Resolved comments",
+    mine: "My comments",
 };
 
 /** The menu/trigger label for a mode. */
 export function commentFilterLabel(mode: CommentFilterMode): string {
-  return FILTER_LABELS[mode];
+    return FILTER_LABELS[mode];
 }
 
 /** Per-bucket thread counts shown beside each filter option. */
 export interface CommentFilterCounts {
-  all: number;
-  active: number;
-  resolved: number;
-  mine: number;
+    all: number;
+    active: number;
+    resolved: number;
+    mine: number;
 }
 
 /** True when the current user authored at least one comment in the thread. */
-export function isMyThread(
-  thread: CommentThread,
-  currentUserId: string,
-): boolean {
-  return thread.comments.some((c) => c.author.id === currentUserId);
+export function isMyThread(thread: CommentThread, currentUserId: string): boolean {
+    return thread.comments.some((c) => c.author.id === currentUserId);
 }
 
 /** Whether a thread is visible under the given filter mode. */
 export function threadMatchesFilter(
-  thread: CommentThread,
-  mode: CommentFilterMode,
-  currentUserId: string,
+    thread: CommentThread,
+    mode: CommentFilterMode,
+    currentUserId: string,
 ): boolean {
-  switch (mode) {
-    case "all":
-      return true;
-    case "active":
-      return !isResolvedLike(thread.status);
-    case "resolved":
-      return isResolvedLike(thread.status);
-    case "mine":
-      return isMyThread(thread, currentUserId);
-  }
+    switch (mode) {
+        case "all":
+            return true;
+        case "active":
+            return !isResolvedLike(thread.status);
+        case "resolved":
+            return isResolvedLike(thread.status);
+        case "mine":
+            return isMyThread(thread, currentUserId);
+    }
 }
 
 /** Match a thread by any comment body or author name, case-insensitively. */
-export function threadMatchesQuery(
-  thread: CommentThread,
-  query: string,
-): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return true;
+export function threadMatchesQuery(thread: CommentThread, query: string): boolean {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return true;
 
-  return thread.comments.some(
-    (comment) =>
-      comment.bodyMarkdown.toLowerCase().includes(normalized) ||
-      comment.author.displayName.toLowerCase().includes(normalized),
-  );
+    return thread.comments.some(
+        (comment) =>
+            comment.bodyMarkdown.toLowerCase().includes(normalized) ||
+            comment.author.displayName.toLowerCase().includes(normalized),
+    );
 }
 
 /**
@@ -88,14 +82,14 @@ export function threadMatchesQuery(
  * query, the selected status/author filter controls visibility as usual.
  */
 export function threadVisibleForCommentView(
-  thread: CommentThread,
-  query: string,
-  mode: CommentFilterMode,
-  currentUserId: string,
+    thread: CommentThread,
+    query: string,
+    mode: CommentFilterMode,
+    currentUserId: string,
 ): boolean {
-  return query.trim()
-    ? threadMatchesQuery(thread, query)
-    : threadMatchesFilter(thread, mode, currentUserId);
+    return query.trim()
+        ? threadMatchesQuery(thread, query)
+        : threadMatchesFilter(thread, mode, currentUserId);
 }
 
 /**
@@ -104,40 +98,38 @@ export function threadVisibleForCommentView(
  * the totals overlap exactly like Azure DevOps's own filter counts.
  */
 export function countCommentFilters(
-  threads: readonly CommentThread[],
-  currentUserId: string,
+    threads: readonly CommentThread[],
+    currentUserId: string,
 ): CommentFilterCounts {
-  const counts: CommentFilterCounts = {
-    all: 0,
-    active: 0,
-    resolved: 0,
-    mine: 0,
-  };
+    const counts: CommentFilterCounts = {
+        all: 0,
+        active: 0,
+        resolved: 0,
+        mine: 0,
+    };
 
-  for (const t of threads) {
-    counts.all += 1;
-    if (isResolvedLike(t.status)) counts.resolved += 1;
-    else counts.active += 1;
-    if (isMyThread(t, currentUserId)) counts.mine += 1;
-  }
+    for (const t of threads) {
+        counts.all += 1;
+        if (isResolvedLike(t.status)) counts.resolved += 1;
+        else counts.active += 1;
+        if (isMyThread(t, currentUserId)) counts.mine += 1;
+    }
 
-  return counts;
+    return counts;
 }
 
 /** One entry in the filter menu: the mode, its label, and its live count. */
 export interface CommentFilterOption {
-  mode: CommentFilterMode;
-  label: string;
-  count: number;
+    mode: CommentFilterMode;
+    label: string;
+    count: number;
 }
 
 /** Build the ordered menu options from a set of counts. */
-export function commentFilterOptions(
-  counts: CommentFilterCounts,
-): CommentFilterOption[] {
-  return COMMENT_FILTER_MODES.map((mode) => ({
-    mode,
-    label: FILTER_LABELS[mode],
-    count: counts[mode],
-  }));
+export function commentFilterOptions(counts: CommentFilterCounts): CommentFilterOption[] {
+    return COMMENT_FILTER_MODES.map((mode) => ({
+        mode,
+        label: FILTER_LABELS[mode],
+        count: counts[mode],
+    }));
 }

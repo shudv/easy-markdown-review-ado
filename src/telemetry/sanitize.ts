@@ -15,38 +15,38 @@
 
 /** Substrings that, when present in a property key, indicate likely PII. */
 const DENY_KEY_SUBSTRINGS = [
-  "name",
-  "path",
-  "email",
-  "mail",
-  "title",
-  "url",
-  "uri",
-  "href",
-  "body",
-  "text",
-  "content",
-  "markdown",
-  "display",
-  "author",
-  "user",
-  "message",
-  "query",
-  "term",
-  "keyword",
-  "file",
-  "comment",
-  "description",
-  "summary",
-  "token",
-  "secret",
-  "address",
-  "phone",
+    "name",
+    "path",
+    "email",
+    "mail",
+    "title",
+    "url",
+    "uri",
+    "href",
+    "body",
+    "text",
+    "content",
+    "markdown",
+    "display",
+    "author",
+    "user",
+    "message",
+    "query",
+    "term",
+    "keyword",
+    "file",
+    "comment",
+    "description",
+    "summary",
+    "token",
+    "secret",
+    "address",
+    "phone",
 ];
 
 /** Keys explicitly allowed even though a deny-substring matches (id-shaped). */
 const ALLOW_KEYS = new Set<string>([
-  // none today; reserved so we can permit e.g. an enum named "filetype" later
+    // none today; reserved so we can permit e.g. an enum named "filetype" later
 ]);
 
 /**
@@ -57,14 +57,14 @@ const ALLOW_KEYS = new Set<string>([
  * `user.id` or `phoneNumber` — that could re-identify a person.
  */
 const MEASUREMENT_DENY_SUBSTRINGS = [
-  "user",
-  "email",
-  "mail",
-  "phone",
-  "address",
-  "ssn",
-  "secret",
-  "token",
+    "user",
+    "email",
+    "mail",
+    "phone",
+    "address",
+    "ssn",
+    "secret",
+    "token",
 ];
 
 const MAX_VALUE_LENGTH = 64;
@@ -80,58 +80,56 @@ const VALID_KEY_RE = /^[a-z][\w.]*$/i;
 type SafeValue = string | number | boolean;
 
 export interface SanitizeResult {
-  clean: Record<string, SafeValue>;
-  /** Keys that were dropped, for dev-time diagnostics. Never sent. */
-  dropped: string[];
+    clean: Record<string, SafeValue>;
+    /** Keys that were dropped, for dev-time diagnostics. Never sent. */
+    dropped: string[];
 }
 
 function keyLooksSafe(key: string): boolean {
-  if (ALLOW_KEYS.has(key)) return true;
-  if (!VALID_KEY_RE.test(key)) return false;
-  const lower = key.toLowerCase();
+    if (ALLOW_KEYS.has(key)) return true;
+    if (!VALID_KEY_RE.test(key)) return false;
+    const lower = key.toLowerCase();
 
-  return !DENY_KEY_SUBSTRINGS.some((bad) => lower.includes(bad));
+    return !DENY_KEY_SUBSTRINGS.some((bad) => lower.includes(bad));
 }
 
 function valueLooksSafe(value: unknown): value is SafeValue {
-  if (typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
+    if (typeof value === "boolean") return true;
+    if (typeof value === "number") return Number.isFinite(value);
 
-  if (typeof value === "string") {
-    if (value.length === 0 || value.length > MAX_VALUE_LENGTH) return false;
-    if (EMAIL_RE.test(value)) return false;
-    if (PATH_LIKE_RE.test(value)) return false;
-    if (WHITESPACE_RE.test(value)) return false;
-    if (DOMAIN_LIKE_RE.test(value)) return false;
+    if (typeof value === "string") {
+        if (value.length === 0 || value.length > MAX_VALUE_LENGTH) return false;
+        if (EMAIL_RE.test(value)) return false;
+        if (PATH_LIKE_RE.test(value)) return false;
+        if (WHITESPACE_RE.test(value)) return false;
+        if (DOMAIN_LIKE_RE.test(value)) return false;
 
-    return true;
-  }
+        return true;
+    }
 
-  return false;
+    return false;
 }
 
 /**
  * Filter a property bag down to provably-safe key/value pairs. Unsafe entries
  * are dropped silently (their keys are reported in `dropped` for dev logging).
  */
-export function sanitizeProperties(
-  props: Record<string, unknown> | undefined,
-): SanitizeResult {
-  const clean: Record<string, SafeValue> = {};
-  const dropped: string[] = [];
-  if (!props) return { clean, dropped };
+export function sanitizeProperties(props: Record<string, unknown> | undefined): SanitizeResult {
+    const clean: Record<string, SafeValue> = {};
+    const dropped: string[] = [];
+    if (!props) return { clean, dropped };
 
-  for (const [key, value] of Object.entries(props)) {
-    if (value === null || value === undefined) continue;
+    for (const [key, value] of Object.entries(props)) {
+        if (value === null || value === undefined) continue;
 
-    if (keyLooksSafe(key) && valueLooksSafe(value)) {
-      clean[key] = value;
-    } else {
-      dropped.push(key);
+        if (keyLooksSafe(key) && valueLooksSafe(value)) {
+            clean[key] = value;
+        } else {
+            dropped.push(key);
+        }
     }
-  }
 
-  return { clean, dropped };
+    return { clean, dropped };
 }
 
 /**
@@ -141,24 +139,24 @@ export function sanitizeProperties(
  * re-identify.
  */
 export function sanitizeMeasurements(
-  measurements: Record<string, number> | undefined,
+    measurements: Record<string, number> | undefined,
 ): Record<string, number> {
-  const clean: Record<string, number> = {};
-  if (!measurements) return clean;
+    const clean: Record<string, number> = {};
+    if (!measurements) return clean;
 
-  for (const [key, value] of Object.entries(measurements)) {
-    if (!VALID_KEY_RE.test(key)) continue;
-    if (typeof value !== "number" || !Number.isFinite(value)) continue;
-    const lower = key.toLowerCase();
+    for (const [key, value] of Object.entries(measurements)) {
+        if (!VALID_KEY_RE.test(key)) continue;
+        if (typeof value !== "number" || !Number.isFinite(value)) continue;
+        const lower = key.toLowerCase();
 
-    if (MEASUREMENT_DENY_SUBSTRINGS.some((bad) => lower.includes(bad))) {
-      continue;
+        if (MEASUREMENT_DENY_SUBSTRINGS.some((bad) => lower.includes(bad))) {
+            continue;
+        }
+
+        clean[key] = value;
     }
 
-    clean[key] = value;
-  }
-
-  return clean;
+    return clean;
 }
 
 // Redaction patterns for free-text error fields. Order matters: e-mail and URL
@@ -176,21 +174,18 @@ const POSIX_PATH_RE = /(?:\/[\w.@-]+){2,}/g;
  * names in a stack are code, not PII, so they survive. Returns `undefined`
  * unchanged so callers can pass an absent stack straight through.
  */
-export function redactText(
-  input: string | undefined,
-  maxLength = 1024,
-): string | undefined {
-  if (input === undefined) return undefined;
+export function redactText(input: string | undefined, maxLength = 1024): string | undefined {
+    if (input === undefined) return undefined;
 
-  let out = input
-    .replace(EMAIL_GLOBAL_RE, "[email]")
-    .replace(URL_GLOBAL_RE, "[url]")
-    .replace(WIN_PATH_RE, "[path]")
-    .replace(POSIX_PATH_RE, "[path]");
+    let out = input
+        .replace(EMAIL_GLOBAL_RE, "[email]")
+        .replace(URL_GLOBAL_RE, "[url]")
+        .replace(WIN_PATH_RE, "[path]")
+        .replace(POSIX_PATH_RE, "[path]");
 
-  if (out.length > maxLength) out = `${out.slice(0, maxLength)}…`;
+    if (out.length > maxLength) out = `${out.slice(0, maxLength)}…`;
 
-  return out;
+    return out;
 }
 
 /**
@@ -200,21 +195,15 @@ export function redactText(
  * aggregate analytics. Use only for low-sensitivity ids, never for secrets.
  */
 export function hashId(value: string | number): string {
-  const str = String(value);
-  let hash = 0x811c9dc5;
+    const str = String(value);
+    let hash = 0x811c9dc5;
 
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    // 32-bit FNV prime multiply via shifts to stay in integer range.
-    hash =
-      (hash +
-        ((hash << 1) +
-          (hash << 4) +
-          (hash << 7) +
-          (hash << 8) +
-          (hash << 24))) >>>
-      0;
-  }
+    for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i);
+        // 32-bit FNV prime multiply via shifts to stay in integer range.
+        hash =
+            (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+    }
 
-  return hash.toString(16).padStart(8, "0");
+    return hash.toString(16).padStart(8, "0");
 }

@@ -1,22 +1,18 @@
 // Shell navigation rail with its resize handle.
 
-import type {
-  ReactElement,
-  ReactNode,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 
 type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface NavPaneProps {
-  /** False in single-file panels, which drop the navigation rail entirely. */
-  shown: boolean;
-  /** The DocNav rendered in the rail. */
-  children: ReactNode;
-  onResizeStart: PointerHandler;
-  onResizeMove: PointerHandler;
-  onResizeEnd: () => void;
-  onResetWidth: () => void;
+    /** False in single-file panels, which drop the navigation rail entirely. */
+    shown: boolean;
+    /** The DocNav rendered in the rail. */
+    children: ReactNode;
+    onResizeStart: PointerHandler;
+    onResizeMove: PointerHandler;
+    onResizeEnd: () => void;
+    onResetWidth: () => void;
 }
 
 /**
@@ -27,25 +23,25 @@ interface NavPaneProps {
  * panels drop it entirely.
  */
 export function NavPane(props: Readonly<NavPaneProps>): ReactElement | null {
-  if (!props.shown) return null;
+    if (!props.shown) return null;
 
-  return (
-    <div className="emr-body__nav">
-      {props.children}
-      {/* Resize affordance on the rail's right border: drag to set
+    return (
+        <div className="emr-body__nav">
+            {props.children}
+            {/* Resize affordance on the rail's right border: drag to set
           the nav width, double-click to reset. Mouse enhancement
           (hidden from AT) — the toolbar's Navigation-width stepper is
           the keyboard-accessible equivalent. */}
-      <div
-        className="emr-nav-resize"
-        title="Drag to resize navigation (double-click to reset)"
-        aria-hidden="true"
-        onPointerDown={props.onResizeStart}
-        onPointerMove={props.onResizeMove}
-        onPointerUp={props.onResizeEnd}
-        onPointerCancel={props.onResizeEnd}
-        onDoubleClick={props.onResetWidth}
-      />
-    </div>
-  );
+            <div
+                className="emr-nav-resize"
+                title="Drag to resize navigation (double-click to reset)"
+                aria-hidden="true"
+                onPointerDown={props.onResizeStart}
+                onPointerMove={props.onResizeMove}
+                onPointerUp={props.onResizeEnd}
+                onPointerCancel={props.onResizeEnd}
+                onDoubleClick={props.onResetWidth}
+            />
+        </div>
+    );
 }

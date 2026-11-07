@@ -22,15 +22,15 @@ let currentDark: boolean | null = null;
  * (returns silently).
  */
 export function setMarkdownDark(isDark: boolean): void {
-  if (typeof document === "undefined") return;
-  if (currentDark === isDark && styleEl?.isConnected) return;
+    if (typeof document === "undefined") return;
+    if (currentDark === isDark && styleEl?.isConnected) return;
 
-  if (!styleEl?.isConnected) {
-    styleEl = document.createElement("style");
-    styleEl.setAttribute("data-emr-markdown-theme", "");
-    document.head.appendChild(styleEl);
-  }
+    if (!styleEl?.isConnected) {
+        styleEl = document.createElement("style");
+        styleEl.setAttribute("data-emr-markdown-theme", "");
+        document.head.appendChild(styleEl);
+    }
 
-  styleEl.textContent = isDark ? darkCss : lightCss;
-  currentDark = isDark;
+    styleEl.textContent = isDark ? darkCss : lightCss;
+    currentDark = isDark;
 }

@@ -6,11 +6,7 @@ import type { FileInfo } from "../types";
 import type { DocRepo, FolderListing } from "../shell/types";
 import { trackUserFacingError } from "../telemetry";
 import { planRootAutoExpand } from "./autoExpand";
-import {
-  mergeFolderListing,
-  seedLazyTree,
-  type LazyTreeState,
-} from "./documentsApp.helpers";
+import { mergeFolderListing, seedLazyTree, type LazyTreeState } from "./documentsApp.helpers";
 import type { DocumentsAppProps } from "./documentsAppProps";
 
 /**
@@ -21,97 +17,88 @@ import type { DocumentsAppProps } from "./documentsAppProps";
  * re-fetch already-expanded folders.
  */
 export function useLazyTree(
-  selectedRepo: DocRepo | undefined,
-  onExpandFolder: DocumentsAppProps["onExpandFolder"],
+    selectedRepo: DocRepo | undefined,
+    onExpandFolder: DocumentsAppProps["onExpandFolder"],
 ) {
-  const [lazyTreeByRepo, setLazyTreeByRepo] = useState<
-    Map<string, LazyTreeState>
-  >(() => {
-    const m = new Map<string, LazyTreeState>();
+    const [lazyTreeByRepo, setLazyTreeByRepo] = useState<Map<string, LazyTreeState>>(() => {
+        const m = new Map<string, LazyTreeState>();
 
-    // Only seed once the repo's listing has loaded. The paginated picker hands
-    // us a content-less skeleton (`detailsLoaded === false`) first; seeding
-    // from it would cache an empty tree that never refreshes when the real
-    // root listing arrives, leaving the nav permanently empty.
-    if (selectedRepo && selectedRepo.detailsLoaded !== false) {
-      m.set(selectedRepo.id, seedLazyTree(selectedRepo));
+        // Only seed once the repo's listing has loaded. The paginated picker hands
+        // us a content-less skeleton (`detailsLoaded === false`) first; seeding
+        // from it would cache an empty tree that never refreshes when the real
+        // root listing arrives, leaving the nav permanently empty.
+        if (selectedRepo && selectedRepo.detailsLoaded !== false) {
+            m.set(selectedRepo.id, seedLazyTree(selectedRepo));
+        }
+
+        return m;
+    });
+
+    // Seed an entry the first time we see a repo with loaded content; existing
+    // entries are the cache. Skeletons (`detailsLoaded === false`) are skipped so
+    // the entry is first created from the real listing, not the empty skeleton.
+    // Adjusted during render whenever the `selectedRepo` object changes (not on
+    // every render: a refresh deletes the entry and must re-seed from the
+    // refreshed repo object, not the stale one).
+    const [seededFor, setSeededFor] = useState(selectedRepo);
+
+    if (seededFor !== selectedRepo) {
+        setSeededFor(selectedRepo);
+
+        if (
+            selectedRepo &&
+            selectedRepo.detailsLoaded !== false &&
+            !lazyTreeByRepo.has(selectedRepo.id)
+        ) {
+            const next = new Map(lazyTreeByRepo);
+            next.set(selectedRepo.id, seedLazyTree(selectedRepo));
+            setLazyTreeByRepo(next);
+        }
     }
 
-    return m;
-  });
+    // The cached entry for the active repo (falls back to `selectedRepo.files`
+    // at read sites while a repo has no entry yet, e.g. a skeleton or mid-refresh).
+    const lazyTree = selectedRepo ? lazyTreeByRepo.get(selectedRepo.id) : undefined;
 
-  // Seed an entry the first time we see a repo with loaded content; existing
-  // entries are the cache. Skeletons (`detailsLoaded === false`) are skipped so
-  // the entry is first created from the real listing, not the empty skeleton.
-  // Adjusted during render whenever the `selectedRepo` object changes (not on
-  // every render: a refresh deletes the entry and must re-seed from the
-  // refreshed repo object, not the stale one).
-  const [seededFor, setSeededFor] = useState(selectedRepo);
+    // Lazy folder expansion handler: returns the raw payload to the DocNav and
+    // merges the result into the per-repo `lazyTreeByRepo` entry.
+    const handleExpandFolder = useCallback(
+        async (path: string): Promise<{ files: FileInfo[]; folders: string[] } | null> => {
+            if (!selectedRepo || !onExpandFolder) return null;
+            const repoIdAtCall = selectedRepo.id;
+            let payload: FolderListing;
 
-  if (seededFor !== selectedRepo) {
-    setSeededFor(selectedRepo);
+            try {
+                payload = await onExpandFolder(repoIdAtCall, path);
+            } catch (err) {
+                console.warn("[documents-hub] expand folder failed:", path, err);
+                trackUserFacingError({
+                    error: err,
+                    source: "DocumentsApp.navigation",
+                    operation: "folder-expand",
+                    impact: "action-failed",
+                });
 
-    if (
-      selectedRepo &&
-      selectedRepo.detailsLoaded !== false &&
-      !lazyTreeByRepo.has(selectedRepo.id)
-    ) {
-      const next = new Map(lazyTreeByRepo);
-      next.set(selectedRepo.id, seedLazyTree(selectedRepo));
-      setLazyTreeByRepo(next);
-    }
-  }
+                return null;
+            }
 
-  // The cached entry for the active repo (falls back to `selectedRepo.files`
-  // at read sites while a repo has no entry yet, e.g. a skeleton or mid-refresh).
-  const lazyTree = selectedRepo
-    ? lazyTreeByRepo.get(selectedRepo.id)
-    : undefined;
+            setLazyTreeByRepo((curr) => {
+                const entry = curr.get(repoIdAtCall);
+                if (!entry) return curr;
+                const next = new Map(curr);
+                next.set(repoIdAtCall, mergeFolderListing(entry, repoIdAtCall, path, payload));
 
-  // Lazy folder expansion handler: returns the raw payload to the DocNav and
-  // merges the result into the per-repo `lazyTreeByRepo` entry.
-  const handleExpandFolder = useCallback(
-    async (
-      path: string,
-    ): Promise<{ files: FileInfo[]; folders: string[] } | null> => {
-      if (!selectedRepo || !onExpandFolder) return null;
-      const repoIdAtCall = selectedRepo.id;
-      let payload: FolderListing;
+                return next;
+            });
 
-      try {
-        payload = await onExpandFolder(repoIdAtCall, path);
-      } catch (err) {
-        console.warn("[documents-hub] expand folder failed:", path, err);
-        trackUserFacingError({
-          error: err,
-          source: "DocumentsApp.navigation",
-          operation: "folder-expand",
-          impact: "action-failed",
-        });
+            return payload;
+        },
+        [selectedRepo, onExpandFolder],
+    );
 
-        return null;
-      }
+    useRootAutoExpand(selectedRepo, lazyTree, onExpandFolder, handleExpandFolder);
 
-      setLazyTreeByRepo((curr) => {
-        const entry = curr.get(repoIdAtCall);
-        if (!entry) return curr;
-        const next = new Map(curr);
-        next.set(
-          repoIdAtCall,
-          mergeFolderListing(entry, repoIdAtCall, path, payload),
-        );
-
-        return next;
-      });
-
-      return payload;
-    },
-    [selectedRepo, onExpandFolder],
-  );
-
-  useRootAutoExpand(selectedRepo, lazyTree, onExpandFolder, handleExpandFolder);
-
-  return { lazyTree, setLazyTreeByRepo, handleExpandFolder };
+    return { lazyTree, setLazyTreeByRepo, handleExpandFolder };
 }
 
 // After a repo's listing loads, auto-expand its folders so the markdown
@@ -122,32 +109,32 @@ export function useLazyTree(
 // document appears, then stops. Deduped + budgeted via refs so it never
 // re-fetches a folder or walks a large repo without bound.
 function useRootAutoExpand(
-  selectedRepo: DocRepo | undefined,
-  lazyTree: LazyTreeState | undefined,
-  onExpandFolder: DocumentsAppProps["onExpandFolder"],
-  handleExpandFolder: (path: string) => Promise<unknown>,
+    selectedRepo: DocRepo | undefined,
+    lazyTree: LazyTreeState | undefined,
+    onExpandFolder: DocumentsAppProps["onExpandFolder"],
+    handleExpandFolder: (path: string) => Promise<unknown>,
 ): void {
-  const autoExpandedFoldersRef = useRef<Set<string>>(new Set());
-  const autoExpandUsedRef = useRef<Map<string, number>>(new Map());
-  useEffect(() => {
-    if (!selectedRepo || !onExpandFolder) return;
-    if (selectedRepo.detailsLoaded === false) return;
-    const tree = lazyTree;
-    if (!tree || tree.unloadedFolders.length === 0) return;
-    const repoId = selectedRepo.id;
+    const autoExpandedFoldersRef = useRef<Set<string>>(new Set());
+    const autoExpandUsedRef = useRef<Map<string, number>>(new Map());
+    useEffect(() => {
+        if (!selectedRepo || !onExpandFolder) return;
+        if (selectedRepo.detailsLoaded === false) return;
+        const tree = lazyTree;
+        if (!tree || tree.unloadedFolders.length === 0) return;
+        const repoId = selectedRepo.id;
 
-    const plan = planRootAutoExpand({
-      repoId,
-      fileCount: tree.files.length,
-      unloadedFolders: tree.unloadedFolders,
-      expandedKeys: autoExpandedFoldersRef.current,
-      used: autoExpandUsedRef.current.get(repoId) ?? 0,
-      max: 40, // safety cap per repo
-    });
+        const plan = planRootAutoExpand({
+            repoId,
+            fileCount: tree.files.length,
+            unloadedFolders: tree.unloadedFolders,
+            expandedKeys: autoExpandedFoldersRef.current,
+            used: autoExpandUsedRef.current.get(repoId) ?? 0,
+            max: 40, // safety cap per repo
+        });
 
-    if (plan.folders.length === 0) return;
-    for (const key of plan.keys) autoExpandedFoldersRef.current.add(key);
-    autoExpandUsedRef.current.set(repoId, plan.used);
-    for (const folder of plan.folders) void handleExpandFolder(folder);
-  }, [selectedRepo, lazyTree, onExpandFolder, handleExpandFolder]);
+        if (plan.folders.length === 0) return;
+        for (const key of plan.keys) autoExpandedFoldersRef.current.add(key);
+        autoExpandUsedRef.current.set(repoId, plan.used);
+        for (const folder of plan.folders) void handleExpandFolder(folder);
+    }, [selectedRepo, lazyTree, onExpandFolder, handleExpandFolder]);
 }

@@ -21,19 +21,19 @@ import type { Element, ElementContent, Root } from "hast";
 
 /** A single `key: value(s)` pair lifted from the frontmatter block. */
 export interface FrontmatterEntry {
-  key: string;
-  /** One entry for a scalar; many for an inline/block YAML list. */
-  values: string[];
-  /**
-   * 1-based source line of the entry's `key:` line. Enables per-row diff
-   * highlighting — omitted when entries are built outside the parser.
-   */
-  startLine?: number;
-  /**
-   * 1-based source line of the entry's last line. Equals `startLine` for
-   * scalars and inline lists; extends across a block list's item lines.
-   */
-  endLine?: number;
+    key: string;
+    /** One entry for a scalar; many for an inline/block YAML list. */
+    values: string[];
+    /**
+     * 1-based source line of the entry's `key:` line. Enables per-row diff
+     * highlighting — omitted when entries are built outside the parser.
+     */
+    startLine?: number;
+    /**
+     * 1-based source line of the entry's last line. Equals `startLine` for
+     * scalars and inline lists; extends across a block list's item lines.
+     */
+    endLine?: number;
 }
 
 // Leading `---` fence … closing `---` fence, anchored to the very start of the
@@ -45,22 +45,22 @@ const FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
 
 /** 1-based source line span a lifted frontmatter block occupied. */
 export interface FrontmatterSourceRange {
-  startLine: number;
-  endLine: number;
+    startLine: number;
+    endLine: number;
 }
 
 /** Strip a single pair of matching surrounding quotes from a scalar value. */
 function unquote(value: string): string {
-  if (value.length >= 2) {
-    const first = value[0];
-    const last = value[value.length - 1];
+    if (value.length >= 2) {
+        const first = value[0];
+        const last = value[value.length - 1];
 
-    if ((first === '"' || first === "'") && first === last) {
-      return value.slice(1, -1);
+        if ((first === '"' || first === "'") && first === last) {
+            return value.slice(1, -1);
+        }
     }
-  }
 
-  return value;
+    return value;
 }
 
 /**
@@ -72,87 +72,79 @@ function unquote(value: string): string {
  * rather than throwing — frontmatter is best-effort metadata, not code.
  */
 function parseFrontmatter(raw: string): FrontmatterEntry[] {
-  const entries: FrontmatterEntry[] = [];
-  let current: FrontmatterEntry | null = null;
+    const entries: FrontmatterEntry[] = [];
+    let current: FrontmatterEntry | null = null;
 
-  const lines = raw.split(/\r?\n/);
+    const lines = raw.split(/\r?\n/);
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    // `raw` is the content BETWEEN the fences, so its first line is source
-    // line 2 (line 1 is the opening `---`).
-    const sourceLine = i + 2;
-    const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        // `raw` is the content BETWEEN the fences, so its first line is source
+        // line 2 (line 1 is the opening `---`).
+        const sourceLine = i + 2;
+        const trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("#")) continue;
 
-    // Indented `- item` continues the most recent block-list key, extending
-    // that entry's source span to cover the item line.
-    // The capture starts at the first non-blank char so `[ \t]+` and the
-    // capture never compete for whitespace (no polynomial backtracking).
-    const listItem = /^[ \t]+-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
-      line,
-    );
+        // Indented `- item` continues the most recent block-list key, extending
+        // that entry's source span to cover the item line.
+        // The capture starts at the first non-blank char so `[ \t]+` and the
+        // capture never compete for whitespace (no polynomial backtracking).
+        const listItem = /^[ \t]+-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
 
-    if (listItem && current) {
-      appendListItem(current, listItem[1]!, sourceLine);
-      continue;
+        if (listItem && current) {
+            appendListItem(current, listItem[1]!, sourceLine);
+            continue;
+        }
+
+        const kv = /^([^:\s][^:]*):[ \t]*((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
+
+        if (!kv) continue;
+        const key = kv[1]!.trim();
+        const rawValue = kv[2]!.trim();
+
+        const entry: FrontmatterEntry = {
+            key,
+            values: parseEntryValues(rawValue),
+            startLine: sourceLine,
+            endLine: sourceLine,
+        };
+
+        entries.push(entry);
+        // Bare key — a block list (or empty value) may follow on later lines.
+        current = rawValue === "" ? entry : null;
     }
 
-    const kv = /^([^:\s][^:]*):[ \t]*((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(
-      line,
-    );
-
-    if (!kv) continue;
-    const key = kv[1]!.trim();
-    const rawValue = kv[2]!.trim();
-
-    const entry: FrontmatterEntry = {
-      key,
-      values: parseEntryValues(rawValue),
-      startLine: sourceLine,
-      endLine: sourceLine,
-    };
-
-    entries.push(entry);
-    // Bare key — a block list (or empty value) may follow on later lines.
-    current = rawValue === "" ? entry : null;
-  }
-
-  return entries;
+    return entries;
 }
 
 /** Add a block-list item to `entry`, extending its source span to `sourceLine`. */
-function appendListItem(
-  entry: FrontmatterEntry,
-  itemText: string,
-  sourceLine: number,
-): void {
-  const item = unquote(itemText.trim());
+function appendListItem(entry: FrontmatterEntry, itemText: string, sourceLine: number): void {
+    const item = unquote(itemText.trim());
 
-  if (item !== "") {
-    entry.values.push(item);
-    entry.endLine = sourceLine;
-  }
+    if (item !== "") {
+        entry.values.push(item);
+        entry.endLine = sourceLine;
+    }
 }
 
 /** Values of a `key: value` line: none, an inline list, or one scalar. */
 function parseEntryValues(rawValue: string): string[] {
-  if (rawValue === "") return [];
+    if (rawValue === "") return [];
 
-  if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
-    return parseInlineList(rawValue);
-  }
+    if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+        return parseInlineList(rawValue);
+    }
 
-  return [unquote(rawValue)];
+    return [unquote(rawValue)];
 }
 
 /** Parse an inline flow list `[a, b, c]` into its trimmed, unquoted values. */
 function parseInlineList(rawValue: string): string[] {
-  return rawValue
-    .slice(1, -1)
-    .split(",")
-    .map((s) => unquote(s.trim()))
-    .filter((s) => s !== "");
+    return rawValue
+        .slice(1, -1)
+        .split(",")
+        .map((s) => unquote(s.trim()))
+        .filter((s) => s !== "");
 }
 
 /**
@@ -161,13 +153,10 @@ function parseInlineList(rawValue: string): string[] {
  * by the diff layer to compare a metadata list against its pre-edit values so
  * only the added / removed items are highlighted.
  */
-export function frontmatterValuesForKey(
-  source: string,
-  key: string,
-): string[] | null {
-  const entry = parseFrontmatter(source).find((e) => e.key === key);
+export function frontmatterValuesForKey(source: string, key: string): string[] | null {
+    const entry = parseFrontmatter(source).find((e) => e.key === key);
 
-  return entry ? entry.values : null;
+    return entry ? entry.values : null;
 }
 
 /**
@@ -178,16 +167,16 @@ export function frontmatterValuesForKey(
  * hands us only the changed item lines.
  */
 export function parseFrontmatterListItems(fragment: string): string[] {
-  const items: string[] = [];
+    const items: string[] = [];
 
-  for (const line of fragment.split(/\r?\n/)) {
-    const m = /^[ \t]*-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
-    if (!m) continue;
-    const value = unquote(m[1]!.trim());
-    if (value !== "") items.push(value);
-  }
+    for (const line of fragment.split(/\r?\n/)) {
+        const m = /^[ \t]*-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
+        if (!m) continue;
+        const value = unquote(m[1]!.trim());
+        if (value !== "") items.push(value);
+    }
 
-  return items;
+    return items;
 }
 
 /**
@@ -197,26 +186,26 @@ export function parseFrontmatterListItems(fragment: string): string[] {
  * line keeps its original 1-based number (critical for comment anchoring).
  */
 export function extractFrontmatter(src: string): {
-  body: string;
-  entries: FrontmatterEntry[] | null;
-  sourceRange: FrontmatterSourceRange | null;
+    body: string;
+    entries: FrontmatterEntry[] | null;
+    sourceRange: FrontmatterSourceRange | null;
 } {
-  const match = FRONTMATTER_RE.exec(src);
-  if (!match) return { body: src, entries: null, sourceRange: null };
+    const match = FRONTMATTER_RE.exec(src);
+    if (!match) return { body: src, entries: null, sourceRange: null };
 
-  const consumed = match[0];
-  // FRONTMATTER_RE requires a newline after the opening fence.
-  const blankLines = consumed.match(/\r?\n/g)!.length;
-  const body = "\n".repeat(blankLines) + src.slice(consumed.length);
-  // The block runs from line 1 through its closing fence. Drop a trailing
-  // newline before counting so the EOF-close and newline-close cases agree.
-  const endLine = consumed.replace(/\r?\n$/, "").split(/\r?\n/).length;
+    const consumed = match[0];
+    // FRONTMATTER_RE requires a newline after the opening fence.
+    const blankLines = consumed.match(/\r?\n/g)!.length;
+    const body = "\n".repeat(blankLines) + src.slice(consumed.length);
+    // The block runs from line 1 through its closing fence. Drop a trailing
+    // newline before counting so the EOF-close and newline-close cases agree.
+    const endLine = consumed.replace(/\r?\n$/, "").split(/\r?\n/).length;
 
-  return {
-    body,
-    entries: parseFrontmatter(match[1]!),
-    sourceRange: { startLine: 1, endLine },
-  };
+    return {
+        body,
+        entries: parseFrontmatter(match[1]!),
+        sourceRange: { startLine: 1, endLine },
+    };
 }
 
 /**
@@ -225,69 +214,69 @@ export function extractFrontmatter(src: string): {
  * simple inline word-diff of one line — no bespoke pill/list-diff machinery.
  */
 export function frontmatterValueText(values: readonly string[]): string {
-  return values.join(", ");
+    return values.join(", ");
 }
 
 /** Assemble the frontmatter metadata card as a hast element. */
 function frontmatterToHast(
-  entries: FrontmatterEntry[],
-  sourceRange?: FrontmatterSourceRange | null,
+    entries: FrontmatterEntry[],
+    sourceRange?: FrontmatterSourceRange | null,
 ): Element {
-  const rows: ElementContent[] = entries.map((entry) => ({
-    type: "element",
-    tagName: "div",
-    properties: {
-      className: ["emr-frontmatter-row"],
-      // Stamp each row with its own source span so diff highlighting lands on
-      // the individual key that changed (like a table row), not the whole card.
-      ...(entry.startLine != null
-        ? {
-            dataSourceLine: entry.startLine,
-            dataSourceEndLine: entry.endLine ?? entry.startLine,
-          }
-        : {}),
-    },
-    children: [
-      {
+    const rows: ElementContent[] = entries.map((entry) => ({
         type: "element",
-        tagName: "dt",
-        properties: { className: ["emr-frontmatter-key"] },
-        children: [{ type: "text", value: entry.key }],
-      },
-      {
-        type: "element",
-        tagName: "dd",
-        properties: { className: ["emr-frontmatter-value"] },
-        children: [{ type: "text", value: frontmatterValueText(entry.values) }],
-      },
-    ],
-  }));
+        tagName: "div",
+        properties: {
+            className: ["emr-frontmatter-row"],
+            // Stamp each row with its own source span so diff highlighting lands on
+            // the individual key that changed (like a table row), not the whole card.
+            ...(entry.startLine != null
+                ? {
+                      dataSourceLine: entry.startLine,
+                      dataSourceEndLine: entry.endLine ?? entry.startLine,
+                  }
+                : {}),
+        },
+        children: [
+            {
+                type: "element",
+                tagName: "dt",
+                properties: { className: ["emr-frontmatter-key"] },
+                children: [{ type: "text", value: entry.key }],
+            },
+            {
+                type: "element",
+                tagName: "dd",
+                properties: { className: ["emr-frontmatter-value"] },
+                children: [{ type: "text", value: frontmatterValueText(entry.values) }],
+            },
+        ],
+    }));
 
-  return {
-    type: "element",
-    tagName: "div",
-    properties: {
-      className: ["emr-frontmatter"],
-      dataEmrFrontmatter: "true",
-      // Stamp the source span so comment anchoring and diff highlighting can
-      // map the card back to the frontmatter lines, exactly as every other
-      // rendered block carries its position.
-      ...(sourceRange
-        ? {
-            dataSourceLine: sourceRange.startLine,
-            dataSourceEndLine: sourceRange.endLine,
-          }
-        : {}),
-    },
-    children: [
-      {
+    return {
         type: "element",
-        tagName: "dl",
-        properties: { className: ["emr-frontmatter-grid"] },
-        children: rows,
-      },
-    ],
-  };
+        tagName: "div",
+        properties: {
+            className: ["emr-frontmatter"],
+            dataEmrFrontmatter: "true",
+            // Stamp the source span so comment anchoring and diff highlighting can
+            // map the card back to the frontmatter lines, exactly as every other
+            // rendered block carries its position.
+            ...(sourceRange
+                ? {
+                      dataSourceLine: sourceRange.startLine,
+                      dataSourceEndLine: sourceRange.endLine,
+                  }
+                : {}),
+        },
+        children: [
+            {
+                type: "element",
+                tagName: "dl",
+                properties: { className: ["emr-frontmatter-grid"] },
+                children: rows,
+            },
+        ],
+    };
 }
 
 // Dedicated stringifier for the standalone metadata card. Kept separate from
@@ -301,15 +290,15 @@ const frontmatterStringifier = unified().use(rehypeStringify);
  * All values are emitted as escaped text nodes, so the output is XSS-safe.
  */
 export function renderFrontmatterHtml(
-  entries: FrontmatterEntry[],
-  sourceRange?: FrontmatterSourceRange | null,
+    entries: FrontmatterEntry[],
+    sourceRange?: FrontmatterSourceRange | null,
 ): string {
-  if (entries.length === 0) return "";
+    if (entries.length === 0) return "";
 
-  const root: Root = {
-    type: "root",
-    children: [frontmatterToHast(entries, sourceRange)],
-  };
+    const root: Root = {
+        type: "root",
+        children: [frontmatterToHast(entries, sourceRange)],
+    };
 
-  return frontmatterStringifier.stringify(root);
+    return frontmatterStringifier.stringify(root);
 }

@@ -11,48 +11,48 @@ import { readerMinWidth, type ReaderPrefs } from "../readerPrefs";
  * their legacy shrink-and-scroll behaviour, so they never trip this.
  */
 export function useTooNarrow(
-  bodyFrameRef: MutableRefObject<HTMLDivElement | null>,
-  hideDocNav: boolean | undefined,
-  commentsAvailable: boolean,
-  readerPrefs: ReaderPrefs,
+    bodyFrameRef: MutableRefObject<HTMLDivElement | null>,
+    hideDocNav: boolean | undefined,
+    commentsAvailable: boolean,
+    readerPrefs: ReaderPrefs,
 ): boolean {
-  const [tooNarrow, setTooNarrow] = useState(false);
-  useLayoutEffect(() => {
-    // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
-    // never disable the reader.
-    if (hideDocNav) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- single-file mode tears down the ResizeObserver that owns this flag, so the layout effect clears it before paint; deriving it instead would resurface a stale `true` if the frame is absent when the nav returns.
-      setTooNarrow(false);
+    const [tooNarrow, setTooNarrow] = useState(false);
+    useLayoutEffect(() => {
+        // Single-file panels keep their legacy shrink-and-scroll behaviour, so they
+        // never disable the reader.
+        if (hideDocNav) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- single-file mode tears down the ResizeObserver that owns this flag, so the layout effect clears it before paint; deriving it instead would resurface a stale `true` if the frame is absent when the nav returns.
+            setTooNarrow(false);
 
-      return;
-    }
+            return;
+        }
 
-    const frame = bodyFrameRef.current;
-    if (!frame) return;
+        const frame = bodyFrameRef.current;
+        if (!frame) return;
 
-    // Budget for the comment rail when it can be revealed. A document that has
-    // explicitly resolved without a housing PR has no comments UI to reserve.
-    const need = readerMinWidth(
-      readerPrefs.showNav,
-      commentsAvailable,
-      readerPrefs.navWidthPct,
-      readerPrefs.commentWidthPct,
-    );
+        // Budget for the comment rail when it can be revealed. A document that has
+        // explicitly resolved without a housing PR has no comments UI to reserve.
+        const need = readerMinWidth(
+            readerPrefs.showNav,
+            commentsAvailable,
+            readerPrefs.navWidthPct,
+            readerPrefs.commentWidthPct,
+        );
 
-    const measure = (): void => setTooNarrow(frame.clientWidth < need);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(frame);
+        const measure = (): void => setTooNarrow(frame.clientWidth < need);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(frame);
 
-    return () => observer.disconnect();
-  }, [
-    hideDocNav,
-    commentsAvailable,
-    readerPrefs.showNav,
-    readerPrefs.navWidthPct,
-    readerPrefs.commentWidthPct,
-    bodyFrameRef,
-  ]);
+        return () => observer.disconnect();
+    }, [
+        hideDocNav,
+        commentsAvailable,
+        readerPrefs.showNav,
+        readerPrefs.navWidthPct,
+        readerPrefs.commentWidthPct,
+        bodyFrameRef,
+    ]);
 
-  return tooNarrow;
+    return tooNarrow;
 }

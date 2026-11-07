@@ -1,11 +1,48 @@
 # OSS mirror sync ledger
 
+## 2026-11-07 Four-space indentation sync
+
+- Public base: `3326f9f` (#32).
+- Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
+- New product boundary: `61b5787` (source branch `chore/four-space-indent`; not
+  yet merged, record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.1`.
+- Strategy: replay the product tree delta without importing private history.
+  The reformat is replayed by re-running the source's formatting sequence on
+  the public tree (Prettier at 80 columns, `eslint --fix`, Prettier at 100
+  columns, `eslint --fix`, a final Prettier pass), so every file shared
+  unchanged with the source matches it byte-for-byte afterwards.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ef62f86`     | Three diff-decoration guards (`attachTableBeforeDisclosure` without original text, `applyLinkTargetIndicators` with an index past the last link, the removed-cell `td` fallback in `diffTableRowCells`) are covered by direct tests instead of `v8 ignore` comments; nine ignores remain in `src/`.                                                                                                                      |
+| `61b5787`     | Prettier indents with 4 spaces and wraps at 100 columns, and the repository is reformatted; VS Code workspace settings match the formatter (4-space tabs, no indentation detection, LF, Prettier as default formatter and a recommended extension). Reflow follow-ups: `eslint --fix` blank lines, one `react-hooks/refs` disable kept above its line, two functions back under the 80-line limit, two `it.each` tables. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- `test/markdown.diffScenarios.test.ts` keeps its public link example
+  (`example.visualstudio.com`, `docs/ReviewGuide/README.md`) inside the
+  reformatted file.
+- Public-only files (`.github/workflows/*`, this ledger) and adapted files
+  (`package.json`, `vss-extension.json`, the feedback contacts in
+  `DocumentsApp.tsx` and `PrTabApp.tsx`, and the rest) are reformatted in
+  place; their public content is unchanged.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `61b5787` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-06 Reliability (ACE) sync
 
 - Public base: `c26d0d8` (#31).
 - Previously mirrored product boundary: `1c1ed97` (source merge `32c7b5c`).
-- New product boundary: `fb1cc3f` (source branch `fix/ace-reliability`; not yet
-  merged, record the source merge commit here once it lands).
+- New product boundary: `fb1cc3f` (source branch `fix/ace-reliability`),
+  merged in the source as `448a0cc` and on public `main` as `3326f9f` (#32).
 - OSS release version: `1.3.1` (package, root lockfile metadata, and Marketplace
   manifest updated together).
 - Strategy: replay the product tree delta without importing private history.

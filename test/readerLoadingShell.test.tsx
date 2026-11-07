@@ -7,151 +7,122 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ReaderLoadingShell } from "../src/shell/components/ReaderLoadingShell";
 import { layoutStorageKey, READER_TYPE_KEY } from "../src/shell/readerPrefs";
 
-(
-  globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 afterEach(() => {
-  if (root) act(() => root!.unmount());
-  root = null;
-  container?.remove();
-  container = null;
-  localStorage.clear();
+    if (root) act(() => root!.unmount());
+    root = null;
+    container?.remove();
+    container = null;
+    localStorage.clear();
 });
 
 function mount(
-  scope: "pr" | "hub",
-  options: {
-    hideDocNav?: boolean;
-    titleSlot?: ReactNode;
-    headerActions?: ReactNode;
-  } = {},
+    scope: "pr" | "hub",
+    options: {
+        hideDocNav?: boolean;
+        titleSlot?: ReactNode;
+        headerActions?: ReactNode;
+    } = {},
 ): HTMLElement {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() => {
-    root!.render(
-      <ReaderLoadingShell
-        scope={scope}
-        ariaLabel="Loading reader"
-        hideDocNav={options.hideDocNav}
-        titleSlot={options.titleSlot}
-        headerActions={options.headerActions}
-      />,
-    );
-  });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+        root!.render(
+            <ReaderLoadingShell
+                scope={scope}
+                ariaLabel="Loading reader"
+                hideDocNav={options.hideDocNav}
+                titleSlot={options.titleSlot}
+                headerActions={options.headerActions}
+            />,
+        );
+    });
 
-  return container.querySelector<HTMLElement>(".emr-app")!;
+    return container.querySelector<HTMLElement>(".emr-app")!;
 }
 
 describe("ReaderLoadingShell", () => {
-  it("restores the surface layout and typography before data loads", () => {
-    localStorage.setItem(
-      READER_TYPE_KEY,
-      JSON.stringify({
-        fontId: "atkinson",
-        sizePct: 115,
-        lineSpacingPct: 125,
-        paragraphSpacingPct: 125,
-        letterSpacingPct: 125,
-        wordSpacingPct: 125,
-      }),
-    );
-    localStorage.setItem(
-      layoutStorageKey("pr"),
-      JSON.stringify({
-        showNav: false,
-        showComments: true,
-        navWidthPct: 120,
-        commentWidthPct: 85,
-      }),
-    );
+    it("restores the surface layout and typography before data loads", () => {
+        localStorage.setItem(
+            READER_TYPE_KEY,
+            JSON.stringify({
+                fontId: "atkinson",
+                sizePct: 115,
+                lineSpacingPct: 125,
+                paragraphSpacingPct: 125,
+                letterSpacingPct: 125,
+                wordSpacingPct: 125,
+            }),
+        );
+        localStorage.setItem(
+            layoutStorageKey("pr"),
+            JSON.stringify({
+                showNav: false,
+                showComments: true,
+                navWidthPct: 120,
+                commentWidthPct: 85,
+            }),
+        );
 
-    const shell = mount("pr");
+        const shell = mount("pr");
 
-    expect(shell.classList.contains("is-nav-hidden")).toBe(true);
-    expect(shell.classList.contains("is-comments-hidden")).toBe(false);
-    expect(shell.style.getPropertyValue("--emr-reader-font")).toContain(
-      "Atkinson Hyperlegible",
-    );
-    expect(shell.style.getPropertyValue("--emr-reader-scale")).toBe("1.15");
-    expect(shell.style.getPropertyValue("--emr-reader-line-height")).toBe(
-      "1.675",
-    );
-    expect(shell.style.getPropertyValue("--emr-reader-letter-spacing")).toBe(
-      "0.02em",
-    );
-    expect(shell.style.getPropertyValue("--emr-reader-word-spacing")).toBe(
-      "0.04em",
-    );
-    expect(shell.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe(
-      "17.6px",
-    );
-    expect(shell.style.getPropertyValue("--emr-nav-scale")).toBe("1.2");
-    expect(shell.style.getPropertyValue("--emr-rail-scale")).toBe("0.85");
-  });
+        expect(shell.classList.contains("is-nav-hidden")).toBe(true);
+        expect(shell.classList.contains("is-comments-hidden")).toBe(false);
+        expect(shell.style.getPropertyValue("--emr-reader-font")).toContain(
+            "Atkinson Hyperlegible",
+        );
+        expect(shell.style.getPropertyValue("--emr-reader-scale")).toBe("1.15");
+        expect(shell.style.getPropertyValue("--emr-reader-line-height")).toBe("1.675");
+        expect(shell.style.getPropertyValue("--emr-reader-letter-spacing")).toBe("0.02em");
+        expect(shell.style.getPropertyValue("--emr-reader-word-spacing")).toBe("0.04em");
+        expect(shell.style.getPropertyValue("--emr-reader-paragraph-spacing")).toBe("17.6px");
+        expect(shell.style.getPropertyValue("--emr-nav-scale")).toBe("1.2");
+        expect(shell.style.getPropertyValue("--emr-rail-scale")).toBe("0.85");
+    });
 
-  it("uses the settled three-pane DOM with shimmer and status-bar progress", () => {
-    const shell = mount("hub");
+    it("uses the settled three-pane DOM with shimmer and status-bar progress", () => {
+        const shell = mount("hub");
 
-    expect(
-      shell.querySelector(".emr-body-frame > .emr-body__nav"),
-    ).toBeTruthy();
-    expect(shell.querySelector(".emr-body-frame > .emr-body")).toBeTruthy();
-    expect(shell.querySelector(".emr-body-frame > .emr-rail")).toBeTruthy();
-    expect(shell.querySelector(".emr-docnav-skel")).toBeTruthy();
-    expect(
-      shell.querySelector(".emr-docnav-header .emr-skel-header-label"),
-    ).toBeTruthy();
-    expect(shell.querySelector(".emr-article-wrap.emr-skeleton")).toBeTruthy();
-    expect(shell.querySelector(".emr-rail-col.emr-skeleton")).toBeTruthy();
-    expect(
-      shell.querySelector(".emr-rail-header .emr-skel-header-label"),
-    ).toBeTruthy();
-    expect(shell.querySelector(".emr-loading-statusbar")?.textContent).toBe(
-      "Loading reader",
-    );
-    expect(shell.querySelector(".emr-statusbar-spinner")).toBeTruthy();
-  });
+        expect(shell.querySelector(".emr-body-frame > .emr-body__nav")).toBeTruthy();
+        expect(shell.querySelector(".emr-body-frame > .emr-body")).toBeTruthy();
+        expect(shell.querySelector(".emr-body-frame > .emr-rail")).toBeTruthy();
+        expect(shell.querySelector(".emr-docnav-skel")).toBeTruthy();
+        expect(shell.querySelector(".emr-docnav-header .emr-skel-header-label")).toBeTruthy();
+        expect(shell.querySelector(".emr-article-wrap.emr-skeleton")).toBeTruthy();
+        expect(shell.querySelector(".emr-rail-col.emr-skeleton")).toBeTruthy();
+        expect(shell.querySelector(".emr-rail-header .emr-skel-header-label")).toBeTruthy();
+        expect(shell.querySelector(".emr-loading-statusbar")?.textContent).toBe("Loading reader");
+        expect(shell.querySelector(".emr-statusbar-spinner")).toBeTruthy();
+    });
 
-  it("matches the no-nav geometry used by direct document links", () => {
-    const shell = mount("hub", { hideDocNav: true });
+    it("matches the no-nav geometry used by direct document links", () => {
+        const shell = mount("hub", { hideDocNav: true });
 
-    expect(shell.classList.contains("is-nav-hidden")).toBe(true);
-    expect(shell.querySelector(".emr-body__nav")).toBeNull();
-    expect(
-      shell.querySelector(".emr-body-frame--no-nav > .emr-body"),
-    ).toBeTruthy();
-    expect(shell.querySelector(".emr-rail")).toBeTruthy();
-  });
+        expect(shell.classList.contains("is-nav-hidden")).toBe(true);
+        expect(shell.querySelector(".emr-body__nav")).toBeNull();
+        expect(shell.querySelector(".emr-body-frame--no-nav > .emr-body")).toBeTruthy();
+        expect(shell.querySelector(".emr-rail")).toBeTruthy();
+    });
 
-  it("restores hidden comments and renders either header slot", () => {
-    localStorage.setItem(
-      layoutStorageKey("hub"),
-      JSON.stringify({ showComments: false }),
-    );
+    it("restores hidden comments and renders either header slot", () => {
+        localStorage.setItem(layoutStorageKey("hub"), JSON.stringify({ showComments: false }));
 
-    let shell = mount("hub", { titleSlot: <span>Repository</span> });
-    expect(shell.classList.contains("is-comments-hidden")).toBe(true);
-    expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe(
-      "Repository",
-    );
-    expect(
-      shell.querySelector(".emr-docnav-header.emr-skel-header"),
-    ).toBeNull();
+        let shell = mount("hub", { titleSlot: <span>Repository</span> });
+        expect(shell.classList.contains("is-comments-hidden")).toBe(true);
+        expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe("Repository");
+        expect(shell.querySelector(".emr-docnav-header.emr-skel-header")).toBeNull();
 
-    act(() => root!.unmount());
-    root = null;
-    container!.remove();
-    container = null;
+        act(() => root!.unmount());
+        root = null;
+        container!.remove();
+        container = null;
 
-    shell = mount("hub", { headerActions: <button>Refresh</button> });
-    expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe(
-      "Refresh",
-    );
-  });
+        shell = mount("hub", { headerActions: <button>Refresh</button> });
+        expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe("Refresh");
+    });
 });

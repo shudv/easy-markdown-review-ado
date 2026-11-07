@@ -18,48 +18,44 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  HUB_CONTRIBUTION_ID,
-  HUB_GROUP_CONTRIBUTION_ID,
-} from "../src/menu/contributionIds";
+import { HUB_CONTRIBUTION_ID, HUB_GROUP_CONTRIBUTION_ID } from "../src/menu/contributionIds";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const require = createRequire(import.meta.url);
 
 interface Contribution {
-  id: string;
-  type: string;
-  targets?: string[];
-  properties?: Record<string, unknown>;
+    id: string;
+    type: string;
+    targets?: string[];
+    properties?: Record<string, unknown>;
 }
 
-const manifest = JSON.parse(
-  readFileSync(resolve(root, "vss-extension.json"), "utf8"),
-) as { contributions: Contribution[] };
+const manifest = JSON.parse(readFileSync(resolve(root, "vss-extension.json"), "utf8")) as {
+    contributions: Contribution[];
+};
 
 const contributions = manifest.contributions;
 
-const byId = (id: string): Contribution | undefined =>
-  contributions.find((c) => c.id === id);
+const byId = (id: string): Contribution | undefined => contributions.find((c) => c.id === id);
 
 // Build the production webpack config and read the HtmlWebpackPlugin instances
 // so we know which `dist/*.html` files actually get emitted.
 type WebpackFactory = (
-  env: unknown,
-  argv: { mode: string },
+    env: unknown,
+    argv: { mode: string },
 ) => {
-  entry: Record<string, string>;
-  plugins: Array<{
-    constructor: { name: string };
-    userOptions?: { filename?: string; chunks?: string[] };
-    options?: { filename?: string; chunks?: string[] };
-  }>;
+    entry: Record<string, string>;
+    plugins: Array<{
+        constructor: { name: string };
+        userOptions?: { filename?: string; chunks?: string[] };
+        options?: { filename?: string; chunks?: string[] };
+    }>;
 };
 
 const webpackConfig = (require("../webpack.config.cjs") as WebpackFactory)(
-  {},
-  { mode: "production" },
+    {},
+    { mode: "production" },
 );
 
 const entryNames = new Set(Object.keys(webpackConfig.entry));
@@ -68,68 +64,66 @@ const entryNames = new Set(Object.keys(webpackConfig.entry));
 const htmlOutputs = new Map<string, string>();
 
 for (const plugin of webpackConfig.plugins) {
-  if (plugin.constructor.name !== "HtmlWebpackPlugin") continue;
-  const opts = plugin.userOptions ?? plugin.options ?? {};
-  const chunk = opts.chunks?.[0];
+    if (plugin.constructor.name !== "HtmlWebpackPlugin") continue;
+    const opts = plugin.userOptions ?? plugin.options ?? {};
+    const chunk = opts.chunks?.[0];
 
-  if (
-    opts.filename !== undefined &&
-    opts.filename !== "" &&
-    chunk !== undefined &&
-    chunk !== ""
-  ) {
-    htmlOutputs.set(opts.filename, chunk);
-  }
+    if (
+        opts.filename !== undefined &&
+        opts.filename !== "" &&
+        chunk !== undefined &&
+        chunk !== ""
+    ) {
+        htmlOutputs.set(opts.filename, chunk);
+    }
 }
 
 describe("manifest ↔ webpack bundles", () => {
-  const builtUriContribs = contributions.filter((c) => {
-    const uri = c.properties?.uri;
+    const builtUriContribs = contributions.filter((c) => {
+        const uri = c.properties?.uri;
 
-    return typeof uri === "string" && uri.startsWith("dist/");
-  });
+        return typeof uri === "string" && uri.startsWith("dist/");
+    });
 
-  it("has at least one dist-backed contribution to check", () => {
-    expect(builtUriContribs.length).toBeGreaterThan(0);
-  });
+    it("has at least one dist-backed contribution to check", () => {
+        expect(builtUriContribs.length).toBeGreaterThan(0);
+    });
 
-  it.each(builtUriContribs.map((c) => [c.id, c.properties!.uri as string]))(
-    "contribution %s → %s is produced by a webpack html entry",
-    (_id, uri) => {
-      const rel = uri.replace(/^dist\//, "");
-      const chunk = htmlOutputs.get(rel);
-      expect(
-        chunk,
-        `No HtmlWebpackPlugin emits ${rel} (referenced by a contribution uri)`,
-      ).toBeDefined();
-      expect(
-        entryNames.has(chunk!),
-        `${rel} is wired to chunk "${chunk}" which is not a webpack entry`,
-      ).toBe(true);
-    },
-  );
+    it.each(builtUriContribs.map((c) => [c.id, c.properties!.uri as string]))(
+        "contribution %s → %s is produced by a webpack html entry",
+        (_id, uri) => {
+            const rel = uri.replace(/^dist\//, "");
+            const chunk = htmlOutputs.get(rel);
+            expect(
+                chunk,
+                `No HtmlWebpackPlugin emits ${rel} (referenced by a contribution uri)`,
+            ).toBeDefined();
+            expect(
+                entryNames.has(chunk!),
+                `${rel} is wired to chunk "${chunk}" which is not a webpack entry`,
+            ).toBe(true);
+        },
+    );
 });
 
 describe("manifest ↔ registration ids", () => {
-  it("the full-page hub lives in our own top-level hub group", () => {
-    const hub = byId(HUB_CONTRIBUTION_ID);
-    expect(hub, "hub contribution missing").toBeDefined();
-    expect(hub!.type).toBe("ms.vss-web.hub");
-    // It targets our own group via a relative reference (leading dot), which
-    // resolves within the same extension and so survives the dev/prod id
-    // rewrite. It must NOT sit under the Azure Repos code-hub group anymore.
-    expect(hub!.targets).toContain(`.${HUB_GROUP_CONTRIBUTION_ID}`);
-    expect(hub!.targets).not.toContain("ms.vss-code-web.code-hub-group");
-    expect(hub!.properties?.uri).toBe("dist/hub/documents-hub.html");
-  });
+    it("the full-page hub lives in our own top-level hub group", () => {
+        const hub = byId(HUB_CONTRIBUTION_ID);
+        expect(hub, "hub contribution missing").toBeDefined();
+        expect(hub!.type).toBe("ms.vss-web.hub");
+        // It targets our own group via a relative reference (leading dot), which
+        // resolves within the same extension and so survives the dev/prod id
+        // rewrite. It must NOT sit under the Azure Repos code-hub group anymore.
+        expect(hub!.targets).toContain(`.${HUB_GROUP_CONTRIBUTION_ID}`);
+        expect(hub!.targets).not.toContain("ms.vss-code-web.code-hub-group");
+        expect(hub!.properties?.uri).toBe("dist/hub/documents-hub.html");
+    });
 
-  it("the top-level hub group targets the project hub-groups collection", () => {
-    const group = byId(HUB_GROUP_CONTRIBUTION_ID);
-    expect(group, "hub group contribution missing").toBeDefined();
-    expect(group!.type).toBe("ms.vss-web.hub-group");
-    expect(group!.targets).toContain(
-      "ms.vss-web.project-hub-groups-collection",
-    );
-    expect(typeof group!.properties?.name).toBe("string");
-  });
+    it("the top-level hub group targets the project hub-groups collection", () => {
+        const group = byId(HUB_GROUP_CONTRIBUTION_ID);
+        expect(group, "hub group contribution missing").toBeDefined();
+        expect(group!.type).toBe("ms.vss-web.hub-group");
+        expect(group!.targets).toContain("ms.vss-web.project-hub-groups-collection");
+        expect(typeof group!.properties?.name).toBe("string");
+    });
 });

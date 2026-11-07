@@ -24,83 +24,83 @@ import { expect, test } from "./fixtures";
 
 import { DEV_ORIGIN_HOST, E2E } from "./env";
 import {
-  discoverPullRequestId,
-  expectReaderHeading,
-  gotoPrTab,
-  hubFrame,
-  openCommentableDoc,
-  prTabFrame,
-  waitForFrameRoot,
+    discoverPullRequestId,
+    expectReaderHeading,
+    gotoPrTab,
+    hubFrame,
+    openCommentableDoc,
+    prTabFrame,
+    waitForFrameRoot,
 } from "./helpers";
 
 declare global {
-  interface Window {
-    __emrLastCopy?: string;
-  }
+    interface Window {
+        __emrLastCopy?: string;
+    }
 }
 
 /** Record the text of every `execCommand("copy")` / `clipboard.writeText`. */
 async function recordCopies(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the app under test still uses execCommand("copy") as its clipboard fallback, so the spy must wrap it to observe copies
-    const exec = document.execCommand.bind(document);
+    await context.addInitScript(() => {
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- the app under test still uses execCommand("copy") as its clipboard fallback, so the spy must wrap it to observe copies
+        const exec = document.execCommand.bind(document);
 
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- replaces the app's execCommand("copy") fallback with a recording wrapper (see above)
-    document.execCommand = (command: string, ...rest: unknown[]) => {
-      if (command === "copy") {
-        const el = document.activeElement as HTMLTextAreaElement | null;
-        window.__emrLastCopy = el?.value ?? String(document.getSelection());
-      }
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- replaces the app's execCommand("copy") fallback with a recording wrapper (see above)
+        document.execCommand = (command: string, ...rest: unknown[]) => {
+            if (command === "copy") {
+                const el = document.activeElement as HTMLTextAreaElement | null;
+                window.__emrLastCopy = el?.value ?? String(document.getSelection());
+            }
 
-      return (exec as (...args: unknown[]) => boolean)(command, ...rest);
-    };
+            return (exec as (...args: unknown[]) => boolean)(command, ...rest);
+        };
 
-    // navigator.clipboard is undefined at runtime in insecure contexts.
-    const clip = navigator.clipboard as Clipboard | undefined;
+        // navigator.clipboard is undefined at runtime in insecure contexts.
+        const clip = navigator.clipboard as Clipboard | undefined;
 
-    if (clip?.writeText !== undefined) {
-      const write = clip.writeText.bind(clip);
+        if (clip?.writeText !== undefined) {
+            const write = clip.writeText.bind(clip);
 
-      clip.writeText = async (text: string) => {
-        await write(text);
-        window.__emrLastCopy = text;
-      };
-    }
-  });
+            clip.writeText = async (text: string) => {
+                await write(text);
+                window.__emrLastCopy = text;
+            };
+        }
+    });
 }
 
 /** The text our contribution iframe last copied (see `recordCopies`). */
 async function lastCopy(page: Page, bundle: string): Promise<string> {
-  const frame = page
-    .frames()
-    .find((f) => f.url().includes(DEV_ORIGIN_HOST) && f.url().includes(bundle));
+    const frame = page
+        .frames()
+        .find((f) => f.url().includes(DEV_ORIGIN_HOST) && f.url().includes(bundle));
 
-  expect(frame, `no ${bundle} frame`).toBeTruthy();
+    expect(frame, `no ${bundle} frame`).toBeTruthy();
 
-  return (await frame!.evaluate(() => window.__emrLastCopy)) ?? "";
+    return (await frame!.evaluate(() => window.__emrLastCopy)) ?? "";
 }
 
 function hostParam(page: Page, name: string): string | null {
-  return new URL(page.url()).searchParams.get(name);
+    return new URL(page.url()).searchParams.get(name);
 }
 
 /** The PR web URL our links must be built on (no query). */
 function prPageUrl(repo: string, prId: number): string {
-  return `${E2E.orgUrl}/${encodeURIComponent(E2E.project)}/_git/${repo}/pullrequest/${prId}`;
+    return `${E2E.orgUrl}/${encodeURIComponent(E2E.project)}/_git/${repo}/pullrequest/${prId}`;
 }
 
 /** Assert `link` re-opens THIS PR on the Markdown Review tab. */
 function expectPrTabLink(link: string, repo: string, prId: number): URL {
-  expect(link, "copied link must be the ADO page, not the iframe").not.toMatch(
-    /gallerycdn|vsassets|localhost|pr-tab\.html/i,
-  );
-  const url = new URL(link);
-  expect(decodeURIComponent(url.origin + url.pathname).toLowerCase()).toBe(
-    decodeURIComponent(prPageUrl(repo, prId)).toLowerCase(),
-  );
-  expect(url.searchParams.get("_a")).toBe(`${E2E.extensionId}.${E2E.prTabId}`);
+    expect(link, "copied link must be the ADO page, not the iframe").not.toMatch(
+        /gallerycdn|vsassets|localhost|pr-tab\.html/i,
+    );
+    const url = new URL(link);
+    expect(decodeURIComponent(url.origin + url.pathname).toLowerCase()).toBe(
+        decodeURIComponent(prPageUrl(repo, prId)).toLowerCase(),
+    );
+    expect(url.searchParams.get("_a")).toBe(`${E2E.extensionId}.${E2E.prTabId}`);
 
-  return url;
+    return url;
 }
 
 /**
@@ -108,251 +108,230 @@ function expectPrTabLink(link: string, repo: string, prId: number): URL {
  * swallow the first pointer event, so a single click races.
  */
 async function clickUntil(
-  target: ReturnType<FrameLocator["locator"]>,
-  done: () => Promise<boolean>,
-  message: string,
+    target: ReturnType<FrameLocator["locator"]>,
+    done: () => Promise<boolean>,
+    message: string,
 ): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        if (!(await done())) await target.click().catch(() => {});
+    await expect
+        .poll(
+            async () => {
+                if (!(await done())) await target.click().catch(() => {});
 
-        return done();
-      },
-      { timeout: 20_000, intervals: [500, 750, 1000], message },
-    )
-    .toBe(true);
+                return done();
+            },
+            { timeout: 20_000, intervals: [500, 750, 1000], message },
+        )
+        .toBe(true);
 }
 
 /** Distance from the reader scroller's top to the element's top, in px. */
 async function offsetFromReaderTop(
-  frame: FrameLocator,
-  selector: string,
+    frame: FrameLocator,
+    selector: string,
 ): Promise<{ offset: number; scrollTop: number }> {
-  return frame.locator(selector).evaluate((el) => {
-    // The nearest scrolling ancestor (the reader's own scroll container).
-    let scroller: HTMLElement | null = el.parentElement;
+    return frame.locator(selector).evaluate((el) => {
+        // The nearest scrolling ancestor (the reader's own scroll container).
+        let scroller: HTMLElement | null = el.parentElement;
 
-    while (scroller) {
-      const { overflowY } = getComputedStyle(scroller);
+        while (scroller) {
+            const { overflowY } = getComputedStyle(scroller);
 
-      if (
-        /auto|scroll/.test(overflowY) &&
-        scroller.scrollHeight > scroller.clientHeight
-      ) {
-        break;
-      }
+            if (/auto|scroll/.test(overflowY) && scroller.scrollHeight > scroller.clientHeight) {
+                break;
+            }
 
-      scroller = scroller.parentElement;
-    }
+            scroller = scroller.parentElement;
+        }
 
-    const box = scroller ?? document.scrollingElement!;
+        const box = scroller ?? document.scrollingElement!;
 
-    return {
-      offset: el.getBoundingClientRect().top - box.getBoundingClientRect().top,
-      scrollTop: box.scrollTop,
-    };
-  });
+        return {
+            offset: el.getBoundingClientRect().top - box.getBoundingClientRect().top,
+            scrollTop: box.scrollTop,
+        };
+    });
 }
 
 test.describe("Shareable links (real ADO host)", () => {
-  test.beforeEach(async ({ context }) => {
-    await recordCopies(context);
-  });
+    test.beforeEach(async ({ context }) => {
+        await recordCopies(context);
+    });
 
-  test("PR tab: Link to comment copies a working PR-tab link", async ({
-    page,
-  }) => {
-    const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
-    await gotoPrTab(page, E2E.prRepo, prId);
-    let frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
+    test("PR tab: Link to comment copies a working PR-tab link", async ({ page }) => {
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        await gotoPrTab(page, E2E.prRepo, prId);
+        let frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
 
-    const highlight = frame.locator(".emr-highlight[data-thread-id]").first();
-    await highlight.waitFor({ state: "visible", timeout: 45_000 });
-    const tid = (await highlight.getAttribute("data-thread-id"))!;
+        const highlight = frame.locator(".emr-highlight[data-thread-id]").first();
 
-    // Selecting the comment mirrors it into the address bar — on the PR page
-    // itself, keeping our tab selected and naming the open document.
-    await clickUntil(
-      highlight,
-      async () =>
-        (await frame
-          .locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`)
-          .count()) > 0,
-      "highlight never became active",
-    );
-    await expect
-      .poll(() => hostParam(page, "comment"), { timeout: 15_000 })
-      .toBe(tid);
-    expect(hostParam(page, "_a")).toBe(`${E2E.extensionId}.${E2E.prTabId}`);
-    const routedPath = hostParam(page, "path");
-    expect(routedPath, "address bar must name the open file").toMatch(
-      /^\/.+\.md$/i,
-    );
+        await highlight.waitFor({ state: "visible", timeout: 45_000 });
+        const tid = (await highlight.getAttribute("data-thread-id"))!;
 
-    // "Link to comment" copies the same shareable PR-tab URL.
-    const balloon = frame.locator(`.emr-balloon[data-thread-id="${tid}"]`);
-    await balloon.getByRole("button", { name: "More options" }).first().click();
-    await balloon.getByRole("menuitem", { name: "Link to comment" }).click();
-    await expect(
-      balloon.getByRole("menuitem", { name: "Link copied" }),
-    ).toBeVisible({ timeout: 10_000 });
-    const copied = await lastCopy(page, "pr-tab.html");
-    const url = expectPrTabLink(copied, E2E.prRepo, prId);
-    expect(url.searchParams.get("comment")).toBe(tid);
-    expect(url.searchParams.get("path")).toBe(routedPath);
+        // Selecting the comment mirrors it into the address bar — on the PR page
+        // itself, keeping our tab selected and naming the open document.
+        await clickUntil(
+            highlight,
+            async () =>
+                (await frame.locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`).count()) >
+                0,
+            "highlight never became active",
+        );
+        await expect.poll(() => hostParam(page, "comment"), { timeout: 15_000 }).toBe(tid);
+        expect(hostParam(page, "_a")).toBe(`${E2E.extensionId}.${E2E.prTabId}`);
+        const routedPath = hostParam(page, "path");
+        expect(routedPath, "address bar must name the open file").toMatch(/^\/.+\.md$/i);
 
-    // Opening the link fresh lands on the thread, with no interaction.
-    await page.goto(copied, { waitUntil: "domcontentloaded" });
-    frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    await expect(
-      frame.locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`),
-    ).toHaveCount(1, { timeout: 45_000 });
-    await expect(
-      frame.locator(`.emr-balloon.is-active[data-thread-id="${tid}"]`),
-    ).toBeVisible({ timeout: 30_000 });
-  });
+        // "Link to comment" copies the same shareable PR-tab URL.
+        const balloon = frame.locator(`.emr-balloon[data-thread-id="${tid}"]`);
+        await balloon.getByRole("button", { name: "More options" }).first().click();
+        await balloon.getByRole("menuitem", { name: "Link to comment" }).click();
+        await expect(balloon.getByRole("menuitem", { name: "Link copied" })).toBeVisible({
+            timeout: 10_000,
+        });
+        const copied = await lastCopy(page, "pr-tab.html");
+        const url = expectPrTabLink(copied, E2E.prRepo, prId);
+        expect(url.searchParams.get("comment")).toBe(tid);
+        expect(url.searchParams.get("path")).toBe(routedPath);
 
-  test("PR tab: a heading link opens that heading in that file", async ({
-    page,
-  }) => {
-    // Short enough a viewport that the linked heading starts below the fold,
-    // so landing on it requires a real scroll.
-    await page.setViewportSize({ width: 1400, height: 560 });
+        // Opening the link fresh lands on the thread, with no interaction.
+        await page.goto(copied, { waitUntil: "domcontentloaded" });
+        frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        await expect(
+            frame.locator(`.emr-highlight.is-active[data-thread-id="${tid}"]`),
+        ).toHaveCount(1, { timeout: 45_000 });
+        await expect(frame.locator(`.emr-balloon.is-active[data-thread-id="${tid}"]`)).toBeVisible({
+            timeout: 30_000,
+        });
+    });
 
-    const prId = await discoverPullRequestId(
-      page,
-      E2E.docLinksRepo,
-      E2E.docLinksPrTitle,
-      "active",
-    );
+    test("PR tab: a heading link opens that heading in that file", async ({ page }) => {
+        // Short enough a viewport that the linked heading starts below the fold,
+        // so landing on it requires a real scroll.
+        await page.setViewportSize({ width: 1400, height: 560 });
 
-    await gotoPrTab(page, E2E.docLinksRepo, prId);
-    let frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
+        const prId = await discoverPullRequestId(
+            page,
+            E2E.docLinksRepo,
+            E2E.docLinksPrTitle,
+            "active",
+        );
 
-    // Open the PR's SECOND changed file, so the link must carry the file.
-    await frame
-      .locator("button.emr-docnav-file-label")
-      .filter({ hasText: "install.md" })
-      .click();
-    await expectReaderHeading(frame, /^Installation$/i);
-    await expect
-      .poll(() => hostParam(page, "path"), { timeout: 15_000 })
-      .toBe("/docs/guides/install.md");
+        await gotoPrTab(page, E2E.docLinksRepo, prId);
+        let frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        await frame.locator(".markdown-body").first().waitFor({ timeout: 45_000 });
 
-    // Copy the heading's link. The click itself scrolls to the (hover-revealed)
-    // button and moves the pointer onto it, and `clickUntil` retries it — the
-    // article is re-wrapped as threads, images and diffs land, which replaces
-    // its elements, so no one-shot scroll/hover on a stale element.
-    const heading = frame.locator(".emr-rendered #see-also");
-    const button = heading.locator(":scope > .emr-heading-link");
-    await clickUntil(
-      button,
-      async () =>
-        (await button.getAttribute("aria-label").catch(() => null)) ===
-        "Link copied",
-      "heading link never confirmed a copy",
-    );
-    const copied = await lastCopy(page, "pr-tab.html");
-    const url = expectPrTabLink(copied, E2E.docLinksRepo, prId);
-    expect(url.searchParams.get("path")).toBe("/docs/guides/install.md");
-    expect(url.searchParams.get("anchor")).toBe("see-also");
-    expect(url.searchParams.has("comment")).toBe(false);
-    // The address bar mirrors it, as ADO's own Markdown preview does.
-    await expect
-      .poll(() => hostParam(page, "anchor"), { timeout: 15_000 })
-      .toBe("see-also");
+        // Open the PR's SECOND changed file, so the link must carry the file.
+        await frame
+            .locator("button.emr-docnav-file-label")
+            .filter({ hasText: "install.md" })
+            .click();
+        await expectReaderHeading(frame, /^Installation$/i);
+        await expect
+            .poll(() => hostParam(page, "path"), { timeout: 15_000 })
+            .toBe("/docs/guides/install.md");
 
-    // Opening the link fresh opens install.md (not the PR's first file) and
-    // scrolls the heading to the top of the reader.
-    await page.goto(copied, { waitUntil: "domcontentloaded" });
-    frame = prTabFrame(page);
-    await waitForFrameRoot(frame);
-    await expectReaderHeading(frame, /^Installation$/i);
-    await expect
-      .poll(
-        async () => {
-          const { offset, scrollTop } = await offsetFromReaderTop(
-            frame,
-            ".emr-rendered #see-also",
-          );
+        // Copy the heading's link. The click itself scrolls to the (hover-revealed)
+        // button and moves the pointer onto it, and `clickUntil` retries it — the
+        // article is re-wrapped as threads, images and diffs land, which replaces
+        // its elements, so no one-shot scroll/hover on a stale element.
+        const heading = frame.locator(".emr-rendered #see-also");
+        const button = heading.locator(":scope > .emr-heading-link");
+        await clickUntil(
+            button,
+            async () =>
+                (await button.getAttribute("aria-label").catch(() => null)) === "Link copied",
+            "heading link never confirmed a copy",
+        );
+        const copied = await lastCopy(page, "pr-tab.html");
+        const url = expectPrTabLink(copied, E2E.docLinksRepo, prId);
+        expect(url.searchParams.get("path")).toBe("/docs/guides/install.md");
+        expect(url.searchParams.get("anchor")).toBe("see-also");
+        expect(url.searchParams.has("comment")).toBe(false);
+        // The address bar mirrors it, as ADO's own Markdown preview does.
+        await expect.poll(() => hostParam(page, "anchor"), { timeout: 15_000 }).toBe("see-also");
 
-          return scrollTop > 0 && offset >= 0 && offset < 120;
-        },
-        {
-          timeout: 20_000,
-          message: "linked heading was not scrolled into view",
-        },
-      )
-      .toBe(true);
-    // Loading the linked document must not wipe the anchor from the URL.
-    expect(hostParam(page, "anchor")).toBe("see-also");
-  });
+        // Opening the link fresh opens install.md (not the PR's first file) and
+        // scrolls the heading to the top of the reader.
+        await page.goto(copied, { waitUntil: "domcontentloaded" });
+        frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        await expectReaderHeading(frame, /^Installation$/i);
+        await expect
+            .poll(
+                async () => {
+                    const { offset, scrollTop } = await offsetFromReaderTop(
+                        frame,
+                        ".emr-rendered #see-also",
+                    );
 
-  test("Documents hub: a heading link survives the round trip", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1400, height: 560 });
-    const { frame, repo, path } = await openCommentableDoc(page);
+                    return scrollTop > 0 && offset >= 0 && offset < 120;
+                },
+                {
+                    timeout: 20_000,
+                    message: "linked heading was not scrolled into view",
+                },
+            )
+            .toBe(true);
+        // Loading the linked document must not wipe the anchor from the URL.
+        expect(hostParam(page, "anchor")).toBe("see-also");
+    });
 
-    // Pick a real section heading mid-document, so there is content both
-    // above (the link must scroll) and below (it can reach the top).
-    const sections = frame.locator(".emr-rendered h2[id]");
-    await sections.first().waitFor({ state: "visible", timeout: 30_000 });
-    const count = await sections.count();
-    expect(count, "commentable doc needs a few h2 sections").toBeGreaterThan(2);
+    test("Documents hub: a heading link survives the round trip", async ({ page }) => {
+        await page.setViewportSize({ width: 1400, height: 560 });
+        const { frame, repo, path } = await openCommentableDoc(page);
 
-    const anchor = (await sections
-      .nth(Math.floor(count / 2))
-      .getAttribute("id"))!;
+        // Pick a real section heading mid-document, so there is content both
+        // above (the link must scroll) and below (it can reach the top).
+        const sections = frame.locator(".emr-rendered h2[id]");
+        await sections.first().waitFor({ state: "visible", timeout: 30_000 });
+        const count = await sections.count();
+        expect(count, "commentable doc needs a few h2 sections").toBeGreaterThan(2);
 
-    // Re-found by id on every use: the article is re-wrapped (its elements
-    // replaced) as threads, images and permissions land after first paint.
-    // The click scrolls to the hover-revealed button and `clickUntil` retries.
-    const heading = frame.locator(`.emr-rendered [id="${anchor}"]`);
-    const button = heading.locator(":scope > .emr-heading-link");
-    await clickUntil(
-      button,
-      async () =>
-        (await button.getAttribute("aria-label").catch(() => null)) ===
-        "Link copied",
-      "heading link never confirmed a copy",
-    );
+        const anchor = (await sections.nth(Math.floor(count / 2)).getAttribute("id"))!;
 
-    const copied = new URL(await lastCopy(page, "documents-hub.html"));
-    expect(copied.pathname).toContain(`${E2E.extensionId}.${E2E.hubId}`);
-    expect(copied.searchParams.get("repo")).toBe(repo);
-    expect(copied.searchParams.get("path")).toBe(path);
-    expect(copied.searchParams.get("anchor")).toBe(anchor);
-    await expect
-      .poll(() => hostParam(page, "anchor"), { timeout: 15_000 })
-      .toBe(anchor);
+        // Re-found by id on every use: the article is re-wrapped (its elements
+        // replaced) as threads, images and permissions land after first paint.
+        // The click scrolls to the hover-revealed button and `clickUntil` retries.
+        const heading = frame.locator(`.emr-rendered [id="${anchor}"]`);
+        const button = heading.locator(":scope > .emr-heading-link");
+        await clickUntil(
+            button,
+            async () =>
+                (await button.getAttribute("aria-label").catch(() => null)) === "Link copied",
+            "heading link never confirmed a copy",
+        );
 
-    await page.goto(copied.toString(), { waitUntil: "domcontentloaded" });
-    const reopened = hubFrame(page);
-    await waitForFrameRoot(reopened);
-    await expect
-      .poll(
-        async () => {
-          const { offset, scrollTop } = await offsetFromReaderTop(
-            reopened,
-            `.emr-rendered [id="${anchor}"]`,
-          );
+        const copied = new URL(await lastCopy(page, "documents-hub.html"));
+        expect(copied.pathname).toContain(`${E2E.extensionId}.${E2E.hubId}`);
+        expect(copied.searchParams.get("repo")).toBe(repo);
+        expect(copied.searchParams.get("path")).toBe(path);
+        expect(copied.searchParams.get("anchor")).toBe(anchor);
+        await expect.poll(() => hostParam(page, "anchor"), { timeout: 15_000 }).toBe(anchor);
 
-          return scrollTop > 0 && offset >= 0 && offset < 120;
-        },
-        {
-          timeout: 30_000,
-          message: "linked heading was not scrolled into view",
-        },
-      )
-      .toBe(true);
-    // The hub re-publishes the opened document on load; that must keep the
-    // anchor rather than treating it as navigation to a new document.
-    expect(hostParam(page, "anchor")).toBe(anchor);
-  });
+        await page.goto(copied.toString(), { waitUntil: "domcontentloaded" });
+        const reopened = hubFrame(page);
+        await waitForFrameRoot(reopened);
+        await expect
+            .poll(
+                async () => {
+                    const { offset, scrollTop } = await offsetFromReaderTop(
+                        reopened,
+                        `.emr-rendered [id="${anchor}"]`,
+                    );
+
+                    return scrollTop > 0 && offset >= 0 && offset < 120;
+                },
+                {
+                    timeout: 30_000,
+                    message: "linked heading was not scrolled into view",
+                },
+            )
+            .toBe(true);
+        // The hub re-publishes the opened document on load; that must keep the
+        // anchor rather than treating it as navigation to a new document.
+        expect(hostParam(page, "anchor")).toBe(anchor);
+    });
 });

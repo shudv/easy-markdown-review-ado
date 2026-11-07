@@ -9,13 +9,13 @@
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
-  type ComponentProps,
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useState,
+    type ComponentProps,
+    type ComponentType,
+    type ReactElement,
+    type ReactNode,
+    useEffect,
+    useLayoutEffect,
+    useState,
 } from "react";
 import { expect, fn, waitFor } from "storybook/test";
 
@@ -38,184 +38,182 @@ import { ArticleView } from "./ArticleView";
 //   • a blockquote inline word-diff
 //   • a deleted-marker with a rendered removed-content body
 const SOURCE = [
-  /*  1 */ "# Widget Configuration Guide",
-  /*  2 */ "",
-  /*  3 */ "Configure your widget by editing the [settings file](https://example.com/settings-v2) in your home folder.",
-  /*  4 */ "",
-  /*  5 */ "## Prerequisites",
-  /*  6 */ "",
-  /*  7 */ "- Node.js 20 or newer installed on the build machine.",
-  /*  8 */ "- A valid API token with read and write scopes.",
-  /*  9 */ "",
-  /* 10 */ "## Installation",
-  /* 11 */ "",
-  /* 12 */ "1. Download the signed installer from the release page and run it using an",
-  /* 13 */ "   administrator account on the target host.",
-  /* 14 */ "2. Restart your shell so the new PATH entry is picked up.",
-  /* 15 */ "",
-  /* 16 */ "## Settings",
-  /* 17 */ "",
-  /* 18 */ "| Option  | Cadence      | Default |",
-  /* 19 */ "| ------- | ------------ | ------- |",
-  /* 20 */ "| theme   | On change    | dark    |",
-  /* 21 */ "| retries | Every minute | 5       |",
-  /* 22 */ "",
-  /* 23 */ "> Tip: keep the settings file under version control for easy rollback.",
-  /* 24 */ "",
-  /* 25 */ "## Notes",
-  /* 26 */ "",
-  /* 27 */ "Everything else in this guide is unchanged for the current release.",
-  /* 28 */ "",
+    /*  1 */ "# Widget Configuration Guide",
+    /*  2 */ "",
+    /*  3 */ "Configure your widget by editing the [settings file](https://example.com/settings-v2) in your home folder.",
+    /*  4 */ "",
+    /*  5 */ "## Prerequisites",
+    /*  6 */ "",
+    /*  7 */ "- Node.js 20 or newer installed on the build machine.",
+    /*  8 */ "- A valid API token with read and write scopes.",
+    /*  9 */ "",
+    /* 10 */ "## Installation",
+    /* 11 */ "",
+    /* 12 */ "1. Download the signed installer from the release page and run it using an",
+    /* 13 */ "   administrator account on the target host.",
+    /* 14 */ "2. Restart your shell so the new PATH entry is picked up.",
+    /* 15 */ "",
+    /* 16 */ "## Settings",
+    /* 17 */ "",
+    /* 18 */ "| Option  | Cadence      | Default |",
+    /* 19 */ "| ------- | ------------ | ------- |",
+    /* 20 */ "| theme   | On change    | dark    |",
+    /* 21 */ "| retries | Every minute | 5       |",
+    /* 22 */ "",
+    /* 23 */ "> Tip: keep the settings file under version control for easy rollback.",
+    /* 24 */ "",
+    /* 25 */ "## Notes",
+    /* 26 */ "",
+    /* 27 */ "Everything else in this guide is unchanged for the current release.",
+    /* 28 */ "",
 ].join("\n");
 
 const HTML = renderMarkdownSync(SOURCE);
 
 const DIFF: DiffRange[] = [
-  // Heading reworded: "Setup" → "Configuration" (inline add + remove).
-  {
-    startLine: 1,
-    endLine: 1,
-    kind: "modified",
-    originalText: "# Widget Setup Guide",
-    linesAdded: 1,
-    linesDeleted: 1,
-  },
-  // Paragraph reworded + link target changed; pins both word marks and the
-  // shared metadata indicator.
-  {
-    startLine: 3,
-    endLine: 3,
-    kind: "modified",
-    originalText:
-      "Configure your widget by editing the [config file](https://example.com/settings-v1) in your home directory.",
-    linesAdded: 1,
-    linesDeleted: 1,
-  },
-  // Pure-added Prerequisites section (heading + two list items).
-  { startLine: 5, endLine: 8, kind: "added", linesAdded: 4 },
-  // Hard-wrapped ordered-list item edited across BOTH of its source lines —
-  // the reported bug shape. Renders as one <li> spanning lines 12-13.
-  {
-    startLine: 12,
-    endLine: 13,
-    kind: "modified",
-    originalText:
-      "1. Download the installer from the release page and run it using a standard\n   user account on the target host.",
-    linesAdded: 2,
-    linesDeleted: 2,
-  },
-  // Cadence column added; Default values also edited. Unchanged Option cells
-  // anchor each row so the structural alignment stays precise rather than
-  // falling back to an amber whole-row wash.
-  {
-    startLine: 18,
-    endLine: 21,
-    kind: "modified",
-    originalText: [
-      "| Option  | Default |",
-      "| ------- | ------- |",
-      "| theme   | light   |",
-      "| retries | 3       |",
-    ].join("\n"),
-    linesAdded: 4,
-    linesDeleted: 4,
-  },
-  // Removed table row: the chip + revealed row stay inside the existing table
-  // so all three cells inherit the parent grid's column widths.
-  {
-    startLine: 21,
-    endLine: 21,
-    kind: "deleted-marker",
-    linesDeleted: 1,
-    deletedContent: "| legacy  | 1       | Removed compatibility option. |",
-  },
-  // Blockquote reworded (inline add + remove).
-  {
-    startLine: 23,
-    endLine: 23,
-    kind: "modified",
-    originalText:
-      "> Tip: keep the settings file backed up somewhere for quick recovery.",
-    linesAdded: 1,
-    linesDeleted: 1,
-  },
-  // A removed "## Deprecated" section leaves a red deleted-marker before Notes.
-  {
-    startLine: 25,
-    endLine: 25,
-    kind: "deleted-marker",
-    linesDeleted: 3,
-    deletedContent:
-      "## Deprecated\n\n- The legacy config file format is no longer supported.",
-  },
+    // Heading reworded: "Setup" → "Configuration" (inline add + remove).
+    {
+        startLine: 1,
+        endLine: 1,
+        kind: "modified",
+        originalText: "# Widget Setup Guide",
+        linesAdded: 1,
+        linesDeleted: 1,
+    },
+    // Paragraph reworded + link target changed; pins both word marks and the
+    // shared metadata indicator.
+    {
+        startLine: 3,
+        endLine: 3,
+        kind: "modified",
+        originalText:
+            "Configure your widget by editing the [config file](https://example.com/settings-v1) in your home directory.",
+        linesAdded: 1,
+        linesDeleted: 1,
+    },
+    // Pure-added Prerequisites section (heading + two list items).
+    { startLine: 5, endLine: 8, kind: "added", linesAdded: 4 },
+    // Hard-wrapped ordered-list item edited across BOTH of its source lines —
+    // the reported bug shape. Renders as one <li> spanning lines 12-13.
+    {
+        startLine: 12,
+        endLine: 13,
+        kind: "modified",
+        originalText:
+            "1. Download the installer from the release page and run it using a standard\n   user account on the target host.",
+        linesAdded: 2,
+        linesDeleted: 2,
+    },
+    // Cadence column added; Default values also edited. Unchanged Option cells
+    // anchor each row so the structural alignment stays precise rather than
+    // falling back to an amber whole-row wash.
+    {
+        startLine: 18,
+        endLine: 21,
+        kind: "modified",
+        originalText: [
+            "| Option  | Default |",
+            "| ------- | ------- |",
+            "| theme   | light   |",
+            "| retries | 3       |",
+        ].join("\n"),
+        linesAdded: 4,
+        linesDeleted: 4,
+    },
+    // Removed table row: the chip + revealed row stay inside the existing table
+    // so all three cells inherit the parent grid's column widths.
+    {
+        startLine: 21,
+        endLine: 21,
+        kind: "deleted-marker",
+        linesDeleted: 1,
+        deletedContent: "| legacy  | 1       | Removed compatibility option. |",
+    },
+    // Blockquote reworded (inline add + remove).
+    {
+        startLine: 23,
+        endLine: 23,
+        kind: "modified",
+        originalText: "> Tip: keep the settings file backed up somewhere for quick recovery.",
+        linesAdded: 1,
+        linesDeleted: 1,
+    },
+    // A removed "## Deprecated" section leaves a red deleted-marker before Notes.
+    {
+        startLine: 25,
+        endLine: 25,
+        kind: "deleted-marker",
+        linesDeleted: 3,
+        deletedContent: "## Deprecated\n\n- The legacy config file format is no longer supported.",
+    },
 ];
 
 const THREADS: CommentThread[] = [
-  {
-    id: "t1",
-    filePath: "/widget-guide.md",
-    status: "active",
-    anchor: {
-      exact: "Everything else",
-      prefix: "",
-      suffix: " in this guide",
+    {
+        id: "t1",
+        filePath: "/widget-guide.md",
+        status: "active",
+        anchor: {
+            exact: "Everything else",
+            prefix: "",
+            suffix: " in this guide",
+        },
+        comments: [],
     },
-    comments: [],
-  },
 ];
 
 /** Applies an EMR theme to the document root for the story's lifetime. */
 function ThemeFrame({
-  theme,
-  width = 720,
-  children,
+    theme,
+    width = 720,
+    children,
 }: {
-  theme?: "dark" | "hc-light" | "hc-dark";
-  width?: number;
-  children: ReactNode;
+    theme?: "dark" | "hc-light" | "hc-dark";
+    width?: number;
+    children: ReactNode;
 }): ReactElement {
-  useLayoutEffect(() => {
-    const el = document.documentElement;
-    const prev = el.getAttribute("data-emr-theme");
-    if (theme) el.setAttribute("data-emr-theme", theme);
-    else el.removeAttribute("data-emr-theme");
+    useLayoutEffect(() => {
+        const el = document.documentElement;
+        const prev = el.getAttribute("data-emr-theme");
+        if (theme) el.setAttribute("data-emr-theme", theme);
+        else el.removeAttribute("data-emr-theme");
 
-    return () => {
-      if (prev) el.setAttribute("data-emr-theme", prev);
-      else el.removeAttribute("data-emr-theme");
-    };
-  }, [theme]);
+        return () => {
+            if (prev) el.setAttribute("data-emr-theme", prev);
+            else el.removeAttribute("data-emr-theme");
+        };
+    }, [theme]);
 
-  return (
-    <div
-      style={{
-        background: "var(--emr-bg)",
-        color: "var(--emr-fg)",
-        padding: 24,
-        width,
-      }}
-    >
-      {children}
-    </div>
-  );
+    return (
+        <div
+            style={{
+                background: "var(--emr-bg)",
+                color: "var(--emr-fg)",
+                padding: 24,
+                width,
+            }}
+        >
+            {children}
+        </div>
+    );
 }
 
 const meta = {
-  title: "Visual/ArticleDiff",
-  component: ArticleView,
-  parameters: { layout: "fullscreen" },
-  args: {
-    pristineHtml: HTML,
-    threads: THREADS,
-    activeThreadId: "t1",
-    draftAnchor: null,
-    diff: DIFF,
-    showDiff: true,
-    storageKey: "visual-widget-guide.md",
-    onAnchorsResolved: fn(),
-    onHighlightClick: fn(),
-    onSelection: fn(),
-  },
+    title: "Visual/ArticleDiff",
+    component: ArticleView,
+    parameters: { layout: "fullscreen" },
+    args: {
+        pristineHtml: HTML,
+        threads: THREADS,
+        activeThreadId: "t1",
+        draftAnchor: null,
+        diff: DIFF,
+        showDiff: true,
+        storageKey: "visual-widget-guide.md",
+        onAnchorsResolved: fn(),
+        onHighlightClick: fn(),
+        onSelection: fn(),
+    },
 } satisfies Meta<typeof ArticleView>;
 
 export default meta;
@@ -223,269 +221,258 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 function assertMicroBeforeTriggers(canvasElement: HTMLElement): void {
-  for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
-    ".emr-diff-before-trigger",
-  )) {
-    const control = trigger.closest<HTMLElement>(".emr-diff-before-control")!;
-    const panel = control.nextElementSibling as HTMLElement | null;
-    const controlParent = control.parentElement;
+    for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
+        ".emr-diff-before-trigger",
+    )) {
+        const control = trigger.closest<HTMLElement>(".emr-diff-before-control")!;
 
-    const owner = controlParent?.classList.contains("emr-diff-block")
-      ? controlParent
-      : (panel?.nextElementSibling as HTMLElement | null);
+        const panel = control.nextElementSibling as HTMLElement | null;
+        const controlParent = control.parentElement;
 
-    const triggerRect = trigger.getBoundingClientRect();
-    const ownerRect = owner?.getBoundingClientRect();
+        const owner = controlParent?.classList.contains("emr-diff-block")
+            ? controlParent
+            : (panel?.nextElementSibling as HTMLElement | null);
 
-    if (
-      trigger.textContent !== "Before" ||
-      trigger.getAttribute("aria-label") !== "Show previous version" ||
-      triggerRect.height > 19 ||
-      trigger.scrollWidth > trigger.clientWidth ||
-      trigger.scrollHeight > trigger.clientHeight ||
-      !ownerRect ||
-      triggerRect.left < ownerRect.left - 1 ||
-      triggerRect.right > ownerRect.right + 1 ||
-      triggerRect.top < ownerRect.top - 1 ||
-      triggerRect.bottom > ownerRect.bottom + 1
-    ) {
-      throw new Error(
-        `Before chip does not fit ${owner?.tagName ?? "unknown"}: trigger=${JSON.stringify({ left: triggerRect.left, right: triggerRect.right, top: triggerRect.top, bottom: triggerRect.bottom, clientWidth: trigger.clientWidth, scrollWidth: trigger.scrollWidth, clientHeight: trigger.clientHeight, scrollHeight: trigger.scrollHeight })} owner=${ownerRect ? JSON.stringify({ left: ownerRect.left, right: ownerRect.right, top: ownerRect.top, bottom: ownerRect.bottom }) : "missing"}`,
-      );
+        const triggerRect = trigger.getBoundingClientRect();
+        const ownerRect = owner?.getBoundingClientRect();
+
+        if (
+            trigger.textContent !== "Before" ||
+            trigger.getAttribute("aria-label") !== "Show previous version" ||
+            triggerRect.height > 19 ||
+            trigger.scrollWidth > trigger.clientWidth ||
+            trigger.scrollHeight > trigger.clientHeight ||
+            !ownerRect ||
+            triggerRect.left < ownerRect.left - 1 ||
+            triggerRect.right > ownerRect.right + 1 ||
+            triggerRect.top < ownerRect.top - 1 ||
+            triggerRect.bottom > ownerRect.bottom + 1
+        ) {
+            throw new Error(
+                `Before chip does not fit ${owner?.tagName ?? "unknown"}: trigger=${JSON.stringify({ left: triggerRect.left, right: triggerRect.right, top: triggerRect.top, bottom: triggerRect.bottom, clientWidth: trigger.clientWidth, scrollWidth: trigger.scrollWidth, clientHeight: trigger.clientHeight, scrollHeight: trigger.scrollHeight })} owner=${ownerRect ? JSON.stringify({ left: ownerRect.left, right: ownerRect.right, top: ownerRect.top, bottom: ownerRect.bottom }) : "missing"}`,
+            );
+        }
     }
-  }
 }
 
 async function waitForDiff(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(
-    () => {
-      if (!canvasElement.querySelector(".emr-diff-block")) {
-        throw new Error("diff not decorated yet");
-      }
+    await waitFor(
+        () => {
+            if (!canvasElement.querySelector(".emr-diff-block")) {
+                throw new Error("diff not decorated yet");
+            }
 
-      if (!canvasElement.querySelector(".emr-word-added")) {
-        throw new Error("inline word diff not applied yet");
-      }
-    },
-    { timeout: 5000 },
-  );
+            if (!canvasElement.querySelector(".emr-word-added")) {
+                throw new Error("inline word diff not applied yet");
+            }
+        },
+        { timeout: 5000 },
+    );
 
-  const tableMarker = canvasElement.querySelector<HTMLTableRowElement>(
-    "tr.emr-diff-deleted-table-row",
-  );
+    const tableMarker = canvasElement.querySelector<HTMLTableRowElement>(
+        "tr.emr-diff-deleted-table-row",
+    );
 
-  if (!tableMarker) throw new Error("deleted table row not rendered");
-  await waitFor(() => {
-    if (tableMarker.hidden) {
-      throw new Error("deleted table row not expanded yet");
-    }
-  });
+    if (!tableMarker) throw new Error("deleted table row not rendered");
+    await waitFor(() => {
+        if (tableMarker.hidden) {
+            throw new Error("deleted table row not expanded yet");
+        }
+    });
 }
 
 /** Light theme: green add wash, inline word edits, red deleted-marker. */
 export const Light: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitForDiff(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    play: async ({ canvasElement }) => {
+        await waitForDiff(canvasElement);
+    },
 };
 
 /** Dark theme: the same diff layer, verifying the dark colour tokens. */
 export const Dark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitForDiff(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    play: async ({ canvasElement }) => {
+        await waitForDiff(canvasElement);
+    },
 };
 
 const MINIMAL_LINE_WASH_SOURCE = [
-  "# Minimal Diff Geometry",
-  "",
-  "## Quality gates",
-  "",
-  "This changed paragraph deliberately contains enough prose to wrap across several rendered lines inside the narrow review surface while preserving a visibly incomplete final line at the end. Final note.",
-  "",
-  "- Every blocking comment has an owner.",
-  "- Links and diagrams render correctly.",
-  "- The decision owner records approval.",
+    "# Minimal Diff Geometry",
+    "",
+    "## Quality gates",
+    "",
+    "This changed paragraph deliberately contains enough prose to wrap across several rendered lines inside the narrow review surface while preserving a visibly incomplete final line at the end. Final note.",
+    "",
+    "- Every blocking comment has an owner.",
+    "- Links and diagrams render correctly.",
+    "- The decision owner records approval.",
 ].join("\n");
 
 /** Prose washes stop at each visual line's text edge, never the column edge. */
 export const MinimalLineWashes: Story = {
-  args: {
-    pristineHtml: renderMarkdownSync(MINIMAL_LINE_WASH_SOURCE),
-    documentPath: "/minimal-line-washes.md",
-    threads: [],
-    activeThreadId: null,
-    diff: [
-      { startLine: 3, endLine: 3, kind: "added" },
-      { startLine: 5, endLine: 5, kind: "added" },
-      { startLine: 7, endLine: 9, kind: "added" },
+    args: {
+        pristineHtml: renderMarkdownSync(MINIMAL_LINE_WASH_SOURCE),
+        documentPath: "/minimal-line-washes.md",
+        threads: [],
+        activeThreadId: null,
+        diff: [
+            { startLine: 3, endLine: 3, kind: "added" },
+            { startLine: 5, endLine: 5, kind: "added" },
+            { startLine: 7, endLine: 9, kind: "added" },
+        ],
+        storageKey: "minimal-line-washes.md",
+    },
+    decorators: [
+        (Story) => (
+            <ThemeFrame width={620}>
+                <Story />
+            </ThemeFrame>
+        ),
     ],
-    storageKey: "minimal-line-washes.md",
-  },
-  decorators: [
-    (Story) => (
-      <ThemeFrame width={620}>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitFor(() => {
-      const wrappers = canvasElement.querySelectorAll<HTMLElement>(
-        ".emr-diff-line-wash",
-      );
+    play: async ({ canvasElement }) => {
+        await waitFor(() => {
+            const wrappers = canvasElement.querySelectorAll<HTMLElement>(".emr-diff-line-wash");
 
-      if (wrappers.length !== 5) throw new Error("line washes not settled");
-    });
+            if (wrappers.length !== 5) throw new Error("line washes not settled");
+        });
 
-    const heading = canvasElement.querySelector<HTMLElement>(
-      "h2 .emr-diff-line-wash",
-    )!;
+        const heading = canvasElement.querySelector<HTMLElement>("h2 .emr-diff-line-wash")!;
 
-    const paragraph = canvasElement.querySelector<HTMLElement>(
-      "p .emr-diff-line-wash",
-    )!;
+        const paragraph = canvasElement.querySelector<HTMLElement>("p .emr-diff-line-wash")!;
 
-    const listWashes = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>("li > .emr-diff-line-wash"),
-    );
+        const listWashes = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>("li > .emr-diff-line-wash"),
+        );
 
-    const expectShortFinalRect = (wash: HTMLElement): DOMRect[] => {
-      const owner = wash.parentElement!;
-      const rects = Array.from(wash.getClientRects());
-      const finalRect = rects[rects.length - 1]!;
+        const expectShortFinalRect = (wash: HTMLElement): DOMRect[] => {
+            const owner = wash.parentElement!;
+            const rects = Array.from(wash.getClientRects());
+            const finalRect = rects[rects.length - 1]!;
 
-      if (finalRect.right >= owner.getBoundingClientRect().right - 24) {
-        throw new Error("line wash still reaches the block edge");
-      }
+            if (finalRect.right >= owner.getBoundingClientRect().right - 24) {
+                throw new Error("line wash still reaches the block edge");
+            }
 
-      return rects;
-    };
+            return rects;
+        };
 
-    expect(expectShortFinalRect(heading)).toHaveLength(1);
-    expect(expectShortFinalRect(paragraph).length).toBeGreaterThan(1);
-    expect(listWashes).toHaveLength(3);
+        expect(expectShortFinalRect(heading)).toHaveLength(1);
+        expect(expectShortFinalRect(paragraph).length).toBeGreaterThan(1);
+        expect(listWashes).toHaveLength(3);
 
-    for (const wash of listWashes) {
-      expect(expectShortFinalRect(wash)).toHaveLength(1);
-    }
-  },
+        for (const wash of listWashes) {
+            expect(expectShortFinalRect(wash)).toHaveLength(1);
+        }
+    },
 };
 
 const MINIMAL_DIFF_COMPARISON_SOURCE = [
-  /*  1 */ "# Minimal Diff Comparison",
-  /*  2 */ "",
-  /*  3 */ "## Single line",
-  /*  4 */ "",
-  /*  5 */ "Every blocking comment has an owner and a recorded resolution.",
-  /*  6 */ "",
-  /*  7 */ "## Wrapped prose",
-  /*  8 */ "",
-  /*  9 */ "This changed paragraph deliberately wraps across several visual lines so the final incomplete line demonstrates exactly where a minimal rendered diff should stop. Final note.",
-  /* 10 */ "",
-  /* 11 */ "## Contiguous lines",
-  /* 12 */ "",
-  /* 13 */ "- Links and diagrams render correctly.",
-  /* 14 */ "- Telemetry claims link to a durable query.",
-  /* 15 */ "- The decision owner records approval.",
-  /* 16 */ "",
-  /* 17 */ "## Code rewrite",
-  /* 18 */ "",
-  /* 19 */ "```powershell",
-  /* 20 */ "Invoke-RestMethod $healthEndpoint",
-  /* 21 */ "Write-Output 'healthy'",
-  /* 22 */ "```",
-  /* 23 */ "",
-  /* 24 */ "[runbook]: docs/current-runbook.md",
-  /* 25 */ "",
-  /* 26 */ "## Ambiguous table (intentionally broad)",
-  /* 27 */ "",
-  /* 28 */ "| Yes | Inserted | Yes |",
-  /* 29 */ "| --- | --- | --- |",
-  /* 30 */ "| Yes | New | Yes |",
+    /*  1 */ "# Minimal Diff Comparison",
+    /*  2 */ "",
+    /*  3 */ "## Single line",
+    /*  4 */ "",
+    /*  5 */ "Every blocking comment has an owner and a recorded resolution.",
+    /*  6 */ "",
+    /*  7 */ "## Wrapped prose",
+    /*  8 */ "",
+    /*  9 */ "This changed paragraph deliberately wraps across several visual lines so the final incomplete line demonstrates exactly where a minimal rendered diff should stop. Final note.",
+    /* 10 */ "",
+    /* 11 */ "## Contiguous lines",
+    /* 12 */ "",
+    /* 13 */ "- Links and diagrams render correctly.",
+    /* 14 */ "- Telemetry claims link to a durable query.",
+    /* 15 */ "- The decision owner records approval.",
+    /* 16 */ "",
+    /* 17 */ "## Code rewrite",
+    /* 18 */ "",
+    /* 19 */ "```powershell",
+    /* 20 */ "Invoke-RestMethod $healthEndpoint",
+    /* 21 */ "Write-Output 'healthy'",
+    /* 22 */ "```",
+    /* 23 */ "",
+    /* 24 */ "[runbook]: docs/current-runbook.md",
+    /* 25 */ "",
+    /* 26 */ "## Ambiguous table (intentionally broad)",
+    /* 27 */ "",
+    /* 28 */ "| Yes | Inserted | Yes |",
+    /* 29 */ "| --- | --- | --- |",
+    /* 30 */ "| Yes | New | Yes |",
 ].join("\n");
 
 const MINIMAL_DIFF_COMPARISON_ORIGINAL = [
-  "# Minimal Diff Comparison",
-  "",
-  "## Single line",
-  "",
-  "",
-  "",
-  "## Wrapped prose",
-  "",
-  "",
-  "",
-  "## Contiguous lines",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "## Code rewrite",
-  "",
-  "```powershell",
-  "Remove-Item legacy.cache -Force",
-  "```",
-  "",
-  "",
-  "[runbook]: docs/legacy-runbook.md",
-  "",
-  "## Ambiguous table (intentionally broad)",
-  "",
-  "| Yes | Yes |",
-  "| --- | --- |",
-  "| Yes | Yes |",
+    "# Minimal Diff Comparison",
+    "",
+    "## Single line",
+    "",
+    "",
+    "",
+    "## Wrapped prose",
+    "",
+    "",
+    "",
+    "## Contiguous lines",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "## Code rewrite",
+    "",
+    "```powershell",
+    "Remove-Item legacy.cache -Force",
+    "```",
+    "",
+    "",
+    "[runbook]: docs/legacy-runbook.md",
+    "",
+    "## Ambiguous table (intentionally broad)",
+    "",
+    "| Yes | Yes |",
+    "| --- | --- |",
+    "| Yes | Yes |",
 ].join("\n");
 
 const MINIMAL_DIFF_COMPARISON_RANGES: DiffRange[] = [
-  { startLine: 5, endLine: 5, kind: "added" },
-  { startLine: 9, endLine: 9, kind: "added" },
-  { startLine: 13, endLine: 15, kind: "added" },
-  {
-    startLine: 19,
-    endLine: 22,
-    kind: "modified",
-    originalStartLine: 19,
-    originalEndLine: 21,
-    originalText: [
-      "```powershell",
-      "Remove-Item legacy.cache -Force",
-      "```",
-    ].join("\n"),
-  },
-  {
-    startLine: 24,
-    endLine: 24,
-    kind: "modified",
-    originalStartLine: 24,
-    originalEndLine: 24,
-    originalText: "[runbook]: docs/legacy-runbook.md",
-  },
-  {
-    startLine: 28,
-    endLine: 30,
-    kind: "modified",
-    originalStartLine: 28,
-    originalEndLine: 30,
-    originalText: ["| Yes | Yes |", "| --- | --- |", "| Yes | Yes |"].join(
-      "\n",
-    ),
-  },
+    { startLine: 5, endLine: 5, kind: "added" },
+    { startLine: 9, endLine: 9, kind: "added" },
+    { startLine: 13, endLine: 15, kind: "added" },
+    {
+        startLine: 19,
+        endLine: 22,
+        kind: "modified",
+        originalStartLine: 19,
+        originalEndLine: 21,
+        originalText: ["```powershell", "Remove-Item legacy.cache -Force", "```"].join("\n"),
+    },
+    {
+        startLine: 24,
+        endLine: 24,
+        kind: "modified",
+        originalStartLine: 24,
+        originalEndLine: 24,
+        originalText: "[runbook]: docs/legacy-runbook.md",
+    },
+    {
+        startLine: 28,
+        endLine: 30,
+        kind: "modified",
+        originalStartLine: 28,
+        originalEndLine: 30,
+        originalText: ["| Yes | Yes |", "| --- | --- |", "| Yes | Yes |"].join("\n"),
+    },
 ];
 
 const LEGACY_DIFF_FIXTURE_CSS = `
@@ -500,1214 +487,1130 @@ const LEGACY_DIFF_FIXTURE_CSS = `
 `;
 
 function MinimalDiffComparison(): ReactElement {
-  const articleProps = {
-    pristineHtml: renderMarkdownSync(MINIMAL_DIFF_COMPARISON_SOURCE),
-    documentPath: "/minimal-diff-comparison.md",
-    threads: [],
-    activeThreadId: null,
-    draftAnchor: null,
-    storageKey: "minimal-diff-comparison.md",
-    diff: MINIMAL_DIFF_COMPARISON_RANGES,
-    originalSource: MINIMAL_DIFF_COMPARISON_ORIGINAL,
-    currentSource: MINIMAL_DIFF_COMPARISON_SOURCE,
-    showDiff: true,
-    onAnchorsResolved: fn(),
-    onHighlightClick: fn(),
-    onSelection: fn(),
-  } satisfies ComponentProps<typeof ArticleView>;
+    const articleProps = {
+        pristineHtml: renderMarkdownSync(MINIMAL_DIFF_COMPARISON_SOURCE),
+        documentPath: "/minimal-diff-comparison.md",
+        threads: [],
+        activeThreadId: null,
+        draftAnchor: null,
+        storageKey: "minimal-diff-comparison.md",
+        diff: MINIMAL_DIFF_COMPARISON_RANGES,
+        originalSource: MINIMAL_DIFF_COMPARISON_ORIGINAL,
+        currentSource: MINIMAL_DIFF_COMPARISON_SOURCE,
+        showDiff: true,
+        onAnchorsResolved: fn(),
+        onHighlightClick: fn(),
+        onSelection: fn(),
+    } satisfies ComponentProps<typeof ArticleView>;
 
-  return (
-    <ThemeFrame width={1280}>
-      <style>{LEGACY_DIFF_FIXTURE_CSS}</style>
-      <div className="minimal-diff-comparison">
-        <section className="minimal-diff-comparison-pane legacy-diff-washes">
-          <h2 className="minimal-diff-comparison-title">Before</h2>
-          <p className="minimal-diff-comparison-subtitle">
-            Full-width block washes
-          </p>
-          <ArticleView {...articleProps} storageKey="minimal-diff-before.md" />
-        </section>
-        <section className="minimal-diff-comparison-pane">
-          <h2 className="minimal-diff-comparison-title">After</h2>
-          <p className="minimal-diff-comparison-subtitle">
-            Text-fitted lines and intrinsic fallbacks
-          </p>
-          <ArticleView {...articleProps} storageKey="minimal-diff-after.md" />
-        </section>
-      </div>
-    </ThemeFrame>
-  );
+    return (
+        <ThemeFrame width={1280}>
+            <style>{LEGACY_DIFF_FIXTURE_CSS}</style>
+            <div className="minimal-diff-comparison">
+                <section className="minimal-diff-comparison-pane legacy-diff-washes">
+                    <h2 className="minimal-diff-comparison-title">Before</h2>
+                    <p className="minimal-diff-comparison-subtitle">Full-width block washes</p>
+                    <ArticleView {...articleProps} storageKey="minimal-diff-before.md" />
+                </section>
+                <section className="minimal-diff-comparison-pane">
+                    <h2 className="minimal-diff-comparison-title">After</h2>
+                    <p className="minimal-diff-comparison-subtitle">
+                        Text-fitted lines and intrinsic fallbacks
+                    </p>
+                    <ArticleView {...articleProps} storageKey="minimal-diff-after.md" />
+                </section>
+            </div>
+        </ThemeFrame>
+    );
 }
 
 /** Persistent before/after snapshot of every broad-wash minimization case. */
 export const MinimalDiffComparisonShot: Story = {
-  render: () => <MinimalDiffComparison />,
-  play: async ({ canvasElement }) => {
-    await waitFor(() => {
-      if (
-        canvasElement.querySelectorAll(".emr-diff-line-wash").length < 10 ||
-        canvasElement.querySelectorAll(".emr-diff-source-only").length !== 2
-      ) {
-        throw new Error("comparison diff fixtures not settled");
-      }
-    });
+    render: () => <MinimalDiffComparison />,
+    play: async ({ canvasElement }) => {
+        await waitFor(() => {
+            if (
+                canvasElement.querySelectorAll(".emr-diff-line-wash").length < 10 ||
+                canvasElement.querySelectorAll(".emr-diff-source-only").length !== 2
+            ) {
+                throw new Error("comparison diff fixtures not settled");
+            }
+        });
 
-    const afterPane = canvasElement.querySelectorAll<HTMLElement>(
-      ".minimal-diff-comparison-pane",
-    )[1]!;
+        const afterPane = canvasElement.querySelectorAll<HTMLElement>(
+            ".minimal-diff-comparison-pane",
+        )[1]!;
 
-    const codeWash = afterPane.querySelector<HTMLElement>(
-      "pre .emr-diff-line-wash",
-    )!;
+        const codeWash = afterPane.querySelector<HTMLElement>("pre .emr-diff-line-wash")!;
 
-    const sourceOnly = afterPane.querySelector<HTMLElement>(
-      ".emr-diff-source-only",
-    )!;
+        const sourceOnly = afterPane.querySelector<HTMLElement>(".emr-diff-source-only")!;
 
-    const article = afterPane.querySelector<HTMLElement>(".emr-rendered")!;
-    expect(codeWash.getClientRects().length).toBeGreaterThan(1);
-    expect(sourceOnly.getBoundingClientRect().width).toBeLessThan(
-      article.getBoundingClientRect().width - 80,
-    );
-    // Repeated table values remain a broad comparison: minimizing this region
-    // would imply a column alignment the source does not prove.
-    expect(
-      afterPane.querySelectorAll(
-        'tr[data-diff-amber-mode="comparison"]:not([data-diff-cells])',
-      ).length,
-    ).toBe(2);
-  },
+        const article = afterPane.querySelector<HTMLElement>(".emr-rendered")!;
+        expect(codeWash.getClientRects().length).toBeGreaterThan(1);
+        expect(sourceOnly.getBoundingClientRect().width).toBeLessThan(
+            article.getBoundingClientRect().width - 80,
+        );
+        // Repeated table values remain a broad comparison: minimizing this region
+        // would imply a column alignment the source does not prove.
+        expect(
+            afterPane.querySelectorAll(
+                'tr[data-diff-amber-mode="comparison"]:not([data-diff-cells])',
+            ).length,
+        ).toBe(2);
+    },
 };
 
-const MEDIA_IMAGE_URL = new URL("../../../static/logo.png", import.meta.url)
-  .href;
+const MEDIA_IMAGE_URL = new URL("../../../static/logo.png", import.meta.url).href;
 
 const MEDIA_SOURCE = [
-  "# Media Diff",
-  "",
-  "## Added image",
-  "",
-  `![Added architecture](${MEDIA_IMAGE_URL})`,
-  "",
-  "## Modified image",
-  "",
-  `![Current architecture](${MEDIA_IMAGE_URL})`,
+    "# Media Diff",
+    "",
+    "## Added image",
+    "",
+    `![Added architecture](${MEDIA_IMAGE_URL})`,
+    "",
+    "## Modified image",
+    "",
+    `![Current architecture](${MEDIA_IMAGE_URL})`,
 ].join("\n");
 
 const MEDIA_DIFF: DiffRange[] = [
-  { startLine: 5, endLine: 5, kind: "added" },
-  {
-    startLine: 9,
-    endLine: 9,
-    kind: "modified",
-    originalText: `![Legacy architecture](${MEDIA_IMAGE_URL})`,
-  },
+    { startLine: 5, endLine: 5, kind: "added" },
+    {
+        startLine: 9,
+        endLine: 9,
+        kind: "modified",
+        originalText: `![Legacy architecture](${MEDIA_IMAGE_URL})`,
+    },
 ];
 
 async function waitForMinimalMediaDiff(canvasElement: HTMLElement) {
-  await waitFor(() => {
-    const blocks =
-      canvasElement.querySelectorAll<HTMLElement>(".emr-diff-image");
+    await waitFor(() => {
+        const blocks = canvasElement.querySelectorAll<HTMLElement>(".emr-diff-image");
 
-    if (blocks.length !== 2) throw new Error("media diffs not decorated");
+        if (blocks.length !== 2) throw new Error("media diffs not decorated");
 
-    for (const block of blocks) {
-      const style = getComputedStyle(block);
+        for (const block of blocks) {
+            const style = getComputedStyle(block);
 
-      if (
-        style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
-        style.borderLeftWidth !== "0px" ||
-        style.boxShadow === "none"
-      ) {
-        throw new Error("media diff is not using the minimal left marker");
-      }
-    }
-  });
+            if (
+                style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+                style.borderLeftWidth !== "0px" ||
+                style.boxShadow === "none"
+            ) {
+                throw new Error("media diff is not using the minimal left marker");
+            }
+        }
+    });
 }
 
 /** Added and modified image-only blocks use a left marker instead of wash. */
 export const MediaDiffLight: Story = {
-  args: {
-    pristineHtml: renderMarkdownSync(MEDIA_SOURCE),
-    documentPath: "/media.md",
-    threads: [],
-    activeThreadId: null,
-    diff: MEDIA_DIFF,
-    storageKey: "media.md",
-  },
-  decorators: [
-    (Story) => (
-      <ThemeFrame width={860}>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitForMinimalMediaDiff(canvasElement);
-  },
+    args: {
+        pristineHtml: renderMarkdownSync(MEDIA_SOURCE),
+        documentPath: "/media.md",
+        threads: [],
+        activeThreadId: null,
+        diff: MEDIA_DIFF,
+        storageKey: "media.md",
+    },
+    decorators: [
+        (Story) => (
+            <ThemeFrame width={860}>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    play: async ({ canvasElement }) => {
+        await waitForMinimalMediaDiff(canvasElement);
+    },
 };
 
 export const MediaDiffDark: Story = {
-  ...MediaDiffLight,
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark" width={860}>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
+    ...MediaDiffLight,
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark" width={860}>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
 };
 
-function OriginalSourceRewrapArticle(
-  props: ComponentProps<typeof ArticleView>,
-): ReactElement {
-  const [originalSource, setOriginalSource] = useState<string>();
-  useEffect(() => setOriginalSource(SOURCE), []);
+function OriginalSourceRewrapArticle(props: ComponentProps<typeof ArticleView>): ReactElement {
+    const [originalSource, setOriginalSource] = useState<string>();
+    useEffect(() => setOriginalSource(SOURCE), []);
 
-  return (
-    <div data-original-source-ready={originalSource !== undefined}>
-      <ArticleView {...props} originalSource={originalSource} />
-    </div>
-  );
+    return (
+        <div data-original-source-ready={originalSource !== undefined}>
+            <ArticleView {...props} originalSource={originalSource} />
+        </div>
+    );
 }
 
 export const ActiveHighlightAfterOriginalSource: Story = {
-  render: (args) => <OriginalSourceRewrapArticle {...args} />,
-  play: async ({ canvasElement }) => {
-    await waitFor(() => {
-      if (
-        canvasElement.querySelector("[data-original-source-ready=true]") ===
-        null
-      ) {
-        throw new Error("original source did not settle");
-      }
+    render: (args) => <OriginalSourceRewrapArticle {...args} />,
+    play: async ({ canvasElement }) => {
+        await waitFor(() => {
+            if (canvasElement.querySelector("[data-original-source-ready=true]") === null) {
+                throw new Error("original source did not settle");
+            }
 
-      if (
-        canvasElement.querySelector(
-          '.emr-highlight.is-active[data-thread-id="t1"]',
-        ) === null
-      ) {
-        throw new Error("original-source rewrap dropped the active highlight");
-      }
-    });
-  },
+            if (
+                canvasElement.querySelector('.emr-highlight.is-active[data-thread-id="t1"]') ===
+                null
+            ) {
+                throw new Error("original-source rewrap dropped the active highlight");
+            }
+        });
+    },
 };
 
 const TABLE_SOURCE = [
-  /*  1 */ "# Table Diff Gallery",
-  /*  2 */ "",
-  /*  3 */ "## Added Column",
-  /*  4 */ "",
-  /*  5 */ "| Service | Cadence | Owner |",
-  /*  6 */ "| --- | --- | --- |",
-  /*  7 */ "| Checkout | Every 30 minutes | Platform |",
-  /*  8 */ "| Search | Every 60 minutes | Discovery |",
-  /*  9 */ "",
-  /* 10 */ "## Rich Cell Edit",
-  /* 11 */ "",
-  /* 12 */ "| Resource | Link | Guidance |",
-  /* 13 */ "| --- | --- | --- |",
-  /* 14 */ "| Incident guide | [Response guide](https://support.fabrikam.test/v2) | Notify after the first failed mitigation and include affected regions in the response log. |",
-  /* 15 */ "| Dashboard | [Service health](https://example.com/health) | Unchanged control row. |",
-  /* 16 */ "",
-  /* 17 */ "## Amber Fallback",
-  /* 18 */ "",
-  /* 19 */ "| Modern field | Modern value | Owner |",
-  /* 20 */ "| --- | --- | --- |",
-  /* 21 */ "| Modern schedule | Continuous | Automation |",
-  /* 22 */ "",
-  /* 23 */ "## Removed and Added Rows",
-  /* 24 */ "",
-  /* 25 */ "| Region | Status | Owner |",
-  /* 26 */ "| --- | --- | --- |",
-  /* 27 */ "| East US | Active | Core platform |",
-  /* 28 */ "| West Europe | Active | Core platform |",
-  /* 29 */ "| North Europe | New | Edge platform |",
-  /* 30 */ "",
-  /* 31 */ "## Removed Column",
-  /* 32 */ "",
-  /* 33 */ "| Service | Owner |",
-  /* 34 */ "| --- | --- |",
-  /* 35 */ "| Checkout | Platform |",
+    /*  1 */ "# Table Diff Gallery",
+    /*  2 */ "",
+    /*  3 */ "## Added Column",
+    /*  4 */ "",
+    /*  5 */ "| Service | Cadence | Owner |",
+    /*  6 */ "| --- | --- | --- |",
+    /*  7 */ "| Checkout | Every 30 minutes | Platform |",
+    /*  8 */ "| Search | Every 60 minutes | Discovery |",
+    /*  9 */ "",
+    /* 10 */ "## Rich Cell Edit",
+    /* 11 */ "",
+    /* 12 */ "| Resource | Link | Guidance |",
+    /* 13 */ "| --- | --- | --- |",
+    /* 14 */ "| Incident guide | [Response guide](https://support.fabrikam.test/v2) | Notify after the first failed mitigation and include affected regions in the response log. |",
+    /* 15 */ "| Dashboard | [Service health](https://example.com/health) | Unchanged control row. |",
+    /* 16 */ "",
+    /* 17 */ "## Amber Fallback",
+    /* 18 */ "",
+    /* 19 */ "| Modern field | Modern value | Owner |",
+    /* 20 */ "| --- | --- | --- |",
+    /* 21 */ "| Modern schedule | Continuous | Automation |",
+    /* 22 */ "",
+    /* 23 */ "## Removed and Added Rows",
+    /* 24 */ "",
+    /* 25 */ "| Region | Status | Owner |",
+    /* 26 */ "| --- | --- | --- |",
+    /* 27 */ "| East US | Active | Core platform |",
+    /* 28 */ "| West Europe | Active | Core platform |",
+    /* 29 */ "| North Europe | New | Edge platform |",
+    /* 30 */ "",
+    /* 31 */ "## Removed Column",
+    /* 32 */ "",
+    /* 33 */ "| Service | Owner |",
+    /* 34 */ "| --- | --- |",
+    /* 35 */ "| Checkout | Platform |",
 ].join("\n");
 
 const TABLE_DIFF: DiffRange[] = [
-  {
-    startLine: 5,
-    endLine: 8,
-    kind: "modified",
-    originalText: [
-      "| Service | Owner |",
-      "| --- | --- |",
-      "| Checkout | Platform |",
-      "| Search | Discovery |",
-    ].join("\n"),
-  },
-  {
-    startLine: 14,
-    endLine: 14,
-    kind: "modified",
-    originalText:
-      "| Incident guide | [Legacy guide](https://docs.contoso.test/v1) | Notify after the second failed mitigation and include customer impact in the response log. |",
-  },
-  {
-    startLine: 19,
-    endLine: 21,
-    kind: "modified",
-    originalText: [
-      "| Legacy field | Legacy value |",
-      "| --- | --- |",
-      "| Legacy policy | Weekly batch |",
-    ].join("\n"),
-  },
-  {
-    startLine: 28,
-    endLine: 28,
-    kind: "deleted-marker",
-    linesDeleted: 1,
-    deletedContent: "| Central US | Deprecated | Legacy operations |",
-  },
-  { startLine: 29, endLine: 29, kind: "added", linesAdded: 1 },
-  {
-    startLine: 33,
-    endLine: 35,
-    kind: "modified",
-    originalText: [
-      "| Service | Legacy | Owner |",
-      "| --- | --- | --- |",
-      "| Checkout | Enabled | Platform |",
-    ].join("\n"),
-  },
+    {
+        startLine: 5,
+        endLine: 8,
+        kind: "modified",
+        originalText: [
+            "| Service | Owner |",
+            "| --- | --- |",
+            "| Checkout | Platform |",
+            "| Search | Discovery |",
+        ].join("\n"),
+    },
+    {
+        startLine: 14,
+        endLine: 14,
+        kind: "modified",
+        originalText:
+            "| Incident guide | [Legacy guide](https://docs.contoso.test/v1) | Notify after the second failed mitigation and include customer impact in the response log. |",
+    },
+    {
+        startLine: 19,
+        endLine: 21,
+        kind: "modified",
+        originalText: [
+            "| Legacy field | Legacy value |",
+            "| --- | --- |",
+            "| Legacy policy | Weekly batch |",
+        ].join("\n"),
+    },
+    {
+        startLine: 28,
+        endLine: 28,
+        kind: "deleted-marker",
+        linesDeleted: 1,
+        deletedContent: "| Central US | Deprecated | Legacy operations |",
+    },
+    { startLine: 29, endLine: 29, kind: "added", linesAdded: 1 },
+    {
+        startLine: 33,
+        endLine: 35,
+        kind: "modified",
+        originalText: [
+            "| Service | Legacy | Owner |",
+            "| --- | --- | --- |",
+            "| Checkout | Enabled | Platform |",
+        ].join("\n"),
+    },
 ];
 
 async function waitForTableGallery(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(() => {
-    for (const selector of [
-      ".emr-diff-cell--added",
-      ".emr-diff-cell--inline",
-      "tr.emr-diff-block--modified:not([data-diff-cells])",
-      "tr.emr-diff-deleted-table-row",
-      ".emr-diff-metadata-trigger",
-      ".emr-diff-before-trigger",
-    ]) {
-      if (!canvasElement.querySelector(selector)) {
-        throw new Error(`table gallery missing ${selector}`);
-      }
-    }
-  });
-  assertMicroBeforeTriggers(canvasElement);
-  canvasElement
-    .querySelector<HTMLButtonElement>(".emr-diff-metadata-trigger")!
-    .click();
-  canvasElement
-    .querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!
-    .click();
-  await waitFor(() => {
-    const trigger = canvasElement.querySelector<HTMLButtonElement>(
-      ".emr-diff-metadata-trigger",
-    )!;
+    await waitFor(() => {
+        for (const selector of [
+            ".emr-diff-cell--added",
+            ".emr-diff-cell--inline",
+            "tr.emr-diff-block--modified:not([data-diff-cells])",
+            "tr.emr-diff-deleted-table-row",
+            ".emr-diff-metadata-trigger",
+            ".emr-diff-before-trigger",
+        ]) {
+            if (!canvasElement.querySelector(selector)) {
+                throw new Error(`table gallery missing ${selector}`);
+            }
+        }
+    });
+    assertMicroBeforeTriggers(canvasElement);
+    canvasElement.querySelector<HTMLButtonElement>(".emr-diff-metadata-trigger")!.click();
+    canvasElement.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!.click();
+    await waitFor(() => {
+        const trigger = canvasElement.querySelector<HTMLButtonElement>(
+            ".emr-diff-metadata-trigger",
+        )!;
 
-    const panel = canvasElement.querySelector<HTMLElement>(
-      ".emr-diff-metadata-panel",
-    )!;
+        const panel = canvasElement.querySelector<HTMLElement>(".emr-diff-metadata-panel")!;
 
-    if (!panel.matches(":popover-open")) {
-      throw new Error("metadata popover not open");
-    }
+        if (!panel.matches(":popover-open")) {
+            throw new Error("metadata popover not open");
+        }
 
-    if (
-      trigger.getAttribute("aria-expanded") !== "true" ||
-      trigger.getAttribute("aria-controls") !== panel.id
-    ) {
-      throw new Error("metadata popover ARIA is not synchronized");
-    }
+        if (
+            trigger.getAttribute("aria-expanded") !== "true" ||
+            trigger.getAttribute("aria-controls") !== panel.id
+        ) {
+            throw new Error("metadata popover ARIA is not synchronized");
+        }
 
-    const panelRect = panel.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
 
-    if (panelRect.top < 7 || panelRect.bottom > window.innerHeight - 7) {
-      throw new Error("metadata popover extends beyond the viewport");
-    }
+        if (panelRect.top < 7 || panelRect.bottom > window.innerHeight - 7) {
+            throw new Error("metadata popover extends beyond the viewport");
+        }
 
-    if (
-      canvasElement.querySelector<HTMLElement>(".emr-diff-before-panel")!.hidden
-    ) {
-      throw new Error("before table not expanded");
-    }
+        if (canvasElement.querySelector<HTMLElement>(".emr-diff-before-panel")!.hidden) {
+            throw new Error("before table not expanded");
+        }
 
-    const removedRowCell = canvasElement.querySelector<HTMLElement>(
-      "tr.emr-diff-deleted-table-row > td",
-    );
+        const removedRowCell = canvasElement.querySelector<HTMLElement>(
+            "tr.emr-diff-deleted-table-row > td",
+        );
 
-    const removedColumnCell = canvasElement.querySelector<HTMLElement>(
-      "td.emr-diff-cell--removed, th.emr-diff-cell--removed",
-    );
+        const removedColumnCell = canvasElement.querySelector<HTMLElement>(
+            "td.emr-diff-cell--removed, th.emr-diff-cell--removed",
+        );
 
-    if (!removedRowCell || !removedColumnCell) {
-      throw new Error("structural removal examples not rendered");
-    }
+        if (!removedRowCell || !removedColumnCell) {
+            throw new Error("structural removal examples not rendered");
+        }
 
-    const removedRowBackground =
-      getComputedStyle(removedRowCell).backgroundColor;
+        const removedRowBackground = getComputedStyle(removedRowCell).backgroundColor;
 
-    const removedColumnBackground =
-      getComputedStyle(removedColumnCell).backgroundColor;
+        const removedColumnBackground = getComputedStyle(removedColumnCell).backgroundColor;
 
-    if (removedRowBackground !== removedColumnBackground) {
-      throw new Error(
-        `removed row (${removedRowBackground}) and column (${removedColumnBackground}) washes do not match`,
-      );
-    }
-  });
+        if (removedRowBackground !== removedColumnBackground) {
+            throw new Error(
+                `removed row (${removedRowBackground}) and column (${removedColumnBackground}) washes do not match`,
+            );
+        }
+    });
 
-  const trigger = canvasElement.querySelector<HTMLButtonElement>(
-    ".emr-diff-metadata-trigger",
-  )!;
+    const trigger = canvasElement.querySelector<HTMLButtonElement>(".emr-diff-metadata-trigger")!;
 
-  const panel = canvasElement.querySelector<HTMLElement>(
-    ".emr-diff-metadata-panel",
-  )!;
+    const panel = canvasElement.querySelector<HTMLElement>(".emr-diff-metadata-panel")!;
 
-  (
-    panel as HTMLElement & {
-      hidePopover(): void;
-    }
-  ).hidePopover();
-  await waitFor(() => {
-    if (
-      panel.matches(":popover-open") ||
-      trigger.getAttribute("aria-expanded") !== "false"
-    ) {
-      throw new Error("metadata popover did not synchronize after Escape");
-    }
-  });
-  trigger.click();
-  await waitFor(() => {
-    if (
-      !panel.matches(":popover-open") ||
-      trigger.getAttribute("aria-expanded") !== "true"
-    ) {
-      throw new Error("metadata popover did not reopen");
-    }
-  });
+    (
+        panel as HTMLElement & {
+            hidePopover(): void;
+        }
+    ).hidePopover();
+    await waitFor(() => {
+        if (panel.matches(":popover-open") || trigger.getAttribute("aria-expanded") !== "false") {
+            throw new Error("metadata popover did not synchronize after Escape");
+        }
+    });
+    trigger.click();
+    await waitFor(() => {
+        if (!panel.matches(":popover-open") || trigger.getAttribute("aria-expanded") !== "true") {
+            throw new Error("metadata popover did not reopen");
+        }
+    });
 }
 
 export const TableGalleryLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(TABLE_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: TABLE_DIFF,
-    storageKey: "visual-table-gallery.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForTableGallery(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(TABLE_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: TABLE_DIFF,
+        storageKey: "visual-table-gallery.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForTableGallery(canvasElement);
+    },
 };
 
 export const TableGalleryDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(TABLE_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: TABLE_DIFF,
-    storageKey: "visual-table-gallery-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForTableGallery(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(TABLE_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: TABLE_DIFF,
+        storageKey: "visual-table-gallery-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForTableGallery(canvasElement);
+    },
 };
 
 const CONFIDENCE_SOURCE = [
-  /*  1 */ "# Table Alignment Confidence",
-  /*  2 */ "",
-  /*  3 */ "## Header Rename",
-  /*  4 */ "",
-  /*  5 */ "| Service | Primary owner |",
-  /*  6 */ "| --- | --- |",
-  /*  7 */ "| Checkout | Platform |",
-  /*  8 */ "",
-  /*  9 */ "## Swapped Columns",
-  /* 10 */ "",
-  /* 11 */ "| Owner | Cadence |",
-  /* 12 */ "| --- | --- |",
-  /* 13 */ "| Platform | Every hour |",
-  /* 14 */ "| Operations | Every day |",
-  /* 15 */ "",
-  /* 16 */ "## Repeated Value Fallback",
-  /* 17 */ "",
-  /* 18 */ "| Yes | Inserted | Yes |",
-  /* 19 */ "| --- | --- | --- |",
-  /* 20 */ "| Yes | New | Yes |",
-  /* 21 */ "",
-  /* 22 */ "## Empty Value Fallback",
-  /* 23 */ "",
-  /* 24 */ "| | Cadence | |",
-  /* 25 */ "| --- | --- | --- |",
-  /* 26 */ "| Schedule | Continuous | |",
-  /* 27 */ "",
-  /* 28 */ "## Formatting Only",
-  /* 29 */ "",
-  /* 30 */ "| Resource | Description |",
-  /* 31 */ "| --- | --- |",
-  /* 32 */ "| Runbook | **incident guide** |",
-  /* 33 */ "| Dashboard | service health |",
+    /*  1 */ "# Table Alignment Confidence",
+    /*  2 */ "",
+    /*  3 */ "## Header Rename",
+    /*  4 */ "",
+    /*  5 */ "| Service | Primary owner |",
+    /*  6 */ "| --- | --- |",
+    /*  7 */ "| Checkout | Platform |",
+    /*  8 */ "",
+    /*  9 */ "## Swapped Columns",
+    /* 10 */ "",
+    /* 11 */ "| Owner | Cadence |",
+    /* 12 */ "| --- | --- |",
+    /* 13 */ "| Platform | Every hour |",
+    /* 14 */ "| Operations | Every day |",
+    /* 15 */ "",
+    /* 16 */ "## Repeated Value Fallback",
+    /* 17 */ "",
+    /* 18 */ "| Yes | Inserted | Yes |",
+    /* 19 */ "| --- | --- | --- |",
+    /* 20 */ "| Yes | New | Yes |",
+    /* 21 */ "",
+    /* 22 */ "## Empty Value Fallback",
+    /* 23 */ "",
+    /* 24 */ "| | Cadence | |",
+    /* 25 */ "| --- | --- | --- |",
+    /* 26 */ "| Schedule | Continuous | |",
+    /* 27 */ "",
+    /* 28 */ "## Formatting Only",
+    /* 29 */ "",
+    /* 30 */ "| Resource | Description |",
+    /* 31 */ "| --- | --- |",
+    /* 32 */ "| Runbook | **incident guide** |",
+    /* 33 */ "| Dashboard | service health |",
 ].join("\n");
 
 const CONFIDENCE_DIFF: DiffRange[] = [
-  {
-    startLine: 5,
-    endLine: 7,
-    kind: "modified",
-    originalText: [
-      "| Service | Response owner |",
-      "| --- | --- |",
-      "| Checkout | Platform |",
-    ].join("\n"),
-  },
-  {
-    startLine: 11,
-    endLine: 14,
-    kind: "modified",
-    originalText: [
-      "| Cadence | Owner |",
-      "| --- | --- |",
-      "| Every hour | Platform |",
-      "| Every day | Operations |",
-    ].join("\n"),
-  },
-  {
-    startLine: 18,
-    endLine: 20,
-    kind: "modified",
-    originalText: ["| Yes | Yes |", "| --- | --- |", "| Yes | Yes |"].join(
-      "\n",
-    ),
-  },
-  {
-    startLine: 24,
-    endLine: 26,
-    kind: "modified",
-    originalText: ["| | |", "| --- | --- |", "| Schedule | |"].join("\n"),
-  },
-  {
-    startLine: 32,
-    endLine: 32,
-    kind: "modified",
-    originalText: "| Runbook | incident guide |",
-  },
+    {
+        startLine: 5,
+        endLine: 7,
+        kind: "modified",
+        originalText: [
+            "| Service | Response owner |",
+            "| --- | --- |",
+            "| Checkout | Platform |",
+        ].join("\n"),
+    },
+    {
+        startLine: 11,
+        endLine: 14,
+        kind: "modified",
+        originalText: [
+            "| Cadence | Owner |",
+            "| --- | --- |",
+            "| Every hour | Platform |",
+            "| Every day | Operations |",
+        ].join("\n"),
+    },
+    {
+        startLine: 18,
+        endLine: 20,
+        kind: "modified",
+        originalText: ["| Yes | Yes |", "| --- | --- |", "| Yes | Yes |"].join("\n"),
+    },
+    {
+        startLine: 24,
+        endLine: 26,
+        kind: "modified",
+        originalText: ["| | |", "| --- | --- |", "| Schedule | |"].join("\n"),
+    },
+    {
+        startLine: 32,
+        endLine: 32,
+        kind: "modified",
+        originalText: "| Runbook | incident guide |",
+    },
 ];
 
-async function waitForConfidenceGallery(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitFor(() => {
-    if (
-      canvasElement.querySelectorAll(".emr-diff-before-trigger").length !== 2
-    ) {
-      throw new Error("confidence fallbacks not rendered");
+async function waitForConfidenceGallery(canvasElement: HTMLElement): Promise<void> {
+    await waitFor(() => {
+        if (canvasElement.querySelectorAll(".emr-diff-before-trigger").length !== 2) {
+            throw new Error("confidence fallbacks not rendered");
+        }
+
+        if (!canvasElement.querySelector("thead .emr-word-added")) {
+            throw new Error("header rename not rendered");
+        }
+
+        const formattingCell = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
+        ).find((cell) => cell.textContent?.includes("incident guide"));
+
+        if (
+            !formattingCell ||
+            !formattingCell.classList.contains("emr-diff-cell--inline") ||
+            formattingCell.querySelector(".emr-diff-format-change")?.textContent !==
+                "incident guide" ||
+            formattingCell.querySelector(".emr-diff-metadata")
+        ) {
+            throw new Error("formatting-only cell was not marked precisely");
+        }
+    });
+    assertMicroBeforeTriggers(canvasElement);
+
+    for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
+        ".emr-diff-before-trigger",
+    )) {
+        trigger.click();
     }
 
-    if (!canvasElement.querySelector("thead .emr-word-added")) {
-      throw new Error("header rename not rendered");
-    }
+    await waitFor(() => {
+        const panels = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>(".emr-diff-before-panel"),
+        );
 
-    const formattingCell = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
-    ).find((cell) => cell.textContent?.includes("incident guide"));
-
-    if (
-      !formattingCell ||
-      !formattingCell.classList.contains("emr-diff-cell--inline") ||
-      formattingCell.querySelector(".emr-diff-format-change")?.textContent !==
-        "incident guide" ||
-      formattingCell.querySelector(".emr-diff-metadata")
-    ) {
-      throw new Error("formatting-only cell was not marked precisely");
-    }
-  });
-  assertMicroBeforeTriggers(canvasElement);
-
-  for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
-    ".emr-diff-before-trigger",
-  )) {
-    trigger.click();
-  }
-
-  await waitFor(() => {
-    const panels = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>(".emr-diff-before-panel"),
-    );
-
-    if (panels.length !== 2 || panels.some((panel) => panel.hidden)) {
-      throw new Error("confidence before panels not expanded");
-    }
-  });
+        if (panels.length !== 2 || panels.some((panel) => panel.hidden)) {
+            throw new Error("confidence before panels not expanded");
+        }
+    });
 }
 
 export const TableConfidenceLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(CONFIDENCE_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: CONFIDENCE_DIFF,
-    storageKey: "visual-table-confidence.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForConfidenceGallery(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(CONFIDENCE_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: CONFIDENCE_DIFF,
+        storageKey: "visual-table-confidence.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForConfidenceGallery(canvasElement);
+    },
 };
 
 export const TableConfidenceDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(CONFIDENCE_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: CONFIDENCE_DIFF,
-    storageKey: "visual-table-confidence-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForConfidenceGallery(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(CONFIDENCE_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: CONFIDENCE_DIFF,
+        storageKey: "visual-table-confidence-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForConfidenceGallery(canvasElement);
+    },
 };
 
 const FORMATTING_SOURCE = [
-  "# Formatting Precision",
-  "",
-  "This sentence is **bold** now.",
-  "",
-  "| Resource | Description |",
-  "| --- | --- |",
-  "| Runbook | **incident guide** |",
+    "# Formatting Precision",
+    "",
+    "This sentence is **bold** now.",
+    "",
+    "| Resource | Description |",
+    "| --- | --- |",
+    "| Runbook | **incident guide** |",
 ].join("\n");
 
 const FORMATTING_DIFF: DiffRange[] = [
-  {
-    startLine: 3,
-    endLine: 3,
-    kind: "modified",
-    originalText: "This sentence is bold now.",
-  },
-  {
-    startLine: 7,
-    endLine: 7,
-    kind: "modified",
-    originalText: "| Runbook | incident guide |",
-  },
+    {
+        startLine: 3,
+        endLine: 3,
+        kind: "modified",
+        originalText: "This sentence is bold now.",
+    },
+    {
+        startLine: 7,
+        endLine: 7,
+        kind: "modified",
+        originalText: "| Runbook | incident guide |",
+    },
 ];
 
-async function waitForFormattingPrecision(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitFor(() => {
-    const paragraph = canvasElement.querySelector<HTMLElement>(
-      "p.emr-diff-block--inline",
-    );
+async function waitForFormattingPrecision(canvasElement: HTMLElement): Promise<void> {
+    await waitFor(() => {
+        const paragraph = canvasElement.querySelector<HTMLElement>("p.emr-diff-block--inline");
 
-    const cell = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
-    ).find((candidate) => candidate.textContent?.includes("incident guide"));
+        const cell = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>("td.emr-diff-cell"),
+        ).find((candidate) => candidate.textContent?.includes("incident guide"));
 
-    if (
-      !paragraph ||
-      paragraph.querySelector(".emr-diff-format-change")?.textContent !==
-        "bold" ||
-      paragraph.querySelector(".emr-diff-metadata") ||
-      !cell ||
-      !cell.classList.contains("emr-diff-cell--inline") ||
-      cell.querySelector(".emr-diff-format-change")?.textContent !==
-        "incident guide" ||
-      cell.querySelector(".emr-diff-metadata")
-    ) {
-      throw new Error("formatting-only changes were not marked precisely");
-    }
+        if (
+            !paragraph ||
+            paragraph.querySelector(".emr-diff-format-change")?.textContent !== "bold" ||
+            paragraph.querySelector(".emr-diff-metadata") ||
+            !cell ||
+            !cell.classList.contains("emr-diff-cell--inline") ||
+            cell.querySelector(".emr-diff-format-change")?.textContent !== "incident guide" ||
+            cell.querySelector(".emr-diff-metadata")
+        ) {
+            throw new Error("formatting-only changes were not marked precisely");
+        }
 
-    if (canvasElement.querySelector(".emr-diff-before-trigger")) {
-      throw new Error("precise formatting diff exposed a Before fallback");
-    }
-  });
+        if (canvasElement.querySelector(".emr-diff-before-trigger")) {
+            throw new Error("precise formatting diff exposed a Before fallback");
+        }
+    });
 }
 
 export const FormattingPrecisionLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(FORMATTING_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: FORMATTING_DIFF,
-    storageKey: "visual-formatting-precision.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForFormattingPrecision(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(FORMATTING_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: FORMATTING_DIFF,
+        storageKey: "visual-formatting-precision.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForFormattingPrecision(canvasElement);
+    },
 };
 
 export const FormattingPrecisionDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(FORMATTING_SOURCE),
-    threads: [],
-    activeThreadId: null,
-    diff: FORMATTING_DIFF,
-    storageKey: "visual-formatting-precision-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForFormattingPrecision(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(FORMATTING_SOURCE),
+        threads: [],
+        activeThreadId: null,
+        diff: FORMATTING_DIFF,
+        storageKey: "visual-formatting-precision-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForFormattingPrecision(canvasElement);
+    },
 };
 
 const BLOCK_CONFIDENCE_SOURCE = [
-  /*  1 */ "# Block Diff Confidence",
-  /*  2 */ "",
-  /*  3 */ "## Wholesale Rewrite",
-  /*  4 */ "",
-  /*  5 */ "Production traffic now follows a staged regional rollout with automated health gates.",
-  /*  6 */ "",
-  /*  7 */ "## Reconstructed Hard Wrap",
-  /*  8 */ "",
-  /*  9 */ "The deployment guide keeps this opening phrase and now recommends",
-  /* 10 */ "the staged verification path for regional rollouts while preserving",
-  /* 11 */ "the final rollback checklist for operators.",
-  /* 12 */ "",
-  /* 13 */ "## Heading Structure",
-  /* 14 */ "",
-  /* 15 */ "### Approval workflow",
-  /* 16 */ "",
-  /* 17 */ "## List Structure",
-  /* 18 */ "",
-  /* 19 */ "- Preserve customer context through the handoff.",
-  /* 20 */ "",
-  /* 21 */ "## Quote Rewrite",
-  /* 22 */ "",
-  /* 23 */ "> Escalate after the first failed mitigation and page the regional owner.",
-  /* 24 */ "",
-  /* 25 */ "## Code Edit",
-  /* 26 */ "",
-  /* 27 */ "```ts",
-  /* 28 */ "const timeout = 30;",
-  /* 29 */ "```",
-  /* 30 */ "",
-  /* 31 */ "## Code Rewrite",
-  /* 32 */ "",
-  /* 33 */ "```powershell",
-  /* 34 */ "Invoke-RestMethod $healthEndpoint",
-  /* 35 */ "```",
-  /* 36 */ "",
-  /* 37 */ "## Link Wrapping",
-  /* 38 */ "",
-  /* 39 */ "Read the [deployment guide](https://example.com/deployment) before continuing.",
-  /* 40 */ "",
-  /* 41 */ "## Checklist State",
-  /* 42 */ "",
-  /* 43 */ "- [x] Confirm the rollback owner.",
-  /* 44 */ "",
-  /* 45 */ "## Formatting Only",
-  /* 46 */ "",
-  /* 47 */ "The **release owner** confirms the deployment window.",
+    /*  1 */ "# Block Diff Confidence",
+    /*  2 */ "",
+    /*  3 */ "## Wholesale Rewrite",
+    /*  4 */ "",
+    /*  5 */ "Production traffic now follows a staged regional rollout with automated health gates.",
+    /*  6 */ "",
+    /*  7 */ "## Reconstructed Hard Wrap",
+    /*  8 */ "",
+    /*  9 */ "The deployment guide keeps this opening phrase and now recommends",
+    /* 10 */ "the staged verification path for regional rollouts while preserving",
+    /* 11 */ "the final rollback checklist for operators.",
+    /* 12 */ "",
+    /* 13 */ "## Heading Structure",
+    /* 14 */ "",
+    /* 15 */ "### Approval workflow",
+    /* 16 */ "",
+    /* 17 */ "## List Structure",
+    /* 18 */ "",
+    /* 19 */ "- Preserve customer context through the handoff.",
+    /* 20 */ "",
+    /* 21 */ "## Quote Rewrite",
+    /* 22 */ "",
+    /* 23 */ "> Escalate after the first failed mitigation and page the regional owner.",
+    /* 24 */ "",
+    /* 25 */ "## Code Edit",
+    /* 26 */ "",
+    /* 27 */ "```ts",
+    /* 28 */ "const timeout = 30;",
+    /* 29 */ "```",
+    /* 30 */ "",
+    /* 31 */ "## Code Rewrite",
+    /* 32 */ "",
+    /* 33 */ "```powershell",
+    /* 34 */ "Invoke-RestMethod $healthEndpoint",
+    /* 35 */ "```",
+    /* 36 */ "",
+    /* 37 */ "## Link Wrapping",
+    /* 38 */ "",
+    /* 39 */ "Read the [deployment guide](https://example.com/deployment) before continuing.",
+    /* 40 */ "",
+    /* 41 */ "## Checklist State",
+    /* 42 */ "",
+    /* 43 */ "- [x] Confirm the rollback owner.",
+    /* 44 */ "",
+    /* 45 */ "## Formatting Only",
+    /* 46 */ "",
+    /* 47 */ "The **release owner** confirms the deployment window.",
 ].join("\n");
 
 const BLOCK_CONFIDENCE_ORIGINAL = [
-  "# Block Diff Confidence",
-  "",
-  "## Wholesale Rewrite",
-  "",
-  "A legacy operator manually copied a checklist into each ticket before deployment.",
-  "",
-  "## Reconstructed Hard Wrap",
-  "",
-  "The deployment guide keeps this opening phrase and now recommends",
-  "the direct verification path for global rollouts while preserving",
-  "the final rollback checklist for operators.",
-  "",
-  "## Heading Structure",
-  "",
-  "## Approval workflow",
-  "",
-  "## List Structure",
-  "",
-  "1. Preserve customer context through the handoff.",
-  "",
-  "## Quote Rewrite",
-  "",
-  "> Archive the weekly summary after review and notify the documentation team.",
-  "",
-  "## Code Edit",
-  "",
-  "```ts",
-  "const timeout = 15;",
-  "```",
-  "",
-  "## Code Rewrite",
-  "",
-  "```powershell",
-  "Remove-Item legacy.cache -Force",
-  "```",
-  "",
-  "## Link Wrapping",
-  "",
-  "Read the deployment guide before continuing.",
-  "",
-  "## Checklist State",
-  "",
-  "- [ ] Confirm the rollback owner.",
-  "",
-  "## Formatting Only",
-  "",
-  "The release owner confirms the deployment window.",
+    "# Block Diff Confidence",
+    "",
+    "## Wholesale Rewrite",
+    "",
+    "A legacy operator manually copied a checklist into each ticket before deployment.",
+    "",
+    "## Reconstructed Hard Wrap",
+    "",
+    "The deployment guide keeps this opening phrase and now recommends",
+    "the direct verification path for global rollouts while preserving",
+    "the final rollback checklist for operators.",
+    "",
+    "## Heading Structure",
+    "",
+    "## Approval workflow",
+    "",
+    "## List Structure",
+    "",
+    "1. Preserve customer context through the handoff.",
+    "",
+    "## Quote Rewrite",
+    "",
+    "> Archive the weekly summary after review and notify the documentation team.",
+    "",
+    "## Code Edit",
+    "",
+    "```ts",
+    "const timeout = 15;",
+    "```",
+    "",
+    "## Code Rewrite",
+    "",
+    "```powershell",
+    "Remove-Item legacy.cache -Force",
+    "```",
+    "",
+    "## Link Wrapping",
+    "",
+    "Read the deployment guide before continuing.",
+    "",
+    "## Checklist State",
+    "",
+    "- [ ] Confirm the rollback owner.",
+    "",
+    "## Formatting Only",
+    "",
+    "The release owner confirms the deployment window.",
 ].join("\n");
 
 const BLOCK_CONFIDENCE_DIFF: DiffRange[] = [
-  {
-    startLine: 5,
-    endLine: 5,
-    kind: "modified",
-    originalStartLine: 5,
-    originalEndLine: 5,
-    originalText:
-      "A legacy operator manually copied a checklist into each ticket before deployment.",
-  },
-  {
-    startLine: 10,
-    endLine: 10,
-    kind: "modified",
-    originalStartLine: 10,
-    originalEndLine: 10,
-    originalText:
-      "the direct verification path for global rollouts while preserving",
-  },
-  {
-    startLine: 15,
-    endLine: 15,
-    kind: "modified",
-    originalStartLine: 15,
-    originalEndLine: 15,
-    originalText: "## Approval workflow",
-  },
-  {
-    startLine: 19,
-    endLine: 19,
-    kind: "modified",
-    originalStartLine: 19,
-    originalEndLine: 19,
-    originalText: "1. Preserve customer context through the handoff.",
-  },
-  {
-    startLine: 23,
-    endLine: 23,
-    kind: "modified",
-    originalStartLine: 23,
-    originalEndLine: 23,
-    originalText:
-      "> Archive the weekly summary after review and notify the documentation team.",
-  },
-  {
-    startLine: 28,
-    endLine: 28,
-    kind: "modified",
-    originalStartLine: 28,
-    originalEndLine: 28,
-    originalText: "const timeout = 15;",
-  },
-  {
-    startLine: 34,
-    endLine: 34,
-    kind: "modified",
-    originalStartLine: 34,
-    originalEndLine: 34,
-    originalText: "Remove-Item legacy.cache -Force",
-  },
-  {
-    startLine: 39,
-    endLine: 39,
-    kind: "modified",
-    originalStartLine: 39,
-    originalEndLine: 39,
-    originalText: "Read the deployment guide before continuing.",
-  },
-  {
-    startLine: 43,
-    endLine: 43,
-    kind: "modified",
-    originalStartLine: 43,
-    originalEndLine: 43,
-    originalText: "- [ ] Confirm the rollback owner.",
-  },
-  {
-    startLine: 47,
-    endLine: 47,
-    kind: "modified",
-    originalStartLine: 47,
-    originalEndLine: 47,
-    originalText: "The release owner confirms the deployment window.",
-  },
+    {
+        startLine: 5,
+        endLine: 5,
+        kind: "modified",
+        originalStartLine: 5,
+        originalEndLine: 5,
+        originalText:
+            "A legacy operator manually copied a checklist into each ticket before deployment.",
+    },
+    {
+        startLine: 10,
+        endLine: 10,
+        kind: "modified",
+        originalStartLine: 10,
+        originalEndLine: 10,
+        originalText: "the direct verification path for global rollouts while preserving",
+    },
+    {
+        startLine: 15,
+        endLine: 15,
+        kind: "modified",
+        originalStartLine: 15,
+        originalEndLine: 15,
+        originalText: "## Approval workflow",
+    },
+    {
+        startLine: 19,
+        endLine: 19,
+        kind: "modified",
+        originalStartLine: 19,
+        originalEndLine: 19,
+        originalText: "1. Preserve customer context through the handoff.",
+    },
+    {
+        startLine: 23,
+        endLine: 23,
+        kind: "modified",
+        originalStartLine: 23,
+        originalEndLine: 23,
+        originalText:
+            "> Archive the weekly summary after review and notify the documentation team.",
+    },
+    {
+        startLine: 28,
+        endLine: 28,
+        kind: "modified",
+        originalStartLine: 28,
+        originalEndLine: 28,
+        originalText: "const timeout = 15;",
+    },
+    {
+        startLine: 34,
+        endLine: 34,
+        kind: "modified",
+        originalStartLine: 34,
+        originalEndLine: 34,
+        originalText: "Remove-Item legacy.cache -Force",
+    },
+    {
+        startLine: 39,
+        endLine: 39,
+        kind: "modified",
+        originalStartLine: 39,
+        originalEndLine: 39,
+        originalText: "Read the deployment guide before continuing.",
+    },
+    {
+        startLine: 43,
+        endLine: 43,
+        kind: "modified",
+        originalStartLine: 43,
+        originalEndLine: 43,
+        originalText: "- [ ] Confirm the rollback owner.",
+    },
+    {
+        startLine: 47,
+        endLine: 47,
+        kind: "modified",
+        originalStartLine: 47,
+        originalEndLine: 47,
+        originalText: "The release owner confirms the deployment window.",
+    },
 ];
 
-async function waitForBlockConfidenceReady(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitFor(() => {
-    const triggers = canvasElement.querySelectorAll<HTMLButtonElement>(
-      ".emr-diff-before-trigger",
-    );
-
-    if (triggers.length !== 3) {
-      throw new Error(`expected 3 block fallbacks, found ${triggers.length}`);
-    }
-
-    if (
-      canvasElement.querySelectorAll('[data-diff-amber-mode="comparison"]')
-        .length !== 3
-    ) {
-      throw new Error("comparison amber regions are not classified precisely");
-    }
-
-    const explained = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>(
-        '[data-diff-amber-mode="explained"]',
-      ),
-    );
-
-    if (
-      explained.length < 5 ||
-      explained.some(
-        (element) =>
-          !element.dataset.diffTooltip || element.hasAttribute("title"),
-      )
-    ) {
-      throw new Error("explained amber regions lack one custom-only tooltip");
-    }
-
-    if (!canvasElement.querySelector("p.emr-diff-block--inline")) {
-      throw new Error("reconstructed hard-wrap diff not rendered inline");
-    }
-
-    const preciseCode = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>("pre"),
-    ).find((candidate) => candidate.textContent?.includes("timeout"));
-
-    if (
-      preciseCode?.querySelector(".emr-word-added")?.textContent !== "30" ||
-      preciseCode.querySelector(".emr-word-removed")?.textContent !== "15" ||
-      preciseCode.previousElementSibling?.classList.contains(
-        "emr-diff-before-panel",
-      )
-    ) {
-      throw new Error(
-        `numeric code edit was not rendered precisely: ${preciseCode?.outerHTML ?? "missing"}`,
-      );
-    }
-
-    const formattingMark = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>(".emr-diff-format-change"),
-    ).find((mark) => mark.textContent === "release owner");
-
-    if (!formattingMark) {
-      throw new Error("formatting-only block was not marked precisely");
-    }
-
-    if (!canvasElement.querySelector("li.emr-diff-list-marker-change")) {
-      throw new Error("list type change was not scoped to its marker");
-    }
-
-    if (
-      canvasElement.querySelector("h3 .emr-diff-format-change")?.textContent !==
-      "Approval workflow"
-    ) {
-      throw new Error("heading structure change was not scoped to its text");
-    }
-
-    const linkMark = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
-    ).find((mark) => mark.textContent === "deployment guide");
-
-    if (!linkMark) {
-      throw new Error("link wrapping change was not scoped to its text");
-    }
-
-    if (!canvasElement.querySelector(".emr-diff-task-state-change")) {
-      throw new Error("checklist state change was not scoped to its checkbox");
-    }
-  });
-  assertMicroBeforeTriggers(canvasElement);
-}
-
-async function waitForBlockConfidence(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitForBlockConfidenceReady(canvasElement);
-
-  for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
-    ".emr-diff-before-trigger",
-  )) {
-    trigger.click();
-  }
-
-  await waitFor(() => {
-    const panels = Array.from(
-      canvasElement.querySelectorAll<HTMLElement>(
-        ".emr-diff-before-panel--block",
-      ),
-    );
-
-    if (panels.length !== 3 || panels.some((panel) => panel.hidden)) {
-      throw new Error("block Before panels not expanded");
-    }
-
-    for (const panel of panels) {
-      const label = panel.querySelector<HTMLElement>(".emr-diff-before-label")!;
-
-      const content = panel.querySelector<HTMLElement>(
-        ".emr-diff-before-content",
-      )!;
-
-      const panelStyle = getComputedStyle(panel);
-
-      const expectedLeft =
-        panel.getBoundingClientRect().left +
-        Number.parseFloat(panelStyle.borderLeftWidth) +
-        Number.parseFloat(panelStyle.paddingLeft);
-
-      if (
-        getComputedStyle(label).display !== "none" ||
-        Math.abs(content.getBoundingClientRect().left - expectedLeft) > 1
-      ) {
-        throw new Error(
-          "Before panel does not use micro-chip content alignment",
+async function waitForBlockConfidenceReady(canvasElement: HTMLElement): Promise<void> {
+    await waitFor(() => {
+        const triggers = canvasElement.querySelectorAll<HTMLButtonElement>(
+            ".emr-diff-before-trigger",
         );
-      }
-    }
 
-    if (!canvasElement.querySelector(".emr-diff-before-panel pre")) {
-      throw new Error("historical code block not rendered");
-    }
-  });
+        if (triggers.length !== 3) {
+            throw new Error(`expected 3 block fallbacks, found ${triggers.length}`);
+        }
+
+        if (canvasElement.querySelectorAll('[data-diff-amber-mode="comparison"]').length !== 3) {
+            throw new Error("comparison amber regions are not classified precisely");
+        }
+
+        const explained = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>('[data-diff-amber-mode="explained"]'),
+        );
+
+        if (
+            explained.length < 5 ||
+            explained.some(
+                (element) => !element.dataset.diffTooltip || element.hasAttribute("title"),
+            )
+        ) {
+            throw new Error("explained amber regions lack one custom-only tooltip");
+        }
+
+        if (!canvasElement.querySelector("p.emr-diff-block--inline")) {
+            throw new Error("reconstructed hard-wrap diff not rendered inline");
+        }
+
+        const preciseCode = Array.from(canvasElement.querySelectorAll<HTMLElement>("pre")).find(
+            (candidate) => candidate.textContent?.includes("timeout"),
+        );
+
+        if (
+            preciseCode?.querySelector(".emr-word-added")?.textContent !== "30" ||
+            preciseCode.querySelector(".emr-word-removed")?.textContent !== "15" ||
+            preciseCode.previousElementSibling?.classList.contains("emr-diff-before-panel")
+        ) {
+            throw new Error(
+                `numeric code edit was not rendered precisely: ${preciseCode?.outerHTML ?? "missing"}`,
+            );
+        }
+
+        const formattingMark = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>(".emr-diff-format-change"),
+        ).find((mark) => mark.textContent === "release owner");
+
+        if (!formattingMark) {
+            throw new Error("formatting-only block was not marked precisely");
+        }
+
+        if (!canvasElement.querySelector("li.emr-diff-list-marker-change")) {
+            throw new Error("list type change was not scoped to its marker");
+        }
+
+        if (
+            canvasElement.querySelector("h3 .emr-diff-format-change")?.textContent !==
+            "Approval workflow"
+        ) {
+            throw new Error("heading structure change was not scoped to its text");
+        }
+
+        const linkMark = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
+        ).find((mark) => mark.textContent === "deployment guide");
+
+        if (!linkMark) {
+            throw new Error("link wrapping change was not scoped to its text");
+        }
+
+        if (!canvasElement.querySelector(".emr-diff-task-state-change")) {
+            throw new Error("checklist state change was not scoped to its checkbox");
+        }
+    });
+    assertMicroBeforeTriggers(canvasElement);
 }
 
-async function prepareBlockDisclosureHover(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitForBlockConfidenceReady(canvasElement);
+async function waitForBlockConfidence(canvasElement: HTMLElement): Promise<void> {
+    await waitForBlockConfidenceReady(canvasElement);
 
-  const paragraph = Array.from(canvasElement.querySelectorAll("p")).find(
-    (candidate) => candidate.textContent?.includes("Production traffic"),
-  )!;
-
-  const panel = paragraph.previousElementSibling as HTMLElement;
-
-  const control = paragraph.querySelector<HTMLElement>(
-    ":scope > .emr-diff-before-control",
-  )!;
-
-  const trigger = control.querySelector<HTMLButtonElement>(
-    ".emr-diff-before-trigger",
-  )!;
-
-  if (
-    control.getBoundingClientRect().height !== 0 ||
-    !panel.hidden ||
-    getComputedStyle(panel).display !== "none"
-  ) {
-    throw new Error("collapsed disclosure still consumes layout");
-  }
-
-  trigger.focus();
-  await waitFor(() => {
-    if (getComputedStyle(trigger).opacity !== "1") {
-      throw new Error("focused disclosure is not visible");
+    for (const trigger of canvasElement.querySelectorAll<HTMLButtonElement>(
+        ".emr-diff-before-trigger",
+    )) {
+        trigger.click();
     }
-  });
-  trigger.blur();
+
+    await waitFor(() => {
+        const panels = Array.from(
+            canvasElement.querySelectorAll<HTMLElement>(".emr-diff-before-panel--block"),
+        );
+
+        if (panels.length !== 3 || panels.some((panel) => panel.hidden)) {
+            throw new Error("block Before panels not expanded");
+        }
+
+        for (const panel of panels) {
+            const label = panel.querySelector<HTMLElement>(".emr-diff-before-label")!;
+
+            const content = panel.querySelector<HTMLElement>(".emr-diff-before-content")!;
+
+            const panelStyle = getComputedStyle(panel);
+
+            const expectedLeft =
+                panel.getBoundingClientRect().left +
+                Number.parseFloat(panelStyle.borderLeftWidth) +
+                Number.parseFloat(panelStyle.paddingLeft);
+
+            if (
+                getComputedStyle(label).display !== "none" ||
+                Math.abs(content.getBoundingClientRect().left - expectedLeft) > 1
+            ) {
+                throw new Error("Before panel does not use micro-chip content alignment");
+            }
+        }
+
+        if (!canvasElement.querySelector(".emr-diff-before-panel pre")) {
+            throw new Error("historical code block not rendered");
+        }
+    });
 }
 
-async function preparePreciseAmberTooltip(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitForBlockConfidenceReady(canvasElement);
+async function prepareBlockDisclosureHover(canvasElement: HTMLElement): Promise<void> {
+    await waitForBlockConfidenceReady(canvasElement);
 
-  const mark = Array.from(
-    canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
-  ).find((candidate) => candidate.textContent === "deployment guide")!;
+    const paragraph = Array.from(canvasElement.querySelectorAll("p")).find((candidate) =>
+        candidate.textContent?.includes("Production traffic"),
+    )!;
 
-  if (
-    mark.dataset.diffTooltip !== "Link added: https://example.com/deployment" ||
-    mark.hasAttribute("title") ||
-    mark.closest("a")?.hasAttribute("title")
-  ) {
-    throw new Error(
-      "precise link tooltip is missing detail or has a native duplicate",
-    );
-  }
+    const panel = paragraph.previousElementSibling as HTMLElement;
 
-  mark.focus();
-  await waitFor(() => {
-    if (getComputedStyle(mark, "::after").opacity !== "1") {
-      throw new Error("precise amber tooltip is not visible on keyboard focus");
+    const control = paragraph.querySelector<HTMLElement>(":scope > .emr-diff-before-control")!;
+
+    const trigger = control.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
+
+    if (
+        control.getBoundingClientRect().height !== 0 ||
+        !panel.hidden ||
+        getComputedStyle(panel).display !== "none"
+    ) {
+        throw new Error("collapsed disclosure still consumes layout");
     }
-  });
-  mark.blur();
+
+    trigger.focus();
+    await waitFor(() => {
+        if (getComputedStyle(trigger).opacity !== "1") {
+            throw new Error("focused disclosure is not visible");
+        }
+    });
+    trigger.blur();
 }
 
-async function prepareChecklistStateTooltip(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitForBlockConfidenceReady(canvasElement);
+async function preparePreciseAmberTooltip(canvasElement: HTMLElement): Promise<void> {
+    await waitForBlockConfidenceReady(canvasElement);
 
-  const wrapper = canvasElement.querySelector<HTMLElement>(
-    ".emr-diff-task-tooltip-anchor",
-  )!;
+    const mark = Array.from(
+        canvasElement.querySelectorAll<HTMLElement>("a .emr-diff-format-change"),
+    ).find((candidate) => candidate.textContent === "deployment guide")!;
 
-  const checkbox = wrapper.querySelector<HTMLElement>(
-    ".emr-diff-task-state-change",
-  )!;
-
-  const wrapperRect = wrapper.getBoundingClientRect();
-  const checkboxRect = checkbox.getBoundingClientRect();
-  const checkboxCenter = checkboxRect.left + checkboxRect.width / 2;
-
-  if (
-    wrapper.dataset.diffTooltip !==
-      "Checklist item changed from unchecked to checked" ||
-    wrapper.hasAttribute("title") ||
-    checkbox.hasAttribute("title") ||
-    checkboxCenter < wrapperRect.left ||
-    checkboxCenter > wrapperRect.right ||
-    getComputedStyle(wrapper, "::after").left !== "0px"
-  ) {
-    throw new Error(
-      "checklist tooltip is not anchored to the changed checkbox",
-    );
-  }
-
-  wrapper.focus();
-  await waitFor(() => {
-    if (getComputedStyle(wrapper, "::after").opacity !== "1") {
-      throw new Error("checklist tooltip is not visible on keyboard focus");
+    if (
+        mark.dataset.diffTooltip !== "Link added: https://example.com/deployment" ||
+        mark.hasAttribute("title") ||
+        mark.closest("a")?.hasAttribute("title")
+    ) {
+        throw new Error("precise link tooltip is missing detail or has a native duplicate");
     }
-  });
-  wrapper.blur();
+
+    mark.focus();
+    await waitFor(() => {
+        if (getComputedStyle(mark, "::after").opacity !== "1") {
+            throw new Error("precise amber tooltip is not visible on keyboard focus");
+        }
+    });
+    mark.blur();
+}
+
+async function prepareChecklistStateTooltip(canvasElement: HTMLElement): Promise<void> {
+    await waitForBlockConfidenceReady(canvasElement);
+
+    const wrapper = canvasElement.querySelector<HTMLElement>(".emr-diff-task-tooltip-anchor")!;
+
+    const checkbox = wrapper.querySelector<HTMLElement>(".emr-diff-task-state-change")!;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const checkboxRect = checkbox.getBoundingClientRect();
+    const checkboxCenter = checkboxRect.left + checkboxRect.width / 2;
+
+    if (
+        wrapper.dataset.diffTooltip !== "Checklist item changed from unchecked to checked" ||
+        wrapper.hasAttribute("title") ||
+        checkbox.hasAttribute("title") ||
+        checkboxCenter < wrapperRect.left ||
+        checkboxCenter > wrapperRect.right ||
+        getComputedStyle(wrapper, "::after").left !== "0px"
+    ) {
+        throw new Error("checklist tooltip is not anchored to the changed checkbox");
+    }
+
+    wrapper.focus();
+    await waitFor(() => {
+        if (getComputedStyle(wrapper, "::after").opacity !== "1") {
+            throw new Error("checklist tooltip is not visible on keyboard focus");
+        }
+    });
+    wrapper.blur();
 }
 
 export const BlockConfidenceLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-block-confidence.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForBlockConfidence(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-block-confidence.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForBlockConfidence(canvasElement);
+    },
 };
 
 export const BlockConfidenceDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-block-confidence-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForBlockConfidence(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-block-confidence-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForBlockConfidence(canvasElement);
+    },
 };
 
 export const BlockConfidenceHoverLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-block-confidence-hover.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareBlockDisclosureHover(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-block-confidence-hover.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareBlockDisclosureHover(canvasElement);
+    },
 };
 
 export const BlockConfidenceHoverDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-block-confidence-hover-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareBlockDisclosureHover(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-block-confidence-hover-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareBlockDisclosureHover(canvasElement);
+    },
 };
 
 /**
@@ -1716,324 +1619,320 @@ export const BlockConfidenceHoverDark: Story = {
  * letter below the 18px control.
  */
 export const BeforeChipTextInflation: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <style>{`.emr-diff-before-trigger { font-size: 13px !important; }`}</style>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-before-chip-text-inflation.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForBlockConfidenceReady(canvasElement);
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <style>{`.emr-diff-before-trigger { font-size: 13px !important; }`}</style>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-before-chip-text-inflation.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForBlockConfidenceReady(canvasElement);
 
-    const trigger = canvasElement.querySelector<HTMLButtonElement>(
-      ".emr-diff-before-trigger",
-    )!;
+        const trigger = canvasElement.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
 
-    trigger.focus();
-    await waitFor(() => {
-      if (getComputedStyle(trigger).opacity !== "1") {
-        throw new Error("inflated Before chip is not visible");
-      }
-    });
-  },
+        trigger.focus();
+        await waitFor(() => {
+            if (getComputedStyle(trigger).opacity !== "1") {
+                throw new Error("inflated Before chip is not visible");
+            }
+        });
+    },
 };
 
 /** An unusually narrow comparison owner must clip the label, never overrun it. */
 export const BeforeChipNarrowOwner: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-before-chip-narrow-owner.md",
-  },
-  play: async ({ canvasElement }) => {
-    await waitForBlockConfidenceReady(canvasElement);
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-before-chip-narrow-owner.md",
+    },
+    play: async ({ canvasElement }) => {
+        await waitForBlockConfidenceReady(canvasElement);
 
-    const trigger = canvasElement.querySelector<HTMLButtonElement>(
-      ".emr-diff-before-trigger",
-    )!;
+        const trigger = canvasElement.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
 
-    const owner = trigger.closest<HTMLElement>(".emr-section")!;
-    owner.style.width = "32px";
-    trigger.focus();
-    await waitFor(() => {
-      const ownerRect = owner.getBoundingClientRect();
-      const triggerRect = trigger.getBoundingClientRect();
-      const style = getComputedStyle(trigger);
+        const owner = trigger.closest<HTMLElement>(".emr-section")!;
+        owner.style.width = "32px";
+        trigger.focus();
+        await waitFor(() => {
+            const ownerRect = owner.getBoundingClientRect();
+            const triggerRect = trigger.getBoundingClientRect();
+            const style = getComputedStyle(trigger);
 
-      if (
-        triggerRect.left < ownerRect.left ||
-        triggerRect.right > ownerRect.right ||
-        triggerRect.height > 19 ||
-        style.overflow !== "hidden" ||
-        style.whiteSpace !== "nowrap"
-      ) {
-        throw new Error(
-          `narrow Before chip escaped its owner: trigger=${JSON.stringify({ left: triggerRect.left, right: triggerRect.right, width: triggerRect.width, height: triggerRect.height })} owner=${JSON.stringify({ left: ownerRect.left, right: ownerRect.right, width: ownerRect.width })}`,
-        );
-      }
-    });
-  },
+            if (
+                triggerRect.left < ownerRect.left ||
+                triggerRect.right > ownerRect.right ||
+                triggerRect.height > 19 ||
+                style.overflow !== "hidden" ||
+                style.whiteSpace !== "nowrap"
+            ) {
+                throw new Error(
+                    `narrow Before chip escaped its owner: trigger=${JSON.stringify({ left: triggerRect.left, right: triggerRect.right, width: triggerRect.width, height: triggerRect.height })} owner=${JSON.stringify({ left: ownerRect.left, right: ownerRect.right, width: ownerRect.width })}`,
+                );
+            }
+        });
+    },
 };
 
 export const PreciseAmberTooltipLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-precise-amber-tooltip.md",
-  },
-  play: async ({ canvasElement }) => {
-    await preparePreciseAmberTooltip(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-precise-amber-tooltip.md",
+    },
+    play: async ({ canvasElement }) => {
+        await preparePreciseAmberTooltip(canvasElement);
+    },
 };
 
 export const PreciseAmberTooltipDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-precise-amber-tooltip-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await preparePreciseAmberTooltip(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-precise-amber-tooltip-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await preparePreciseAmberTooltip(canvasElement);
+    },
 };
 
 export const ChecklistStateTooltipLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-checklist-state-tooltip.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareChecklistStateTooltip(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-checklist-state-tooltip.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareChecklistStateTooltip(canvasElement);
+    },
 };
 
 export const ChecklistStateTooltipDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
-    originalSource: BLOCK_CONFIDENCE_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: BLOCK_CONFIDENCE_DIFF,
-    storageKey: "visual-checklist-state-tooltip-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareChecklistStateTooltip(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(BLOCK_CONFIDENCE_SOURCE),
+        originalSource: BLOCK_CONFIDENCE_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: BLOCK_CONFIDENCE_DIFF,
+        storageKey: "visual-checklist-state-tooltip-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareChecklistStateTooltip(canvasElement);
+    },
 };
 
 const INLINE_PARITY_SOURCE = [
-  /*  1 */ "# Shared Inline Diff Semantics",
-  /*  2 */ "",
-  /*  3 */ "## Combined Marker and Checklist State",
-  /*  4 */ "",
-  /*  5 */ "- [x] Confirm the release owner.",
-  /*  6 */ "",
-  /*  7 */ "## Formatting and Link Target",
-  /*  8 */ "",
-  /*  9 */ "| Resource | Link |",
-  /* 10 */ "| --- | --- |",
-  /* 11 */ "| Guide | [**Incident guide**](https://example.com/v2) |",
-  /* 12 */ "",
-  /* 13 */ "## Text and Image Metadata",
-  /* 14 */ "",
-  /* 15 */ "| Preview |",
-  /* 16 */ "| --- |",
-  /* 17 */ "| Current ![Architecture](https://example.com/v2.png) |",
+    /*  1 */ "# Shared Inline Diff Semantics",
+    /*  2 */ "",
+    /*  3 */ "## Combined Marker and Checklist State",
+    /*  4 */ "",
+    /*  5 */ "- [x] Confirm the release owner.",
+    /*  6 */ "",
+    /*  7 */ "## Formatting and Link Target",
+    /*  8 */ "",
+    /*  9 */ "| Resource | Link |",
+    /* 10 */ "| --- | --- |",
+    /* 11 */ "| Guide | [**Incident guide**](https://example.com/v2) |",
+    /* 12 */ "",
+    /* 13 */ "## Text and Image Metadata",
+    /* 14 */ "",
+    /* 15 */ "| Preview |",
+    /* 16 */ "| --- |",
+    /* 17 */ "| Current ![Architecture](https://example.com/v2.png) |",
 ].join("\n");
 
 const INLINE_PARITY_ORIGINAL = [
-  "# Shared Inline Diff Semantics",
-  "",
-  "## Combined Marker and Checklist State",
-  "",
-  "1. [ ] Confirm the release owner.",
-  "",
-  "## Formatting and Link Target",
-  "",
-  "| Resource | Link |",
-  "| --- | --- |",
-  "| Guide | [Incident guide](https://example.com/v1) |",
-  "",
-  "## Text and Image Metadata",
-  "",
-  "| Preview |",
-  "| --- |",
-  "| Legacy ![Architecture](https://example.com/v1.png) |",
+    "# Shared Inline Diff Semantics",
+    "",
+    "## Combined Marker and Checklist State",
+    "",
+    "1. [ ] Confirm the release owner.",
+    "",
+    "## Formatting and Link Target",
+    "",
+    "| Resource | Link |",
+    "| --- | --- |",
+    "| Guide | [Incident guide](https://example.com/v1) |",
+    "",
+    "## Text and Image Metadata",
+    "",
+    "| Preview |",
+    "| --- |",
+    "| Legacy ![Architecture](https://example.com/v1.png) |",
 ].join("\n");
 
 const INLINE_PARITY_DIFF: DiffRange[] = [
-  {
-    startLine: 5,
-    endLine: 5,
-    kind: "modified",
-    originalStartLine: 5,
-    originalEndLine: 5,
-    originalText: "1. [ ] Confirm the release owner.",
-  },
-  {
-    startLine: 11,
-    endLine: 11,
-    kind: "modified",
-    originalStartLine: 11,
-    originalEndLine: 11,
-    originalText: "| Guide | [Incident guide](https://example.com/v1) |",
-  },
-  {
-    startLine: 17,
-    endLine: 17,
-    kind: "modified",
-    originalStartLine: 17,
-    originalEndLine: 17,
-    originalText: "| Legacy ![Architecture](https://example.com/v1.png) |",
-  },
+    {
+        startLine: 5,
+        endLine: 5,
+        kind: "modified",
+        originalStartLine: 5,
+        originalEndLine: 5,
+        originalText: "1. [ ] Confirm the release owner.",
+    },
+    {
+        startLine: 11,
+        endLine: 11,
+        kind: "modified",
+        originalStartLine: 11,
+        originalEndLine: 11,
+        originalText: "| Guide | [Incident guide](https://example.com/v1) |",
+    },
+    {
+        startLine: 17,
+        endLine: 17,
+        kind: "modified",
+        originalStartLine: 17,
+        originalEndLine: 17,
+        originalText: "| Legacy ![Architecture](https://example.com/v1.png) |",
+    },
 ];
 
 async function prepareInlineParity(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(() => {
-    const item = canvasElement.querySelector<HTMLElement>(
-      'li[data-diff-tooltip^="List item changed:"]',
-    );
+    await waitFor(() => {
+        const item = canvasElement.querySelector<HTMLElement>(
+            'li[data-diff-tooltip^="List item changed:"]',
+        );
 
-    const cells = canvasElement.querySelectorAll<HTMLElement>("tbody td");
+        const cells = canvasElement.querySelectorAll<HTMLElement>("tbody td");
 
-    if (
-      !item ||
-      item.querySelector(".emr-diff-task-tooltip-anchor") ||
-      !item.querySelector(".emr-diff-task-state-change") ||
-      !cells[1]?.querySelector(".emr-diff-format-change") ||
-      !cells[1]?.querySelector(".emr-diff-metadata") ||
-      !cells[2]?.querySelector(".emr-word-added") ||
-      !cells[2]?.querySelector(".emr-diff-metadata")
-    ) {
-      throw new Error("shared inline parity examples are incomplete");
-    }
-  });
+        if (
+            !item ||
+            item.querySelector(".emr-diff-task-tooltip-anchor") ||
+            !item.querySelector(".emr-diff-task-state-change") ||
+            !cells[1]?.querySelector(".emr-diff-format-change") ||
+            !cells[1]?.querySelector(".emr-diff-metadata") ||
+            !cells[2]?.querySelector(".emr-word-added") ||
+            !cells[2]?.querySelector(".emr-diff-metadata")
+        ) {
+            throw new Error("shared inline parity examples are incomplete");
+        }
+    });
 }
 
 export const InlineParityLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(INLINE_PARITY_SOURCE),
-    originalSource: INLINE_PARITY_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: INLINE_PARITY_DIFF,
-    storageKey: "visual-inline-parity.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareInlineParity(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(INLINE_PARITY_SOURCE),
+        originalSource: INLINE_PARITY_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: INLINE_PARITY_DIFF,
+        storageKey: "visual-inline-parity.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareInlineParity(canvasElement);
+    },
 };
 
 export const InlineParityDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(INLINE_PARITY_SOURCE),
-    originalSource: INLINE_PARITY_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: INLINE_PARITY_DIFF,
-    storageKey: "visual-inline-parity-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareInlineParity(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(INLINE_PARITY_SOURCE),
+        originalSource: INLINE_PARITY_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: INLINE_PARITY_DIFF,
+        storageKey: "visual-inline-parity-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareInlineParity(canvasElement);
+    },
 };
 
 const NESTED_LIST_SOURCE = [
-  /*  1 */ "# Nested List Changes",
-  /*  2 */ "",
-  /*  3 */ "1. Keep this item.",
-  /*  4 */ "",
-  /*  5 */ "2. Benchmark each HVA-",
-  /*  6 */ "",
-  /*  7 */ "   1. Locally against the dev app perf plan.",
-  /*  8 */ "   2. Capture latency numbers from an e2e plan.",
-  /*  9 */ "",
-  /* 10 */ "   You can use the **Perf Insights** panel to capture these numbers.",
-  /* 11 */ "",
-  /* 12 */ "## Tight list",
-  /* 13 */ "",
-  /* 14 */ "- Existing parent item",
-  /* 15 */ "  - New child under an unchanged parent",
-  /* 16 */ "- New parent item",
-  /* 17 */ "  - New child under a new parent",
-  /* 18 */ "    - New grandchild under a new child",
+    /*  1 */ "# Nested List Changes",
+    /*  2 */ "",
+    /*  3 */ "1. Keep this item.",
+    /*  4 */ "",
+    /*  5 */ "2. Benchmark each HVA-",
+    /*  6 */ "",
+    /*  7 */ "   1. Locally against the dev app perf plan.",
+    /*  8 */ "   2. Capture latency numbers from an e2e plan.",
+    /*  9 */ "",
+    /* 10 */ "   You can use the **Perf Insights** panel to capture these numbers.",
+    /* 11 */ "",
+    /* 12 */ "## Tight list",
+    /* 13 */ "",
+    /* 14 */ "- Existing parent item",
+    /* 15 */ "  - New child under an unchanged parent",
+    /* 16 */ "- New parent item",
+    /* 17 */ "  - New child under a new parent",
+    /* 18 */ "    - New grandchild under a new child",
 ].join("\n");
 
 const NESTED_LIST_DIFF: DiffRange[] = [
-  { startLine: 5, endLine: 10, kind: "added" },
-  { startLine: 15, endLine: 18, kind: "added" },
+    { startLine: 5, endLine: 10, kind: "added" },
+    { startLine: 15, endLine: 18, kind: "added" },
 ];
 
 /**
@@ -2043,630 +1942,609 @@ const NESTED_LIST_DIFF: DiffRange[] = [
  * change).
  */
 async function prepareNestedList(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(() => {
-    const nested = canvasElement.querySelectorAll(
-      "li li.emr-diff-block--added",
+    await waitFor(() => {
+        const nested = canvasElement.querySelectorAll("li li.emr-diff-block--added");
+
+        if (nested.length < 4) {
+            throw new Error(`nested items not decorated yet (${nested.length})`);
+        }
+    });
+
+    const continuation = Array.from(canvasElement.querySelectorAll("li > p")).find((p) =>
+        p.textContent?.startsWith("You can use"),
     );
 
-    if (nested.length < 4) {
-      throw new Error(`nested items not decorated yet (${nested.length})`);
+    if (!continuation?.querySelector(".emr-diff-line-wash")) {
+        throw new Error("the continuation paragraph after a nested list is unpainted");
     }
-  });
 
-  const continuation = Array.from(
-    canvasElement.querySelectorAll("li > p"),
-  ).find((p) => p.textContent?.startsWith("You can use"));
+    for (const item of canvasElement.querySelectorAll<HTMLElement>("li.emr-diff-block")) {
+        for (
+            let ancestor = item.parentElement?.closest<HTMLElement>("li");
+            ancestor;
+            ancestor = ancestor.parentElement?.closest<HTMLElement>("li")
+        ) {
+            const paint = getComputedStyle(ancestor).backgroundColor;
 
-  if (!continuation?.querySelector(".emr-diff-line-wash")) {
-    throw new Error(
-      "the continuation paragraph after a nested list is unpainted",
-    );
-  }
-
-  for (const item of canvasElement.querySelectorAll<HTMLElement>(
-    "li.emr-diff-block",
-  )) {
-    for (
-      let ancestor = item.parentElement?.closest<HTMLElement>("li");
-      ancestor;
-      ancestor = ancestor.parentElement?.closest<HTMLElement>("li")
-    ) {
-      const paint = getComputedStyle(ancestor).backgroundColor;
-
-      if (paint !== "rgba(0, 0, 0, 0)" && paint !== "transparent") {
-        throw new Error(
-          `"${item.textContent?.trim().slice(0, 40)}" is washed inside a tinted ancestor item (${paint})`,
-        );
-      }
+            if (paint !== "rgba(0, 0, 0, 0)" && paint !== "transparent") {
+                throw new Error(
+                    `"${item.textContent?.trim().slice(0, 40)}" is washed inside a tinted ancestor item (${paint})`,
+                );
+            }
+        }
     }
-  }
 }
 
 const NESTED_LIST_ARGS = {
-  pristineHtml: renderMarkdownSync(NESTED_LIST_SOURCE),
-  threads: [],
-  activeThreadId: null,
-  diff: NESTED_LIST_DIFF,
+    pristineHtml: renderMarkdownSync(NESTED_LIST_SOURCE),
+    threads: [],
+    activeThreadId: null,
+    diff: NESTED_LIST_DIFF,
 };
 
 export const NestedListChangesLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list.md" },
-  play: async ({ canvasElement }) => {
-    await prepareNestedList(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list.md" },
+    play: async ({ canvasElement }) => {
+        await prepareNestedList(canvasElement);
+    },
 };
 
 export const NestedListChangesDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list-dark.md" },
-  play: async ({ canvasElement }) => {
-    await prepareNestedList(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: { ...NESTED_LIST_ARGS, storageKey: "visual-nested-list-dark.md" },
+    play: async ({ canvasElement }) => {
+        await prepareNestedList(canvasElement);
+    },
 };
 
 const PRODUCTION_SYNTAX_SOURCE = [
-  /*  1 */ "# Production Documentation Syntax",
-  /*  2 */ "",
-  /*  3 */ "[guide]: docs/current-guide.md",
-  /*  4 */ "",
-  /*  5 */ "Read the [deployment guide][guide] before continuing.",
-  /*  6 */ "",
-  /*  7 */ "> [!NOTE]",
-  /*  8 */ "> The browser may omit capabilities from the object.",
-  /*  9 */ "",
-  /* 10 */ "<details open>",
-  /* 11 */ "<summary>Common question</summary>",
-  /* 12 */ "",
-  /* 13 */ "The current answer remains visible.",
-  /* 14 */ "",
-  /* 15 */ "</details>",
-  /* 16 */ "",
-  /* 17 */ '```js [[1, 3, "updateName"], [2, 25, "submitAction"]]',
-  /* 18 */ '"use client";',
-  /* 19 */ "```",
+    /*  1 */ "# Production Documentation Syntax",
+    /*  2 */ "",
+    /*  3 */ "[guide]: docs/current-guide.md",
+    /*  4 */ "",
+    /*  5 */ "Read the [deployment guide][guide] before continuing.",
+    /*  6 */ "",
+    /*  7 */ "> [!NOTE]",
+    /*  8 */ "> The browser may omit capabilities from the object.",
+    /*  9 */ "",
+    /* 10 */ "<details open>",
+    /* 11 */ "<summary>Common question</summary>",
+    /* 12 */ "",
+    /* 13 */ "The current answer remains visible.",
+    /* 14 */ "",
+    /* 15 */ "</details>",
+    /* 16 */ "",
+    /* 17 */ '```js [[1, 3, "updateName"], [2, 25, "submitAction"]]',
+    /* 18 */ '"use client";',
+    /* 19 */ "```",
 ].join("\n");
 
 const PRODUCTION_SYNTAX_ORIGINAL = [
-  "# Production Documentation Syntax",
-  "",
-  "[guide]: http://localhost:3000/docs/current-guide.md",
-  "",
-  "Read the [deployment guide][guide] before continuing.",
-  "",
-  "> [!NOTE]",
-  "> The browser may omit capabilities from the map.",
-  "",
-  "<details open>",
-  "<summary>Common question</summary>",
-  "",
-  "The previous answer remains visible.",
-  "",
-  "</details>",
-  "",
-  '```js [[1, 3, "updateName"], [2, 23, "submitAction"]]',
-  '"use client";',
-  "```",
+    "# Production Documentation Syntax",
+    "",
+    "[guide]: http://localhost:3000/docs/current-guide.md",
+    "",
+    "Read the [deployment guide][guide] before continuing.",
+    "",
+    "> [!NOTE]",
+    "> The browser may omit capabilities from the map.",
+    "",
+    "<details open>",
+    "<summary>Common question</summary>",
+    "",
+    "The previous answer remains visible.",
+    "",
+    "</details>",
+    "",
+    '```js [[1, 3, "updateName"], [2, 23, "submitAction"]]',
+    '"use client";',
+    "```",
 ].join("\n");
 
 const PRODUCTION_SYNTAX_DIFF: DiffRange[] = [
-  {
-    startLine: 3,
-    endLine: 3,
-    kind: "modified",
-    originalStartLine: 3,
-    originalEndLine: 3,
-    originalText: "[guide]: http://localhost:3000/docs/current-guide.md",
-  },
-  {
-    startLine: 8,
-    endLine: 8,
-    kind: "modified",
-    originalStartLine: 8,
-    originalEndLine: 8,
-    originalText: "> The browser may omit capabilities from the map.",
-  },
-  {
-    startLine: 13,
-    endLine: 13,
-    kind: "modified",
-    originalStartLine: 13,
-    originalEndLine: 13,
-    originalText: "The previous answer remains visible.",
-  },
-  {
-    startLine: 17,
-    endLine: 17,
-    kind: "modified",
-    originalStartLine: 17,
-    originalEndLine: 17,
-    originalText: '```js [[1, 3, "updateName"], [2, 23, "submitAction"]]',
-  },
+    {
+        startLine: 3,
+        endLine: 3,
+        kind: "modified",
+        originalStartLine: 3,
+        originalEndLine: 3,
+        originalText: "[guide]: http://localhost:3000/docs/current-guide.md",
+    },
+    {
+        startLine: 8,
+        endLine: 8,
+        kind: "modified",
+        originalStartLine: 8,
+        originalEndLine: 8,
+        originalText: "> The browser may omit capabilities from the map.",
+    },
+    {
+        startLine: 13,
+        endLine: 13,
+        kind: "modified",
+        originalStartLine: 13,
+        originalEndLine: 13,
+        originalText: "The previous answer remains visible.",
+    },
+    {
+        startLine: 17,
+        endLine: 17,
+        kind: "modified",
+        originalStartLine: 17,
+        originalEndLine: 17,
+        originalText: '```js [[1, 3, "updateName"], [2, 23, "submitAction"]]',
+    },
 ];
 
-async function prepareProductionSyntax(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitFor(() => {
-    if (!canvasElement.querySelector(".emr-diff-source-only")) {
-      throw new Error("source-only reference diff missing");
+async function prepareProductionSyntax(canvasElement: HTMLElement): Promise<void> {
+    await waitFor(() => {
+        if (!canvasElement.querySelector(".emr-diff-source-only")) {
+            throw new Error("source-only reference diff missing");
+        }
+
+        if (!canvasElement.querySelector("details[open] .emr-word-added")) {
+            throw new Error("details body diff missing");
+        }
+
+        if (!canvasElement.querySelector(".markdown-alert .emr-word-added")) {
+            throw new Error("admonition body diff missing");
+        }
+
+        if (!canvasElement.querySelector("pre .emr-diff-metadata")) {
+            throw new Error("code fence metadata diff missing");
+        }
+    });
+
+    const metadataTrigger = canvasElement.querySelector<HTMLButtonElement>(
+        "pre .emr-diff-metadata-trigger",
+    )!;
+
+    if (metadataTrigger.scrollWidth > metadataTrigger.clientWidth) {
+        throw new Error("code fence metadata label overflows its trigger");
     }
 
-    if (!canvasElement.querySelector("details[open] .emr-word-added")) {
-      throw new Error("details body diff missing");
-    }
+    const trigger = canvasElement.querySelector<HTMLButtonElement>(
+        ".emr-diff-source-only .emr-diff-before-trigger",
+    )!;
 
-    if (!canvasElement.querySelector(".markdown-alert .emr-word-added")) {
-      throw new Error("admonition body diff missing");
-    }
-
-    if (!canvasElement.querySelector("pre .emr-diff-metadata")) {
-      throw new Error("code fence metadata diff missing");
-    }
-  });
-
-  const metadataTrigger = canvasElement.querySelector<HTMLButtonElement>(
-    "pre .emr-diff-metadata-trigger",
-  )!;
-
-  if (metadataTrigger.scrollWidth > metadataTrigger.clientWidth) {
-    throw new Error("code fence metadata label overflows its trigger");
-  }
-
-  const trigger = canvasElement.querySelector<HTMLButtonElement>(
-    ".emr-diff-source-only .emr-diff-before-trigger",
-  )!;
-
-  trigger.click();
-  await waitFor(() => {
-    if (
-      canvasElement.querySelector(
-        ".emr-diff-source-only .emr-diff-before-panel:not([hidden])",
-      ) === null
-    ) {
-      throw new Error("source-only Before panel did not open");
-    }
-  });
+    trigger.click();
+    await waitFor(() => {
+        if (
+            canvasElement.querySelector(
+                ".emr-diff-source-only .emr-diff-before-panel:not([hidden])",
+            ) === null
+        ) {
+            throw new Error("source-only Before panel did not open");
+        }
+    });
 }
 
 export const ProductionSyntaxLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(PRODUCTION_SYNTAX_SOURCE),
-    currentSource: PRODUCTION_SYNTAX_SOURCE,
-    originalSource: PRODUCTION_SYNTAX_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: PRODUCTION_SYNTAX_DIFF,
-    storageKey: "visual-production-syntax.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareProductionSyntax(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(PRODUCTION_SYNTAX_SOURCE),
+        currentSource: PRODUCTION_SYNTAX_SOURCE,
+        originalSource: PRODUCTION_SYNTAX_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: PRODUCTION_SYNTAX_DIFF,
+        storageKey: "visual-production-syntax.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareProductionSyntax(canvasElement);
+    },
 };
 
 export const ProductionSyntaxDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: {
-    pristineHtml: renderMarkdownSync(PRODUCTION_SYNTAX_SOURCE),
-    currentSource: PRODUCTION_SYNTAX_SOURCE,
-    originalSource: PRODUCTION_SYNTAX_ORIGINAL,
-    threads: [],
-    activeThreadId: null,
-    diff: PRODUCTION_SYNTAX_DIFF,
-    storageKey: "visual-production-syntax-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareProductionSyntax(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: {
+        pristineHtml: renderMarkdownSync(PRODUCTION_SYNTAX_SOURCE),
+        currentSource: PRODUCTION_SYNTAX_SOURCE,
+        originalSource: PRODUCTION_SYNTAX_ORIGINAL,
+        threads: [],
+        activeThreadId: null,
+        diff: PRODUCTION_SYNTAX_DIFF,
+        storageKey: "visual-production-syntax-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareProductionSyntax(canvasElement);
+    },
 };
 
 const EQUATION_GALLERY_SOURCE = [
-  /*  1 */ "# Equation Rendering",
-  /*  2 */ "",
-  /*  3 */ String.raw`Inline notation keeps $E = mc^2$ aligned with surrounding prose.`,
-  /*  4 */ "",
-  /*  5 */ "## RMS aggregation",
-  /*  6 */ "",
-  /*  7 */ "$$",
-  /*  8 */ String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i^2}`,
-  /*  9 */ "$$",
-  /* 10 */ "",
-  /* 11 */ "## Throughput",
-  /* 12 */ "",
-  /* 13 */ "```math",
-  /* 14 */ String.raw`F_{\mathrm{scro}\parallel} = \frac{1000n}{d}`,
-  /* 15 */ "```",
-  /* 16 */ "",
-  /* 17 */ "## Wide matrix",
-  /* 18 */ "",
-  /* 19 */ "$$",
-  /* 20 */ String.raw`\begin{bmatrix} a_{11} & a_{12} & a_{13} & a_{14} & a_{15} & a_{16} & a_{17} & a_{18} & a_{19} & a_{1,10} & a_{1,11} & a_{1,12} & a_{1,13} & a_{1,14} & a_{1,15} & a_{1,16} & a_{1,17} & a_{1,18} \end{bmatrix}`,
-  /* 21 */ "$$",
-  /* 22 */ "",
-  /* 23 */ "## Invalid source remains readable",
-  /* 24 */ "",
-  /* 25 */ String.raw`$$\frac{1000n}d}$$`,
+    /*  1 */ "# Equation Rendering",
+    /*  2 */ "",
+    /*  3 */ String.raw`Inline notation keeps $E = mc^2$ aligned with surrounding prose.`,
+    /*  4 */ "",
+    /*  5 */ "## RMS aggregation",
+    /*  6 */ "",
+    /*  7 */ "$$",
+    /*  8 */ String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i^2}`,
+    /*  9 */ "$$",
+    /* 10 */ "",
+    /* 11 */ "## Throughput",
+    /* 12 */ "",
+    /* 13 */ "```math",
+    /* 14 */ String.raw`F_{\mathrm{scro}\parallel} = \frac{1000n}{d}`,
+    /* 15 */ "```",
+    /* 16 */ "",
+    /* 17 */ "## Wide matrix",
+    /* 18 */ "",
+    /* 19 */ "$$",
+    /* 20 */ String.raw`\begin{bmatrix} a_{11} & a_{12} & a_{13} & a_{14} & a_{15} & a_{16} & a_{17} & a_{18} & a_{19} & a_{1,10} & a_{1,11} & a_{1,12} & a_{1,13} & a_{1,14} & a_{1,15} & a_{1,16} & a_{1,17} & a_{1,18} \end{bmatrix}`,
+    /* 21 */ "$$",
+    /* 22 */ "",
+    /* 23 */ "## Invalid source remains readable",
+    /* 24 */ "",
+    /* 25 */ String.raw`$$\frac{1000n}d}$$`,
 ].join("\n");
 
 const EQUATION_GALLERY_DIFF: DiffRange[] = [
-  {
-    startLine: 8,
-    endLine: 8,
-    kind: "modified",
-    originalStartLine: 8,
-    originalEndLine: 8,
-    originalText: String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`,
-    linesAdded: 1,
-    linesDeleted: 1,
-  },
+    {
+        startLine: 8,
+        endLine: 8,
+        kind: "modified",
+        originalStartLine: 8,
+        originalEndLine: 8,
+        originalText: String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`,
+        linesAdded: 1,
+        linesDeleted: 1,
+    },
 ];
 
 const EQUATION_GALLERY_ORIGINAL = EQUATION_GALLERY_SOURCE.replace(
-  String.raw`\sum_{i=1}^{n} g_i^2`,
-  String.raw`\sum_{i=1}^{n} g_i`,
+    String.raw`\sum_{i=1}^{n} g_i^2`,
+    String.raw`\sum_{i=1}^{n} g_i`,
 );
 
-async function prepareEquationGallery(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  await waitFor(
-    () => {
-      const equations = canvasElement.querySelectorAll<HTMLElement>(
-        ".equation-gallery-frame .emr-math",
-      );
+async function prepareEquationGallery(canvasElement: HTMLElement): Promise<void> {
+    await waitFor(
+        () => {
+            const equations = canvasElement.querySelectorAll<HTMLElement>(
+                ".equation-gallery-frame .emr-math",
+            );
 
-      const rendered = canvasElement.querySelectorAll<HTMLElement>(
-        '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex',
-      );
+            const rendered = canvasElement.querySelectorAll<HTMLElement>(
+                '.equation-gallery-frame .emr-math[data-hydrated="true"] .katex',
+            );
 
-      const failed = canvasElement.querySelector<HTMLElement>(
-        '.equation-gallery-frame .emr-math[data-math-error="render-failed"]',
-      );
+            const failed = canvasElement.querySelector<HTMLElement>(
+                '.equation-gallery-frame .emr-math[data-math-error="render-failed"]',
+            );
 
-      if (equations.length !== 5 || rendered.length !== 4 || !failed) {
-        throw new Error("equation gallery has not finished hydrating");
-      }
-    },
-    { timeout: 10_000 },
-  );
+            if (equations.length !== 5 || rendered.length !== 4 || !failed) {
+                throw new Error("equation gallery has not finished hydrating");
+            }
+        },
+        { timeout: 10_000 },
+    );
 
-  const frame = canvasElement.querySelector<HTMLElement>(
-    ".equation-gallery-frame",
-  )!;
+    const frame = canvasElement.querySelector<HTMLElement>(".equation-gallery-frame")!;
 
-  const wideEquation = frame.querySelector<HTMLElement>(
-    '.emr-math--display[data-source-line="19"]',
-  )!;
+    const wideEquation = frame.querySelector<HTMLElement>(
+        '.emr-math--display[data-source-line="19"]',
+    )!;
 
-  const wideDisplay =
-    wideEquation.querySelector<HTMLElement>(".katex-display")!;
+    const wideDisplay = wideEquation.querySelector<HTMLElement>(".katex-display")!;
 
-  const changedEquation = frame.querySelector<HTMLElement>(
-    ".emr-math.emr-diff-block",
-  )!;
+    const changedEquation = frame.querySelector<HTMLElement>(".emr-math.emr-diff-block")!;
 
-  const fallback = frame.querySelector<HTMLElement>(
-    '[data-math-error="render-failed"] .emr-math-fallback',
-  );
+    const fallback = frame.querySelector<HTMLElement>(
+        '[data-math-error="render-failed"] .emr-math-fallback',
+    );
 
-  if (wideDisplay.scrollWidth <= wideDisplay.clientWidth) {
-    throw new Error("wide equation does not exercise horizontal overflow");
-  }
+    if (wideDisplay.scrollWidth <= wideDisplay.clientWidth) {
+        throw new Error("wide equation does not exercise horizontal overflow");
+    }
 
-  if (frame.scrollWidth > frame.clientWidth) {
-    throw new Error("wide equation leaks overflow outside its owner");
-  }
+    if (frame.scrollWidth > frame.clientWidth) {
+        throw new Error("wide equation leaks overflow outside its owner");
+    }
 
-  if (!changedEquation) {
-    throw new Error("modified equation lacks atomic diff decoration");
-  }
+    if (!changedEquation) {
+        throw new Error("modified equation lacks atomic diff decoration");
+    }
 
-  if (changedEquation.querySelector(".emr-word-added, .emr-word-removed")) {
-    throw new Error("modified equation received internal word-diff markup");
-  }
+    if (changedEquation.querySelector(".emr-word-added, .emr-word-removed")) {
+        throw new Error("modified equation received internal word-diff markup");
+    }
 
-  if (fallback?.textContent !== String.raw`\frac{1000n}d}`) {
-    throw new Error("malformed equation source fallback is not readable");
-  }
+    if (fallback?.textContent !== String.raw`\frac{1000n}d}`) {
+        throw new Error("malformed equation source fallback is not readable");
+    }
 
-  const sourceButton = changedEquation.querySelector<HTMLElement>(
-    ":scope > .emr-math-source-btn",
-  );
+    const sourceButton = changedEquation.querySelector<HTMLElement>(
+        ":scope > .emr-math-source-btn",
+    );
 
-  if (!sourceButton) {
-    throw new Error("modified equation lacks a Source affordance");
-  }
+    if (!sourceButton) {
+        throw new Error("modified equation lacks a Source affordance");
+    }
 
-  if (changedEquation.querySelector(".emr-diff-before-trigger")) {
-    throw new Error("equation exposes a redundant standalone Before control");
-  }
+    if (changedEquation.querySelector(".emr-diff-before-trigger")) {
+        throw new Error("equation exposes a redundant standalone Before control");
+    }
 }
 
 function equationGalleryDecorator(
-  theme?: "dark" | "hc-light" | "hc-dark",
+    theme?: "dark" | "hc-light" | "hc-dark",
 ): (Story: ComponentType) => ReactElement {
-  return (Story) => (
-    <ThemeFrame theme={theme} width={760}>
-      <div className="equation-gallery-frame">
-        <Story />
-      </div>
-    </ThemeFrame>
-  );
+    return (Story) => (
+        <ThemeFrame theme={theme} width={760}>
+            <div className="equation-gallery-frame">
+                <Story />
+            </div>
+        </ThemeFrame>
+    );
 }
 
 const EQUATION_GALLERY_ARGS = {
-  pristineHtml: renderMarkdownSync(EQUATION_GALLERY_SOURCE),
-  currentSource: EQUATION_GALLERY_SOURCE,
-  originalSource: EQUATION_GALLERY_ORIGINAL,
-  threads: [],
-  activeThreadId: null,
-  diff: EQUATION_GALLERY_DIFF,
-  storageKey: "visual-equation-gallery.md",
+    pristineHtml: renderMarkdownSync(EQUATION_GALLERY_SOURCE),
+    currentSource: EQUATION_GALLERY_SOURCE,
+    originalSource: EQUATION_GALLERY_ORIGINAL,
+    threads: [],
+    activeThreadId: null,
+    diff: EQUATION_GALLERY_DIFF,
+    storageKey: "visual-equation-gallery.md",
 };
 
 export const EquationGalleryLight: Story = {
-  decorators: [equationGalleryDecorator()],
-  args: EQUATION_GALLERY_ARGS,
-  play: async ({ canvasElement }) => {
-    await prepareEquationGallery(canvasElement);
-  },
+    decorators: [equationGalleryDecorator()],
+    args: EQUATION_GALLERY_ARGS,
+    play: async ({ canvasElement }) => {
+        await prepareEquationGallery(canvasElement);
+    },
 };
 
 export const EquationGalleryDark: Story = {
-  decorators: [equationGalleryDecorator("dark")],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-gallery-dark.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareEquationGallery(canvasElement);
-  },
+    decorators: [equationGalleryDecorator("dark")],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-gallery-dark.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareEquationGallery(canvasElement);
+    },
 };
 
 export const EquationSourceDiff: Story = {
-  decorators: [equationGalleryDecorator()],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-source-diff.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareEquationGallery(canvasElement);
+    decorators: [equationGalleryDecorator()],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-source-diff.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareEquationGallery(canvasElement);
 
-    const equation = canvasElement.querySelector<HTMLElement>(
-      '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
-    )!;
+        const equation = canvasElement.querySelector<HTMLElement>(
+            '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
+        )!;
 
-    equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
-    await waitFor(() => {
-      const modal = canvasElement.querySelector<HTMLElement>(
-        ".emr-generated-source-modal",
-      );
+        equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
+        await waitFor(() => {
+            const modal = canvasElement.querySelector<HTMLElement>(".emr-generated-source-modal");
 
-      if (!modal) throw new Error("equation source modal did not open");
+            if (!modal) throw new Error("equation source modal did not open");
 
-      if (
-        modal.querySelector(".emr-word-added")?.textContent !== "^2" ||
-        !modal.querySelector(".emr-generated-source-preview .katex")
-      ) {
-        throw new Error("equation source diff or preview is incomplete");
-      }
-    });
-  },
+            if (
+                modal.querySelector(".emr-word-added")?.textContent !== "^2" ||
+                !modal.querySelector(".emr-generated-source-preview .katex")
+            ) {
+                throw new Error("equation source diff or preview is incomplete");
+            }
+        });
+    },
 };
 
 export const EquationSourceBefore: Story = {
-  decorators: [equationGalleryDecorator()],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-source-before.md",
-  },
-  play: async ({ canvasElement }) => {
-    await prepareEquationGallery(canvasElement);
+    decorators: [equationGalleryDecorator()],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-source-before.md",
+    },
+    play: async ({ canvasElement }) => {
+        await prepareEquationGallery(canvasElement);
 
-    const equation = canvasElement.querySelector<HTMLElement>(
-      '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
-    )!;
+        const equation = canvasElement.querySelector<HTMLElement>(
+            '.equation-gallery-frame .emr-math.emr-diff-block[data-diff-kind="modified"]',
+        )!;
 
-    equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
-    await waitFor(() => {
-      const before = canvasElement.querySelector<HTMLButtonElement>(
-        '.emr-generated-source-before[aria-pressed="false"]',
-      );
+        equation.querySelector<HTMLButtonElement>(".emr-math-source-btn")!.click();
+        await waitFor(() => {
+            const before = canvasElement.querySelector<HTMLButtonElement>(
+                '.emr-generated-source-before[aria-pressed="false"]',
+            );
 
-      if (!before) throw new Error("Before source view is unavailable");
-      before.click();
-    });
-    await waitFor(() => {
-      const modal = canvasElement.querySelector<HTMLElement>(
-        ".emr-generated-source-modal",
-      );
+            if (!before) throw new Error("Before source view is unavailable");
+            before.click();
+        });
+        await waitFor(() => {
+            const modal = canvasElement.querySelector<HTMLElement>(".emr-generated-source-modal");
 
-      const source = modal?.querySelector(
-        ".emr-generated-source-code code",
-      )?.textContent;
+            const source = modal?.querySelector(".emr-generated-source-code code")?.textContent;
 
-      const preview = modal?.querySelector("annotation")?.textContent;
-      const expected = String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`;
+            const preview = modal?.querySelector("annotation")?.textContent;
+            const expected = String.raw`G_{\mathrm{scro}\parallel,\mathrm{RMS}} = \sqrt{\frac{1}{Kn}\sum_{i=1}^{n} g_i}`;
 
-      if (source !== expected || preview !== expected) {
-        throw new Error("Before source or rendered preview is incorrect");
-      }
-    });
-  },
+            if (source !== expected || preview !== expected) {
+                throw new Error("Before source or rendered preview is incorrect");
+            }
+        });
+    },
 };
 
 export const EquationSourceBeforeDark: Story = {
-  decorators: [equationGalleryDecorator("dark")],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-source-before-dark.md",
-  },
-  play: EquationSourceBefore.play,
+    decorators: [equationGalleryDecorator("dark")],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-source-before-dark.md",
+    },
+    play: EquationSourceBefore.play,
 };
 
 export const EquationSourceBeforeHighContrastLight: Story = {
-  decorators: [equationGalleryDecorator("hc-light")],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-source-before-hc-light.md",
-  },
-  play: EquationSourceBefore.play,
+    decorators: [equationGalleryDecorator("hc-light")],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-source-before-hc-light.md",
+    },
+    play: EquationSourceBefore.play,
 };
 
 export const EquationSourceBeforeHighContrastDark: Story = {
-  decorators: [equationGalleryDecorator("hc-dark")],
-  args: {
-    ...EQUATION_GALLERY_ARGS,
-    storageKey: "visual-equation-source-before-hc-dark.md",
-  },
-  play: EquationSourceBefore.play,
+    decorators: [equationGalleryDecorator("hc-dark")],
+    args: {
+        ...EQUATION_GALLERY_ARGS,
+        storageKey: "visual-equation-source-before-hc-dark.md",
+    },
+    play: EquationSourceBefore.play,
 };
 
 const EDGE_DESTINATION =
-  "https://example.com/platform/deployments/regions/primary/secondary/canary/rings/validation/health/checks/owners/approvals/matrix";
+    "https://example.com/platform/deployments/regions/primary/secondary/canary/rings/validation/health/checks/owners/approvals/matrix";
 
 const TOOLTIP_EDGE_SOURCE = [
-  "# Tooltip Edge Matrix",
-  "",
-  `[Left edge guide](${EDGE_DESTINATION})`,
-  "",
-  `Open the [right edge guide](${EDGE_DESTINATION})`,
+    "# Tooltip Edge Matrix",
+    "",
+    `[Left edge guide](${EDGE_DESTINATION})`,
+    "",
+    `Open the [right edge guide](${EDGE_DESTINATION})`,
 ].join("\n");
 
 const TOOLTIP_EDGE_ORIGINAL = [
-  "# Tooltip Edge Matrix",
-  "",
-  "Left edge guide",
-  "",
-  "Open the right edge guide",
+    "# Tooltip Edge Matrix",
+    "",
+    "Left edge guide",
+    "",
+    "Open the right edge guide",
 ].join("\n");
 
 const TOOLTIP_EDGE_DIFF: DiffRange[] = [
-  {
-    startLine: 3,
-    endLine: 3,
-    kind: "modified",
-    originalStartLine: 3,
-    originalEndLine: 3,
-    originalText: "Left edge guide",
-  },
-  {
-    startLine: 5,
-    endLine: 5,
-    kind: "modified",
-    originalStartLine: 5,
-    originalEndLine: 5,
-    originalText: "Open the right edge guide",
-  },
+    {
+        startLine: 3,
+        endLine: 3,
+        kind: "modified",
+        originalStartLine: 3,
+        originalEndLine: 3,
+        originalText: "Left edge guide",
+    },
+    {
+        startLine: 5,
+        endLine: 5,
+        kind: "modified",
+        originalStartLine: 5,
+        originalEndLine: 5,
+        originalText: "Open the right edge guide",
+    },
 ];
 
 async function prepareTooltipEdges(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(() => {
-    if (
-      canvasElement.querySelectorAll<HTMLElement>(
+    await waitFor(() => {
+        if (
+            canvasElement.querySelectorAll<HTMLElement>(
+                '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
+            ).length !== 2
+        ) {
+            throw new Error("tooltip edge examples not rendered");
+        }
+    });
+    const paragraphs = canvasElement.querySelectorAll<HTMLElement>("p");
+    paragraphs[1]!.style.textAlign = "right";
+
+    const marks = canvasElement.querySelectorAll<HTMLElement>(
         '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-      ).length !== 2
-    ) {
-      throw new Error("tooltip edge examples not rendered");
+    );
+
+    marks[0]!.focus();
+
+    if (marks[0]!.classList.contains("emr-diff-explained-change--right")) {
+        throw new Error("left-edge tooltip aligned outward");
     }
-  });
-  const paragraphs = canvasElement.querySelectorAll<HTMLElement>("p");
-  paragraphs[1]!.style.textAlign = "right";
 
-  const marks = canvasElement.querySelectorAll<HTMLElement>(
-    '.emr-diff-format-change[data-diff-tooltip^="Link added:"]',
-  );
+    marks[0]!.blur();
+    marks[1]!.focus();
 
-  marks[0]!.focus();
+    if (!marks[1]!.classList.contains("emr-diff-explained-change--right")) {
+        throw new Error("right-edge tooltip aligned outward");
+    }
 
-  if (marks[0]!.classList.contains("emr-diff-explained-change--right")) {
-    throw new Error("left-edge tooltip aligned outward");
-  }
-
-  marks[0]!.blur();
-  marks[1]!.focus();
-
-  if (!marks[1]!.classList.contains("emr-diff-explained-change--right")) {
-    throw new Error("right-edge tooltip aligned outward");
-  }
-
-  marks[1]!.blur();
+    marks[1]!.blur();
 }
 
 function tooltipEdgeDecorator(
-  theme?: "dark" | "hc-light" | "hc-dark",
+    theme?: "dark" | "hc-light" | "hc-dark",
 ): (Story: ComponentType) => ReactElement {
-  return (Story) => (
-    <ThemeFrame theme={theme} width={360}>
-      <Story />
-    </ThemeFrame>
-  );
+    return (Story) => (
+        <ThemeFrame theme={theme} width={360}>
+            <Story />
+        </ThemeFrame>
+    );
 }
 
 const TOOLTIP_EDGE_ARGS = {
-  pristineHtml: renderMarkdownSync(TOOLTIP_EDGE_SOURCE),
-  originalSource: TOOLTIP_EDGE_ORIGINAL,
-  threads: [],
-  activeThreadId: null,
-  diff: TOOLTIP_EDGE_DIFF,
-  storageKey: "visual-tooltip-edges.md",
+    pristineHtml: renderMarkdownSync(TOOLTIP_EDGE_SOURCE),
+    originalSource: TOOLTIP_EDGE_ORIGINAL,
+    threads: [],
+    activeThreadId: null,
+    diff: TOOLTIP_EDGE_DIFF,
+    storageKey: "visual-tooltip-edges.md",
 };
 
 export const TooltipEdgesLight: Story = {
-  decorators: [tooltipEdgeDecorator()],
-  args: TOOLTIP_EDGE_ARGS,
-  play: async ({ canvasElement }) => {
-    await prepareTooltipEdges(canvasElement);
-  },
+    decorators: [tooltipEdgeDecorator()],
+    args: TOOLTIP_EDGE_ARGS,
+    play: async ({ canvasElement }) => {
+        await prepareTooltipEdges(canvasElement);
+    },
 };
 
 export const TooltipEdgesDark: Story = {
-  decorators: [tooltipEdgeDecorator("dark")],
-  args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-dark.md" },
-  play: async ({ canvasElement }) => {
-    await prepareTooltipEdges(canvasElement);
-  },
+    decorators: [tooltipEdgeDecorator("dark")],
+    args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-dark.md" },
+    play: async ({ canvasElement }) => {
+        await prepareTooltipEdges(canvasElement);
+    },
 };
 
 export const TooltipEdgesHighContrastLight: Story = {
-  decorators: [tooltipEdgeDecorator("hc-light")],
-  args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-hcl.md" },
-  play: async ({ canvasElement }) => {
-    await prepareTooltipEdges(canvasElement);
-  },
+    decorators: [tooltipEdgeDecorator("hc-light")],
+    args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-hcl.md" },
+    play: async ({ canvasElement }) => {
+        await prepareTooltipEdges(canvasElement);
+    },
 };
 
 export const TooltipEdgesHighContrastDark: Story = {
-  decorators: [tooltipEdgeDecorator("hc-dark")],
-  args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-hcd.md" },
-  play: async ({ canvasElement }) => {
-    await prepareTooltipEdges(canvasElement);
-  },
+    decorators: [tooltipEdgeDecorator("hc-dark")],
+    args: { ...TOOLTIP_EDGE_ARGS, storageKey: "visual-tooltip-edges-hcd.md" },
+    play: async ({ canvasElement }) => {
+        await prepareTooltipEdges(canvasElement);
+    },
 };
 
 // Structural edits: lines added to / removed from inside existing blocks,
@@ -2676,247 +2554,234 @@ export const TooltipEdgesHighContrastDark: Story = {
 // story passes both sources, so every in-block reconstruction path renders
 // exactly as it does for a real pull request.
 const STRUCTURAL_ORIGINAL = [
-  "# Structural Edits",
-  "",
-  "## Prose",
-  "",
-  "Reviews read best with one sentence per line.",
-  "Each line can change on its own.",
-  "",
-  "This paragraph had three lines.",
-  "The middle line was removed.",
-  "The last line stays.",
-  "",
-  "## Code",
-  "",
-  "```ts",
-  "function load(url) {",
-  "  const retries = 3;",
-  '  log("start");',
-  "  const legacy = true;",
-  "  return fetch(url, { retries });",
-  "}",
-  "```",
-  "",
-  "```sh",
-  "npm ci",
-  "npm test",
-  "```",
-  "",
-  "```go",
-  "func run() {",
-  "\treturn",
-  "}",
-  "```",
-  "",
-  "## Lists",
-  "",
-  "- [ ] Write the migration notes",
-  "- [ ] Ship the release",
-  "",
-  "Ownership:",
-  "",
-  "- Parent task",
-  "- Child task that belongs under the parent",
-  "- Sibling task",
-  "",
-  "## Quotes",
-  "",
-  "> Prefer small pull requests.",
-  "",
-  "> Reviewer guidance",
-  ">",
-  "> > Approve when the old checks pass.",
-  "",
-  "## Other scripts and footnotes",
-  "",
-  "今日は東京に行きます。",
-  "",
-  "Latency improved.[^bench]",
-  "",
-  "[^bench]: Measured on the old staging cluster.",
+    "# Structural Edits",
+    "",
+    "## Prose",
+    "",
+    "Reviews read best with one sentence per line.",
+    "Each line can change on its own.",
+    "",
+    "This paragraph had three lines.",
+    "The middle line was removed.",
+    "The last line stays.",
+    "",
+    "## Code",
+    "",
+    "```ts",
+    "function load(url) {",
+    "  const retries = 3;",
+    '  log("start");',
+    "  const legacy = true;",
+    "  return fetch(url, { retries });",
+    "}",
+    "```",
+    "",
+    "```sh",
+    "npm ci",
+    "npm test",
+    "```",
+    "",
+    "```go",
+    "func run() {",
+    "\treturn",
+    "}",
+    "```",
+    "",
+    "## Lists",
+    "",
+    "- [ ] Write the migration notes",
+    "- [ ] Ship the release",
+    "",
+    "Ownership:",
+    "",
+    "- Parent task",
+    "- Child task that belongs under the parent",
+    "- Sibling task",
+    "",
+    "## Quotes",
+    "",
+    "> Prefer small pull requests.",
+    "",
+    "> Reviewer guidance",
+    ">",
+    "> > Approve when the old checks pass.",
+    "",
+    "## Other scripts and footnotes",
+    "",
+    "今日は東京に行きます。",
+    "",
+    "Latency improved.[^bench]",
+    "",
+    "[^bench]: Measured on the old staging cluster.",
 ].join("\n");
 
 const STRUCTURAL_SOURCE = [
-  "# Structural Edits",
-  "",
-  "## Prose",
-  "",
-  "Reviews read best with one sentence per line.",
-  "Each line can change on its own.",
-  "A new line shows only its own words.",
-  "",
-  "This paragraph had three lines.",
-  "The last line stays.",
-  "",
-  "## Code",
-  "",
-  "```ts",
-  "function load(url) {",
-  "    const retries = 3;",
-  '  log("start");',
-  "  return fetch(url, { retries });",
-  "  // Retries are handled by the caller.",
-  "}",
-  "```",
-  "",
-  "```sh",
-  "npm ci",
-  "",
-  "npm test",
-  "```",
-  "",
-  "```go",
-  "func run() {",
-  "    return",
-  "}",
-  "```",
-  "",
-  "## Lists",
-  "",
-  "- [x] Write the full migration notes",
-  "- [ ] Ship the release",
-  "",
-  "Ownership:",
-  "",
-  "- Parent task",
-  "  - Child task that belongs under the parent",
-  "- Sibling task",
-  "",
-  "## Quotes",
-  "",
-  "> Prefer small pull requests.",
-  "> They are easier to review.",
-  "",
-  "> Reviewer guidance",
-  ">",
-  "> > Approve when the new checks pass.",
-  "",
-  "## Other scripts and footnotes",
-  "",
-  "今日は大阪に行きます。",
-  "",
-  "Latency improved.[^bench]",
-  "",
-  "[^bench]: Measured on the new staging cluster.",
+    "# Structural Edits",
+    "",
+    "## Prose",
+    "",
+    "Reviews read best with one sentence per line.",
+    "Each line can change on its own.",
+    "A new line shows only its own words.",
+    "",
+    "This paragraph had three lines.",
+    "The last line stays.",
+    "",
+    "## Code",
+    "",
+    "```ts",
+    "function load(url) {",
+    "    const retries = 3;",
+    '  log("start");',
+    "  return fetch(url, { retries });",
+    "  // Retries are handled by the caller.",
+    "}",
+    "```",
+    "",
+    "```sh",
+    "npm ci",
+    "",
+    "npm test",
+    "```",
+    "",
+    "```go",
+    "func run() {",
+    "    return",
+    "}",
+    "```",
+    "",
+    "## Lists",
+    "",
+    "- [x] Write the full migration notes",
+    "- [ ] Ship the release",
+    "",
+    "Ownership:",
+    "",
+    "- Parent task",
+    "  - Child task that belongs under the parent",
+    "- Sibling task",
+    "",
+    "## Quotes",
+    "",
+    "> Prefer small pull requests.",
+    "> They are easier to review.",
+    "",
+    "> Reviewer guidance",
+    ">",
+    "> > Approve when the new checks pass.",
+    "",
+    "## Other scripts and footnotes",
+    "",
+    "今日は大阪に行きます。",
+    "",
+    "Latency improved.[^bench]",
+    "",
+    "[^bench]: Measured on the new staging cluster.",
 ].join("\n");
 
 const STRUCTURAL_ARGS = {
-  pristineHtml: renderMarkdownSync(STRUCTURAL_SOURCE),
-  currentSource: STRUCTURAL_SOURCE,
-  originalSource: STRUCTURAL_ORIGINAL,
-  threads: [],
-  activeThreadId: null,
-  diff: refineDiffRanges(
-    sourceDiffRanges(STRUCTURAL_ORIGINAL, STRUCTURAL_SOURCE),
-    STRUCTURAL_ORIGINAL,
-    STRUCTURAL_SOURCE,
-  ),
+    pristineHtml: renderMarkdownSync(STRUCTURAL_SOURCE),
+    currentSource: STRUCTURAL_SOURCE,
+    originalSource: STRUCTURAL_ORIGINAL,
+    threads: [],
+    activeThreadId: null,
+    diff: refineDiffRanges(
+        sourceDiffRanges(STRUCTURAL_ORIGINAL, STRUCTURAL_SOURCE),
+        STRUCTURAL_ORIGINAL,
+        STRUCTURAL_SOURCE,
+    ),
 };
 
 /** Every structural edit is shown in place, inside the block it changed. */
-async function prepareStructuralEdits(
-  canvasElement: HTMLElement,
-): Promise<void> {
-  const marked = (selector: string, text: string): boolean =>
-    Array.from(canvasElement.querySelectorAll(selector)).some(
-      (mark) => mark.textContent === text,
-    );
+async function prepareStructuralEdits(canvasElement: HTMLElement): Promise<void> {
+    const marked = (selector: string, text: string): boolean =>
+        Array.from(canvasElement.querySelectorAll(selector)).some(
+            (mark) => mark.textContent === text,
+        );
 
-  await waitFor(() => {
-    const checks: Array<[string, boolean]> = [
-      [
-        "appended prose line",
-        marked("p .emr-word-added", "\nA new line shows only its own words."),
-      ],
-      [
-        "removed prose line",
-        marked("p .emr-word-removed", "The middle line was removed.\n"),
-      ],
-      ["code re-indent", marked("pre .emr-word-added", "  ")],
-      [
-        "tab replaced by spaces",
-        canvasElement.querySelector(
-          'pre .emr-diff-format-change[data-diff-tooltip="Indentation changed from 1 tab to 4 spaces"]',
-        ) !== null,
-      ],
-      [
-        "removed code line",
-        marked("pre .emr-word-removed", "  const legacy = true;\n"),
-      ],
-      ["added blank code line", marked("pre .emr-word-added", "\n")],
-      [
-        "checklist toggle with text edit",
-        canvasElement.querySelector(
-          "li.emr-diff-block--inline .emr-diff-task-tooltip-anchor",
-        ) !== null && marked("li .emr-word-added", "full "),
-      ],
-      [
-        "list nesting",
-        canvasElement.querySelector(
-          'li .emr-diff-format-change[data-diff-tooltip="List nesting changed from level 1 to level 2"]',
-        ) !== null,
-      ],
-      [
-        "quote continuation",
-        marked("blockquote .emr-word-added", "\nThey are easier to review."),
-      ],
-      ["nested quote", marked("blockquote blockquote .emr-word-added", "new")],
-      ["CJK word", marked("p .emr-word-added", "大阪")],
-      ["footnote", marked("[data-footnotes] .emr-word-added", "new")],
-    ];
+    await waitFor(() => {
+        const checks: Array<[string, boolean]> = [
+            [
+                "appended prose line",
+                marked("p .emr-word-added", "\nA new line shows only its own words."),
+            ],
+            ["removed prose line", marked("p .emr-word-removed", "The middle line was removed.\n")],
+            ["code re-indent", marked("pre .emr-word-added", "  ")],
+            [
+                "tab replaced by spaces",
+                canvasElement.querySelector(
+                    'pre .emr-diff-format-change[data-diff-tooltip="Indentation changed from 1 tab to 4 spaces"]',
+                ) !== null,
+            ],
+            ["removed code line", marked("pre .emr-word-removed", "  const legacy = true;\n")],
+            ["added blank code line", marked("pre .emr-word-added", "\n")],
+            [
+                "checklist toggle with text edit",
+                canvasElement.querySelector(
+                    "li.emr-diff-block--inline .emr-diff-task-tooltip-anchor",
+                ) !== null && marked("li .emr-word-added", "full "),
+            ],
+            [
+                "list nesting",
+                canvasElement.querySelector(
+                    'li .emr-diff-format-change[data-diff-tooltip="List nesting changed from level 1 to level 2"]',
+                ) !== null,
+            ],
+            [
+                "quote continuation",
+                marked("blockquote .emr-word-added", "\nThey are easier to review."),
+            ],
+            ["nested quote", marked("blockquote blockquote .emr-word-added", "new")],
+            ["CJK word", marked("p .emr-word-added", "大阪")],
+            ["footnote", marked("[data-footnotes] .emr-word-added", "new")],
+        ];
 
-    const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
+        const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
 
-    if (missing.length > 0) {
-      throw new Error(`structural edits not decorated: ${missing.join(", ")}`);
+        if (missing.length > 0) {
+            throw new Error(`structural edits not decorated: ${missing.join(", ")}`);
+        }
+    });
+
+    if (canvasElement.querySelector(".emr-diff-block--added")) {
+        throw new Error("an edited block is painted as wholly added");
     }
-  });
 
-  if (canvasElement.querySelector(".emr-diff-block--added")) {
-    throw new Error("an edited block is painted as wholly added");
-  }
+    if (canvasElement.querySelector(".emr-diff-deleted-marker")) {
+        throw new Error("an in-block removal is shown as a separate marker");
+    }
 
-  if (canvasElement.querySelector(".emr-diff-deleted-marker")) {
-    throw new Error("an in-block removal is shown as a separate marker");
-  }
+    const blankLine = canvasElement.querySelector("pre .emr-word-mark--line-break");
 
-  const blankLine = canvasElement.querySelector(
-    "pre .emr-word-mark--line-break",
-  );
-
-  if (
-    !blankLine ||
-    getComputedStyle(blankLine, "::before").content !== '"\u21B5"'
-  ) {
-    throw new Error("the blank line added to code has no visible glyph");
-  }
+    if (!blankLine || getComputedStyle(blankLine, "::before").content !== '"\u21B5"') {
+        throw new Error("the blank line added to code has no visible glyph");
+    }
 }
 
 export const StructuralEditsLight: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits.md" },
-  play: async ({ canvasElement }) => {
-    await prepareStructuralEdits(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits.md" },
+    play: async ({ canvasElement }) => {
+        await prepareStructuralEdits(canvasElement);
+    },
 };
 
 export const StructuralEditsDark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits-dark.md" },
-  play: async ({ canvasElement }) => {
-    await prepareStructuralEdits(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    args: { ...STRUCTURAL_ARGS, storageKey: "visual-structural-edits-dark.md" },
+    play: async ({ canvasElement }) => {
+        await prepareStructuralEdits(canvasElement);
+    },
 };

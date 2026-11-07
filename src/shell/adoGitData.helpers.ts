@@ -3,9 +3,9 @@
 // can't evaluate).
 
 import type {
-  GitPullRequest,
-  GitRepository,
-  PullRequestStatus,
+    GitPullRequest,
+    GitRepository,
+    PullRequestStatus,
 } from "azure-devops-extension-api/Git";
 import { isItemNotFoundError, type DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
@@ -18,8 +18,8 @@ import { ORDER_FILE_NAME } from "./wikiOrder";
  * needed. The SDK glue passes `sharedGitClient`; tests pass a fake.
  */
 export interface GitScope<C> {
-  git: () => C;
-  projectId: string;
+    git: () => C;
+    projectId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -32,10 +32,10 @@ export interface GitScope<C> {
  * distinguishable from the repo root.
  */
 export function normalizePath(p: string): string {
-  if (!p) return "/";
-  const stripped = p.replace(/\/+$/, "");
+    if (!p) return "/";
+    const stripped = p.replace(/\/+$/, "");
 
-  return stripped.length === 0 ? "/" : stripped;
+    return stripped.length === 0 ? "/" : stripped;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,9 +47,9 @@ export function normalizePath(p: string): string {
  * absent; empty string for null/undefined.
  */
 export function stripRefsHeads(ref: string | undefined | null): string {
-  if (ref == null || ref === "") return "";
+    if (ref == null || ref === "") return "";
 
-  return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
+    return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,32 +64,29 @@ export function stripRefsHeads(ref: string | undefined | null): string {
  * slugs fall back to `doc`) and suffix a base-36 timestamp for uniqueness.
  * `now` is injected so the function stays deterministic under test.
  */
-export function editBranchName(
-  fileName: string,
-  now: number = Date.now(),
-): string {
-  const slug =
-    fileName
-      .replace(/\.md$/i, "")
-      .replace(/[^\w.-]+/g, "-")
-      // Git refs cannot contain `..` and cannot begin/end with `.`.
-      .replace(/\.+/g, ".")
-      .replace(/^\.+|\.+$/g, "")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase() || "doc";
+export function editBranchName(fileName: string, now: number = Date.now()): string {
+    const slug =
+        fileName
+            .replace(/\.md$/i, "")
+            .replace(/[^\w.-]+/g, "-")
+            // Git refs cannot contain `..` and cannot begin/end with `.`.
+            .replace(/\.+/g, ".")
+            .replace(/^\.+|\.+$/g, "")
+            .replace(/^-+|-+$/g, "")
+            .toLowerCase() || "doc";
 
-  return `emr/edit/${slug}-${now.toString(36)}`;
+    return `emr/edit/${slug}-${now.toString(36)}`;
 }
 
 /** Markdown body for the bootstrapped edit PR. */
 export function editPrDescription(path: string): string {
-  return [
-    `Drafted from **Easy Markdown Review** to edit \`${path}\`.`,
-    "",
-    "A placeholder line was added to the top of the file so this pull request",
-    "could be created. **Remove it before completing the PR**, then make your",
-    "edits here.",
-  ].join("\n");
+    return [
+        `Drafted from **Easy Markdown Review** to edit \`${path}\`.`,
+        "",
+        "A placeholder line was added to the top of the file so this pull request",
+        "could be created. **Remove it before completing the PR**, then make your",
+        "edits here.",
+    ].join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -98,13 +95,13 @@ export function editPrDescription(path: string): string {
 
 /** Minimal shape of an ADO `GitItem` the projection reads. */
 export interface GitItemLike {
-  path?: string;
-  isFolder?: boolean;
+    path?: string;
+    isFolder?: boolean;
 }
 
 /** Minimal shape of a repository the name filter reads. */
 export interface NamedRepoLike {
-  name: string;
+    name: string;
 }
 
 /**
@@ -115,17 +112,17 @@ export interface NamedRepoLike {
  * repos rather than showing an empty picker).
  */
 export function filterReposByName<R extends NamedRepoLike>(
-  repos: readonly R[],
-  restrictToRepoName: string | undefined,
+    repos: readonly R[],
+    restrictToRepoName: string | undefined,
 ): R[] {
-  if (restrictToRepoName == null || restrictToRepoName === "") {
-    return [...repos];
-  }
+    if (restrictToRepoName == null || restrictToRepoName === "") {
+        return [...repos];
+    }
 
-  const lc = restrictToRepoName.toLowerCase();
-  const narrowed = repos.filter((r) => r.name.toLowerCase() === lc);
+    const lc = restrictToRepoName.toLowerCase();
+    const narrowed = repos.filter((r) => r.name.toLowerCase() === lc);
 
-  return narrowed.length > 0 ? narrowed : [...repos];
+    return narrowed.length > 0 ? narrowed : [...repos];
 }
 
 /**
@@ -141,34 +138,34 @@ export function filterReposByName<R extends NamedRepoLike>(
  * without the SDK.
  */
 export function projectMarkdownLevel(
-  items: readonly GitItemLike[],
-  scopePath: string,
+    items: readonly GitItemLike[],
+    scopePath: string,
 ): FolderListing {
-  const files: FileInfo[] = [];
-  const folders: string[] = [];
-  const normalizedScope = normalizePath(scopePath);
+    const files: FileInfo[] = [];
+    const folders: string[] = [];
+    const normalizedScope = normalizePath(scopePath);
 
-  for (const item of items) {
-    const path = item.path ?? "";
-    if (!path) continue;
-    if (normalizePath(path) === normalizedScope) continue;
+    for (const item of items) {
+        const path = item.path ?? "";
+        if (!path) continue;
+        if (normalizePath(path) === normalizedScope) continue;
 
-    if (item.isFolder) {
-      folders.push(path);
-    } else if (path.toLowerCase().endsWith(".md")) {
-      files.push({
-        path,
-        changeType: "modified",
-        linesAdded: 0,
-        linesDeleted: 0,
-      });
+        if (item.isFolder) {
+            folders.push(path);
+        } else if (path.toLowerCase().endsWith(".md")) {
+            files.push({
+                path,
+                changeType: "modified",
+                linesAdded: 0,
+                linesDeleted: 0,
+            });
+        }
     }
-  }
 
-  files.sort((a, b) => a.path.localeCompare(b.path));
-  folders.sort((a, b) => a.localeCompare(b));
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    folders.sort((a, b) => a.localeCompare(b));
 
-  return { files, folders };
+    return { files, folders };
 }
 
 /** What a failed folder listing becomes; see `listingFailureOutcome`. */
@@ -182,12 +179,12 @@ export type ListingFailureOutcome = "empty" | "throw" | "degrade";
  * stays usable) and is reported.
  */
 export function listingFailureOutcome(
-  err: unknown,
-  options: { missingOk?: boolean; propagate?: boolean },
+    err: unknown,
+    options: { missingOk?: boolean; propagate?: boolean },
 ): ListingFailureOutcome {
-  if (options.missingOk && isItemNotFoundError(err)) return "empty";
+    if (options.missingOk && isItemNotFoundError(err)) return "empty";
 
-  return options.propagate ? "throw" : "degrade";
+    return options.propagate ? "throw" : "degrade";
 }
 
 /**
@@ -195,17 +192,15 @@ export function listingFailureOutcome(
  * OneLevel listing, or undefined when the folder has none.
  */
 export function findOrderFile(
-  items: readonly GitItemLike[],
-  scopePath: string,
+    items: readonly GitItemLike[],
+    scopePath: string,
 ): string | undefined {
-  // Scope paths arrive with or without a leading slash; ADO item paths have one.
-  const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
-  const scope = bare(scopePath);
-  const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
+    // Scope paths arrive with or without a leading slash; ADO item paths have one.
+    const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
+    const scope = bare(scopePath);
+    const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
 
-  return items.find(
-    (item) => !item.isFolder && bare(item.path ?? "") === expected,
-  )?.path;
+    return items.find((item) => !item.isFolder && bare(item.path ?? "") === expected)?.path;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +213,7 @@ export function findOrderFile(
  * (which would 400). Not exhaustive — just the common delimiters.
  */
 export function escapeSearchQuery(s: string): string {
-  return s.replace(/[\\:"*?(){}[\]^~]/g, " ").trim();
+    return s.replace(/[\\:"*?(){}[\]^~]/g, " ").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -243,31 +238,28 @@ export function escapeSearchQuery(s: string): string {
  * Returns `undefined` when there's no source URL to derive the org base from
  * (the caller then leaves `avatarUrl` unset and the initials avatar shows).
  */
-export function identityAvatarUrl(identity: {
-  id: string;
-  imageUrl?: string;
-}): string | undefined {
-  if (identity.imageUrl == null || identity.imageUrl === "") return undefined;
-  let parsed: URL;
+export function identityAvatarUrl(identity: { id: string; imageUrl?: string }): string | undefined {
+    if (identity.imageUrl == null || identity.imageUrl === "") return undefined;
+    let parsed: URL;
 
-  try {
-    parsed = new URL(identity.imageUrl);
-  } catch {
-    return undefined;
-  }
+    try {
+        parsed = new URL(identity.imageUrl);
+    } catch {
+        return undefined;
+    }
 
-  // The org base is everything before the API segment, e.g.
-  // "https://dev.azure.com/{org}" or "https://{org}.visualstudio.com". When no
-  // API segment is present, keep the whole path (sans trailing slash) as base.
-  const path = parsed.pathname;
-  const apiIdx = path.indexOf("/_apis/");
-  const legacyIdx = path.indexOf("/_api/");
-  const cut = apiIdx >= 0 ? apiIdx : legacyIdx;
-  const base = cut >= 0 ? path.slice(0, cut) : path.replace(/\/+$/, "");
+    // The org base is everything before the API segment, e.g.
+    // "https://dev.azure.com/{org}" or "https://{org}.visualstudio.com". When no
+    // API segment is present, keep the whole path (sans trailing slash) as base.
+    const path = parsed.pathname;
+    const apiIdx = path.indexOf("/_apis/");
+    const legacyIdx = path.indexOf("/_api/");
+    const cut = apiIdx >= 0 ? apiIdx : legacyIdx;
+    const base = cut >= 0 ? path.slice(0, cut) : path.replace(/\/+$/, "");
 
-  return `${parsed.origin}${base}/_api/_common/identityImage?id=${encodeURIComponent(
-    identity.id,
-  )}`;
+    return `${parsed.origin}${base}/_api/_common/identityImage?id=${encodeURIComponent(
+        identity.id,
+    )}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,10 +268,10 @@ export function identityAvatarUrl(identity: {
 
 /** Most-recent ordering key: prefer closedDate when set, else creationDate. */
 export function prDate(pr: { closedDate?: Date; creationDate?: Date }): number {
-  const closed = pr.closedDate ? new Date(pr.closedDate).getTime() : 0;
-  const created = pr.creationDate ? new Date(pr.creationDate).getTime() : 0;
+    const closed = pr.closedDate ? new Date(pr.closedDate).getTime() : 0;
+    const created = pr.creationDate ? new Date(pr.creationDate).getTime() : 0;
 
-  return Math.max(closed, created);
+    return Math.max(closed, created);
 }
 
 /**
@@ -304,17 +296,15 @@ export const COMPLETED_PR_STATUS = 3 as PullRequestStatus;
  *
  * Returns the most recent completed PR, or `null` when none exists.
  */
-export function selectRoutingPr(
-  prs: readonly GitPullRequest[],
-): GitPullRequest | null {
-  let best: GitPullRequest | null = null;
+export function selectRoutingPr(prs: readonly GitPullRequest[]): GitPullRequest | null {
+    let best: GitPullRequest | null = null;
 
-  for (const pr of prs) {
-    if (pr.status !== COMPLETED_PR_STATUS) continue;
-    if (best === null || prDate(pr) > prDate(best)) best = pr;
-  }
+    for (const pr of prs) {
+        if (pr.status !== COMPLETED_PR_STATUS) continue;
+        if (best === null || prDate(pr) > prDate(best)) best = pr;
+    }
 
-  return best;
+    return best;
 }
 
 /**
@@ -324,9 +314,9 @@ export function selectRoutingPr(
  * changed it — the input to the `LastMergeCommit` PR query.
  */
 export function firstCommitId(
-  commits: ReadonlyArray<{ commitId?: string }> | undefined | null,
+    commits: ReadonlyArray<{ commitId?: string }> | undefined | null,
 ): string | null {
-  return commits?.[0]?.commitId ?? null;
+    return commits?.[0]?.commitId ?? null;
 }
 
 /**
@@ -338,13 +328,10 @@ export function firstCommitId(
  * document's comments always anchor to a merged PR, matching the legacy scan.
  */
 export function selectRoutingPrFromQuery(
-  results:
-    | ReadonlyArray<{ [commitId: string]: GitPullRequest[] }>
-    | undefined
-    | null,
-  commitId: string,
+    results: ReadonlyArray<{ [commitId: string]: GitPullRequest[] }> | undefined | null,
+    commitId: string,
 ): GitPullRequest | null {
-  return selectRoutingPr(results?.[0]?.[commitId] ?? []);
+    return selectRoutingPr(results?.[0]?.[commitId] ?? []);
 }
 
 /**
@@ -355,15 +342,15 @@ export function selectRoutingPrFromQuery(
  * back to this order.
  */
 export function commitIds(
-  commits: ReadonlyArray<{ commitId?: string | null }> | undefined | null,
+    commits: ReadonlyArray<{ commitId?: string | null }> | undefined | null,
 ): string[] {
-  const out: string[] = [];
+    const out: string[] = [];
 
-  for (const c of commits ?? []) {
-    if (c.commitId != null && c.commitId !== "") out.push(c.commitId);
-  }
+    for (const c of commits ?? []) {
+        if (c.commitId != null && c.commitId !== "") out.push(c.commitId);
+    }
 
-  return out;
+    return out;
 }
 
 /**
@@ -379,33 +366,30 @@ export function commitIds(
  * anchor for historical comments + the document snapshot at its merge commit.
  */
 export function selectRoutingPrsFromQuery(
-  results:
-    | ReadonlyArray<{ [commitId: string]: GitPullRequest[] }>
-    | undefined
-    | null,
-  commitIds: readonly string[],
+    results: ReadonlyArray<{ [commitId: string]: GitPullRequest[] }> | undefined | null,
+    commitIds: readonly string[],
 ): GitPullRequest[] {
-  const map = results?.[0];
-  if (!map) return [];
-  const seen = new Set<number>();
-  const out: GitPullRequest[] = [];
+    const map = results?.[0];
+    if (!map) return [];
+    const seen = new Set<number>();
+    const out: GitPullRequest[] = [];
 
-  for (const commitId of commitIds) {
-    const completed = (map[commitId] ?? [])
-      .filter((pr) => pr.status === COMPLETED_PR_STATUS)
-      .sort((a, b) => prDate(b) - prDate(a));
+    for (const commitId of commitIds) {
+        const completed = (map[commitId] ?? [])
+            .filter((pr) => pr.status === COMPLETED_PR_STATUS)
+            .sort((a, b) => prDate(b) - prDate(a));
 
-    for (const pr of completed) {
-      if (typeof pr.pullRequestId !== "number" || seen.has(pr.pullRequestId)) {
-        continue;
-      }
+        for (const pr of completed) {
+            if (typeof pr.pullRequestId !== "number" || seen.has(pr.pullRequestId)) {
+                continue;
+            }
 
-      seen.add(pr.pullRequestId);
-      out.push(pr);
+            seen.add(pr.pullRequestId);
+            out.push(pr);
+        }
     }
-  }
 
-  return out;
+    return out;
 }
 
 /**
@@ -417,24 +401,24 @@ export function selectRoutingPrsFromQuery(
  * without a numeric id are skipped. Order is preserved (most recent first).
  */
 export function docPrRefsFromHistory(
-  prs: readonly Partial<GitPullRequest>[],
-  buildUrl: (prId: number) => string | undefined,
+    prs: readonly Partial<GitPullRequest>[],
+    buildUrl: (prId: number) => string | undefined,
 ): DocPrRef[] {
-  const out: DocPrRef[] = [];
+    const out: DocPrRef[] = [];
 
-  for (const pr of prs) {
-    const prId = pr.pullRequestId;
-    if (typeof prId !== "number" || !Number.isFinite(prId)) continue;
-    out.push({
-      prId,
-      commitId: pr.lastMergeCommit?.commitId ?? null,
-      title: pr.title ?? `PR #${prId}`,
-      url: buildUrl(prId),
-      dateMs: prDate(pr),
-    });
-  }
+    for (const pr of prs) {
+        const prId = pr.pullRequestId;
+        if (typeof prId !== "number" || !Number.isFinite(prId)) continue;
+        out.push({
+            prId,
+            commitId: pr.lastMergeCommit?.commitId ?? null,
+            title: pr.title ?? `PR #${prId}`,
+            url: buildUrl(prId),
+            dateMs: prDate(pr),
+        });
+    }
 
-  return out;
+    return out;
 }
 
 /**
@@ -443,19 +427,16 @@ export function docPrRefsFromHistory(
  * against. Skips entries without an `item.path`; tolerates a missing list.
  */
 export function changedPathsFromEntries(
-  entries:
-    | ReadonlyArray<{ item?: { path?: string | null } | null }>
-    | undefined
-    | null,
+    entries: ReadonlyArray<{ item?: { path?: string | null } | null }> | undefined | null,
 ): string[] {
-  const paths: string[] = [];
+    const paths: string[] = [];
 
-  for (const entry of entries ?? []) {
-    const p = entry.item?.path;
-    if (p != null && p !== "") paths.push(normalizePath(p).toLowerCase());
-  }
+    for (const entry of entries ?? []) {
+        const p = entry.item?.path;
+        if (p != null && p !== "") paths.push(normalizePath(p).toLowerCase());
+    }
 
-  return paths;
+    return paths;
 }
 
 /**
@@ -465,29 +446,26 @@ export function changedPathsFromEntries(
  * cause misses. Tolerates a missing list.
  */
 export function prsTouchingPath<T extends { paths: readonly string[] }>(
-  prs: readonly T[] | undefined | null,
-  path: string,
+    prs: readonly T[] | undefined | null,
+    path: string,
 ): T[] {
-  const key = normalizePath(path).toLowerCase();
+    const key = normalizePath(path).toLowerCase();
 
-  return (prs ?? []).filter((e) => e.paths.includes(key));
+    return (prs ?? []).filter((e) => e.paths.includes(key));
 }
 
 /**
  * Best-effort web URL for a PR. `webUrl` isn't always present on the REST
  * JSON, so fall back to a link constructed off `repo.webUrl`.
  */
-export function buildPrUrl(
-  repo: GitRepository,
-  prId: number | undefined,
-): string | undefined {
-  if (typeof prId !== "number") return undefined;
+export function buildPrUrl(repo: GitRepository, prId: number | undefined): string | undefined {
+    if (typeof prId !== "number") return undefined;
 
-  if (repo.webUrl) {
-    return `${repo.webUrl.replace(/\/$/, "")}/pullrequest/${prId}`;
-  }
+    if (repo.webUrl) {
+        return `${repo.webUrl.replace(/\/$/, "")}/pullrequest/${prId}`;
+    }
 
-  return undefined;
+    return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -500,26 +478,26 @@ export function buildPrUrl(
  * intentionally not a library dependency.
  */
 export async function runWithConcurrency<T, R>(
-  items: T[],
-  cap: number,
-  worker: (item: T) => Promise<R>,
+    items: T[],
+    cap: number,
+    worker: (item: T) => Promise<R>,
 ): Promise<R[]> {
-  if (items.length === 0) return [];
-  const safeCap = Math.max(1, Math.min(cap, items.length));
-  const results: R[] = new Array<R>(items.length);
-  let cursor = 0;
+    if (items.length === 0) return [];
+    const safeCap = Math.max(1, Math.min(cap, items.length));
+    const results: R[] = new Array<R>(items.length);
+    let cursor = 0;
 
-  async function pump(): Promise<void> {
-    for (let idx = cursor++; idx < items.length; idx = cursor++) {
-      results[idx] = await worker(items[idx]!);
+    async function pump(): Promise<void> {
+        for (let idx = cursor++; idx < items.length; idx = cursor++) {
+            results[idx] = await worker(items[idx]!);
+        }
     }
-  }
 
-  const workers: Promise<void>[] = [];
-  for (let w = 0; w < safeCap; w++) workers.push(pump());
-  await Promise.all(workers);
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < safeCap; w++) workers.push(pump());
+    await Promise.all(workers);
 
-  return results;
+    return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -528,9 +506,9 @@ export async function runWithConcurrency<T, R>(
 
 /** Human-readable one-liner shown under a repo name in the picker. */
 export function repoDescription(repo: GitRepository): string {
-  const branch = stripRefsHeads(repo.defaultBranch) || "main";
+    const branch = stripRefsHeads(repo.defaultBranch) || "main";
 
-  return `Default branch: ${branch}`;
+    return `Default branch: ${branch}`;
 }
 
 /**
@@ -540,16 +518,16 @@ export function repoDescription(repo: GitRepository): string {
  * contents to list it.
  */
 export function repoSkeleton(repo: GitRepository): DocRepo {
-  return {
-    id: repo.id,
-    name: repo.name,
-    description: repoDescription(repo),
-    defaultBranch: stripRefsHeads(repo.defaultBranch) || "main",
-    files: [],
-    topLevelFolders: [],
-    recentPr: null,
-    detailsLoaded: false,
-  };
+    return {
+        id: repo.id,
+        name: repo.name,
+        description: repoDescription(repo),
+        defaultBranch: stripRefsHeads(repo.defaultBranch) || "main",
+        files: [],
+        topLevelFolders: [],
+        recentPr: null,
+        detailsLoaded: false,
+    };
 }
 
 /**
@@ -557,9 +535,9 @@ export function repoSkeleton(repo: GitRepository): DocRepo {
  * mapped to `undefined` so an empty box requests the unfiltered first page.
  */
 export function normalizeRepoFilter(filter?: string): string | undefined {
-  const trimmed = filter?.trim();
+    const trimmed = filter?.trim();
 
-  return trimmed === undefined || trimmed === "" ? undefined : trimmed;
+    return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
 
 /**
@@ -568,13 +546,13 @@ export function normalizeRepoFilter(filter?: string): string | undefined {
  * host. `null` when the context doesn't carry one.
  */
 export function webContextProject(
-  webContext: { project?: { id?: unknown; name?: unknown } | null } | undefined,
+    webContext: { project?: { id?: unknown; name?: unknown } | null } | undefined,
 ): { id: string; name: string } | null {
-  const project = webContext?.project;
-  if (typeof project?.id !== "string" || project.id.length === 0) return null;
+    const project = webContext?.project;
+    if (typeof project?.id !== "string" || project.id.length === 0) return null;
 
-  return {
-    id: project.id,
-    name: typeof project.name === "string" ? project.name : "",
-  };
+    return {
+        id: project.id,
+        name: typeof project.name === "string" ? project.name : "",
+    };
 }

@@ -46,23 +46,19 @@ export const TEXT_LINK_PARAM = "text";
 export const PATH_LINK_PARAM = "path";
 
 /** Every param naming a target inside the document (cleared together). */
-export const TARGET_LINK_PARAMS = [
-  COMMENT_LINK_PARAM,
-  ANCHOR_LINK_PARAM,
-  TEXT_LINK_PARAM,
-] as const;
+export const TARGET_LINK_PARAMS = [COMMENT_LINK_PARAM, ANCHOR_LINK_PARAM, TEXT_LINK_PARAM] as const;
 
 /** What a shareable link points at inside the current document. */
 export type DeepLinkTarget =
-  | { kind: "comment"; threadId: string }
-  | { kind: "heading"; anchor: string }
-  | {
-      kind: "text";
-      /** Serialized text fragment (see `serializeTextFragment`). */
-      text: string;
-      /** Enclosing heading slug, used when the text can't be found. */
-      anchor?: string;
-    };
+    | { kind: "comment"; threadId: string }
+    | { kind: "heading"; anchor: string }
+    | {
+          kind: "text";
+          /** Serialized text fragment (see `serializeTextFragment`). */
+          text: string;
+          /** Enclosing heading slug, used when the text can't be found. */
+          anchor?: string;
+      };
 
 /**
  * Builds a shareable URL for a target in the active document, or `undefined`
@@ -79,28 +75,26 @@ export const DeepLinkContext = createContext<DeepLinkBuilder | null>(null);
 
 /** Read the nearest `DeepLinkContext` builder (or `null`). */
 export function useDeepLink(): DeepLinkBuilder | null {
-  return useContext(DeepLinkContext);
+    return useContext(DeepLinkContext);
 }
 
 /** The `{ param: value }` pairs a target writes into a URL. */
 function targetParams(target: DeepLinkTarget): Record<string, string> {
-  switch (target.kind) {
-    case "comment":
-      return { [COMMENT_LINK_PARAM]: target.threadId.trim() };
-    case "heading":
-      return { [ANCHOR_LINK_PARAM]: target.anchor.trim() };
+    switch (target.kind) {
+        case "comment":
+            return { [COMMENT_LINK_PARAM]: target.threadId.trim() };
+        case "heading":
+            return { [ANCHOR_LINK_PARAM]: target.anchor.trim() };
 
-    case "text": {
-      const anchor = target.anchor?.trim();
+        case "text": {
+            const anchor = target.anchor?.trim();
 
-      return {
-        [TEXT_LINK_PARAM]: target.text.trim(),
-        ...(anchor !== undefined && anchor !== ""
-          ? { [ANCHOR_LINK_PARAM]: anchor }
-          : {}),
-      };
+            return {
+                [TEXT_LINK_PARAM]: target.text.trim(),
+                ...(anchor !== undefined && anchor !== "" ? { [ANCHOR_LINK_PARAM]: anchor } : {}),
+            };
+        }
     }
-  }
 }
 
 /**
@@ -111,46 +105,43 @@ function targetParams(target: DeepLinkTarget): Record<string, string> {
  * or the target value is blank, so callers can report a failure rather than
  * emit a broken link.
  */
-export function withDeepLinkTarget(
-  baseUrl: string,
-  target: DeepLinkTarget,
-): string | undefined {
-  const params = targetParams(target);
-  const primary = Object.values(params)[0]!;
-  if (!baseUrl || !primary) return undefined;
-  let url: URL;
+export function withDeepLinkTarget(baseUrl: string, target: DeepLinkTarget): string | undefined {
+    const params = targetParams(target);
+    const primary = Object.values(params)[0]!;
+    if (!baseUrl || !primary) return undefined;
+    let url: URL;
 
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    return undefined;
-  }
+    try {
+        url = new URL(baseUrl);
+    } catch {
+        return undefined;
+    }
 
-  for (const param of TARGET_LINK_PARAMS) url.searchParams.delete(param);
+    for (const param of TARGET_LINK_PARAMS) url.searchParams.delete(param);
 
-  for (const [param, value] of Object.entries(params)) {
-    url.searchParams.set(param, value);
-  }
+    for (const [param, value] of Object.entries(params)) {
+        url.searchParams.set(param, value);
+    }
 
-  // Quoted text is mostly spaces: spell them `%20`, not the form-style `+`,
-  // which a host that decodes with `decodeURIComponent` would keep literally.
-  // (A literal `+` is always serialized as `%2B`, so this is lossless.)
-  if (target.kind === "text") {
-    url.search = url.searchParams.toString().replace(/\+/g, "%20");
-  }
+    // Quoted text is mostly spaces: spell them `%20`, not the form-style `+`,
+    // which a host that decodes with `decodeURIComponent` would keep literally.
+    // (A literal `+` is always serialized as `%2B`, so this is lossless.)
+    if (target.kind === "text") {
+        url.search = url.searchParams.toString().replace(/\+/g, "%20");
+    }
 
-  return url.toString();
+    return url.toString();
 }
 
 type RouteParams = Record<string, string | undefined> | null | undefined;
 
 function readTrimmed(params: RouteParams, key: string): string | undefined {
-  if (!params) return undefined;
-  const raw = params[key];
-  if (typeof raw !== "string") return undefined;
-  const trimmed = raw.trim();
+    if (!params) return undefined;
+    const raw = params[key];
+    if (typeof raw !== "string") return undefined;
+    const trimmed = raw.trim();
 
-  return trimmed.length > 0 ? trimmed : undefined;
+    return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /**
@@ -158,7 +149,7 @@ function readTrimmed(params: RouteParams, key: string): string | undefined {
  * the host navigation service). Returns `undefined` when absent or blank.
  */
 export function readCommentParam(params: RouteParams): string | undefined {
-  return readTrimmed(params, COMMENT_LINK_PARAM);
+    return readTrimmed(params, COMMENT_LINK_PARAM);
 }
 
 /**
@@ -167,9 +158,9 @@ export function readCommentParam(params: RouteParams): string | undefined {
  * or blank.
  */
 export function readAnchorParam(params: RouteParams): string | undefined {
-  const anchor = readTrimmed(params, ANCHOR_LINK_PARAM)?.replace(/^#+/, "");
+    const anchor = readTrimmed(params, ANCHOR_LINK_PARAM)?.replace(/^#+/, "");
 
-  return anchor === "" ? undefined : anchor;
+    return anchor === "" ? undefined : anchor;
 }
 
 /**
@@ -177,7 +168,7 @@ export function readAnchorParam(params: RouteParams): string | undefined {
  * absent or blank; parsing is left to `parseTextFragment`.
  */
 export function readTextParam(params: RouteParams): string | undefined {
-  return readTrimmed(params, TEXT_LINK_PARAM);
+    return readTrimmed(params, TEXT_LINK_PARAM);
 }
 
 /**
@@ -186,7 +177,7 @@ export function readTextParam(params: RouteParams): string | undefined {
  * leading-slash form. Returns `undefined` when absent or blank.
  */
 export function readPathParam(params: RouteParams): string | undefined {
-  const bare = readTrimmed(params, PATH_LINK_PARAM)?.replace(/^\/+/, "");
+    const bare = readTrimmed(params, PATH_LINK_PARAM)?.replace(/^\/+/, "");
 
-  return bare !== undefined && bare !== "" ? `/${bare}` : undefined;
+    return bare !== undefined && bare !== "" ? `/${bare}` : undefined;
 }

@@ -75,7 +75,7 @@ describe("isAlmSearchError", () => {
 
 describe("AlmSearchRestClient", () => {
     it("composes the URL with encoded org + project and sends the request body", async () => {
-        const fetchImpl = vi.fn(async () => jsonResponse({ count: 0, results: [] }));
+        const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ count: 0, results: [] }));
 
         const client = new AlmSearchRestClient("my org", async () => "TOK", fetchImpl);
 

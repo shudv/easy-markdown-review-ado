@@ -150,7 +150,7 @@ describe("ShellNotices", () => {
                     missingDoc: null,
                     onDismissMissingDoc: vi.fn(),
                     draftGuard: {
-                        requested: { path: "/", threadId: "t1" },
+                        requested: { path: "/", threadId: "t1", anchor: null },
                         existingPath: "/",
                         snippet: "draft",
                     },

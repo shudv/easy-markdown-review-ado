@@ -22,6 +22,7 @@
         "size": "node scripts/check-bundle-size.mjs",
         "typecheck": "tsc --noEmit",
         "typecheck:e2e": "tsc -p e2e/tsconfig.json",
+        "typecheck:test": "tsc -p test/tsconfig.json",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "lint:staged": "lint-staged",

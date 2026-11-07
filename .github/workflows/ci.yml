@@ -36,6 +36,11 @@ jobs:
             - name: Typecheck end-to-end tests
               run: npm run typecheck:e2e
 
+            # Vitest strips types without checking them, so unit tests are
+            # type-checked here or nowhere.
+            - name: Typecheck unit tests
+              run: npm run typecheck:test
+
             - name: Lint (includes the complexity and size gate)
               run: npm run lint
 

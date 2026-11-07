@@ -9,6 +9,7 @@ vi.mock("mermaid", () => ({
         initialize: vi.fn(),
         render: vi.fn(async (id: string, src: string) => ({
             svg: `<svg data-id="${id}" data-src="${src.length}"></svg>`,
+            diagramType: "flowchart",
         })),
     },
 }));
@@ -77,6 +78,7 @@ describe("hydrateMermaid", () => {
         // inline max-width cap.
         vi.mocked(mermaid.render).mockResolvedValueOnce({
             svg: '<svg viewBox="0 0 400 200" width="400" height="200" style="max-width: 400px"></svg>',
+            diagramType: "flowchart",
         });
         const root = document.createElement("div");
         const src = encodeURIComponent("graph TD\nA-->B");
@@ -356,7 +358,7 @@ describe("hydrateMermaid — author syntax errors", () => {
                 throw new Error("Parse error on line 2:\nExpecting 'SOLID_ARROW'");
             }
 
-            return { svg: `<svg data-id="${id}"></svg>` };
+            return { svg: `<svg data-id="${id}"></svg>`, diagramType: "sequence" };
         });
     }
 

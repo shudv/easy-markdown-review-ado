@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { Root, Element, Properties } from "hast";
+import { unified } from "unified";
 import { renderMarkdown } from "../src/markdown/render";
 import { rehypeSanitizeUrls } from "../src/markdown/sanitize-urls";
 
@@ -15,8 +16,7 @@ import { rehypeSanitizeUrls } from "../src/markdown/sanitize-urls";
 // full markdown pipeline does not currently emit `target` on links.
 function sanitizeElement(el: Element): Element {
     const tree: Root = { type: "root", children: [el] };
-    const transform = rehypeSanitizeUrls() as unknown as (t: Root) => void;
-    transform(tree);
+    unified().use(rehypeSanitizeUrls).runSync(tree);
 
     return tree.children[0] as Element;
 }
@@ -217,7 +217,9 @@ describe("renderMarkdown — security", () => {
                 properties: {
                     href: "https://example.com",
                     target: "_blank",
-                    rel: "author help",
+                    // hast types rel as string[], but another plugin can set a plain
+                    // string, which the sanitizer must also handle.
+                    rel: "author help" as unknown as string[],
                 },
                 children: [],
             });

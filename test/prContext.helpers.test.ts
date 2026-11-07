@@ -141,6 +141,6 @@ describe("prBranchVersion", () => {
     });
 
     it("is undefined without a source branch", () => {
-        expect(prBranchVersion({})).toBeUndefined();
+        expect(prBranchVersion({} as Parameters<typeof prBranchVersion>[0])).toBeUndefined();
     });
 });

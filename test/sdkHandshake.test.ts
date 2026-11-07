@@ -1,11 +1,12 @@
 // Tests for the SDK host-handshake retry: the SDK leaves a refused handshake
 // as an unhandled rejection and never settles `init()`, so boot must own it.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
     HANDSHAKE_RETRY_DELAYS_MS,
     HostHandshakeError,
+    type HandshakeRetryDeps,
     initWithHandshakeRetry,
     isHostHandshakeRejection,
 } from "../src/shell/sdkHandshake";
@@ -78,14 +79,14 @@ describe("isHostHandshakeRejection", () => {
 
 describe("initWithHandshakeRetry", () => {
     let stream: ReturnType<typeof rejectionStream>;
-    let claim: ReturnType<typeof vi.fn>;
-    let release: ReturnType<typeof vi.fn>;
+    let claim: Mock<NonNullable<HandshakeRetryDeps["claim"]>>;
+    let release: Mock<() => void>;
 
     beforeEach(() => {
         vi.useFakeTimers();
         stream = rejectionStream();
-        release = vi.fn();
-        claim = vi.fn(() => release);
+        release = vi.fn<() => void>();
+        claim = vi.fn<NonNullable<HandshakeRetryDeps["claim"]>>(() => release);
     });
 
     afterEach(() => {

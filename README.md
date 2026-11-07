@@ -67,8 +67,8 @@ Dependencies restore from public npm. The repository disables install scripts in
 Before opening a PR, run:
 
 ```pwsh
-npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run duplication:check; npm run spell:check
+npm run typecheck; npm run typecheck:e2e; npm run typecheck:test; npm run lint
+npm run format:check; npm run depcruise; npm run duplication:check; npm run spell:check
 npm run test:coverage
 npm run build
 npm run test:visual:docker

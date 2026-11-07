@@ -69,7 +69,7 @@ describe("syncHostTheme", () => {
             lumaSignal = "rgb(10, 10, 10)";
             document.body.className = "vss-theme-dark";
             // MutationObserver in jsdom is async (microtask).
-            await new Promise((resolve) => queueMicrotask(resolve));
+            await new Promise<void>((resolve) => queueMicrotask(resolve));
 
             // The managed <style> tag should now be installed.
             const styleEl = document.head.querySelector("style[data-emr-markdown-theme]");

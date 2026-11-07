@@ -109,11 +109,10 @@ const config = tseslint.config(
         files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "visual/**/*.ts", "test/**/*.{ts,tsx}"],
         languageOptions: {
             parserOptions: {
-                // Type-aware linting. List the projects explicitly so the root
-                // (src), test, and e2e tsconfigs are all resolved — the root
-                // tsconfig.json excludes test/, so projectService alone can't see
-                // those files.
-                project: ["./tsconfig.eslint.json", "./e2e/tsconfig.json"],
+                // Type-aware linting. List the projects explicitly: the root
+                // tsconfig.json (src, first so src keeps its browser lib) excludes
+                // test/, which test/tsconfig.json covers, and e2e has its own.
+                project: ["./tsconfig.json", "./test/tsconfig.json", "./e2e/tsconfig.json"],
                 tsconfigRootDir: import.meta.dirname,
             },
         },

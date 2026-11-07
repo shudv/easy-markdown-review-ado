@@ -59,9 +59,9 @@ function fakeClient(opts: {
     query?: Reply<{ results?: Record<string, GitPullRequest[]>[] }>;
 }) {
     return {
-        getPullRequests: vi.fn(() => answer(opts.prs ?? [])),
-        getCommits: vi.fn(() => answer(opts.commits ?? [])),
-        getPullRequestQuery: vi.fn(() => answer(opts.query ?? {})),
+        getPullRequests: vi.fn((..._args: unknown[]) => answer(opts.prs ?? [])),
+        getCommits: vi.fn((..._args: unknown[]) => answer(opts.commits ?? [])),
+        getPullRequestQuery: vi.fn((..._args: unknown[]) => answer(opts.query ?? {})),
     };
 }
 

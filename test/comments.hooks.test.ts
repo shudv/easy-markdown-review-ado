@@ -44,17 +44,17 @@ afterEach(() => {
 // Minimal error boundary so a hook that throws during render is captured as a
 // value instead of crashing the test runner.
 class Boundary extends Component<
-    { onError: (e: Error) => void; children: ReactNode },
+    { onError: (e: Error) => void; children?: ReactNode },
     { failed: boolean }
 > {
-    state = { failed: false };
+    override state = { failed: false };
     static getDerivedStateFromError(): { failed: boolean } {
         return { failed: true };
     }
-    componentDidCatch(error: Error): void {
+    override componentDidCatch(error: Error): void {
         this.props.onError(error);
     }
-    render(): ReactNode {
+    override render(): ReactNode {
         return this.state.failed ? null : this.props.children;
     }
 }

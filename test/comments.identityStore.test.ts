@@ -120,7 +120,7 @@ describe("IdentityStore — ensure / resolve", () => {
     it("skips resolver entries that have no display name", async () => {
         const resolver: IdentityResolver = async () => ({
             good: { displayName: "Good" },
-            // @ts-expect-error — simulate a malformed/empty entry from the service
+            // A malformed/empty entry from the service.
             bad: { displayName: "" },
         });
 

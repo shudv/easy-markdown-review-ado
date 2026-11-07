@@ -24,7 +24,7 @@ const repo = { id: "r1", name: "Docs", defaultBranch: "refs/heads/main" };
 
 function fakeClient(opts: { items?: unknown[] | Error; orderText?: string | Error }) {
     return {
-        getItems: vi.fn(async () => {
+        getItems: vi.fn(async (..._args: unknown[]) => {
             if (opts.items instanceof Error) throw opts.items;
 
             return opts.items ?? [];

@@ -4,11 +4,10 @@
 // @vitest-environment node
 
 import { RuleTester } from "eslint";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { coverageIgnoreRationale } from "../scripts/eslint-rules/coverage-ignore-rationale.mjs";
 
-RuleTester.afterAll = afterAll;
 RuleTester.describe = describe;
 RuleTester.it = it;
 

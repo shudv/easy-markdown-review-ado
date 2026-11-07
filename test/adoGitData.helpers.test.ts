@@ -525,7 +525,10 @@ describe("selectRoutingPrFromQuery", () => {
     });
 
     it("only reads the first query's results", () => {
-        const results = [{}, { [SHA]: [closedPr(5, COMPLETED, "2024-05-01T00:00:00Z")] }];
+        const results: Parameters<typeof selectRoutingPrFromQuery>[0] = [
+            {},
+            { [SHA]: [closedPr(5, COMPLETED, "2024-05-01T00:00:00Z")] },
+        ];
 
         // The matching PR lives in the second query, which is ignored.
         expect(selectRoutingPrFromQuery(results, SHA)).toBeNull();

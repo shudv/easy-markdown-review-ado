@@ -330,7 +330,7 @@ describe("diff ownership regressions", () => {
             renderInline: renderMarkdownSync,
             currentSource: md,
         });
-        const [lead, second] = Array.from(root.querySelectorAll("li > p"));
+        const [lead, second] = Array.from(root.querySelectorAll<HTMLElement>("li > p"));
         expect(root.querySelector("li")!.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
         expect(lead!.classList.contains(DIFF_BLOCK_CLASS)).toBe(false);
         expect(second!.dataset.diffKind).toBe("added");

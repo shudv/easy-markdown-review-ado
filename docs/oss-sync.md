@@ -4,7 +4,7 @@
 
 - Public base: `3326f9f` (#32).
 - Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
-- New product boundary: `61b5787` (source branch `chore/four-space-indent`; not
+- New product boundary: `8baddb5` (source branch `chore/four-space-indent`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.1`.
 - Strategy: replay the product tree delta without importing private history.
@@ -19,6 +19,7 @@
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ef62f86`     | Three diff-decoration guards (`attachTableBeforeDisclosure` without original text, `applyLinkTargetIndicators` with an index past the last link, the removed-cell `td` fallback in `diffTableRowCells`) are covered by direct tests instead of `v8 ignore` comments; nine ignores remain in `src/`.                                                                                                                      |
 | `61b5787`     | Prettier indents with 4 spaces and wraps at 100 columns, and the repository is reformatted; VS Code workspace settings match the formatter (4-space tabs, no indentation detection, LF, Prettier as default formatter and a recommended extension). Reflow follow-ups: `eslint --fix` blank lines, one `react-hooks/refs` disable kept above its line, two functions back under the 80-line limit, two `it.each` tables. |
+| `8baddb5`     | Unit tests are type-checked: `test/tsconfig.json` (ES2023 lib for Node/jsdom) replaces `tsconfig.test.json`, which inherited the root `exclude` of `test`, and `tsconfig.eslint.json`; `npm run typecheck:test`, type-aware ESLint and the editor share it. The 40 errors it surfaced in 18 test files are fixed, and `coverage-ignore-rationale.mjs` gets a `.d.mts`.                                                   |
 
 ### Public-specific adaptations retained
 
@@ -30,10 +31,12 @@
   (`package.json`, `vss-extension.json`, the feedback contacts in
   `DocumentsApp.tsx` and `PrTabApp.tsx`, and the rest) are reformatted in
   place; their public content is unchanged.
+- The source adds the `typecheck:test` step to its private Azure PR
+  validation pipeline; here it is a step in `.github/workflows/ci.yml`.
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `61b5787` and
+Compare the next source product tree against the merged form of `8baddb5` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

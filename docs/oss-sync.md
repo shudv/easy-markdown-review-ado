@@ -4,7 +4,7 @@
 
 - Public base: `3326f9f` (#32).
 - Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
-- New product boundary: `8baddb5` (source branch `chore/four-space-indent`; not
+- New product boundary: `e01ef29` (source branch `chore/four-space-indent`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.1`.
 - Strategy: replay the product tree delta without importing private history.
@@ -20,6 +20,7 @@
 | `ef62f86`     | Three diff-decoration guards (`attachTableBeforeDisclosure` without original text, `applyLinkTargetIndicators` with an index past the last link, the removed-cell `td` fallback in `diffTableRowCells`) are covered by direct tests instead of `v8 ignore` comments; nine ignores remain in `src/`.                                                                                                                      |
 | `61b5787`     | Prettier indents with 4 spaces and wraps at 100 columns, and the repository is reformatted; VS Code workspace settings match the formatter (4-space tabs, no indentation detection, LF, Prettier as default formatter and a recommended extension). Reflow follow-ups: `eslint --fix` blank lines, one `react-hooks/refs` disable kept above its line, two functions back under the 80-line limit, two `it.each` tables. |
 | `8baddb5`     | Unit tests are type-checked: `test/tsconfig.json` (ES2023 lib for Node/jsdom) replaces `tsconfig.test.json`, which inherited the root `exclude` of `test`, and `tsconfig.eslint.json`; `npm run typecheck:test`, type-aware ESLint and the editor share it. The 40 errors it surfaced in 18 test files are fixed, and `coverage-ignore-rationale.mjs` gets a `.d.mts`.                                                   |
+| `e01ef29`     | The source removes its local multi-agent Agency review tooling (agents, contracts, `review:local` runner and `test:review` tests, which were never mirrored). Mirrored as the matching cleanup: the cspell `.agency/**` ignore path and three words only that tooling used.                                                                                                                                              |
 
 ### Public-specific adaptations retained
 
@@ -36,7 +37,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `8baddb5` and
+Compare the next source product tree against the merged form of `e01ef29` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 
@@ -378,7 +379,8 @@ and synthetic sandbox documents accompany the runtime changes.
 
 ### Intentionally not mirrored
 
-- `7519a6e`: source-local Agency review agents, contracts, and runner.
+- `7519a6e`: source-local Agency review agents, contracts, and runner (removed
+  from the source in `e01ef29`, so there is nothing left to exclude).
 - `164830d`: private Azure Artifacts authentication and feed setup.
 - Private Azure Pipelines, publishing identities and metadata, compliance
   metadata, the private Marketplace validation helper, and pipeline output wiring.

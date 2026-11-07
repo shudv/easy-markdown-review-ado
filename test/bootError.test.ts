@@ -21,6 +21,11 @@ describe("bootErrorDetail", () => {
             thrown: errorWithStack("just a message", undefined),
             expected: "just a message",
         },
+        {
+            name: "falls back to the message when the stack is empty, rather than showing a blank panel",
+            thrown: errorWithStack("host refused", ""),
+            expected: "host refused",
+        },
         { name: "shows a thrown string as-is", thrown: "plain string", expected: "plain string" },
         { name: "stringifies a thrown number", thrown: 42, expected: "42" },
         { name: "stringifies a thrown null", thrown: null, expected: "null" },

@@ -86,6 +86,7 @@ const config = tseslint.config(
             "test-results/**",
             ".webpack-cache/**",
             "reports/**",
+            ".stryker-tmp/**",
             "sandbox/**",
             "storybook-static/**",
             "node_modules/**",

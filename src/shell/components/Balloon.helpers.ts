@@ -8,39 +8,39 @@ import type { ThreadStatus } from "../../types";
 export type BalloonDisplayStatus = ThreadStatus | "orphaned";
 
 const STATUS_LABELS: Record<BalloonDisplayStatus, string> = {
-  active: "Active",
-  resolved: "Resolved",
-  wontFix: "Won't fix",
-  closed: "Closed",
-  pending: "Pending",
-  orphaned: "Anchor missing",
+    active: "Active",
+    resolved: "Resolved",
+    wontFix: "Won't fix",
+    closed: "Closed",
+    pending: "Pending",
+    orphaned: "Anchor missing",
 };
 
 export function balloonStatusLabel(status: BalloonDisplayStatus): string {
-  return STATUS_LABELS[status];
+    return STATUS_LABELS[status];
 }
 
 export function balloonClassName(flags: {
-  inline?: boolean;
-  isActive: boolean;
-  resolved: boolean;
-  isOrphaned?: boolean;
-  general?: boolean;
+    inline?: boolean;
+    isActive: boolean;
+    resolved: boolean;
+    isOrphaned?: boolean;
+    general?: boolean;
 }): string {
-  const classes = ["emr-balloon"];
-  if (flags.inline) classes.push("inline");
-  if (flags.isActive) classes.push("is-active");
-  if (flags.resolved) classes.push("is-resolved");
-  if (flags.isOrphaned) classes.push("is-orphaned");
-  if (flags.general) classes.push("is-general");
+    const classes = ["emr-balloon"];
+    if (flags.inline) classes.push("inline");
+    if (flags.isActive) classes.push("is-active");
+    if (flags.resolved) classes.push("is-resolved");
+    if (flags.isOrphaned) classes.push("is-orphaned");
+    if (flags.general) classes.push("is-general");
 
-  return classes.join(" ");
+    return classes.join(" ");
 }
 
 /** Inline balloons flow naturally; positioned ones sit at `topPx` (or 0). */
 export function balloonStyle(
-  inline: boolean | undefined,
-  topPx: number | undefined,
+    inline: boolean | undefined,
+    topPx: number | undefined,
 ): CSSProperties {
-  return inline ? {} : { top: typeof topPx === "number" ? topPx : 0 };
+    return inline ? {} : { top: typeof topPx === "number" ? topPx : 0 };
 }

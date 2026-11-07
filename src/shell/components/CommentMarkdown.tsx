@@ -13,34 +13,34 @@ import { useUserMentionHydration } from "../../comments/identityStore";
 import { resolveAdoAttachmentObjectUrl } from "../adoAttachmentMedia";
 
 interface Props {
-  body: string;
+    body: string;
 }
 
 export function CommentMarkdown({ body }: Readonly<Props>): ReactElement {
-  const html = useMemo(() => renderMarkdownSync(body), [body]);
-  const ref = useRef<HTMLDivElement | null>(null);
-  // Rewrite `mention://workitem/...` / `mention://pullrequest/...` href
-  // placeholders to real ADO web URLs once the surrounding app has
-  // provided org/project context via `MentionLinkContext`.
-  useMentionLinkHydration(ref, [html]);
-  // Fill `@<GUID>` user mentions with the person's display name from the shared
-  // identity store (resolving unknown ids lazily).
-  useUserMentionHydration(ref, [html]);
-  useLayoutEffect(() => {
-    const root = ref.current;
-    /* v8 ignore next -- the div below renders unconditionally and React attaches its ref before layout effects run */
-    if (!root) return;
-    void hydrateMath(root);
+    const html = useMemo(() => renderMarkdownSync(body), [body]);
+    const ref = useRef<HTMLDivElement | null>(null);
+    // Rewrite `mention://workitem/...` / `mention://pullrequest/...` href
+    // placeholders to real ADO web URLs once the surrounding app has
+    // provided org/project context via `MentionLinkContext`.
+    useMentionLinkHydration(ref, [html]);
+    // Fill `@<GUID>` user mentions with the person's display name from the shared
+    // identity store (resolving unknown ids lazily).
+    useUserMentionHydration(ref, [html]);
+    useLayoutEffect(() => {
+        const root = ref.current;
+        /* v8 ignore next -- the div below renders unconditionally and React attaches its ref before layout effects run */
+        if (!root) return;
+        void hydrateMath(root);
 
-    return decorateCommentMedia(root, resolveAdoAttachmentObjectUrl);
-  }, [html]);
+        return decorateCommentMedia(root, resolveAdoAttachmentObjectUrl);
+    }, [html]);
 
-  return (
-    <div
-      ref={ref}
-      className="emr-comment-content"
-      // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- html is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src)
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+    return (
+        <div
+            ref={ref}
+            className="emr-comment-content"
+            // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- html is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src)
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
+    );
 }

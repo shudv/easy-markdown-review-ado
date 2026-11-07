@@ -18,9 +18,9 @@ You can expect:
 - An acknowledgement within **3 business days**.
 - A triage decision (accept / decline / need-more-info) within **10 business days**.
 - If accepted, a target fix-or-mitigation timeline based on severity:
-  - **Critical** (unauthenticated remote code execution, persistent XSS reaching the host): 7 days.
-  - **High** (authenticated XSS, privilege escalation): 30 days.
-  - **Medium / Low**: bundled into the next routine release.
+    - **Critical** (unauthenticated remote code execution, persistent XSS reaching the host): 7 days.
+    - **High** (authenticated XSS, privilege escalation): 30 days.
+    - **Medium / Low**: bundled into the next routine release.
 
 We'll coordinate disclosure with you and credit you in the release notes unless you request otherwise.
 

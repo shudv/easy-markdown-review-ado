@@ -12,18 +12,18 @@
 import * as SDK from "azure-devops-extension-sdk";
 
 import {
-  commentPermissionFromResponse,
-  GIT_CONTRIBUTE_BIT,
-  GIT_REPOSITORIES_NAMESPACE_ID,
-  hasPermissionsPath,
-  isAzureDevOpsOrgUrl,
-  repoSecurityToken,
-  type CommentPermission,
+    commentPermissionFromResponse,
+    GIT_CONTRIBUTE_BIT,
+    GIT_REPOSITORIES_NAMESPACE_ID,
+    hasPermissionsPath,
+    isAzureDevOpsOrgUrl,
+    repoSecurityToken,
+    type CommentPermission,
 } from "./commentPermission.helpers";
 
 const ALLOWED_UNRESOLVED: CommentPermission = {
-  canComment: true,
-  resolved: false,
+    canComment: true,
+    resolved: false,
 };
 
 /**
@@ -31,37 +31,37 @@ const ALLOWED_UNRESOLVED: CommentPermission = {
  * `orgUrl` is the collection web URL (no trailing slash required).
  */
 export async function checkRepoCommentPermission(
-  orgUrl: string,
-  projectId: string,
-  repoId: string,
+    orgUrl: string,
+    projectId: string,
+    repoId: string,
 ): Promise<CommentPermission> {
-  if (!orgUrl) return ALLOWED_UNRESOLVED;
-  // Never attach the ADO access token to a non-ADO origin.
-  if (!isAzureDevOpsOrgUrl(orgUrl)) return ALLOWED_UNRESOLVED;
+    if (!orgUrl) return ALLOWED_UNRESOLVED;
+    // Never attach the ADO access token to a non-ADO origin.
+    if (!isAzureDevOpsOrgUrl(orgUrl)) return ALLOWED_UNRESOLVED;
 
-  try {
-    const accessToken = await SDK.getAccessToken();
-    const base = orgUrl.replace(/\/+$/, "");
+    try {
+        const accessToken = await SDK.getAccessToken();
+        const base = orgUrl.replace(/\/+$/, "");
 
-    const url = `${base}/${hasPermissionsPath(
-      GIT_REPOSITORIES_NAMESPACE_ID,
-      GIT_CONTRIBUTE_BIT,
-      repoSecurityToken(projectId, repoId),
-    )}`;
+        const url = `${base}/${hasPermissionsPath(
+            GIT_REPOSITORIES_NAMESPACE_ID,
+            GIT_CONTRIBUTE_BIT,
+            repoSecurityToken(projectId, repoId),
+        )}`;
 
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    });
+        const res = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: "application/json",
+            },
+        });
 
-    if (!res.ok) return ALLOWED_UNRESOLVED;
-    const body = (await res.json()) as { value?: unknown };
+        if (!res.ok) return ALLOWED_UNRESOLVED;
+        const body = (await res.json()) as { value?: unknown };
 
-    return commentPermissionFromResponse(body);
-  } catch {
-    // Never block commenting because the probe failed.
-    return ALLOWED_UNRESOLVED;
-  }
+        return commentPermissionFromResponse(body);
+    } catch {
+        // Never block commenting because the probe failed.
+        return ALLOWED_UNRESOLVED;
+    }
 }

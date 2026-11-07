@@ -2,35 +2,30 @@
 // returns the values the render (and child hooks) consume, so their branches
 // are unit-tested directly instead of only through the rendered shell.
 
-import type {
-  ChangeType,
-  DiffRange,
-  FileInfo,
-  TextQuoteAnchor,
-} from "../../types";
+import type { ChangeType, DiffRange, FileInfo, TextQuoteAnchor } from "../../types";
 import type { HistoryNav } from "../components/RailToolbar";
 import { NEW_DRAFT_THREAD_ID, type DraftTarget } from "../draftStorage";
 import {
-  absentAtUpdateMessage,
-  historyChevronTooltip,
-  resolveReviewIterationRange,
-  reviewRangeLabel,
-  stepStopIndex,
-  type HistoryStop,
-  type ResolvedReviewIterationRange,
-  type ReviewIterationRange,
+    absentAtUpdateMessage,
+    historyChevronTooltip,
+    resolveReviewIterationRange,
+    reviewRangeLabel,
+    stepStopIndex,
+    type HistoryStop,
+    type ResolvedReviewIterationRange,
+    type ReviewIterationRange,
 } from "../shellHelpers";
 import type { RoutedPrInfo } from "./types";
 
 export function pickInitialPath(
-  initialSelectedPath: string | undefined,
-  files: readonly FileInfo[],
+    initialSelectedPath: string | undefined,
+    files: readonly FileInfo[],
 ): string {
-  return initialSelectedPath ?? (files.length > 0 ? files[0].path : "");
+    return initialSelectedPath ?? (files.length > 0 ? files[0].path : "");
 }
 
 function isNonEmpty(s: string | null | undefined): s is string {
-  return s != null && s !== "";
+    return s != null && s !== "";
 }
 
 /** A host-provided loader callback, or `undefined` when the host has none. */
@@ -42,59 +37,52 @@ type OptionalLoader = ((...args: never[]) => unknown) | undefined;
  * writing comments that would be dropped.
  */
 export function documentReadOnly(
-  readOnly: boolean | undefined,
-  readOnlyMessage: string | undefined,
-  perDocNoWriteTarget: boolean,
+    readOnly: boolean | undefined,
+    readOnlyMessage: string | undefined,
+    perDocNoWriteTarget: boolean,
 ): {
-  effectiveReadOnly: boolean;
-  effectiveReadOnlyMessage: string | undefined;
+    effectiveReadOnly: boolean;
+    effectiveReadOnlyMessage: string | undefined;
 } {
-  return {
-    effectiveReadOnly: !!readOnly || perDocNoWriteTarget,
-    effectiveReadOnlyMessage:
-      readOnly || !perDocNoWriteTarget
-        ? readOnlyMessage
-        : "Comments are read-only here — this document isn't part of a completed pull request yet.",
-  };
+    return {
+        effectiveReadOnly: !!readOnly || perDocNoWriteTarget,
+        effectiveReadOnlyMessage:
+            readOnly || !perDocNoWriteTarget
+                ? readOnlyMessage
+                : "Comments are read-only here — this document isn't part of a completed pull request yet.",
+    };
 }
 
 export function draftTargetsOnScreen(
-  activeDraft: DraftTarget | null,
-  selectedPath: string,
+    activeDraft: DraftTarget | null,
+    selectedPath: string,
 ): {
-  draftAnchor: TextQuoteAnchor | null;
-  activeReplyThreadId: string | null;
+    draftAnchor: TextQuoteAnchor | null;
+    activeReplyThreadId: string | null;
 } {
-  const onScreen = activeDraft !== null && activeDraft.path === selectedPath;
+    const onScreen = activeDraft !== null && activeDraft.path === selectedPath;
 
-  return {
-    // The new-comment draft's anchor, shown only when its draft targets the
-    // file currently on screen (a reply draft, or a draft on another file,
-    // shows none).
-    draftAnchor:
-      onScreen && activeDraft.threadId === NEW_DRAFT_THREAD_ID
-        ? activeDraft.anchor
-        : null,
-    // The open reply composer's thread, shown only on its own file.
-    activeReplyThreadId:
-      onScreen && activeDraft.threadId !== NEW_DRAFT_THREAD_ID
-        ? activeDraft.threadId
-        : null,
-  };
+    return {
+        // The new-comment draft's anchor, shown only when its draft targets the
+        // file currently on screen (a reply draft, or a draft on another file,
+        // shows none).
+        draftAnchor:
+            onScreen && activeDraft.threadId === NEW_DRAFT_THREAD_ID ? activeDraft.anchor : null,
+        // The open reply composer's thread, shown only on its own file.
+        activeReplyThreadId:
+            onScreen && activeDraft.threadId !== NEW_DRAFT_THREAD_ID ? activeDraft.threadId : null,
+    };
 }
 
 /** Whether `target` re-opens exactly the composer `current` already is. */
-export function isSameDraftTarget(
-  current: DraftTarget | null,
-  target: DraftTarget,
-): boolean {
-  return (
-    current !== null &&
-    current.path === target.path &&
-    current.threadId === target.threadId &&
-    (target.threadId !== NEW_DRAFT_THREAD_ID ||
-      JSON.stringify(current.anchor) === JSON.stringify(target.anchor))
-  );
+export function isSameDraftTarget(current: DraftTarget | null, target: DraftTarget): boolean {
+    return (
+        current !== null &&
+        current.path === target.path &&
+        current.threadId === target.threadId &&
+        (target.threadId !== NEW_DRAFT_THREAD_ID ||
+            JSON.stringify(current.anchor) === JSON.stringify(target.anchor))
+    );
 }
 
 /**
@@ -102,112 +90,105 @@ export function isSameDraftTarget(
  * completed-PR history (all three loaders) or the PR tab's native updates.
  */
 export function historyModes(opts: {
-  loadDocHistory: OptionalLoader;
-  loadThreadsForPr: OptionalLoader;
-  loadFileSourceAt: OptionalLoader;
-  reviewIterationStops: readonly HistoryStop[] | undefined;
-  reviewIterationBaseCommit: string | undefined;
+    loadDocHistory: OptionalLoader;
+    loadThreadsForPr: OptionalLoader;
+    loadFileSourceAt: OptionalLoader;
+    reviewIterationStops: readonly HistoryStop[] | undefined;
+    reviewIterationBaseCommit: string | undefined;
 }): {
-  completedPrHistoryEnabled: boolean;
-  nativeIterationMode: boolean;
-  nativeUpdateCount: number;
+    completedPrHistoryEnabled: boolean;
+    nativeIterationMode: boolean;
+    nativeUpdateCount: number;
 } {
-  return {
-    completedPrHistoryEnabled:
-      opts.loadDocHistory !== undefined &&
-      opts.loadThreadsForPr !== undefined &&
-      opts.loadFileSourceAt !== undefined,
-    nativeIterationMode:
-      (opts.reviewIterationStops?.length ?? 0) > 0 &&
-      isNonEmpty(opts.reviewIterationBaseCommit) &&
-      opts.loadFileSourceAt !== undefined,
-    nativeUpdateCount: Math.max(1, opts.reviewIterationStops?.length ?? 1),
-  };
+    return {
+        completedPrHistoryEnabled:
+            opts.loadDocHistory !== undefined &&
+            opts.loadThreadsForPr !== undefined &&
+            opts.loadFileSourceAt !== undefined,
+        nativeIterationMode:
+            (opts.reviewIterationStops?.length ?? 0) > 0 &&
+            isNonEmpty(opts.reviewIterationBaseCommit) &&
+            opts.loadFileSourceAt !== undefined,
+        nativeUpdateCount: Math.max(1, opts.reviewIterationStops?.length ?? 1),
+    };
 }
 
 interface HistoryView {
-  historyStops: readonly HistoryStop[];
-  resolvedIterationRange: ResolvedReviewIterationRange;
-  clampedStopIndex: number;
-  comparingIterations: boolean;
-  activeStop: HistoryStop;
-  baselineStop: HistoryStop | undefined;
-  viewingHistorical: boolean;
-  /** The compared updates as a value key (`null` outside native mode). */
-  reportedRangeKey: string | null;
-  /** Key of a partial comparison whose touched files are loaded. */
-  rangeChangesKey: string | null;
+    historyStops: readonly HistoryStop[];
+    resolvedIterationRange: ResolvedReviewIterationRange;
+    clampedStopIndex: number;
+    comparingIterations: boolean;
+    activeStop: HistoryStop;
+    baselineStop: HistoryStop | undefined;
+    viewingHistorical: boolean;
+    /** The compared updates as a value key (`null` outside native mode). */
+    reportedRangeKey: string | null;
+    /** Key of a partial comparison whose touched files are loaded. */
+    rangeChangesKey: string | null;
 }
 
 /** Resolves the active and baseline stops of the review-history stepper. */
 export function resolveHistoryView(opts: {
-  nativeIterationMode: boolean;
-  reviewIterationStops: readonly HistoryStop[] | undefined;
-  completedPrHistoryStops: readonly HistoryStop[];
-  iterationRange: ReviewIterationRange;
-  completedHistoryStopIndex: number;
+    nativeIterationMode: boolean;
+    reviewIterationStops: readonly HistoryStop[] | undefined;
+    completedPrHistoryStops: readonly HistoryStop[];
+    iterationRange: ReviewIterationRange;
+    completedHistoryStopIndex: number;
 }): HistoryView {
-  const native = opts.nativeIterationMode;
+    const native = opts.nativeIterationMode;
 
-  const historyStops = native
-    ? opts.reviewIterationStops!
-    : opts.completedPrHistoryStops;
+    const historyStops = native ? opts.reviewIterationStops! : opts.completedPrHistoryStops;
 
-  const resolvedIterationRange = resolveReviewIterationRange(
-    opts.iterationRange,
-    historyStops.length,
-  );
+    const resolvedIterationRange = resolveReviewIterationRange(
+        opts.iterationRange,
+        historyStops.length,
+    );
 
-  const clampedStopIndex = native
-    ? resolvedIterationRange.activeStopIndex
-    : Math.min(opts.completedHistoryStopIndex, historyStops.length - 1);
+    const clampedStopIndex = native
+        ? resolvedIterationRange.activeStopIndex
+        : Math.min(opts.completedHistoryStopIndex, historyStops.length - 1);
 
-  const comparingIterations = native && !resolvedIterationRange.isAllChanges;
+    const comparingIterations = native && !resolvedIterationRange.isAllChanges;
 
-  const baselineStopIndex = native
-    ? resolvedIterationRange.baselineStopIndex
-    : clampedStopIndex;
+    const baselineStopIndex = native ? resolvedIterationRange.baselineStopIndex : clampedStopIndex;
 
-  const activeStop = historyStops[clampedStopIndex]!;
-  const { fromUpdate, toUpdate } = resolvedIterationRange.range;
+    const activeStop = historyStops[clampedStopIndex]!;
+    const { fromUpdate, toUpdate } = resolvedIterationRange.range;
 
-  const reportedRangeKey = native
-    ? resolvedIterationRange.isAllChanges
-      ? "all"
-      : `${fromUpdate}-${toUpdate}`
-    : null;
+    const reportedRangeKey = native
+        ? resolvedIterationRange.isAllChanges
+            ? "all"
+            : `${fromUpdate}-${toUpdate}`
+        : null;
 
-  return {
-    historyStops,
-    resolvedIterationRange,
-    clampedStopIndex,
-    comparingIterations,
-    activeStop,
-    baselineStop:
-      baselineStopIndex == null ? undefined : historyStops[baselineStopIndex],
-    viewingHistorical: !activeStop.isCurrent,
-    reportedRangeKey,
-    rangeChangesKey: comparingIterations ? reportedRangeKey : null,
-  };
+    return {
+        historyStops,
+        resolvedIterationRange,
+        clampedStopIndex,
+        comparingIterations,
+        activeStop,
+        baselineStop: baselineStopIndex == null ? undefined : historyStops[baselineStopIndex],
+        viewingHistorical: !activeStop.isCurrent,
+        reportedRangeKey,
+        rangeChangesKey: comparingIterations ? reportedRangeKey : null,
+    };
 }
 
 /** The file list's "changed in the compared updates" marks, once loaded. */
 export function docNavRangeChangesFor(
-  rangeChangesKey: string | null,
-  rangeChangesByKey: Partial<
-    Record<string, Readonly<Record<string, ChangeType>>>
-  >,
-  range: ReviewIterationRange,
-  updateCount: number,
+    rangeChangesKey: string | null,
+    rangeChangesByKey: Partial<Record<string, Readonly<Record<string, ChangeType>>>>,
+    range: ReviewIterationRange,
+    updateCount: number,
 ): { label: string; byPath: Readonly<Record<string, ChangeType>> } | undefined {
-  if (rangeChangesKey === null) return undefined;
-  const byPath = rangeChangesByKey[rangeChangesKey];
-  if (byPath === undefined) return undefined;
+    if (rangeChangesKey === null) return undefined;
+    const byPath = rangeChangesByKey[rangeChangesKey];
+    if (byPath === undefined) return undefined;
 
-  return {
-    label: reviewRangeLabel(range, updateCount),
-    byPath,
-  };
+    return {
+        label: reviewRangeLabel(range, updateCount),
+        byPath,
+    };
 }
 
 /**
@@ -216,172 +197,163 @@ export function docNavRangeChangesFor(
  * the baseline's.
  */
 export function historicalContentKeys(opts: {
-  selectedPath: string;
-  viewingHistorical: boolean;
-  activeStop: HistoryStop;
-  baselineStop: HistoryStop | undefined;
-  reviewIterationBaseCommit: string | undefined;
-  comparingIterations: boolean;
+    selectedPath: string;
+    viewingHistorical: boolean;
+    activeStop: HistoryStop;
+    baselineStop: HistoryStop | undefined;
+    reviewIterationBaseCommit: string | undefined;
+    comparingIterations: boolean;
 }): {
-  historicalContentKey: string | null;
-  baselineCommitId: string | null | undefined;
-  baselineContentKey: string | null;
+    historicalContentKey: string | null;
+    baselineCommitId: string | null | undefined;
+    baselineContentKey: string | null;
 } {
-  const { selectedPath, activeStop } = opts;
+    const { selectedPath, activeStop } = opts;
 
-  const baselineCommitId =
-    opts.baselineStop?.commitId ?? opts.reviewIterationBaseCommit;
+    const baselineCommitId = opts.baselineStop?.commitId ?? opts.reviewIterationBaseCommit;
 
-  return {
-    historicalContentKey:
-      opts.viewingHistorical && isNonEmpty(activeStop.commitId)
-        ? `${selectedPath}\u0000${activeStop.commitId}`
-        : null,
-    baselineCommitId,
-    baselineContentKey: opts.comparingIterations
-      ? `${selectedPath}\u0000${baselineCommitId!}`
-      : null,
-  };
+    return {
+        historicalContentKey:
+            opts.viewingHistorical && isNonEmpty(activeStop.commitId)
+                ? `${selectedPath}\u0000${activeStop.commitId}`
+                : null,
+        baselineCommitId,
+        baselineContentKey: opts.comparingIterations
+            ? `${selectedPath}\u0000${baselineCommitId!}`
+            : null,
+    };
 }
 
 interface HistoricalStatus {
-  historicalHtml: string | undefined;
-  usingHistoricalContent: boolean;
-  historicalLoadError: string | undefined;
-  absentNotice: { title: string; body: string } | null;
-  baselineAbsent: boolean;
-  historicalLoading: boolean;
+    historicalHtml: string | undefined;
+    usingHistoricalContent: boolean;
+    historicalLoadError: string | undefined;
+    absentNotice: { title: string; body: string } | null;
+    baselineAbsent: boolean;
+    historicalLoading: boolean;
 }
 
 /** Load state of the historical endpoints the current selection renders. */
 export function historicalStatus(opts: {
-  viewingHistorical: boolean;
-  comparingIterations: boolean;
-  historicalContentKey: string | null;
-  baselineContentKey: string | null;
-  historicalLoadTargets: readonly { key: string }[];
-  currentFileChangeType: ChangeType | undefined;
-  toUpdate: number;
-  historicalHtmlByKey: Partial<Record<string, string>>;
-  historicalSourceByKey: Partial<Record<string, string>>;
-  historicalErrorByKey: Partial<Record<string, string>>;
-  historicalAbsentByKey: Partial<Record<string, true>>;
+    viewingHistorical: boolean;
+    comparingIterations: boolean;
+    historicalContentKey: string | null;
+    baselineContentKey: string | null;
+    historicalLoadTargets: readonly { key: string }[];
+    currentFileChangeType: ChangeType | undefined;
+    toUpdate: number;
+    historicalHtmlByKey: Partial<Record<string, string>>;
+    historicalSourceByKey: Partial<Record<string, string>>;
+    historicalErrorByKey: Partial<Record<string, string>>;
+    historicalAbsentByKey: Partial<Record<string, true>>;
 }): HistoricalStatus {
-  const { historicalContentKey, baselineContentKey } = opts;
+    const { historicalContentKey, baselineContentKey } = opts;
 
-  const historicalHtml = isNonEmpty(historicalContentKey)
-    ? opts.historicalHtmlByKey[historicalContentKey]
-    : undefined;
+    const historicalHtml = isNonEmpty(historicalContentKey)
+        ? opts.historicalHtmlByKey[historicalContentKey]
+        : undefined;
 
-  // A historical stop with no recorded merge commit can't load a snapshot
-  // (`historicalContentKey` is null), so fall back to the live head content
-  // instead of rendering a blank, perpetually-"loading" article.
-  const usingHistoricalContent =
-    opts.viewingHistorical && isNonEmpty(historicalContentKey);
+    // A historical stop with no recorded merge commit can't load a snapshot
+    // (`historicalContentKey` is null), so fall back to the live head content
+    // instead of rendering a blank, perpetually-"loading" article.
+    const usingHistoricalContent = opts.viewingHistorical && isNonEmpty(historicalContentKey);
 
-  const historicalLoadError = opts.historicalLoadTargets.reduce<
-    string | undefined
-  >(
-    (found, target) => found ?? opts.historicalErrorByKey[target.key],
-    undefined,
-  );
+    const historicalLoadError = opts.historicalLoadTargets.reduce<string | undefined>(
+        (found, target) => found ?? opts.historicalErrorByKey[target.key],
+        undefined,
+    );
 
-  // Comparing PR updates, the file may not exist at an endpoint. Absent at the
-  // NEWER end: nothing to show (the PR adds it later / deleted it) — a notice
-  // with a way back to "All updates". Absent at the OLDER end only: the file is
-  // new within the selection, so it renders as wholly added (like "All
-  // updates" shows a file the PR adds) rather than as a load error. A file the
-  // PR deletes is absent at the latest update too, even though the live view
-  // (which "All updates" uses) shows its pre-deletion content.
-  const activeAbsent =
-    (historicalContentKey != null &&
-      !!opts.historicalAbsentByKey[historicalContentKey]) ||
-    (opts.comparingIterations &&
-      historicalContentKey == null &&
-      opts.currentFileChangeType === "deleted");
+    // Comparing PR updates, the file may not exist at an endpoint. Absent at the
+    // NEWER end: nothing to show (the PR adds it later / deleted it) — a notice
+    // with a way back to "All updates". Absent at the OLDER end only: the file is
+    // new within the selection, so it renders as wholly added (like "All
+    // updates" shows a file the PR adds) rather than as a load error. A file the
+    // PR deletes is absent at the latest update too, even though the live view
+    // (which "All updates" uses) shows its pre-deletion content.
+    const activeAbsent =
+        (historicalContentKey != null && !!opts.historicalAbsentByKey[historicalContentKey]) ||
+        (opts.comparingIterations &&
+            historicalContentKey == null &&
+            opts.currentFileChangeType === "deleted");
 
-  const baselineAbsent =
-    baselineContentKey != null &&
-    !!opts.historicalAbsentByKey[baselineContentKey];
+    const baselineAbsent =
+        baselineContentKey != null && !!opts.historicalAbsentByKey[baselineContentKey];
 
-  const historicalLoading =
-    historicalLoadError === undefined &&
-    !activeAbsent &&
-    ((usingHistoricalContent && historicalHtml === undefined) ||
-      (baselineContentKey != null &&
-        !baselineAbsent &&
-        opts.historicalSourceByKey[baselineContentKey] === undefined));
+    const historicalLoading =
+        historicalLoadError === undefined &&
+        !activeAbsent &&
+        ((usingHistoricalContent && historicalHtml === undefined) ||
+            (baselineContentKey != null &&
+                !baselineAbsent &&
+                opts.historicalSourceByKey[baselineContentKey] === undefined));
 
-  return {
-    historicalHtml,
-    usingHistoricalContent,
-    historicalLoadError,
-    absentNotice: activeAbsent
-      ? absentAtUpdateMessage(opts.currentFileChangeType, opts.toUpdate)
-      : null,
-    baselineAbsent,
-    historicalLoading,
-  };
+    return {
+        historicalHtml,
+        usingHistoricalContent,
+        historicalLoadError,
+        absentNotice: activeAbsent
+            ? absentAtUpdateMessage(opts.currentFileChangeType, opts.toUpdate)
+            : null,
+        baselineAbsent,
+        historicalLoading,
+    };
 }
 
 /** The article actually shown: a historical snapshot or the live document. */
 export function activeArticleState(opts: {
-  status: HistoricalStatus;
-  pristineHtml: string;
-  viewingHistorical: boolean;
-  historicalContentKey: string | null;
-  selectedPath: string;
+    status: HistoricalStatus;
+    pristineHtml: string;
+    viewingHistorical: boolean;
+    historicalContentKey: string | null;
+    selectedPath: string;
 }): {
-  activePristineHtml: string;
-  activeStorageKey: string;
-  articleReady: boolean;
+    activePristineHtml: string;
+    activeStorageKey: string;
+    articleReady: boolean;
 } {
-  const { status, historicalContentKey } = opts;
+    const { status, historicalContentKey } = opts;
 
-  const activePristineHtml = status.usingHistoricalContent
-    ? (status.historicalHtml ?? "")
-    : opts.pristineHtml;
+    const activePristineHtml = status.usingHistoricalContent
+        ? (status.historicalHtml ?? "")
+        : opts.pristineHtml;
 
-  return {
-    activePristineHtml,
-    activeStorageKey:
-      opts.viewingHistorical && isNonEmpty(historicalContentKey)
-        ? historicalContentKey
-        : opts.selectedPath,
-    // "Rendered" means the article actually shown — when a link opens an
-    // earlier PR update, that is the earlier version, which loads after the
-    // latest one.
-    articleReady:
-      !!activePristineHtml && !status.historicalLoading && !status.absentNotice,
-  };
+    return {
+        activePristineHtml,
+        activeStorageKey:
+            opts.viewingHistorical && isNonEmpty(historicalContentKey)
+                ? historicalContentKey
+                : opts.selectedPath,
+        // "Rendered" means the article actually shown — when a link opens an
+        // earlier PR update, that is the earlier version, which loads after the
+        // latest one.
+        articleReady: !!activePristineHtml && !status.historicalLoading && !status.absentNotice,
+    };
 }
 
 /** The Markdown sources behind the rendered article and its diff baseline. */
 export function activeSources(opts: {
-  usingHistoricalContent: boolean;
-  comparingIterations: boolean;
-  baselineAbsent: boolean;
-  historicalContentKey: string | null;
-  baselineContentKey: string | null;
-  historicalSourceByKey: Record<string, string>;
-  latestSource: string | undefined;
+    usingHistoricalContent: boolean;
+    comparingIterations: boolean;
+    baselineAbsent: boolean;
+    historicalContentKey: string | null;
+    baselineContentKey: string | null;
+    historicalSourceByKey: Record<string, string>;
+    latestSource: string | undefined;
 }): { activeSource: string | undefined; baselineSource: string | undefined } {
-  const { historicalSourceByKey } = opts;
+    const { historicalSourceByKey } = opts;
 
-  const activeSource = opts.usingHistoricalContent
-    ? historicalSourceByKey[opts.historicalContentKey!]
-    : opts.latestSource;
+    const activeSource = opts.usingHistoricalContent
+        ? historicalSourceByKey[opts.historicalContentKey!]
+        : opts.latestSource;
 
-  if (!opts.comparingIterations) {
-    return { activeSource, baselineSource: undefined };
-  }
+    if (!opts.comparingIterations) {
+        return { activeSource, baselineSource: undefined };
+    }
 
-  return {
-    activeSource,
-    baselineSource: opts.baselineAbsent
-      ? ""
-      : historicalSourceByKey[opts.baselineContentKey!],
-  };
+    return {
+        activeSource,
+        baselineSource: opts.baselineAbsent ? "" : historicalSourceByKey[opts.baselineContentKey!],
+    };
 }
 
 /**
@@ -389,55 +361,51 @@ export function activeSources(opts: {
  * PR updates, otherwise ADO's PR-wide diff against the base commit.
  */
 export function diffInputs(opts: {
-  comparingIterations: boolean;
-  baselineSource: string | undefined;
-  activeSource: string | undefined;
-  latestSource: string | undefined;
-  currentOriginalSource: string | undefined;
-  iterationDiff: DiffRange[] | undefined;
-  currentFileDiff: DiffRange[] | undefined;
+    comparingIterations: boolean;
+    baselineSource: string | undefined;
+    activeSource: string | undefined;
+    latestSource: string | undefined;
+    currentOriginalSource: string | undefined;
+    iterationDiff: DiffRange[] | undefined;
+    currentFileDiff: DiffRange[] | undefined;
 }): {
-  activeOriginalSource: string | undefined;
-  activeDiffTarget: string | undefined;
-  rawActiveDiff: DiffRange[] | undefined;
+    activeOriginalSource: string | undefined;
+    activeDiffTarget: string | undefined;
+    rawActiveDiff: DiffRange[] | undefined;
 } {
-  if (opts.comparingIterations) {
-    return {
-      activeOriginalSource: opts.baselineSource,
-      activeDiffTarget: opts.activeSource,
-      rawActiveDiff: opts.iterationDiff,
-    };
-  }
+    if (opts.comparingIterations) {
+        return {
+            activeOriginalSource: opts.baselineSource,
+            activeDiffTarget: opts.activeSource,
+            rawActiveDiff: opts.iterationDiff,
+        };
+    }
 
-  return {
-    activeOriginalSource: opts.currentOriginalSource,
-    activeDiffTarget: opts.latestSource,
-    rawActiveDiff: opts.currentFileDiff,
-  };
+    return {
+        activeOriginalSource: opts.currentOriginalSource,
+        activeDiffTarget: opts.latestSource,
+        rawActiveDiff: opts.currentFileDiff,
+    };
 }
 
 export function isDiffAvailable(opts: {
-  comparingIterations: boolean;
-  baselineAbsent: boolean;
-  iterationDiff: DiffRange[] | undefined;
-  viewingHistorical: boolean;
-  isWholeFileChange: boolean;
-  currentFileDiff: DiffRange[] | undefined;
+    comparingIterations: boolean;
+    baselineAbsent: boolean;
+    iterationDiff: DiffRange[] | undefined;
+    viewingHistorical: boolean;
+    isWholeFileChange: boolean;
+    currentFileDiff: DiffRange[] | undefined;
 }): boolean {
-  if (opts.comparingIterations) {
-    return (
-      !opts.baselineAbsent &&
-      !!opts.iterationDiff &&
-      opts.iterationDiff.length > 0
-    );
-  }
+    if (opts.comparingIterations) {
+        return !opts.baselineAbsent && !!opts.iterationDiff && opts.iterationDiff.length > 0;
+    }
 
-  return (
-    !opts.viewingHistorical &&
-    !opts.isWholeFileChange &&
-    !!opts.currentFileDiff &&
-    opts.currentFileDiff.length > 0
-  );
+    return (
+        !opts.viewingHistorical &&
+        !opts.isWholeFileChange &&
+        !!opts.currentFileDiff &&
+        opts.currentFileDiff.length > 0
+    );
 }
 
 /**
@@ -445,54 +413,54 @@ export function isDiffAvailable(opts: {
  * rail shows for it.
  */
 export function commentAccess(opts: {
-  viewingHistorical: boolean;
-  nativeIterationMode: boolean;
-  activeStop: HistoryStop;
-  effectiveRoutedPr: RoutedPrInfo | undefined;
-  routedPrResolution: RoutedPrInfo | null | undefined;
-  documentsMode: boolean | undefined;
-  currentFileChangeType: ChangeType | undefined;
-  effectiveReadOnly: boolean;
-  effectiveReadOnlyMessage: string | undefined;
+    viewingHistorical: boolean;
+    nativeIterationMode: boolean;
+    activeStop: HistoryStop;
+    effectiveRoutedPr: RoutedPrInfo | undefined;
+    routedPrResolution: RoutedPrInfo | null | undefined;
+    documentsMode: boolean | undefined;
+    currentFileChangeType: ChangeType | undefined;
+    effectiveReadOnly: boolean;
+    effectiveReadOnlyMessage: string | undefined;
 }): {
-  viewingPastPr: boolean;
-  activeRoutedPr: RoutedPrInfo | undefined;
-  commentsAvailable: boolean;
-  activeReadOnly: boolean;
-  activeReadOnlyMessage: string | undefined;
+    viewingPastPr: boolean;
+    activeRoutedPr: RoutedPrInfo | undefined;
+    commentsAvailable: boolean;
+    activeReadOnly: boolean;
+    activeReadOnlyMessage: string | undefined;
 } {
-  // Comparing earlier updates of THIS PR stays writable: threads belong to
-  // the PR, so replies/resolve/likes work anywhere, and a new comment is
-  // checked against the latest version before its composer opens (see
-  // `commentBlocker`). Only the Documents hub's history stops — earlier,
-  // completed PRs — are read-only.
-  const viewingPastPr = opts.viewingHistorical && !opts.nativeIterationMode;
+    // Comparing earlier updates of THIS PR stays writable: threads belong to
+    // the PR, so replies/resolve/likes work anywhere, and a new comment is
+    // checked against the latest version before its composer opens (see
+    // `commentBlocker`). Only the Documents hub's history stops — earlier,
+    // completed PRs — are read-only.
+    const viewingPastPr = opts.viewingHistorical && !opts.nativeIterationMode;
 
-  const activeRoutedPr = activeRoutedPrFor(
-    viewingPastPr,
-    opts.activeStop,
-    opts.effectiveRoutedPr,
-  );
+    const activeRoutedPr = activeRoutedPrFor(
+        viewingPastPr,
+        opts.activeStop,
+        opts.effectiveRoutedPr,
+    );
 
-  const commentsAvailable = commentsAvailableFor(
-    opts.documentsMode,
-    opts.routedPrResolution,
-    activeRoutedPr,
-  );
+    const commentsAvailable = commentsAvailableFor(
+        opts.documentsMode,
+        opts.routedPrResolution,
+        activeRoutedPr,
+    );
 
-  return {
-    viewingPastPr,
-    activeRoutedPr,
-    commentsAvailable,
-    ...activeReadOnlyState({
-      effectiveReadOnly: opts.effectiveReadOnly,
-      effectiveReadOnlyMessage: opts.effectiveReadOnlyMessage,
-      viewingPastPr,
-      viewingDeletedFile: opts.currentFileChangeType === "deleted",
-      commentsAvailable,
-      activeStopPrId: opts.activeStop.prId,
-    }),
-  };
+    return {
+        viewingPastPr,
+        activeRoutedPr,
+        commentsAvailable,
+        ...activeReadOnlyState({
+            effectiveReadOnly: opts.effectiveReadOnly,
+            effectiveReadOnlyMessage: opts.effectiveReadOnlyMessage,
+            viewingPastPr,
+            viewingDeletedFile: opts.currentFileChangeType === "deleted",
+            commentsAvailable,
+            activeStopPrId: opts.activeStop.prId,
+        }),
+    };
 }
 
 /**
@@ -500,74 +468,72 @@ export function commentAccess(opts: {
  * while the stepper is parked on it, otherwise the document's routing PR.
  */
 function activeRoutedPrFor(
-  viewingPastPr: boolean,
-  activeStop: HistoryStop,
-  effectiveRoutedPr: RoutedPrInfo | undefined,
+    viewingPastPr: boolean,
+    activeStop: HistoryStop,
+    effectiveRoutedPr: RoutedPrInfo | undefined,
 ): RoutedPrInfo | undefined {
-  if (!viewingPastPr) return effectiveRoutedPr;
+    if (!viewingPastPr) return effectiveRoutedPr;
 
-  return {
-    prId: activeStop.prId ?? 0,
-    title: activeStop.title ?? `PR #${activeStop.prId}`,
-    status: "completed",
-    url: activeStop.url,
-  };
+    return {
+        prId: activeStop.prId ?? 0,
+        title: activeStop.title ?? `PR #${activeStop.prId}`,
+        status: "completed",
+        url: activeStop.url,
+    };
 }
 
 function commentsAvailableFor(
-  documentsMode: boolean | undefined,
-  routedPrResolution: RoutedPrInfo | null | undefined,
-  activeRoutedPr: RoutedPrInfo | undefined,
+    documentsMode: boolean | undefined,
+    routedPrResolution: RoutedPrInfo | null | undefined,
+    activeRoutedPr: RoutedPrInfo | undefined,
 ): boolean {
-  return (
-    !documentsMode ||
-    routedPrResolution === undefined ||
-    activeRoutedPr?.status === "completed"
-  );
+    return (
+        !documentsMode || routedPrResolution === undefined || activeRoutedPr?.status === "completed"
+    );
 }
 
 /** Read-only state + banner text for the active document view. */
 function activeReadOnlyState(opts: {
-  effectiveReadOnly: boolean;
-  effectiveReadOnlyMessage: string | undefined;
-  viewingPastPr: boolean;
-  viewingDeletedFile: boolean;
-  commentsAvailable: boolean;
-  activeStopPrId: number | null;
+    effectiveReadOnly: boolean;
+    effectiveReadOnlyMessage: string | undefined;
+    viewingPastPr: boolean;
+    viewingDeletedFile: boolean;
+    commentsAvailable: boolean;
+    activeStopPrId: number | null;
 }): { activeReadOnly: boolean; activeReadOnlyMessage: string | undefined } {
-  const activeReadOnly =
-    opts.effectiveReadOnly ||
-    opts.viewingPastPr ||
-    opts.viewingDeletedFile ||
-    !opts.commentsAvailable;
+    const activeReadOnly =
+        opts.effectiveReadOnly ||
+        opts.viewingPastPr ||
+        opts.viewingDeletedFile ||
+        !opts.commentsAvailable;
 
-  if (opts.viewingPastPr) {
+    if (opts.viewingPastPr) {
+        return {
+            activeReadOnly,
+            activeReadOnlyMessage: `Viewing this document as it was at pull request #${opts.activeStopPrId}. Comments here are read-only — open the pull request to reply.`,
+        };
+    }
+
+    if (opts.viewingDeletedFile) {
+        return {
+            activeReadOnly,
+            activeReadOnlyMessage:
+                "This document was deleted in this pull request. Its previous version is read-only.",
+        };
+    }
+
+    if (!opts.commentsAvailable) {
+        return {
+            activeReadOnly,
+            activeReadOnlyMessage:
+                "Comments are unavailable until this document is part of a completed pull request.",
+        };
+    }
+
     return {
-      activeReadOnly,
-      activeReadOnlyMessage: `Viewing this document as it was at pull request #${opts.activeStopPrId}. Comments here are read-only — open the pull request to reply.`,
+        activeReadOnly,
+        activeReadOnlyMessage: opts.effectiveReadOnlyMessage,
     };
-  }
-
-  if (opts.viewingDeletedFile) {
-    return {
-      activeReadOnly,
-      activeReadOnlyMessage:
-        "This document was deleted in this pull request. Its previous version is read-only.",
-    };
-  }
-
-  if (!opts.commentsAvailable) {
-    return {
-      activeReadOnly,
-      activeReadOnlyMessage:
-        "Comments are unavailable until this document is part of a completed pull request.",
-    };
-  }
-
-  return {
-    activeReadOnly,
-    activeReadOnlyMessage: opts.effectiveReadOnlyMessage,
-  };
 }
 
 /**
@@ -576,27 +542,21 @@ function activeReadOnlyState(opts: {
  * stop index to move to.
  */
 export function buildHistoryNav(
-  completedPrHistoryEnabled: boolean,
-  historyStops: readonly HistoryStop[],
-  clampedStopIndex: number,
-  onStep: (stopIndex: number) => void,
+    completedPrHistoryEnabled: boolean,
+    historyStops: readonly HistoryStop[],
+    clampedStopIndex: number,
+    onStep: (stopIndex: number) => void,
 ): HistoryNav | undefined {
-  if (!completedPrHistoryEnabled || historyStops.length <= 1) return undefined;
+    if (!completedPrHistoryEnabled || historyStops.length <= 1) {
+        return undefined;
+    }
 
-  return {
-    canNewer: clampedStopIndex > 0,
-    canOlder: clampedStopIndex < historyStops.length - 1,
-    olderLabel: historyChevronTooltip(
-      "older",
-      historyStops[clampedStopIndex + 1],
-    ),
-    newerLabel: historyChevronTooltip(
-      "newer",
-      historyStops[clampedStopIndex - 1],
-    ),
-    onNewer: () =>
-      onStep(stepStopIndex(clampedStopIndex, -1, historyStops.length)),
-    onOlder: () =>
-      onStep(stepStopIndex(clampedStopIndex, 1, historyStops.length)),
-  };
+    return {
+        canNewer: clampedStopIndex > 0,
+        canOlder: clampedStopIndex < historyStops.length - 1,
+        olderLabel: historyChevronTooltip("older", historyStops[clampedStopIndex + 1]),
+        newerLabel: historyChevronTooltip("newer", historyStops[clampedStopIndex - 1]),
+        onNewer: () => onStep(stepStopIndex(clampedStopIndex, -1, historyStops.length)),
+        onOlder: () => onStep(stepStopIndex(clampedStopIndex, 1, historyStops.length)),
+    };
 }

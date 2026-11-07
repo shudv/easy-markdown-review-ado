@@ -25,8 +25,8 @@ const update = process.argv.includes("--update");
 const cwd = process.cwd();
 
 function run(cmd) {
-  console.log(`\n$ ${cmd}\n`);
-  execSync(cmd, { stdio: "inherit" });
+    console.log(`\n$ ${cmd}\n`);
+    execSync(cmd, { stdio: "inherit" });
 }
 
 // 1) Build the static Storybook on the host (native toolchain). The container
@@ -36,13 +36,13 @@ run("npm run build-storybook -- -o storybook-static --quiet");
 // 2) Screenshot / compare inside the container — the CI-identical environment.
 const snapshots = update ? " --update-snapshots=all" : "";
 run(
-  `docker run --rm -e CI=1 -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright ` +
-    `-v "${cwd}:/work" -w /work ${IMAGE} ` +
-    `npx playwright test --config playwright.visual.config.ts${snapshots}`,
+    `docker run --rm -e CI=1 -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright ` +
+        `-v "${cwd}:/work" -w /work ${IMAGE} ` +
+        `npx playwright test --config playwright.visual.config.ts${snapshots}`,
 );
 
 console.log(
-  update
-    ? "\nBaselines regenerated in the pinned container. Review + commit the *-chromium.png files."
-    : "\nVisual comparison ran in the pinned container.",
+    update
+        ? "\nBaselines regenerated in the pinned container. Review + commit the *-chromium.png files."
+        : "\nVisual comparison ran in the pinned container.",
 );

@@ -12,17 +12,17 @@
  * Build-time asset generator only — not shipped in the extension.
  */
 const BRANCH_ICON =
-  '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm7.5-9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>';
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm7.5-9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>';
 const COPY_ICON =
-  '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"/></svg>';
+    '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"/></svg>';
 const SEARCH_ICON =
-  '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>';
+    '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>';
 
 // Returns { css, html }. Inject `css` via addStyleTag and append `html` to body.
 // The chrome is a fixed bar of `chromeHeight` px at the top; the story content
 // is shifted below it by the caller's layout CSS.
 export function adoChromeMarkup({ width, chromeHeight }) {
-  const css = `
+    const css = `
   #emr-ado-chrome {
     position: fixed; top: 0; left: 0; width: ${width}px; height: ${chromeHeight}px;
     background: #fff; z-index: 60; overflow: hidden;
@@ -127,7 +127,7 @@ export function adoChromeMarkup({ width, chromeHeight }) {
   #emr-ado-chrome .ado-tab.active { color: #0b6cc9; font-weight: 600; border-bottom-color: #0b6cc9; }
   `;
 
-  const html = `
+    const html = `
     <div class="ado-global">
       <div class="ado-logo"><svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor" aria-hidden="true"><path d="M3 6.5 9.5 2v3.2l8-1.2L21 7.1v10.2l-4 3.2-7.5-1.1V22L3 17.5Zm6.5 1.2v9.2l7.5 1V6.6Zm-4 0v8.6l2 1.3V6.4Z"/></svg></div>
       <div class="ado-crumbs"><span>Contoso</span><span class="ado-crumb-sep">/</span><span>Web Platform</span><span class="ado-crumb-sep">/</span><span>Repos</span><span class="ado-crumb-sep">/</span><span>Pull requests</span><span class="ado-crumb-sep">/</span><span class="ado-repo-crumb"><span class="ado-repo-mark">◆</span>deployment-docs&nbsp;⌄</span></div>
@@ -168,5 +168,5 @@ export function adoChromeMarkup({ width, chromeHeight }) {
       </div>
     </div>`;
 
-  return { css, html };
+    return { css, html };
 }

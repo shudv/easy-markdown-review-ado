@@ -53,17 +53,13 @@ export const FRONTMATTER_ROW_CLASS = "emr-frontmatter-row";
  * intentionally NOT selected.)
  */
 export const BLOCK_SELECTOR =
-  "p, pre, blockquote, dl, h1, h2, h3, h4, h5, h6, hr, img, li, tr, .emr-frontmatter-row, .emr-math";
+    "p, pre, blockquote, dl, h1, h2, h3, h4, h5, h6, hr, img, li, tr, .emr-frontmatter-row, .emr-math";
 
 /** An image by itself (optionally wrapped in a link/span) owns the whole block. */
 export function isImageOnlyBlock(el: HTMLElement): boolean {
-  if (el.tagName === "IMG") return true;
+    if (el.tagName === "IMG") return true;
 
-  return (
-    el.tagName === "P" &&
-    el.querySelector("img") !== null &&
-    el.textContent.trim() === ""
-  );
+    return el.tagName === "P" && el.querySelector("img") !== null && el.textContent.trim() === "";
 }
 
 /** Selector for a rendered Mermaid diagram placeholder/host. */
@@ -76,17 +72,17 @@ export const MERMAID_SELECTOR = ".emr-mermaid";
  * blocks. `li` is included so a reworded list item shows word-level changes.
  */
 export const PROSE_TAGS = new Set([
-  "P",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "LI",
-  "BLOCKQUOTE",
-  "DD",
-  "DT",
+    "P",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "LI",
+    "BLOCKQUOTE",
+    "DD",
+    "DT",
 ]);
 
 /**
@@ -95,71 +91,66 @@ export const PROSE_TAGS = new Set([
  * definition list, heading, rule, or a rendered diagram/equation host.
  */
 const CHILD_BLOCK_TAGS = new Set([
-  "P",
-  "UL",
-  "OL",
-  "PRE",
-  "TABLE",
-  "BLOCKQUOTE",
-  "DL",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "HR",
-  "DIV",
+    "P",
+    "UL",
+    "OL",
+    "PRE",
+    "TABLE",
+    "BLOCKQUOTE",
+    "DL",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HR",
+    "DIV",
 ]);
 
 /** A child block of a container (a source-mapped `div` only, never chrome). */
 export function isChildBlock(el: Element): boolean {
-  return (
-    CHILD_BLOCK_TAGS.has(el.tagName) &&
-    (el.tagName !== "DIV" || el.hasAttribute("data-source-line"))
-  );
+    return (
+        CHILD_BLOCK_TAGS.has(el.tagName) &&
+        (el.tagName !== "DIV" || el.hasAttribute("data-source-line"))
+    );
 }
 
 /** A 1-based, inclusive span of source lines. */
 export interface SourceSpan {
-  start: number;
-  end: number;
+    start: number;
+    end: number;
 }
 
 export interface ChangeRange {
-  start: number;
-  end: number;
-  kind: "added" | "modified";
-  /** Original source text of the changed lines (modified ranges only). */
-  originalText?: string;
-  originalStart?: number;
-  originalEnd?: number;
+    start: number;
+    end: number;
+    kind: "added" | "modified";
+    /** Original source text of the changed lines (modified ranges only). */
+    originalText?: string;
+    originalStart?: number;
+    originalEnd?: number;
 }
 
 export function numAttr(el: Element, name: string): number | null {
-  const raw = el.getAttribute(name);
-  if (raw == null) return null;
-  const n = Number.parseInt(raw, 10);
+    const raw = el.getAttribute(name);
+    if (raw == null) return null;
+    const n = Number.parseInt(raw, 10);
 
-  return Number.isFinite(n) ? n : null;
+    return Number.isFinite(n) ? n : null;
 }
 
 /** True when [aStart,aEnd] and [bStart,bEnd] share at least one line. */
-export function overlaps(
-  aStart: number,
-  aEnd: number,
-  bStart: number,
-  bEnd: number,
-): boolean {
-  return aStart <= bEnd && bStart <= aEnd;
+export function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+    return aStart <= bEnd && bStart <= aEnd;
 }
 
 /** A block's stamped `[start, end]` source span, or null when unstamped. */
 export function readSourceSpan(el: Element): SourceSpan | null {
-  const start = numAttr(el, "data-source-line");
-  const end = numAttr(el, "data-source-end-line");
+    const start = numAttr(el, "data-source-line");
+    const end = numAttr(el, "data-source-end-line");
 
-  return start == null || end == null ? null : { start, end };
+    return start == null || end == null ? null : { start, end };
 }
 
 /**
@@ -173,23 +164,19 @@ export function readSourceSpan(el: Element): SourceSpan | null {
  * returned unchanged.
  */
 export function inlineProseTarget(block: HTMLElement): HTMLElement {
-  if (block.tagName === "BLOCKQUOTE") {
-    const body = Array.from(block.children).find(
-      (child) =>
-        child.tagName === "P" &&
-        !child.classList.contains("markdown-alert-title"),
-    );
+    if (block.tagName === "BLOCKQUOTE") {
+        const body = Array.from(block.children).find(
+            (child) => child.tagName === "P" && !child.classList.contains("markdown-alert-title"),
+        );
 
-    if (body) return body as HTMLElement;
-  }
+        if (body) return body as HTMLElement;
+    }
 
-  if (block.tagName === "LI") {
-    const prose = Array.from(block.children).find(
-      (child) => child.tagName === "P",
-    );
+    if (block.tagName === "LI") {
+        const prose = Array.from(block.children).find((child) => child.tagName === "P");
 
-    if (prose) return prose as HTMLElement;
-  }
+        if (prose) return prose as HTMLElement;
+    }
 
-  return block;
+    return block;
 }

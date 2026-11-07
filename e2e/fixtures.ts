@@ -14,13 +14,13 @@ import { test as base, expect } from "@playwright/test";
 import { E2E } from "./env";
 
 export const test = base.extend({
-  // (`provide` is Playwright's fixture callback, conventionally named `use`.)
-  context: async ({ context }, provide) => {
-    await context.grantPermissions(["local-network-access"], {
-      origin: new URL(E2E.orgUrl).origin,
-    });
-    await provide(context);
-  },
+    // (`provide` is Playwright's fixture callback, conventionally named `use`.)
+    context: async ({ context }, provide) => {
+        await context.grantPermissions(["local-network-access"], {
+            origin: new URL(E2E.orgUrl).origin,
+        });
+        await provide(context);
+    },
 });
 
 export { expect };

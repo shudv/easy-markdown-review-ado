@@ -12,99 +12,88 @@ import { SKIP, visit } from "unist-util-visit";
 import { extractHastText } from "./hast-text";
 
 function classesOf(element: Element): string[] {
-  const classes = element.properties.className;
+    const classes = element.properties.className;
 
-  return Array.isArray(classes) ? classes.map(String) : [];
+    return Array.isArray(classes) ? classes.map(String) : [];
 }
 
 function sourceProperties(element: Element): Record<string, unknown> {
-  return {
-    ...(element.properties.dataSourceLine != null
-      ? { dataSourceLine: element.properties.dataSourceLine }
-      : {}),
-    ...(element.properties.dataSourceEndLine != null
-      ? { dataSourceEndLine: element.properties.dataSourceEndLine }
-      : {}),
-  };
+    return {
+        ...(element.properties.dataSourceLine != null
+            ? { dataSourceLine: element.properties.dataSourceLine }
+            : {}),
+        ...(element.properties.dataSourceEndLine != null
+            ? { dataSourceEndLine: element.properties.dataSourceEndLine }
+            : {}),
+    };
 }
 
-function placeholder(
-  source: string,
-  display: boolean,
-  sourceOwner: Element,
-): Element {
-  const fallback: Element = display
-    ? {
-        type: "element",
-        tagName: "pre",
-        properties: { className: ["emr-math-fallback"] },
-        children: [
-          {
-            type: "element",
-            tagName: "code",
-            properties: {},
-            children: [{ type: "text", value: source }],
-          },
-        ],
-      }
-    : {
-        type: "element",
-        tagName: "code",
-        properties: { className: ["emr-math-fallback"] },
-        children: [{ type: "text", value: source }],
-      };
+function placeholder(source: string, display: boolean, sourceOwner: Element): Element {
+    const fallback: Element = display
+        ? {
+              type: "element",
+              tagName: "pre",
+              properties: { className: ["emr-math-fallback"] },
+              children: [
+                  {
+                      type: "element",
+                      tagName: "code",
+                      properties: {},
+                      children: [{ type: "text", value: source }],
+                  },
+              ],
+          }
+        : {
+              type: "element",
+              tagName: "code",
+              properties: { className: ["emr-math-fallback"] },
+              children: [{ type: "text", value: source }],
+          };
 
-  return {
-    type: "element",
-    tagName: display ? "div" : "span",
-    properties: {
-      className: [
-        "emr-math",
-        display ? "emr-math--display" : "emr-math--inline",
-      ],
-      dataMathSrc: encodeURIComponent(source),
-      dataMathDisplay: display ? "true" : "false",
-      ...sourceProperties(sourceOwner),
-    },
-    children: [fallback as ElementContent],
-  };
+    return {
+        type: "element",
+        tagName: display ? "div" : "span",
+        properties: {
+            className: ["emr-math", display ? "emr-math--display" : "emr-math--inline"],
+            dataMathSrc: encodeURIComponent(source),
+            dataMathDisplay: display ? "true" : "false",
+            ...sourceProperties(sourceOwner),
+        },
+        children: [fallback as ElementContent],
+    };
 }
 
 export const rehypeMathPlaceholder: Plugin<[], Root> = () => (tree) => {
-  visit(tree, "element", (node: Element, index, parent) => {
-    /* v8 ignore next -- visit() over a Root only matches descendant elements, which always have a parent and index; this only narrows the optional callback params */
-    if (index == null || !parent) return;
+    visit(tree, "element", (node: Element, index, parent) => {
+        /* v8 ignore next -- visit() over a Root only matches descendant elements, which always have a parent and index; this only narrows the optional callback params */
+        if (index == null || !parent) return;
 
-    if (node.tagName === "pre") {
-      const code = node.children.find(
-        (child): child is Element =>
-          child.type === "element" && child.tagName === "code",
-      );
+        if (node.tagName === "pre") {
+            const code = node.children.find(
+                (child): child is Element => child.type === "element" && child.tagName === "code",
+            );
 
-      if (!code) return;
-      const classes = classesOf(code);
+            if (!code) return;
+            const classes = classesOf(code);
 
-      if (
-        !classes.includes("language-math") &&
-        !classes.includes("math-display")
-      ) {
-        return;
-      }
+            if (!classes.includes("language-math") && !classes.includes("math-display")) {
+                return;
+            }
 
-      const source = extractHastText(code).replace(/\n+$/g, "");
-      // Empty math fences remain ordinary code blocks.
-      if (!source) return;
-      parent.children[index] = placeholder(source, true, node);
+            const source = extractHastText(code).replace(/\n+$/g, "");
+            // Empty math fences remain ordinary code blocks.
+            if (!source) return;
+            parent.children[index] = placeholder(source, true, node);
 
-      return SKIP;
-    }
+            return SKIP;
+        }
 
-    if (node.tagName === "code" && classesOf(node).includes("math-inline")) {
-      const source = extractHastText(node);
-      if (!source) return;
-      parent.children[index] = placeholder(source, false, node);
+        if (node.tagName === "code" && classesOf(node).includes("math-inline")) {
+            const source = extractHastText(node);
+            if (!source) return;
+            parent.children[index] = placeholder(source, false, node);
 
-      return SKIP;
-    }
-  });
+            return SKIP;
+        }
+    });
 };

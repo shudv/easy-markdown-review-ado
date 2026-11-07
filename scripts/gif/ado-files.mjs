@@ -20,59 +20,53 @@ const FILE_NAME = "production-rollout.md";
 // same three changes the review tab shows: v1 -> v2 inside a link target, the
 // Web row added, the Notifications row deleted.
 const DIFF = [
-  ["ctx", 1, 1, "# Production Rollout"],
-  ["ctx", 2, 2, ""],
-  [
-    "del",
-    3,
-    null,
-    "Review the [deployment runbook](https://example.com/runbooks/deploy-v1) before using the resolved configuration.",
-  ],
-  [
-    "add",
-    null,
-    3,
-    "Review the [deployment runbook](https://example.com/runbooks/deploy-v2) before using the resolved configuration.",
-  ],
-  ["ctx", 4, 4, ""],
-  ["ctx", 5, 5, "## Service Plan"],
-  ["ctx", 6, 6, ""],
-  ["ctx", 7, 7, "| Service | Owner    | Window    |"],
-  ["ctx", 8, 8, "| ------- | -------- | --------- |"],
-  ["ctx", 9, 9, "| API     | Platform | 02:00 UTC |"],
-  ["del", 10, null, "| Notifications | Messaging | 05:00 UTC |"],
-  ["add", null, 10, "| Web     | Frontend | 04:00 UTC |"],
-  ["ctx", 11, 11, ""],
-  ["ctx", 12, 12, "## Release Checks"],
-  ["ctx", 13, 13, ""],
-  ["ctx", 14, 14, "1. Confirm health checks in every active region."],
-  ["ctx", 15, 15, "2. Publish the release summary after rollout."],
-  ["ctx", 16, 16, ""],
-  ["ctx", 17, 17, "## Recovery"],
-  ["ctx", 18, 18, ""],
-  [
-    "ctx",
-    19,
-    19,
-    "Roll back to the previous artifact if regional health checks fail.",
-  ],
+    ["ctx", 1, 1, "# Production Rollout"],
+    ["ctx", 2, 2, ""],
+    [
+        "del",
+        3,
+        null,
+        "Review the [deployment runbook](https://example.com/runbooks/deploy-v1) before using the resolved configuration.",
+    ],
+    [
+        "add",
+        null,
+        3,
+        "Review the [deployment runbook](https://example.com/runbooks/deploy-v2) before using the resolved configuration.",
+    ],
+    ["ctx", 4, 4, ""],
+    ["ctx", 5, 5, "## Service Plan"],
+    ["ctx", 6, 6, ""],
+    ["ctx", 7, 7, "| Service | Owner    | Window    |"],
+    ["ctx", 8, 8, "| ------- | -------- | --------- |"],
+    ["ctx", 9, 9, "| API     | Platform | 02:00 UTC |"],
+    ["del", 10, null, "| Notifications | Messaging | 05:00 UTC |"],
+    ["add", null, 10, "| Web     | Frontend | 04:00 UTC |"],
+    ["ctx", 11, 11, ""],
+    ["ctx", 12, 12, "## Release Checks"],
+    ["ctx", 13, 13, ""],
+    ["ctx", 14, 14, "1. Confirm health checks in every active region."],
+    ["ctx", 15, 15, "2. Publish the release summary after rollout."],
+    ["ctx", 16, 16, ""],
+    ["ctx", 17, 17, "## Recovery"],
+    ["ctx", 18, 18, ""],
+    ["ctx", 19, 19, "Roll back to the previous artifact if regional health checks fail."],
 ];
 
-const esc = (s) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const diffRows = () =>
-  DIFF.map(([kind, oldNo, newNo, text]) => {
-    const sign = kind === "add" ? "+" : kind === "del" ? "-" : " ";
-    return (
-      `<div class="fx-row fx-${kind}">` +
-      `<span class="fx-no">${oldNo ?? ""}</span>` +
-      `<span class="fx-no">${newNo ?? ""}</span>` +
-      `<span class="fx-sign">${sign}</span>` +
-      `<span class="fx-code">${esc(text)}</span>` +
-      `</div>`
-    );
-  }).join("");
+    DIFF.map(([kind, oldNo, newNo, text]) => {
+        const sign = kind === "add" ? "+" : kind === "del" ? "-" : " ";
+        return (
+            `<div class="fx-row fx-${kind}">` +
+            `<span class="fx-no">${oldNo ?? ""}</span>` +
+            `<span class="fx-no">${newNo ?? ""}</span>` +
+            `<span class="fx-sign">${sign}</span>` +
+            `<span class="fx-code">${esc(text)}</span>` +
+            `</div>`
+        );
+    }).join("");
 
 // ADO's Markdown preview: the head revision, rendered, with no change
 // information and nowhere to anchor a comment.
@@ -97,7 +91,7 @@ const PREVIEW = `
 
 // Returns { css, html }. Inject `css` via addStyleTag and append `html` to body.
 export function adoFilesMarkup({ left, top, width, height }) {
-  const css = `
+    const css = `
   #emr-ado-files {
     position: fixed; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px;
     z-index: 55; display: none; background: #fff; overflow: hidden;
@@ -183,7 +177,7 @@ export function adoFilesMarkup({ left, top, width, height }) {
   #emr-ado-files .fx-preview li { margin-bottom: 5px; }
   `;
 
-  const html = `
+    const html = `
     <div class="fx-tree">
       <div class="fx-tree-head">Files</div>
       <div class="fx-tree-row sel"><span class="fx-md">M&darr;</span>${FILE_NAME}<span class="fx-chip">+2 -2</span></div>
@@ -205,5 +199,5 @@ export function adoFilesMarkup({ left, top, width, height }) {
       </div>
     </div>`;
 
-  return { css, html };
+    return { css, html };
 }

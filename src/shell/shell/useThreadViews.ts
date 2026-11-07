@@ -4,161 +4,142 @@ import { useMemo } from "react";
 
 import type { CommentThread, FileInfo } from "../../types";
 import { isResolvedLike } from "../../types";
-import {
-  selectGeneralThreads,
-  selectThreadsByFile,
-  type ThreadState,
-} from "../../comments/store";
-import {
-  threadVisibleForCommentView,
-  type CommentFilterMode,
-} from "../components/commentFilter";
+import { selectGeneralThreads, selectThreadsByFile, type ThreadState } from "../../comments/store";
+import { threadVisibleForCommentView, type CommentFilterMode } from "../components/commentFilter";
 
 /** Stable empty thread list for the stepper's read-only historical fallback. */
 const EMPTY_THREADS: CommentThread[] = [];
 
 interface ThreadViewsOptions {
-  threadState: ThreadState;
-  selectedPath: string;
-  files: FileInfo[];
-  isHub: boolean;
-  viewingHistorical: boolean;
-  nativeIterationMode: boolean;
-  activeStopPrId: number | null;
-  historicalThreadsByKey: Record<string, CommentThread[]>;
-  commentQuery: string;
-  commentFilter: CommentFilterMode;
-  currentUserId: string;
+    threadState: ThreadState;
+    selectedPath: string;
+    files: FileInfo[];
+    isHub: boolean;
+    viewingHistorical: boolean;
+    nativeIterationMode: boolean;
+    activeStopPrId: number | null;
+    historicalThreadsByKey: Record<string, CommentThread[]>;
+    commentQuery: string;
+    commentFilter: CommentFilterMode;
+    currentUserId: string;
 }
 
 /** The thread sets the article, rail and file list render from. */
 export function useThreadViews(opts: ThreadViewsOptions) {
-  const {
-    threadState,
-    selectedPath,
-    files,
-    isHub,
-    viewingHistorical,
-    nativeIterationMode,
-    activeStopPrId,
-    historicalThreadsByKey,
-    commentQuery,
-    commentFilter,
-    currentUserId,
-  } = opts;
+    const {
+        threadState,
+        selectedPath,
+        files,
+        isHub,
+        viewingHistorical,
+        nativeIterationMode,
+        activeStopPrId,
+        historicalThreadsByKey,
+        commentQuery,
+        commentFilter,
+        currentUserId,
+    } = opts;
 
-  const allThreadsForFile = useMemo(
-    () => selectThreadsByFile(threadState, selectedPath),
-    [threadState, selectedPath],
-  );
+    const allThreadsForFile = useMemo(
+        () => selectThreadsByFile(threadState, selectedPath),
+        [threadState, selectedPath],
+    );
 
-  // The writable "Current" head's threads for this file (from the live reducer
-  // state / poller). When the stepper is parked on a historical stop we show
-  // that PR's threads instead — read-only, loaded on demand and cached by id.
-  const currentThreadsRaw = useMemo(() => {
-    if (viewingHistorical && !nativeIterationMode) {
-      return activeStopPrId != null
-        ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStopPrId}`] ??
-            EMPTY_THREADS)
-        : EMPTY_THREADS;
-    }
+    // The writable "Current" head's threads for this file (from the live reducer
+    // state / poller). When the stepper is parked on a historical stop we show
+    // that PR's threads instead — read-only, loaded on demand and cached by id.
+    const currentThreadsRaw = useMemo(() => {
+        if (viewingHistorical && !nativeIterationMode) {
+            return activeStopPrId != null
+                ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStopPrId}`] ??
+                      EMPTY_THREADS)
+                : EMPTY_THREADS;
+        }
 
-    return allThreadsForFile;
-  }, [
-    viewingHistorical,
-    nativeIterationMode,
-    activeStopPrId,
-    selectedPath,
-    historicalThreadsByKey,
-    allThreadsForFile,
-  ]);
+        return allThreadsForFile;
+    }, [
+        viewingHistorical,
+        nativeIterationMode,
+        activeStopPrId,
+        selectedPath,
+        historicalThreadsByKey,
+        allThreadsForFile,
+    ]);
 
-  // General PR-level ("Overview") comments — not tied to any file. Suppressed
-  // in the hub (single-file, latest-master context — see `isHub`).
-  const generalThreads = useMemo(
-    () => (isHub ? EMPTY_THREADS : selectGeneralThreads(threadState)),
-    [threadState, isHub],
-  );
+    // General PR-level ("Overview") comments — not tied to any file. Suppressed
+    // in the hub (single-file, latest-master context — see `isHub`).
+    const generalThreads = useMemo(
+        () => (isHub ? EMPTY_THREADS : selectGeneralThreads(threadState)),
+        [threadState, isHub],
+    );
 
-  // Threads anchored to a file that is NO LONGER part of this PR (the file was
-  // removed from the PR's change set, so it has no tab and can never be opened
-  // here). These would otherwise be unreachable, so they get their own tray
-  // below the General section. NOTE: this is strictly "file gone from the PR" —
-  // comments on files that ARE still in the PR belong to those files and show
-  // when the reader opens them, never here. Suppressed in the hub (`isHub`):
-  // there's no change-set to leave, and its file list is a partial lazy tree.
-  const orphanedFileThreads = useMemo(
-    () => (isHub ? EMPTY_THREADS : threadsOutsideFiles(threadState, files)),
-    [threadState, files, isHub],
-  );
+    // Threads anchored to a file that is NO LONGER part of this PR (the file was
+    // removed from the PR's change set, so it has no tab and can never be opened
+    // here). These would otherwise be unreachable, so they get their own tray
+    // below the General section. NOTE: this is strictly "file gone from the PR" —
+    // comments on files that ARE still in the PR belong to those files and show
+    // when the reader opens them, never here. Suppressed in the hub (`isHub`):
+    // there's no change-set to leave, and its file list is a partial lazy tree.
+    const orphanedFileThreads = useMemo(
+        () => (isHub ? EMPTY_THREADS : threadsOutsideFiles(threadState, files)),
+        [threadState, files, isHub],
+    );
 
-  // Threads passed to ArticleView for anchoring: only those matching the
-  // active comment filter (all / active / resolved / mine) are highlighted in
-  // the prose, so the article and the rail always agree on what's shown.
-  const visibleForArticle = useMemo(() => {
-    const out: CommentThread[] = [];
+    // Threads passed to ArticleView for anchoring: only those matching the
+    // active comment filter (all / active / resolved / mine) are highlighted in
+    // the prose, so the article and the rail always agree on what's shown.
+    const visibleForArticle = useMemo(() => {
+        const out: CommentThread[] = [];
 
-    for (const t of currentThreadsRaw) {
-      if (
-        threadVisibleForCommentView(
-          t,
-          commentQuery,
-          commentFilter,
-          currentUserId,
-        )
-      ) {
-        out.push(t);
-      }
-    }
+        for (const t of currentThreadsRaw) {
+            if (threadVisibleForCommentView(t, commentQuery, commentFilter, currentUserId)) {
+                out.push(t);
+            }
+        }
 
-    return out;
-  }, [currentThreadsRaw, commentQuery, commentFilter, currentUserId]);
+        return out;
+    }, [currentThreadsRaw, commentQuery, commentFilter, currentUserId]);
 
-  const threadCountsByPath: Record<string, number> = useMemo(
-    () => openThreadCountsByPath(threadState),
-    [threadState],
-  );
+    const threadCountsByPath: Record<string, number> = useMemo(
+        () => openThreadCountsByPath(threadState),
+        [threadState],
+    );
 
-  return {
-    currentThreadsRaw,
-    generalThreads,
-    orphanedFileThreads,
-    visibleForArticle,
-    threadCountsByPath,
-  };
+    return {
+        currentThreadsRaw,
+        generalThreads,
+        orphanedFileThreads,
+        visibleForArticle,
+        threadCountsByPath,
+    };
 }
 
 /** Threads anchored to a file outside `files` (General threads excluded). */
-function threadsOutsideFiles(
-  threadState: ThreadState,
-  files: FileInfo[],
-): CommentThread[] {
-  const inPr = new Set(files.map((f) => f.path));
-  const out: CommentThread[] = [];
+function threadsOutsideFiles(threadState: ThreadState, files: FileInfo[]): CommentThread[] {
+    const inPr = new Set(files.map((f) => f.path));
+    const out: CommentThread[] = [];
 
-  for (const id of threadState.order) {
-    const t = threadState.threadsById[id];
-    // General/Overview threads have their own tray (an empty filePath always
-    // means general in our data model, so this also covers file-less threads).
-    if (t.general) continue;
-    if (inPr.has(t.filePath)) continue;
-    out.push(t);
-  }
+    for (const id of threadState.order) {
+        const t = threadState.threadsById[id];
+        // General/Overview threads have their own tray (an empty filePath always
+        // means general in our data model, so this also covers file-less threads).
+        if (t.general) continue;
+        if (inPr.has(t.filePath)) continue;
+        out.push(t);
+    }
 
-  return out;
+    return out;
 }
 
 /** Unresolved thread counts keyed by file path. */
-function openThreadCountsByPath(
-  threadState: ThreadState,
-): Record<string, number> {
-  const out: Record<string, number> = {};
+function openThreadCountsByPath(threadState: ThreadState): Record<string, number> {
+    const out: Record<string, number> = {};
 
-  for (const id of threadState.order) {
-    const t = threadState.threadsById[id];
-    if (isResolvedLike(t.status)) continue;
-    out[t.filePath] = (out[t.filePath] ?? 0) + 1;
-  }
+    for (const id of threadState.order) {
+        const t = threadState.threadsById[id];
+        if (isResolvedLike(t.status)) continue;
+        out[t.filePath] = (out[t.filePath] ?? 0) + 1;
+    }
 
-  return out;
+    return out;
 }

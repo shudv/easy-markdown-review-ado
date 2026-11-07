@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
-  type CSSProperties,
-  type ReactElement,
-  type Ref,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
+    type CSSProperties,
+    type ReactElement,
+    type Ref,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
 } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -21,27 +21,37 @@ import { DocNav, type RangeChanges } from "./DocNav";
 const SELECTED = "docs/api/guide.md";
 
 const FILES: FileInfo[] = [
-  {
-    path: "docs/api/guide.md",
-    changeType: "modified",
-    linesAdded: 3,
-    linesDeleted: 4,
-  },
-  {
-    path: "docs/api/internal.md",
-    changeType: "added",
-    linesAdded: 10,
-    linesDeleted: 0,
-  },
-  { path: "README.md", changeType: "modified", linesAdded: 0, linesDeleted: 0 },
-  {
-    path: "old-name.md",
-    changeType: "renamed",
-    renamedFrom: "ancient.md",
-    linesAdded: 1,
-    linesDeleted: 1,
-  },
-  { path: "removed.md", changeType: "deleted", linesAdded: 0, linesDeleted: 8 },
+    {
+        path: "docs/api/guide.md",
+        changeType: "modified",
+        linesAdded: 3,
+        linesDeleted: 4,
+    },
+    {
+        path: "docs/api/internal.md",
+        changeType: "added",
+        linesAdded: 10,
+        linesDeleted: 0,
+    },
+    {
+        path: "README.md",
+        changeType: "modified",
+        linesAdded: 0,
+        linesDeleted: 0,
+    },
+    {
+        path: "old-name.md",
+        changeType: "renamed",
+        renamedFrom: "ancient.md",
+        linesAdded: 1,
+        linesDeleted: 1,
+    },
+    {
+        path: "removed.md",
+        changeType: "deleted",
+        linesAdded: 0,
+        linesDeleted: 8,
+    },
 ];
 
 const THREAD_COUNTS: Record<string, number> = { "docs/api/guide.md": 2 };
@@ -50,116 +60,109 @@ const THREAD_COUNTS: Record<string, number> = { "docs/api/guide.md": 2 };
  *  highlight tallying (open/resolved/draft/dup/no-id), a heading without an
  *  id, a heading outside a section, and a couple of collapsed sections. */
 function Article(): ReactElement {
-  const tall: CSSProperties = { minHeight: 260 };
+    const tall: CSSProperties = { minHeight: 260 };
 
-  return (
-    <>
-      <section className="emr-section" data-section-id="intro" style={tall}>
-        <h1 id="intro">Introduction</h1>
-        <p>
-          <span className="emr-highlight" data-thread-id="t1" />
-          <span className="emr-highlight" data-thread-id="t4" />
-          <span className="emr-highlight is-resolved" data-thread-id="t2" />
-          <span className="emr-highlight" data-thread-id="__draft__" />
-          <span className="emr-highlight" data-thread-id="t1" />
-          <span className="emr-highlight" />
-        </p>
-      </section>
-      <section className="emr-section" data-section-id="setup" style={tall}>
-        <h2 id="setup">Setup</h2>
-        <span className="emr-highlight is-resolved" data-thread-id="t3" />
-        <h3 id="setup-deep">Deep dive</h3>
-      </section>
-      <section
-        className="emr-section"
-        data-section-id="usage"
-        data-collapsed="true"
-        style={tall}
-      >
-        <h2 id="usage">Usage</h2>
-      </section>
-      {/* Collapsed section with no id is skipped by the collapsed snapshot. */}
-      <section className="emr-section" data-collapsed="true" style={tall}>
-        <h2 id="extras">Extras</h2>
-      </section>
-      {/* A heading with no id is skipped entirely. */}
-      <h4>Unindexed</h4>
-      {/* A heading outside any section gets zero comment tallies. */}
-      <h2 id="loose">Loose heading</h2>
-    </>
-  );
+    return (
+        <>
+            <section className="emr-section" data-section-id="intro" style={tall}>
+                <h1 id="intro">Introduction</h1>
+                <p>
+                    <span className="emr-highlight" data-thread-id="t1" />
+                    <span className="emr-highlight" data-thread-id="t4" />
+                    <span className="emr-highlight is-resolved" data-thread-id="t2" />
+                    <span className="emr-highlight" data-thread-id="__draft__" />
+                    <span className="emr-highlight" data-thread-id="t1" />
+                    <span className="emr-highlight" />
+                </p>
+            </section>
+            <section className="emr-section" data-section-id="setup" style={tall}>
+                <h2 id="setup">Setup</h2>
+                <span className="emr-highlight is-resolved" data-thread-id="t3" />
+                <h3 id="setup-deep">Deep dive</h3>
+            </section>
+            <section
+                className="emr-section"
+                data-section-id="usage"
+                data-collapsed="true"
+                style={tall}
+            >
+                <h2 id="usage">Usage</h2>
+            </section>
+            {/* Collapsed section with no id is skipped by the collapsed snapshot. */}
+            <section className="emr-section" data-collapsed="true" style={tall}>
+                <h2 id="extras">Extras</h2>
+            </section>
+            {/* A heading with no id is skipped entirely. */}
+            <h4>Unindexed</h4>
+            {/* A heading outside any section gets zero comment tallies. */}
+            <h2 id="loose">Loose heading</h2>
+        </>
+    );
 }
 
 interface HarnessProps {
-  files?: FileInfo[];
-  unloadedFolders?: string[];
-  onExpandFolder?: (
-    path: string,
-  ) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
-  onSearchFiles?: (
-    query: string,
-    signal?: AbortSignal,
-  ) => Promise<FileSearchOutcome>;
-  onSelectPath: (path: string) => void;
-  initialSelected?: string;
-  showChangeIndicators?: boolean;
-  rangeChanges?: RangeChanges;
-  wikiPages?: boolean;
-  threadCounts?: Record<string, number>;
-  showOutline?: boolean;
-  /** Leave the document scroller unattached (no `scrollRef`). */
-  detachScroller?: boolean;
+    files?: FileInfo[];
+    unloadedFolders?: string[];
+    onExpandFolder?: (path: string) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
+    onSearchFiles?: (query: string, signal?: AbortSignal) => Promise<FileSearchOutcome>;
+    onSelectPath: (path: string) => void;
+    initialSelected?: string;
+    showChangeIndicators?: boolean;
+    rangeChanges?: RangeChanges;
+    wikiPages?: boolean;
+    threadCounts?: Record<string, number>;
+    showOutline?: boolean;
+    /** Leave the document scroller unattached (no `scrollRef`). */
+    detachScroller?: boolean;
 }
 
 function Harness(props: HarnessProps): ReactElement {
-  const scrollRef = useRef<HTMLElement | null>(null);
-  const articleWrapRef = useRef<HTMLDivElement | null>(null);
+    const scrollRef = useRef<HTMLElement | null>(null);
+    const articleWrapRef = useRef<HTMLDivElement | null>(null);
 
-  const [selectedPath, setSelectedPath] = useState(
-    props.initialSelected ?? SELECTED,
-  );
+    const [selectedPath, setSelectedPath] = useState(props.initialSelected ?? SELECTED);
 
-  // The real app bumps `version` once the article content has loaded; do the
-  // same so DocNav re-reads the headings after the article is in the DOM.
-  const [version, setVersion] = useState(0);
+    // The real app bumps `version` once the article content has loaded; do the
+    // same so DocNav re-reads the headings after the article is in the DOM.
+    const [version, setVersion] = useState(0);
 
-  const handleSelect = (path: string): void => {
-    props.onSelectPath(path);
-    setSelectedPath(path);
-  };
+    const handleSelect = (path: string): void => {
+        props.onSelectPath(path);
+        setSelectedPath(path);
+    };
 
-  useEffect(() => {
-    setVersion(1);
-  }, []);
+    useEffect(() => {
+        setVersion(1);
+    }, []);
 
-  return (
-    <div style={{ display: "flex", height: 300, width: 640 }}>
-      <DocNav
-        articleWrapRef={articleWrapRef}
-        scrollRef={scrollRef}
-        version={version}
-        files={props.files ?? FILES}
-        selectedPath={selectedPath}
-        onSelectPath={handleSelect}
-        threadCountsByPath={props.threadCounts ?? THREAD_COUNTS}
-        unloadedFolders={props.unloadedFolders}
-        onExpandFolder={props.onExpandFolder}
-        onSearchFiles={props.onSearchFiles}
-        showChangeIndicators={props.showChangeIndicators}
-        rangeChanges={props.rangeChanges}
-        wikiPages={props.wikiPages}
-        showOutline={props.showOutline}
-      />
-      <main
-        ref={props.detachScroller ? undefined : (scrollRef as Ref<HTMLElement>)}
-        style={{ overflow: "auto", height: 300, flex: 1 }}
-      >
-        <div ref={articleWrapRef} className="emr-article-wrap">
-          <Article />
+    return (
+        <div style={{ display: "flex", height: 300, width: 640 }}>
+            <DocNav
+                articleWrapRef={articleWrapRef}
+                scrollRef={scrollRef}
+                version={version}
+                files={props.files ?? FILES}
+                selectedPath={selectedPath}
+                onSelectPath={handleSelect}
+                threadCountsByPath={props.threadCounts ?? THREAD_COUNTS}
+                unloadedFolders={props.unloadedFolders}
+                onExpandFolder={props.onExpandFolder}
+                onSearchFiles={props.onSearchFiles}
+                showChangeIndicators={props.showChangeIndicators}
+                rangeChanges={props.rangeChanges}
+                wikiPages={props.wikiPages}
+                showOutline={props.showOutline}
+            />
+            <main
+                ref={props.detachScroller ? undefined : (scrollRef as Ref<HTMLElement>)}
+                style={{ overflow: "auto", height: 300, flex: 1 }}
+            >
+                <div ref={articleWrapRef} className="emr-article-wrap">
+                    <Article />
+                </div>
+            </main>
         </div>
-      </main>
-    </div>
-  );
+    );
 }
 
 /**
@@ -171,61 +174,61 @@ function Harness(props: HarnessProps): ReactElement {
  * levels and its attempt-once guard.
  */
 function LazyHostHarness(props: {
-  initialSelected: string;
-  initialUnloaded: string[];
-  expansions: Record<string, { files: FileInfo[]; folders: string[] }>;
-  onExpand: (path: string) => void;
+    initialSelected: string;
+    initialUnloaded: string[];
+    expansions: Record<string, { files: FileInfo[]; folders: string[] }>;
+    onExpand: (path: string) => void;
 }): ReactElement {
-  const scrollRef = useRef<HTMLElement | null>(null);
-  const articleWrapRef = useRef<HTMLDivElement | null>(null);
-  const [files, setFiles] = useState<FileInfo[]>([]);
+    const scrollRef = useRef<HTMLElement | null>(null);
+    const articleWrapRef = useRef<HTMLDivElement | null>(null);
+    const [files, setFiles] = useState<FileInfo[]>([]);
 
-  const [unloadedFolders, setUnloadedFolders] = useState<string[]>(
-    props.initialUnloaded,
-  );
+    const [unloadedFolders, setUnloadedFolders] = useState<string[]>(props.initialUnloaded);
 
-  const onExpandFolder = useCallback(
-    async (path: string) => {
-      props.onExpand(path);
-      const yielded = props.expansions[path] ?? { files: [], folders: [] };
-      setFiles((curr) => [...curr, ...yielded.files]);
-      // A fresh array reference each time (matching the host) so the lazy-set
-      // memo recomputes and the auto-expand effect re-runs.
-      setUnloadedFolders((curr) => [
-        ...curr.filter((f) => f !== path),
-        ...yielded.folders,
-      ]);
+    const onExpandFolder = useCallback(
+        async (path: string) => {
+            props.onExpand(path);
 
-      return yielded;
-    },
-    [props],
-  );
+            const yielded = props.expansions[path] ?? {
+                files: [],
+                folders: [],
+            };
 
-  return (
-    <div style={{ display: "flex", height: 300, width: 640 }}>
-      <DocNav
-        articleWrapRef={articleWrapRef}
-        scrollRef={scrollRef}
-        version={1}
-        files={files}
-        selectedPath={props.initialSelected}
-        onSelectPath={() => {}}
-        threadCountsByPath={{}}
-        unloadedFolders={unloadedFolders}
-        onExpandFolder={onExpandFolder}
-      />
-      <main ref={scrollRef as Ref<HTMLElement>} style={{ flex: 1 }}>
-        <div ref={articleWrapRef} className="emr-article-wrap" />
-      </main>
-    </div>
-  );
+            setFiles((curr) => [...curr, ...yielded.files]);
+            // A fresh array reference each time (matching the host) so the lazy-set
+            // memo recomputes and the auto-expand effect re-runs.
+            setUnloadedFolders((curr) => [...curr.filter((f) => f !== path), ...yielded.folders]);
+
+            return yielded;
+        },
+        [props],
+    );
+
+    return (
+        <div style={{ display: "flex", height: 300, width: 640 }}>
+            <DocNav
+                articleWrapRef={articleWrapRef}
+                scrollRef={scrollRef}
+                version={1}
+                files={files}
+                selectedPath={props.initialSelected}
+                onSelectPath={() => {}}
+                threadCountsByPath={{}}
+                unloadedFolders={unloadedFolders}
+                onExpandFolder={onExpandFolder}
+            />
+            <main ref={scrollRef as Ref<HTMLElement>} style={{ flex: 1 }}>
+                <div ref={articleWrapRef} className="emr-article-wrap" />
+            </main>
+        </div>
+    );
 }
 
 const meta = {
-  title: "Components/DocNav",
-  component: Harness,
-  parameters: { layout: "fullscreen" },
-  args: { onSelectPath: fn() },
+    title: "Components/DocNav",
+    component: Harness,
+    parameters: { layout: "fullscreen" },
+    args: { onSelectPath: fn() },
 } satisfies Meta<typeof Harness>;
 
 export default meta;
@@ -235,207 +238,173 @@ type Story = StoryObj<typeof meta>;
 /** File tree + heading TOC: folders toggle, headings fold and scroll, file
  *  rows switch the active file. */
 export const TreeAndHeadings: Story = {
-  play: async ({ canvasElement }) => {
-    // Scope queries to the nav: heading text also appears in the article DOM.
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    play: async ({ canvasElement }) => {
+        // Scope queries to the nav: heading text also appears in the article DOM.
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    // Heading badges: intro has 2 open, setup has a resolved one.
-    await waitFor(() => expect(nav.getByText("Introduction")).toBeTruthy());
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-docnav-badge.is-open"),
-      ).toBeTruthy(),
-    );
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-docnav-badge.is-resolved"),
-      ).toBeTruthy(),
-    );
-    expect(canvasElement.querySelector(".emr-docnav-file-diff")).toBeNull();
+        // Heading badges: intro has 2 open, setup has a resolved one.
+        await waitFor(() => expect(nav.getByText("Introduction")).toBeTruthy());
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-docnav-badge.is-open")).toBeTruthy(),
+        );
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-docnav-badge.is-resolved")).toBeTruthy(),
+        );
+        expect(canvasElement.querySelector(".emr-docnav-file-diff")).toBeNull();
 
-    // Collapse then re-expand the folder (re-query: the row re-renders).
-    await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
-    await userEvent.click(nav.getByRole("button", { name: "Expand folder" }));
+        // Collapse then re-expand the folder (re-query: the row re-renders).
+        await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
+        await userEvent.click(nav.getByRole("button", { name: "Expand folder" }));
 
-    // Fold a heading section via its chevron, then unfold it. Both intro and
-    // setup expose a "Collapse section" twist; fold setup (a leaf parent) so
-    // the other heading rows stay visible.
-    await userEvent.click(
-      nav.getAllByRole("button", { name: "Collapse section" })[1]!,
-    );
-    await userEvent.click(nav.getByRole("button", { name: "Expand section" }));
+        // Fold a heading section via its chevron, then unfold it. Both intro and
+        // setup expose a "Collapse section" twist; fold setup (a leaf parent) so
+        // the other heading rows stay visible.
+        await userEvent.click(nav.getAllByRole("button", { name: "Collapse section" })[1]!);
+        await userEvent.click(nav.getByRole("button", { name: "Expand section" }));
 
-    // Click a heading label (Usage is collapsed → it expands its section).
-    await userEvent.click(nav.getByRole("button", { name: /Usage/ }));
-    // Click the Introduction heading (already expanded → no section toggle).
-    await userEvent.click(nav.getByRole("button", { name: /Introduction/ }));
+        // Click a heading label (Usage is collapsed → it expands its section).
+        await userEvent.click(nav.getByRole("button", { name: /Usage/ }));
+        // Click the Introduction heading (already expanded → no section toggle).
+        await userEvent.click(nav.getByRole("button", { name: /Introduction/ }));
 
-    // Switch to a different file.
-    await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
-    // A root-level file has no parent folders to auto-expand — it just selects.
-    await userEvent.click(nav.getByRole("button", { name: /README\.md/ }));
+        // Switch to a different file.
+        await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
+        // A root-level file has no parent folders to auto-expand — it just selects.
+        await userEvent.click(nav.getByRole("button", { name: /README\.md/ }));
 
-    // Tonal + weight hierarchy: file names read heavier (semibold) than the
-    // regular-weight heading rows nested beneath them, and the two use distinct
-    // colour tokens (near-black file tone vs muted heading tone) so files
-    // clearly out-rank headings. Assert the weight gap and that the colours
-    // actually differ (exact rgb values are theme-driven, so compare relative).
-    const fileName = canvasElement.querySelector(
-      ".emr-docnav-file-name",
-    ) as HTMLElement;
+        // Tonal + weight hierarchy: file names read heavier (semibold) than the
+        // regular-weight heading rows nested beneath them, and the two use distinct
+        // colour tokens (near-black file tone vs muted heading tone) so files
+        // clearly out-rank headings. Assert the weight gap and that the colours
+        // actually differ (exact rgb values are theme-driven, so compare relative).
+        const fileName = canvasElement.querySelector(".emr-docnav-file-name") as HTMLElement;
 
-    const headingRow = canvasElement.querySelector(
-      ".emr-docnav-item.lvl-2",
-    ) as HTMLElement;
+        const headingRow = canvasElement.querySelector(".emr-docnav-item.lvl-2") as HTMLElement;
 
-    expect(fileName).toBeTruthy();
-    expect(headingRow).toBeTruthy();
-    const fileStyle = getComputedStyle(fileName);
-    const headingStyle = getComputedStyle(headingRow);
-    expect(Number(fileStyle.fontWeight)).toBeGreaterThanOrEqual(600);
-    // File tone and heading tone are different colours (the separation the
-    // design relies on), not the same inherited foreground.
-    expect(fileStyle.color).not.toBe(headingStyle.color);
-  },
+        expect(fileName).toBeTruthy();
+        expect(headingRow).toBeTruthy();
+        const fileStyle = getComputedStyle(fileName);
+        const headingStyle = getComputedStyle(headingRow);
+        expect(Number(fileStyle.fontWeight)).toBeGreaterThanOrEqual(600);
+        // File tone and heading tone are different colours (the separation the
+        // design relies on), not the same inherited foreground.
+        expect(fileStyle.color).not.toBe(headingStyle.color);
+    },
 };
 
 /** Fewer than five files: the search affordance is hidden (little to filter). */
 export const FewFiles: Story = {
-  args: {
-    files: [
-      {
-        path: "README.md",
-        changeType: "modified",
-        linesAdded: 1,
-        linesDeleted: 0,
-      },
-      {
-        path: "CHANGELOG.md",
-        changeType: "modified",
-        linesAdded: 2,
-        linesDeleted: 0,
-      },
-    ],
-  },
-  play: async ({ canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    args: {
+        files: [
+            {
+                path: "README.md",
+                changeType: "modified",
+                linesAdded: 1,
+                linesDeleted: 0,
+            },
+            {
+                path: "CHANGELOG.md",
+                changeType: "modified",
+                linesAdded: 2,
+                linesDeleted: 0,
+            },
+        ],
+    },
+    play: async ({ canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    // Search is hidden, but the "Documents" title still shows (>1 file).
-    await expect(
-      nav.queryByRole("button", { name: "Search documents" }),
-    ).toBeNull();
-    await expect(nav.getByText("Documents")).toBeTruthy();
-  },
+        // Search is hidden, but the "Documents" title still shows (>1 file).
+        await expect(nav.queryByRole("button", { name: "Search documents" })).toBeNull();
+        await expect(nav.getByText("Documents")).toBeTruthy();
+    },
 };
 
 /** A single file still shows the "Documents" header but hides search. */
 export const SingleFile: Story = {
-  args: {
-    files: [
-      {
-        path: "README.md",
-        changeType: "modified",
-        linesAdded: 1,
-        linesDeleted: 0,
-      },
-    ],
-  },
-  play: async ({ canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    args: {
+        files: [
+            {
+                path: "README.md",
+                changeType: "modified",
+                linesAdded: 1,
+                linesDeleted: 0,
+            },
+        ],
+    },
+    play: async ({ canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    await waitFor(() => expect(nav.getByText(/README\.md/)).toBeTruthy());
-    await expect(nav.getByText("Documents")).toBeTruthy();
-    await expect(
-      nav.queryByRole("button", { name: "Search documents" }),
-    ).toBeNull();
-  },
+        await waitFor(() => expect(nav.getByText(/README\.md/)).toBeTruthy());
+        await expect(nav.getByText("Documents")).toBeTruthy();
+        await expect(nav.queryByRole("button", { name: "Search documents" })).toBeNull();
+    },
 };
 
 /** Re-selecting the active file scrolls the article back to the top. */
 export const ReselectSameFile: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByText("guide.md")).toBeTruthy());
-    await userEvent.click(canvas.getByRole("button", { name: /guide\.md/ }));
-    // Same path → onSelectPath is NOT called (it scrolls instead).
-    await expect(args.onSelectPath).not.toHaveBeenCalled();
-  },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await waitFor(() => expect(canvas.getByText("guide.md")).toBeTruthy());
+        await userEvent.click(canvas.getByRole("button", { name: /guide\.md/ }));
+        // Same path → onSelectPath is NOT called (it scrolls instead).
+        await expect(args.onSelectPath).not.toHaveBeenCalled();
+    },
 };
 
 /** Scroll-spy lights up the heading scrolled past the top margin, and clears
  *  it again at the very top. */
 export const ScrollSpy: Story = {
-  play: async ({ canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    play: async ({ canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    await waitFor(() => expect(nav.getByText("Setup")).toBeTruthy());
-    const scroller = canvasElement.querySelector("main") as HTMLElement;
+        await waitFor(() => expect(nav.getByText("Setup")).toBeTruthy());
+        const scroller = canvasElement.querySelector("main") as HTMLElement;
 
-    scroller.scrollTop = 500;
-    scroller.dispatchEvent(new Event("scroll"));
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-docnav-item.is-active"),
-      ).toBeTruthy(),
-    );
+        scroller.scrollTop = 500;
+        scroller.dispatchEvent(new Event("scroll"));
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-docnav-item.is-active")).toBeTruthy(),
+        );
 
-    scroller.scrollTop = 0;
-    scroller.dispatchEvent(new Event("scroll"));
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-docnav-item.lvl-2.is-active"),
-      ).toBeNull(),
-    );
-  },
+        scroller.scrollTop = 0;
+        scroller.dispatchEvent(new Event("scroll"));
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-docnav-item.lvl-2.is-active")).toBeNull(),
+        );
+    },
 };
 
 /** Local file finder: open, filter, pick a result, short-query hint, clear and
  *  close via Escape, and blur-to-collapse. */
 export const Search: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    const input = canvas.getByRole("searchbox") as HTMLInputElement;
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        const input = canvas.getByRole("searchbox") as HTMLInputElement;
 
-    await userEvent.type(input, "internal");
-    await waitFor(() => expect(canvas.getByText("internal.md")).toBeTruthy());
-    await userEvent.click(canvas.getByRole("button", { name: /internal\.md/ }));
-    await expect(args.onSelectPath).toHaveBeenCalledWith(
-      "docs/api/internal.md",
-    );
+        await userEvent.type(input, "internal");
+        await waitFor(() => expect(canvas.getByText("internal.md")).toBeTruthy());
+        await userEvent.click(canvas.getByRole("button", { name: /internal\.md/ }));
+        await expect(args.onSelectPath).toHaveBeenCalledWith("docs/api/internal.md");
 
-    // One character → "type at least 2" hint.
-    await userEvent.clear(input);
-    await userEvent.type(input, "x");
-    await waitFor(() =>
-      expect(
-        canvas.getByText("Type at least 2 characters to search."),
-      ).toBeTruthy(),
-    );
+        // One character → "type at least 2" hint.
+        await userEvent.clear(input);
+        await userEvent.type(input, "x");
+        await waitFor(() =>
+            expect(canvas.getByText("Type at least 2 characters to search.")).toBeTruthy(),
+        );
 
-    // A query that matches nothing → "No files match".
-    await userEvent.clear(input);
-    await userEvent.type(input, "zzzzz");
-    await waitFor(() =>
-      expect(canvas.getByText(/No files match/)).toBeTruthy(),
-    );
+        // A query that matches nothing → "No files match".
+        await userEvent.clear(input);
+        await userEvent.type(input, "zzzzz");
+        await waitFor(() => expect(canvas.getByText(/No files match/)).toBeTruthy());
 
-    // Escape clears the text, second Escape closes the box.
-    await userEvent.type(input, "{Escape}");
-    await waitFor(() => expect(input.value).toBe(""));
-    await userEvent.type(input, "{Escape}");
-    await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
-  },
+        // Escape clears the text, second Escape closes the box.
+        await userEvent.type(input, "{Escape}");
+        await waitFor(() => expect(input.value).toBe(""));
+        await userEvent.type(input, "{Escape}");
+        await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
+    },
 };
 
 /**
@@ -445,31 +414,27 @@ export const Search: Story = {
  * themselves still render.
  */
 export const NoChangeIndicators: Story = {
-  args: { showChangeIndicators: false },
-  play: async ({ canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    args: { showChangeIndicators: false },
+    play: async ({ canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    await waitFor(() => expect(nav.getByText(/guide\.md/)).toBeTruthy());
+        await waitFor(() => expect(nav.getByText(/guide\.md/)).toBeTruthy());
 
-    // No change-type glyphs anywhere in the tree.
-    // (Scope to the A/M/D glyph variants so the folder chevron — which reuses
-    // `.emr-docnav-file-icon` — isn't counted.)
-    const changeGlyphSelector =
-      ".emr-docnav-file-icon.is-added, .emr-docnav-file-icon.is-modified, .emr-docnav-file-icon.is-renamed, .emr-docnav-file-icon.is-deleted";
+        // No change-type glyphs anywhere in the tree.
+        // (Scope to the A/M/D glyph variants so the folder chevron — which reuses
+        // `.emr-docnav-file-icon` — isn't counted.)
+        const changeGlyphSelector =
+            ".emr-docnav-file-icon.is-added, .emr-docnav-file-icon.is-modified, .emr-docnav-file-icon.is-renamed, .emr-docnav-file-icon.is-deleted";
 
-    expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
+        expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
 
-    // Search results also omit the change glyph.
-    await userEvent.click(
-      nav.getByRole("button", { name: "Search documents" }),
-    );
-    const input = nav.getByRole("searchbox") as HTMLInputElement;
-    await userEvent.type(input, "internal");
-    await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
-    expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
-  },
+        // Search results also omit the change glyph.
+        await userEvent.click(nav.getByRole("button", { name: "Search documents" }));
+        const input = nav.getByRole("searchbox") as HTMLInputElement;
+        await userEvent.type(input, "internal");
+        await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
+        expect(canvasElement.querySelectorAll(changeGlyphSelector).length).toBe(0);
+    },
 };
 
 /**
@@ -480,210 +445,183 @@ export const NoChangeIndicators: Story = {
  * tree and in search results.
  */
 export const RangeChangesMarkTouchedFiles: Story = {
-  args: {
-    rangeChanges: {
-      label: "Update 4 → 5",
-      byPath: {
-        "docs/api/guide.md": "modified",
-        "docs/api/internal.md": "modified",
-      },
+    args: {
+        rangeChanges: {
+            label: "Update 4 → 5",
+            byPath: {
+                "docs/api/guide.md": "modified",
+                "docs/api/internal.md": "modified",
+            },
+        },
     },
-  },
-  play: async ({ canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    play: async ({ canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    const rowOf = (name: RegExp) =>
-      nav
-        .getByRole("button", { name })
-        .closest<HTMLElement>(".emr-docnav-item")!;
+        const rowOf = (name: RegExp) =>
+            nav.getByRole("button", { name }).closest<HTMLElement>(".emr-docnav-item")!;
 
-    await waitFor(() => expect(nav.getByText(/internal\.md/)).toBeTruthy());
+        await waitFor(() => expect(nav.getByText(/internal\.md/)).toBeTruthy());
 
-    // Touched in the selection: normal row, the change WITHIN the updates.
-    const internal = rowOf(/internal\.md/);
-    await expect(internal.classList.contains("is-unchanged-in-range")).toBe(
-      false,
-    );
-    await expect(internal.dataset.changeType).toBe("modified");
-    await expect(
-      internal.querySelector(".emr-docnav-file-icon")!.textContent,
-    ).toBe("M");
+        // Touched in the selection: normal row, the change WITHIN the updates.
+        const internal = rowOf(/internal\.md/);
+        await expect(internal.classList.contains("is-unchanged-in-range")).toBe(false);
+        await expect(internal.dataset.changeType).toBe("modified");
+        await expect(internal.querySelector(".emr-docnav-file-icon")!.textContent).toBe("M");
 
-    // Untouched: dimmed, and says why (tooltip + accessible name).
-    const readme = rowOf(/README\.md/);
-    await expect(readme.classList.contains("is-unchanged-in-range")).toBe(true);
-    const readmeButton = readme.querySelector<HTMLElement>("button")!;
-    await expect(readmeButton.title).toContain("No changes in Update 4 → 5");
-    await expect(readmeButton).toHaveAccessibleName(
-      /README\.md \(No changes in Update 4 → 5\)/,
-    );
-    // Recedes by colour, never by fading: the filename stays readable text.
-    await expect(getComputedStyle(readmeButton).color).not.toBe(
-      getComputedStyle(internal.querySelector("button")!).color,
-    );
-    await expect(getComputedStyle(readmeButton).opacity).toBe("1");
+        // Untouched: dimmed, and says why (tooltip + accessible name).
+        const readme = rowOf(/README\.md/);
+        await expect(readme.classList.contains("is-unchanged-in-range")).toBe(true);
+        const readmeButton = readme.querySelector<HTMLElement>("button")!;
+        await expect(readmeButton.title).toContain("No changes in Update 4 → 5");
+        await expect(readmeButton).toHaveAccessibleName(
+            /README\.md \(No changes in Update 4 → 5\)/,
+        );
+        // Recedes by colour, never by fading: the filename stays readable text.
+        await expect(getComputedStyle(readmeButton).color).not.toBe(
+            getComputedStyle(internal.querySelector("button")!).color,
+        );
+        await expect(getComputedStyle(readmeButton).opacity).toBe("1");
 
-    // Search results follow the same rules.
-    await userEvent.click(
-      nav.getByRole("button", { name: "Search documents" }),
-    );
-    await userEvent.type(nav.getByRole("searchbox"), "readme");
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-docnav-search-result")?.classList,
-      ).toContain("is-unchanged-in-range"),
-    );
-    await expect(
-      canvasElement.querySelector<HTMLElement>(".emr-docnav-search-label")!
-        .title,
-    ).toContain("No changes in Update 4 → 5");
-    await userEvent.clear(nav.getByRole("searchbox"));
-    await userEvent.type(nav.getByRole("searchbox"), "internal");
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector<HTMLElement>(".emr-docnav-search-result")!
-          .dataset.changeType,
-      ).toBe("modified"),
-    );
-    await expect(
-      canvasElement.querySelector(".emr-docnav-search-result")!.classList,
-    ).not.toContain("is-unchanged-in-range");
-  },
+        // Search results follow the same rules.
+        await userEvent.click(nav.getByRole("button", { name: "Search documents" }));
+        await userEvent.type(nav.getByRole("searchbox"), "readme");
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-docnav-search-result")?.classList).toContain(
+                "is-unchanged-in-range",
+            ),
+        );
+        await expect(
+            canvasElement.querySelector<HTMLElement>(".emr-docnav-search-label")!.title,
+        ).toContain("No changes in Update 4 → 5");
+        await userEvent.clear(nav.getByRole("searchbox"));
+        await userEvent.type(nav.getByRole("searchbox"), "internal");
+        await waitFor(() =>
+            expect(
+                canvasElement.querySelector<HTMLElement>(".emr-docnav-search-result")!.dataset
+                    .changeType,
+            ).toBe("modified"),
+        );
+        await expect(
+            canvasElement.querySelector(".emr-docnav-search-result")!.classList,
+        ).not.toContain("is-unchanged-in-range");
+    },
 };
 
 /** Blur with an empty box collapses the inline search. */
 export const SearchBlurCollapses: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    const input = canvas.getByRole("searchbox") as HTMLInputElement;
-    input.blur();
-    await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
-  },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        const input = canvas.getByRole("searchbox") as HTMLInputElement;
+        input.blur();
+        await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
+    },
 };
 
 /** The close (X) button collapses an open search box. */
 export const SearchCloseButton: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    const input = canvas.getByRole("searchbox") as HTMLInputElement;
-    await userEvent.type(input, "keep-open");
-    await userEvent.click(canvas.getByRole("button", { name: "Close search" }));
-    await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
-  },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        const input = canvas.getByRole("searchbox") as HTMLInputElement;
+        await userEvent.type(input, "keep-open");
+        await userEvent.click(canvas.getByRole("button", { name: "Close search" }));
+        await waitFor(() => expect(canvas.queryByRole("searchbox")).toBeNull());
+    },
 };
 
 const REASONS = [
-  "extension-missing",
-  "auth",
-  "network",
-  "bad-request",
-  "no-config",
-  "mystery",
+    "extension-missing",
+    "auth",
+    "network",
+    "bad-request",
+    "no-config",
+    "mystery",
 ] as const;
 
 /** Remote search "unavailable" banner renders a message per failure reason. */
 export const RemoteUnavailable: Story = {
-  args: {
-    onSearchFiles: (query: string) => {
-      const reason = REASONS[Math.min(query.length - 2, REASONS.length - 1)]!;
+    args: {
+        onSearchFiles: (query: string) => {
+            const reason = REASONS[Math.min(query.length - 2, REASONS.length - 1)]!;
 
-      return Promise.resolve({
-        kind: "unavailable",
-        reason,
-      } as FileSearchOutcome);
+            return Promise.resolve({
+                kind: "unavailable",
+                reason,
+            } as FileSearchOutcome);
+        },
     },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    const input = canvas.getByRole("searchbox") as HTMLInputElement;
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        const input = canvas.getByRole("searchbox") as HTMLInputElement;
 
-    const expected = [
-      /Code Search isn't installed/,
-      /Couldn't authenticate/,
-      /Couldn't reach Code Search/,
-      /Code Search rejected/,
-      /Code Search isn't available here/,
-      /unavailable right now/,
-    ];
+        const expected = [
+            /Code Search isn't installed/,
+            /Couldn't authenticate/,
+            /Couldn't reach Code Search/,
+            /Code Search rejected/,
+            /Code Search isn't available here/,
+            /unavailable right now/,
+        ];
 
-    for (let i = 0; i < REASONS.length; i += 1) {
-      await userEvent.clear(input);
-      await userEvent.type(input, "q".repeat(i + 2));
-      await waitFor(() => expect(canvas.getByText(expected[i]!)).toBeTruthy(), {
-        timeout: 3000,
-      });
-    }
-  },
+        for (let i = 0; i < REASONS.length; i += 1) {
+            await userEvent.clear(input);
+            await userEvent.type(input, "q".repeat(i + 2));
+            await waitFor(() => expect(canvas.getByText(expected[i]!)).toBeTruthy(), {
+                timeout: 3000,
+            });
+        }
+    },
 };
 
 /** Selecting a file inside a manually-collapsed folder auto-expands its
  *  ancestor folders again so the active row stays visible. */
 export const CollapsedAncestorReexpand: Story = {
-  play: async ({ args, canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    play: async ({ args, canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    await waitFor(() => expect(nav.getByText("guide.md")).toBeTruthy());
-    // Collapse the docs/api folder.
-    await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
-    await waitFor(() =>
-      expect(nav.getByRole("button", { name: "Expand folder" })).toBeTruthy(),
-    );
-    // Picking a file inside it via search re-expands the ancestor folder.
-    await userEvent.click(
-      nav.getByRole("button", { name: "Search documents" }),
-    );
-    const input = nav.getByRole("searchbox") as HTMLInputElement;
-    await userEvent.type(input, "internal");
-    await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
-    await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
-    await waitFor(() =>
-      expect(args.onSelectPath).toHaveBeenCalledWith("docs/api/internal.md"),
-    );
-  },
+        await waitFor(() => expect(nav.getByText("guide.md")).toBeTruthy());
+        // Collapse the docs/api folder.
+        await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
+        await waitFor(() =>
+            expect(nav.getByRole("button", { name: "Expand folder" })).toBeTruthy(),
+        );
+        // Picking a file inside it via search re-expands the ancestor folder.
+        await userEvent.click(nav.getByRole("button", { name: "Search documents" }));
+        const input = nav.getByRole("searchbox") as HTMLInputElement;
+        await userEvent.type(input, "internal");
+        await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
+        await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
+        await waitFor(() => expect(args.onSelectPath).toHaveBeenCalledWith("docs/api/internal.md"));
+    },
 };
 
 /** Lazy folders fetch their contents on expand and show a spinner meanwhile. */
 export const LazyFolders: Story = {
-  args: {
-    files: [],
-    unloadedFolders: ["pending"],
-    onExpandFolder: fn(
-      () =>
-        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-          setTimeout(() => resolve({ files: [], folders: [] }), 50),
+    args: {
+        files: [],
+        unloadedFolders: ["pending"],
+        onExpandFolder: fn(
+            () =>
+                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
+                    setTimeout(() => resolve({ files: [], folders: [] }), 50),
+                ),
         ),
-    ),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-    // While the fetch is in flight the row shows a (disabled) spinner.
-    await waitFor(() =>
-      expect(
-        canvas.getByRole("button", { name: "Loading folder..." }),
-      ).toBeTruthy(),
-    );
-    // Once it settles the callback has fired and the loading state clears.
-    await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(
-        canvas.queryByRole("button", { name: "Loading folder..." }),
-      ).toBeNull(),
-    );
-  },
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+        // While the fetch is in flight the row shows a (disabled) spinner.
+        await waitFor(() =>
+            expect(canvas.getByRole("button", { name: "Loading folder..." })).toBeTruthy(),
+        );
+        // Once it settles the callback has fired and the loading state clears.
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+            expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull(),
+        );
+    },
 };
 
 /**
@@ -693,27 +631,25 @@ export const LazyFolders: Story = {
  * as an inert empty row instead of an expandable "Load folder" one.
  */
 export const LazyFoldersLeadingSlash: Story = {
-  args: {
-    files: [],
-    unloadedFolders: ["/pending"],
-    onExpandFolder: fn(
-      () =>
-        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-          setTimeout(() => resolve({ files: [], folders: [] }), 50),
+    args: {
+        files: [],
+        unloadedFolders: ["/pending"],
+        onExpandFolder: fn(
+            () =>
+                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
+                    setTimeout(() => resolve({ files: [], folders: [] }), 50),
+                ),
         ),
-    ),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    // The leading-slash folder is still recognized as lazy/expandable.
-    await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-    await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(
-        canvas.queryByRole("button", { name: "Loading folder..." }),
-      ).toBeNull(),
-    );
-  },
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        // The leading-slash folder is still recognized as lazy/expandable.
+        await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+            expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull(),
+        );
+    },
 };
 
 /**
@@ -722,24 +658,22 @@ export const LazyFoldersLeadingSlash: Story = {
  * surfaces in the tree.
  */
 export const DeepLinkAutoExpand: Story = {
-  args: {
-    files: [],
-    initialSelected: "/pending/buried.md",
-    unloadedFolders: ["pending"],
-    onExpandFolder: fn(
-      () =>
-        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-          setTimeout(() => resolve({ files: [], folders: [] }), 20),
+    args: {
+        files: [],
+        initialSelected: "/pending/buried.md",
+        unloadedFolders: ["pending"],
+        onExpandFolder: fn(
+            () =>
+                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
+                    setTimeout(() => resolve({ files: [], folders: [] }), 20),
+                ),
         ),
-    ),
-  },
-  play: async ({ args }) => {
-    // The ancestor folder is fetched automatically to reveal the deep-linked
-    // file — without any user interaction.
-    await waitFor(() =>
-      expect(args.onExpandFolder).toHaveBeenCalledWith("pending"),
-    );
-  },
+    },
+    play: async ({ args }) => {
+        // The ancestor folder is fetched automatically to reveal the deep-linked
+        // file — without any user interaction.
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledWith("pending"));
+    },
 };
 
 const chainExpandSpy = fn();
@@ -751,38 +685,36 @@ const guardExpandSpy = fn();
  * effect auto-expands in turn — until the file's own folder is enumerated.
  */
 export const DeepLinkChainsThroughLazyLevels: Story = {
-  render: () => (
-    <LazyHostHarness
-      initialSelected="api/rest/pull-requests.md"
-      initialUnloaded={["api"]}
-      expansions={{
-        api: { files: [], folders: ["api/rest"] },
-        "api/rest": {
-          files: [
-            {
-              path: "api/rest/pull-requests.md",
-              changeType: "modified",
-              linesAdded: 1,
-              linesDeleted: 0,
-            },
-          ],
-          folders: [],
-        },
-      }}
-      onExpand={chainExpandSpy}
-    />
-  ),
-  play: async ({ canvasElement }) => {
-    // Both lazy levels are fetched in order, then the deep-linked file row
-    // surfaces in the tree.
-    await waitFor(() =>
-      expect(chainExpandSpy).toHaveBeenCalledWith("api/rest"),
-    );
-    expect(chainExpandSpy).toHaveBeenCalledWith("api");
-    await waitFor(() =>
-      expect(within(canvasElement).getByText("pull-requests.md")).toBeTruthy(),
-    );
-  },
+    render: () => (
+        <LazyHostHarness
+            initialSelected="api/rest/pull-requests.md"
+            initialUnloaded={["api"]}
+            expansions={{
+                api: { files: [], folders: ["api/rest"] },
+                "api/rest": {
+                    files: [
+                        {
+                            path: "api/rest/pull-requests.md",
+                            changeType: "modified",
+                            linesAdded: 1,
+                            linesDeleted: 0,
+                        },
+                    ],
+                    folders: [],
+                },
+            }}
+            onExpand={chainExpandSpy}
+        />
+    ),
+    play: async ({ canvasElement }) => {
+        // Both lazy levels are fetched in order, then the deep-linked file row
+        // surfaces in the tree.
+        await waitFor(() => expect(chainExpandSpy).toHaveBeenCalledWith("api/rest"));
+        expect(chainExpandSpy).toHaveBeenCalledWith("api");
+        await waitFor(() =>
+            expect(within(canvasElement).getByText("pull-requests.md")).toBeTruthy(),
+        );
+    },
 };
 
 /**
@@ -792,43 +724,41 @@ export const DeepLinkChainsThroughLazyLevels: Story = {
  * the folder forever.
  */
 export const DeepLinkLazyAncestorFetchedOnce: Story = {
-  render: () => (
-    <LazyHostHarness
-      initialSelected="stuck/file.md"
-      initialUnloaded={["stuck"]}
-      // Expanding "stuck" yields "stuck" again (still lazy) with a fresh array
-      // reference, which would loop without the guard.
-      expansions={{ stuck: { files: [], folders: ["stuck"] } }}
-      onExpand={guardExpandSpy}
-    />
-  ),
-  play: async () => {
-    await waitFor(() => expect(guardExpandSpy).toHaveBeenCalled());
-    // Give the effect several render cycles to (mis)fire a refetch loop.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(guardExpandSpy).toHaveBeenCalledTimes(1);
-  },
+    render: () => (
+        <LazyHostHarness
+            initialSelected="stuck/file.md"
+            initialUnloaded={["stuck"]}
+            // Expanding "stuck" yields "stuck" again (still lazy) with a fresh array
+            // reference, which would loop without the guard.
+            expansions={{ stuck: { files: [], folders: ["stuck"] } }}
+            onExpand={guardExpandSpy}
+        />
+    ),
+    play: async () => {
+        await waitFor(() => expect(guardExpandSpy).toHaveBeenCalled());
+        // Give the effect several render cycles to (mis)fire a refetch loop.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(guardExpandSpy).toHaveBeenCalledTimes(1);
+    },
 };
 
 /** Without an onExpandFolder callback, expanding a lazy folder is a no-op. */
 export const LazyFoldersNoCallback: Story = {
-  args: { files: [], unloadedFolders: ["pending"] },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-    // Still present and not loading — the click did nothing.
-    await expect(
-      canvas.getByRole("button", { name: "Load folder" }),
-    ).toBeTruthy();
-  },
+    args: { files: [], unloadedFolders: ["pending"] },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+        // Still present and not loading — the click did nothing.
+        await expect(canvas.getByRole("button", { name: "Load folder" })).toBeTruthy();
+    },
 };
 
 /** No files and no folders → the rail renders nothing. */
 export const Empty: Story = {
-  args: { files: [] },
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector(".emr-docnav")).toBeNull();
-  },
+    args: { files: [] },
+    play: async ({ canvasElement }) => {
+        await expect(canvasElement.querySelector(".emr-docnav")).toBeNull();
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -836,7 +766,7 @@ export const Empty: Story = {
 // ---------------------------------------------------------------------------
 
 function wikiFile(path: string): FileInfo {
-  return { path, changeType: "modified", linesAdded: 0, linesDeleted: 0 };
+    return { path, changeType: "modified", linesAdded: 0, linesDeleted: 0 };
 }
 
 /**
@@ -846,129 +776,109 @@ function wikiFile(path: string): FileInfo {
  * page's outline sits above its subpages.
  */
 export const WikiPages: Story = {
-  args: {
-    files: [
-      wikiFile("Home.md"),
-      wikiFile("Guides.md"),
-      wikiFile("Guides/Install.md"),
-      wikiFile("Guides/Configure.md"),
-    ],
-    initialSelected: "Home.md",
-    showChangeIndicators: false,
-    wikiPages: true,
-    threadCounts: { "Guides.md": 2 },
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
+    args: {
+        files: [
+            wikiFile("Home.md"),
+            wikiFile("Guides.md"),
+            wikiFile("Guides/Install.md"),
+            wikiFile("Guides/Configure.md"),
+        ],
+        initialSelected: "Home.md",
+        showChangeIndicators: false,
+        wikiPages: true,
+        threadCounts: { "Guides.md": 2 },
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    const names = () =>
-      Array.from(canvasElement.querySelectorAll(".emr-docnav-file-name")).map(
-        (el) => el.textContent,
-      );
+        const names = () =>
+            Array.from(canvasElement.querySelectorAll(".emr-docnav-file-name")).map(
+                (el) => el.textContent,
+            );
 
-    // No separate `Guides.md` file row: it's the folder's page.
-    await expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]);
+        // No separate `Guides.md` file row: it's the folder's page.
+        await expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]);
 
-    const pageLabel = canvasElement.querySelector<HTMLElement>(
-      ".emr-docnav-page-label",
-    )!;
+        const pageLabel = canvasElement.querySelector<HTMLElement>(".emr-docnav-page-label")!;
 
-    await expect(pageLabel.title).toBe("Guides.md");
-    await expect(pageLabel.textContent).toContain("Guides.md");
-    await expect(within(pageLabel).getByText("2")).toBeTruthy();
+        await expect(pageLabel.title).toBe("Guides.md");
+        await expect(pageLabel.textContent).toContain("Guides.md");
+        await expect(within(pageLabel).getByText("2")).toBeTruthy();
 
-    // The chevron alone hides and shows the subpages.
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Collapse subpages" }),
-    );
-    await expect(names()).toEqual(["Home.md"]);
-    await expect(args.onSelectPath).not.toHaveBeenCalled();
+        // The chevron alone hides and shows the subpages.
+        await userEvent.click(canvas.getByRole("button", { name: "Collapse subpages" }));
+        await expect(names()).toEqual(["Home.md"]);
+        await expect(args.onSelectPath).not.toHaveBeenCalled();
 
-    // The label opens the page and expands it, outline above the subpages.
-    await userEvent.click(pageLabel);
-    await expect(args.onSelectPath).toHaveBeenCalledWith("Guides.md");
-    await waitFor(() =>
-      expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]),
-    );
-    const row = pageLabel.closest(".emr-docnav-item")!;
-    await expect(row.classList.contains("is-active")).toBe(true);
-    const outline = row.nextElementSibling!;
-    await expect(outline.textContent).toContain("Introduction");
-    await expect(outline.nextElementSibling!.textContent).toBe(
-      "Configure.mdInstall.md",
-    );
+        // The label opens the page and expands it, outline above the subpages.
+        await userEvent.click(pageLabel);
+        await expect(args.onSelectPath).toHaveBeenCalledWith("Guides.md");
+        await waitFor(() => expect(names()).toEqual(["Configure.md", "Install.md", "Home.md"]));
+        const row = pageLabel.closest(".emr-docnav-item")!;
+        await expect(row.classList.contains("is-active")).toBe(true);
+        const outline = row.nextElementSibling!;
+        await expect(outline.textContent).toContain("Introduction");
+        await expect(outline.nextElementSibling!.textContent).toBe("Configure.mdInstall.md");
 
-    // Opening an already-expanded page leaves it expanded.
-    await userEvent.click(pageLabel);
-    await expect(
-      canvas.getByRole("button", { name: "Collapse subpages" }),
-    ).toBeTruthy();
+        // Opening an already-expanded page leaves it expanded.
+        await userEvent.click(pageLabel);
+        await expect(canvas.getByRole("button", { name: "Collapse subpages" })).toBeTruthy();
 
-    // Hiding the subpages keeps the open page's outline.
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Collapse subpages" }),
-    );
-    await expect(names()).toEqual(["Home.md"]);
-    await expect(
-      within(
-        canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
-      ).getByText("Introduction"),
-    ).toBeTruthy();
-  },
+        // Hiding the subpages keeps the open page's outline.
+        await userEvent.click(canvas.getByRole("button", { name: "Collapse subpages" }));
+        await expect(names()).toEqual(["Home.md"]);
+        await expect(
+            within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!).getByText(
+                "Introduction",
+            ),
+        ).toBeTruthy();
+    },
 };
 
 /**
  * An open page shows its outline even before its subpage folder has loaded.
  */
 export const WikiPageOutlineBeforeSubpagesLoad: Story = {
-  args: {
-    files: [wikiFile("Archive.md")],
-    unloadedFolders: ["Archive"],
-    initialSelected: "Archive.md",
-    wikiPages: true,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole("button", { name: "Load folder" }),
-    ).toBeTruthy();
-    await waitFor(() =>
-      expect(
-        within(
-          canvasElement.querySelector<HTMLElement>(".emr-docnav")!,
-        ).getByText("Introduction"),
-      ).toBeTruthy(),
-    );
-  },
+    args: {
+        files: [wikiFile("Archive.md")],
+        unloadedFolders: ["Archive"],
+        initialSelected: "Archive.md",
+        wikiPages: true,
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("button", { name: "Load folder" })).toBeTruthy();
+        await waitFor(() =>
+            expect(
+                within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!).getByText(
+                    "Introduction",
+                ),
+            ).toBeTruthy(),
+        );
+    },
 };
 
 /** A page whose subpage folder isn't loaded yet fetches it when opened. */
 export const WikiPageLazySubpages: Story = {
-  args: {
-    files: [wikiFile("Archive.md")],
-    unloadedFolders: ["Archive"],
-    initialSelected: "Home.md",
-    wikiPages: true,
-    onExpandFolder: fn(
-      () =>
-        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-          setTimeout(() => resolve({ files: [], folders: [] }), 20),
+    args: {
+        files: [wikiFile("Archive.md")],
+        unloadedFolders: ["Archive"],
+        initialSelected: "Home.md",
+        wikiPages: true,
+        onExpandFolder: fn(
+            () =>
+                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
+                    setTimeout(() => resolve({ files: [], folders: [] }), 20),
+                ),
         ),
-    ),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole("button", { name: "Load folder" }),
-    ).toBeTruthy();
-    await userEvent.click(
-      canvasElement.querySelector<HTMLElement>(".emr-docnav-page-label")!,
-    );
-    await expect(args.onSelectPath).toHaveBeenCalledWith("Archive.md");
-    await waitFor(() =>
-      expect(args.onExpandFolder).toHaveBeenCalledWith("Archive"),
-    );
-  },
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("button", { name: "Load folder" })).toBeTruthy();
+        await userEvent.click(canvasElement.querySelector<HTMLElement>(".emr-docnav-page-label")!);
+        await expect(args.onSelectPath).toHaveBeenCalledWith("Archive.md");
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledWith("Archive"));
+    },
 };
 
 /**
@@ -976,66 +886,53 @@ export const WikiPageLazySubpages: Story = {
  * row stays highlighted as the reader scrolls through the document.
  */
 export const OutlineOff: Story = {
-  args: { showOutline: false },
-  play: async ({ canvasElement }) => {
-    const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
-    await expect(within(nav).queryByText("Introduction")).toBeNull();
-    const scroller = canvasElement.querySelector<HTMLElement>("main")!;
-    scroller.scrollTop = 400;
-    scroller.dispatchEvent(new Event("scroll"));
-    await waitFor(() =>
-      expect(
-        nav.querySelector(".emr-docnav-file.is-active .emr-docnav-file-name")
-          ?.textContent,
-      ).toBe("guide.md"),
-    );
-  },
+    args: { showOutline: false },
+    play: async ({ canvasElement }) => {
+        const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        await expect(within(nav).queryByText("Introduction")).toBeNull();
+        const scroller = canvasElement.querySelector<HTMLElement>("main")!;
+        scroller.scrollTop = 400;
+        scroller.dispatchEvent(new Event("scroll"));
+        await waitFor(() =>
+            expect(
+                nav.querySelector(".emr-docnav-file.is-active .emr-docnav-file-name")?.textContent,
+            ).toBe("guide.md"),
+        );
+    },
 };
 
 /** While the remote search is pending, local hits show with a loading note. */
 export const SearchLoadingUnderLocalHits: Story = {
-  args: { onSearchFiles: () => new Promise<FileSearchOutcome>(() => {}) },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    await userEvent.type(canvas.getByRole("searchbox"), "readme");
-    await waitFor(() =>
-      expect(
-        canvas.getByText("Searching the repo for more matches…"),
-      ).toBeTruthy(),
-    );
-    await expect(
-      canvasElement.querySelector(".emr-docnav-search-result"),
-    ).toBeTruthy();
-  },
+    args: { onSearchFiles: () => new Promise<FileSearchOutcome>(() => {}) },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        await userEvent.type(canvas.getByRole("searchbox"), "readme");
+        await waitFor(() =>
+            expect(canvas.getByText("Searching the repo for more matches…")).toBeTruthy(),
+        );
+        await expect(canvasElement.querySelector(".emr-docnav-search-result")).toBeTruthy();
+    },
 };
 
 /** Before any document is chosen the tree renders with no active file row. */
 export const NoDocumentSelected: Story = {
-  args: { initialSelected: "" },
-  play: async ({ canvasElement }) => {
-    await waitFor(() =>
-      expect(within(canvasElement).getByText("README.md")).toBeTruthy(),
-    );
-    await expect(
-      canvasElement.querySelector(".emr-docnav-file.is-active"),
-    ).toBeNull();
-  },
+    args: { initialSelected: "" },
+    play: async ({ canvasElement }) => {
+        await waitFor(() => expect(within(canvasElement).getByText("README.md")).toBeTruthy());
+        await expect(canvasElement.querySelector(".emr-docnav-file.is-active")).toBeNull();
+    },
 };
 
 /** Re-selecting the open file with no scroller attached has nothing to scroll. */
 export const ReselectWithoutScroller: Story = {
-  args: { detachScroller: true },
-  play: async ({ args, canvasElement }) => {
-    const nav = within(
-      canvasElement.querySelector(".emr-docnav") as HTMLElement,
-    );
+    args: { detachScroller: true },
+    play: async ({ args, canvasElement }) => {
+        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
 
-    await userEvent.click(nav.getByRole("button", { name: /guide\.md/ }));
-    await expect(args.onSelectPath).not.toHaveBeenCalled();
-  },
+        await userEvent.click(nav.getByRole("button", { name: /guide\.md/ }));
+        await expect(args.onSelectPath).not.toHaveBeenCalled();
+    },
 };
 
 let finishLazyFetch: () => void = () => {};
@@ -1045,53 +942,46 @@ let finishLazyFetch: () => void = () => {};
  * it is then opened from search (the deep-link reveal sees it in flight).
  */
 export const OpenFromSearchWhileFolderLoads: Story = {
-  args: {
-    unloadedFolders: ["lazy"],
-    onExpandFolder: fn(
-      () =>
-        new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) => {
-          finishLazyFetch = () => resolve({ files: [], folders: [] });
-        }),
-    ),
-    onSearchFiles: () =>
-      Promise.resolve<FileSearchOutcome>({
-        kind: "ok",
-        files: [
-          {
-            path: "lazy/deep.md",
-            changeType: "added",
-            linesAdded: 1,
-            linesDeleted: 0,
-          },
-        ],
-      }),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-    await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Search documents" }),
-    );
-    await userEvent.type(canvas.getByRole("searchbox"), "deep");
+    args: {
+        unloadedFolders: ["lazy"],
+        onExpandFolder: fn(
+            () =>
+                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) => {
+                    finishLazyFetch = () => resolve({ files: [], folders: [] });
+                }),
+        ),
+        onSearchFiles: () =>
+            Promise.resolve<FileSearchOutcome>({
+                kind: "ok",
+                files: [
+                    {
+                        path: "lazy/deep.md",
+                        changeType: "added",
+                        linesAdded: 1,
+                        linesDeleted: 0,
+                    },
+                ],
+            }),
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+        await userEvent.click(canvas.getByRole("button", { name: "Search documents" }));
+        await userEvent.type(canvas.getByRole("searchbox"), "deep");
 
-    const result = await waitFor(
-      () => canvas.getByRole("button", { name: /deep\.md/ }),
-      { timeout: 3000 },
-    );
+        const result = await waitFor(() => canvas.getByRole("button", { name: /deep\.md/ }), {
+            timeout: 3000,
+        });
 
-    await userEvent.click(result);
-    await waitFor(() =>
-      expect(args.onSelectPath).toHaveBeenCalledWith("lazy/deep.md"),
-    );
-    await expect(args.onExpandFolder).toHaveBeenCalledTimes(1);
-    finishLazyFetch();
-    await waitFor(() =>
-      expect(
-        canvas.queryByRole("button", { name: "Loading folder..." }),
-      ).toBeNull(),
-    );
-  },
+        await userEvent.click(result);
+        await waitFor(() => expect(args.onSelectPath).toHaveBeenCalledWith("lazy/deep.md"));
+        await expect(args.onExpandFolder).toHaveBeenCalledTimes(1);
+        finishLazyFetch();
+        await waitFor(() =>
+            expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull(),
+        );
+    },
 };
 
 /**
@@ -1099,20 +989,20 @@ export const OpenFromSearchWhileFolderLoads: Story = {
  * reader moves down the document and back up.
  */
 export const ActiveHeadingKeptInView: Story = {
-  play: async ({ canvasElement }) => {
-    const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
-    await waitFor(() => expect(within(nav).getByText("Extras")).toBeTruthy());
-    const list = nav.querySelector<HTMLElement>(".emr-docnav-list")!;
-    Object.assign(list.style, { height: "90px", flex: "none" });
-    const scroller = canvasElement.querySelector<HTMLElement>("main")!;
+    play: async ({ canvasElement }) => {
+        const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        await waitFor(() => expect(within(nav).getByText("Extras")).toBeTruthy());
+        const list = nav.querySelector<HTMLElement>(".emr-docnav-list")!;
+        Object.assign(list.style, { height: "90px", flex: "none" });
+        const scroller = canvasElement.querySelector<HTMLElement>("main")!;
 
-    scroller.scrollTop = scroller.scrollHeight;
-    scroller.dispatchEvent(new Event("scroll"));
-    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
-    const scrolledDown = list.scrollTop;
+        scroller.scrollTop = scroller.scrollHeight;
+        scroller.dispatchEvent(new Event("scroll"));
+        await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+        const scrolledDown = list.scrollTop;
 
-    scroller.scrollTop = 30;
-    scroller.dispatchEvent(new Event("scroll"));
-    await waitFor(() => expect(list.scrollTop).toBeLessThan(scrolledDown));
-  },
+        scroller.scrollTop = 30;
+        scroller.dispatchEvent(new Event("scroll"));
+        await waitFor(() => expect(list.scrollTop).toBeLessThan(scrolledDown));
+    },
 };

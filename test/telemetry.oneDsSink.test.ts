@@ -6,31 +6,31 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@microsoft/1ds-core-js", () => ({
-  AppInsightsCore: vi.fn(() => {
-    throw new Error("simulated 1DS init failure");
-  }),
+    AppInsightsCore: vi.fn(() => {
+        throw new Error("simulated 1DS init failure");
+    }),
 }));
 vi.mock("@microsoft/1ds-post-js", () => ({
-  PostChannel: vi.fn(),
+    PostChannel: vi.fn(),
 }));
 
 import { createOneDsSink } from "../src/telemetry/sinks/oneDsSink";
 import type { TelemetryBuildConfig } from "../src/telemetry/buildConfig";
 
 const config: TelemetryBuildConfig = {
-  key: "test-key",
-  appVersion: "1.0.0",
-  environment: "development",
-  enabled: true,
-  debug: false,
+    key: "test-key",
+    appVersion: "1.0.0",
+    environment: "development",
+    enabled: true,
+    debug: false,
 };
 
 afterEach(() => {
-  vi.clearAllMocks();
+    vi.clearAllMocks();
 });
 
 describe("createOneDsSink", () => {
-  it("returns null when the 1DS SDK cannot be constructed", () => {
-    expect(createOneDsSink(config)).toBeNull();
-  });
+    it("returns null when the 1DS SDK cannot be constructed", () => {
+        expect(createOneDsSink(config)).toBeNull();
+    });
 });

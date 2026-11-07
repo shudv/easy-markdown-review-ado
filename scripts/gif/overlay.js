@@ -12,495 +12,490 @@
  * extension bundle.
  */
 (function () {
-  if (window.__tour) return;
+    if (window.__tour) return;
 
-  const NS = "emr-tour";
-  const ACCENT = "#0b6cff";
-  const INK = "#0a0c10";
+    const NS = "emr-tour";
+    const ACCENT = "#0b6cff";
+    const INK = "#0a0c10";
 
-  function el(tag, css, parent) {
-    const node = document.createElement(tag);
-    if (css) Object.assign(node.style, css);
-    if (parent) parent.appendChild(node);
-    return node;
-  }
-
-  let root, scrim, spot, badge, badgeNum, badgeLabel, caption, capTitle, capSub;
-  let brand, card, cardKicker, cardTitle, cardSub, cardFoot, progress, stats;
-  let cursor, ripple;
-
-  function setup() {
-    if (root) return;
-    root = el(
-      "div",
-      {
-        position: "fixed",
-        inset: "0",
-        zIndex: "2147483000",
-        pointerEvents: "none",
-        fontFamily:
-          '"Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-        color: "#fff",
-        overflow: "hidden",
-      },
-      document.body,
-    );
-    root.setAttribute("data-" + NS, "");
-
-    // Plain full-viewport scrim (used for intro/outro when there is no spot).
-    scrim = el("div", {
-      position: "absolute",
-      inset: "0",
-      background: INK,
-      opacity: "0",
-    });
-    root.appendChild(scrim);
-
-    // Spotlight: a transparent rect whose huge box-shadow dims everything else.
-    spot = el("div", {
-      position: "absolute",
-      left: "0",
-      top: "0",
-      width: "0",
-      height: "0",
-      borderRadius: "12px",
-      boxShadow: "0 0 0 100vmax rgba(10,12,16,0)",
-      outline: "2px solid rgba(11,108,255,0)",
-      outlineOffset: "3px",
-      opacity: "0",
-      transition: "none",
-    });
-    root.appendChild(spot);
-
-    // Numbered feature badge (circle + label pill).
-    badge = el("div", {
-      position: "absolute",
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      padding: "8px 16px 8px 8px",
-      background: ACCENT,
-      color: "#fff",
-      borderRadius: "999px",
-      boxShadow: "0 10px 30px rgba(4,20,60,0.45)",
-      opacity: "0",
-      transformOrigin: "left center",
-      whiteSpace: "nowrap",
-    });
-    badgeNum = el("div", {
-      width: "30px",
-      height: "30px",
-      borderRadius: "999px",
-      background: "rgba(255,255,255,0.18)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontWeight: "700",
-      fontSize: "15px",
-      lineHeight: "1",
-    });
-    badgeLabel = el("div", {
-      fontSize: "17px",
-      fontWeight: "600",
-      letterSpacing: "0.2px",
-    });
-    badge.appendChild(badgeNum);
-    badge.appendChild(badgeLabel);
-    root.appendChild(badge);
-
-    // Bottom caption bar.
-    caption = el("div", {
-      position: "absolute",
-      left: "50%",
-      bottom: "34px",
-      transform: "translateX(-50%)",
-      maxWidth: "76%",
-      textAlign: "center",
-      background: "rgba(10,13,20,0.92)",
-      border: "1px solid rgba(255,255,255,0.14)",
-      backdropFilter: "blur(2px)",
-      padding: "15px 28px",
-      borderRadius: "14px",
-      boxShadow: "0 12px 40px rgba(0,0,0,0.42)",
-      opacity: "0",
-    });
-    capTitle = el("div", {
-      fontSize: "24px",
-      fontWeight: "700",
-      letterSpacing: "0.2px",
-    });
-    capSub = el("div", {
-      fontSize: "17px",
-      fontWeight: "400",
-      marginTop: "5px",
-      color: "rgba(255,255,255,0.92)",
-    });
-    caption.appendChild(capTitle);
-    caption.appendChild(capSub);
-    root.appendChild(caption);
-
-    // Scene progress dots (top center).
-    progress = el("div", {
-      position: "absolute",
-      top: "20px",
-      left: "50%",
-      transform: "translateX(-50%)",
-      display: "flex",
-      gap: "7px",
-      opacity: "0",
-    });
-    root.appendChild(progress);
-
-    // Wordmark (bottom-left) on a subtle dark pill so it stays legible over
-    // both dark-dimmed content and a brightly-lit spotlight (e.g. the nav).
-    brand = el("div", {
-      position: "absolute",
-      left: "22px",
-      bottom: "22px",
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      padding: "7px 14px 7px 8px",
-      background: "rgba(10,12,16,0.42)",
-      borderRadius: "999px",
-      opacity: "0",
-    });
-    const dot = el("div", {
-      width: "22px",
-      height: "22px",
-      borderRadius: "6px",
-      background: "linear-gradient(135deg,#0b6cff,#3aa0ff)",
-      boxShadow: "0 4px 12px rgba(11,108,255,0.5)",
-    });
-    const wm = el("div", {
-      fontSize: "15px",
-      fontWeight: "700",
-      color: "#fff",
-      textShadow: "0 1px 6px rgba(0,0,0,0.6)",
-    });
-    wm.textContent = "Easy Markdown Review";
-    brand.appendChild(dot);
-    brand.appendChild(wm);
-    root.appendChild(brand);
-
-    // Centered statement / intro / outro card.
-    card = el("div", {
-      position: "absolute",
-      left: "50%",
-      top: "50%",
-      transform: "translate(-50%,-50%)",
-      textAlign: "center",
-      opacity: "0",
-      maxWidth: "78%",
-    });
-    cardKicker = el("div", {
-      fontSize: "14px",
-      fontWeight: "700",
-      letterSpacing: "2.6px",
-      textTransform: "uppercase",
-      color: "#7cb6ff",
-      marginBottom: "16px",
-      textShadow: "0 2px 12px rgba(0,0,0,0.6)",
-    });
-    cardTitle = el("div", {
-      fontSize: "44px",
-      fontWeight: "800",
-      lineHeight: "1.16",
-      letterSpacing: "-0.6px",
-      textShadow: "0 4px 24px rgba(0,0,0,0.55)",
-    });
-    cardSub = el("div", {
-      fontSize: "21px",
-      fontWeight: "500",
-      marginTop: "14px",
-      color: "rgba(255,255,255,0.9)",
-      textShadow: "0 2px 14px rgba(0,0,0,0.5)",
-    });
-    cardFoot = el("div", {
-      fontSize: "16px",
-      fontWeight: "600",
-      marginTop: "22px",
-      letterSpacing: "0.4px",
-      color: "rgba(255,255,255,0.62)",
-      textShadow: "0 2px 12px rgba(0,0,0,0.5)",
-    });
-    card.appendChild(cardKicker);
-    card.appendChild(cardTitle);
-    card.appendChild(cardSub);
-    card.appendChild(cardFoot);
-    root.appendChild(card);
-
-    // Proof-point tiles (sit below the card on the closing scenes).
-    stats = el("div", {
-      position: "absolute",
-      left: "50%",
-      top: "60%",
-      transform: "translateX(-50%)",
-      display: "flex",
-      alignItems: "stretch",
-      gap: "18px",
-      opacity: "0",
-    });
-    root.appendChild(stats);
-
-    // Click ripple, drawn under the cursor so a scripted click reads as one.
-    ripple = el("div", {
-      position: "absolute",
-      width: "46px",
-      height: "46px",
-      marginLeft: "-23px",
-      marginTop: "-23px",
-      borderRadius: "999px",
-      border: "2.5px solid rgba(11,108,255,0.9)",
-      background: "rgba(11,108,255,0.16)",
-      opacity: "0",
-    });
-    root.appendChild(ripple);
-
-    cursor = el("div", {
-      position: "absolute",
-      width: "17px",
-      height: "17px",
-      marginLeft: "-8px",
-      marginTop: "-8px",
-      borderRadius: "999px",
-      background: "#fff",
-      border: "2px solid rgba(10,12,16,0.7)",
-      boxShadow: "0 3px 12px rgba(0,0,0,0.5)",
-      opacity: "0",
-    });
-    root.appendChild(cursor);
-  }
-
-  function statTile() {
-    const tile = el("div", {
-      minWidth: "250px",
-      padding: "22px 26px",
-      borderRadius: "16px",
-      background: "rgba(255,255,255,0.07)",
-      border: "1px solid rgba(255,255,255,0.16)",
-      boxShadow: "0 18px 48px rgba(0,0,0,0.42)",
-      textAlign: "center",
-    });
-    tile.__value = el("div", {
-      fontSize: "46px",
-      fontWeight: "800",
-      letterSpacing: "-1px",
-      lineHeight: "1",
-      color: "#9ecbff",
-      textShadow: "0 3px 18px rgba(0,0,0,0.5)",
-    });
-    tile.__label = el("div", {
-      fontSize: "15px",
-      fontWeight: "600",
-      marginTop: "12px",
-      lineHeight: "1.35",
-      color: "rgba(255,255,255,0.86)",
-    });
-    tile.appendChild(tile.__value);
-    tile.appendChild(tile.__label);
-    return tile;
-  }
-
-  function clamp01(n) {
-    return n < 0 ? 0 : n > 1 ? 1 : n;
-  }
-
-  // Render exactly one frame from an explicit state object (computed in Node).
-  function render(s) {
-    setup();
-    const dim = clamp01(s.dim ?? 0);
-
-    if (s.spot) {
-      const r = s.spot;
-      spot.style.opacity = "1";
-      spot.style.left = r.x + "px";
-      spot.style.top = r.y + "px";
-      spot.style.width = r.w + "px";
-      spot.style.height = r.h + "px";
-      spot.style.borderRadius = (r.radius ?? 12) + "px";
-      spot.style.boxShadow = "0 0 0 100vmax rgba(10,12,16," + dim + ")";
-      const ring = clamp01(s.ringOpacity ?? 1);
-      spot.style.outline = "2.5px solid rgba(11,108,255," + ring + ")";
-      scrim.style.opacity = "0";
-    } else {
-      // No focus target: dim the whole viewport with a solid rgba scrim (a
-      // box-shadow "hole" trick under-dims when the hole is off-screen, so use
-      // a plain full-bleed layer here — matches the feature-scene darkness).
-      spot.style.opacity = "0";
-      spot.style.boxShadow = "none";
-      scrim.style.background = "rgba(10,12,16," + dim + ")";
-      scrim.style.opacity = "1";
+    function el(tag, css, parent) {
+        const node = document.createElement(tag);
+        if (css) Object.assign(node.style, css);
+        if (parent) parent.appendChild(node);
+        return node;
     }
 
-    if (s.badge) {
-      const a = clamp01(s.badge.appear);
-      badge.style.opacity = String(a);
-      badgeNum.textContent = String(s.badge.num);
-      badgeLabel.textContent = s.badge.label;
-      // Position first (top-left anchor), then clamp inside the viewport.
-      badge.style.left = s.badge.x + "px";
-      badge.style.top = s.badge.y + "px";
-      badge.style.transform = "none";
-      const bw = badge.getBoundingClientRect().width;
-      const bh = badge.getBoundingClientRect().height;
-      let bx = s.badge.x;
-      let by = s.badge.y;
-      if (bx + bw > window.innerWidth - 12) bx = window.innerWidth - 12 - bw;
-      if (bx < 12) bx = 12;
-      if (by + bh > window.innerHeight - 12) by = window.innerHeight - 12 - bh;
-      if (by < 12) by = 12;
-      badge.style.left = bx + "px";
-      badge.style.top = by + "px";
-      const slide = (1 - a) * -12;
-      badge.style.transform =
-        "translateX(" + slide + "px) scale(" + (0.9 + a * 0.1) + ")";
-    } else {
-      badge.style.opacity = "0";
-    }
+    let root, scrim, spot, badge, badgeNum, badgeLabel, caption, capTitle, capSub;
+    let brand, card, cardKicker, cardTitle, cardSub, cardFoot, progress, stats;
+    let cursor, ripple;
 
-    if (s.caption) {
-      const a = clamp01(s.caption.appear);
-      caption.style.opacity = String(a);
-      caption.style.transform =
-        "translateX(-50%) translateY(" + (1 - a) * 14 + "px)";
-      capTitle.textContent = s.caption.title || "";
-      capSub.textContent = s.caption.sub || "";
-      capSub.style.display = s.caption.sub ? "block" : "none";
-    } else {
-      caption.style.opacity = "0";
-    }
-
-    if (s.progress) {
-      progress.style.opacity = String(clamp01(s.progress.appear ?? 1));
-      const total = s.progress.total || 0;
-      while (progress.children.length < total) {
-        el(
-          "div",
-          {
-            width: "8px",
-            height: "8px",
-            borderRadius: "999px",
-            background: "rgba(255,255,255,0.35)",
-            transition: "none",
-          },
-          progress,
+    function setup() {
+        if (root) return;
+        root = el(
+            "div",
+            {
+                position: "fixed",
+                inset: "0",
+                zIndex: "2147483000",
+                pointerEvents: "none",
+                fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+                color: "#fff",
+                overflow: "hidden",
+            },
+            document.body,
         );
-      }
-      for (let i = 0; i < progress.children.length; i++) {
-        const on = i === s.progress.index;
-        const d = progress.children[i];
-        d.style.background = on ? "#fff" : "rgba(255,255,255,0.32)";
-        d.style.width = on ? "22px" : "8px";
-      }
-    } else {
-      progress.style.opacity = "0";
+        root.setAttribute("data-" + NS, "");
+
+        // Plain full-viewport scrim (used for intro/outro when there is no spot).
+        scrim = el("div", {
+            position: "absolute",
+            inset: "0",
+            background: INK,
+            opacity: "0",
+        });
+        root.appendChild(scrim);
+
+        // Spotlight: a transparent rect whose huge box-shadow dims everything else.
+        spot = el("div", {
+            position: "absolute",
+            left: "0",
+            top: "0",
+            width: "0",
+            height: "0",
+            borderRadius: "12px",
+            boxShadow: "0 0 0 100vmax rgba(10,12,16,0)",
+            outline: "2px solid rgba(11,108,255,0)",
+            outlineOffset: "3px",
+            opacity: "0",
+            transition: "none",
+        });
+        root.appendChild(spot);
+
+        // Numbered feature badge (circle + label pill).
+        badge = el("div", {
+            position: "absolute",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 16px 8px 8px",
+            background: ACCENT,
+            color: "#fff",
+            borderRadius: "999px",
+            boxShadow: "0 10px 30px rgba(4,20,60,0.45)",
+            opacity: "0",
+            transformOrigin: "left center",
+            whiteSpace: "nowrap",
+        });
+        badgeNum = el("div", {
+            width: "30px",
+            height: "30px",
+            borderRadius: "999px",
+            background: "rgba(255,255,255,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: "700",
+            fontSize: "15px",
+            lineHeight: "1",
+        });
+        badgeLabel = el("div", {
+            fontSize: "17px",
+            fontWeight: "600",
+            letterSpacing: "0.2px",
+        });
+        badge.appendChild(badgeNum);
+        badge.appendChild(badgeLabel);
+        root.appendChild(badge);
+
+        // Bottom caption bar.
+        caption = el("div", {
+            position: "absolute",
+            left: "50%",
+            bottom: "34px",
+            transform: "translateX(-50%)",
+            maxWidth: "76%",
+            textAlign: "center",
+            background: "rgba(10,13,20,0.92)",
+            border: "1px solid rgba(255,255,255,0.14)",
+            backdropFilter: "blur(2px)",
+            padding: "15px 28px",
+            borderRadius: "14px",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.42)",
+            opacity: "0",
+        });
+        capTitle = el("div", {
+            fontSize: "24px",
+            fontWeight: "700",
+            letterSpacing: "0.2px",
+        });
+        capSub = el("div", {
+            fontSize: "17px",
+            fontWeight: "400",
+            marginTop: "5px",
+            color: "rgba(255,255,255,0.92)",
+        });
+        caption.appendChild(capTitle);
+        caption.appendChild(capSub);
+        root.appendChild(caption);
+
+        // Scene progress dots (top center).
+        progress = el("div", {
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            gap: "7px",
+            opacity: "0",
+        });
+        root.appendChild(progress);
+
+        // Wordmark (bottom-left) on a subtle dark pill so it stays legible over
+        // both dark-dimmed content and a brightly-lit spotlight (e.g. the nav).
+        brand = el("div", {
+            position: "absolute",
+            left: "22px",
+            bottom: "22px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "7px 14px 7px 8px",
+            background: "rgba(10,12,16,0.42)",
+            borderRadius: "999px",
+            opacity: "0",
+        });
+        const dot = el("div", {
+            width: "22px",
+            height: "22px",
+            borderRadius: "6px",
+            background: "linear-gradient(135deg,#0b6cff,#3aa0ff)",
+            boxShadow: "0 4px 12px rgba(11,108,255,0.5)",
+        });
+        const wm = el("div", {
+            fontSize: "15px",
+            fontWeight: "700",
+            color: "#fff",
+            textShadow: "0 1px 6px rgba(0,0,0,0.6)",
+        });
+        wm.textContent = "Easy Markdown Review";
+        brand.appendChild(dot);
+        brand.appendChild(wm);
+        root.appendChild(brand);
+
+        // Centered statement / intro / outro card.
+        card = el("div", {
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%,-50%)",
+            textAlign: "center",
+            opacity: "0",
+            maxWidth: "78%",
+        });
+        cardKicker = el("div", {
+            fontSize: "14px",
+            fontWeight: "700",
+            letterSpacing: "2.6px",
+            textTransform: "uppercase",
+            color: "#7cb6ff",
+            marginBottom: "16px",
+            textShadow: "0 2px 12px rgba(0,0,0,0.6)",
+        });
+        cardTitle = el("div", {
+            fontSize: "44px",
+            fontWeight: "800",
+            lineHeight: "1.16",
+            letterSpacing: "-0.6px",
+            textShadow: "0 4px 24px rgba(0,0,0,0.55)",
+        });
+        cardSub = el("div", {
+            fontSize: "21px",
+            fontWeight: "500",
+            marginTop: "14px",
+            color: "rgba(255,255,255,0.9)",
+            textShadow: "0 2px 14px rgba(0,0,0,0.5)",
+        });
+        cardFoot = el("div", {
+            fontSize: "16px",
+            fontWeight: "600",
+            marginTop: "22px",
+            letterSpacing: "0.4px",
+            color: "rgba(255,255,255,0.62)",
+            textShadow: "0 2px 12px rgba(0,0,0,0.5)",
+        });
+        card.appendChild(cardKicker);
+        card.appendChild(cardTitle);
+        card.appendChild(cardSub);
+        card.appendChild(cardFoot);
+        root.appendChild(card);
+
+        // Proof-point tiles (sit below the card on the closing scenes).
+        stats = el("div", {
+            position: "absolute",
+            left: "50%",
+            top: "60%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "stretch",
+            gap: "18px",
+            opacity: "0",
+        });
+        root.appendChild(stats);
+
+        // Click ripple, drawn under the cursor so a scripted click reads as one.
+        ripple = el("div", {
+            position: "absolute",
+            width: "46px",
+            height: "46px",
+            marginLeft: "-23px",
+            marginTop: "-23px",
+            borderRadius: "999px",
+            border: "2.5px solid rgba(11,108,255,0.9)",
+            background: "rgba(11,108,255,0.16)",
+            opacity: "0",
+        });
+        root.appendChild(ripple);
+
+        cursor = el("div", {
+            position: "absolute",
+            width: "17px",
+            height: "17px",
+            marginLeft: "-8px",
+            marginTop: "-8px",
+            borderRadius: "999px",
+            background: "#fff",
+            border: "2px solid rgba(10,12,16,0.7)",
+            boxShadow: "0 3px 12px rgba(0,0,0,0.5)",
+            opacity: "0",
+        });
+        root.appendChild(cursor);
     }
 
-    brand.style.opacity = String(clamp01(s.brandAppear ?? 0));
-
-    if (s.card) {
-      const a = clamp01(s.card.appear);
-      card.style.opacity = String(a);
-      card.style.top = s.card.anchor === "high" ? "36%" : "50%";
-      card.style.transform =
-        "translate(-50%,-50%) translateY(" +
-        (1 - a) * 16 +
-        "px) scale(" +
-        (0.98 + a * 0.02) +
-        ")";
-      cardKicker.textContent = s.card.kicker || "";
-      cardKicker.style.display = s.card.kicker ? "block" : "none";
-      cardTitle.textContent = s.card.title || "";
-      cardSub.textContent = s.card.sub || "";
-      cardSub.style.display = s.card.sub ? "block" : "none";
-      cardFoot.textContent = s.card.foot || "";
-      cardFoot.style.display = s.card.foot ? "block" : "none";
-    } else {
-      card.style.opacity = "0";
+    function statTile() {
+        const tile = el("div", {
+            minWidth: "250px",
+            padding: "22px 26px",
+            borderRadius: "16px",
+            background: "rgba(255,255,255,0.07)",
+            border: "1px solid rgba(255,255,255,0.16)",
+            boxShadow: "0 18px 48px rgba(0,0,0,0.42)",
+            textAlign: "center",
+        });
+        tile.__value = el("div", {
+            fontSize: "46px",
+            fontWeight: "800",
+            letterSpacing: "-1px",
+            lineHeight: "1",
+            color: "#9ecbff",
+            textShadow: "0 3px 18px rgba(0,0,0,0.5)",
+        });
+        tile.__label = el("div", {
+            fontSize: "15px",
+            fontWeight: "600",
+            marginTop: "12px",
+            lineHeight: "1.35",
+            color: "rgba(255,255,255,0.86)",
+        });
+        tile.appendChild(tile.__value);
+        tile.appendChild(tile.__label);
+        return tile;
     }
 
-    if (s.stats) {
-      const items = s.stats.items || [];
-      while (stats.children.length < items.length)
-        stats.appendChild(statTile());
-      stats.style.opacity = "1";
-      for (let i = 0; i < stats.children.length; i++) {
-        const tile = stats.children[i];
-        const item = items[i];
-        if (!item) {
-          tile.style.display = "none";
-          continue;
+    function clamp01(n) {
+        return n < 0 ? 0 : n > 1 ? 1 : n;
+    }
+
+    // Render exactly one frame from an explicit state object (computed in Node).
+    function render(s) {
+        setup();
+        const dim = clamp01(s.dim ?? 0);
+
+        if (s.spot) {
+            const r = s.spot;
+            spot.style.opacity = "1";
+            spot.style.left = r.x + "px";
+            spot.style.top = r.y + "px";
+            spot.style.width = r.w + "px";
+            spot.style.height = r.h + "px";
+            spot.style.borderRadius = (r.radius ?? 12) + "px";
+            spot.style.boxShadow = "0 0 0 100vmax rgba(10,12,16," + dim + ")";
+            const ring = clamp01(s.ringOpacity ?? 1);
+            spot.style.outline = "2.5px solid rgba(11,108,255," + ring + ")";
+            scrim.style.opacity = "0";
+        } else {
+            // No focus target: dim the whole viewport with a solid rgba scrim (a
+            // box-shadow "hole" trick under-dims when the hole is off-screen, so use
+            // a plain full-bleed layer here — matches the feature-scene darkness).
+            spot.style.opacity = "0";
+            spot.style.boxShadow = "none";
+            scrim.style.background = "rgba(10,12,16," + dim + ")";
+            scrim.style.opacity = "1";
         }
-        const a = clamp01(item.appear);
-        tile.style.display = "block";
-        tile.style.opacity = String(a);
-        tile.style.transform = "translateY(" + (1 - a) * 18 + "px)";
-        tile.__value.textContent = item.value;
-        tile.__label.textContent = item.label;
-      }
-    } else {
-      stats.style.opacity = "0";
+
+        if (s.badge) {
+            const a = clamp01(s.badge.appear);
+            badge.style.opacity = String(a);
+            badgeNum.textContent = String(s.badge.num);
+            badgeLabel.textContent = s.badge.label;
+            // Position first (top-left anchor), then clamp inside the viewport.
+            badge.style.left = s.badge.x + "px";
+            badge.style.top = s.badge.y + "px";
+            badge.style.transform = "none";
+            const bw = badge.getBoundingClientRect().width;
+            const bh = badge.getBoundingClientRect().height;
+            let bx = s.badge.x;
+            let by = s.badge.y;
+            if (bx + bw > window.innerWidth - 12) bx = window.innerWidth - 12 - bw;
+            if (bx < 12) bx = 12;
+            if (by + bh > window.innerHeight - 12) by = window.innerHeight - 12 - bh;
+            if (by < 12) by = 12;
+            badge.style.left = bx + "px";
+            badge.style.top = by + "px";
+            const slide = (1 - a) * -12;
+            badge.style.transform = "translateX(" + slide + "px) scale(" + (0.9 + a * 0.1) + ")";
+        } else {
+            badge.style.opacity = "0";
+        }
+
+        if (s.caption) {
+            const a = clamp01(s.caption.appear);
+            caption.style.opacity = String(a);
+            caption.style.transform = "translateX(-50%) translateY(" + (1 - a) * 14 + "px)";
+            capTitle.textContent = s.caption.title || "";
+            capSub.textContent = s.caption.sub || "";
+            capSub.style.display = s.caption.sub ? "block" : "none";
+        } else {
+            caption.style.opacity = "0";
+        }
+
+        if (s.progress) {
+            progress.style.opacity = String(clamp01(s.progress.appear ?? 1));
+            const total = s.progress.total || 0;
+            while (progress.children.length < total) {
+                el(
+                    "div",
+                    {
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "999px",
+                        background: "rgba(255,255,255,0.35)",
+                        transition: "none",
+                    },
+                    progress,
+                );
+            }
+            for (let i = 0; i < progress.children.length; i++) {
+                const on = i === s.progress.index;
+                const d = progress.children[i];
+                d.style.background = on ? "#fff" : "rgba(255,255,255,0.32)";
+                d.style.width = on ? "22px" : "8px";
+            }
+        } else {
+            progress.style.opacity = "0";
+        }
+
+        brand.style.opacity = String(clamp01(s.brandAppear ?? 0));
+
+        if (s.card) {
+            const a = clamp01(s.card.appear);
+            card.style.opacity = String(a);
+            card.style.top = s.card.anchor === "high" ? "36%" : "50%";
+            card.style.transform =
+                "translate(-50%,-50%) translateY(" +
+                (1 - a) * 16 +
+                "px) scale(" +
+                (0.98 + a * 0.02) +
+                ")";
+            cardKicker.textContent = s.card.kicker || "";
+            cardKicker.style.display = s.card.kicker ? "block" : "none";
+            cardTitle.textContent = s.card.title || "";
+            cardSub.textContent = s.card.sub || "";
+            cardSub.style.display = s.card.sub ? "block" : "none";
+            cardFoot.textContent = s.card.foot || "";
+            cardFoot.style.display = s.card.foot ? "block" : "none";
+        } else {
+            card.style.opacity = "0";
+        }
+
+        if (s.stats) {
+            const items = s.stats.items || [];
+            while (stats.children.length < items.length) stats.appendChild(statTile());
+            stats.style.opacity = "1";
+            for (let i = 0; i < stats.children.length; i++) {
+                const tile = stats.children[i];
+                const item = items[i];
+                if (!item) {
+                    tile.style.display = "none";
+                    continue;
+                }
+                const a = clamp01(item.appear);
+                tile.style.display = "block";
+                tile.style.opacity = String(a);
+                tile.style.transform = "translateY(" + (1 - a) * 18 + "px)";
+                tile.__value.textContent = item.value;
+                tile.__label.textContent = item.label;
+            }
+        } else {
+            stats.style.opacity = "0";
+        }
+
+        if (s.pointer) {
+            const a = clamp01(s.pointer.appear ?? 1);
+            cursor.style.opacity = String(a);
+            cursor.style.left = s.pointer.x + "px";
+            cursor.style.top = s.pointer.y + "px";
+            // `click` runs 0 -> 1 across one press; the ring grows out and fades.
+            const c = s.pointer.click;
+            if (c > 0 && c < 1) {
+                ripple.style.opacity = String(a * (1 - c));
+                ripple.style.left = s.pointer.x + "px";
+                ripple.style.top = s.pointer.y + "px";
+                ripple.style.transform = "scale(" + (0.35 + c * 1.35) + ")";
+                cursor.style.transform = "scale(" + (1 - Math.sin(c * Math.PI) * 0.22) + ")";
+            } else {
+                ripple.style.opacity = "0";
+                cursor.style.transform = "scale(1)";
+            }
+        } else {
+            cursor.style.opacity = "0";
+            ripple.style.opacity = "0";
+        }
     }
 
-    if (s.pointer) {
-      const a = clamp01(s.pointer.appear ?? 1);
-      cursor.style.opacity = String(a);
-      cursor.style.left = s.pointer.x + "px";
-      cursor.style.top = s.pointer.y + "px";
-      // `click` runs 0 -> 1 across one press; the ring grows out and fades.
-      const c = s.pointer.click;
-      if (c > 0 && c < 1) {
-        ripple.style.opacity = String(a * (1 - c));
-        ripple.style.left = s.pointer.x + "px";
-        ripple.style.top = s.pointer.y + "px";
-        ripple.style.transform = "scale(" + (0.35 + c * 1.35) + ")";
-        cursor.style.transform =
-          "scale(" + (1 - Math.sin(c * Math.PI) * 0.22) + ")";
-      } else {
-        ripple.style.opacity = "0";
-        cursor.style.transform = "scale(1)";
-      }
-    } else {
-      cursor.style.opacity = "0";
-      ripple.style.opacity = "0";
+    // Measure a target rect (union when the selector matches many elements),
+    // clamped to the viewport with padding, in CSS pixels.
+    function measure(selector, opts) {
+        opts = opts || {};
+        const pad = opts.pad ?? 10;
+        const nodes = Array.from(document.querySelectorAll(selector));
+        if (!nodes.length) return null;
+        let x0 = Infinity,
+            y0 = Infinity,
+            x1 = -Infinity,
+            y1 = -Infinity;
+        const cap = opts.max ?? nodes.length;
+        nodes.slice(0, cap).forEach((n) => {
+            const r = n.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) return;
+            x0 = Math.min(x0, r.left);
+            y0 = Math.min(y0, r.top);
+            x1 = Math.max(x1, r.right);
+            y1 = Math.max(y1, r.bottom);
+        });
+        if (!isFinite(x0)) return null;
+        x0 -= pad;
+        y0 -= pad;
+        x1 += pad;
+        y1 += pad;
+        const vw = window.innerWidth,
+            vh = window.innerHeight;
+        x0 = Math.max(2, x0);
+        y0 = Math.max(2, y0);
+        x1 = Math.min(vw - 2, x1);
+        y1 = Math.min(vh - 2, y1);
+        if (opts.maxHeight && y1 - y0 > opts.maxHeight) y1 = y0 + opts.maxHeight;
+        return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
-  }
 
-  // Measure a target rect (union when the selector matches many elements),
-  // clamped to the viewport with padding, in CSS pixels.
-  function measure(selector, opts) {
-    opts = opts || {};
-    const pad = opts.pad ?? 10;
-    const nodes = Array.from(document.querySelectorAll(selector));
-    if (!nodes.length) return null;
-    let x0 = Infinity,
-      y0 = Infinity,
-      x1 = -Infinity,
-      y1 = -Infinity;
-    const cap = opts.max ?? nodes.length;
-    nodes.slice(0, cap).forEach((n) => {
-      const r = n.getBoundingClientRect();
-      if (r.width === 0 && r.height === 0) return;
-      x0 = Math.min(x0, r.left);
-      y0 = Math.min(y0, r.top);
-      x1 = Math.max(x1, r.right);
-      y1 = Math.max(y1, r.bottom);
-    });
-    if (!isFinite(x0)) return null;
-    x0 -= pad;
-    y0 -= pad;
-    x1 += pad;
-    y1 += pad;
-    const vw = window.innerWidth,
-      vh = window.innerHeight;
-    x0 = Math.max(2, x0);
-    y0 = Math.max(2, y0);
-    x1 = Math.min(vw - 2, x1);
-    y1 = Math.min(vh - 2, y1);
-    if (opts.maxHeight && y1 - y0 > opts.maxHeight) y1 = y0 + opts.maxHeight;
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  }
-
-  window.__tour = { setup, render, measure };
+    window.__tour = { setup, render, measure };
 })();

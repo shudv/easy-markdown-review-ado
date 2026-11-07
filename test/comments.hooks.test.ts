@@ -5,152 +5,134 @@
 //
 // @vitest-environment jsdom
 
-import {
-  act,
-  Component,
-  createElement,
-  type ReactElement,
-  type ReactNode,
-  useRef,
-} from "react";
+import { act, Component, createElement, type ReactElement, type ReactNode, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CommentApiProvider, useCommentApi } from "../src/comments/api";
 import type { CommentApi } from "../src/comments/api";
 import {
-  MentionLinkContext,
-  useMentionLinkHydration,
-  type MentionLinkResolution,
+    MentionLinkContext,
+    useMentionLinkHydration,
+    type MentionLinkResolution,
 } from "../src/comments/mentionLinks";
 
-(
-  globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 function mount(element: ReactElement): void {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() => {
-    root!.render(element);
-  });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+        root!.render(element);
+    });
 }
 
 afterEach(() => {
-  if (root) {
-    act(() => root!.unmount());
-    root = null;
-  }
+    if (root) {
+        act(() => root!.unmount());
+        root = null;
+    }
 
-  container?.remove();
-  container = null;
+    container?.remove();
+    container = null;
 });
 
 // Minimal error boundary so a hook that throws during render is captured as a
 // value instead of crashing the test runner.
 class Boundary extends Component<
-  { onError: (e: Error) => void; children: ReactNode },
-  { failed: boolean }
+    { onError: (e: Error) => void; children?: ReactNode },
+    { failed: boolean }
 > {
-  state = { failed: false };
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-  componentDidCatch(error: Error): void {
-    this.props.onError(error);
-  }
-  render(): ReactNode {
-    return this.state.failed ? null : this.props.children;
-  }
+    override state = { failed: false };
+    static getDerivedStateFromError(): { failed: boolean } {
+        return { failed: true };
+    }
+    override componentDidCatch(error: Error): void {
+        this.props.onError(error);
+    }
+    override render(): ReactNode {
+        return this.state.failed ? null : this.props.children;
+    }
 }
 
 describe("useCommentApi", () => {
-  it("returns the provider's value to descendants", () => {
-    const api = { marker: "the-api" } as unknown as CommentApi;
-    let seen: CommentApi | null = null;
+    it("returns the provider's value to descendants", () => {
+        const api = { marker: "the-api" } as unknown as CommentApi;
+        let seen: CommentApi | null = null;
 
-    function Consumer(): null {
-      seen = useCommentApi();
+        function Consumer(): null {
+            seen = useCommentApi();
 
-      return null;
-    }
+            return null;
+        }
 
-    mount(
-      createElement(
-        CommentApiProvider,
-        { value: api },
-        createElement(Consumer),
-      ),
-    );
-    expect(seen).toBe(api);
-  });
+        mount(createElement(CommentApiProvider, { value: api }, createElement(Consumer)));
+        expect(seen).toBe(api);
+    });
 
-  it("throws when used without a provider", () => {
-    let captured: Error | null = null;
+    it("throws when used without a provider", () => {
+        let captured: Error | null = null;
 
-    function Consumer(): null {
-      useCommentApi();
+        function Consumer(): null {
+            useCommentApi();
 
-      return null;
-    }
+            return null;
+        }
 
-    mount(
-      createElement(
-        Boundary,
-        { onError: (e: Error) => (captured = e) },
-        createElement(Consumer),
-      ),
-    );
-    expect(captured).not.toBeNull();
-    expect(captured!.message).toMatch(/useCommentApi must be used inside/);
-  });
+        mount(
+            createElement(
+                Boundary,
+                { onError: (e: Error) => (captured = e) },
+                createElement(Consumer),
+            ),
+        );
+        expect(captured).not.toBeNull();
+        expect(captured!.message).toMatch(/useCommentApi must be used inside/);
+    });
 });
 
 describe("useMentionLinkHydration", () => {
-  const CTX: MentionLinkResolution = {
-    orgUrl: "https://dev.azure.com/contoso",
-    projectName: "Proj",
-    defaultRepoName: "repo",
-  };
+    const CTX: MentionLinkResolution = {
+        orgUrl: "https://dev.azure.com/contoso",
+        projectName: "Proj",
+        defaultRepoName: "repo",
+    };
 
-  // The hook reads MentionLinkContext from ABOVE it, so the provider must be
-  // an ancestor of the component that calls the hook.
-  function Inner(): ReactElement {
-    const ref = useRef<HTMLDivElement>(null);
-    useMentionLinkHydration(ref, []);
+    // The hook reads MentionLinkContext from ABOVE it, so the provider must be
+    // an ancestor of the component that calls the hook.
+    function Inner(): ReactElement {
+        const ref = useRef<HTMLDivElement>(null);
+        useMentionLinkHydration(ref, []);
 
-    return createElement("div", {
-      ref,
-      dangerouslySetInnerHTML: {
-        __html:
-          '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
-      },
+        return createElement("div", {
+            ref,
+            dangerouslySetInnerHTML: {
+                __html: '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="7" href="mention://workitem/7">#7</a>',
+            },
+        });
+    }
+
+    function Host(props: { ctx: MentionLinkResolution | null }): ReactElement {
+        return createElement(
+            MentionLinkContext.Provider,
+            { value: props.ctx },
+            createElement(Inner),
+        );
+    }
+
+    it("rewrites placeholder mention hrefs after mount using context", () => {
+        mount(createElement(Host, { ctx: CTX }));
+        const a = container!.querySelector("a")!;
+        expect(a.getAttribute("href")).toBe("https://dev.azure.com/contoso/Proj/_workitems/edit/7");
     });
-  }
 
-  function Host(props: { ctx: MentionLinkResolution | null }): ReactElement {
-    return createElement(
-      MentionLinkContext.Provider,
-      { value: props.ctx },
-      createElement(Inner),
-    );
-  }
-
-  it("rewrites placeholder mention hrefs after mount using context", () => {
-    mount(createElement(Host, { ctx: CTX }));
-    const a = container!.querySelector("a")!;
-    expect(a.getAttribute("href")).toBe(
-      "https://dev.azure.com/contoso/Proj/_workitems/edit/7",
-    );
-  });
-
-  it("leaves placeholders untouched when context is absent", () => {
-    mount(createElement(Host, { ctx: null }));
-    const a = container!.querySelector("a")!;
-    expect(a.getAttribute("href")).toBe("mention://workitem/7");
-  });
+    it("leaves placeholders untouched when context is absent", () => {
+        mount(createElement(Host, { ctx: null }));
+        const a = container!.querySelector("a")!;
+        expect(a.getAttribute("href")).toBe("mention://workitem/7");
+    });
 });

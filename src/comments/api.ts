@@ -16,39 +16,34 @@
 
 import { createContext, useContext } from "react";
 
-import type {
-  MentionedIdentity,
-  ReactionKind,
-  TextQuoteAnchor,
-  ThreadStatus,
-} from "../types";
+import type { MentionedIdentity, ReactionKind, TextQuoteAnchor, ThreadStatus } from "../types";
 import {
-  type PullRequestSuggestion,
-  type UserSuggestion,
-  type WorkItemSuggestion,
+    type PullRequestSuggestion,
+    type UserSuggestion,
+    type WorkItemSuggestion,
 } from "./mentions";
 
 export interface NewThreadInput {
-  filePath: string;
-  anchor: TextQuoteAnchor;
-  bodyMarkdown: string;
-  /**
-   * Display names/avatars for the users this comment `@`-mentions, captured
-   * from the picker at compose time. Persisted into a thread property we own
-   * so mentions render as names on load in every org — including personal-MSA
-   * or cross-tenant-guest cases where ADO's `thread.identities` and the by-id
-   * identity endpoint both return nothing.
-   */
-  mentions?: MentionedIdentity[];
+    filePath: string;
+    anchor: TextQuoteAnchor;
+    bodyMarkdown: string;
+    /**
+     * Display names/avatars for the users this comment `@`-mentions, captured
+     * from the picker at compose time. Persisted into a thread property we own
+     * so mentions render as names on load in every org — including personal-MSA
+     * or cross-tenant-guest cases where ADO's `thread.identities` and the by-id
+     * identity endpoint both return nothing.
+     */
+    mentions?: MentionedIdentity[];
 }
 
 export interface CreatedThreadIds {
-  /** Server-assigned thread id (as a string — ADO mints integers, we stringify). */
-  threadId: string;
-  /** Server-assigned id of the first comment in the new thread. */
-  firstCommentId: string;
-  /** ISO timestamp the server stamped on the new thread/comment. */
-  createdAt: string;
+    /** Server-assigned thread id (as a string — ADO mints integers, we stringify). */
+    threadId: string;
+    /** Server-assigned id of the first comment in the new thread. */
+    firstCommentId: string;
+    /** ISO timestamp the server stamped on the new thread/comment. */
+    createdAt: string;
 }
 
 /**
@@ -57,66 +52,66 @@ export interface CreatedThreadIds {
  * memory and is fine for fixtures + standalone dev preview.
  */
 export interface CommentApi {
-  /** Create a new thread + first comment. Returns the server-minted ids. */
-  createThread(input: NewThreadInput): Promise<CreatedThreadIds>;
+    /** Create a new thread + first comment. Returns the server-minted ids. */
+    createThread(input: NewThreadInput): Promise<CreatedThreadIds>;
 
-  /** Append a reply to an existing thread. Returns the new comment's id + timestamp. */
-  addReply(
-    threadId: string,
-    bodyMarkdown: string,
-  ): Promise<{ commentId: string; createdAt: string }>;
+    /** Append a reply to an existing thread. Returns the new comment's id + timestamp. */
+    addReply(
+        threadId: string,
+        bodyMarkdown: string,
+    ): Promise<{ commentId: string; createdAt: string }>;
 
-  /** Replace an existing comment's body. Returns the server-stamped updatedAt. */
-  editComment(
-    threadId: string,
-    commentId: string,
-    bodyMarkdown: string,
-  ): Promise<{ updatedAt: string }>;
+    /** Replace an existing comment's body. Returns the server-stamped updatedAt. */
+    editComment(
+        threadId: string,
+        commentId: string,
+        bodyMarkdown: string,
+    ): Promise<{ updatedAt: string }>;
 
-  /** Soft-delete a comment. */
-  deleteComment(threadId: string, commentId: string): Promise<void>;
+    /** Soft-delete a comment. */
+    deleteComment(threadId: string, commentId: string): Promise<void>;
 
-  /** Change a thread's status. */
-  setStatus(threadId: string, status: ThreadStatus): Promise<void>;
+    /** Change a thread's status. */
+    setStatus(threadId: string, status: ThreadStatus): Promise<void>;
 
-  /**
-   * Toggle the current user's reaction. `add=true` adds, `add=false` removes.
-   * Today only `"like"` is supported — ADO PR comments don't round-trip any
-   * other reaction kinds.
-   */
-  toggleReaction(
-    threadId: string,
-    commentId: string,
-    kind: ReactionKind,
-    add: boolean,
-  ): Promise<void>;
+    /**
+     * Toggle the current user's reaction. `add=true` adds, `add=false` removes.
+     * Today only `"like"` is supported — ADO PR comments don't round-trip any
+     * other reaction kinds.
+     */
+    toggleReaction(
+        threadId: string,
+        commentId: string,
+        kind: ReactionKind,
+        add: boolean,
+    ): Promise<void>;
 
-  // -------------------------------------------------------------------------
-  // Mention typeahead surfaces. Each method returns at most ~8 ranked
-  // suggestions for the given query. Empty / undefined query should return
-  // a recency-ordered "recent items" list so the picker is useful before
-  // the user starts typing.
-  // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Mention typeahead surfaces. Each method returns at most ~8 ranked
+    // suggestions for the given query. Empty / undefined query should return
+    // a recency-ordered "recent items" list so the picker is useful before
+    // the user starts typing.
+    // -------------------------------------------------------------------------
 
-  /** People search powering the `@` picker. */
-  searchUsers(query: string): Promise<UserSuggestion[]>;
+    /** People search powering the `@` picker. */
+    searchUsers(query: string): Promise<UserSuggestion[]>;
 
-  /** Work item search powering the `#` picker. */
-  searchWorkItems(query: string): Promise<WorkItemSuggestion[]>;
+    /** Work item search powering the `#` picker. */
+    searchWorkItems(query: string): Promise<WorkItemSuggestion[]>;
 
-  /** Pull request search powering the `!` picker. */
-  searchPullRequests(query: string): Promise<PullRequestSuggestion[]>;
+    /** Pull request search powering the `!` picker. */
+    searchPullRequests(query: string): Promise<PullRequestSuggestion[]>;
 
-  /**
-   * Resolve a batch of user identity ids (GUIDs) to display names / avatars for
-   * the identity store, so `@<GUID>` mentions render as names. Optional — when
-   * absent, mentions fall back to store entries seeded from comment authors and
-   * the @-picker (which already covers self + PR participants). Missing ids may
-   * be omitted from the result.
-   */
-  resolveIdentities?(
-    ids: string[],
-  ): Promise<Record<string, { displayName: string; avatarUrl?: string }>>;
+    /**
+     * Resolve a batch of user identity ids (GUIDs) to display names / avatars for
+     * the identity store, so `@<GUID>` mentions render as names. Optional — when
+     * absent, mentions fall back to store entries seeded from comment authors and
+     * the @-picker (which already covers self + PR participants). Missing ids may
+     * be omitted from the result.
+     */
+    resolveIdentities?(
+        ids: string[],
+    ): Promise<Record<string, { displayName: string; avatarUrl?: string }>>;
 }
 
 /**
@@ -126,73 +121,73 @@ export interface CommentApi {
  * with fixture ids.
  */
 export class LocalOnlyCommentApi implements CommentApi {
-  private threadCounter = 0;
-  private commentCounter = 0;
+    private threadCounter = 0;
+    private commentCounter = 0;
 
-  async createThread(_input: NewThreadInput): Promise<CreatedThreadIds> {
-    const n = ++this.threadCounter;
-    const threadId = `t-local-${n}`;
+    async createThread(_input: NewThreadInput): Promise<CreatedThreadIds> {
+        const n = ++this.threadCounter;
+        const threadId = `t-local-${n}`;
 
-    return {
-      threadId,
-      firstCommentId: `${threadId}-c1`,
-      createdAt: new Date().toISOString(),
-    };
-  }
+        return {
+            threadId,
+            firstCommentId: `${threadId}-c1`,
+            createdAt: new Date().toISOString(),
+        };
+    }
 
-  async addReply(
-    _threadId: string,
-    _bodyMarkdown: string,
-  ): Promise<{ commentId: string; createdAt: string }> {
-    return {
-      commentId: `c-local-${++this.commentCounter}`,
-      createdAt: new Date().toISOString(),
-    };
-  }
+    async addReply(
+        _threadId: string,
+        _bodyMarkdown: string,
+    ): Promise<{ commentId: string; createdAt: string }> {
+        return {
+            commentId: `c-local-${++this.commentCounter}`,
+            createdAt: new Date().toISOString(),
+        };
+    }
 
-  async editComment(
-    _threadId: string,
-    _commentId: string,
-    _bodyMarkdown: string,
-  ): Promise<{ updatedAt: string }> {
-    return { updatedAt: new Date().toISOString() };
-  }
+    async editComment(
+        _threadId: string,
+        _commentId: string,
+        _bodyMarkdown: string,
+    ): Promise<{ updatedAt: string }> {
+        return { updatedAt: new Date().toISOString() };
+    }
 
-  async deleteComment(_threadId: string, _commentId: string): Promise<void> {}
+    async deleteComment(_threadId: string, _commentId: string): Promise<void> {}
 
-  async setStatus(_threadId: string, _status: ThreadStatus): Promise<void> {}
+    async setStatus(_threadId: string, _status: ThreadStatus): Promise<void> {}
 
-  async toggleReaction(
-    _threadId: string,
-    _commentId: string,
-    _kind: ReactionKind,
-    _add: boolean,
-  ): Promise<void> {}
+    async toggleReaction(
+        _threadId: string,
+        _commentId: string,
+        _kind: ReactionKind,
+        _add: boolean,
+    ): Promise<void> {}
 
-  // -------------------------------------------------------------------------
-  // Mention search — the production fallback has no directory to search, so it
-  // returns nothing. Fixture-backed results for dev/stories live in
-  // `FixtureCommentApi` (./fixtureCommentApi), which keeps the sample people /
-  // work items / PRs out of the shipped bundles.
-  // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Mention search — the production fallback has no directory to search, so it
+    // returns nothing. Fixture-backed results for dev/stories live in
+    // `FixtureCommentApi` (./fixtureCommentApi), which keeps the sample people /
+    // work items / PRs out of the shipped bundles.
+    // -------------------------------------------------------------------------
 
-  async searchUsers(_query: string): Promise<UserSuggestion[]> {
-    return [];
-  }
+    async searchUsers(_query: string): Promise<UserSuggestion[]> {
+        return [];
+    }
 
-  async searchWorkItems(_query: string): Promise<WorkItemSuggestion[]> {
-    return [];
-  }
+    async searchWorkItems(_query: string): Promise<WorkItemSuggestion[]> {
+        return [];
+    }
 
-  async searchPullRequests(_query: string): Promise<PullRequestSuggestion[]> {
-    return [];
-  }
+    async searchPullRequests(_query: string): Promise<PullRequestSuggestion[]> {
+        return [];
+    }
 
-  async resolveIdentities(
-    _ids: string[],
-  ): Promise<Record<string, { displayName: string; avatarUrl?: string }>> {
-    return {};
-  }
+    async resolveIdentities(
+        _ids: string[],
+    ): Promise<Record<string, { displayName: string; avatarUrl?: string }>> {
+        return {};
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -208,28 +203,24 @@ export class LocalOnlyCommentApi implements CommentApi {
  * Exported for unit tests; the production call sites are the
  * `LocalOnlyCommentApi.search*` methods above.
  */
-export function filterByQuery<T>(
-  items: T[],
-  query: string,
-  keys: (item: T) => string[],
-): T[] {
-  const q = query.trim().toLowerCase();
-  // Stryker disable next-line ConditionalExpression: equivalent mutant — with
-  // an empty query the scoring loop below matches every item at offset 0
-  // (indexOf("") === 0) and returns the same first-8 slice, so removing this
-  // fast path doesn't change the output.
-  if (!q) return items.slice(0, 8);
-  const matches: { item: T; score: number }[] = [];
+export function filterByQuery<T>(items: T[], query: string, keys: (item: T) => string[]): T[] {
+    const q = query.trim().toLowerCase();
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — with
+    // an empty query the scoring loop below matches every item at offset 0
+    // (indexOf("") === 0) and returns the same first-8 slice, so removing this
+    // fast path doesn't change the output.
+    if (!q) return items.slice(0, 8);
+    const matches: { item: T; score: number }[] = [];
 
-  for (const item of items) {
-    const hay = keys(item).join(" ").toLowerCase();
-    const idx = hay.indexOf(q);
-    if (idx >= 0) matches.push({ item, score: idx });
-  }
+    for (const item of items) {
+        const hay = keys(item).join(" ").toLowerCase();
+        const idx = hay.indexOf(q);
+        if (idx >= 0) matches.push({ item, score: idx });
+    }
 
-  matches.sort((a, b) => a.score - b.score);
+    matches.sort((a, b) => a.score - b.score);
 
-  return matches.slice(0, 8).map((m) => m.item);
+    return matches.slice(0, 8).map((m) => m.item);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,13 +241,11 @@ export const CommentApiProvider = CommentApiContext.Provider;
  * misuse is loud rather than silent.
  */
 export function useCommentApi(): CommentApi {
-  const api = useContext(CommentApiContext);
+    const api = useContext(CommentApiContext);
 
-  if (!api) {
-    throw new Error(
-      "useCommentApi must be used inside <CommentApiProvider value={...}>",
-    );
-  }
+    if (!api) {
+        throw new Error("useCommentApi must be used inside <CommentApiProvider value={...}>");
+    }
 
-  return api;
+    return api;
 }

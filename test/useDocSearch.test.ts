@@ -19,401 +19,386 @@ import type { FileSearchOutcome } from "../src/shell/almSearch";
 const trackMock = vi.fn();
 const trackUserFacingErrorMock = vi.fn();
 vi.mock("../src/telemetry", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/telemetry")>();
+    const actual = await importOriginal<typeof import("../src/telemetry")>();
 
-  return {
-    ...actual,
-    track: (...args: unknown[]) => trackMock(...args),
-    trackUserFacingError: (...args: unknown[]) =>
-      trackUserFacingErrorMock(...args),
-  };
+    return {
+        ...actual,
+        track: (...args: unknown[]) => trackMock(...args),
+        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
+    };
 });
 
-(
-  globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function file(path: string): FileInfo {
-  return { path, changeType: "modified", linesAdded: 0, linesDeleted: 0 };
+    return { path, changeType: "modified", linesAdded: 0, linesDeleted: 0 };
 }
 
 type Hook = ReturnType<typeof useDocSearch>;
 
 interface Handle {
-  current: Hook | null;
+    current: Hook | null;
 }
 
 function Harness(props: {
-  files: FileInfo[];
-  onSearchFiles?: (
-    query: string,
-    signal?: AbortSignal,
-  ) => Promise<FileSearchOutcome>;
-  handle: Handle;
+    files: FileInfo[];
+    onSearchFiles?: (query: string, signal?: AbortSignal) => Promise<FileSearchOutcome>;
+    handle: Handle;
 }): null {
-  const { handle: resultRef } = props;
-  const search = useDocSearch(props.files, props.onSearchFiles);
-  useLayoutEffect(() => {
-    resultRef.current = search;
-  });
+    const { handle: resultRef } = props;
+    const search = useDocSearch(props.files, props.onSearchFiles);
+    useLayoutEffect(() => {
+        resultRef.current = search;
+    });
 
-  return null;
+    return null;
 }
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 function mount(props: {
-  files: FileInfo[];
-  onSearchFiles?: (
-    query: string,
-    signal?: AbortSignal,
-  ) => Promise<FileSearchOutcome>;
+    files: FileInfo[];
+    onSearchFiles?: (query: string, signal?: AbortSignal) => Promise<FileSearchOutcome>;
 }): Handle {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  const handle: Handle = { current: null };
-  act(() => {
-    root!.render(createElement(Harness, { ...props, handle }));
-  });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const handle: Handle = { current: null };
+    act(() => {
+        root!.render(createElement(Harness, { ...props, handle }));
+    });
 
-  return handle;
+    return handle;
 }
 
 afterEach(() => {
-  if (root) {
-    act(() => root!.unmount());
-    root = null;
-  }
+    if (root) {
+        act(() => root!.unmount());
+        root = null;
+    }
 
-  container?.remove();
-  container = null;
-  vi.useRealTimers();
-  trackMock.mockClear();
-  trackUserFacingErrorMock.mockClear();
+    container?.remove();
+    container = null;
+    vi.useRealTimers();
+    trackMock.mockClear();
+    trackUserFacingErrorMock.mockClear();
 });
 
 /** Advance fake timers inside act() and flush the resulting microtasks. */
 async function flush(ms: number): Promise<void> {
-  await act(async () => {
-    vi.advanceTimersByTime(ms);
-    // Let the awaited onSearchFiles promise settle.
-    await Promise.resolve();
-    await Promise.resolve();
-  });
+    await act(async () => {
+        vi.advanceTimersByTime(ms);
+        // Let the awaited onSearchFiles promise settle.
+        await Promise.resolve();
+        await Promise.resolve();
+    });
 }
 
 describe("useDocSearch — local filtering", () => {
-  const files = [file("docs/intro.md"), file("docs/guide.md"), file("api.md")];
+    const files = [file("docs/intro.md"), file("docs/guide.md"), file("api.md")];
 
-  it("returns no results and is not searching while the query is empty", () => {
-    const h = mount({ files });
-    expect(h.current!.isSearching).toBe(false);
-    expect(h.current!.searchResults).toEqual([]);
-  });
+    it("returns no results and is not searching while the query is empty", () => {
+        const h = mount({ files });
+        expect(h.current!.isSearching).toBe(false);
+        expect(h.current!.searchResults).toEqual([]);
+    });
 
-  it("filters files by case-insensitive substring on the path", () => {
-    const h = mount({ files });
-    act(() => h.current!.setSearchQuery("GUIDE"));
-    expect(h.current!.isSearching).toBe(true);
-    expect(h.current!.searchResults.map((f) => f.path)).toEqual([
-      "docs/guide.md",
-    ]);
-  });
+    it("filters files by case-insensitive substring on the path", () => {
+        const h = mount({ files });
+        act(() => h.current!.setSearchQuery("GUIDE"));
+        expect(h.current!.isSearching).toBe(true);
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["docs/guide.md"]);
+    });
 
-  it("treats a whitespace-only query as not searching", () => {
-    const h = mount({ files });
-    act(() => h.current!.setSearchQuery("   "));
-    expect(h.current!.isSearching).toBe(false);
-    expect(h.current!.searchResults).toEqual([]);
-  });
+    it("treats a whitespace-only query as not searching", () => {
+        const h = mount({ files });
+        act(() => h.current!.setSearchQuery("   "));
+        expect(h.current!.isSearching).toBe(false);
+        expect(h.current!.searchResults).toEqual([]);
+    });
 });
 
 describe("useDocSearch — open/close affordance", () => {
-  it("opens automatically once a query is typed and closes via closeSearch", () => {
-    const h = mount({ files: [file("a.md")] });
-    expect(h.current!.searchOpen).toBe(false);
-    act(() => h.current!.setSearchQuery("a"));
-    expect(h.current!.searchOpen).toBe(true);
+    it("opens automatically once a query is typed and closes via closeSearch", () => {
+        const h = mount({ files: [file("a.md")] });
+        expect(h.current!.searchOpen).toBe(false);
+        act(() => h.current!.setSearchQuery("a"));
+        expect(h.current!.searchOpen).toBe(true);
 
-    act(() => h.current!.closeSearch());
-    expect(h.current!.searchOpen).toBe(false);
-    expect(h.current!.isSearching).toBe(false);
-    expect(h.current!.searchResults).toEqual([]);
-  });
+        act(() => h.current!.closeSearch());
+        expect(h.current!.searchOpen).toBe(false);
+        expect(h.current!.isSearching).toBe(false);
+        expect(h.current!.searchResults).toEqual([]);
+    });
 });
 
 describe("useDocSearch — remote merge", () => {
-  beforeEach(() => vi.useFakeTimers());
+    beforeEach(() => vi.useFakeTimers());
 
-  afterEach(() => trackMock.mockClear());
+    afterEach(() => trackMock.mockClear());
 
-  it("does not call the remote searcher for queries shorter than 2 chars", async () => {
-    const onSearchFiles = vi.fn();
-    const h = mount({ files: [file("a.md")], onSearchFiles });
-    act(() => h.current!.setSearchQuery("a"));
-    await flush(1000);
-    expect(onSearchFiles).not.toHaveBeenCalled();
-    expect(h.current!.remoteLoading).toBe(false);
-  });
-
-  it("merges remote hits after local ones, deduped by path", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({
-        kind: "ok",
-        files: [file("docs/guide.md"), file("remote/only.md")],
-      }),
-    );
-
-    const h = mount({
-      files: [file("docs/guide.md"), file("local.md")],
-      onSearchFiles,
+    it("does not call the remote searcher for queries shorter than 2 chars", async () => {
+        const onSearchFiles = vi.fn();
+        const h = mount({ files: [file("a.md")], onSearchFiles });
+        act(() => h.current!.setSearchQuery("a"));
+        await flush(1000);
+        expect(onSearchFiles).not.toHaveBeenCalled();
+        expect(h.current!.remoteLoading).toBe(false);
     });
 
-    act(() => h.current!.setSearchQuery("o"));
-    // 1-char query: local-only ("o" matches docs and local), no remote.
-    act(() => h.current!.setSearchQuery("do"));
-    await flush(300);
+    it("merges remote hits after local ones, deduped by path", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({
+                kind: "ok",
+                files: [file("docs/guide.md"), file("remote/only.md")],
+            }),
+        );
 
-    expect(onSearchFiles).toHaveBeenCalledWith("do", expect.anything());
-    expect(h.current!.searchResults.map((f) => f.path)).toEqual([
-      "docs/guide.md", // local hit, kept once despite also being a remote hit
-      "remote/only.md", // remote-only hit appended
-    ]);
-    expect(h.current!.remoteLoading).toBe(false);
-    expect(h.current!.searchUnavailable).toBeNull();
-  });
+        const h = mount({
+            files: [file("docs/guide.md"), file("local.md")],
+            onSearchFiles,
+        });
 
-  it("surfaces an unavailable outcome and drops remote hits", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({
-        kind: "unavailable",
-        reason: "extension-missing",
-        message: "Code Search not installed",
-      }),
-    );
+        act(() => h.current!.setSearchQuery("o"));
+        // 1-char query: local-only ("o" matches docs and local), no remote.
+        act(() => h.current!.setSearchQuery("do"));
+        await flush(300);
 
-    const h = mount({ files: [file("local.md")], onSearchFiles });
-    act(() => h.current!.setSearchQuery("loc"));
-    await flush(300);
-
-    expect(h.current!.searchUnavailable).toEqual({
-      reason: "extension-missing",
-      message: "Code Search not installed",
-    });
-    // Only the local hit remains.
-    expect(h.current!.searchResults.map((f) => f.path)).toEqual(["local.md"]);
-    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
-  });
-
-  it("treats a rejected remote search as an unknown unavailability", async () => {
-    const onSearchFiles = vi.fn(async (): Promise<FileSearchOutcome> => {
-      throw new Error("boom");
+        expect(onSearchFiles).toHaveBeenCalledWith("do", expect.anything());
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual([
+            "docs/guide.md", // local hit, kept once despite also being a remote hit
+            "remote/only.md", // remote-only hit appended
+        ]);
+        expect(h.current!.remoteLoading).toBe(false);
+        expect(h.current!.searchUnavailable).toBeNull();
     });
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("query"));
-    await flush(300);
+    it("surfaces an unavailable outcome and drops remote hits", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({
+                kind: "unavailable",
+                reason: "extension-missing",
+                message: "Code Search not installed",
+            }),
+        );
 
-    expect(h.current!.searchUnavailable).toEqual({ reason: "unknown" });
-    expect(h.current!.searchResults).toEqual([]);
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-      error: expect.objectContaining({ message: "boom" }),
-      source: "DocNav.search",
-      operation: "code-search",
-      impact: "degraded",
-    });
-  });
+        const h = mount({ files: [file("local.md")], onSearchFiles });
+        act(() => h.current!.setSearchQuery("loc"));
+        await flush(300);
 
-  it("recovers from unavailable back to ok on a later successful query", async () => {
-    let outcome: FileSearchOutcome = {
-      kind: "unavailable",
-      reason: "network",
-    };
-
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => outcome,
-    );
-
-    const h = mount({ files: [], onSearchFiles });
-
-    act(() => h.current!.setSearchQuery("aa"));
-    await flush(300);
-    expect(h.current!.searchUnavailable).not.toBeNull();
-    expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-      error: expect.objectContaining({ message: "Code Search request failed" }),
-      source: "DocNav.search",
-      operation: "code-search",
-      impact: "degraded",
+        expect(h.current!.searchUnavailable).toEqual({
+            reason: "extension-missing",
+            message: "Code Search not installed",
+        });
+        // Only the local hit remains.
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["local.md"]);
+        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
     });
 
-    outcome = { kind: "ok", files: [file("found.md")] };
-    act(() => h.current!.setSearchQuery("aaa"));
-    await flush(300);
-    expect(h.current!.searchUnavailable).toBeNull();
-    expect(h.current!.searchResults.map((f) => f.path)).toEqual(["found.md"]);
-  });
+    it("treats a rejected remote search as an unknown unavailability", async () => {
+        const onSearchFiles = vi.fn(async (): Promise<FileSearchOutcome> => {
+            throw new Error("boom");
+        });
 
-  it("sets remoteLoading true during the debounce and clears it after settle", async () => {
-    let resolveOutcome: (o: FileSearchOutcome) => void = () => {};
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("query"));
+        await flush(300);
 
-    const onSearchFiles = vi.fn(
-      () =>
-        new Promise<FileSearchOutcome>((res) => {
-          resolveOutcome = res;
-        }),
-    );
-
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("abc"));
-    // After the debounce fires but before the promise settles, loading is on.
-    await act(async () => {
-      vi.advanceTimersByTime(250);
-      await Promise.resolve();
+        expect(h.current!.searchUnavailable).toEqual({ reason: "unknown" });
+        expect(h.current!.searchResults).toEqual([]);
+        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+            error: expect.objectContaining({ message: "boom" }),
+            source: "DocNav.search",
+            operation: "code-search",
+            impact: "degraded",
+        });
     });
-    expect(h.current!.remoteLoading).toBe(true);
-    // Settling the fetch flips loading back off.
-    await act(async () => {
-      resolveOutcome({ kind: "ok", files: [] });
-      await Promise.resolve();
-      await Promise.resolve();
+
+    it("recovers from unavailable back to ok on a later successful query", async () => {
+        let outcome: FileSearchOutcome = {
+            kind: "unavailable",
+            reason: "network",
+        };
+
+        const onSearchFiles = vi.fn(async (): Promise<FileSearchOutcome> => outcome);
+
+        const h = mount({ files: [], onSearchFiles });
+
+        act(() => h.current!.setSearchQuery("aa"));
+        await flush(300);
+        expect(h.current!.searchUnavailable).not.toBeNull();
+        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
+            error: expect.objectContaining({
+                message: "Code Search request failed",
+            }),
+            source: "DocNav.search",
+            operation: "code-search",
+            impact: "degraded",
+        });
+
+        outcome = { kind: "ok", files: [file("found.md")] };
+        act(() => h.current!.setSearchQuery("aaa"));
+        await flush(300);
+        expect(h.current!.searchUnavailable).toBeNull();
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["found.md"]);
     });
-    expect(h.current!.remoteLoading).toBe(false);
-  });
 
-  it("does not fire the remote search until the debounce elapses", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({ kind: "ok", files: [] }),
-    );
+    it("sets remoteLoading true during the debounce and clears it after settle", async () => {
+        let resolveOutcome: (o: FileSearchOutcome) => void = () => {};
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("abc"));
-    // Just short of the 250ms debounce: no call yet.
-    await flush(249);
-    expect(onSearchFiles).not.toHaveBeenCalled();
-    // Crossing the threshold fires exactly one call.
-    await flush(1);
-    expect(onSearchFiles).toHaveBeenCalledTimes(1);
-  });
+        const onSearchFiles = vi.fn(
+            () =>
+                new Promise<FileSearchOutcome>((res) => {
+                    resolveOutcome = res;
+                }),
+        );
 
-  it("emits a success telemetry event with the result count", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({
-        kind: "ok",
-        files: [file("r/one.md"), file("r/two.md")],
-      }),
-    );
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("abc"));
+        // After the debounce fires but before the promise settles, loading is on.
+        await act(async () => {
+            vi.advanceTimersByTime(250);
+            await Promise.resolve();
+        });
+        expect(h.current!.remoteLoading).toBe(true);
+        // Settling the fetch flips loading back off.
+        await act(async () => {
+            resolveOutcome({ kind: "ok", files: [] });
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(h.current!.remoteLoading).toBe(false);
+    });
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("abcd"));
-    await flush(300);
-    expect(trackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: "search.performed",
-        properties: expect.objectContaining({ succeeded: true }),
-        measurements: { queryLength: 4, resultCount: 2 },
-      }),
-    );
-  });
+    it("does not fire the remote search until the debounce elapses", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({ kind: "ok", files: [] }),
+        );
 
-  it("emits a failure telemetry event carrying the failure reason", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({
-        kind: "unavailable",
-        reason: "extension-missing",
-      }),
-    );
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("abc"));
+        // Just short of the 250ms debounce: no call yet.
+        await flush(249);
+        expect(onSearchFiles).not.toHaveBeenCalled();
+        // Crossing the threshold fires exactly one call.
+        await flush(1);
+        expect(onSearchFiles).toHaveBeenCalledTimes(1);
+    });
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("abcd"));
-    await flush(300);
-    expect(trackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: "search.performed",
-        properties: expect.objectContaining({
-          succeeded: false,
-          failureReason: "extension-missing",
-        }),
-        measurements: expect.objectContaining({ resultCount: 0 }),
-      }),
-    );
-    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
-  });
+    it("emits a success telemetry event with the result count", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({
+                kind: "ok",
+                files: [file("r/one.md"), file("r/two.md")],
+            }),
+        );
 
-  it("does not count no-config as a reliability failure", async () => {
-    const onSearchFiles = vi.fn(
-      async (): Promise<FileSearchOutcome> => ({
-        kind: "unavailable",
-        reason: "no-config",
-      }),
-    );
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("abcd"));
+        await flush(300);
+        expect(trackMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: "search.performed",
+                properties: expect.objectContaining({ succeeded: true }),
+                measurements: { queryLength: 4, resultCount: 2 },
+            }),
+        );
+    });
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("abcd"));
-    await flush(300);
-    expect(h.current!.searchUnavailable?.reason).toBe("no-config");
-    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
-  });
+    it("emits a failure telemetry event carrying the failure reason", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({
+                kind: "unavailable",
+                reason: "extension-missing",
+            }),
+        );
+
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("abcd"));
+        await flush(300);
+        expect(trackMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: "search.performed",
+                properties: expect.objectContaining({
+                    succeeded: false,
+                    failureReason: "extension-missing",
+                }),
+                measurements: expect.objectContaining({ resultCount: 0 }),
+            }),
+        );
+        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    });
+
+    it("does not count no-config as a reliability failure", async () => {
+        const onSearchFiles = vi.fn(
+            async (): Promise<FileSearchOutcome> => ({
+                kind: "unavailable",
+                reason: "no-config",
+            }),
+        );
+
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("abcd"));
+        await flush(300);
+        expect(h.current!.searchUnavailable?.reason).toBe("no-config");
+        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+    });
 });
 
 describe("useDocSearch — superseded remote searches", () => {
-  beforeEach(() => vi.useFakeTimers());
+    beforeEach(() => vi.useFakeTimers());
 
-  /**
-   * Mount with a remote searcher whose calls settle only when the test says
-   * so, fire a search for "ab", then change the query while it is in flight.
-   */
-  async function supersedeInFlightSearch() {
-    const calls: Array<{
-      resolve: (outcome: FileSearchOutcome) => void;
-      reject: (err: Error) => void;
-    }> = [];
+    /**
+     * Mount with a remote searcher whose calls settle only when the test says
+     * so, fire a search for "ab", then change the query while it is in flight.
+     */
+    async function supersedeInFlightSearch() {
+        const calls: Array<{
+            resolve: (outcome: FileSearchOutcome) => void;
+            reject: (err: Error) => void;
+        }> = [];
 
-    const onSearchFiles = vi.fn(
-      () =>
-        new Promise<FileSearchOutcome>((resolve, reject) => {
-          calls.push({ resolve, reject });
-        }),
-    );
+        const onSearchFiles = vi.fn(
+            () =>
+                new Promise<FileSearchOutcome>((resolve, reject) => {
+                    calls.push({ resolve, reject });
+                }),
+        );
 
-    const h = mount({ files: [], onSearchFiles });
-    act(() => h.current!.setSearchQuery("ab"));
-    await flush(250);
-    act(() => h.current!.setSearchQuery("abc"));
+        const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("ab"));
+        await flush(250);
+        act(() => h.current!.setSearchQuery("abc"));
 
-    return { calls, h };
-  }
+        return { calls, h };
+    }
 
-  async function settle(run: () => void): Promise<void> {
-    await act(async () => {
-      run();
-      await Promise.resolve();
-      await Promise.resolve();
+    async function settle(run: () => void): Promise<void> {
+        await act(async () => {
+            run();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+    }
+
+    it("drops hits that arrive after the query changed", async () => {
+        const { calls, h } = await supersedeInFlightSearch();
+        await settle(() => calls[0]!.resolve({ kind: "ok", files: [file("stale.md")] }));
+        expect(h.current!.searchResults).toEqual([]);
+        expect(h.current!.remoteLoading).toBe(true);
+
+        await flush(250);
+        await settle(() => calls[1]!.resolve({ kind: "ok", files: [file("fresh.md")] }));
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["fresh.md"]);
+        expect(h.current!.remoteLoading).toBe(false);
     });
-  }
 
-  it("drops hits that arrive after the query changed", async () => {
-    const { calls, h } = await supersedeInFlightSearch();
-    await settle(() =>
-      calls[0]!.resolve({ kind: "ok", files: [file("stale.md")] }),
-    );
-    expect(h.current!.searchResults).toEqual([]);
-    expect(h.current!.remoteLoading).toBe(true);
-
-    await flush(250);
-    await settle(() =>
-      calls[1]!.resolve({ kind: "ok", files: [file("fresh.md")] }),
-    );
-    expect(h.current!.searchResults.map((f) => f.path)).toEqual(["fresh.md"]);
-    expect(h.current!.remoteLoading).toBe(false);
-  });
-
-  it("drops a failure that arrives after the query changed", async () => {
-    const { calls, h } = await supersedeInFlightSearch();
-    await settle(() => calls[0]!.reject(new Error("aborted")));
-    expect(h.current!.searchUnavailable).toBeNull();
-    expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
-    expect(h.current!.remoteLoading).toBe(true);
-  });
+    it("drops a failure that arrives after the query changed", async () => {
+        const { calls, h } = await supersedeInFlightSearch();
+        await settle(() => calls[0]!.reject(new Error("aborted")));
+        expect(h.current!.searchUnavailable).toBeNull();
+        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(h.current!.remoteLoading).toBe(true);
+    });
 });

@@ -8,19 +8,19 @@ import { countWords, sourceDiffRanges, wordCountDelta } from "../shellHelpers";
 import { activeSources, diffInputs, isDiffAvailable } from "./derive";
 
 interface ActiveDiffOptions {
-  selectedPath: string;
-  sourceByPath: Record<string, string>;
-  historicalSourceByKey: Record<string, string>;
-  historicalContentKey: string | null;
-  baselineContentKey: string | null;
-  usingHistoricalContent: boolean;
-  comparingIterations: boolean;
-  baselineAbsent: boolean;
-  viewingHistorical: boolean;
-  isWholeFileChange: boolean;
-  currentFileDiff: DiffRange[] | undefined;
-  currentOriginalSource: string | undefined;
-  diffHidden: boolean;
+    selectedPath: string;
+    sourceByPath: Record<string, string>;
+    historicalSourceByKey: Record<string, string>;
+    historicalContentKey: string | null;
+    baselineContentKey: string | null;
+    usingHistoricalContent: boolean;
+    comparingIterations: boolean;
+    baselineAbsent: boolean;
+    viewingHistorical: boolean;
+    isWholeFileChange: boolean;
+    currentFileDiff: DiffRange[] | undefined;
+    currentOriginalSource: string | undefined;
+    diffHidden: boolean;
 }
 
 /**
@@ -28,72 +28,67 @@ interface ActiveDiffOptions {
  * the compared PR updates) and the word-count badge derived from them.
  */
 export function useActiveDiff(opts: ActiveDiffOptions) {
-  const { comparingIterations, currentFileDiff } = opts;
-  const latestSource = opts.sourceByPath[opts.selectedPath];
+    const { comparingIterations, currentFileDiff } = opts;
+    const latestSource = opts.sourceByPath[opts.selectedPath];
 
-  const { activeSource, baselineSource } = activeSources({
-    ...opts,
-    latestSource,
-  });
+    const { activeSource, baselineSource } = activeSources({
+        ...opts,
+        latestSource,
+    });
 
-  const iterationDiff = useMemo(
-    () =>
-      comparingIterations &&
-      baselineSource !== undefined &&
-      activeSource !== undefined
-        ? sourceDiffRanges(baselineSource, activeSource)
-        : undefined,
-    [comparingIterations, baselineSource, activeSource],
-  );
+    const iterationDiff = useMemo(
+        () =>
+            comparingIterations && baselineSource !== undefined && activeSource !== undefined
+                ? sourceDiffRanges(baselineSource, activeSource)
+                : undefined,
+        [comparingIterations, baselineSource, activeSource],
+    );
 
-  const { activeOriginalSource, activeDiffTarget, rawActiveDiff } = diffInputs({
-    comparingIterations,
-    baselineSource,
-    activeSource,
-    latestSource,
-    currentOriginalSource: opts.currentOriginalSource,
-    iterationDiff,
-    currentFileDiff,
-  });
+    const { activeOriginalSource, activeDiffTarget, rawActiveDiff } = diffInputs({
+        comparingIterations,
+        baselineSource,
+        activeSource,
+        latestSource,
+        currentOriginalSource: opts.currentOriginalSource,
+        iterationDiff,
+        currentFileDiff,
+    });
 
-  // Both line diffs (ADO's and the update comparison's) report a rewrite as
-  // coarse hunks; re-align them per Markdown block so new blocks read as
-  // added and only genuine edits read as edited.
-  const activeDiff = useMemo(
-    () =>
-      rawActiveDiff &&
-      refineDiffRanges(rawActiveDiff, activeOriginalSource, activeDiffTarget),
-    [rawActiveDiff, activeOriginalSource, activeDiffTarget],
-  );
+    // Both line diffs (ADO's and the update comparison's) report a rewrite as
+    // coarse hunks; re-align them per Markdown block so new blocks read as
+    // added and only genuine edits read as edited.
+    const activeDiff = useMemo(
+        () =>
+            rawActiveDiff &&
+            refineDiffRanges(rawActiveDiff, activeOriginalSource, activeDiffTarget),
+        [rawActiveDiff, activeOriginalSource, activeDiffTarget],
+    );
 
-  const diffAvailable = isDiffAvailable({ ...opts, iterationDiff });
-  const showDiff = diffAvailable && !opts.diffHidden;
+    const diffAvailable = isDiffAvailable({ ...opts, iterationDiff });
+    const showDiff = diffAvailable && !opts.diffHidden;
 
-  // Subtle word-count badge for the doc-nav title. Uses the active document's
-  // Markdown source; falls back to 0 (badge hidden) until the source loads.
-  const docWordCount = useMemo(
-    () => countWords(activeSource ?? ""),
-    [activeSource],
-  );
+    // Subtle word-count badge for the doc-nav title. Uses the active document's
+    // Markdown source; falls back to 0 (badge hidden) until the source loads.
+    const docWordCount = useMemo(() => countWords(activeSource ?? ""), [activeSource]);
 
-  // When the diff is shown, also surface how the PR grew/shrank the prose:
-  // words added vs. removed, derived from the changed line ranges. `showDiff`
-  // already implies a present, non-empty `currentFileDiff` (see `diffAvailable`),
-  // so the delta only needs the show/hide gate here; an all-zero delta is fine —
-  // the badge simply renders no `+/−` segment.
-  const docWordDelta = useMemo(() => {
-    if (!showDiff) return undefined;
+    // When the diff is shown, also surface how the PR grew/shrank the prose:
+    // words added vs. removed, derived from the changed line ranges. `showDiff`
+    // already implies a present, non-empty `currentFileDiff` (see `diffAvailable`),
+    // so the delta only needs the show/hide gate here; an all-zero delta is fine —
+    // the badge simply renders no `+/−` segment.
+    const docWordDelta = useMemo(() => {
+        if (!showDiff) return undefined;
 
-    return wordCountDelta(activeSource ?? "", activeDiff!);
-  }, [showDiff, activeDiff, activeSource]);
+        return wordCountDelta(activeSource ?? "", activeDiff!);
+    }, [showDiff, activeDiff, activeSource]);
 
-  return {
-    activeSource,
-    activeOriginalSource,
-    activeDiff,
-    diffAvailable,
-    showDiff,
-    docWordCount,
-    docWordDelta,
-  };
+    return {
+        activeSource,
+        activeOriginalSource,
+        activeDiff,
+        diffAvailable,
+        showDiff,
+        docWordCount,
+        docWordDelta,
+    };
 }

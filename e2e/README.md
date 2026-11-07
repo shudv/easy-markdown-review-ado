@@ -26,51 +26,51 @@ Run every command from the repo root.
 1. **Create `.env`** and fill in `AZDO_ORG_URL`, `AZDO_PAT` (scopes are listed
    in the file), and `AZDO_PUBLISHER_ID`. `.env` is gitignored.
 
-   ```pwsh
-   Copy-Item .env.example .env
-   npm run verify:ado          # checks the PAT; changes nothing
-   ```
+    ```pwsh
+    Copy-Item .env.example .env
+    npm run verify:ado          # checks the PAT; changes nothing
+    ```
 
 2. **Create the sandbox project** with its repos, PRs, and comment threads. It
    is safe to re-run.
 
-   ```pwsh
-   npm run setup:sandbox
-   ```
+    ```pwsh
+    npm run setup:sandbox
+    ```
 
 3. **Trust the local HTTPS certificate** so ADO can load
    `https://localhost:3000`:
 
-   ```pwsh
-   npm run setup:cert
-   ```
+    ```pwsh
+    npm run setup:cert
+    ```
 
 4. **Publish the dev extension** and share it with your org. Replace `<org>`
    with the last path segment of `AZDO_ORG_URL`:
 
-   ```pwsh
-   npm run publish:dev -- --share-with <org>
-   ```
+    ```pwsh
+    npm run publish:dev -- --share-with <org>
+    ```
 
-   Then install it once in ADO: **Organization settings → Extensions → Shared →
-   Easy Markdown Review (dev) → Install**. Later publishes update it in place, so
-   `--share-with` and the install are only needed the first time.
+    Then install it once in ADO: **Organization settings → Extensions → Shared →
+    Easy Markdown Review (dev) → Install**. Later publishes update it in place, so
+    `--share-with` and the install are only needed the first time.
 
 5. **Save an ADO login** for Playwright. A browser window opens; finish sign-in
    (including MFA). The session is saved to `e2e/.auth/state.json`
    (gitignored). Re-run this when the session expires.
 
-   ```pwsh
-   npm run e2e:auth
-   ```
+    ```pwsh
+    npm run e2e:auth
+    ```
 
 6. **Check the whole setup** (dev server, certificate, installed extension,
    login, and browser access to localhost) in one command. It prints what to
    fix if anything is missing:
 
-   ```pwsh
-   npm run dev:ado -- --check
-   ```
+    ```pwsh
+    npm run dev:ado -- --check
+    ```
 
 ## The loop
 

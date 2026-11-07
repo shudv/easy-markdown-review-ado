@@ -20,34 +20,33 @@ const distDir = resolve(process.argv[2] ?? join(here, "..", "dist"));
 const MARKERS = ["__emrFaults", "emr.devFaults", "[dev faults]", "dev-fault"];
 
 function* jsFiles(dir) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) yield* jsFiles(path);
-    else if (name.endsWith(".js")) yield path;
-  }
+    for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) yield* jsFiles(path);
+        else if (name.endsWith(".js")) yield path;
+    }
 }
 
 if (!existsSync(distDir)) {
-  console.error(`check-no-dev-faults: ${distDir} not found — build first.`);
-  process.exit(1);
+    console.error(`check-no-dev-faults: ${distDir} not found — build first.`);
+    process.exit(1);
 }
 
 const hits = [];
 let scanned = 0;
 for (const file of jsFiles(distDir)) {
-  scanned += 1;
-  const text = readFileSync(file, "utf8");
-  for (const marker of MARKERS) {
-    if (text.includes(marker))
-      hits.push(`${relative(distDir, file)}: ${marker}`);
-  }
+    scanned += 1;
+    const text = readFileSync(file, "utf8");
+    for (const marker of MARKERS) {
+        if (text.includes(marker)) hits.push(`${relative(distDir, file)}: ${marker}`);
+    }
 }
 
 if (hits.length > 0) {
-  console.error(
-    "check-no-dev-faults: dev-only fault injection leaked into the build:\n  " +
-      hits.join("\n  "),
-  );
-  process.exit(1);
+    console.error(
+        "check-no-dev-faults: dev-only fault injection leaked into the build:\n  " +
+            hits.join("\n  "),
+    );
+    process.exit(1);
 }
 console.log(`check-no-dev-faults: OK (${scanned} JS files clean)`);

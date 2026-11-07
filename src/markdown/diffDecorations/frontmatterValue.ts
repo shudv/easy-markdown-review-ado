@@ -2,9 +2,9 @@
 
 import { diffWords } from "../wordDiff";
 import {
-  frontmatterValuesForKey,
-  frontmatterValueText,
-  parseFrontmatterListItems,
+    frontmatterValuesForKey,
+    frontmatterValueText,
+    parseFrontmatterListItems,
 } from "../frontmatter";
 import { applyInlineWordDiff } from "../wordDiffDom";
 import { type ChangeRange, overlaps, type SourceSpan } from "./shared";
@@ -22,45 +22,41 @@ import { type ChangeRange, overlaps, type SourceSpan } from "./shared";
  * or whose value is unchanged.
  */
 export function decorateFrontmatterValue(
-  el: HTMLElement,
-  kind: "added" | "modified",
-  row: SourceSpan,
-  changeRanges: readonly ChangeRange[],
+    el: HTMLElement,
+    kind: "added" | "modified",
+    row: SourceSpan,
+    changeRanges: readonly ChangeRange[],
 ): boolean {
-  const valueEl = el.querySelector<HTMLElement>(".emr-frontmatter-value");
-  if (!valueEl) return false;
+    const valueEl = el.querySelector<HTMLElement>(".emr-frontmatter-value");
+    if (!valueEl) return false;
 
-  const modifiedText = valueEl.textContent;
+    const modifiedText = valueEl.textContent;
 
-  // Resolve the pre-edit value text. A wholly-added row has no "before", so we
-  // diff against an empty string — every word reads as added (green).
-  let originalText = "";
+    // Resolve the pre-edit value text. A wholly-added row has no "before", so we
+    // diff against an empty string — every word reads as added (green).
+    let originalText = "";
 
-  if (kind === "modified") {
-    const key = el.querySelector(".emr-frontmatter-key")?.textContent.trim();
-    if (key === undefined || key === "") return false;
+    if (kind === "modified") {
+        const key = el.querySelector(".emr-frontmatter-key")?.textContent.trim();
 
-    const resolved = resolveFrontmatterOriginalValue(
-      key,
-      modifiedText,
-      row,
-      changeRanges,
-    );
+        if (key === undefined || key === "") return false;
 
-    if (resolved == null) return false;
-    originalText = resolved;
-  }
+        const resolved = resolveFrontmatterOriginalValue(key, modifiedText, row, changeRanges);
 
-  if (originalText === modifiedText) return false;
+        if (resolved == null) return false;
+        originalText = resolved;
+    }
 
-  // Word-diff the value against its pre-edit text. Unlike the prose blocks we
-  // apply NO unchanged-ratio threshold: metadata values are short and a full
-  // replacement (e.g. `Draft` → `Published`) still reads best as struck-old +
-  // green-new rather than a flat wash.
-  const ops = diffWords(originalText, modifiedText);
-  const res = applyInlineWordDiff(valueEl, ops);
+    if (originalText === modifiedText) return false;
 
-  return res != null && res.added + res.removed > 0;
+    // Word-diff the value against its pre-edit text. Unlike the prose blocks we
+    // apply NO unchanged-ratio threshold: metadata values are short and a full
+    // replacement (e.g. `Draft` → `Published`) still reads best as struck-old +
+    // green-new rather than a flat wash.
+    const ops = diffWords(originalText, modifiedText);
+    const res = applyInlineWordDiff(valueEl, ops);
+
+    return res != null && res.added + res.removed > 0;
 }
 
 /**
@@ -78,44 +74,44 @@ export function decorateFrontmatterValue(
  * Returns null when no overlapping modified range carries usable original text.
  */
 function resolveFrontmatterOriginalValue(
-  key: string,
-  currentText: string,
-  { start: rowStart, end: rowEnd }: SourceSpan,
-  ranges: readonly ChangeRange[],
+    key: string,
+    currentText: string,
+    { start: rowStart, end: rowEnd }: SourceSpan,
+    ranges: readonly ChangeRange[],
 ): string | null {
-  const overlapping = ranges.filter(
-    (r) =>
-      r.kind === "modified" &&
-      r.originalText != null &&
-      overlaps(rowStart, rowEnd, r.start, r.end),
-  );
-
-  if (overlapping.length === 0) return null;
-
-  // Shape 1: a fragment that carries the `key:` line resolves the value whole.
-  for (const r of overlapping) {
-    const values = frontmatterValuesForKey(r.originalText!, key);
-    if (values) return frontmatterValueText(values);
-  }
-
-  // Shape 2: block-list item fragments — substitute the original item(s) back
-  // at their line position. Items sit on `rowStart+1…`, so a range starting at
-  // line L maps to current item index `L - (rowStart + 1)`. Apply back-to-front
-  // so earlier indices stay valid when item counts differ.
-  const firstItemLine = rowStart + 1;
-  const originalItems = currentText === "" ? [] : currentText.split(", ");
-  const sorted = [...overlapping].sort((a, b) => b.start - a.start);
-
-  for (const r of sorted) {
-    const startIdx = r.start - firstItemLine;
-    if (startIdx < 0) return null; // Can't map the fragment onto an item slot.
-    const modifiedCount = r.end - r.start + 1;
-    originalItems.splice(
-      startIdx,
-      modifiedCount,
-      ...parseFrontmatterListItems(r.originalText!),
+    const overlapping = ranges.filter(
+        (r) =>
+            r.kind === "modified" &&
+            r.originalText != null &&
+            overlaps(rowStart, rowEnd, r.start, r.end),
     );
-  }
 
-  return frontmatterValueText(originalItems);
+    if (overlapping.length === 0) return null;
+
+    // Shape 1: a fragment that carries the `key:` line resolves the value whole.
+    for (const r of overlapping) {
+        const values = frontmatterValuesForKey(r.originalText!, key);
+        if (values) return frontmatterValueText(values);
+    }
+
+    // Shape 2: block-list item fragments — substitute the original item(s) back
+    // at their line position. Items sit on `rowStart+1…`, so a range starting at
+    // line L maps to current item index `L - (rowStart + 1)`. Apply back-to-front
+    // so earlier indices stay valid when item counts differ.
+    const firstItemLine = rowStart + 1;
+    const originalItems = currentText === "" ? [] : currentText.split(", ");
+    const sorted = [...overlapping].sort((a, b) => b.start - a.start);
+
+    for (const r of sorted) {
+        const startIdx = r.start - firstItemLine;
+        if (startIdx < 0) return null; // Can't map the fragment onto an item slot.
+        const modifiedCount = r.end - r.start + 1;
+        originalItems.splice(
+            startIdx,
+            modifiedCount,
+            ...parseFrontmatterListItems(r.originalText!),
+        );
+    }
+
+    return frontmatterValueText(originalItems);
 }

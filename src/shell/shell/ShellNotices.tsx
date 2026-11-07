@@ -7,19 +7,19 @@ import { SessionNotice } from "../components/SessionNotice";
 import type { DraftTarget } from "../draftStorage";
 
 interface ShellNoticesProps {
-  persistError: string | null;
-  onDismissPersistError: () => void;
-  /** Whether the reconnect notice may offer "Reload page". */
-  reloadAllowed: boolean;
-  missingDoc: { missing: string; shown: string } | null;
-  onDismissMissingDoc: () => void;
-  draftGuard: {
-    requested: DraftTarget;
-    existingPath: string;
-    snippet: string;
-  } | null;
-  onDiscardExistingDraft: () => void;
-  onKeepExistingDraft: () => void;
+    persistError: string | null;
+    onDismissPersistError: () => void;
+    /** Whether the reconnect notice may offer "Reload page". */
+    reloadAllowed: boolean;
+    missingDoc: { missing: string; shown: string } | null;
+    onDismissMissingDoc: () => void;
+    draftGuard: {
+        requested: DraftTarget;
+        existingPath: string;
+        snippet: string;
+    } | null;
+    onDiscardExistingDraft: () => void;
+    onKeepExistingDraft: () => void;
 }
 
 /**
@@ -28,55 +28,55 @@ interface ShellNoticesProps {
  * discard prompt.
  */
 export function ShellNotices(props: Readonly<ShellNoticesProps>): ReactElement {
-  const { persistError, missingDoc, draftGuard } = props;
+    const { persistError, missingDoc, draftGuard } = props;
 
-  return (
-    <>
-      {persistError !== null && persistError !== "" ? (
-        <div className="emr-toast emr-toast--error" role="alert">
-          <span className="emr-toast-icon" aria-hidden="true">
-            ⚠
-          </span>
-          <span className="emr-toast-msg">{persistError}</span>
-          <button
-            type="button"
-            className="emr-toast-dismiss"
-            onClick={props.onDismissPersistError}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-      <SessionNotice reloadAllowed={props.reloadAllowed} />
-      {missingDoc ? (
-        <div className="emr-toast emr-toast--info" role="status">
-          <span className="emr-toast-msg">
-            <code>{missingDoc.missing}</code> is no longer in this repository
-            &mdash; it may have been moved or deleted. Showing{" "}
-            <code>{missingDoc.shown}</code> instead.
-          </span>
-          <button
-            type="button"
-            className="emr-toast-dismiss"
-            onClick={props.onDismissMissingDoc}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-      {draftGuard ? (
-        <DraftGuardDialog
-          fileName={
-            draftGuard.existingPath.split("/").filter(Boolean).pop() ??
-            draftGuard.existingPath
-          }
-          snippet={draftGuard.snippet}
-          onDiscard={props.onDiscardExistingDraft}
-          onKeepEditing={props.onKeepExistingDraft}
-        />
-      ) : null}
-    </>
-  );
+    return (
+        <>
+            {persistError !== null && persistError !== "" ? (
+                <div className="emr-toast emr-toast--error" role="alert">
+                    <span className="emr-toast-icon" aria-hidden="true">
+                        ⚠
+                    </span>
+                    <span className="emr-toast-msg">{persistError}</span>
+                    <button
+                        type="button"
+                        className="emr-toast-dismiss"
+                        onClick={props.onDismissPersistError}
+                        aria-label="Dismiss"
+                    >
+                        ×
+                    </button>
+                </div>
+            ) : null}
+            <SessionNotice reloadAllowed={props.reloadAllowed} />
+            {missingDoc ? (
+                <div className="emr-toast emr-toast--info" role="status">
+                    <span className="emr-toast-msg">
+                        <code>{missingDoc.missing}</code> is no longer in this repository &mdash; it
+                        may have been moved or deleted. Showing <code>{missingDoc.shown}</code>{" "}
+                        instead.
+                    </span>
+                    <button
+                        type="button"
+                        className="emr-toast-dismiss"
+                        onClick={props.onDismissMissingDoc}
+                        aria-label="Dismiss"
+                    >
+                        ×
+                    </button>
+                </div>
+            ) : null}
+            {draftGuard ? (
+                <DraftGuardDialog
+                    fileName={
+                        draftGuard.existingPath.split("/").filter(Boolean).pop() ??
+                        draftGuard.existingPath
+                    }
+                    snippet={draftGuard.snippet}
+                    onDiscard={props.onDiscardExistingDraft}
+                    onKeepEditing={props.onKeepExistingDraft}
+                />
+            ) : null}
+        </>
+    );
 }

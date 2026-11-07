@@ -3,40 +3,37 @@
 // evaluate). `adoCommentApi.ts` re-exports these by name, so the production
 // call shape is unchanged.
 
+import type { CommentType, PullRequestStatus } from "azure-devops-extension-api/Git";
 import type {
-  CommentType,
-  PullRequestStatus,
+    CommentPosition,
+    GitPullRequest,
+    GitPullRequestCommentThread,
+    Comment as AdoComment,
 } from "azure-devops-extension-api/Git";
 import type {
-  CommentPosition,
-  GitPullRequest,
-  GitPullRequestCommentThread,
-  Comment as AdoComment,
-} from "azure-devops-extension-api/Git";
-import type {
-  Comment,
-  CommentAuthor,
-  CommentThread,
-  MentionedIdentity,
-  ReactionKind,
-  TextQuoteAnchor,
-  ThreadStatus,
+    Comment,
+    CommentAuthor,
+    CommentThread,
+    MentionedIdentity,
+    ReactionKind,
+    TextQuoteAnchor,
+    ThreadStatus,
 } from "../types";
 import { identityAvatarUrl } from "./adoGitData.helpers";
 import {
-  mergeMentionIdentities,
-  normalizeIdentityGuid,
-  type PullRequestSuggestion,
+    mergeMentionIdentities,
+    normalizeIdentityGuid,
+    type PullRequestSuggestion,
 } from "../comments/mentions";
 
 // The file-diff helpers live in `./adoFileDiffs.helpers`; re-exported here so
 // existing importers keep their path.
 export {
-  fileDiffCacheReplacer,
-  hashString,
-  lineDiffBlocksToCounts,
-  lineDiffBlocksToRanges,
-  pathsRequiringOriginalSource,
+    fileDiffCacheReplacer,
+    hashString,
+    lineDiffBlocksToCounts,
+    lineDiffBlocksToRanges,
+    pathsRequiringOriginalSource,
 } from "./adoFileDiffs.helpers";
 
 // ---------------------------------------------------------------------------
@@ -60,21 +57,19 @@ export { normalizeIdentityGuid };
  * persisted `@<GUID>` mention needs to resolve after a reload.
  */
 export function buildIdentitiesUrl(
-  orgName: string | undefined,
-  ids: readonly string[],
+    orgName: string | undefined,
+    ids: readonly string[],
 ): string | null {
-  if (orgName === undefined || orgName === "") return null;
+    if (orgName === undefined || orgName === "") return null;
 
-  const clean = [
-    ...new Set(ids.map((i) => i.trim().toLowerCase()).filter(Boolean)),
-  ];
+    const clean = [...new Set(ids.map((i) => i.trim().toLowerCase()).filter(Boolean))];
 
-  if (clean.length === 0) return null;
+    if (clean.length === 0) return null;
 
-  return (
-    `https://vssps.dev.azure.com/${encodeURIComponent(orgName)}` +
-    `/_apis/identities?identityIds=${clean.join(",")}&api-version=7.1-preview.1`
-  );
+    return (
+        `https://vssps.dev.azure.com/${encodeURIComponent(orgName)}` +
+        `/_apis/identities?identityIds=${clean.join(",")}&api-version=7.1-preview.1`
+    );
 }
 
 /**
@@ -85,43 +80,43 @@ export function buildIdentitiesUrl(
  * silently rendering the wrong person's name.
  */
 export function parseIdentitiesResponse(
-  body: unknown,
-  requestedIds: readonly string[],
+    body: unknown,
+    requestedIds: readonly string[],
 ): Record<string, { displayName: string; avatarUrl?: string }> {
-  const out: Record<string, { displayName: string; avatarUrl?: string }> = {};
-  const value = (body as { value?: unknown } | null)?.value;
-  if (!Array.isArray(value)) return out;
-  const byId = new Map<string, string>();
+    const out: Record<string, { displayName: string; avatarUrl?: string }> = {};
+    const value = (body as { value?: unknown } | null)?.value;
+    if (!Array.isArray(value)) return out;
+    const byId = new Map<string, string>();
 
-  for (const entity of value) {
-    // ADO returns a `null` slot for any requested id it can't resolve (e.g. a
-    // cross-tenant AAD guest queried by its object id). Skip those — a single
-    // null must NOT crash the whole batch and drop the ids that DID resolve.
-    if (entity === null || typeof entity !== "object") continue;
+    for (const entity of value) {
+        // ADO returns a `null` slot for any requested id it can't resolve (e.g. a
+        // cross-tenant AAD guest queried by its object id). Skip those — a single
+        // null must NOT crash the whole batch and drop the ids that DID resolve.
+        if (entity === null || typeof entity !== "object") continue;
 
-    const e = entity as {
-      id?: unknown;
-      providerDisplayName?: unknown;
-      customDisplayName?: unknown;
-    };
+        const e = entity as {
+            id?: unknown;
+            providerDisplayName?: unknown;
+            customDisplayName?: unknown;
+        };
 
-    const id = typeof e.id === "string" ? e.id.toLowerCase() : "";
+        const id = typeof e.id === "string" ? e.id.toLowerCase() : "";
 
-    const name =
-      (typeof e.providerDisplayName === "string" && e.providerDisplayName) ||
-      (typeof e.customDisplayName === "string" && e.customDisplayName) ||
-      "";
+        const name =
+            (typeof e.providerDisplayName === "string" && e.providerDisplayName) ||
+            (typeof e.customDisplayName === "string" && e.customDisplayName) ||
+            "";
 
-    if (id && name) byId.set(id, name);
-  }
+        if (id && name) byId.set(id, name);
+    }
 
-  for (const raw of requestedIds) {
-    const name = byId.get(raw.trim().toLowerCase());
-    // `byId` only ever stores non-empty names, so a hit is always non-empty.
-    if (name !== undefined) out[raw] = { displayName: name };
-  }
+    for (const raw of requestedIds) {
+        const name = byId.get(raw.trim().toLowerCase());
+        // `byId` only ever stores non-empty names, so a hit is always non-empty.
+        if (name !== undefined) out[raw] = { displayName: name };
+    }
 
-  return out;
+    return out;
 }
 
 /**
@@ -129,11 +124,11 @@ export function parseIdentitiesResponse(
  * `authorFromAdo` and the identity-picker → suggestion adapter.
  */
 export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
 
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -147,19 +142,19 @@ export function initialsOf(name: string): string {
  * formatting — WIQL has no code execution; ADO validates further).
  */
 export function buildWorkItemWiql(query: string): string {
-  const numeric = /^\d+$/.test(query) ? Number(query) : null;
+    const numeric = /^\d+$/.test(query) ? Number(query) : null;
 
-  if (numeric !== null) {
-    return `SELECT [System.Id] FROM WorkItems WHERE [System.Id] = ${numeric}`;
-  }
+    if (numeric !== null) {
+        return `SELECT [System.Id] FROM WorkItems WHERE [System.Id] = ${numeric}`;
+    }
 
-  const escaped = query.replace(/'/g, "''");
+    const escaped = query.replace(/'/g, "''");
 
-  return (
-    "SELECT [System.Id] FROM WorkItems " +
-    `WHERE [System.Title] CONTAINS '${escaped}' ` +
-    "ORDER BY [System.ChangedDate] DESC"
-  );
+    return (
+        "SELECT [System.Id] FROM WorkItems " +
+        `WHERE [System.Title] CONTAINS '${escaped}' ` +
+        "ORDER BY [System.ChangedDate] DESC"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -177,12 +172,12 @@ const PR_STATUS_COMPLETED = 3 as PullRequestStatus;
  * file SDK-free at runtime while the parameter type stays type-checked.
  */
 export function prStatusLabel(
-  status: PullRequestStatus | undefined,
+    status: PullRequestStatus | undefined,
 ): "active" | "completed" | "abandoned" {
-  if (status === PR_STATUS_COMPLETED) return "completed";
-  if (status === PR_STATUS_ABANDONED) return "abandoned";
+    if (status === PR_STATUS_COMPLETED) return "completed";
+    if (status === PR_STATUS_ABANDONED) return "abandoned";
 
-  return "active";
+    return "active";
 }
 
 /**
@@ -192,28 +187,28 @@ export function prStatusLabel(
  * so it is skipped rather than suggested as `!undefined`.
  */
 export function matchPullRequestSuggestions(
-  prs: readonly Partial<GitPullRequest>[],
-  query: string,
+    prs: readonly Partial<GitPullRequest>[],
+    query: string,
 ): PullRequestSuggestion[] {
-  const trimmed = query.trim();
-  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
-  const lower = trimmed.toLowerCase();
+    const trimmed = query.trim();
+    const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+    const lower = trimmed.toLowerCase();
 
-  return prs
-    .filter((p): p is Partial<GitPullRequest> & { pullRequestId: number } => {
-      if (typeof p.pullRequestId !== "number") return false;
-      if (p.pullRequestId === numeric) return true;
+    return prs
+        .filter((p): p is Partial<GitPullRequest> & { pullRequestId: number } => {
+            if (typeof p.pullRequestId !== "number") return false;
+            if (p.pullRequestId === numeric) return true;
 
-      return (p.title ?? "").toLowerCase().includes(lower);
-    })
-    .slice(0, 10)
-    .map((p) => ({
-      kind: "pullrequest",
-      id: String(p.pullRequestId),
-      title: p.title ?? "(untitled PR)",
-      status: prStatusLabel(p.status),
-      repository: p.repository?.name,
-    }));
+            return (p.title ?? "").toLowerCase().includes(lower);
+        })
+        .slice(0, 10)
+        .map((p) => ({
+            kind: "pullrequest",
+            id: String(p.pullRequestId),
+            title: p.title ?? "(untitled PR)",
+            status: prStatusLabel(p.status),
+            repository: p.repository?.name,
+        }));
 }
 
 // Thread/comment conversion. Numeric literals stand in for SDK enum values so
@@ -251,58 +246,58 @@ export const SCHEMA_VERSION = "1";
  * old threads created before this schema) by returning `[]`.
  */
 export function readMentionsProp(properties: unknown): MentionedIdentity[] {
-  const raw = readProp(properties, PROP_MENTIONS);
-  if (typeof raw !== "string" || raw.length === 0) return [];
-  let parsed: unknown;
+    const raw = readProp(properties, PROP_MENTIONS);
+    if (typeof raw !== "string" || raw.length === 0) return [];
+    let parsed: unknown;
 
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-
-  if (!Array.isArray(parsed)) return [];
-  const out: MentionedIdentity[] = [];
-
-  for (const e of parsed) {
-    const r = e as {
-      id?: unknown;
-      displayName?: unknown;
-      avatarUrl?: unknown;
-    } | null;
-
-    if (typeof r?.id !== "string" || typeof r.displayName !== "string") {
-      continue;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        return [];
     }
 
-    out.push({
-      id: r.id,
-      displayName: r.displayName,
-      avatarUrl: typeof r.avatarUrl === "string" ? r.avatarUrl : undefined,
-    });
-  }
+    if (!Array.isArray(parsed)) return [];
+    const out: MentionedIdentity[] = [];
 
-  return out;
+    for (const e of parsed) {
+        const r = e as {
+            id?: unknown;
+            displayName?: unknown;
+            avatarUrl?: unknown;
+        } | null;
+
+        if (typeof r?.id !== "string" || typeof r.displayName !== "string") {
+            continue;
+        }
+
+        out.push({
+            id: r.id,
+            displayName: r.displayName,
+            avatarUrl: typeof r.avatarUrl === "string" ? r.avatarUrl : undefined,
+        });
+    }
+
+    return out;
 }
 
 /** Map ADO's numeric thread status to our local string status. */
 export function fromAdoStatus(s: number | undefined): ThreadStatus {
-  switch (s) {
-    case 2 /* Fixed */:
-    case 5 /* ByDesign */:
-      return "resolved";
-    case 3 /* WontFix */:
-      return "wontFix";
-    case 4 /* Closed */:
-      return "closed";
-    case 6 /* Pending */:
-      return "pending";
-    case 1 /* Active */:
-    case 0 /* Unknown */:
-    case undefined:
-    default:
-      return "active";
-  }
+    switch (s) {
+        case 2 /* Fixed */:
+        case 5 /* ByDesign */:
+            return "resolved";
+        case 3 /* WontFix */:
+            return "wontFix";
+        case 4 /* Closed */:
+            return "closed";
+        case 6 /* Pending */:
+            return "pending";
+        case 1 /* Active */:
+        case 0 /* Unknown */:
+        case undefined:
+        default:
+            return "active";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -330,43 +325,43 @@ export const COMMENT_TYPE_TEXT = 1;
 
 /** Shape of the comment payload we POST (structural, SDK-free). */
 export interface AdoCommentPayload {
-  parentCommentId: number;
-  content: string;
-  commentType: number;
+    parentCommentId: number;
+    content: string;
+    commentType: number;
 }
 
 /** Payload for the root comment of a newly-created thread. */
 export function buildRootComment(bodyMarkdown: string): AdoCommentPayload {
-  return {
-    parentCommentId: ROOT_PARENT_COMMENT_ID,
-    content: bodyMarkdown,
-    commentType: COMMENT_TYPE_TEXT,
-  };
+    return {
+        parentCommentId: ROOT_PARENT_COMMENT_ID,
+        content: bodyMarkdown,
+        commentType: COMMENT_TYPE_TEXT,
+    };
 }
 
 /** Payload for a reply appended to an existing thread. */
 export function buildReplyComment(bodyMarkdown: string): AdoCommentPayload {
-  return {
-    parentCommentId: REPLY_PARENT_COMMENT_ID,
-    content: bodyMarkdown,
-    commentType: COMMENT_TYPE_TEXT,
-  };
+    return {
+        parentCommentId: REPLY_PARENT_COMMENT_ID,
+        content: bodyMarkdown,
+        commentType: COMMENT_TYPE_TEXT,
+    };
 }
 
 /** Map our local thread status to ADO's numeric `CommentThreadStatus`. */
 export function toAdoStatusValue(s: ThreadStatus): number {
-  switch (s) {
-    case "active":
-      return 1; // Active
-    case "resolved":
-      return 2; // Fixed
-    case "wontFix":
-      return 3; // WontFix
-    case "closed":
-      return 4; // Closed
-    case "pending":
-      return 6; // Pending
-  }
+    switch (s) {
+        case "active":
+            return 1; // Active
+        case "resolved":
+            return 2; // Fixed
+        case "wontFix":
+            return 3; // WontFix
+        case "closed":
+            return 4; // Closed
+        case "pending":
+            return 6; // Pending
+    }
 }
 
 /**
@@ -374,10 +369,8 @@ export function toAdoStatusValue(s: ThreadStatus): number {
  * must create the like and `false` must remove it — inverting this makes the
  * Like button remove reactions and vice-versa.
  */
-export function reactionClientMethod(
-  add: boolean,
-): "createLike" | "deleteLike" {
-  return add ? "createLike" : "deleteLike";
+export function reactionClientMethod(add: boolean): "createLike" | "deleteLike" {
+    return add ? "createLike" : "deleteLike";
 }
 
 /**
@@ -386,15 +379,15 @@ export function reactionClientMethod(
  * naked or wrapped.
  */
 export function readProp(properties: unknown, key: string): unknown {
-  if (properties === null || typeof properties !== "object") return undefined;
-  const p = (properties as Record<string, unknown>)[key];
-  if (p == null) return undefined;
+    if (properties === null || typeof properties !== "object") return undefined;
+    const p = (properties as Record<string, unknown>)[key];
+    if (p == null) return undefined;
 
-  if (typeof p === "object" && "$value" in (p as object)) {
-    return (p as { $value: unknown }).$value;
-  }
+    if (typeof p === "object" && "$value" in (p as object)) {
+        return (p as { $value: unknown }).$value;
+    }
 
-  return p;
+    return p;
 }
 
 /**
@@ -411,13 +404,13 @@ export function readProp(properties: unknown, key: string): unknown {
  * base to borrow → `undefined`, and the initials avatar shows.
  */
 export function pickerAvatarUrl(
-  id: string,
-  rawImage: string | undefined,
-  selfImageUrl: string | undefined,
+    id: string,
+    rawImage: string | undefined,
+    selfImageUrl: string | undefined,
 ): string | undefined {
-  if (rawImage === undefined || rawImage === "") return undefined;
+    if (rawImage === undefined || rawImage === "") return undefined;
 
-  return identityAvatarUrl({ id, imageUrl: selfImageUrl });
+    return identityAvatarUrl({ id, imageUrl: selfImageUrl });
 }
 
 // ---------------------------------------------------------------------------
@@ -432,47 +425,44 @@ export function pickerAvatarUrl(
 
 /** ADO `CommentThreadContext` as actually returned over REST. */
 interface AdoThreadContextWire {
-  filePath?: string;
-  leftFileStart?: CommentPosition;
-  leftFileEnd?: CommentPosition;
-  rightFileStart?: CommentPosition;
-  rightFileEnd?: CommentPosition;
+    filePath?: string;
+    leftFileStart?: CommentPosition;
+    leftFileEnd?: CommentPosition;
+    rightFileStart?: CommentPosition;
+    rightFileEnd?: CommentPosition;
 }
 
 /** ADO `Comment` as actually returned over REST. */
 export type AdoCommentWire = Omit<
-  AdoComment,
-  "content" | "lastContentUpdatedDate" | "publishedDate" | "usersLiked"
+    AdoComment,
+    "content" | "lastContentUpdatedDate" | "publishedDate" | "usersLiked"
 > & {
-  content?: string;
-  lastContentUpdatedDate?: Date;
-  publishedDate?: Date;
-  usersLiked?: AdoComment["usersLiked"];
+    content?: string;
+    lastContentUpdatedDate?: Date;
+    publishedDate?: Date;
+    usersLiked?: AdoComment["usersLiked"];
 };
 
 /** ADO `GitPullRequestCommentThread` as actually returned over REST. */
-export type AdoThreadWire = Omit<
-  GitPullRequestCommentThread,
-  "comments" | "threadContext"
-> & {
-  comments?: AdoCommentWire[];
-  threadContext?: AdoThreadContextWire;
+export type AdoThreadWire = Omit<GitPullRequestCommentThread, "comments" | "threadContext"> & {
+    comments?: AdoCommentWire[];
+    threadContext?: AdoThreadContextWire;
 };
 
 function authorFromAdo(a: AdoComment["author"] | undefined): CommentAuthor {
-  const displayName = a?.displayName ?? "Unknown";
-  const id = a?.id ?? "unknown";
+    const displayName = a?.displayName ?? "Unknown";
+    const id = a?.id ?? "unknown";
 
-  return {
-    id,
-    displayName,
-    initials: initialsOf(displayName),
-    // Route every author through the same CORS-safe `identityImage` endpoint
-    // the current user uses, so a person renders identically whether their
-    // comment was just optimistically posted or later re-fetched from ADO
-    // (whose raw `imageUrl` is the CORS-blocked MemberAvatars URL).
-    avatarUrl: identityAvatarUrl({ id, imageUrl: a?.imageUrl }),
-  };
+    return {
+        id,
+        displayName,
+        initials: initialsOf(displayName),
+        // Route every author through the same CORS-safe `identityImage` endpoint
+        // the current user uses, so a person renders identically whether their
+        // comment was just optimistically posted or later re-fetched from ADO
+        // (whose raw `imageUrl` is the CORS-blocked MemberAvatars URL).
+        avatarUrl: identityAvatarUrl({ id, imageUrl: a?.imageUrl }),
+    };
 }
 
 /**
@@ -490,48 +480,48 @@ const EDIT_TOLERANCE_MS = 1000;
  * values are treated as unedited).
  */
 export function editedAtOf(
-  publishedDate: Date | undefined,
-  lastContentUpdatedDate: Date | undefined,
+    publishedDate: Date | undefined,
+    lastContentUpdatedDate: Date | undefined,
 ): string | undefined {
-  if (!lastContentUpdatedDate) return undefined;
-  const updatedMs = new Date(lastContentUpdatedDate).getTime();
-  const publishedMs = publishedDate ? new Date(publishedDate).getTime() : 0;
-  if (updatedMs - publishedMs <= EDIT_TOLERANCE_MS) return undefined;
+    if (!lastContentUpdatedDate) return undefined;
+    const updatedMs = new Date(lastContentUpdatedDate).getTime();
+    const publishedMs = publishedDate ? new Date(publishedDate).getTime() : 0;
+    if (updatedMs - publishedMs <= EDIT_TOLERANCE_MS) return undefined;
 
-  return new Date(lastContentUpdatedDate).toISOString();
+    return new Date(lastContentUpdatedDate).toISOString();
 }
 
 function adoCommentToLocal(c: AdoCommentWire): Comment {
-  const id = String(c.id);
-  const createdAt = (c.publishedDate ?? new Date()).toString();
-  // ADO stamps `lastContentUpdatedDate` on creation too (it equals
-  // `publishedDate` for a brand-new comment), so treating any non-empty value
-  // as "edited" makes the tag show on every comment. Only surface `updatedAt`
-  // when the content was actually updated *after* it was published (allowing a
-  // small clock-skew tolerance so the create-time pair isn't misread as edit).
-  const updatedAt = editedAtOf(c.publishedDate, c.lastContentUpdatedDate);
+    const id = String(c.id);
+    const createdAt = (c.publishedDate ?? new Date()).toString();
+    // ADO stamps `lastContentUpdatedDate` on creation too (it equals
+    // `publishedDate` for a brand-new comment), so treating any non-empty value
+    // as "edited" makes the tag show on every comment. Only surface `updatedAt`
+    // when the content was actually updated *after* it was published (allowing a
+    // small clock-skew tolerance so the create-time pair isn't misread as edit).
+    const updatedAt = editedAtOf(c.publishedDate, c.lastContentUpdatedDate);
 
-  const reactions =
-    c.usersLiked && c.usersLiked.length > 0
-      ? [
-          {
-            kind: "like" as ReactionKind,
-            users: c.usersLiked.map((u) => ({
-              id: u.id,
-              displayName: u.displayName || u.id,
-            })),
-          },
-        ]
-      : undefined;
+    const reactions =
+        c.usersLiked && c.usersLiked.length > 0
+            ? [
+                  {
+                      kind: "like" as ReactionKind,
+                      users: c.usersLiked.map((u) => ({
+                          id: u.id,
+                          displayName: u.displayName || u.id,
+                      })),
+                  },
+              ]
+            : undefined;
 
-  return {
-    id,
-    author: authorFromAdo(c.author),
-    bodyMarkdown: c.content ?? "",
-    createdAt: new Date(createdAt).toISOString(),
-    updatedAt,
-    reactions,
-  };
+    return {
+        id,
+        author: authorFromAdo(c.author),
+        bodyMarkdown: c.content ?? "",
+        createdAt: new Date(createdAt).toISOString(),
+        updatedAt,
+        reactions,
+    };
 }
 
 /**
@@ -543,29 +533,31 @@ function adoCommentToLocal(c: AdoCommentWire): Comment {
  * normalized to the dashed GUID so they key the same as the rendered pills.
  */
 export function collectThreadIdentities(t: AdoThreadWire): MentionedIdentity[] {
-  const map = (t as { identities?: Record<string, unknown> }).identities;
-  if (!map || typeof map !== "object") return [];
-  const out: MentionedIdentity[] = [];
+    const map = (t as { identities?: Record<string, unknown> }).identities;
+    if (!map || typeof map !== "object") return [];
+    const out: MentionedIdentity[] = [];
 
-  for (const ref of Object.values(map)) {
-    const r = ref as {
-      id?: unknown;
-      displayName?: unknown;
-      imageUrl?: unknown;
-    } | null;
+    for (const ref of Object.values(map)) {
+        const r = ref as {
+            id?: unknown;
+            displayName?: unknown;
+            imageUrl?: unknown;
+        } | null;
 
-    if (!r) continue;
-    const rawId = typeof r.id === "string" ? r.id : "";
-    const displayName = typeof r.displayName === "string" ? r.displayName : "";
-    if (!rawId || !displayName) continue;
-    out.push({
-      id: normalizeIdentityGuid(rawId) ?? rawId,
-      displayName,
-      avatarUrl: typeof r.imageUrl === "string" ? r.imageUrl : undefined,
-    });
-  }
+        if (!r) continue;
+        const rawId = typeof r.id === "string" ? r.id : "";
 
-  return out;
+        const displayName = typeof r.displayName === "string" ? r.displayName : "";
+
+        if (!rawId || !displayName) continue;
+        out.push({
+            id: normalizeIdentityGuid(rawId) ?? rawId,
+            displayName,
+            avatarUrl: typeof r.imageUrl === "string" ? r.imageUrl : undefined,
+        });
+    }
+
+    return out;
 }
 
 /**
@@ -576,72 +568,70 @@ export function collectThreadIdentities(t: AdoThreadWire): MentionedIdentity[] {
  * (3) general PR-level comments (no file/line; shown in the general tray).
  */
 export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
-  if (t.isDeleted) return null;
+    if (t.isDeleted) return null;
 
-  // Drop ADO system/auto threads (votes, reviewer changes, status updates,
-  // ref updates) — they're commentType=System(3) and aren't review discussion.
-  const comments = (t.comments ?? [])
-    .filter((c) => !c.isDeleted && c.commentType !== COMMENT_TYPE_SYSTEM)
-    .map(adoCommentToLocal);
+    // Drop ADO system/auto threads (votes, reviewer changes, status updates,
+    // ref updates) — they're commentType=System(3) and aren't review discussion.
+    const comments = (t.comments ?? [])
+        .filter((c) => !c.isDeleted && c.commentType !== COMMENT_TYPE_SYSTEM)
+        .map(adoCommentToLocal);
 
-  if (comments.length === 0) return null;
+    if (comments.length === 0) return null;
 
-  const status = fromAdoStatus(t.status as number | undefined);
-  const id = String(t.id);
+    const status = fromAdoStatus(t.status as number | undefined);
+    const id = String(t.id);
 
-  // ADO-resolved @mention identities (works even where by-id lookup can't).
-  // Prefer the names WE persisted at compose time (PROP_MENTIONS) — the only
-  // source guaranteed to carry cross-tenant guests — then fall back to ADO's
-  // own `thread.identities` map for threads authored outside this extension.
-  const mentionedIdentities = mergeMentionIdentities(
-    readMentionsProp(t.properties),
-    collectThreadIdentities(t),
-  );
+    // ADO-resolved @mention identities (works even where by-id lookup can't).
+    // Prefer the names WE persisted at compose time (PROP_MENTIONS) — the only
+    // source guaranteed to carry cross-tenant guests — then fall back to ADO's
+    // own `thread.identities` map for threads authored outside this extension.
+    const mentionedIdentities = mergeMentionIdentities(
+        readMentionsProp(t.properties),
+        collectThreadIdentities(t),
+    );
 
-  const withMentions = (thread: CommentThread): CommentThread =>
-    mentionedIdentities.length > 0
-      ? { ...thread, mentionedIdentities }
-      : thread;
+    const withMentions = (thread: CommentThread): CommentThread =>
+        mentionedIdentities.length > 0 ? { ...thread, mentionedIdentities } : thread;
 
-  // (1) Extension-authored thread with a stored text-quote anchor.
-  const extensionAnchor = readExtensionAnchor(t);
+    // (1) Extension-authored thread with a stored text-quote anchor.
+    const extensionAnchor = readExtensionAnchor(t);
 
-  if (extensionAnchor !== undefined) {
+    if (extensionAnchor !== undefined) {
+        return withMentions({
+            id,
+            filePath: t.threadContext?.filePath ?? "",
+            anchor: extensionAnchor,
+            status,
+            comments,
+            origin: "extension",
+        });
+    }
+
+    const ctx = t.threadContext;
+    const filePath = ctx?.filePath ?? "";
+
+    // (2) Native thread anchored to a file + diff line.
+    if (filePath) {
+        return withMentions({
+            id,
+            filePath,
+            anchor: nativeDiffLineAnchor(ctx),
+            status,
+            comments,
+            origin: "ado",
+        });
+    }
+
+    // (3) General PR-level comment with no file/line context.
     return withMentions({
-      id,
-      filePath: t.threadContext?.filePath ?? "",
-      anchor: extensionAnchor,
-      status,
-      comments,
-      origin: "extension",
+        id,
+        filePath: "",
+        anchor: { exact: "", prefix: "", suffix: "" },
+        status,
+        comments,
+        origin: "ado",
+        general: true,
     });
-  }
-
-  const ctx = t.threadContext;
-  const filePath = ctx?.filePath ?? "";
-
-  // (2) Native thread anchored to a file + diff line.
-  if (filePath) {
-    return withMentions({
-      id,
-      filePath,
-      anchor: nativeDiffLineAnchor(ctx),
-      status,
-      comments,
-      origin: "ado",
-    });
-  }
-
-  // (3) General PR-level comment with no file/line context.
-  return withMentions({
-    id,
-    filePath: "",
-    anchor: { exact: "", prefix: "", suffix: "" },
-    status,
-    comments,
-    origin: "ado",
-    general: true,
-  });
 }
 
 /**
@@ -650,37 +640,35 @@ export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
  * caller treats it as a native thread and the comment isn't silently lost).
  */
 function readExtensionAnchor(t: AdoThreadWire): TextQuoteAnchor | undefined {
-  const schema = readProp(t.properties, PROP_SCHEMA);
-  const anchorJson = readProp(t.properties, PROP_ANCHOR);
+    const schema = readProp(t.properties, PROP_SCHEMA);
+    const anchorJson = readProp(t.properties, PROP_ANCHOR);
 
-  if (schema !== SCHEMA_VERSION || typeof anchorJson !== "string") {
-    return undefined;
-  }
+    if (schema !== SCHEMA_VERSION || typeof anchorJson !== "string") {
+        return undefined;
+    }
 
-  try {
-    return JSON.parse(anchorJson) as TextQuoteAnchor;
-  } catch {
-    return undefined;
-  }
+    try {
+        return JSON.parse(anchorJson) as TextQuoteAnchor;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Synthesize a line anchor for a native diff-anchored thread. */
-function nativeDiffLineAnchor(
-  ctx: AdoThreadContextWire | undefined,
-): TextQuoteAnchor {
-  const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
+function nativeDiffLineAnchor(ctx: AdoThreadContextWire | undefined): TextQuoteAnchor {
+    const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
 
-  if (typeof startLine !== "number" || startLine <= 0) {
-    return { exact: "", prefix: "", suffix: "" };
-  }
+    if (typeof startLine !== "number" || startLine <= 0) {
+        return { exact: "", prefix: "", suffix: "" };
+    }
 
-  return {
-    exact: "",
-    prefix: "",
-    suffix: "",
-    line: startLine,
-    endLine: ctx?.rightFileEnd?.line ?? ctx?.leftFileEnd?.line ?? startLine,
-  };
+    return {
+        exact: "",
+        prefix: "",
+        suffix: "",
+        line: startLine,
+        endLine: ctx?.rightFileEnd?.line ?? ctx?.leftFileEnd?.line ?? startLine,
+    };
 }
 
 /**
@@ -688,37 +676,32 @@ function nativeDiffLineAnchor(
  * Falls back to line/offset 1 when the anchor has no source mapping.
  */
 export function buildThreadContext(
-  filePath: string,
-  anchor: TextQuoteAnchor,
+    filePath: string,
+    anchor: TextQuoteAnchor,
 ): {
-  filePath: string;
-  rightFileStart: { line: number; offset: number };
-  rightFileEnd: { line: number; offset: number };
+    filePath: string;
+    rightFileStart: { line: number; offset: number };
+    rightFileEnd: { line: number; offset: number };
 } {
-  const startLine =
-    typeof anchor.line === "number" && anchor.line > 0 ? anchor.line : 1;
+    const startLine = typeof anchor.line === "number" && anchor.line > 0 ? anchor.line : 1;
 
-  const startOffset =
-    typeof anchor.column === "number" && anchor.column > 0 ? anchor.column : 1;
+    const startOffset = typeof anchor.column === "number" && anchor.column > 0 ? anchor.column : 1;
 
-  const rawEndLine =
-    typeof anchor.endLine === "number" && anchor.endLine > 0
-      ? anchor.endLine
-      : startLine;
+    const rawEndLine =
+        typeof anchor.endLine === "number" && anchor.endLine > 0 ? anchor.endLine : startLine;
 
-  const endLine = Math.max(startLine, rawEndLine);
+    const endLine = Math.max(startLine, rawEndLine);
 
-  const rawEndOffset =
-    typeof anchor.endColumn === "number" && anchor.endColumn > 0
-      ? anchor.endColumn
-      : startOffset;
+    const rawEndOffset =
+        typeof anchor.endColumn === "number" && anchor.endColumn > 0
+            ? anchor.endColumn
+            : startOffset;
 
-  const endOffset =
-    endLine === startLine ? Math.max(startOffset, rawEndOffset) : rawEndOffset;
+    const endOffset = endLine === startLine ? Math.max(startOffset, rawEndOffset) : rawEndOffset;
 
-  return {
-    filePath,
-    rightFileStart: { line: startLine, offset: startOffset },
-    rightFileEnd: { line: endLine, offset: endOffset },
-  };
+    return {
+        filePath,
+        rightFileStart: { line: startLine, offset: startOffset },
+        rightFileEnd: { line: endLine, offset: endOffset },
+    };
 }

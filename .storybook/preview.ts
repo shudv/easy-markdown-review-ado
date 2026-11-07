@@ -5,16 +5,16 @@ import type { Preview } from "@storybook/react-vite";
 import "../src/shell/styles.scss";
 
 const preview: Preview = {
-  parameters: {
-    layout: "padded",
-    controls: {
-      expanded: true,
-      matchers: {
-        color: /(background|color)$/i,
-        date: /Date$/i,
-      },
+    parameters: {
+        layout: "padded",
+        controls: {
+            expanded: true,
+            matchers: {
+                color: /(background|color)$/i,
+                date: /Date$/i,
+            },
+        },
     },
-  },
 };
 
 export default preview;

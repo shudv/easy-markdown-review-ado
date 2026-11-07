@@ -12,10 +12,10 @@
  * file, otherwise `""` meaning "not resolved yet — try again on a later render".
  */
 export function resolveInitialDocPath(
-  deepLinkPath: string | undefined,
-  firstFilePath: string | undefined,
+    deepLinkPath: string | undefined,
+    firstFilePath: string | undefined,
 ): string {
-  return deepLinkPath ?? firstFilePath ?? "";
+    return deepLinkPath ?? firstFilePath ?? "";
 }
 
 /**
@@ -26,11 +26,11 @@ export function resolveInitialDocPath(
  * skeleton and never publishing the default doc.
  */
 export function shouldPublishDefaultPath(
-  publishedRepoId: string | null,
-  selectedRepoId: string,
-  path: string,
+    publishedRepoId: string | null,
+    selectedRepoId: string,
+    path: string,
 ): boolean {
-  if (publishedRepoId === selectedRepoId) return false;
+    if (publishedRepoId === selectedRepoId) return false;
 
-  return path !== "";
+    return path !== "";
 }

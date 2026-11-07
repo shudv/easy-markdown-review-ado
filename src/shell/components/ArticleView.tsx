@@ -4,609 +4,556 @@
 // text selection.
 
 import {
-  type ReactElement,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+    type ReactElement,
+    type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
+    type PointerEvent as ReactPointerEvent,
+    useCallback,
+    useContext,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
 import { captureAnchorFromSelection } from "../../comments/anchor";
-import {
-  decorateDiffRanges,
-  selectionTouchesDeletedDiff,
-} from "../../markdown/diffDecorations";
+import { decorateDiffRanges, selectionTouchesDeletedDiff } from "../../markdown/diffDecorations";
 import { renderMarkdownSync } from "../../markdown/render";
 import { hydrateMermaid } from "../../markdown/mermaidHydrate";
 import { hydrateMath } from "../../markdown/mathHydrate";
-import {
-  hydrateDocumentImages,
-  type RepositoryImageResolver,
-} from "../../markdown/documentImages";
-import {
-  hydrateMentionLinks,
-  MentionLinkContext,
-} from "../../comments/mentionLinks";
+import { hydrateDocumentImages, type RepositoryImageResolver } from "../../markdown/documentImages";
+import { hydrateMentionLinks, MentionLinkContext } from "../../comments/mentionLinks";
 import { GeneratedSourceModal } from "./GeneratedSourceModal";
-import type {
-  AnchorLayout,
-  CommentBlock,
-  SelectionLinkTarget,
-} from "./ArticleView.types";
+import type { AnchorLayout, CommentBlock, SelectionLinkTarget } from "./ArticleView.types";
 import { HEADING_LINK_CLASS } from "./ArticleView.headingLinks";
 import {
-  addHighlightKeyboardTargets,
-  containedThreadIds,
-  DRAFT_THREAD_ID,
-  syncActiveHighlights,
-  syncHoveredHighlights,
+    addHighlightKeyboardTargets,
+    containedThreadIds,
+    DRAFT_THREAD_ID,
+    syncActiveHighlights,
+    syncHoveredHighlights,
 } from "./ArticleView.highlights";
+import { addGeneratedSourceButtons, type GeneratedSourceView } from "./ArticleView.generatedSource";
 import {
-  addGeneratedSourceButtons,
-  type GeneratedSourceView,
-} from "./ArticleView.generatedSource";
-import {
-  handleDocLinkClick,
-  handleGeneratedSourceClick,
-  handleHeadingLinkClick,
-  handleSectionToggleClick,
-  nextClickedThreadId,
+    handleDocLinkClick,
+    handleGeneratedSourceClick,
+    handleHeadingLinkClick,
+    handleSectionToggleClick,
+    nextClickedThreadId,
 } from "./ArticleView.clicks";
 import {
-  ArticleSelectionBubble,
-  selectionBubblePosition,
-  selectionBubbleWidth,
-  selectionLinkTarget,
-  type SelectionBubbleState,
+    ArticleSelectionBubble,
+    selectionBubblePosition,
+    selectionBubbleWidth,
+    selectionLinkTarget,
+    type SelectionBubbleState,
 } from "./ArticleView.selectionBubble";
 import {
-  anchorSignature,
-  focusedDatasetValue,
-  hasVisibleDiff,
-  hydrateSections,
-  measureAnchorYs,
-  restoreRewrapFocus,
-  wrapAnchors,
+    anchorSignature,
+    focusedDatasetValue,
+    hasVisibleDiff,
+    hydrateSections,
+    measureAnchorYs,
+    restoreRewrapFocus,
+    wrapAnchors,
 } from "./ArticleView.wrap";
 
 export type { AnchorLayout, SelectionLinkTarget } from "./ArticleView.types";
 
 interface ArticleViewProps {
-  pristineHtml: string;
-  /** Repository path of the Markdown document being rendered. */
-  documentPath?: string;
-  /** Reader font stack to bake into generated Mermaid SVG labels. */
-  readerFontFamily?: string;
-  threads: CommentThread[];
-  activeThreadId: string | null;
-  /** When set, render the selected comment-anchor treatment at this anchor. */
-  draftAnchor: TextQuoteAnchor | null;
-  /** Class to add to highlights when the thread is in resolved/historical state. */
-  onAnchorsResolved: (layout: AnchorLayout, draftY: number | null) => void;
-  onHighlightClick: (threadId: string) => void;
-  onSelection: (anchor: TextQuoteAnchor) => void;
-  /** Persistence key (typically the current file path) for section state. */
-  storageKey: string;
-  /** Suppress the selection bubble (no commenting available). */
-  readOnly?: boolean;
-  /**
-   * Changed source-line ranges for the current file. When provided (and
-   * {@link showDiff} is not false) the article gets subtle change bars in
-   * the left gutter plus deletion markers. Empty/undefined renders clean.
-   */
-  diff?: readonly DiffRange[];
-  /** Complete Markdown source at the diff base commit for old-block reconstruction. */
-  originalSource?: string;
-  /** Complete current Markdown source for changes with no rendered DOM owner. */
-  currentSource?: string;
-  /** Toggle the diff decorations off without unmounting. Defaults to true. */
-  showDiff?: boolean;
-  /**
-   * Called when the reader intercepts a click on an in-page/relative link. The
-   * host resolves the `href` against the current document and navigates; it
-   * returns `true` when it consumed the click (so the default is prevented) and
-   * `false` for external links (https/mailto/mention…), which fall through to
-   * the browser. Omitted in embeds that don't wire navigation.
-   */
-  onDocLink?: (href: string) => boolean;
-  /** Resolve an in-repository image path to a browser-renderable object URL. */
-  resolveDocumentImage?: RepositoryImageResolver;
-  /**
-   * Copy a shareable link to the heading with this id. When provided, every
-   * section heading gets a hover/focus "Copy link to section" button; it
-   * resolves to whether the copy succeeded so the button can confirm. Omitted
-   * on surfaces with no shareable URL (the button is then not rendered).
-   */
-  onCopyHeadingLink?: (headingId: string) => Promise<boolean>;
-  /**
-   * Copy a shareable link to selected text: the serialized text fragment
-   * (`?text=`) plus the enclosing heading's id as a fallback. When provided the
-   * selection bubble gets a "Copy link to selection" action — also on
-   * read-only surfaces, where it is the bubble's only action. Resolves to
-   * whether the copy succeeded.
-   */
-  onCopySelectionLink?: (target: SelectionLinkTarget) => Promise<boolean>;
-  /**
-   * Checked when text is selected: return a reason (with a way forward) when
-   * a comment can't be attached to the selection — e.g. comparing an earlier
-   * PR update where the text no longer exists in the latest version. The
-   * selection bubble then explains instead of offering "Add comment".
-   */
-  commentBlocker?: (anchor: TextQuoteAnchor) => CommentBlock | null;
+    pristineHtml: string;
+    /** Repository path of the Markdown document being rendered. */
+    documentPath?: string;
+    /** Reader font stack to bake into generated Mermaid SVG labels. */
+    readerFontFamily?: string;
+    threads: CommentThread[];
+    activeThreadId: string | null;
+    /** When set, render the selected comment-anchor treatment at this anchor. */
+    draftAnchor: TextQuoteAnchor | null;
+    /** Class to add to highlights when the thread is in resolved/historical state. */
+    onAnchorsResolved: (layout: AnchorLayout, draftY: number | null) => void;
+    onHighlightClick: (threadId: string) => void;
+    onSelection: (anchor: TextQuoteAnchor) => void;
+    /** Persistence key (typically the current file path) for section state. */
+    storageKey: string;
+    /** Suppress the selection bubble (no commenting available). */
+    readOnly?: boolean;
+    /**
+     * Changed source-line ranges for the current file. When provided (and
+     * {@link showDiff} is not false) the article gets subtle change bars in
+     * the left gutter plus deletion markers. Empty/undefined renders clean.
+     */
+    diff?: readonly DiffRange[];
+    /** Complete Markdown source at the diff base commit for old-block reconstruction. */
+    originalSource?: string;
+    /** Complete current Markdown source for changes with no rendered DOM owner. */
+    currentSource?: string;
+    /** Toggle the diff decorations off without unmounting. Defaults to true. */
+    showDiff?: boolean;
+    /**
+     * Called when the reader intercepts a click on an in-page/relative link. The
+     * host resolves the `href` against the current document and navigates; it
+     * returns `true` when it consumed the click (so the default is prevented) and
+     * `false` for external links (https/mailto/mention…), which fall through to
+     * the browser. Omitted in embeds that don't wire navigation.
+     */
+    onDocLink?: (href: string) => boolean;
+    /** Resolve an in-repository image path to a browser-renderable object URL. */
+    resolveDocumentImage?: RepositoryImageResolver;
+    /**
+     * Copy a shareable link to the heading with this id. When provided, every
+     * section heading gets a hover/focus "Copy link to section" button; it
+     * resolves to whether the copy succeeded so the button can confirm. Omitted
+     * on surfaces with no shareable URL (the button is then not rendered).
+     */
+    onCopyHeadingLink?: (headingId: string) => Promise<boolean>;
+    /**
+     * Copy a shareable link to selected text: the serialized text fragment
+     * (`?text=`) plus the enclosing heading's id as a fallback. When provided the
+     * selection bubble gets a "Copy link to selection" action — also on
+     * read-only surfaces, where it is the bubble's only action. Resolves to
+     * whether the copy succeeded.
+     */
+    onCopySelectionLink?: (target: SelectionLinkTarget) => Promise<boolean>;
+    /**
+     * Checked when text is selected: return a reason (with a way forward) when
+     * a comment can't be attached to the selection — e.g. comparing an earlier
+     * PR update where the text no longer exists in the latest version. The
+     * selection bubble then explains instead of offering "Add comment".
+     */
+    commentBlocker?: (anchor: TextQuoteAnchor) => CommentBlock | null;
 }
 
 // eslint-disable-next-line max-lines-per-function -- Rendered article: owns the DOM refs that highlight wrapping, selection and click delegation act on. Effect bodies and handlers are extracted; the component wires them to one element tree.
 export function ArticleView(props: Readonly<ArticleViewProps>): ReactElement {
-  const {
-    pristineHtml,
-    documentPath,
-    readerFontFamily,
-    threads,
-    activeThreadId,
-    draftAnchor,
-    onAnchorsResolved,
-    onHighlightClick,
-    onSelection,
-    storageKey,
-    readOnly = false,
-    diff,
-    originalSource,
-    currentSource,
-    showDiff = true,
-    onDocLink,
-    resolveDocumentImage,
-    onCopyHeadingLink,
-    onCopySelectionLink,
-    commentBlocker,
-  } = props;
-
-  const hasHeadingLinks = onCopyHeadingLink !== undefined;
-  const hasSelectionLinks = onCopySelectionLink !== undefined;
-
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const articleRef = useRef<HTMLDivElement>(null);
-  const mentionCtx = useContext(MentionLinkContext);
-  // Polite announcement for the heading link button's copy outcome (the
-  // button's own label change is not reliably announced).
-  const [linkAnnouncementText, setLinkAnnouncementText] = useState("");
-
-  const setLinkAnnouncement = useCallback((text: string) => {
-    // Clear first so repeating the same outcome is announced again.
-    setLinkAnnouncementText("");
-    window.requestAnimationFrame(() => setLinkAnnouncementText(text));
-  }, []);
-
-  const [bubble, setBubble] = useState<SelectionBubbleState | null>(null);
-
-  // Generated block whose Source action was clicked. `original` carries the
-  // pre-PR source so the modal can show an internal source-level diff.
-  const [generatedSource, setGeneratedSource] =
-    useState<GeneratedSourceView | null>(null);
-
-  // Keep stable refs so the layout effect's dep array can stay simple. Synced
-  // in a layout effect declared before the wrap pass, so that pass (and every
-  // later event handler) reads this render's callbacks.
-  const callbacksRef = useRef({
-    onAnchorsResolved,
-    onHighlightClick,
-    onSelection,
-    commentBlocker,
-  });
-
-  useLayoutEffect(() => {
-    callbacksRef.current = {
-      onAnchorsResolved,
-      onHighlightClick,
-      onSelection,
-      commentBlocker,
-    };
-  });
-
-  // Build a stable signature so the wrap effect only re-runs when anchors change.
-  const threadsKey = useMemo(
-    () =>
-      threads
-        .map((t) => `${t.id}|${t.status}|${anchorSignature(t.anchor)}`)
-        .join("\n"),
-    [threads],
-  );
-
-  const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
-  const previousActiveThreadIdRef = useRef<string | null>(null);
-
-  // Signature so the layout effect re-runs when the diff ranges (or the
-  // show/hide toggle) change, without re-running on unrelated renders.
-  const diffKey = useMemo(() => {
-    if (!hasVisibleDiff(showDiff, diff)) return "";
-
-    return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
-  }, [diff, showDiff]);
-
-  // -------------------------------------------------------------------------
-  // Wrap pass: reset innerHTML, then wrap each anchor.
-  // -------------------------------------------------------------------------
-  useLayoutEffect(() => {
-    const article = articleRef.current!;
-    const wrap = wrapRef.current!;
-
-    const focusedThreadId = focusedDatasetValue(
-      article,
-      '.emr-highlight[role="button"]',
-      "threadId",
-    );
-
-    // A keyboard user on a heading link button keeps their place when a
-    // thread poll / diff / image load re-wraps the article.
-    const focusedHeadingLinkId = focusedDatasetValue(
-      article,
-      `.${HEADING_LINK_CLASS}`,
-      "headingId",
-    );
-
-    // Reset to pristine HTML — easiest way to undo previous wraps.
-    // eslint-disable-next-line no-unsanitized/property -- pristineHtml is the output of renderMarkdown (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); fillSubpagesMacros only adds DOM-built nodes
-    article.innerHTML = pristineHtml;
-
-    // Upgrade mention placeholder hrefs to real ADO web URLs before wrapping.
-    hydrateMentionLinks(article, mentionCtx);
-
-    const cleanupDocumentImages = resolveDocumentImage
-      ? hydrateDocumentImages(
-          article,
-          documentPath ?? storageKey,
-          resolveDocumentImage,
-        )
-      : undefined;
-
-    // Hydrate persisted section collapse state BEFORE the wrap pass so the
-    // measure step can detect hidden anchors and fall back to their heading y.
-    hydrateSections(article, storageKey, hasHeadingLinks);
-
-    // Wrap each anchor with a highlight span; defer y measurement until all
-    // wraps are done so section toggles can re-measure without re-wrapping.
-    const { orphaned, hasDraft } = wrapAnchors(article, threads, draftAnchor);
-
-    addHighlightKeyboardTargets(article);
-
-    // ---------------------------------------------------------------------
-    // Diff decorations: gutter bars on changed blocks + deletion markers.
-    // Applied AFTER the anchor wrap (block source-line attrs intact) and
-    // BEFORE measureAll (a deletion marker shifts anchor y-positions).
-    // ---------------------------------------------------------------------
-    if (hasVisibleDiff(showDiff, diff)) {
-      decorateDiffRanges(article, diff, {
-        renderInline: renderMarkdownSync,
+    const {
+        pristineHtml,
+        documentPath,
+        readerFontFamily,
+        threads,
+        activeThreadId,
+        draftAnchor,
+        onAnchorsResolved,
+        onHighlightClick,
+        onSelection,
+        storageKey,
+        readOnly = false,
+        diff,
         originalSource,
         currentSource,
-      });
-    }
+        showDiff = true,
+        onDocLink,
+        resolveDocumentImage,
+        onCopyHeadingLink,
+        onCopySelectionLink,
+        commentBlocker,
+    } = props;
 
-    // Rewraps create fresh spans, so restore selection without replaying the
-    // transient landing cue. The active-thread effect owns that animation.
-    syncActiveHighlights(article, activeThreadId, false);
-    restoreRewrapFocus(article, focusedThreadId, focusedHeadingLinkId);
+    const hasHeadingLinks = onCopyHeadingLink !== undefined;
+    const hasSelectionLinks = onCopySelectionLink !== undefined;
 
-    // Measure y of every wrapped highlight relative to the article-wrap (see
-    // `measureAnchorYs`) and report the layout.
-    function measureAll() {
-      const { yByThreadId, draftY } = measureAnchorYs(wrap, article);
-      callbacksRef.current.onAnchorsResolved(
-        { yByThreadId, orphanedThreadIds: orphaned },
-        hasDraft ? draftY : null,
-      );
-    }
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const articleRef = useRef<HTMLDivElement>(null);
+    const mentionCtx = useContext(MentionLinkContext);
+    // Polite announcement for the heading link button's copy outcome (the
+    // button's own label change is not reliably announced).
+    const [linkAnnouncementText, setLinkAnnouncementText] = useState("");
 
-    measureAll();
+    const setLinkAnnouncement = useCallback((text: string) => {
+        // Clear first so repeating the same outcome is announced again.
+        setLinkAnnouncementText("");
+        window.requestAnimationFrame(() => setLinkAnnouncementText(text));
+    }, []);
 
-    // Hydrate generated media, then re-measure so balloons settle on the final
-    // rendered height rather than the readable source fallbacks.
-    void Promise.all([
-      hydrateMermaid(article, readerFontFamily),
-      hydrateMath(article),
-    ]).then(() => {
-      if (!wrapRef.current) return;
-      addGeneratedSourceButtons(article);
-      wrapRef.current.dispatchEvent(
-        new CustomEvent("emr-sections-changed", { bubbles: false }),
-      );
+    const [bubble, setBubble] = useState<SelectionBubbleState | null>(null);
+
+    // Generated block whose Source action was clicked. `original` carries the
+    // pre-PR source so the modal can show an internal source-level diff.
+    const [generatedSource, setGeneratedSource] = useState<GeneratedSourceView | null>(null);
+
+    // Keep stable refs so the layout effect's dep array can stay simple. Synced
+    // in a layout effect declared before the wrap pass, so that pass (and every
+    // later event handler) reads this render's callbacks.
+    const callbacksRef = useRef({
+        onAnchorsResolved,
+        onHighlightClick,
+        onSelection,
+        commentBlocker,
     });
 
-    // Notify observers (DocNav badges, ChangeBar marks) that the wrap
-    // completed, reusing the section-toggle event channel.
-    wrap.dispatchEvent(
-      new CustomEvent("emr-sections-changed", { bubbles: false }),
+    useLayoutEffect(() => {
+        callbacksRef.current = {
+            onAnchorsResolved,
+            onHighlightClick,
+            onSelection,
+            commentBlocker,
+        };
+    });
+
+    // Build a stable signature so the wrap effect only re-runs when anchors change.
+    const threadsKey = useMemo(
+        () => threads.map((t) => `${t.id}|${t.status}|${anchorSignature(t.anchor)}`).join("\n"),
+        [threads],
     );
 
-    // Re-measure whenever sections collapse / expand.
-    function onSectionsChanged() {
-      measureAll();
-    }
+    const draftKey = draftAnchor ? anchorSignature(draftAnchor) : "";
+    const previousActiveThreadIdRef = useRef<string | null>(null);
 
-    wrap.addEventListener("emr-sections-changed", onSectionsChanged);
+    // Signature so the layout effect re-runs when the diff ranges (or the
+    // show/hide toggle) change, without re-running on unrelated renders.
+    const diffKey = useMemo(() => {
+        if (!hasVisibleDiff(showDiff, diff)) return "";
 
-    return () => {
-      wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
-      cleanupDocumentImages?.();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on threadsKey/draftKey/diffKey rather than the objects, so the costly rewrap runs only when content changes; selection and focus have their own effects
-  }, [
-    pristineHtml,
-    documentPath,
-    readerFontFamily,
-    threadsKey,
-    draftKey,
-    storageKey,
-    mentionCtx,
-    diffKey,
-    originalSource,
-    currentSource,
-    resolveDocumentImage,
-    hasHeadingLinks,
-  ]);
+        return diff.map((d) => `${d.kind}:${d.startLine}-${d.endLine}`).join(",");
+    }, [diff, showDiff]);
 
-  // -------------------------------------------------------------------------
-  // Mermaid follows the host theme. A rendered diagram bakes its colours in, so
-  // when the reader flips light↔dark (`data-emr-theme` on <html>) the diagrams
-  // must be re-hydrated to recolour. Font changes rerun the wrap effect above.
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const article = articleRef.current;
-      /* v8 ignore next -- the article div is always rendered, and unmount disconnects this observer, which discards queued records, so the ref is never null here */
-      if (!article) return;
-      void hydrateMermaid(article, readerFontFamily).then(() => {
-        if (!wrapRef.current) return;
-        addGeneratedSourceButtons(article);
-        wrapRef.current.dispatchEvent(
-          new CustomEvent("emr-sections-changed", { bubbles: false }),
+    // -------------------------------------------------------------------------
+    // Wrap pass: reset innerHTML, then wrap each anchor.
+    // -------------------------------------------------------------------------
+    useLayoutEffect(() => {
+        const article = articleRef.current!;
+        const wrap = wrapRef.current!;
+
+        const focusedThreadId = focusedDatasetValue(
+            article,
+            '.emr-highlight[role="button"]',
+            "threadId",
         );
-      });
-    });
 
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-emr-theme"],
-    });
+        // A keyboard user on a heading link button keeps their place when a
+        // thread poll / diff / image load re-wraps the article.
+        const focusedHeadingLinkId = focusedDatasetValue(
+            article,
+            `.${HEADING_LINK_CLASS}`,
+            "headingId",
+        );
 
-    return () => observer.disconnect();
-  }, [readerFontFamily]);
+        // Reset to pristine HTML — easiest way to undo previous wraps.
+        // eslint-disable-next-line no-unsanitized/property -- pristineHtml is the output of renderMarkdown (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); fillSubpagesMacros only adds DOM-built nodes
+        article.innerHTML = pristineHtml;
 
-  // -------------------------------------------------------------------------
-  // Active thread changes do not rewrap the article. Synchronize the persistent
-  // selection and play one landing cue on the newly active range.
-  // -------------------------------------------------------------------------
-  useLayoutEffect(() => {
-    const activeChanged =
-      activeThreadId !== null &&
-      activeThreadId !== previousActiveThreadIdRef.current;
+        // Upgrade mention placeholder hrefs to real ADO web URLs before wrapping.
+        hydrateMentionLinks(article, mentionCtx);
 
-    syncActiveHighlights(articleRef.current!, activeThreadId, activeChanged);
-    previousActiveThreadIdRef.current = activeThreadId;
-  }, [activeThreadId]);
+        const cleanupDocumentImages = resolveDocumentImage
+            ? hydrateDocumentImages(article, documentPath ?? storageKey, resolveDocumentImage)
+            : undefined;
 
-  // -------------------------------------------------------------------------
-  // Click delegation on highlights AND section headings (collapse toggle),
-  // sharing one listener. The heading branch yields when a text selection
-  // exists so users can still select+comment heading text.
-  // -------------------------------------------------------------------------
-  const onClick = useCallback(
-    (e: ReactMouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (handleDocLinkClick(e, target, onDocLink)) return;
-      if (handleGeneratedSourceClick(e, target, setGeneratedSource)) return;
+        // Hydrate persisted section collapse state BEFORE the wrap pass so the
+        // measure step can detect hidden anchors and fall back to their heading y.
+        hydrateSections(article, storageKey, hasHeadingLinks);
 
-      if (
-        handleHeadingLinkClick(
-          e,
-          target,
-          onCopyHeadingLink,
-          setLinkAnnouncement,
-        )
-      ) {
-        return;
-      }
+        // Wrap each anchor with a highlight span; defer y measurement until all
+        // wraps are done so section toggles can re-measure without re-wrapping.
+        const { orphaned, hasDraft } = wrapAnchors(article, threads, draftAnchor);
 
-      if (handleSectionToggleClick(target, storageKey, wrapRef)) return;
+        addHighlightKeyboardTargets(article);
 
-      const threadId = nextClickedThreadId(
-        target,
-        articleRef.current,
-        activeThreadId,
-      );
+        // ---------------------------------------------------------------------
+        // Diff decorations: gutter bars on changed blocks + deletion markers.
+        // Applied AFTER the anchor wrap (block source-line attrs intact) and
+        // BEFORE measureAll (a deletion marker shifts anchor y-positions).
+        // ---------------------------------------------------------------------
+        if (hasVisibleDiff(showDiff, diff)) {
+            decorateDiffRanges(article, diff, {
+                renderInline: renderMarkdownSync,
+                originalSource,
+                currentSource,
+            });
+        }
 
-      if (threadId === null) return;
-      syncHoveredHighlights(articleRef.current!, null);
-      callbacksRef.current.onHighlightClick(threadId);
-    },
-    [
-      storageKey,
-      onDocLink,
-      activeThreadId,
-      onCopyHeadingLink,
-      setLinkAnnouncement,
-    ],
-  );
+        // Rewraps create fresh spans, so restore selection without replaying the
+        // transient landing cue. The active-thread effect owns that animation.
+        syncActiveHighlights(article, activeThreadId, false);
+        restoreRewrapFocus(article, focusedThreadId, focusedHeadingLinkId);
 
-  const onKeyDown = useCallback(
-    (event: ReactKeyboardEvent) => {
-      const target = (event.target as HTMLElement).closest<HTMLElement>(
-        '.emr-highlight[role="button"]',
-      );
+        // Measure y of every wrapped highlight relative to the article-wrap (see
+        // `measureAnchorYs`) and report the layout.
+        function measureAll() {
+            const { yByThreadId, draftY } = measureAnchorYs(wrap, article);
+            callbacksRef.current.onAnchorsResolved(
+                { yByThreadId, orphanedThreadIds: orphaned },
+                hasDraft ? draftY : null,
+            );
+        }
 
-      if (!target) return;
+        measureAll();
 
-      if (event.key === " ") {
-        event.preventDefault();
+        // Hydrate generated media, then re-measure so balloons settle on the final
+        // rendered height rather than the readable source fallbacks.
+        void Promise.all([hydrateMermaid(article, readerFontFamily), hydrateMath(article)]).then(
+            () => {
+                if (!wrapRef.current) return;
+                addGeneratedSourceButtons(article);
+                wrapRef.current.dispatchEvent(
+                    new CustomEvent("emr-sections-changed", { bubbles: false }),
+                );
+            },
+        );
 
-        return;
-      }
+        // Notify observers (DocNav badges, ChangeBar marks) that the wrap
+        // completed, reusing the section-toggle event channel.
+        wrap.dispatchEvent(new CustomEvent("emr-sections-changed", { bubbles: false }));
 
-      if (event.key !== "Enter" || event.repeat) return;
-      const threadIds = containedThreadIds(target);
-      event.preventDefault();
-      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
-      callbacksRef.current.onHighlightClick(
-        threadIds[(activeIndex + 1) % threadIds.length]!,
-      );
-    },
-    [activeThreadId],
-  );
+        // Re-measure whenever sections collapse / expand.
+        function onSectionsChanged() {
+            measureAll();
+        }
 
-  const onKeyUp = useCallback(
-    (event: ReactKeyboardEvent) => {
-      if (event.key !== " ") return;
+        wrap.addEventListener("emr-sections-changed", onSectionsChanged);
 
-      const target = (event.target as HTMLElement).closest<HTMLElement>(
-        '.emr-highlight[role="button"]',
-      );
+        return () => {
+            wrap.removeEventListener("emr-sections-changed", onSectionsChanged);
+            cleanupDocumentImages?.();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on threadsKey/draftKey/diffKey rather than the objects, so the costly rewrap runs only when content changes; selection and focus have their own effects
+    }, [
+        pristineHtml,
+        documentPath,
+        readerFontFamily,
+        threadsKey,
+        draftKey,
+        storageKey,
+        mentionCtx,
+        diffKey,
+        originalSource,
+        currentSource,
+        resolveDocumentImage,
+        hasHeadingLinks,
+    ]);
 
-      if (!target) return;
-      event.preventDefault();
-      const threadIds = containedThreadIds(target);
-      const activeIndex = threadIds.indexOf(activeThreadId ?? "");
-      callbacksRef.current.onHighlightClick(
-        threadIds[(activeIndex + 1) % threadIds.length]!,
-      );
-    },
-    [activeThreadId],
-  );
+    // -------------------------------------------------------------------------
+    // Mermaid follows the host theme. A rendered diagram bakes its colours in, so
+    // when the reader flips light↔dark (`data-emr-theme` on <html>) the diagrams
+    // must be re-hydrated to recolour. Font changes rerun the wrap effect above.
+    // -------------------------------------------------------------------------
+    useEffect(() => {
+        const observer = new MutationObserver(() => {
+            const article = articleRef.current;
+            /* v8 ignore next -- the article div is always rendered, and unmount disconnects this observer, which discards queued records, so the ref is never null here */
+            if (!article) return;
+            void hydrateMermaid(article, readerFontFamily).then(() => {
+                if (!wrapRef.current) return;
+                addGeneratedSourceButtons(article);
+                wrapRef.current.dispatchEvent(
+                    new CustomEvent("emr-sections-changed", { bubbles: false }),
+                );
+            });
+        });
 
-  const onPointerOver = useCallback((event: ReactPointerEvent) => {
-    const article = articleRef.current!;
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["data-emr-theme"],
+        });
 
-    const highlight = (event.target as HTMLElement).closest<HTMLElement>(
-      ".emr-highlight",
+        return () => observer.disconnect();
+    }, [readerFontFamily]);
+
+    // -------------------------------------------------------------------------
+    // Active thread changes do not rewrap the article. Synchronize the persistent
+    // selection and play one landing cue on the newly active range.
+    // -------------------------------------------------------------------------
+    useLayoutEffect(() => {
+        const activeChanged =
+            activeThreadId !== null && activeThreadId !== previousActiveThreadIdRef.current;
+
+        syncActiveHighlights(articleRef.current!, activeThreadId, activeChanged);
+        previousActiveThreadIdRef.current = activeThreadId;
+    }, [activeThreadId]);
+
+    // -------------------------------------------------------------------------
+    // Click delegation on highlights AND section headings (collapse toggle),
+    // sharing one listener. The heading branch yields when a text selection
+    // exists so users can still select+comment heading text.
+    // -------------------------------------------------------------------------
+    const onClick = useCallback(
+        (e: ReactMouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (handleDocLinkClick(e, target, onDocLink)) return;
+
+            if (handleGeneratedSourceClick(e, target, setGeneratedSource)) {
+                return;
+            }
+
+            if (handleHeadingLinkClick(e, target, onCopyHeadingLink, setLinkAnnouncement)) {
+                return;
+            }
+
+            if (handleSectionToggleClick(target, storageKey, wrapRef)) return;
+
+            const threadId = nextClickedThreadId(target, articleRef.current, activeThreadId);
+
+            if (threadId === null) return;
+            syncHoveredHighlights(articleRef.current!, null);
+            callbacksRef.current.onHighlightClick(threadId);
+        },
+        [storageKey, onDocLink, activeThreadId, onCopyHeadingLink, setLinkAnnouncement],
     );
 
-    const threadId = highlight?.dataset.threadId;
-    syncHoveredHighlights(
-      article,
-      threadId !== undefined && threadId !== "" && threadId !== DRAFT_THREAD_ID
-        ? threadId
-        : null,
+    const onKeyDown = useCallback(
+        (event: ReactKeyboardEvent) => {
+            const target = (event.target as HTMLElement).closest<HTMLElement>(
+                '.emr-highlight[role="button"]',
+            );
+
+            if (!target) return;
+
+            if (event.key === " ") {
+                event.preventDefault();
+
+                return;
+            }
+
+            if (event.key !== "Enter" || event.repeat) return;
+            const threadIds = containedThreadIds(target);
+            event.preventDefault();
+            const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+            callbacksRef.current.onHighlightClick(threadIds[(activeIndex + 1) % threadIds.length]!);
+        },
+        [activeThreadId],
     );
-  }, []);
 
-  const onPointerLeave = useCallback(() => {
-    syncHoveredHighlights(articleRef.current!, null);
-  }, []);
+    const onKeyUp = useCallback(
+        (event: ReactKeyboardEvent) => {
+            if (event.key !== " ") return;
 
-  // -------------------------------------------------------------------------
-  // Selection capture: on mouseup, show the floating bubble above a non-empty
-  // selection inside the article. Read-only surfaces still get the bubble
-  // when the selection can be linked to (its only action is then the link).
-  // -------------------------------------------------------------------------
-  const onMouseUp = useCallback(() => {
-    if (readOnly && !hasSelectionLinks) return;
-    // Wait for the selection to settle (click can clear it).
-    window.requestAnimationFrame(() => {
-      const article = articleRef.current!;
-      const wrap = wrapRef.current!;
-      const anchor = captureAnchorFromSelection(article);
+            const target = (event.target as HTMLElement).closest<HTMLElement>(
+                '.emr-highlight[role="button"]',
+            );
 
-      if (!anchor) {
-        setBubble(null);
+            if (!target) return;
+            event.preventDefault();
+            const threadIds = containedThreadIds(target);
+            const activeIndex = threadIds.indexOf(activeThreadId ?? "");
+            callbacksRef.current.onHighlightClick(threadIds[(activeIndex + 1) % threadIds.length]!);
+        },
+        [activeThreadId],
+    );
 
-        return;
-      }
+    const onPointerOver = useCallback((event: ReactPointerEvent) => {
+        const article = articleRef.current!;
 
-      const sel = window.getSelection();
-      /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
-      if (!sel || sel.rangeCount === 0) return;
+        const highlight = (event.target as HTMLElement).closest<HTMLElement>(".emr-highlight");
 
-      // Removed (deleted-diff) content is shown for reference only; it isn't
-      // part of the document, so a comment anchored there orphans immediately.
-      // Don't offer the bubble when the selection lands in a deletion marker.
-      if (selectionTouchesDeletedDiff(sel.anchorNode, sel.focusNode)) {
-        setBubble(null);
+        const threadId = highlight?.dataset.threadId;
+        syncHoveredHighlights(
+            article,
+            threadId !== undefined && threadId !== "" && threadId !== DRAFT_THREAD_ID
+                ? threadId
+                : null,
+        );
+    }, []);
 
-        return;
-      }
+    const onPointerLeave = useCallback(() => {
+        syncHoveredHighlights(articleRef.current!, null);
+    }, []);
 
-      const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      const wrapRect = wrap.getBoundingClientRect();
+    // -------------------------------------------------------------------------
+    // Selection capture: on mouseup, show the floating bubble above a non-empty
+    // selection inside the article. Read-only surfaces still get the bubble
+    // when the selection can be linked to (its only action is then the link).
+    // -------------------------------------------------------------------------
+    const onMouseUp = useCallback(() => {
+        if (readOnly && !hasSelectionLinks) return;
+        // Wait for the selection to settle (click can clear it).
+        window.requestAnimationFrame(() => {
+            const article = articleRef.current!;
+            const wrap = wrapRef.current!;
+            const anchor = captureAnchorFromSelection(article);
 
-      const block = readOnly
-        ? null
-        : (callbacksRef.current.commentBlocker?.(anchor) ?? null);
+            if (!anchor) {
+                setBubble(null);
 
-      const link =
-        hasSelectionLinks && !block
-          ? selectionLinkTarget(article, range)
-          : null;
+                return;
+            }
 
-      if (readOnly && !link) {
-        setBubble(null);
+            const sel = window.getSelection();
+            /* v8 ignore next -- captureAnchorFromSelection just read this same live selection synchronously and returned an anchor, so it still has a range */
+            if (!sel || sel.rangeCount === 0) return;
 
-        return;
-      }
+            // Removed (deleted-diff) content is shown for reference only; it isn't
+            // part of the document, so a comment anchored there orphans immediately.
+            // Don't offer the bubble when the selection lands in a deletion marker.
+            if (selectionTouchesDeletedDiff(sel.anchorNode, sel.focusNode)) {
+                setBubble(null);
 
-      // Approx bubble width (button label + chrome). Used to clamp horizontal.
-      const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
-      setBubble({
-        anchor,
-        block,
-        link,
-        ...selectionBubblePosition(rect, wrapRect, bubbleWidth),
-      });
-    });
-  }, [readOnly, hasSelectionLinks]);
+                return;
+            }
 
-  // Clear bubble if user clicks elsewhere or selection collapses.
-  useEffect(() => {
-    function onDocMouseDown(e: MouseEvent) {
-      // If click is inside the bubble, ignore (its own button handler runs).
-      const target = e.target as HTMLElement;
-      if (target.closest(".emr-selection-bubble")) return;
-      setBubble(null);
-    }
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const wrapRect = wrap.getBoundingClientRect();
 
-    document.addEventListener("mousedown", onDocMouseDown);
+            const block = readOnly ? null : (callbacksRef.current.commentBlocker?.(anchor) ?? null);
 
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-  }, []);
+            const link = hasSelectionLinks && !block ? selectionLinkTarget(article, range) : null;
 
-  return (
-    <div className="emr-article-wrap" ref={wrapRef}>
-      {/* eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- event-delegation container for rendered document content: its keyboard targets are the native section/heading-link buttons and the tabIndex'd role="button" highlights, whose Enter/Space this onKeyDown/onKeyUp handles */}
-      <div
-        ref={articleRef}
-        className="markdown-body emr-rendered"
-        onClick={onClick}
-        onKeyDown={onKeyDown}
-        onKeyUp={onKeyUp}
-        onMouseUp={onMouseUp}
-        onPointerLeave={onPointerLeave}
-        onPointerOver={onPointerOver}
-      />
-      {bubble ? (
-        <ArticleSelectionBubble
-          key={`${bubble.top}:${bubble.left}:${bubble.anchor.exact}`}
-          bubble={bubble}
-          readOnly={readOnly}
-          onCopySelectionLink={onCopySelectionLink}
-          onSelection={(a) => callbacksRef.current.onSelection(a)}
-          onDismiss={() => setBubble(null)}
-        />
-      ) : null}
-      <GeneratedSourceModal
-        kind={generatedSource?.kind}
-        source={generatedSource?.source ?? null}
-        originalSource={generatedSource?.original ?? null}
-        onClose={() => setGeneratedSource(null)}
-      />
-      {hasHeadingLinks ? (
-        <span className="emr-sr-only" role="status" aria-live="polite">
-          {linkAnnouncementText}
-        </span>
-      ) : null}
-    </div>
-  );
+            if (readOnly && !link) {
+                setBubble(null);
+
+                return;
+            }
+
+            // Approx bubble width (button label + chrome). Used to clamp horizontal.
+            const bubbleWidth = selectionBubbleWidth(block, readOnly, link);
+            setBubble({
+                anchor,
+                block,
+                link,
+                ...selectionBubblePosition(rect, wrapRect, bubbleWidth),
+            });
+        });
+    }, [readOnly, hasSelectionLinks]);
+
+    // Clear bubble if user clicks elsewhere or selection collapses.
+    useEffect(() => {
+        function onDocMouseDown(e: MouseEvent) {
+            // If click is inside the bubble, ignore (its own button handler runs).
+            const target = e.target as HTMLElement;
+            if (target.closest(".emr-selection-bubble")) return;
+            setBubble(null);
+        }
+
+        document.addEventListener("mousedown", onDocMouseDown);
+
+        return () => document.removeEventListener("mousedown", onDocMouseDown);
+    }, []);
+
+    return (
+        <div className="emr-article-wrap" ref={wrapRef}>
+            {/* eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- event-delegation container for rendered document content: its keyboard targets are the native section/heading-link buttons and the tabIndex'd role="button" highlights, whose Enter/Space this onKeyDown/onKeyUp handles */}
+            <div
+                ref={articleRef}
+                className="markdown-body emr-rendered"
+                onClick={onClick}
+                onKeyDown={onKeyDown}
+                onKeyUp={onKeyUp}
+                onMouseUp={onMouseUp}
+                onPointerLeave={onPointerLeave}
+                onPointerOver={onPointerOver}
+            />
+            {bubble ? (
+                <ArticleSelectionBubble
+                    key={`${bubble.top}:${bubble.left}:${bubble.anchor.exact}`}
+                    bubble={bubble}
+                    readOnly={readOnly}
+                    onCopySelectionLink={onCopySelectionLink}
+                    onSelection={(a) => callbacksRef.current.onSelection(a)}
+                    onDismiss={() => setBubble(null)}
+                />
+            ) : null}
+            <GeneratedSourceModal
+                kind={generatedSource?.kind}
+                source={generatedSource?.source ?? null}
+                originalSource={generatedSource?.original ?? null}
+                onClose={() => setGeneratedSource(null)}
+            />
+            {hasHeadingLinks ? (
+                <span className="emr-sr-only" role="status" aria-live="polite">
+                    {linkAnnouncementText}
+                </span>
+            ) : null}
+        </div>
+    );
 }

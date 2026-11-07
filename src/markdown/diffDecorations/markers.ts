@@ -5,68 +5,54 @@ import type { DiffRange } from "../../types";
 import type { DecorationPass } from "./pass";
 import { splitTableRow } from "./tableAlignment";
 import {
-  type ChangeRange,
-  DIFF_DELETED_MARKER_CLASS,
-  DIFF_SOURCE_ONLY_CLASS,
-  numAttr,
-  overlaps,
-  readSourceSpan,
+    type ChangeRange,
+    DIFF_DELETED_MARKER_CLASS,
+    DIFF_SOURCE_ONLY_CLASS,
+    numAttr,
+    overlaps,
+    readSourceSpan,
 } from "./shared";
 
 function insertBeforeAnchor(
-  root: HTMLElement,
-  marker: HTMLElement,
-  anchor: HTMLElement | null,
+    root: HTMLElement,
+    marker: HTMLElement,
+    anchor: HTMLElement | null,
 ): void {
-  if (anchor?.parentElement) {
-    anchor.parentElement.insertBefore(marker, anchor);
-  } else {
-    root.appendChild(marker);
-  }
+    if (anchor?.parentElement) {
+        anchor.parentElement.insertBefore(marker, anchor);
+    } else {
+        root.appendChild(marker);
+    }
 }
 
 /** Show changed source lines that no rendered block covers as raw source. */
 export function insertSourceOnlyMarkers(
-  pass: DecorationPass,
-  markerAnchors: readonly HTMLElement[],
+    pass: DecorationPass,
+    markerAnchors: readonly HTMLElement[],
 ): void {
-  const currentLines = pass.currentLines;
-  if (!currentLines) return;
+    const currentLines = pass.currentLines;
+    if (!currentLines) return;
 
-  const renderedSpans = markerAnchors.flatMap((element) => {
-    const span = readSourceSpan(element);
+    const renderedSpans = markerAnchors.flatMap((element) => {
+        const span = readSourceSpan(element);
 
-    return span ? [span] : [];
-  });
+        return span ? [span] : [];
+    });
 
-  for (const range of pass.changeRanges) {
-    if (
-      renderedSpans.some((span) =>
-        overlaps(span.start, span.end, range.start, range.end),
-      )
-    ) {
-      continue;
+    for (const range of pass.changeRanges) {
+        if (renderedSpans.some((span) => overlaps(span.start, span.end, range.start, range.end))) {
+            continue;
+        }
+
+        const currentText = currentLines.slice(range.start - 1, range.end).join("\n");
+
+        if (currentText.trim().length === 0) continue;
+
+        const marker = buildSourceOnlyMarker(range, currentText, pass.root.ownerDocument);
+
+        insertBeforeAnchor(pass.root, marker, firstBlockAtOrAfter(markerAnchors, range.start));
+        pass.decorated++;
     }
-
-    const currentText = currentLines
-      .slice(range.start - 1, range.end)
-      .join("\n");
-
-    if (currentText.trim().length === 0) continue;
-
-    const marker = buildSourceOnlyMarker(
-      range,
-      currentText,
-      pass.root.ownerDocument,
-    );
-
-    insertBeforeAnchor(
-      pass.root,
-      marker,
-      firstBlockAtOrAfter(markerAnchors, range.start),
-    );
-    pass.decorated++;
-  }
 }
 
 /**
@@ -81,202 +67,190 @@ export function insertSourceOnlyMarkers(
  * returns nodes in document order, which matches source order.
  */
 export function insertDeletionMarkers(
-  pass: DecorationPass,
-  markerAnchors: readonly HTMLElement[],
+    pass: DecorationPass,
+    markerAnchors: readonly HTMLElement[],
 ): number {
-  let markers = 0;
+    let markers = 0;
 
-  for (const r of pass.deletedRanges) {
-    if (pass.absorbedDeletions.has(r)) continue;
-    const anchor = firstBlockAtOrAfter(markerAnchors, r.startLine);
+    for (const r of pass.deletedRanges) {
+        if (pass.absorbedDeletions.has(r)) continue;
+        const anchor = firstBlockAtOrAfter(markerAnchors, r.startLine);
 
-    const tableMarker = pass.renderInline
-      ? buildDeletedTableRows(r, anchor, markerAnchors, pass.renderInline)
-      : null;
+        const tableMarker = pass.renderInline
+            ? buildDeletedTableRows(r, anchor, markerAnchors, pass.renderInline)
+            : null;
 
-    if (tableMarker) {
-      const { parent, before, rows } = tableMarker;
-      for (const row of rows) parent.insertBefore(row, before);
-    } else {
-      insertBeforeAnchor(
-        pass.root,
-        buildDeletedMarker(r, pass.renderInline),
-        anchor,
-      );
+        if (tableMarker) {
+            const { parent, before, rows } = tableMarker;
+            for (const row of rows) parent.insertBefore(row, before);
+        } else {
+            insertBeforeAnchor(pass.root, buildDeletedMarker(r, pass.renderInline), anchor);
+        }
+
+        markers++;
     }
 
-    markers++;
-  }
-
-  return markers;
+    return markers;
 }
 
 function buildSourceOnlyMarker(
-  range: ChangeRange,
-  currentText: string,
-  doc: Document,
+    range: ChangeRange,
+    currentText: string,
+    doc: Document,
 ): HTMLElement {
-  const marker = doc.createElement("div");
-  marker.className = `${DIFF_SOURCE_ONLY_CLASS} emr-diff-block--${range.kind}`;
-  marker.dataset.diffKind = range.kind;
-  marker.dataset.sourceLine = String(range.start);
-  marker.dataset.sourceEndLine = String(range.end);
+    const marker = doc.createElement("div");
+    marker.className = `${DIFF_SOURCE_ONLY_CLASS} emr-diff-block--${range.kind}`;
+    marker.dataset.diffKind = range.kind;
+    marker.dataset.sourceLine = String(range.start);
+    marker.dataset.sourceEndLine = String(range.end);
 
-  const label = doc.createElement("span");
-  label.className = "emr-diff-source-only-label";
-  label.textContent =
-    range.kind === "added" ? "Source added" : "Source changed";
-  const source = doc.createElement("pre");
-  source.className = "emr-diff-source-only-current";
-  const code = doc.createElement("code");
-  code.textContent = currentText;
-  source.appendChild(code);
+    const label = doc.createElement("span");
+    label.className = "emr-diff-source-only-label";
+    label.textContent = range.kind === "added" ? "Source added" : "Source changed";
+    const source = doc.createElement("pre");
+    source.className = "emr-diff-source-only-current";
+    const code = doc.createElement("code");
+    code.textContent = currentText;
+    source.appendChild(code);
 
-  if (range.kind === "modified" && range.originalText != null) {
-    const control = doc.createElement("div");
-    control.className =
-      "emr-diff-before-control emr-diff-before-control--source";
-    const trigger = doc.createElement("button");
-    trigger.type = "button";
-    trigger.className = "emr-diff-before-trigger";
-    trigger.textContent = "Before";
-    trigger.setAttribute("aria-label", "Show previous source");
-    trigger.setAttribute("aria-expanded", "false");
-    const panel = doc.createElement("div");
-    panel.className =
-      "emr-diff-before-panel emr-diff-before-panel--source markdown-body";
-    panel.id = `emr-diff-before-source-${range.start}-${range.end}`;
-    panel.hidden = true;
-    trigger.setAttribute("aria-controls", panel.id);
-    const previous = doc.createElement("pre");
-    const previousCode = doc.createElement("code");
-    previousCode.textContent = range.originalText;
-    previous.appendChild(previousCode);
-    panel.appendChild(previous);
-    trigger.addEventListener("click", () => {
-      const open = panel.hidden;
-      panel.hidden = !open;
-      trigger.textContent = open ? "Hide" : "Before";
-      trigger.setAttribute(
-        "aria-label",
-        open ? "Hide previous source" : "Show previous source",
-      );
-      trigger.setAttribute("aria-expanded", open ? "true" : "false");
-    });
-    control.appendChild(trigger);
-    marker.append(control, panel);
-  }
+    if (range.kind === "modified" && range.originalText != null) {
+        const control = doc.createElement("div");
+        control.className = "emr-diff-before-control emr-diff-before-control--source";
+        const trigger = doc.createElement("button");
+        trigger.type = "button";
+        trigger.className = "emr-diff-before-trigger";
+        trigger.textContent = "Before";
+        trigger.setAttribute("aria-label", "Show previous source");
+        trigger.setAttribute("aria-expanded", "false");
+        const panel = doc.createElement("div");
+        panel.className = "emr-diff-before-panel emr-diff-before-panel--source markdown-body";
+        panel.id = `emr-diff-before-source-${range.start}-${range.end}`;
+        panel.hidden = true;
+        trigger.setAttribute("aria-controls", panel.id);
+        const previous = doc.createElement("pre");
+        const previousCode = doc.createElement("code");
+        previousCode.textContent = range.originalText;
+        previous.appendChild(previousCode);
+        panel.appendChild(previous);
+        trigger.addEventListener("click", () => {
+            const open = panel.hidden;
+            panel.hidden = !open;
+            trigger.textContent = open ? "Hide" : "Before";
+            trigger.setAttribute(
+                "aria-label",
+                open ? "Hide previous source" : "Show previous source",
+            );
+            trigger.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+        control.appendChild(trigger);
+        marker.append(control, panel);
+    }
 
-  marker.append(label, source);
+    marker.append(label, source);
 
-  return marker;
+    return marker;
 }
 
 /** First block whose source range starts at/after `line` (document order). */
-function firstBlockAtOrAfter(
-  blocks: readonly HTMLElement[],
-  line: number,
-): HTMLElement | null {
-  for (const el of blocks) {
-    const start = numAttr(el, "data-source-line");
-    if (start != null && start >= line) return el;
-  }
+function firstBlockAtOrAfter(blocks: readonly HTMLElement[], line: number): HTMLElement | null {
+    for (const el of blocks) {
+        const start = numAttr(el, "data-source-line");
+        if (start != null && start >= line) return el;
+    }
 
-  return null;
+    return null;
 }
 
-function buildDeletedMarker(
-  r: DiffRange,
-  renderInline?: (md: string) => string,
-): HTMLElement {
-  const count = r.linesDeleted ?? 0;
-  const marker = document.createElement("div");
-  marker.className = DIFF_DELETED_MARKER_CLASS;
-  marker.setAttribute("role", "note");
-  const label = `${count} line${count === 1 ? "" : "s"} removed`;
-  marker.setAttribute("aria-label", label);
+function buildDeletedMarker(r: DiffRange, renderInline?: (md: string) => string): HTMLElement {
+    const count = r.linesDeleted ?? 0;
+    const marker = document.createElement("div");
+    marker.className = DIFF_DELETED_MARKER_CLASS;
+    marker.setAttribute("role", "note");
+    const label = `${count} line${count === 1 ? "" : "s"} removed`;
+    marker.setAttribute("aria-label", label);
 
-  const rail = document.createElement("span");
-  rail.className = "emr-diff-deleted-rail";
-  rail.setAttribute("aria-hidden", "true");
+    const rail = document.createElement("span");
+    rail.className = "emr-diff-deleted-rail";
+    rail.setAttribute("aria-hidden", "true");
 
-  const chip = document.createElement("button");
-  chip.type = "button";
-  chip.className = "emr-diff-deleted-chip";
-  chip.textContent = label;
-  chip.setAttribute("aria-expanded", "false");
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "emr-diff-deleted-chip";
+    chip.textContent = label;
+    chip.setAttribute("aria-expanded", "false");
 
-  const removedMarkdown = (r.deletedContent ?? "").replace(/\n+$/, "");
-  // Render the removed source as Markdown so headings/code/lists read like the
-  // document they came from — not raw `##`/backtick syntax. Falls back to a
-  // preformatted plain block when no renderer is supplied (pure jsdom tests).
-  let body: HTMLElement;
+    const removedMarkdown = (r.deletedContent ?? "").replace(/\n+$/, "");
+    // Render the removed source as Markdown so headings/code/lists read like the
+    // document they came from — not raw `##`/backtick syntax. Falls back to a
+    // preformatted plain block when no renderer is supplied (pure jsdom tests).
+    let body: HTMLElement;
 
-  if (renderInline && removedMarkdown) {
-    body = document.createElement("div");
-    body.className = "emr-diff-deleted-body markdown-body";
-    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
-    body.innerHTML = renderInline(removedMarkdown);
-  } else {
-    body = document.createElement("pre");
-    body.className = "emr-diff-deleted-body";
-    body.textContent = removedMarkdown;
-  }
+    if (renderInline && removedMarkdown) {
+        body = document.createElement("div");
+        body.className = "emr-diff-deleted-body markdown-body";
+        // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
+        body.innerHTML = renderInline(removedMarkdown);
+    } else {
+        body = document.createElement("pre");
+        body.className = "emr-diff-deleted-body";
+        body.textContent = removedMarkdown;
+    }
 
-  body.hidden = true;
+    body.hidden = true;
 
-  chip.addEventListener("click", () => {
-    const open = body.hidden === true;
-    body.hidden = !open;
-    chip.setAttribute("aria-expanded", open ? "true" : "false");
-    marker.classList.toggle("is-open", open);
-  });
+    chip.addEventListener("click", () => {
+        const open = body.hidden === true;
+        body.hidden = !open;
+        chip.setAttribute("aria-expanded", open ? "true" : "false");
+        marker.classList.toggle("is-open", open);
+    });
 
-  marker.appendChild(rail);
-  marker.appendChild(chip);
-  marker.appendChild(body);
+    marker.appendChild(rail);
+    marker.appendChild(chip);
+    marker.appendChild(body);
 
-  return marker;
+    return marker;
 }
 
 interface DeletedTableRows {
-  parent: HTMLElement;
-  before: ChildNode | null;
-  rows: HTMLTableRowElement[];
+    parent: HTMLElement;
+    before: ChildNode | null;
+    rows: HTMLTableRowElement[];
 }
 
 function buildDeletedTableRows(
-  range: DiffRange,
-  anchor: HTMLElement | null,
-  anchors: readonly HTMLElement[],
-  renderInline: (md: string) => string,
+    range: DiffRange,
+    anchor: HTMLElement | null,
+    anchors: readonly HTMLElement[],
+    renderInline: (md: string) => string,
 ): DeletedTableRows | null {
-  if (range.deletedContent == null || range.deletedContent === "") return null;
-  const markdown = range.deletedContent.replace(/\n+$/, "");
-  const lines = markdown.split(/\r\n|\r|\n/);
-  const columnCount = deletedTableColumnCount(lines);
-  if (columnCount == null) return null;
+    if (range.deletedContent == null || range.deletedContent === "") {
+        return null;
+    }
 
-  const referenceRow = deletedRowReference(range, anchor, anchors);
-  if (!referenceRow) return null;
-  const parent = referenceRow.parentElement;
+    const markdown = range.deletedContent.replace(/\n+$/, "");
+    const lines = markdown.split(/\r\n|\r|\n/);
+    const columnCount = deletedTableColumnCount(lines);
+    if (columnCount == null) return null;
 
-  if (
-    parent?.tagName !== "TBODY" ||
-    referenceRow.children.length !== columnCount
-  ) {
-    return null;
-  }
+    const referenceRow = deletedRowReference(range, anchor, anchors);
+    if (!referenceRow) return null;
+    const parent = referenceRow.parentElement;
 
-  const removedRows = renderDeletedTableRows(lines, columnCount, renderInline);
-  if (!removedRows) return null;
+    if (parent?.tagName !== "TBODY" || referenceRow.children.length !== columnCount) {
+        return null;
+    }
 
-  const before =
-    anchor?.tagName === "TR" && anchor.parentElement === parent
-      ? anchor
-      : referenceRow.nextSibling;
+    const removedRows = renderDeletedTableRows(lines, columnCount, renderInline);
 
-  return { parent, before, rows: removedRows };
+    if (!removedRows) return null;
+
+    const before =
+        anchor?.tagName === "TR" && anchor.parentElement === parent
+            ? anchor
+            : referenceRow.nextSibling;
+
+    return { parent, before, rows: removedRows };
 }
 
 /**
@@ -284,21 +258,19 @@ function buildDeletedTableRows(
  * delimiter row, at least two columns); null for anything else.
  */
 function deletedTableColumnCount(lines: readonly string[]): number | null {
-  const rows = lines.map(splitTableRow);
-  const columnCount = rows[0]!.length;
+    const rows = lines.map(splitTableRow);
+    const columnCount = rows[0]!.length;
 
-  if (
-    lines.some((line) => !/^\s*\|.*\|\s*$/.test(line)) ||
-    lines.some((line) =>
-      splitTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell)),
-    ) ||
-    columnCount < 2 ||
-    rows.some((cells) => cells.length !== columnCount)
-  ) {
-    return null;
-  }
+    if (
+        lines.some((line) => !/^\s*\|.*\|\s*$/.test(line)) ||
+        lines.some((line) => splitTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell))) ||
+        columnCount < 2 ||
+        rows.some((cells) => cells.length !== columnCount)
+    ) {
+        return null;
+    }
 
-  return columnCount;
+    return columnCount;
 }
 
 /**
@@ -306,69 +278,67 @@ function deletedTableColumnCount(lines: readonly string[]): number | null {
  * the last row of a table that ends just before the deletion.
  */
 function deletedRowReference(
-  range: DiffRange,
-  anchor: HTMLElement | null,
-  anchors: readonly HTMLElement[],
+    range: DiffRange,
+    anchor: HTMLElement | null,
+    anchors: readonly HTMLElement[],
 ): HTMLElement | undefined {
-  const previousRow = [...anchors]
-    .reverse()
-    .find(
-      (candidate) =>
-        candidate.tagName === "TR" &&
-        numAttr(candidate, "data-source-end-line")! < range.startLine,
-    );
+    const previousRow = [...anchors]
+        .reverse()
+        .find(
+            (candidate) =>
+                candidate.tagName === "TR" &&
+                numAttr(candidate, "data-source-end-line")! < range.startLine,
+        );
 
-  const previousRowEnd =
-    previousRow == null ? null : numAttr(previousRow, "data-source-end-line");
+    const previousRowEnd =
+        previousRow == null ? null : numAttr(previousRow, "data-source-end-line");
 
-  const immediatelyAfterPreviousTable =
-    previousRowEnd != null && previousRowEnd + 1 === range.startLine;
+    const immediatelyAfterPreviousTable =
+        previousRowEnd != null && previousRowEnd + 1 === range.startLine;
 
-  return anchor?.tagName === "TR"
-    ? anchor
-    : immediatelyAfterPreviousTable
-      ? previousRow
-      : undefined;
+    return anchor?.tagName === "TR"
+        ? anchor
+        : immediatelyAfterPreviousTable
+          ? previousRow
+          : undefined;
 }
 
 /** Render deleted table-row Markdown as body rows styled as removed. */
 function renderDeletedTableRows(
-  lines: readonly string[],
-  columnCount: number,
-  renderInline: (md: string) => string,
+    lines: readonly string[],
+    columnCount: number,
+    renderInline: (md: string) => string,
 ): HTMLTableRowElement[] | null {
-  const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
-  const scratch = document.createElement("div");
-  // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
-  scratch.innerHTML = renderInline(
-    [lines[0]!, delimiter, ...lines.slice(1)].join("\n"),
-  );
-  const table = scratch.querySelector<HTMLTableElement>("table");
-  const headerRow = table?.querySelector<HTMLTableRowElement>("thead tr");
-  if (!table || !headerRow) return null;
+    const delimiter = `| ${Array(columnCount).fill("---").join(" | ")} |`;
+    const scratch = document.createElement("div");
+    // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
+    scratch.innerHTML = renderInline([lines[0]!, delimiter, ...lines.slice(1)].join("\n"));
+    const table = scratch.querySelector<HTMLTableElement>("table");
+    const headerRow = table?.querySelector<HTMLTableRowElement>("thead tr");
+    if (!table || !headerRow) return null;
 
-  for (const header of Array.from(headerRow.querySelectorAll("th"))) {
-    const cell = document.createElement("td");
+    for (const header of Array.from(headerRow.querySelectorAll("th"))) {
+        const cell = document.createElement("td");
 
-    for (const attribute of Array.from(header.attributes)) {
-      cell.setAttribute(attribute.name, attribute.value);
+        for (const attribute of Array.from(header.attributes)) {
+            cell.setAttribute(attribute.name, attribute.value);
+        }
+
+        cell.append(...Array.from(header.childNodes));
+        header.replaceWith(cell);
     }
 
-    cell.append(...Array.from(header.childNodes));
-    header.replaceWith(cell);
-  }
+    const body = table.tBodies.item(0) ?? table.createTBody();
+    body.prepend(headerRow);
+    const removedRows = Array.from(body.rows);
 
-  const body = table.tBodies.item(0) ?? table.createTBody();
-  body.prepend(headerRow);
-  const removedRows = Array.from(body.rows);
+    for (const row of removedRows) {
+        row.className = `${DIFF_DELETED_MARKER_CLASS} emr-diff-deleted-table-row`;
+        row.setAttribute("role", "note");
+        row.setAttribute("aria-label", "Removed table row");
+    }
 
-  for (const row of removedRows) {
-    row.className = `${DIFF_DELETED_MARKER_CLASS} emr-diff-deleted-table-row`;
-    row.setAttribute("role", "note");
-    row.setAttribute("aria-label", "Removed table row");
-  }
-
-  return removedRows;
+    return removedRows;
 }
 
 /**
@@ -377,18 +347,18 @@ function renderDeletedTableRows(
  * never be offered as a comment anchor (the anchor would orphan immediately).
  */
 function isWithinDeletedDiff(node: Node | null): boolean {
-  const el =
-    node == null
-      ? null
-      : node.nodeType === Node.ELEMENT_NODE
-        ? (node as Element)
-        : node.parentElement;
+    const el =
+        node == null
+            ? null
+            : node.nodeType === Node.ELEMENT_NODE
+              ? (node as Element)
+              : node.parentElement;
 
-  return (
-    el?.closest(
-      `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel, .${DIFF_SOURCE_ONLY_CLASS}`,
-    ) != null
-  );
+    return (
+        el?.closest(
+            `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel, .${DIFF_SOURCE_ONLY_CLASS}`,
+        ) != null
+    );
 }
 
 /**
@@ -400,38 +370,34 @@ function isWithinDeletedDiff(node: Node | null): boolean {
  * leave the comment bubble available over deleted content.
  */
 export function selectionTouchesDeletedDiff(
-  anchorNode: Node | null,
-  focusNode: Node | null,
+    anchorNode: Node | null,
+    focusNode: Node | null,
 ): boolean {
-  if (isWithinDeletedDiff(anchorNode) || isWithinDeletedDiff(focusNode)) {
-    return true;
-  }
+    if (isWithinDeletedDiff(anchorNode) || isWithinDeletedDiff(focusNode)) {
+        return true;
+    }
 
-  if (!anchorNode || !focusNode) return false;
+    if (!anchorNode || !focusNode) return false;
 
-  // Both endpoints sit outside every marker. The selection still covers a
-  // marker when one lies between the endpoints in document order — i.e. exactly
-  // one endpoint precedes it. Scope the scan to the nodes' shared tree so it
-  // works whether the article is live in the document or a detached fixture.
-  // "Before" panels count only while open: a collapsed (`hidden`) panel sits
-  // beside every changed block but contributes no selected text.
-  const scope = anchorNode.getRootNode() as ParentNode;
+    // Both endpoints sit outside every marker. The selection still covers a
+    // marker when one lies between the endpoints in document order — i.e. exactly
+    // one endpoint precedes it. Scope the scan to the nodes' shared tree so it
+    // works whether the article is live in the document or a detached fixture.
+    // "Before" panels count only while open: a collapsed (`hidden`) panel sits
+    // beside every changed block but contributes no selected text.
+    const scope = anchorNode.getRootNode() as ParentNode;
 
-  for (const marker of scope.querySelectorAll(
-    `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel:not([hidden]), .${DIFF_SOURCE_ONLY_CLASS}`,
-  )) {
-    const markerAfterAnchor =
-      (anchorNode.compareDocumentPosition(marker) &
-        Node.DOCUMENT_POSITION_FOLLOWING) !==
-      0;
+    for (const marker of scope.querySelectorAll(
+        `.${DIFF_DELETED_MARKER_CLASS}, .emr-diff-before-panel:not([hidden]), .${DIFF_SOURCE_ONLY_CLASS}`,
+    )) {
+        const markerAfterAnchor =
+            (anchorNode.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-    const markerAfterFocus =
-      (focusNode.compareDocumentPosition(marker) &
-        Node.DOCUMENT_POSITION_FOLLOWING) !==
-      0;
+        const markerAfterFocus =
+            (focusNode.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-    if (markerAfterAnchor !== markerAfterFocus) return true;
-  }
+        if (markerAfterAnchor !== markerAfterFocus) return true;
+    }
 
-  return false;
+    return false;
 }

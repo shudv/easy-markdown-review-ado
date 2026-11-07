@@ -16,20 +16,17 @@ import type { FolderListing } from "./types";
  * as of `atCommitId` when given (a historical version of a document), else as
  * the host's current version.
  */
-export type FolderLister = (
-  folderPath: string,
-  atCommitId?: string,
-) => Promise<FolderListing>;
+export type FolderLister = (folderPath: string, atCommitId?: string) => Promise<FolderListing>;
 
 /** File name of a folder's wiki page order. */
 export const ORDER_FILE_NAME = ".order";
 
 /** The page names a `.order` file lists, in order. */
 export function parseOrderFile(text: string): string[] {
-  return text
-    .split(/\r\n|\r|\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    return text
+        .split(/\r\n|\r|\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
 }
 
 /**
@@ -37,48 +34,45 @@ export function parseOrderFile(text: string): string[] {
  * trailing slash or `.md` extension.
  */
 export function wikiPageName(pathOrName: string): string {
-  const segments = pathOrName.split("/").filter(Boolean);
+    const segments = pathOrName.split("/").filter(Boolean);
 
-  return (segments[segments.length - 1] ?? "").replace(/\.md$/i, "");
+    return (segments[segments.length - 1] ?? "").replace(/\.md$/i, "");
 }
 
 /** The display title of a wiki page file. */
 export function wikiPageTitle(path: string): string {
-  const name = wikiPageName(path).replace(/-/g, " ");
+    const name = wikiPageName(path).replace(/-/g, " ");
 
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    // A stray `%` that isn't an escape — show the name as written.
-    return name;
-  }
+    try {
+        return decodeURIComponent(name);
+    } catch {
+        // A stray `%` that isn't an escape — show the name as written.
+        return name;
+    }
 }
 
 /**
  * Rank lookup for a folder's `.order`: the position of a page name in it, or
  * `Infinity` when unlisted. Matches exactly first, then case-insensitively.
  */
-export function orderRank(
-  order: readonly string[] | undefined,
-): (name: string) => number {
-  const exact = new Map<string, number>();
-  const folded = new Map<string, number>();
-  (order ?? []).forEach((entry, index) => {
-    const name = wikiPageName(entry);
-    if (!exact.has(name)) exact.set(name, index);
-    const lower = name.toLowerCase();
-    if (!folded.has(lower)) folded.set(lower, index);
-  });
+export function orderRank(order: readonly string[] | undefined): (name: string) => number {
+    const exact = new Map<string, number>();
+    const folded = new Map<string, number>();
+    (order ?? []).forEach((entry, index) => {
+        const name = wikiPageName(entry);
+        if (!exact.has(name)) exact.set(name, index);
+        const lower = name.toLowerCase();
+        if (!folded.has(lower)) folded.set(lower, index);
+    });
 
-  return (name) =>
-    exact.get(name) ?? folded.get(name.toLowerCase()) ?? Infinity;
+    return (name) => exact.get(name) ?? folded.get(name.toLowerCase()) ?? Infinity;
 }
 
 /** Compare two ranks; equal ranks (including two unlisted) tie at 0. */
 export function compareRanks(a: number, b: number): number {
-  if (a === b) return 0;
+    if (a === b) return 0;
 
-  return a < b ? -1 : 1;
+    return a < b ? -1 : 1;
 }
 
 /**
@@ -87,24 +81,24 @@ export function compareRanks(a: number, b: number): number {
  * first. Unchanged without a root order or when no listed root page exists.
  */
 export function withFirstPageFirst<F extends { path: string }>(
-  files: F[],
-  rootOrder: readonly string[] | undefined,
+    files: F[],
+    rootOrder: readonly string[] | undefined,
 ): F[] {
-  const rank = orderRank(rootOrder);
-  let first: F | undefined;
-  let best = Infinity;
+    const rank = orderRank(rootOrder);
+    let first: F | undefined;
+    let best = Infinity;
 
-  for (const file of files) {
-    if (file.path.replace(/^\/+/, "").includes("/")) continue;
-    const fileRank = rank(wikiPageName(file.path));
+    for (const file of files) {
+        if (file.path.replace(/^\/+/, "").includes("/")) continue;
+        const fileRank = rank(wikiPageName(file.path));
 
-    if (fileRank < best) {
-      best = fileRank;
-      first = file;
+        if (fileRank < best) {
+            best = fileRank;
+            first = file;
+        }
     }
-  }
 
-  return first ? [first, ...files.filter((file) => file !== first)] : files;
+    return first ? [first, ...files.filter((file) => file !== first)] : files;
 }
 
 /**
@@ -112,7 +106,7 @@ export function withFirstPageFirst<F extends { path: string }>(
  * (`/Guides.md` → `/Guides`).
  */
 export function subpagesFolderOf(documentPath: string): string {
-  return documentPath.replace(/\.md$/i, "");
+    return documentPath.replace(/\.md$/i, "");
 }
 
 /**
@@ -120,18 +114,18 @@ export function subpagesFolderOf(documentPath: string): string {
  * Markdown pages in `.order` order, unlisted pages after them by title.
  */
 export function subpagesFromListing(listing: FolderListing): WikiSubpage[] {
-  const rank = orderRank(listing.order);
+    const rank = orderRank(listing.order);
 
-  return listing.files
-    .map((file) => ({
-      path: file.path,
-      title: wikiPageTitle(file.path),
-      rank: rank(wikiPageName(file.path)),
-    }))
-    .sort(
-      (a, b) =>
-        compareRanks(a.rank, b.rank) ||
-        a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
-    )
-    .map(({ path, title }) => ({ path, title }));
+    return listing.files
+        .map((file) => ({
+            path: file.path,
+            title: wikiPageTitle(file.path),
+            rank: rank(wikiPageName(file.path)),
+        }))
+        .sort(
+            (a, b) =>
+                compareRanks(a.rank, b.rank) ||
+                a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+        )
+        .map(({ path, title }) => ({ path, title }));
 }

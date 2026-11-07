@@ -27,20 +27,16 @@ const args = process.argv.slice(2);
 const modeIdx = args.indexOf("--mode");
 const mode = modeIdx >= 0 ? args[modeIdx + 1] : "prod";
 if (mode !== "dev" && mode !== "prod") {
-  console.error(
-    `✘ --mode must be 'dev' or 'prod' (got: ${mode ?? "<missing>"})`,
-  );
-  process.exit(1);
+    console.error(`✘ --mode must be 'dev' or 'prod' (got: ${mode ?? "<missing>"})`);
+    process.exit(1);
 }
 
 const publisher = (process.env.AZDO_PUBLISHER_ID ?? "").trim();
 if (!publisher) {
-  console.error("✘ AZDO_PUBLISHER_ID is not set in .env.");
-  console.error(
-    "  Create a publisher at https://aka.ms/vsmarketplace-manage-publishers",
-  );
-  console.error("  then add `AZDO_PUBLISHER_ID=<your-id>` to .env.");
-  process.exit(1);
+    console.error("✘ AZDO_PUBLISHER_ID is not set in .env.");
+    console.error("  Create a publisher at https://aka.ms/vsmarketplace-manage-publishers");
+    console.error("  then add `AZDO_PUBLISHER_ID=<your-id>` to .env.");
+    process.exit(1);
 }
 
 // ---------- read base manifest for version ----------
@@ -55,27 +51,27 @@ console.log(`▸ Building (mode=${mode})…`);
 const webpackMode = mode === "dev" ? "development" : "production";
 const isWin = process.platform === "win32";
 const webpackResult = spawnSync(
-  isWin ? "npx.cmd" : "npx",
-  ["webpack", "--mode", webpackMode, "--config", "webpack.config.cjs"],
-  { stdio: "inherit", cwd: REPO_ROOT, shell: isWin },
+    isWin ? "npx.cmd" : "npx",
+    ["webpack", "--mode", webpackMode, "--config", "webpack.config.cjs"],
+    { stdio: "inherit", cwd: REPO_ROOT, shell: isWin },
 );
 if (webpackResult.status !== 0) {
-  console.error("✘ webpack failed");
-  process.exit(webpackResult.status ?? 1);
+    console.error("✘ webpack failed");
+    process.exit(webpackResult.status ?? 1);
 }
 
 // The dev-only fault injector (src/dev/faults.ts) must never ship: fail before
 // packaging if any of it survived the production build.
 if (mode !== "dev") {
-  const guard = spawnSync(
-    process.execPath,
-    [join(REPO_ROOT, "scripts", "check-no-dev-faults.mjs")],
-    { stdio: "inherit", cwd: REPO_ROOT },
-  );
-  if (guard.status !== 0) {
-    console.error("✘ dev-only fault injection found in the production build");
-    process.exit(guard.status ?? 1);
-  }
+    const guard = spawnSync(
+        process.execPath,
+        [join(REPO_ROOT, "scripts", "check-no-dev-faults.mjs")],
+        { stdio: "inherit", cwd: REPO_ROOT },
+    );
+    if (guard.status !== 0) {
+        console.error("✘ dev-only fault injection found in the production build");
+        process.exit(guard.status ?? 1);
+    }
 }
 
 // ---------- 2. overrides ----------
@@ -85,29 +81,29 @@ mkdirSync(buildDir, { recursive: true });
 
 const overrides = { publisher };
 if (mode === "dev") {
-  overrides.baseUri = "https://localhost:3000/";
-  // Bump version per publish so successive uploads don't collide. The
-  // Marketplace requires 1-4 dot-separated non-negative integers (each
-  // < 2^31), no pre-release suffix, so we append a 4th numeric segment.
-  // Unix-seconds fits in int32 (good through Jan 2038) and is strictly
-  // monotonic for back-to-back packages.
-  overrides.version = `${baseVersion}.${Math.floor(Date.now() / 1000)}`;
-  overrides.public = false;
-  // Append "(dev)" to display name to make the dev variant visually distinct.
-  overrides.name = `${manifest.name} (dev)`;
-  // Use a different id so dev and prod extensions can coexist in the same org.
-  // The Marketplace permanently reserves an extension id once it has been
-  // published — even after the extension is deleted, the id is tombstoned and
-  // cannot be recreated (tfx fails with "The extension already exists"). If a
-  // dev id ever gets burned that way, set AZDO_DEV_ID_SUFFIX in .env to a fresh
-  // token (e.g. `devlocal`, `dev2`) to mint a new, unused id without a code edit.
-  const devIdSuffix = (process.env.AZDO_DEV_ID_SUFFIX ?? "dev").trim() || "dev";
-  overrides.id = `${manifest.id}-${devIdSuffix}`;
+    overrides.baseUri = "https://localhost:3000/";
+    // Bump version per publish so successive uploads don't collide. The
+    // Marketplace requires 1-4 dot-separated non-negative integers (each
+    // < 2^31), no pre-release suffix, so we append a 4th numeric segment.
+    // Unix-seconds fits in int32 (good through Jan 2038) and is strictly
+    // monotonic for back-to-back packages.
+    overrides.version = `${baseVersion}.${Math.floor(Date.now() / 1000)}`;
+    overrides.public = false;
+    // Append "(dev)" to display name to make the dev variant visually distinct.
+    overrides.name = `${manifest.name} (dev)`;
+    // Use a different id so dev and prod extensions can coexist in the same org.
+    // The Marketplace permanently reserves an extension id once it has been
+    // published — even after the extension is deleted, the id is tombstoned and
+    // cannot be recreated (tfx fails with "The extension already exists"). If a
+    // dev id ever gets burned that way, set AZDO_DEV_ID_SUFFIX in .env to a fresh
+    // token (e.g. `devlocal`, `dev2`) to mint a new, unused id without a code edit.
+    const devIdSuffix = (process.env.AZDO_DEV_ID_SUFFIX ?? "dev").trim() || "dev";
+    overrides.id = `${manifest.id}-${devIdSuffix}`;
 } else {
-  // Prod uploads also need a strictly increasing version per publish.
-  // Use the same monotonic 4th-segment-as-unix-seconds trick so a single
-  // `npm run package:prod` is always upload-ready without a manual bump.
-  overrides.version = `${baseVersion}.${Math.floor(Date.now() / 1000)}`;
+    // Prod uploads also need a strictly increasing version per publish.
+    // Use the same monotonic 4th-segment-as-unix-seconds trick so a single
+    // `npm run package:prod` is always upload-ready without a manual bump.
+    overrides.version = `${baseVersion}.${Math.floor(Date.now() / 1000)}`;
 }
 
 const overridesPath = join(buildDir, `overrides.${mode}.json`);
@@ -130,90 +126,76 @@ console.log(`▸ Wrote overrides: ${overridesPath}`);
 let manifestGlob = "vss-extension.json";
 let devManifestPath = null;
 if (mode === "dev") {
-  const devTitleSuffix = " (dev)";
-  const devManifest = structuredClone(manifest);
-  devManifest.contributions = (manifest.contributions ?? []).map(
-    (contribution) => {
-      const next = structuredClone(contribution);
-      const props = next.properties ?? {};
-      if (typeof props.name === "string") {
-        props.name = `${props.name}${devTitleSuffix}`;
-      }
-      if (typeof props.text === "string") {
-        props.text = `${props.text}${devTitleSuffix}`;
-      }
-      // Strip the `dist/` prefix from the content URI. In prod the bundle files
-      // are addressable under `dist/` on the Marketplace CDN, so the manifest
-      // uses `dist/<entry>.html`. In dev the webpack-dev-server serves those same
-      // entries at the ROOT of https://localhost:3000/ (publicPath `/`, so e.g.
-      // `/hub/documents-hub.html`, `/pr-tab/pr-tab.html`). Since the
-      // dev `baseUri` points the host at localhost, the URI must be root-relative
-      // (no `dist/`) or the host iframe 404s. Verified against the live host.
-      if (typeof props.uri === "string") {
-        props.uri = props.uri.replace(/^dist\//, "");
-      }
-      next.properties = props;
-      return next;
-    },
-  );
-  devManifestPath = join(REPO_ROOT, "vss-extension.dev.generated.json");
-  writeFileSync(devManifestPath, JSON.stringify(devManifest, null, 2));
-  manifestGlob = devManifestPath;
-  console.log(`▸ Wrote dev manifest (suffixed titles): ${devManifestPath}`);
+    const devTitleSuffix = " (dev)";
+    const devManifest = structuredClone(manifest);
+    devManifest.contributions = (manifest.contributions ?? []).map((contribution) => {
+        const next = structuredClone(contribution);
+        const props = next.properties ?? {};
+        if (typeof props.name === "string") {
+            props.name = `${props.name}${devTitleSuffix}`;
+        }
+        if (typeof props.text === "string") {
+            props.text = `${props.text}${devTitleSuffix}`;
+        }
+        // Strip the `dist/` prefix from the content URI. In prod the bundle files
+        // are addressable under `dist/` on the Marketplace CDN, so the manifest
+        // uses `dist/<entry>.html`. In dev the webpack-dev-server serves those same
+        // entries at the ROOT of https://localhost:3000/ (publicPath `/`, so e.g.
+        // `/hub/documents-hub.html`, `/pr-tab/pr-tab.html`). Since the
+        // dev `baseUri` points the host at localhost, the URI must be root-relative
+        // (no `dist/`) or the host iframe 404s. Verified against the live host.
+        if (typeof props.uri === "string") {
+            props.uri = props.uri.replace(/^dist\//, "");
+        }
+        next.properties = props;
+        return next;
+    });
+    devManifestPath = join(REPO_ROOT, "vss-extension.dev.generated.json");
+    writeFileSync(devManifestPath, JSON.stringify(devManifest, null, 2));
+    manifestGlob = devManifestPath;
+    console.log(`▸ Wrote dev manifest (suffixed titles): ${devManifestPath}`);
 }
 
 // ---------- 3. tfx package ----------
 
 console.log("▸ Packaging .vsix via tfx…");
 const tfxResult = spawnSync(
-  isWin ? "npx.cmd" : "npx",
-  [
-    "tfx",
-    "extension",
-    "create",
-    "--manifest-globs",
-    manifestGlob,
-    "--overrides-file",
-    overridesPath,
-    "--output-path",
-    buildDir,
-    "--no-color",
-  ],
-  { stdio: "inherit", cwd: REPO_ROOT, shell: isWin },
+    isWin ? "npx.cmd" : "npx",
+    [
+        "tfx",
+        "extension",
+        "create",
+        "--manifest-globs",
+        manifestGlob,
+        "--overrides-file",
+        overridesPath,
+        "--output-path",
+        buildDir,
+        "--no-color",
+    ],
+    { stdio: "inherit", cwd: REPO_ROOT, shell: isWin },
 );
 // Clean up the temporary generated dev manifest regardless of tfx's outcome.
 if (devManifestPath) {
-  rmSync(devManifestPath, { force: true });
+    rmSync(devManifestPath, { force: true });
 }
 if (tfxResult.status !== 0) {
-  console.error("✘ tfx packaging failed");
-  process.exit(tfxResult.status ?? 1);
+    console.error("✘ tfx packaging failed");
+    process.exit(tfxResult.status ?? 1);
 }
 
 console.log("");
 console.log(`✓ Packaged (mode=${mode}). VSIX written to ./build/`);
 if (mode === "dev") {
-  console.log("");
-  console.log("Next steps for dev install:");
-  console.log(
-    "  1. Run `npm run setup:cert` once so browsers trust https://localhost:3000.",
-  );
-  console.log("  2. Upload the .vsix to your Marketplace publisher at");
-  console.log("       https://marketplace.visualstudio.com/manage");
-  console.log(
-    "     and share the extension with your ADO org (only your org).",
-  );
-  console.log("  3. Install it into your org from the same Manage page.");
-  console.log(
-    "  4. Run `npm run dev:ado` — it serves the bundles and opens ADO in a dev",
-  );
-  console.log(
-    "     browser allowed to load them (Chromium blocks localhost iframes in",
-  );
-  console.log(
-    "     public sites by default; see e2e/README.md). Open your test PR there.",
-  );
-  console.log(
-    "  5. Code changes hot-reload via webpack-dev-server; no re-package needed.",
-  );
+    console.log("");
+    console.log("Next steps for dev install:");
+    console.log("  1. Run `npm run setup:cert` once so browsers trust https://localhost:3000.");
+    console.log("  2. Upload the .vsix to your Marketplace publisher at");
+    console.log("       https://marketplace.visualstudio.com/manage");
+    console.log("     and share the extension with your ADO org (only your org).");
+    console.log("  3. Install it into your org from the same Manage page.");
+    console.log("  4. Run `npm run dev:ado` — it serves the bundles and opens ADO in a dev");
+    console.log("     browser allowed to load them (Chromium blocks localhost iframes in");
+    console.log("     public sites by default; see e2e/README.md). Open your test PR there.");
+    console.log("  5. Code changes hot-reload via webpack-dev-server; no re-package needed.");
 }

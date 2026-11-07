@@ -14,26 +14,26 @@
 // The entry points supply thin adapters that close over the real `SDK.*` calls.
 
 export interface BootDeps {
-  /** `SDK.init(...)` — establish the host connection. */
-  init: () => Promise<void>;
-  /** `SDK.ready()` — resolve once the host has finished handshaking. */
-  ready: () => Promise<void>;
-  /**
-   * App-specific startup that must run only AFTER `ready` resolves: bring up
-   * telemetry, sync theme, resolve services, and render. Reject to trigger the
-   * failure path.
-   */
-  run: () => Promise<void>;
-  /** `SDK.notifyLoadSucceeded()` — clears the host's loading spinner. */
-  notifySucceeded: () => void;
-  /** `SDK.notifyLoadFailed(err)` — best-effort; may throw if init never ran. */
-  notifyFailed: (err: Error) => void;
-  /**
-   * Side-effect error sink (logging, telemetry, in-iframe error UI). Runs
-   * before `notifyFailed`. Never throws in a way that should mask the failure
-   * notification.
-   */
-  onError?: (err: unknown) => void;
+    /** `SDK.init(...)` — establish the host connection. */
+    init: () => Promise<void>;
+    /** `SDK.ready()` — resolve once the host has finished handshaking. */
+    ready: () => Promise<void>;
+    /**
+     * App-specific startup that must run only AFTER `ready` resolves: bring up
+     * telemetry, sync theme, resolve services, and render. Reject to trigger the
+     * failure path.
+     */
+    run: () => Promise<void>;
+    /** `SDK.notifyLoadSucceeded()` — clears the host's loading spinner. */
+    notifySucceeded: () => void;
+    /** `SDK.notifyLoadFailed(err)` — best-effort; may throw if init never ran. */
+    notifyFailed: (err: Error) => void;
+    /**
+     * Side-effect error sink (logging, telemetry, in-iframe error UI). Runs
+     * before `notifyFailed`. Never throws in a way that should mask the failure
+     * notification.
+     */
+    onError?: (err: unknown) => void;
 }
 
 /**
@@ -43,22 +43,22 @@ export interface BootDeps {
  * swallowed — the host API may be unavailable when init failed). Never rejects.
  */
 export async function orchestrateBoot(deps: BootDeps): Promise<void> {
-  try {
-    await deps.init();
-    await deps.ready();
-    await deps.run();
-    deps.notifySucceeded();
-  } catch (err: unknown) {
     try {
-      deps.onError?.(err);
-    } catch {
-      // An error sink must never prevent the host from being notified.
-    }
+        await deps.init();
+        await deps.ready();
+        await deps.run();
+        deps.notifySucceeded();
+    } catch (err: unknown) {
+        try {
+            deps.onError?.(err);
+        } catch {
+            // An error sink must never prevent the host from being notified.
+        }
 
-    try {
-      deps.notifyFailed(err instanceof Error ? err : new Error(String(err)));
-    } catch {
-      // init never completed or the host API is unavailable — nothing else to do.
+        try {
+            deps.notifyFailed(err instanceof Error ? err : new Error(String(err)));
+        } catch {
+            // init never completed or the host API is unavailable — nothing else to do.
+        }
     }
-  }
 }

@@ -8,76 +8,70 @@ import { diff_match_patch } from "diff-match-patch";
 
 import { diffWords } from "../markdown/wordDiff";
 import type { ChangeType, DiffRange } from "../types";
-import type {
-  DocumentImageResolver,
-  RepositoryImageResolver,
-} from "../markdown/documentImages";
+import type { DocumentImageResolver, RepositoryImageResolver } from "../markdown/documentImages";
 
 export interface ReaderActivity {
-  /** Stable operation identity used while delayed visibility is pending. */
-  id: string;
-  /** Concise status-bar message, including an ellipsis for ongoing work. */
-  label: string;
-  /** Larger values take precedence when operations overlap. */
-  priority: number;
+    /** Stable operation identity used while delayed visibility is pending. */
+    id: string;
+    /** Concise status-bar message, including an ellipsis for ongoing work. */
+    label: string;
+    /** Larger values take precedence when operations overlap. */
+    priority: number;
 }
 
 export function buildReaderActivities(input: {
-  navigationActivities: readonly ReaderActivity[];
-  commentSyncing: boolean;
-  fileRefreshing: boolean;
-  historicalLoading: boolean;
-  documentLoading: boolean;
+    navigationActivities: readonly ReaderActivity[];
+    commentSyncing: boolean;
+    fileRefreshing: boolean;
+    historicalLoading: boolean;
+    documentLoading: boolean;
 }): ReaderActivity[] {
-  const activities = [...input.navigationActivities];
+    const activities = [...input.navigationActivities];
 
-  if (input.commentSyncing) {
-    activities.push({
-      id: "comment-sync",
-      label: input.fileRefreshing
-        ? "Refreshing files and comments…"
-        : "Syncing comments…",
-      priority: input.fileRefreshing ? 60 : 20,
-    });
-  } else if (input.fileRefreshing) {
-    activities.push({
-      id: "file-refresh",
-      label: "Refreshing files…",
-      priority: 60,
-    });
-  }
+    if (input.commentSyncing) {
+        activities.push({
+            id: "comment-sync",
+            label: input.fileRefreshing ? "Refreshing files and comments…" : "Syncing comments…",
+            priority: input.fileRefreshing ? 60 : 20,
+        });
+    } else if (input.fileRefreshing) {
+        activities.push({
+            id: "file-refresh",
+            label: "Refreshing files…",
+            priority: 60,
+        });
+    }
 
-  if (input.historicalLoading) {
-    activities.push({
-      id: "history",
-      label: "Loading document version…",
-      priority: 100,
-    });
-  } else if (input.documentLoading) {
-    activities.push({
-      id: "document",
-      label: "Loading document…",
-      priority: 100,
-    });
-  }
+    if (input.historicalLoading) {
+        activities.push({
+            id: "history",
+            label: "Loading document version…",
+            priority: 100,
+        });
+    } else if (input.documentLoading) {
+        activities.push({
+            id: "document",
+            label: "Loading document…",
+            priority: 100,
+        });
+    }
 
-  return activities;
+    return activities;
 }
 
 export function bindRepositoryImageResolver(
-  resolveImage: DocumentImageResolver | undefined,
-  documentPath: string,
-  atCommitId: string | null | undefined,
+    resolveImage: DocumentImageResolver | undefined,
+    documentPath: string,
+    atCommitId: string | null | undefined,
 ): RepositoryImageResolver | undefined {
-  if (!resolveImage) return undefined;
+    if (!resolveImage) return undefined;
 
-  return (repositoryPath) =>
-    resolveImage(documentPath, repositoryPath, atCommitId ?? undefined);
+    return (repositoryPath) => resolveImage(documentPath, repositoryPath, atCommitId ?? undefined);
 }
 
 /** Human-readable message from an unknown thrown value. */
 export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+    return err instanceof Error ? err.message : String(err);
 }
 
 /**
@@ -87,7 +81,7 @@ export function errorMessage(err: unknown): string {
  * there yet / any more" as a normal state rather than an error.
  */
 export function isItemNotFoundError(err: unknown): boolean {
-  return extractStatus(err) === 404 || /\bTF401174\b/.test(errorMessage(err));
+    return extractStatus(err) === 404 || /\bTF401174\b/.test(errorMessage(err));
 }
 
 /**
@@ -96,27 +90,27 @@ export function isItemNotFoundError(err: unknown): boolean {
  * doesn't exist yet at an earlier update; a file it deletes is already gone.
  */
 export function absentAtUpdateMessage(
-  changeType: ChangeType | undefined,
-  update: number,
+    changeType: ChangeType | undefined,
+    update: number,
 ): { title: string; body: string } {
-  if (changeType === "deleted") {
-    return {
-      title: `Deleted by Update ${update}`,
-      body: `This file was deleted in this pull request by Update ${update}, so there's nothing to show for the selected updates.`,
-    };
-  }
+    if (changeType === "deleted") {
+        return {
+            title: `Deleted by Update ${update}`,
+            body: `This file was deleted in this pull request by Update ${update}, so there's nothing to show for the selected updates.`,
+        };
+    }
 
-  if (changeType === "added") {
-    return {
-      title: `Not added yet at Update ${update}`,
-      body: `This pull request adds this file in a later update, so it doesn't exist yet at Update ${update}.`,
-    };
-  }
+    if (changeType === "added") {
+        return {
+            title: `Not added yet at Update ${update}`,
+            body: `This pull request adds this file in a later update, so it doesn't exist yet at Update ${update}.`,
+        };
+    }
 
-  return {
-    title: `Not present at Update ${update}`,
-    body: `This file doesn't exist at Update ${update} of this pull request (it may have been moved or renamed).`,
-  };
+    return {
+        title: `Not present at Update ${update}`,
+        body: `This file doesn't exist at Update ${update} of this pull request (it may have been moved or renamed).`,
+    };
 }
 
 /**
@@ -129,30 +123,28 @@ export function absentAtUpdateMessage(
  * so it stays actionable. Never surfaces a raw `TF` code or identity GUID.
  */
 export function friendlyWriteError(label: string, err: unknown): string {
-  if (isSessionRefreshingError(err)) {
-    return `${label} didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.`;
-  }
+    if (isSessionRefreshingError(err)) {
+        return `${label} didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.`;
+    }
 
-  const status = extractStatus(err);
-  const raw = errorMessage(err);
+    const status = extractStatus(err);
+    const raw = errorMessage(err);
 
-  // Transient auth blip — token refresh race / SPS auth blip.
-  if (status === 401 || /\bTF400813\b/.test(raw)) {
-    return `${label} didn't go through — your session refreshed. Please try again.`;
-  }
+    // Transient auth blip — token refresh race / SPS auth blip.
+    if (status === 401 || /\bTF400813\b/.test(raw)) {
+        return `${label} didn't go through — your session refreshed. Please try again.`;
+    }
 
-  // No HTTP status reached us — a dropped connection.
-  if (status === undefined) {
-    return `${label} didn't go through — check your connection and try again.`;
-  }
+    // No HTTP status reached us — a dropped connection.
+    if (status === undefined) {
+        return `${label} didn't go through — check your connection and try again.`;
+    }
 
-  // A server-provided, human-readable reason (permission rules, etc.) — keep it,
-  // but only when it isn't an opaque TF code.
-  const clean = raw && !/\bTF\d{5,6}\b/.test(raw) ? raw.trim() : "";
+    // A server-provided, human-readable reason (permission rules, etc.) — keep it,
+    // but only when it isn't an opaque TF code.
+    const clean = raw && !/\bTF\d{5,6}\b/.test(raw) ? raw.trim() : "";
 
-  return clean
-    ? `${label} failed: ${clean}`
-    : `${label} didn't go through. Please try again.`;
+    return clean ? `${label} failed: ${clean}` : `${label} didn't go through. Please try again.`;
 }
 
 /**
@@ -161,7 +153,7 @@ export function friendlyWriteError(label: string, err: unknown): string {
  * Uses an explicit null check so falsy-but-valid values (e.g. `0`) still clear.
  */
 export function clearIfSet<T>(curr: T | null): T | null {
-  return curr != null ? null : curr;
+    return curr != null ? null : curr;
 }
 
 /**
@@ -169,7 +161,7 @@ export function clearIfSet<T>(curr: T | null): T | null {
  * `match`, otherwise leaves it untouched (avoids a redundant re-render).
  */
 export function clearIfEquals<T>(match: T): (curr: T | null) => T | null {
-  return (curr) => (curr === match ? null : curr);
+    return (curr) => (curr === match ? null : curr);
 }
 
 /**
@@ -177,10 +169,8 @@ export function clearIfEquals<T>(match: T): (curr: T | null) => T | null {
  * already-`null` value untouched (avoids a redundant re-render). Uses an
  * explicit null check so falsy-but-valid values (e.g. `0`) still get patched.
  */
-export function patchIfSet<T>(
-  patch: (prev: T) => T,
-): (prev: T | null) => T | null {
-  return (prev) => (prev != null ? patch(prev) : prev);
+export function patchIfSet<T>(patch: (prev: T) => T): (prev: T | null) => T | null {
+    return (prev) => (prev != null ? patch(prev) : prev);
 }
 
 /**
@@ -192,9 +182,9 @@ export function patchIfSet<T>(
  * immediately undo that + defeat collapsed-tray auto-expand).
  */
 export function isCommentUiClickTarget(target: Element | null): boolean {
-  return !!target?.closest(
-    ".emr-highlight, .emr-balloon, .emr-selection-bubble, .emr-draft-guard-overlay, .emr-rail-header, .emr-rail-section-header, .emr-statusbar-comment-stepper",
-  );
+    return !!target?.closest(
+        ".emr-highlight, .emr-balloon, .emr-selection-bubble, .emr-draft-guard-overlay, .emr-rail-header, .emr-rail-section-header, .emr-statusbar-comment-stepper",
+    );
 }
 
 /**
@@ -204,27 +194,27 @@ export function isCommentUiClickTarget(target: Element | null): boolean {
  * indicator by design — not a precise typesetting metric.
  */
 export function countWords(markdown: string): number {
-  if (!markdown) return 0;
+    if (!markdown) return 0;
 
-  const text = markdown
-    .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
-    .replace(/`[^`]*`/g, " ") // inline code
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // images
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links → keep text
-    .replace(/<[^>]+>/g, " ") // HTML tags
-    .replace(/[#>*_~`|=]+/g, " "); // common md punctuation (keep hyphens)
+    const text = markdown
+        .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
+        .replace(/`[^`]*`/g, " ") // inline code
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // images
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links → keep text
+        .replace(/<[^>]+>/g, " ") // HTML tags
+        .replace(/[#>*_~`|=]+/g, " "); // common md punctuation (keep hyphens)
 
-  const matches = text.match(/\p{L}[\p{L}\p{N}'-]*/gu);
+    const matches = text.match(/\p{L}[\p{L}\p{N}'-]*/gu);
 
-  return matches ? matches.length : 0;
+    return matches ? matches.length : 0;
 }
 
 /** Words the PR added vs. removed in a document (for the diff word-count badge). */
 export interface WordCountDelta {
-  /** Prose words present only in the current version. */
-  added: number;
-  /** Prose words present only in the pre-PR version. */
-  removed: number;
+    /** Prose words present only in the current version. */
+    added: number;
+    /** Prose words present only in the pre-PR version. */
+    removed: number;
 }
 
 /**
@@ -234,45 +224,42 @@ export interface WordCountDelta {
  * `originalText`; a `deleted-marker` contributes its removed words. Uses
  * {@link countWords} throughout so the totals line up with the badge's count.
  */
-export function wordCountDelta(
-  source: string,
-  diff: readonly DiffRange[],
-): WordCountDelta {
-  const lines = source.split(/\r?\n/);
-  let added = 0;
-  let removed = 0;
+export function wordCountDelta(source: string, diff: readonly DiffRange[]): WordCountDelta {
+    const lines = source.split(/\r?\n/);
+    let added = 0;
+    let removed = 0;
 
-  for (const range of diff) {
-    if (range.kind === "deleted-marker") {
-      removed += countWords(range.deletedContent ?? "");
-      continue;
+    for (const range of diff) {
+        if (range.kind === "deleted-marker") {
+            removed += countWords(range.deletedContent ?? "");
+            continue;
+        }
+
+        const slice = lines.slice(range.startLine - 1, range.endLine).join("\n");
+
+        if (range.kind === "added") {
+            added += countWords(slice);
+            continue;
+        }
+
+        // modified: word-diff the pre-edit text against the current slice so only
+        // the genuinely changed words count on each side.
+        for (const op of diffWords(range.originalText ?? "", slice)) {
+            if (op.kind === "added") added += countWords(op.value);
+            else if (op.kind === "removed") removed += countWords(op.value);
+        }
     }
 
-    const slice = lines.slice(range.startLine - 1, range.endLine).join("\n");
-
-    if (range.kind === "added") {
-      added += countWords(slice);
-      continue;
-    }
-
-    // modified: word-diff the pre-edit text against the current slice so only
-    // the genuinely changed words count on each side.
-    for (const op of diffWords(range.originalText ?? "", slice)) {
-      if (op.kind === "added") added += countWords(op.value);
-      else if (op.kind === "removed") removed += countWords(op.value);
-    }
-  }
-
-  return { added, removed };
+    return { added, removed };
 }
 
 /** One coloured segment of the word-count delta badge (`+N` / `−N`). */
 export interface WordDeltaPart {
-  kind: "added" | "removed";
-  /** Rendered label, e.g. `+48` or `−12` (true minus sign). */
-  label: string;
-  /** Accessible description, e.g. `48 words added`. */
-  a11y: string;
+    kind: "added" | "removed";
+    /** Rendered label, e.g. `+48` or `−12` (true minus sign). */
+    label: string;
+    /** Accessible description, e.g. `48 words added`. */
+    a11y: string;
 }
 
 /**
@@ -280,25 +267,25 @@ export interface WordDeltaPart {
  * side whose count is zero (so a pure addition shows only `+N`, never `−0`).
  */
 export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
-  const parts: WordDeltaPart[] = [];
+    const parts: WordDeltaPart[] = [];
 
-  if (delta.added > 0) {
-    parts.push({
-      kind: "added",
-      label: `+${delta.added.toLocaleString()}`,
-      a11y: `${delta.added} words added`,
-    });
-  }
+    if (delta.added > 0) {
+        parts.push({
+            kind: "added",
+            label: `+${delta.added.toLocaleString()}`,
+            a11y: `${delta.added} words added`,
+        });
+    }
 
-  if (delta.removed > 0) {
-    parts.push({
-      kind: "removed",
-      label: `\u2212${delta.removed.toLocaleString()}`,
-      a11y: `${delta.removed} words removed`,
-    });
-  }
+    if (delta.removed > 0) {
+        parts.push({
+            kind: "removed",
+            label: `\u2212${delta.removed.toLocaleString()}`,
+            a11y: `${delta.removed} words removed`,
+        });
+    }
 
-  return parts;
+    return parts;
 }
 
 /**
@@ -307,34 +294,34 @@ export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
  * `GitPullRequest` records to this shape so the view-model stays testable.
  */
 export interface DocPrRef {
-  prId: number;
-  /**
-   * Merge commit on the target branch — i.e. the document's state right after
-   * this PR landed. `null` when the PR has no recorded merge commit (the stop
-   * then falls back to the live head for content).
-   */
-  commitId: string | null;
-  title: string;
-  url?: string;
-  /** Epoch milliseconds used for ordering and display. */
-  dateMs?: number;
+    prId: number;
+    /**
+     * Merge commit on the target branch — i.e. the document's state right after
+     * this PR landed. `null` when the PR has no recorded merge commit (the stop
+     * then falls back to the live head for content).
+     */
+    commitId: string | null;
+    title: string;
+    url?: string;
+    /** Epoch milliseconds used for ordering and display. */
+    dateMs?: number;
 }
 
 /** One position in a document's comment-history stepper. */
 export interface HistoryStop {
-  /** `null` => the live "Current" head (writable); a commit SHA otherwise. */
-  commitId: string | null;
-  /** PR backing this stop, if any (Current may have none yet). */
-  prId: number | null;
-  /** ADO pull-request iteration id, for native PR updates. */
-  iterationId?: number;
-  title?: string;
-  url?: string;
-  dateMs?: number;
-  /** Position 0: the live, writable head. */
-  isCurrent: boolean;
-  /** Historical stops are read-only. */
-  readOnly: boolean;
+    /** `null` => the live "Current" head (writable); a commit SHA otherwise. */
+    commitId: string | null;
+    /** PR backing this stop, if any (Current may have none yet). */
+    prId: number | null;
+    /** ADO pull-request iteration id, for native PR updates. */
+    iterationId?: number;
+    title?: string;
+    url?: string;
+    dateMs?: number;
+    /** Position 0: the live, writable head. */
+    isCurrent: boolean;
+    /** Historical stops are read-only. */
+    readOnly: boolean;
 }
 
 /**
@@ -342,82 +329,78 @@ export interface HistoryStop {
  * The picker selection contains updates `fromUpdate + 1` through `toUpdate`.
  */
 export interface ReviewIterationRange {
-  fromUpdate: number;
-  toUpdate: number;
+    fromUpdate: number;
+    toUpdate: number;
 }
 
 export interface ResolvedReviewIterationRange {
-  range: ReviewIterationRange;
-  isAllChanges: boolean;
-  /** Newer endpoint whose document content is rendered. */
-  activeStopIndex: number;
-  /** Older diff endpoint; null means the pull request merge base. */
-  baselineStopIndex: number | null;
+    range: ReviewIterationRange;
+    isAllChanges: boolean;
+    /** Newer endpoint whose document content is rendered. */
+    activeStopIndex: number;
+    /** Older diff endpoint; null means the pull request merge base. */
+    baselineStopIndex: number | null;
 }
 
 export function allReviewIterations(updateCount: number): ReviewIterationRange {
-  return { fromUpdate: 0, toUpdate: Math.max(1, updateCount) };
+    return { fromUpdate: 0, toUpdate: Math.max(1, updateCount) };
 }
 
-export function oneReviewUpdate(
-  update: number,
-  updateCount: number,
-): ReviewIterationRange {
-  const toUpdate = Math.max(1, Math.min(update, Math.max(1, updateCount)));
+export function oneReviewUpdate(update: number, updateCount: number): ReviewIterationRange {
+    const toUpdate = Math.max(1, Math.min(update, Math.max(1, updateCount)));
 
-  return { fromUpdate: toUpdate - 1, toUpdate };
+    return { fromUpdate: toUpdate - 1, toUpdate };
 }
 
 export function betweenReviewUpdates(
-  firstUpdate: number,
-  secondUpdate: number,
-  updateCount: number,
+    firstUpdate: number,
+    secondUpdate: number,
+    updateCount: number,
 ): ReviewIterationRange {
-  const max = Math.max(1, updateCount);
-  const first = Math.max(1, Math.min(firstUpdate, max));
-  const second = Math.max(1, Math.min(secondUpdate, max));
-  if (first === second) return oneReviewUpdate(first, max);
+    const max = Math.max(1, updateCount);
+    const first = Math.max(1, Math.min(firstUpdate, max));
+    const second = Math.max(1, Math.min(secondUpdate, max));
+    if (first === second) return oneReviewUpdate(first, max);
 
-  return {
-    fromUpdate: Math.min(first, second) - 1,
-    toUpdate: Math.max(first, second),
-  };
+    return {
+        fromUpdate: Math.min(first, second) - 1,
+        toUpdate: Math.max(first, second),
+    };
 }
 
 /** Normalize an interval and map it to Shell's newest-first stop indexes. */
 export function resolveReviewIterationRange(
-  requested: ReviewIterationRange,
-  updateCount: number,
+    requested: ReviewIterationRange,
+    updateCount: number,
 ): ResolvedReviewIterationRange {
-  const max = Math.max(1, updateCount);
-  const toUpdate = Math.max(1, Math.min(requested.toUpdate, max));
-  const fromUpdate = Math.max(0, Math.min(requested.fromUpdate, toUpdate - 1));
-  const range = { fromUpdate, toUpdate };
+    const max = Math.max(1, updateCount);
+    const toUpdate = Math.max(1, Math.min(requested.toUpdate, max));
 
-  return {
-    range,
-    isAllChanges: fromUpdate === 0 && toUpdate === max,
-    activeStopIndex: max - toUpdate,
-    baselineStopIndex: fromUpdate === 0 ? null : max - fromUpdate,
-  };
+    const fromUpdate = Math.max(0, Math.min(requested.fromUpdate, toUpdate - 1));
+
+    const range = { fromUpdate, toUpdate };
+
+    return {
+        range,
+        isAllChanges: fromUpdate === 0 && toUpdate === max,
+        activeStopIndex: max - toUpdate,
+        baselineStopIndex: fromUpdate === 0 ? null : max - fromUpdate,
+    };
 }
 
 /**
  * Human label for a comparison of PR updates — "All updates", "Base → Update
  * 3", or "Update 4 → 5" — shared by the update picker and the file list.
  */
-export function reviewRangeLabel(
-  range: ReviewIterationRange,
-  updateCount: number,
-): string {
-  const resolved = resolveReviewIterationRange(range, updateCount);
-  if (resolved.isAllChanges) return "All updates";
+export function reviewRangeLabel(range: ReviewIterationRange, updateCount: number): string {
+    const resolved = resolveReviewIterationRange(range, updateCount);
+    if (resolved.isAllChanges) return "All updates";
 
-  if (resolved.range.fromUpdate === 0) {
-    return `Base → Update ${resolved.range.toUpdate}`;
-  }
+    if (resolved.range.fromUpdate === 0) {
+        return `Base → Update ${resolved.range.toUpdate}`;
+    }
 
-  return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
+    return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
 }
 
 /**
@@ -428,163 +411,157 @@ export function reviewRangeLabel(
  * de-duped by `prId`.
  */
 export function buildHistoryStops(
-  currentPrId: number | null,
-  history: readonly DocPrRef[],
+    currentPrId: number | null,
+    history: readonly DocPrRef[],
 ): HistoryStop[] {
-  const current: HistoryStop = {
-    commitId: null,
-    prId: currentPrId,
-    isCurrent: true,
-    readOnly: false,
-  };
+    const current: HistoryStop = {
+        commitId: null,
+        prId: currentPrId,
+        isCurrent: true,
+        readOnly: false,
+    };
 
-  const seen = new Set<number>();
-  if (currentPrId != null) seen.add(currentPrId);
-  const historical: HistoryStop[] = [];
+    const seen = new Set<number>();
+    if (currentPrId != null) seen.add(currentPrId);
+    const historical: HistoryStop[] = [];
 
-  for (const ref of history) {
-    if (seen.has(ref.prId)) continue;
-    seen.add(ref.prId);
-    historical.push({
-      commitId: ref.commitId,
-      prId: ref.prId,
-      title: ref.title,
-      url: ref.url,
-      dateMs: ref.dateMs,
-      isCurrent: false,
-      readOnly: true,
-    });
-  }
+    for (const ref of history) {
+        if (seen.has(ref.prId)) continue;
+        seen.add(ref.prId);
+        historical.push({
+            commitId: ref.commitId,
+            prId: ref.prId,
+            title: ref.title,
+            url: ref.url,
+            dateMs: ref.dateMs,
+            isCurrent: false,
+            readOnly: true,
+        });
+    }
 
-  return [current, ...historical];
+    return [current, ...historical];
 }
 
 /** Build renderer-ready line ranges for an arbitrary source-to-source comparison. */
-export function sourceDiffRanges(
-  originalSource: string,
-  modifiedSource: string,
-): DiffRange[] {
-  if (originalSource === modifiedSource) return [];
+export function sourceDiffRanges(originalSource: string, modifiedSource: string): DiffRange[] {
+    if (originalSource === modifiedSource) return [];
 
-  const dmp = new diff_match_patch();
-  const encoded = dmp.diff_linesToChars_(originalSource, modifiedSource);
-  const diffs = dmp.diff_main(encoded.chars1, encoded.chars2, false);
-  dmp.diff_cleanupSemantic(diffs);
-  dmp.diff_charsToLines_(diffs, encoded.lineArray);
+    const dmp = new diff_match_patch();
+    const encoded = dmp.diff_linesToChars_(originalSource, modifiedSource);
+    const diffs = dmp.diff_main(encoded.chars1, encoded.chars2, false);
+    dmp.diff_cleanupSemantic(diffs);
+    dmp.diff_charsToLines_(diffs, encoded.lineArray);
 
-  const ranges: DiffRange[] = [];
-  let originalLine = 1;
-  let modifiedLine = 1;
-  let index = 0;
+    const ranges: DiffRange[] = [];
+    let originalLine = 1;
+    let modifiedLine = 1;
+    let index = 0;
 
-  while (index < diffs.length) {
-    const [operation, text] = diffs[index]!;
+    while (index < diffs.length) {
+        const [operation, text] = diffs[index]!;
 
-    if (operation === 0) {
-      const count = sourceLineCount(text);
-      originalLine += count;
-      modifiedLine += count;
-      index += 1;
-      continue;
+        if (operation === 0) {
+            const count = sourceLineCount(text);
+            originalLine += count;
+            modifiedLine += count;
+            index += 1;
+            continue;
+        }
+
+        const run = collectChangeRun(diffs, index);
+        ranges.push(changeRunToRange(run, originalLine, modifiedLine));
+        originalLine += run.deletedLines;
+        modifiedLine += run.addedLines;
+        index = run.next;
     }
 
-    const run = collectChangeRun(diffs, index);
-    ranges.push(changeRunToRange(run, originalLine, modifiedLine));
-    originalLine += run.deletedLines;
-    modifiedLine += run.addedLines;
-    index = run.next;
-  }
-
-  return ranges;
+    return ranges;
 }
 
 /** A maximal run of consecutive non-equal diffs starting at some index. */
 interface ChangeRun {
-  /** Index of the first diff after the run. */
-  next: number;
-  deletedText: string;
-  deletedLines: number;
-  addedLines: number;
+    /** Index of the first diff after the run. */
+    next: number;
+    deletedText: string;
+    deletedLines: number;
+    addedLines: number;
 }
 
-function collectChangeRun(
-  diffs: readonly (readonly [number, string])[],
-  start: number,
-): ChangeRun {
-  const run: ChangeRun = {
-    next: start,
-    deletedText: "",
-    deletedLines: 0,
-    addedLines: 0,
-  };
+function collectChangeRun(diffs: readonly (readonly [number, string])[], start: number): ChangeRun {
+    const run: ChangeRun = {
+        next: start,
+        deletedText: "",
+        deletedLines: 0,
+        addedLines: 0,
+    };
 
-  while (run.next < diffs.length && diffs[run.next]![0] !== 0) {
-    const [change, changeText] = diffs[run.next]!;
-    const count = sourceLineCount(changeText);
+    while (run.next < diffs.length && diffs[run.next]![0] !== 0) {
+        const [change, changeText] = diffs[run.next]!;
+        const count = sourceLineCount(changeText);
 
-    if (change < 0) {
-      run.deletedText += changeText;
-      run.deletedLines += count;
-    } else {
-      run.addedLines += count;
+        if (change < 0) {
+            run.deletedText += changeText;
+            run.deletedLines += count;
+        } else {
+            run.addedLines += count;
+        }
+
+        run.next += 1;
     }
 
-    run.next += 1;
-  }
-
-  return run;
+    return run;
 }
 
 function changeRunToRange(
-  { deletedText, deletedLines, addedLines }: ChangeRun,
-  originalStartLine: number,
-  modifiedStartLine: number,
+    { deletedText, deletedLines, addedLines }: ChangeRun,
+    originalStartLine: number,
+    modifiedStartLine: number,
 ): DiffRange {
-  if (addedLines > 0 && deletedLines > 0) {
-    return {
-      startLine: modifiedStartLine,
-      endLine: modifiedStartLine + addedLines - 1,
-      kind: "modified",
-      originalText: stripFinalLineBreak(deletedText),
-      originalStartLine,
-      originalEndLine: originalStartLine + deletedLines - 1,
-      linesAdded: addedLines,
-      linesDeleted: deletedLines,
-    };
-  }
+    if (addedLines > 0 && deletedLines > 0) {
+        return {
+            startLine: modifiedStartLine,
+            endLine: modifiedStartLine + addedLines - 1,
+            kind: "modified",
+            originalText: stripFinalLineBreak(deletedText),
+            originalStartLine,
+            originalEndLine: originalStartLine + deletedLines - 1,
+            linesAdded: addedLines,
+            linesDeleted: deletedLines,
+        };
+    }
 
-  if (addedLines > 0) {
-    return {
-      startLine: modifiedStartLine,
-      endLine: modifiedStartLine + addedLines - 1,
-      kind: "added",
-      linesAdded: addedLines,
-      linesDeleted: 0,
-    };
-  }
+    if (addedLines > 0) {
+        return {
+            startLine: modifiedStartLine,
+            endLine: modifiedStartLine + addedLines - 1,
+            kind: "added",
+            linesAdded: addedLines,
+            linesDeleted: 0,
+        };
+    }
 
-  return {
-    startLine: Math.max(1, modifiedStartLine),
-    endLine: Math.max(1, modifiedStartLine),
-    kind: "deleted-marker",
-    deletedContent: stripFinalLineBreak(deletedText),
-    linesAdded: 0,
-    linesDeleted: deletedLines,
-  };
+    return {
+        startLine: Math.max(1, modifiedStartLine),
+        endLine: Math.max(1, modifiedStartLine),
+        kind: "deleted-marker",
+        deletedContent: stripFinalLineBreak(deletedText),
+        linesAdded: 0,
+        linesDeleted: deletedLines,
+    };
 }
 
 function sourceLineCount(text: string): number {
-  let lines = text.endsWith("\n") ? 0 : 1;
+    let lines = text.endsWith("\n") ? 0 : 1;
 
-  for (const character of text) {
-    if (character === "\n") lines += 1;
-  }
+    for (const character of text) {
+        if (character === "\n") lines += 1;
+    }
 
-  return lines;
+    return lines;
 }
 
 function stripFinalLineBreak(text: string): string {
-  return text.replace(/\r?\n$/, "");
+    return text.replace(/\r?\n$/, "");
 }
 
 /**
@@ -592,17 +569,13 @@ function stripFinalLineBreak(text: string): string {
  * current index (negative = newer/toward Current, positive = older), bounded to
  * `[0, length - 1]`. An empty list clamps to 0.
  */
-export function stepStopIndex(
-  current: number,
-  delta: number,
-  length: number,
-): number {
-  const next = current + delta;
-  if (next < 0) return 0;
-  const last = length - 1;
-  if (next > last) return last < 0 ? 0 : last;
+export function stepStopIndex(current: number, delta: number, length: number): number {
+    const next = current + delta;
+    if (next < 0) return 0;
+    const last = length - 1;
+    if (next > last) return last < 0 ? 0 : last;
 
-  return next;
+    return next;
 }
 
 /**
@@ -613,27 +586,23 @@ export function stepStopIndex(
  * (back through review history), right walks newer (toward the present).
  */
 export function historyChevronTooltip(
-  direction: "older" | "newer",
-  target: HistoryStop | undefined,
+    direction: "older" | "newer",
+    target: HistoryStop | undefined,
 ): string {
-  if (!target) {
-    return direction === "older"
-      ? "No earlier versions"
-      : "Already at the current version";
-  }
+    if (!target) {
+        return direction === "older" ? "No earlier versions" : "Already at the current version";
+    }
 
-  const titleSuffix =
-    target.title !== undefined && target.title !== ""
-      ? `: ${target.title}`
-      : "";
+    const titleSuffix =
+        target.title !== undefined && target.title !== "" ? `: ${target.title}` : "";
 
-  const where = target.isCurrent
-    ? target.prId != null
-      ? `current version (PR #${target.prId})`
-      : "current version"
-    : `PR #${target.prId}${titleSuffix}`;
+    const where = target.isCurrent
+        ? target.prId != null
+            ? `current version (PR #${target.prId})`
+            : "current version"
+        : `PR #${target.prId}${titleSuffix}`;
 
-  const verb = direction === "older" ? "Older" : "Newer";
+    const verb = direction === "older" ? "Older" : "Newer";
 
-  return `${verb} version — ${where}`;
+    return `${verb} version — ${where}`;
 }

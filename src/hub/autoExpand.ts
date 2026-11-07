@@ -10,21 +10,21 @@
 
 /** Canonical, slash-free folder form, matching `handleExpandFolder`. */
 function canonicalFolder(path: string): string {
-  return path.replace(/^\/+/, "");
+    return path.replace(/^\/+/, "");
 }
 
 /** Stable dedupe key for a (repo, folder) pair. */
 export function autoExpandKey(repoId: string, folder: string): string {
-  return `${repoId}\u0000${canonicalFolder(folder)}`;
+    return `${repoId}\u0000${canonicalFolder(folder)}`;
 }
 
 export interface RootAutoExpandPlan {
-  /** Folders to request expansion for now (original, unmodified paths). */
-  folders: string[];
-  /** Dedupe keys to record as expanded (parallel to `folders`). */
-  keys: string[];
-  /** Budget consumed for this repo after applying the plan. */
-  used: number;
+    /** Folders to request expansion for now (original, unmodified paths). */
+    folders: string[];
+    /** Dedupe keys to record as expanded (parallel to `folders`). */
+    keys: string[];
+    /** Budget consumed for this repo after applying the plan. */
+    used: number;
 }
 
 /**
@@ -34,29 +34,30 @@ export interface RootAutoExpandPlan {
  * and skips folders already expanded so the same listing is never re-fetched.
  */
 export function planRootAutoExpand(opts: {
-  repoId: string;
-  fileCount: number;
-  unloadedFolders: readonly string[];
-  expandedKeys: ReadonlySet<string>;
-  used: number;
-  max: number;
+    repoId: string;
+    fileCount: number;
+    unloadedFolders: readonly string[];
+    expandedKeys: ReadonlySet<string>;
+    used: number;
+    max: number;
 }): RootAutoExpandPlan {
-  const { repoId, fileCount, unloadedFolders, expandedKeys, used, max } = opts;
-  // A document is already visible — nothing to reveal.
-  if (fileCount > 0) return { folders: [], keys: [], used };
-  let remaining = max - used;
-  if (remaining <= 0) return { folders: [], keys: [], used };
-  const folders: string[] = [];
-  const keys: string[] = [];
+    const { repoId, fileCount, unloadedFolders, expandedKeys, used, max } = opts;
 
-  for (const folder of unloadedFolders) {
-    if (remaining <= 0) break;
-    const key = autoExpandKey(repoId, folder);
-    if (expandedKeys.has(key)) continue;
-    folders.push(folder);
-    keys.push(key);
-    remaining -= 1;
-  }
+    // A document is already visible — nothing to reveal.
+    if (fileCount > 0) return { folders: [], keys: [], used };
+    let remaining = max - used;
+    if (remaining <= 0) return { folders: [], keys: [], used };
+    const folders: string[] = [];
+    const keys: string[] = [];
 
-  return { folders, keys, used: max - remaining };
+    for (const folder of unloadedFolders) {
+        if (remaining <= 0) break;
+        const key = autoExpandKey(repoId, folder);
+        if (expandedKeys.has(key)) continue;
+        folders.push(folder);
+        keys.push(key);
+        remaining -= 1;
+    }
+
+    return { folders, keys, used: max - remaining };
 }

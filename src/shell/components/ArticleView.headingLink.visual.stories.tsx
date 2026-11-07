@@ -21,18 +21,18 @@ import { setMarkdownDark } from "../../theme/markdownStyles";
 import { ArticleView } from "./ArticleView";
 
 const SOURCE = [
-  "# Glossary",
-  "",
-  "Shared vocabulary for the data-semantics instructions.",
-  "",
-  "## Classifiers & Hashing",
-  "",
-  "How records are bucketed before they are hashed.",
-  "",
-  "### Retention",
-  "",
-  "How long hashed records are kept.",
-  "",
+    "# Glossary",
+    "",
+    "Shared vocabulary for the data-semantics instructions.",
+    "",
+    "## Classifiers & Hashing",
+    "",
+    "How records are bucketed before they are hashed.",
+    "",
+    "### Retention",
+    "",
+    "How long hashed records are kept.",
+    "",
 ].join("\n");
 
 const HTML = renderMarkdownSync(SOURCE);
@@ -41,60 +41,54 @@ const HTML = renderMarkdownSync(SOURCE);
 const DIFF: DiffRange[] = [{ startLine: 9, endLine: 11, kind: "added" }];
 
 /** Applies an EMR theme to the document root for the story's lifetime. */
-function ThemeFrame({
-  theme,
-  children,
-}: {
-  theme?: "dark";
-  children: ReactNode;
-}): ReactElement {
-  useLayoutEffect(() => {
-    const el = document.documentElement;
-    const prev = el.getAttribute("data-emr-theme");
-    if (theme) el.setAttribute("data-emr-theme", theme);
-    else el.removeAttribute("data-emr-theme");
-    // The same github-markdown-css the shipped reader injects, so heading
-    // sizes (which the button scales with) match production.
-    setMarkdownDark(theme === "dark");
+function ThemeFrame({ theme, children }: { theme?: "dark"; children: ReactNode }): ReactElement {
+    useLayoutEffect(() => {
+        const el = document.documentElement;
+        const prev = el.getAttribute("data-emr-theme");
+        if (theme) el.setAttribute("data-emr-theme", theme);
+        else el.removeAttribute("data-emr-theme");
+        // The same github-markdown-css the shipped reader injects, so heading
+        // sizes (which the button scales with) match production.
+        setMarkdownDark(theme === "dark");
 
-    return () => {
-      if (prev) el.setAttribute("data-emr-theme", prev);
-      else el.removeAttribute("data-emr-theme");
-    };
-  }, [theme]);
+        return () => {
+            if (prev) el.setAttribute("data-emr-theme", prev);
+            else el.removeAttribute("data-emr-theme");
+        };
+    }, [theme]);
 
-  return (
-    <div
-      style={{
-        background: "var(--emr-bg)",
-        color: "var(--emr-fg)",
-        padding: "24px 24px 24px 48px",
-        width: 640,
-      }}
-    >
-      {children}
-    </div>
-  );
+    return (
+        <div
+            style={{
+                background: "var(--emr-bg)",
+                color: "var(--emr-fg)",
+                padding: "24px 24px 24px 48px",
+                width: 640,
+            }}
+        >
+            {children}
+        </div>
+    );
 }
 
 const meta = {
-  title: "Visual/HeadingLink",
-  component: ArticleView,
-  parameters: { layout: "fullscreen" },
-  args: {
-    pristineHtml: HTML,
-    documentPath: "/docs/glossary.md",
-    threads: [],
-    activeThreadId: null,
-    draftAnchor: null,
-    diff: DIFF,
-    showDiff: true,
-    storageKey: "visual-heading-link.md",
-    onAnchorsResolved: fn(),
-    onHighlightClick: fn(),
-    onSelection: fn(),
-    onCopyHeadingLink: fn(() => Promise.resolve(true)),
-  },
+    title: "Visual/HeadingLink",
+    component: ArticleView,
+    parameters: { layout: "fullscreen" },
+    args: {
+        pristineHtml: HTML,
+        documentPath: "/docs/glossary.md",
+        threads: [],
+        activeThreadId: null,
+        draftAnchor: null,
+        diff: DIFF,
+        showDiff: true,
+        storageKey: "visual-heading-link.md",
+        onAnchorsResolved: fn(),
+        onHighlightClick: fn(),
+        onSelection: fn(),
+        onCopyHeadingLink: fn(() => Promise.resolve(true)),
+    },
 } satisfies Meta<typeof ArticleView>;
 
 export default meta;
@@ -102,44 +96,40 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 async function waitForHeadingLinks(canvasElement: HTMLElement): Promise<void> {
-  await waitFor(
-    () => {
-      if (
-        !canvasElement.querySelector(
-          "#retention.emr-diff-block > .emr-heading-link",
-        )
-      ) {
-        throw new Error("heading links / diff wash not applied yet");
-      }
-    },
-    { timeout: 5000 },
-  );
+    await waitFor(
+        () => {
+            if (!canvasElement.querySelector("#retention.emr-diff-block > .emr-heading-link")) {
+                throw new Error("heading links / diff wash not applied yet");
+            }
+        },
+        { timeout: 5000 },
+    );
 }
 
 /** Light theme. */
 export const Light: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame>
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitForHeadingLinks(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame>
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    play: async ({ canvasElement }) => {
+        await waitForHeadingLinks(canvasElement);
+    },
 };
 
 /** Dark theme: the same headings, verifying the dark colour tokens. */
 export const Dark: Story = {
-  decorators: [
-    (Story) => (
-      <ThemeFrame theme="dark">
-        <Story />
-      </ThemeFrame>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    await waitForHeadingLinks(canvasElement);
-  },
+    decorators: [
+        (Story) => (
+            <ThemeFrame theme="dark">
+                <Story />
+            </ThemeFrame>
+        ),
+    ],
+    play: async ({ canvasElement }) => {
+        await waitForHeadingLinks(canvasElement);
+    },
 };

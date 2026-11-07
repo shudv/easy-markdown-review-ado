@@ -1,0 +1,17 @@
+{
+    // Unit-test project, shared by `npm run typecheck:test`, type-aware ESLint and
+    // the editor (which uses the nearest tsconfig.json, so test files get these
+    // settings rather than an inferred project). The root tsconfig.json covers only
+    // src/, and its `exclude` of "test" must not be inherited. Tests run on Node 24
+    // and jsdom, so they may use ES2023 APIs (`at`, `findLast`) that the
+    // browser-targeted src/ lib leaves out.
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "..",
+        "noEmit": true,
+        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "types": ["node", "vitest/globals"]
+    },
+    "include": ["**/*.ts", "**/*.tsx", "../src/**/*.ts", "../src/**/*.tsx"],
+    "exclude": ["../node_modules"]
+}

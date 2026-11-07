@@ -11,10 +11,10 @@ let override: (() => string | null) | null = null;
 
 /** Register (or clear, with `null`) a token override. Dev builds only. */
 export function setHostTokenOverride(fn: (() => string | null) | null): void {
-  override = fn;
+    override = fn;
 }
 
 /** The overriding token, or `null` to use the real host token. */
 export function hostTokenOverride(): string | null {
-  return override ? override() : null;
+    return override ? override() : null;
 }

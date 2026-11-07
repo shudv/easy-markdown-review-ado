@@ -4,238 +4,211 @@
 // mutations are delegated upward so the reducer stays the source of truth.
 
 import type { ReactElement } from "react";
-import type {
-  Comment,
-  CommentAuthor,
-  ReactionKind,
-  ThreadStatus,
-} from "../../types";
+import type { Comment, CommentAuthor, ReactionKind, ThreadStatus } from "../../types";
 import { isResolvedLike } from "../../types";
 import { Avatar } from "./Avatar";
 import { CommentMarkdown } from "./CommentMarkdown";
 import { Composer } from "./Composer";
 import { commentRowPermissions, summarizeLikes } from "./CommentRow.helpers";
+import { useCommentEditSession, useCommentLinkCopy, useCommentRowMenu } from "./CommentRow.hooks";
 import {
-  useCommentEditSession,
-  useCommentLinkCopy,
-  useCommentRowMenu,
-} from "./CommentRow.hooks";
-import {
-  CommentLikeButton,
-  CommentLikePill,
-  CommentMenuToggle,
-  CommentRowMenu,
-  CommentRowMeta,
+    CommentLikeButton,
+    CommentLikePill,
+    CommentMenuToggle,
+    CommentRowMenu,
+    CommentRowMeta,
 } from "./CommentRow.parts";
 
 interface CommentRowProps {
-  threadId: string;
-  comment: Comment;
-  currentUser: CommentAuthor;
-  /** True for the first comment in a thread — surfaces Resolve/Delete-thread items. */
-  isFirst: boolean;
-  /** Current thread status — drives whether the menu shows Resolve or Reopen. */
-  threadStatus: ThreadStatus;
-  /** True when every comment in the thread can be deleted by this user. */
-  canDeleteThread: boolean;
-  /**
-   * When false, edit / delete / react affordances are hidden. Used for
-   * historical / orphan threads which are read-only.
-   */
-  interactive: boolean;
-  /**
-   * Save an edit. May resolve to `false` when the save failed, in which case
-   * the editor stays open with the user's text.
-   */
-  onEdit: (
-    threadId: string,
-    commentId: string,
-    newBody: string,
-  ) => void | Promise<boolean>;
-  onDelete: (threadId: string, commentId: string) => void;
-  onResolveThread: (threadId: string) => void;
-  onReopenThread: (threadId: string) => void;
-  onMarkPendingThread: (threadId: string) => void;
-  onCloseThread: (threadId: string) => void;
-  onDeleteThread: (threadId: string) => void;
-  onToggleReaction: (
-    threadId: string,
-    commentId: string,
-    kind: ReactionKind,
-  ) => void;
+    threadId: string;
+    comment: Comment;
+    currentUser: CommentAuthor;
+    /** True for the first comment in a thread — surfaces Resolve/Delete-thread items. */
+    isFirst: boolean;
+    /** Current thread status — drives whether the menu shows Resolve or Reopen. */
+    threadStatus: ThreadStatus;
+    /** True when every comment in the thread can be deleted by this user. */
+    canDeleteThread: boolean;
+    /**
+     * When false, edit / delete / react affordances are hidden. Used for
+     * historical / orphan threads which are read-only.
+     */
+    interactive: boolean;
+    /**
+     * Save an edit. May resolve to `false` when the save failed, in which case
+     * the editor stays open with the user's text.
+     */
+    onEdit: (threadId: string, commentId: string, newBody: string) => void | Promise<boolean>;
+    onDelete: (threadId: string, commentId: string) => void;
+    onResolveThread: (threadId: string) => void;
+    onReopenThread: (threadId: string) => void;
+    onMarkPendingThread: (threadId: string) => void;
+    onCloseThread: (threadId: string) => void;
+    onDeleteThread: (threadId: string) => void;
+    onToggleReaction: (threadId: string, commentId: string, kind: ReactionKind) => void;
 }
 
 // eslint-disable-next-line max-lines-per-function -- Single comment: author line, body or edit mode, reactions and actions menu share edit state. Hooks and parts are already split out.
 export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
-  const {
-    threadId,
-    comment,
-    currentUser,
-    isFirst,
-    threadStatus,
-    canDeleteThread,
-    interactive,
-    onEdit,
-    onDelete,
-    onResolveThread,
-    onReopenThread,
-    onMarkPendingThread,
-    onCloseThread,
-    onDeleteThread,
-    onToggleReaction,
-  } = props;
+    const {
+        threadId,
+        comment,
+        currentUser,
+        isFirst,
+        threadStatus,
+        canDeleteThread,
+        interactive,
+        onEdit,
+        onDelete,
+        onResolveThread,
+        onReopenThread,
+        onMarkPendingThread,
+        onCloseThread,
+        onDeleteThread,
+        onToggleReaction,
+    } = props;
 
-  const edit = useCommentEditSession(onEdit, threadId, comment.id);
-  const menu = useCommentRowMenu();
-  const { canLink, linkState, handleLink } = useCommentLinkCopy(threadId);
+    const edit = useCommentEditSession(onEdit, threadId, comment.id);
+    const menu = useCommentRowMenu();
+    const { canLink, linkState, handleLink } = useCommentLinkCopy(threadId);
 
-  const { canEdit, canDelete, canReact, hasMenuItems } = commentRowPermissions({
-    isOwn: comment.author.id === currentUser.id,
-    interactive,
-    isFirst,
-    canLink,
-  });
+    const { canEdit, canDelete, canReact, hasMenuItems } = commentRowPermissions({
+        isOwn: comment.author.id === currentUser.id,
+        interactive,
+        isFirst,
+        canLink,
+    });
 
-  const { likedByMe, likeCount, likeTooltip } = summarizeLikes(
-    comment.reactions,
-    currentUser.id,
-  );
+    const { likedByMe, likeCount, likeTooltip } = summarizeLikes(comment.reactions, currentUser.id);
 
-  const closeMenu = menu.close;
+    const closeMenu = menu.close;
 
-  const handleEdit = () => {
-    edit.begin();
-    closeMenu();
-  };
+    const handleEdit = () => {
+        edit.begin();
+        closeMenu();
+    };
 
-  // A thread is "open" (active or pending) or "terminal" (resolved / closed /
-  // wontFix). Terminal threads only offer Reopen; open threads offer Resolve +
-  // Close. An active thread can be marked pending; a pending thread can be
-  // marked active again — both reuse onReopenThread, which sets status active.
-  // `wontFix` is set only via ADO's native UI, so it never appears as a menu
-  // action here — but a wontFix thread can still be reopened.
-  const isTerminal = isResolvedLike(threadStatus);
+    // A thread is "open" (active or pending) or "terminal" (resolved / closed /
+    // wontFix). Terminal threads only offer Reopen; open threads offer Resolve +
+    // Close. An active thread can be marked pending; a pending thread can be
+    // marked active again — both reuse onReopenThread, which sets status active.
+    // `wontFix` is set only via ADO's native UI, so it never appears as a menu
+    // action here — but a wontFix thread can still be reopened.
+    const isTerminal = isResolvedLike(threadStatus);
 
-  const handleResolve = () => {
-    onResolveThread(threadId);
-    closeMenu();
-  };
+    const handleResolve = () => {
+        onResolveThread(threadId);
+        closeMenu();
+    };
 
-  const handleReopen = () => {
-    onReopenThread(threadId);
-    closeMenu();
-  };
+    const handleReopen = () => {
+        onReopenThread(threadId);
+        closeMenu();
+    };
 
-  const handleMarkPending = () => {
-    onMarkPendingThread(threadId);
-    closeMenu();
-  };
+    const handleMarkPending = () => {
+        onMarkPendingThread(threadId);
+        closeMenu();
+    };
 
-  const handleClose = () => {
-    onCloseThread(threadId);
-    closeMenu();
-  };
+    const handleClose = () => {
+        onCloseThread(threadId);
+        closeMenu();
+    };
 
-  const confirmDeleteComment = () => {
-    onDelete(threadId, comment.id);
-    closeMenu();
-  };
+    const confirmDeleteComment = () => {
+        onDelete(threadId, comment.id);
+        closeMenu();
+    };
 
-  const confirmDeleteThread = () => {
-    onDeleteThread(threadId);
-    closeMenu();
-  };
+    const confirmDeleteThread = () => {
+        onDeleteThread(threadId);
+        closeMenu();
+    };
 
-  const toggleLike = () => onToggleReaction(threadId, comment.id, "like");
+    const toggleLike = () => onToggleReaction(threadId, comment.id, "like");
 
-  return (
-    <div
-      className="emr-comment"
-      data-comment-id={comment.id}
-      id={`comment-${comment.id}`}
-    >
-      <Avatar author={comment.author} size="sm" />
-      <div className="emr-comment-body">
-        <div className="emr-comment-header">
-          <CommentRowMeta comment={comment} />
+    return (
+        <div className="emr-comment" data-comment-id={comment.id} id={`comment-${comment.id}`}>
+            <Avatar author={comment.author} size="sm" />
+            <div className="emr-comment-body">
+                <div className="emr-comment-header">
+                    <CommentRowMeta comment={comment} />
 
-          {interactive && !edit.editing ? (
-            // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks on the comment tools from bubbling to the balloon's select-thread handler; it has no action of its own
-            <div
-              className="emr-comment-tools"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="emr-comment-tools-hover">
-                {hasMenuItems ? (
-                  <CommentMenuToggle
-                    buttonRef={menu.menuBtnRef}
-                    open={menu.menuOpen}
-                    onToggle={menu.toggle}
-                  />
-                ) : null}
-                {canReact && likeCount === 0 ? (
-                  <CommentLikeButton onLike={toggleLike} />
-                ) : null}
-              </div>
+                    {interactive && !edit.editing ? (
+                        // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks on the comment tools from bubbling to the balloon's select-thread handler; it has no action of its own
+                        <div className="emr-comment-tools" onClick={(e) => e.stopPropagation()}>
+                            <div className="emr-comment-tools-hover">
+                                {hasMenuItems ? (
+                                    <CommentMenuToggle
+                                        buttonRef={menu.menuBtnRef}
+                                        open={menu.menuOpen}
+                                        onToggle={menu.toggle}
+                                    />
+                                ) : null}
+                                {canReact && likeCount === 0 ? (
+                                    <CommentLikeButton onLike={toggleLike} />
+                                ) : null}
+                            </div>
 
-              {likeCount > 0 ? (
-                <CommentLikePill
-                  likedByMe={likedByMe}
-                  likeCount={likeCount}
-                  likeTooltip={likeTooltip}
-                  canReact={canReact}
-                  onLike={toggleLike}
-                />
-              ) : null}
+                            {likeCount > 0 ? (
+                                <CommentLikePill
+                                    likedByMe={likedByMe}
+                                    likeCount={likeCount}
+                                    likeTooltip={likeTooltip}
+                                    canReact={canReact}
+                                    onLike={toggleLike}
+                                />
+                            ) : null}
 
-              {menu.menuOpen ? (
-                <CommentRowMenu
-                  menuRef={menu.menuRef}
-                  confirm={menu.confirm}
-                  setConfirm={menu.setConfirm}
-                  state={{
-                    canLink,
-                    linkState,
-                    canEdit,
-                    canDelete,
-                    isFirst,
-                    isTerminal,
-                    threadStatus,
-                    canDeleteThread,
-                  }}
-                  actions={{
-                    link: handleLink,
-                    edit: handleEdit,
-                    reopen: handleReopen,
-                    resolve: handleResolve,
-                    markPending: handleMarkPending,
-                    close: handleClose,
-                    confirmDeleteComment,
-                    confirmDeleteThread,
-                  }}
-                />
-              ) : null}
+                            {menu.menuOpen ? (
+                                <CommentRowMenu
+                                    menuRef={menu.menuRef}
+                                    confirm={menu.confirm}
+                                    setConfirm={menu.setConfirm}
+                                    state={{
+                                        canLink,
+                                        linkState,
+                                        canEdit,
+                                        canDelete,
+                                        isFirst,
+                                        isTerminal,
+                                        threadStatus,
+                                        canDeleteThread,
+                                    }}
+                                    actions={{
+                                        link: handleLink,
+                                        edit: handleEdit,
+                                        reopen: handleReopen,
+                                        resolve: handleResolve,
+                                        markPending: handleMarkPending,
+                                        close: handleClose,
+                                        confirmDeleteComment,
+                                        confirmDeleteThread,
+                                    }}
+                                />
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
+
+                {edit.editing ? (
+                    // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks in the edit composer from bubbling to the balloon's select-thread handler; it has no action of its own
+                    <div onClick={(e) => e.stopPropagation()}>
+                        <Composer
+                            initial={comment.bodyMarkdown}
+                            submitLabel="Save"
+                            // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the edit composer only mounts after the user picks "Edit comment", so focus moves to the text they asked to edit
+                            autoFocus
+                            onChange={edit.onChange}
+                            onSubmit={edit.onSubmit}
+                            onCancel={edit.onCancel}
+                        />
+                    </div>
+                ) : (
+                    <CommentMarkdown body={comment.bodyMarkdown} />
+                )}
             </div>
-          ) : null}
         </div>
-
-        {edit.editing ? (
-          // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks in the edit composer from bubbling to the balloon's select-thread handler; it has no action of its own
-          <div onClick={(e) => e.stopPropagation()}>
-            <Composer
-              initial={comment.bodyMarkdown}
-              submitLabel="Save"
-              // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the edit composer only mounts after the user picks "Edit comment", so focus moves to the text they asked to edit
-              autoFocus
-              onChange={edit.onChange}
-              onSubmit={edit.onSubmit}
-              onCancel={edit.onCancel}
-            />
-          </div>
-        ) : (
-          <CommentMarkdown body={comment.bodyMarkdown} />
-        )}
-      </div>
-    </div>
-  );
+    );
 }

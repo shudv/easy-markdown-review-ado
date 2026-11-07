@@ -14,7 +14,6 @@ export function attachTableBeforeDisclosure(
   range: ChangeRange,
   renderInline: (md: string) => string,
 ): void {
-  /* v8 ignore next -- decorateModifiedTableRow calls this only after reading originalRow from range.originalText; the check narrows the optional field */
   if (range.originalText == null) return;
   row.dataset.diffAmberMode = "comparison";
   const table = row.closest<HTMLTableElement>("table");

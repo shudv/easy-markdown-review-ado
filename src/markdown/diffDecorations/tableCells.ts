@@ -283,7 +283,6 @@ function insertRemovedCell(
   row: TableRowCells,
   item: { originalIndex: number; currentIndex: number },
 ): void {
-  /* v8 ignore next -- GFM pads every rendered row to the header width, so a row showing a removed cell always has a td/th to copy */
   const removedCell = row.doc.createElement(row.cells[0]?.tagName ?? "td");
   removedCell.classList.add(
     DIFF_CELL_CLASS,

@@ -55,7 +55,6 @@ export function applyLinkTargetIndicators(
   const links = Array.from(root.querySelectorAll<HTMLAnchorElement>("a"));
 
   for (const change of changes) {
-    /* v8 ignore next -- indexes come from readLinkTargets on this same target, and the word/format marks added since never add or remove anchors */
     if (change.index >= links.length) continue;
     const link = links[change.index];
     const indicator = document.createElement("span");

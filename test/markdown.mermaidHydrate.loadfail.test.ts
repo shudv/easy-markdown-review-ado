@@ -5,7 +5,7 @@
 //
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 // Make the dynamic import reject by throwing from the mock factory.
 vi.mock("mermaid", () => {
@@ -13,46 +13,48 @@ vi.mock("mermaid", () => {
 });
 
 import { hydrateMermaid } from "../src/markdown/mermaidHydrate";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 describe("hydrateMermaid — library load failure", () => {
-    it("flags every placeholder as load-failed without throwing", async () => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    beforeEach(() => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("keeps every diagram's source readable, flags it as load-failed, and reports once", async () => {
         const root = document.createElement("div");
         const src = encodeURIComponent("graph TD\nA-->B");
         root.innerHTML =
-            `<div class="emr-mermaid" data-mermaid-src="${src}"></div>` +
-            `<div class="emr-mermaid" data-mermaid-src="${src}"></div>`;
+            `<div class="emr-mermaid" data-mermaid-src="${src}"><pre class="emr-mermaid-fallback">graph TD</pre></div>` +
+            `<div class="emr-mermaid" data-mermaid-src="${src}"><pre class="emr-mermaid-fallback">graph TD</pre></div>`;
         document.body.appendChild(root);
 
-        await expect(hydrateMermaid(root)).resolves.toBeUndefined();
+        await hydrateMermaid(root);
 
-        for (const el of root.querySelectorAll(".emr-mermaid")) {
-            expect(el.getAttribute("data-mermaid-error")).toBe("load-failed");
-            // Not hydrated — the fallback stays in place for a retry/readability.
-            expect(el.getAttribute("data-hydrated")).toBeNull();
-        }
+        const diagrams = Array.from(root.querySelectorAll(".emr-mermaid"), (el) => ({
+            error: el.getAttribute("data-mermaid-error"),
+            hydrated: el.getAttribute("data-hydrated"),
+            fallback: el.querySelector(".emr-mermaid-fallback") !== null,
+        }));
 
-        expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
-            error: expect.objectContaining({
-                message: expect.stringContaining("error when mocking a module"),
-                cause: expect.objectContaining({
-                    message: "chunk load failed",
+        expect(diagrams).toEqual([
+            { error: "load-failed", hydrated: null, fallback: true },
+            { error: "load-failed", hydrated: null, fallback: true },
+        ]);
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    cause: expect.objectContaining({ message: "chunk load failed" }),
                 }),
+                source: "Mermaid.hydrate",
+                operation: "diagram-library-load",
+                impact: "degraded",
             }),
-            source: "Mermaid.hydrate",
-            operation: "diagram-library-load",
-            impact: "degraded",
-        });
-        warn.mockRestore();
+        ]);
     });
 });

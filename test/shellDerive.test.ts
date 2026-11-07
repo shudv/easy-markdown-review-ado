@@ -57,24 +57,34 @@ const file = (path: string): FileInfo => ({ path }) as FileInfo;
 const range = (start: number) => [{ kind: "modified" as const, startLine: start, endLine: start }];
 
 describe("pickInitialPath", () => {
-    it("prefers the seeded path, then the first file, then empty", () => {
-        expect(pickInitialPath("b.md", [file("a.md")])).toBe("b.md");
-        expect(pickInitialPath(undefined, [file("a.md")])).toBe("a.md");
-        expect(pickInitialPath(undefined, [])).toBe("");
+    it.each([
+        { name: "the seeded path", seeded: "b.md", files: [file("a.md")], path: "b.md" },
+        {
+            name: "the first file without a seeded path",
+            seeded: undefined,
+            files: [file("a.md")],
+            path: "a.md",
+        },
+        { name: "nothing without files", seeded: undefined, files: [], path: "" },
+    ])("opens $name", ({ seeded, files, path }) => {
+        expect(pickInitialPath(seeded, files)).toBe(path);
     });
 });
 
 describe("documentReadOnly", () => {
-    it("passes the host's read-only state through", () => {
-        expect(documentReadOnly(true, "host", true)).toEqual({
-            effectiveReadOnly: true,
-            effectiveReadOnlyMessage: "host",
-        });
-        expect(documentReadOnly(undefined, "host", false)).toEqual({
-            effectiveReadOnly: false,
-            effectiveReadOnlyMessage: "host",
-        });
-    });
+    it.each([
+        { hostReadOnly: true, writable: true, readOnly: true },
+        { hostReadOnly: undefined, writable: false, readOnly: false },
+    ])(
+        "passes the host's read-only state ($hostReadOnly) through",
+        ({ hostReadOnly, writable, readOnly }) => {
+            expect(documentReadOnly(hostReadOnly, "host", writable)).toEqual({
+                effectiveReadOnly: readOnly,
+                effectiveReadOnlyMessage: "host",
+            });
+        },
+    );
+
     it("makes a document without a write target read-only", () => {
         const r = documentReadOnly(false, "host", true);
         expect(r.effectiveReadOnly).toBe(true);
@@ -84,57 +94,83 @@ describe("documentReadOnly", () => {
 
 describe("draftTargetsOnScreen", () => {
     const a = anchor("x");
-    it("shows a new-comment draft's anchor on its own file only", () => {
-        const d: DraftTarget = {
-            path: "a.md",
-            threadId: NEW_DRAFT_THREAD_ID,
-            anchor: a,
-        };
+    const newComment: DraftTarget = { path: "a.md", threadId: NEW_DRAFT_THREAD_ID, anchor: a };
+    const reply: DraftTarget = { path: "a.md", threadId: "t1", anchor: null };
 
-        expect(draftTargetsOnScreen(d, "a.md")).toEqual({
-            draftAnchor: a,
-            activeReplyThreadId: null,
-        });
-        expect(draftTargetsOnScreen(d, "b.md")).toEqual({
-            draftAnchor: null,
-            activeReplyThreadId: null,
-        });
-    });
-    it("shows a reply draft's thread on its own file only", () => {
-        const d: DraftTarget = { path: "a.md", threadId: "t1", anchor: null };
-        expect(draftTargetsOnScreen(d, "a.md")).toEqual({
-            draftAnchor: null,
-            activeReplyThreadId: "t1",
-        });
-        expect(draftTargetsOnScreen(null, "a.md")).toEqual({
-            draftAnchor: null,
-            activeReplyThreadId: null,
-        });
+    it.each([
+        {
+            name: "a new-comment draft's anchor on its own file",
+            draft: newComment,
+            path: "a.md",
+            onScreen: { draftAnchor: a, activeReplyThreadId: null },
+        },
+        {
+            name: "a reply draft's thread on its own file",
+            draft: reply,
+            path: "a.md",
+            onScreen: { draftAnchor: null, activeReplyThreadId: "t1" },
+        },
+        {
+            name: "nothing of a draft on another file",
+            draft: newComment,
+            path: "b.md",
+            onScreen: { draftAnchor: null, activeReplyThreadId: null },
+        },
+        {
+            name: "nothing without a draft",
+            draft: null,
+            path: "a.md",
+            onScreen: { draftAnchor: null, activeReplyThreadId: null },
+        },
+    ])("shows $name", ({ draft, path, onScreen }) => {
+        expect(draftTargetsOnScreen(draft, path)).toEqual(onScreen);
     });
 });
 
 describe("isSameDraftTarget", () => {
     const target: DraftTarget = { path: "a.md", threadId: "t1", anchor: null };
-    it("matches the same reply composer", () => {
-        expect(isSameDraftTarget(null, target)).toBe(false);
-        expect(isSameDraftTarget({ ...target }, target)).toBe(true);
-        expect(isSameDraftTarget({ ...target, path: "b.md" }, target)).toBe(false);
-        expect(isSameDraftTarget({ ...target, threadId: "t2" }, target)).toBe(false);
-    });
-    it("compares new-comment anchors by value", () => {
-        const d = (exact: string): DraftTarget => ({
-            path: "a.md",
-            threadId: NEW_DRAFT_THREAD_ID,
-            anchor: anchor(exact),
-        });
 
-        expect(isSameDraftTarget(d("x"), d("x"))).toBe(true);
-        expect(isSameDraftTarget(d("x"), d("y"))).toBe(false);
+    const newComment = (exact: string): DraftTarget => ({
+        path: "a.md",
+        threadId: NEW_DRAFT_THREAD_ID,
+        anchor: anchor(exact),
+    });
+
+    it.each([
+        { name: "the same reply composer", open: { ...target }, requested: target, same: true },
+        { name: "no open draft", open: null, requested: target, same: false },
+        {
+            name: "a reply on another file",
+            open: { ...target, path: "b.md" },
+            requested: target,
+            same: false,
+        },
+        {
+            name: "a reply to another thread",
+            open: { ...target, threadId: "t2" },
+            requested: target,
+            same: false,
+        },
+        {
+            name: "a new comment on equal text",
+            open: newComment("x"),
+            requested: newComment("x"),
+            same: true,
+        },
+        {
+            name: "a new comment on other text",
+            open: newComment("x"),
+            requested: newComment("y"),
+            same: false,
+        },
+    ])("matches $name: $same", ({ open, requested, same }) => {
+        expect(isSameDraftTarget(open, requested)).toBe(same);
     });
 });
 
 describe("historyModes", () => {
     const load = () => Promise.resolve();
+
     it("enables completed-PR history only with all three loaders", () => {
         expect(
             historyModes({
@@ -150,14 +186,14 @@ describe("historyModes", () => {
             nativeUpdateCount: 1,
         });
     });
+
     it("enables native updates with stops, a base and a source loader", () => {
-        const stops = [current, past(1, "c1")];
         expect(
             historyModes({
                 loadDocHistory: undefined,
                 loadThreadsForPr: undefined,
                 loadFileSourceAt: load,
-                reviewIterationStops: stops,
+                reviewIterationStops: [current, past(1, "c1")],
                 reviewIterationBaseCommit: "base",
             }),
         ).toEqual({
@@ -165,6 +201,9 @@ describe("historyModes", () => {
             nativeIterationMode: true,
             nativeUpdateCount: 2,
         });
+    });
+
+    it("leaves native updates off for a PR without update stops", () => {
         expect(
             historyModes({
                 loadDocHistory: undefined,
@@ -179,6 +218,9 @@ describe("historyModes", () => {
 
 describe("resolveHistoryView", () => {
     const completed = [current, past(5, "c5"), past(4, "c4")];
+    // Newest first: Update 3 (latest), Update 2, Update 1.
+    const stops = [current, past(1, "u2"), past(1, "u1")];
+
     it("clamps the completed-PR stop index", () => {
         const v = resolveHistoryView({
             nativeIterationMode: false,
@@ -196,10 +238,8 @@ describe("resolveHistoryView", () => {
         expect(v.reportedRangeKey).toBeNull();
         expect(v.rangeChangesKey).toBeNull();
     });
-    it("maps a native comparison onto its stops", () => {
-        // Newest first: Update 3 (latest), Update 2, Update 1.
-        const stops = [current, past(1, "u2"), past(1, "u1")];
 
+    it("shows All updates of a PR against its base, with no range changes to load", () => {
         const all = resolveHistoryView({
             nativeIterationMode: true,
             reviewIterationStops: stops,
@@ -212,7 +252,9 @@ describe("resolveHistoryView", () => {
         expect(all.reportedRangeKey).toBe("all");
         expect(all.rangeChangesKey).toBeNull();
         expect(all.baselineStop).toBeUndefined();
+    });
 
+    it("compares a partial range of updates between its two stops", () => {
         const partial = resolveHistoryView({
             nativeIterationMode: true,
             reviewIterationStops: stops,
@@ -231,16 +273,20 @@ describe("resolveHistoryView", () => {
 
 describe("docNavRangeChangesFor", () => {
     const byKey = { "1-2": { "a.md": "modified" as const } };
+    const compared = { fromUpdate: 1, toUpdate: 2 };
+
     it("returns the loaded marks for the compared updates", () => {
-        expect(docNavRangeChangesFor("1-2", byKey, { fromUpdate: 1, toUpdate: 2 }, 3)).toEqual({
+        expect(docNavRangeChangesFor("1-2", byKey, compared, 3)).toEqual({
             label: "Update 1 → 2",
             byPath: byKey["1-2"],
         });
     });
-    it("returns nothing until loaded or outside a comparison", () => {
-        const r = { fromUpdate: 1, toUpdate: 2 };
-        expect(docNavRangeChangesFor(null, byKey, r, 3)).toBeUndefined();
-        expect(docNavRangeChangesFor("0-1", byKey, r, 3)).toBeUndefined();
+
+    it.each([
+        { name: "outside a comparison", key: null },
+        { name: "until the compared range's marks load", key: "0-1" },
+    ])("marks nothing $name", ({ key }) => {
+        expect(docNavRangeChangesFor(key, byKey, compared, 3)).toBeUndefined();
     });
 });
 
@@ -261,6 +307,7 @@ describe("historicalContentKeys", () => {
             baselineContentKey: "a.md\u0000c0",
         });
     });
+
     it("falls back to the merge base and skips the live head", () => {
         expect(
             historicalContentKeys({
@@ -294,12 +341,15 @@ describe("historicalStatus", () => {
         historicalAbsentByKey: {} as Record<string, true>,
     };
 
-    it("loads until both endpoints arrive", () => {
+    it("is loading while the compared endpoints haven't arrived", () => {
         expect(historicalStatus(base)).toMatchObject({
             usingHistoricalContent: true,
             historicalLoading: true,
             absentNotice: null,
         });
+    });
+
+    it("shows the newer endpoint once both endpoints arrive", () => {
         expect(
             historicalStatus({
                 ...base,
@@ -311,12 +361,14 @@ describe("historicalStatus", () => {
             historicalLoading: false,
         });
     });
+
     it("reports the first load error", () => {
         expect(historicalStatus({ ...base, historicalErrorByKey: { k0: "boom" } })).toMatchObject({
             historicalLoadError: "boom",
             historicalLoading: false,
         });
     });
+
     it("explains a file absent at the newer endpoint", () => {
         const s = historicalStatus({
             ...base,
@@ -326,6 +378,7 @@ describe("historicalStatus", () => {
         expect(s.absentNotice?.title).toBe("Not present at Update 2");
         expect(s.historicalLoading).toBe(false);
     });
+
     it("treats a deleted file as absent at the latest update", () => {
         const s = historicalStatus({
             ...base,
@@ -337,6 +390,7 @@ describe("historicalStatus", () => {
         expect(s.absentNotice?.title).toBe("Deleted by Update 2");
         expect(s.usingHistoricalContent).toBe(false);
     });
+
     it("renders a file absent only at the baseline as added", () => {
         const s = historicalStatus({
             ...base,
@@ -347,6 +401,7 @@ describe("historicalStatus", () => {
         expect(s.baselineAbsent).toBe(true);
         expect(s.historicalLoading).toBe(false);
     });
+
     it("is idle with no historical endpoints", () => {
         expect(
             historicalStatus({
@@ -378,6 +433,13 @@ describe("activeArticleState", () => {
         historicalLoading: false,
     };
 
+    const historical = {
+        pristineHtml: "<p>live</p>",
+        viewingHistorical: true,
+        historicalContentKey: "k1",
+        selectedPath: "a.md",
+    };
+
     it("shows the live document", () => {
         expect(
             activeArticleState({
@@ -393,17 +455,11 @@ describe("activeArticleState", () => {
             articleReady: true,
         });
     });
-    it("shows a historical snapshot once loaded", () => {
-        const args = {
-            pristineHtml: "<p>live</p>",
-            viewingHistorical: true,
-            historicalContentKey: "k1",
-            selectedPath: "a.md",
-        };
 
+    it("holds the article back until a historical snapshot loads", () => {
         expect(
             activeArticleState({
-                ...args,
+                ...historical,
                 status: { ...status, usingHistoricalContent: true },
             }),
         ).toEqual({
@@ -411,9 +467,12 @@ describe("activeArticleState", () => {
             activeStorageKey: "k1",
             articleReady: false,
         });
+    });
+
+    it("holds the article back when the file is absent at that version", () => {
         expect(
             activeArticleState({
-                ...args,
+                ...historical,
                 status: {
                     ...status,
                     usingHistoricalContent: true,
@@ -442,6 +501,7 @@ describe("activeSources", () => {
             baselineSource: undefined,
         });
     });
+
     it("uses both endpoints while comparing", () => {
         expect(
             activeSources({
@@ -450,6 +510,9 @@ describe("activeSources", () => {
                 comparingIterations: true,
             }),
         ).toEqual({ activeSource: "one", baselineSource: "zero" });
+    });
+
+    it("compares against an empty baseline for a file added in the range", () => {
         expect(
             activeSources({
                 ...base,
@@ -480,6 +543,7 @@ describe("diffInputs / isDiffAvailable", () => {
             rawActiveDiff: iterationDiff,
         });
     });
+
     it("diffs the PR against its base", () => {
         expect(diffInputs({ ...base, comparingIterations: false })).toEqual({
             activeOriginalSource: "orig",
@@ -497,29 +561,44 @@ describe("diffInputs / isDiffAvailable", () => {
         currentFileDiff: undefined,
     };
 
-    it("offers changes only for a non-empty displayable diff", () => {
-        expect(isDiffAvailable({ ...avail, currentFileDiff })).toBe(true);
-        expect(isDiffAvailable({ ...avail, currentFileDiff: [] })).toBe(false);
-        expect(isDiffAvailable(avail)).toBe(false);
-        expect(
-            isDiffAvailable({
-                ...avail,
-                currentFileDiff,
-                isWholeFileChange: true,
-            }),
-        ).toBe(false);
-        expect(
-            isDiffAvailable({
-                ...avail,
-                currentFileDiff,
-                viewingHistorical: true,
-            }),
-        ).toBe(false);
-        const cmp = { ...avail, comparingIterations: true };
-        expect(isDiffAvailable({ ...cmp, iterationDiff })).toBe(true);
-        expect(isDiffAvailable({ ...cmp, iterationDiff: [] })).toBe(false);
-        expect(isDiffAvailable(cmp)).toBe(false);
-        expect(isDiffAvailable({ ...cmp, iterationDiff, baselineAbsent: true })).toBe(false);
+    const comparing = { ...avail, comparingIterations: true };
+
+    it.each([
+        { name: "a file with changes", state: { ...avail, currentFileDiff }, offered: true },
+        {
+            name: "a file with an empty diff",
+            state: { ...avail, currentFileDiff: [] },
+            offered: false,
+        },
+        { name: "a file whose diff hasn't loaded", state: avail, offered: false },
+        {
+            name: "a wholly added or deleted file",
+            state: { ...avail, currentFileDiff, isWholeFileChange: true },
+            offered: false,
+        },
+        {
+            name: "a past version of the file",
+            state: { ...avail, currentFileDiff, viewingHistorical: true },
+            offered: false,
+        },
+        {
+            name: "compared updates with changes",
+            state: { ...comparing, iterationDiff },
+            offered: true,
+        },
+        {
+            name: "compared updates without changes",
+            state: { ...comparing, iterationDiff: [] },
+            offered: false,
+        },
+        { name: "compared updates whose diff hasn't loaded", state: comparing, offered: false },
+        {
+            name: "compared updates where the file is new",
+            state: { ...comparing, iterationDiff, baselineAbsent: true },
+            offered: false,
+        },
+    ])("offers the changes view for $name: $offered", ({ state, offered }) => {
+        expect(isDiffAvailable(state)).toBe(offered);
     });
 });
 
@@ -547,6 +626,7 @@ describe("commentAccess", () => {
             activeReadOnlyMessage: "msg",
         });
     });
+
     it("shows a past PR read-only with its own pill", () => {
         const r = commentAccess({
             ...base,
@@ -564,24 +644,24 @@ describe("commentAccess", () => {
         expect(r.activeReadOnly).toBe(true);
         expect(r.activeReadOnlyMessage).toMatch(/pull request #4/);
     });
-    it("labels a past PR pill even when the stop lacks its id or title", () => {
-        const untitled: HistoryStop = { ...past(4, "c4"), title: undefined };
+
+    it.each([
+        {
+            name: "its title",
+            stop: { ...past(4, "c4"), title: undefined },
+            pill: { prId: 4, title: "PR #4" },
+        },
+        {
+            name: "its id",
+            stop: { ...past(4, "c4"), prId: null },
+            pill: { prId: 0, title: "PR 4" },
+        },
+    ])("labels a past PR pill even when the stop lacks $name", ({ stop, pill }) => {
         expect(
-            commentAccess({
-                ...base,
-                viewingHistorical: true,
-                activeStop: untitled,
-            }).activeRoutedPr,
-        ).toMatchObject({ prId: 4, title: "PR #4" });
-        const anonymous: HistoryStop = { ...past(4, "c4"), prId: null };
-        expect(
-            commentAccess({
-                ...base,
-                viewingHistorical: true,
-                activeStop: anonymous,
-            }).activeRoutedPr,
-        ).toMatchObject({ prId: 0, title: "PR 4" });
+            commentAccess({ ...base, viewingHistorical: true, activeStop: stop }).activeRoutedPr,
+        ).toMatchObject(pill);
     });
+
     it("keeps earlier PR updates writable", () => {
         const r = commentAccess({
             ...base,
@@ -593,52 +673,65 @@ describe("commentAccess", () => {
         expect(r.viewingPastPr).toBe(false);
         expect(r.activeReadOnly).toBe(false);
     });
+
     it("makes a deleted file read-only", () => {
         const r = commentAccess({ ...base, currentFileChangeType: "deleted" });
         expect(r.activeReadOnly).toBe(true);
         expect(r.activeReadOnlyMessage).toMatch(/was deleted/);
     });
-    it("gates documents-mode comments on a completed routing PR", () => {
+
+    it("locks documents-mode comments while the routing PR is still active", () => {
         const r = commentAccess({ ...base, documentsMode: true });
         expect(r.commentsAvailable).toBe(false);
         expect(r.activeReadOnly).toBe(true);
         expect(r.activeReadOnlyMessage).toMatch(/unavailable until/);
+    });
+
+    it.each([
+        { name: "the routing PR is still resolving", overrides: { routedPrResolution: undefined } },
+        {
+            name: "the routing PR is completed",
+            overrides: { effectiveRoutedPr: { ...routed, status: "completed" as const } },
+        },
+    ])("allows documents-mode comments when $name", ({ overrides }) => {
         expect(
-            commentAccess({
-                ...base,
-                documentsMode: true,
-                routedPrResolution: undefined,
-            }).commentsAvailable,
-        ).toBe(true);
-        const done = { ...routed, status: "completed" as const };
-        expect(
-            commentAccess({
-                ...base,
-                documentsMode: true,
-                effectiveRoutedPr: done,
-            }).commentsAvailable,
+            commentAccess({ ...base, documentsMode: true, ...overrides }).commentsAvailable,
         ).toBe(true);
     });
 });
 
 describe("buildHistoryNav", () => {
     const stops = [current, past(5, "c5"), past(4, "c4")];
-    it("is absent without a history to step through", () => {
-        expect(buildHistoryNav(false, stops, 0, vi.fn())).toBeUndefined();
-        expect(buildHistoryNav(true, [current], 0, vi.fn())).toBeUndefined();
+
+    it.each([
+        { name: "history is off", enabled: false, available: stops },
+        { name: "there is only the current version", enabled: true, available: [current] },
+    ])("offers no history stepping when $name", ({ enabled, available }) => {
+        expect(buildHistoryNav(enabled, available, 0, vi.fn())).toBeUndefined();
     });
-    it("steps between neighbouring stops", () => {
-        const onStep = vi.fn();
-        const nav = buildHistoryNav(true, stops, 1, onStep)!;
+
+    it("offers both directions from a middle stop, naming the older one", () => {
+        const nav = buildHistoryNav(true, stops, 1, vi.fn())!;
         expect(nav.canNewer).toBe(true);
         expect(nav.canOlder).toBe(true);
         expect(nav.olderLabel).toMatch(/PR 4|#4/);
-        nav.onNewer();
-        nav.onOlder();
-        expect(onStep.mock.calls).toEqual([[0], [2]]);
-        const atEnd = buildHistoryNav(true, stops, 2, onStep)!;
-        expect(atEnd.canOlder).toBe(false);
-        expect(buildHistoryNav(true, stops, 0, onStep)!.canNewer).toBe(false);
+    });
+
+    it.each([
+        { name: "newer steps to the stop above", step: "onNewer" as const, to: 0 },
+        { name: "older steps to the stop below", step: "onOlder" as const, to: 2 },
+    ])("from a middle stop, $name", ({ step, to }) => {
+        const onStep = vi.fn();
+        buildHistoryNav(true, stops, 1, onStep)![step]();
+        expect(onStep).toHaveBeenCalledWith(to);
+    });
+
+    it("can't step older from the oldest stop", () => {
+        expect(buildHistoryNav(true, stops, 2, vi.fn())!.canOlder).toBe(false);
+    });
+
+    it("can't step newer from the current version", () => {
+        expect(buildHistoryNav(true, stops, 0, vi.fn())!.canNewer).toBe(false);
     });
 });
 
@@ -650,61 +743,66 @@ describe("reader chrome", () => {
             "--emr-reader-font": readerFont.stack,
         });
     });
-    it("builds the feedback mailto only with an address", () => {
+
+    it("offers no feedback link without an address", () => {
         expect(feedbackHrefFor(undefined)).toBeUndefined();
+    });
+
+    it("builds the feedback mailto for an address", () => {
         expect(feedbackHrefFor("a@b.test")).toMatch(/^mailto:a@b\.test\?subject=/);
     });
-    it("composes the app class name", () => {
-        expect(
-            appClassName({
+
+    it.each([
+        {
+            name: "the plain app",
+            state: {
                 navHidden: false,
                 commentsHidden: false,
                 documentsMode: undefined,
                 tooNarrow: false,
-            }),
-        ).toBe("emr-app");
-        expect(
-            appClassName({
-                navHidden: true,
-                commentsHidden: true,
-                documentsMode: true,
-                tooNarrow: true,
-            }),
-        ).toBe("emr-app is-nav-hidden is-comments-hidden is-documents-mode is-too-narrow");
+            },
+            className: "emr-app",
+        },
+        {
+            name: "every layout modifier",
+            state: { navHidden: true, commentsHidden: true, documentsMode: true, tooNarrow: true },
+            className: "emr-app is-nav-hidden is-comments-hidden is-documents-mode is-too-narrow",
+        },
+    ])("styles $name", ({ state, className }) => {
+        expect(appClassName(state)).toBe(className);
     });
-    it("drops the banner and pill for earlier PR updates", () => {
-        expect(
-            railChrome({
-                nativeIterationMode: true,
-                viewingHistorical: true,
-                hidePrPill: false,
-                documentsMode: undefined,
-            }),
-        ).toEqual({ showReadOnlyBanner: false, hidePrPill: true });
-        expect(
-            railChrome({
-                nativeIterationMode: false,
-                viewingHistorical: true,
-                hidePrPill: false,
-                documentsMode: undefined,
-            }),
-        ).toEqual({ showReadOnlyBanner: true, hidePrPill: false });
-        expect(
-            railChrome({
-                nativeIterationMode: false,
-                viewingHistorical: false,
-                hidePrPill: false,
-                documentsMode: true,
-            }).hidePrPill,
-        ).toBe(true);
-    });
-    it("lays out the panes", () => {
-        const prefs = {
-            ...DEFAULT_READER_PREFS,
-            showNav: true,
-            showComments: true,
-        };
 
+    it.each([
+        {
+            name: "an earlier PR update shows no read-only banner and no pill",
+            state: { nativeIterationMode: true, viewingHistorical: true, documentsMode: undefined },
+            chrome: { showReadOnlyBanner: false, hidePrPill: true },
+        },
+        {
+            name: "a past completed PR shows the read-only banner and its pill",
+            state: {
+                nativeIterationMode: false,
+                viewingHistorical: true,
+                documentsMode: undefined,
+            },
+            chrome: { showReadOnlyBanner: true, hidePrPill: false },
+        },
+        {
+            name: "documents mode hides the PR pill",
+            state: { nativeIterationMode: false, viewingHistorical: false, documentsMode: true },
+            chrome: expect.objectContaining({ hidePrPill: true }),
+        },
+    ])("$name", ({ state, chrome }) => {
+        expect(railChrome({ ...state, hidePrPill: false })).toEqual(chrome);
+    });
+
+    const prefs = {
+        ...DEFAULT_READER_PREFS,
+        showNav: true,
+        showComments: true,
+    };
+
+    it("lays out a full reader with resizable panes", () => {
         expect(paneLayout(undefined, prefs, true)).toEqual({
             navToggleable: true,
             navHidden: false,
@@ -714,9 +812,15 @@ describe("reader chrome", () => {
             navReopenShown: false,
             commentsReopenShown: false,
         });
+    });
+
+    it("offers to reopen panes the reader closed", () => {
         expect(
             paneLayout(undefined, { ...prefs, showNav: false, showComments: false }, true),
         ).toMatchObject({ navReopenShown: true, commentsReopenShown: true });
+    });
+
+    it("hides the nav when the host hides it, and the rail when comments are unavailable", () => {
         expect(paneLayout(true, prefs, false)).toEqual({
             navToggleable: false,
             navHidden: true,
@@ -727,20 +831,22 @@ describe("reader chrome", () => {
             commentsReopenShown: false,
         });
     });
-    it("derives the status bar's mode-dependent controls", () => {
-        const options = [
-            { stopIndex: 1, number: 1, title: "Update 1" },
-            { stopIndex: 0, number: 2, title: "Update 2" },
-        ];
 
+    const updates = [
+        { stopIndex: 1, number: 1, title: "Update 1" },
+        { stopIndex: 0, number: 2, title: "Update 2" },
+    ];
+
+    const done = { prId: 1, title: "t", status: "completed" as const };
+
+    it("gives the status bar the resolved PR, update picker and refresh in a PR's documents", () => {
         const handleRefresh = vi.fn();
-        const done = { prId: 1, title: "t", status: "completed" as const };
         expect(
             statusBarExtras({
                 documentsMode: true,
                 activeRoutedPr: done,
                 nativeIterationMode: true,
-                iterationOptions: options,
+                iterationOptions: updates,
                 reviewIterationBaseCommit: "base",
                 canRefreshComments: true,
                 handleRefresh,
@@ -749,20 +855,23 @@ describe("reader chrome", () => {
             }),
         ).toEqual({
             resolvedPullRequest: done,
-            iterationOptions: options,
+            iterationOptions: updates,
             iterationBaseCommit: "base",
             onRefresh: handleRefresh,
             refreshing: true,
         });
+    });
+
+    it("gives the status bar none of the PR controls outside documents and update modes", () => {
         expect(
             statusBarExtras({
                 documentsMode: false,
                 activeRoutedPr: done,
                 nativeIterationMode: false,
-                iterationOptions: options,
+                iterationOptions: updates,
                 reviewIterationBaseCommit: "base",
                 canRefreshComments: false,
-                handleRefresh,
+                handleRefresh: vi.fn(),
                 commentsRefreshing: false,
                 fileRefreshInFlight: false,
             }),

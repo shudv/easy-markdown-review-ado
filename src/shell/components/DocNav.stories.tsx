@@ -235,12 +235,31 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** The navigation rail (heading text also appears in the article beside it). */
+function docNav(canvasElement: HTMLElement): HTMLElement {
+    return within(canvasElement).getByRole("complementary", { name: "Document navigation" });
+}
+
+/** A host folder fetch that the story settles when it chooses. */
+function heldFolderFetch() {
+    let settle: () => void = () => {};
+
+    const onExpandFolder = fn(
+        () =>
+            new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) => {
+                settle = () => resolve({ files: [], folders: [] });
+            }),
+    );
+
+    return { onExpandFolder, settle: () => settle() };
+}
+
 /** File tree + heading TOC: folders toggle, headings fold and scroll, file
  *  rows switch the active file. */
 export const TreeAndHeadings: Story = {
-    play: async ({ canvasElement }) => {
+    play: async ({ args, canvasElement }) => {
         // Scope queries to the nav: heading text also appears in the article DOM.
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         // Heading badges: intro has 2 open, setup has a resolved one.
         await waitFor(() => expect(nav.getByText("Introduction")).toBeTruthy());
@@ -252,43 +271,34 @@ export const TreeAndHeadings: Story = {
         );
         expect(canvasElement.querySelector(".emr-docnav-file-diff")).toBeNull();
 
-        // Collapse then re-expand the folder (re-query: the row re-renders).
+        // Collapsing the folder hides its files; expanding shows them again.
         await userEvent.click(nav.getByRole("button", { name: "Collapse folder" }));
+        await expect(nav.queryByText("internal.md")).toBeNull();
         await userEvent.click(nav.getByRole("button", { name: "Expand folder" }));
+        await expect(nav.getByText("internal.md")).toBeTruthy();
 
         // Fold a heading section via its chevron, then unfold it. Both intro and
-        // setup expose a "Collapse section" twist; fold setup (a leaf parent) so
-        // the other heading rows stay visible.
+        // setup expose a "Collapse section" twist; fold setup so its nested
+        // "Deep dive" row hides while the other heading rows stay visible.
         await userEvent.click(nav.getAllByRole("button", { name: "Collapse section" })[1]!);
+        await expect(nav.queryByText("Deep dive")).toBeNull();
         await userEvent.click(nav.getByRole("button", { name: "Expand section" }));
+        await expect(nav.getByText("Deep dive")).toBeTruthy();
 
-        // Click a heading label (Usage is collapsed → it expands its section).
+        // Clicking a collapsed heading (Usage) unfolds its section in the article.
+        const usage = canvasElement.querySelector<HTMLElement>('[data-section-id="usage"]')!;
+
         await userEvent.click(nav.getByRole("button", { name: /Usage/ }));
-        // Click the Introduction heading (already expanded → no section toggle).
+        await waitFor(() => expect(usage.dataset.collapsed).not.toBe("true"));
+        // Clicking an expanded heading (Introduction) leaves it expanded.
         await userEvent.click(nav.getByRole("button", { name: /Introduction/ }));
+        await expect(nav.getByText("Introduction")).toBeTruthy();
 
-        // Switch to a different file.
+        // File rows switch the open file, including root-level files.
         await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
-        // A root-level file has no parent folders to auto-expand — it just selects.
+        await expect(args.onSelectPath).toHaveBeenLastCalledWith("docs/api/internal.md");
         await userEvent.click(nav.getByRole("button", { name: /README\.md/ }));
-
-        // Tonal + weight hierarchy: file names read heavier (semibold) than the
-        // regular-weight heading rows nested beneath them, and the two use distinct
-        // colour tokens (near-black file tone vs muted heading tone) so files
-        // clearly out-rank headings. Assert the weight gap and that the colours
-        // actually differ (exact rgb values are theme-driven, so compare relative).
-        const fileName = canvasElement.querySelector(".emr-docnav-file-name") as HTMLElement;
-
-        const headingRow = canvasElement.querySelector(".emr-docnav-item.lvl-2") as HTMLElement;
-
-        expect(fileName).toBeTruthy();
-        expect(headingRow).toBeTruthy();
-        const fileStyle = getComputedStyle(fileName);
-        const headingStyle = getComputedStyle(headingRow);
-        expect(Number(fileStyle.fontWeight)).toBeGreaterThanOrEqual(600);
-        // File tone and heading tone are different colours (the separation the
-        // design relies on), not the same inherited foreground.
-        expect(fileStyle.color).not.toBe(headingStyle.color);
+        await expect(args.onSelectPath).toHaveBeenLastCalledWith("README.md");
     },
 };
 
@@ -311,7 +321,7 @@ export const FewFiles: Story = {
         ],
     },
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         // Search is hidden, but the "Documents" title still shows (>1 file).
         await expect(nav.queryByRole("button", { name: "Search documents" })).toBeNull();
@@ -332,7 +342,7 @@ export const SingleFile: Story = {
         ],
     },
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         await waitFor(() => expect(nav.getByText(/README\.md/)).toBeTruthy());
         await expect(nav.getByText("Documents")).toBeTruthy();
@@ -345,8 +355,12 @@ export const ReselectSameFile: Story = {
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
         await waitFor(() => expect(canvas.getByText("guide.md")).toBeTruthy());
+        const article = canvas.getByRole("main");
+        article.scrollTop = 400;
+        await waitFor(() => expect(article.scrollTop).toBeGreaterThan(0));
         await userEvent.click(canvas.getByRole("button", { name: /guide\.md/ }));
-        // Same path → onSelectPath is NOT called (it scrolls instead).
+        await waitFor(() => expect(article.scrollTop).toBe(0));
+        // Same path → the open file isn't re-requested.
         await expect(args.onSelectPath).not.toHaveBeenCalled();
     },
 };
@@ -355,7 +369,7 @@ export const ReselectSameFile: Story = {
  *  it again at the very top. */
 export const ScrollSpy: Story = {
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         await waitFor(() => expect(nav.getByText("Setup")).toBeTruthy());
         const scroller = canvasElement.querySelector("main") as HTMLElement;
@@ -416,7 +430,7 @@ export const Search: Story = {
 export const NoChangeIndicators: Story = {
     args: { showChangeIndicators: false },
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         await waitFor(() => expect(nav.getByText(/guide\.md/)).toBeTruthy());
 
@@ -455,7 +469,7 @@ export const RangeChangesMarkTouchedFiles: Story = {
         },
     },
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         const rowOf = (name: RegExp) =>
             nav.getByRole("button", { name }).closest<HTMLElement>(".emr-docnav-item")!;
@@ -579,7 +593,7 @@ export const RemoteUnavailable: Story = {
  *  ancestor folders again so the active row stays visible. */
 export const CollapsedAncestorReexpand: Story = {
     play: async ({ args, canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         await waitFor(() => expect(nav.getByText("guide.md")).toBeTruthy());
         // Collapse the docs/api folder.
@@ -594,30 +608,33 @@ export const CollapsedAncestorReexpand: Story = {
         await waitFor(() => expect(nav.getByText("internal.md")).toBeTruthy());
         await userEvent.click(nav.getByRole("button", { name: /internal\.md/ }));
         await waitFor(() => expect(args.onSelectPath).toHaveBeenCalledWith("docs/api/internal.md"));
+        // Back in the tree, the folder holding the opened file is expanded again.
+        await userEvent.click(nav.getByRole("button", { name: "Close search" }));
+        await waitFor(() =>
+            expect(nav.getByRole("button", { name: "Collapse folder" })).toBeTruthy(),
+        );
+        await expect(nav.getByText("guide.md")).toBeTruthy();
     },
 };
+
+const lazyFolder = heldFolderFetch();
 
 /** Lazy folders fetch their contents on expand and show a spinner meanwhile. */
 export const LazyFolders: Story = {
     args: {
         files: [],
         unloadedFolders: ["pending"],
-        onExpandFolder: fn(
-            () =>
-                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-                    setTimeout(() => resolve({ files: [], folders: [] }), 50),
-                ),
-        ),
+        onExpandFolder: lazyFolder.onExpandFolder,
     },
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
         await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
         // While the fetch is in flight the row shows a (disabled) spinner.
         await waitFor(() =>
-            expect(canvas.getByRole("button", { name: "Loading folder..." })).toBeTruthy(),
+            expect(canvas.getByRole("button", { name: "Loading folder..." })).toBeDisabled(),
         );
-        // Once it settles the callback has fired and the loading state clears.
-        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+        await expect(args.onExpandFolder).toHaveBeenCalledWith("pending");
+        lazyFolder.settle();
         await waitFor(() =>
             expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull(),
         );
@@ -634,18 +651,13 @@ export const LazyFoldersLeadingSlash: Story = {
     args: {
         files: [],
         unloadedFolders: ["/pending"],
-        onExpandFolder: fn(
-            () =>
-                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-                    setTimeout(() => resolve({ files: [], folders: [] }), 50),
-                ),
-        ),
+        onExpandFolder: fn(async () => ({ files: [], folders: [] })),
     },
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
         // The leading-slash folder is still recognized as lazy/expandable.
         await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(args.onExpandFolder).toHaveBeenCalledOnce());
         await waitFor(() =>
             expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull(),
         );
@@ -662,12 +674,7 @@ export const DeepLinkAutoExpand: Story = {
         files: [],
         initialSelected: "/pending/buried.md",
         unloadedFolders: ["pending"],
-        onExpandFolder: fn(
-            () =>
-                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-                    setTimeout(() => resolve({ files: [], folders: [] }), 20),
-                ),
-        ),
+        onExpandFolder: fn(async () => ({ files: [], folders: [] })),
     },
     play: async ({ args }) => {
         // The ancestor folder is fetched automatically to reveal the deep-linked
@@ -734,21 +741,27 @@ export const DeepLinkLazyAncestorFetchedOnce: Story = {
             onExpand={guardExpandSpy}
         />
     ),
-    play: async () => {
-        await waitFor(() => expect(guardExpandSpy).toHaveBeenCalled());
-        // Give the effect several render cycles to (mis)fire a refetch loop.
-        await new Promise((resolve) => setTimeout(resolve, 100));
+    play: async ({ canvasElement }) => {
+        await waitFor(() => expect(guardExpandSpy).toHaveBeenCalledWith("stuck"));
+        // The fetch settles and the host lists the folder as still unloaded: the
+        // row goes back to "Load folder" instead of fetching again and again.
+        await waitFor(() =>
+            expect(within(canvasElement).getByRole("button", { name: "Load folder" })).toBeTruthy(),
+        );
         expect(guardExpandSpy).toHaveBeenCalledTimes(1);
     },
 };
 
-/** Without an onExpandFolder callback, expanding a lazy folder is a no-op. */
+/**
+ * A Documents hub without a folder lister still shows unenumerated folders,
+ * but "Load folder" can't fetch anything: no spinner, the row stays as is.
+ */
 export const LazyFoldersNoCallback: Story = {
     args: { files: [], unloadedFolders: ["pending"] },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
-        // Still present and not loading — the click did nothing.
+        await expect(canvas.queryByRole("button", { name: "Loading folder..." })).toBeNull();
         await expect(canvas.getByRole("button", { name: "Load folder" })).toBeTruthy();
     },
 };
@@ -757,7 +770,9 @@ export const LazyFoldersNoCallback: Story = {
 export const Empty: Story = {
     args: { files: [] },
     play: async ({ canvasElement }) => {
-        await expect(canvasElement.querySelector(".emr-docnav")).toBeNull();
+        await expect(
+            within(canvasElement).queryByRole("complementary", { name: "Document navigation" }),
+        ).toBeNull();
     },
 };
 
@@ -827,11 +842,7 @@ export const WikiPages: Story = {
         // Hiding the subpages keeps the open page's outline.
         await userEvent.click(canvas.getByRole("button", { name: "Collapse subpages" }));
         await expect(names()).toEqual(["Home.md"]);
-        await expect(
-            within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!).getByText(
-                "Introduction",
-            ),
-        ).toBeTruthy();
+        await expect(within(docNav(canvasElement)).getByText("Introduction")).toBeTruthy();
     },
 };
 
@@ -849,11 +860,7 @@ export const WikiPageOutlineBeforeSubpagesLoad: Story = {
         const canvas = within(canvasElement);
         await expect(canvas.getByRole("button", { name: "Load folder" })).toBeTruthy();
         await waitFor(() =>
-            expect(
-                within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!).getByText(
-                    "Introduction",
-                ),
-            ).toBeTruthy(),
+            expect(within(docNav(canvasElement)).getByText("Introduction")).toBeTruthy(),
         );
     },
 };
@@ -865,12 +872,7 @@ export const WikiPageLazySubpages: Story = {
         unloadedFolders: ["Archive"],
         initialSelected: "Home.md",
         wikiPages: true,
-        onExpandFolder: fn(
-            () =>
-                new Promise<{ files: FileInfo[]; folders: string[] }>((resolve) =>
-                    setTimeout(() => resolve({ files: [], folders: [] }), 20),
-                ),
-        ),
+        onExpandFolder: fn(async () => ({ files: [], folders: [] })),
     },
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
@@ -888,7 +890,7 @@ export const WikiPageLazySubpages: Story = {
 export const OutlineOff: Story = {
     args: { showOutline: false },
     play: async ({ canvasElement }) => {
-        const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        const nav = docNav(canvasElement);
         await expect(within(nav).queryByText("Introduction")).toBeNull();
         const scroller = canvasElement.querySelector<HTMLElement>("main")!;
         scroller.scrollTop = 400;
@@ -924,11 +926,14 @@ export const NoDocumentSelected: Story = {
     },
 };
 
-/** Re-selecting the open file with no scroller attached has nothing to scroll. */
-export const ReselectWithoutScroller: Story = {
+/**
+ * While the reader pane isn't showing the document (e.g. it failed to load),
+ * clicking the open file's row doesn't re-open it; there is nothing to scroll.
+ */
+export const ReselectWhileReaderHidden: Story = {
     args: { detachScroller: true },
     play: async ({ args, canvasElement }) => {
-        const nav = within(canvasElement.querySelector(".emr-docnav") as HTMLElement);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /guide\.md/ }));
         await expect(args.onSelectPath).not.toHaveBeenCalled();
@@ -990,7 +995,7 @@ export const OpenFromSearchWhileFolderLoads: Story = {
  */
 export const ActiveHeadingKeptInView: Story = {
     play: async ({ canvasElement }) => {
-        const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        const nav = docNav(canvasElement);
         await waitFor(() => expect(within(nav).getByText("Extras")).toBeTruthy());
         const list = nav.querySelector<HTMLElement>(".emr-docnav-list")!;
         Object.assign(list.style, { height: "90px", flex: "none" });

@@ -4,16 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadFileDiffs } from "../src/shell/adoFileDiffs.helpers";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 const diff = {
     repositoryId: "repo",
@@ -51,7 +44,6 @@ function load(paths: string[], client: FakeClient) {
 
 beforeEach(() => {
     sessionStorage.clear();
-    trackUserFacingErrorMock.mockReset();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
@@ -112,13 +104,18 @@ describe("loadFileDiffs", () => {
             "repo",
         );
         // Only the file with deletions loads its original text, at the base commit.
-        expect(client.getItemText).toHaveBeenCalledTimes(1);
-        expect(client.getItemText.mock.calls[0]![1]).toBe("/a.md");
-        expect(client.getItemText.mock.calls[0]![8]).toEqual({
-            version: "base",
-            versionType: 2,
-            versionOptions: 0,
-        });
+        expect(client.getItemText).toHaveBeenCalledExactlyOnceWith(
+            "repo",
+            "/a.md",
+            "proj",
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { version: "base", versionType: 2, versionOptions: 0 },
+            true,
+        );
         expect(out["/a.md"]).toMatchObject({
             linesAdded: 0,
             linesDeleted: 1,
@@ -161,13 +158,13 @@ describe("loadFileDiffs", () => {
         const out = await load(["/a.md"], client).result;
         expect(out["/a.md"]!.originalSource).toBeUndefined();
         expect(out["/a.md"]!.ranges[0]).not.toHaveProperty("deletedContent");
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({
                 source: "PrTabApp.diff",
                 operation: "original-content-load",
                 impact: "degraded",
             }),
-        );
+        ]);
     });
 
     it("treats a missing diff response as no diff data", async () => {

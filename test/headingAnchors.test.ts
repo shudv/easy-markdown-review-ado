@@ -77,11 +77,14 @@ describe("findAnchorTarget", () => {
         expect(findAnchorTarget(root, "goals")).toBeNull();
     });
 
-    it("returns null for a blank anchor or a renamed heading", () => {
+    it.each([
+        { name: "a blank anchor", anchor: "" },
+        { name: "a bare #", anchor: "#" },
+        { name: "an anchor to a renamed heading", anchor: "objectives" },
+    ])("finds nothing for $name", ({ anchor }) => {
         const root = mount(`<h2 id="goals">Goals</h2>`);
-        expect(findAnchorTarget(root, "")).toBeNull();
-        expect(findAnchorTarget(root, "#")).toBeNull();
-        expect(findAnchorTarget(root, "objectives")).toBeNull();
+
+        expect(findAnchorTarget(root, anchor)).toBeNull();
     });
 
     it("does not reslug punctuation-only anchors onto the generic fallback id", () => {
@@ -141,15 +144,25 @@ describe("revealAnchorTarget", () => {
         const target = root.querySelector<HTMLElement>("#inner")!;
         expect(revealAnchorTarget(target, "/a.md")).toBe(true);
 
-        for (const section of root.querySelectorAll(".emr-section")) {
-            expect(section.hasAttribute("data-collapsed")).toBe(false);
-        }
+        expect(
+            Array.from(root.querySelectorAll(".emr-section"), (section) =>
+                section.hasAttribute("data-collapsed"),
+            ),
+        ).toEqual([false, false]);
 
-        for (const toggle of root.querySelectorAll<HTMLElement>(".emr-section-toggle")) {
-            expect(toggle.getAttribute("aria-expanded")).toBe("true");
-            expect(toggle.getAttribute("aria-label")).toBe("Collapse section");
-            expect(toggle.title).toBe("Collapse section");
-        }
+        const expanded = {
+            "aria-expanded": "true",
+            "aria-label": "Collapse section",
+            title: "Collapse section",
+        };
+
+        expect(
+            Array.from(root.querySelectorAll<HTMLElement>(".emr-section-toggle"), (toggle) => ({
+                "aria-expanded": toggle.getAttribute("aria-expanded"),
+                "aria-label": toggle.getAttribute("aria-label"),
+                title: toggle.title,
+            })),
+        ).toEqual([expanded, expanded]);
 
         // Persisted as open, like a manual expand.
         expect(readSectionState("/a.md", "outer")).toBe(false);
@@ -398,23 +411,17 @@ describe("holdScrollOnTarget", () => {
         expect(scroll).not.toHaveBeenCalled();
     });
 
-    it("leaves no document listeners behind once released", () => {
-        const add = vi.spyOn(document, "addEventListener");
-        const remove = vi.spyOn(document, "removeEventListener");
-        const { cancel } = setup();
+    it("stops re-aligning once the caller cancels the hold, leaving no timer behind", () => {
+        vi.useFakeTimers();
+        const { scroll, cancel, observer } = setup();
+        observer.fire();
+
         cancel();
-        const added = add.mock.calls.map(([type, fn]) => [type, fn]);
+        observer.fire();
 
-        const removed = remove.mock.calls.map(([type, fn, opts]) => {
-            // Same capture phase it was added in, or the removal is a no-op.
-            expect(opts).toBe(true);
-
-            return [type, fn];
-        });
-
-        expect(removed).toEqual(added);
-        add.mockRestore();
-        remove.mockRestore();
+        expect(observer.disconnected).toBe(true);
+        expect(scroll).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it("keeps holding until the time budget runs out, then releases", () => {

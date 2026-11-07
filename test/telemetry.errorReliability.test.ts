@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "../src/telemetry/ErrorBoundary";
 import {
@@ -13,26 +13,9 @@ import {
     installGlobalErrorHandlers,
     rejectionTypeOf,
 } from "../src/telemetry/errorHandlers";
-import { __resetTelemetryForTests } from "../src/telemetry/telemetry";
-import type { TelemetrySink } from "../src/telemetry/types";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-function fakeSink() {
-    const sink: TelemetrySink & {
-        eventCalls: unknown[];
-        exceptionCalls: unknown[];
-    } = {
-        name: "fake",
-        eventCalls: [],
-        exceptionCalls: [],
-        init: vi.fn(),
-        setContext: vi.fn(),
-        trackEvent: vi.fn((event) => sink.eventCalls.push(event)),
-        trackException: vi.fn((info) => sink.exceptionCalls.push(info)),
-        flush: vi.fn(),
-    };
-
-    return sink;
-}
+const telemetry = recordTelemetryEachTest();
 
 const timingEnvironment: BootTimingEnvironment = {
     now: () => 10,
@@ -52,77 +35,61 @@ function rejectWith(reason: unknown): Event {
     return event;
 }
 
+beforeEach(() => {
+    __resetBootTimingForTests();
+    __uninstallGlobalErrorHandlersForTests();
+    markBootStart(timingEnvironment);
+});
+
+afterEach(() => {
+    __uninstallGlobalErrorHandlersForTests();
+    __resetBootTimingForTests();
+});
+
 describe("error reliability denominator", () => {
-    let sink: ReturnType<typeof fakeSink>;
+    // A session that crashes during boot still counts as loaded (with
+    // readyReason "error"), so error rates are measured against every session.
+    it.each([
+        {
+            name: "a React boundary failure",
+            fail: () =>
+                new ErrorBoundary({
+                    source: "unit",
+                    children: createElement("div"),
+                }).componentDidCatch(new Error("render failed"), { componentStack: "at Unit" }),
+        },
+        {
+            name: "a global error",
+            fail: () => {
+                installGlobalErrorHandlers();
+                window.dispatchEvent(
+                    new ErrorEvent("error", { error: new Error("global failed") }),
+                );
+            },
+        },
+        {
+            name: "an unhandled rejection",
+            fail: () => {
+                installGlobalErrorHandlers();
+                rejectWith("promise failed");
+            },
+        },
+    ])("keeps $name in the loaded-session cohort", ({ fail }) => {
+        fail();
 
-    beforeEach(() => {
-        sink = fakeSink();
-        __resetTelemetryForTests(sink);
-        __resetBootTimingForTests();
-        __uninstallGlobalErrorHandlersForTests();
-        markBootStart(timingEnvironment);
-    });
-
-    afterEach(() => {
-        __uninstallGlobalErrorHandlersForTests();
-        __resetBootTimingForTests();
-        __resetTelemetryForTests();
-    });
-
-    it("keeps a React boundary failure in the loaded-session cohort", () => {
-        const boundary = new ErrorBoundary({
-            source: "unit",
-            children: createElement("div"),
-        });
-
-        boundary.componentDidCatch(new Error("render failed"), {
-            componentStack: "at Unit",
-        });
-
-        expect(sink.exceptionCalls).toHaveLength(1);
-        expect(sink.eventCalls).toEqual([
+        expect(telemetry.current.exceptions).toHaveLength(1);
+        expect(telemetry.current.events).toEqual([
             expect.objectContaining({
                 name: "app.loaded",
                 properties: expect.objectContaining({ readyReason: "error" }),
             }),
         ]);
     });
-
-    it("keeps a global error in the loaded-session cohort", () => {
-        installGlobalErrorHandlers();
-        window.dispatchEvent(new ErrorEvent("error", { error: new Error("global failed") }));
-
-        expect(sink.exceptionCalls).toHaveLength(1);
-        expect(sink.eventCalls).toHaveLength(1);
-    });
-
-    it("keeps an unhandled rejection in the loaded-session cohort", () => {
-        installGlobalErrorHandlers();
-        const event = new Event("unhandledrejection") as PromiseRejectionEvent;
-        Object.defineProperty(event, "reason", { value: "promise failed" });
-        window.dispatchEvent(event);
-
-        expect(sink.exceptionCalls).toHaveLength(1);
-        expect(sink.eventCalls).toHaveLength(1);
-    });
 });
 
 describe("unhandled rejection reasons with no primitive conversion", () => {
-    let sink: ReturnType<typeof fakeSink>;
-
     beforeEach(() => {
-        sink = fakeSink();
-        __resetTelemetryForTests(sink);
-        __resetBootTimingForTests();
-        __uninstallGlobalErrorHandlersForTests();
-        markBootStart(timingEnvironment);
         installGlobalErrorHandlers();
-    });
-
-    afterEach(() => {
-        __uninstallGlobalErrorHandlersForTests();
-        __resetBootTimingForTests();
-        __resetTelemetryForTests();
     });
 
     // Production regression: `String(reason)` threw "Cannot convert object to
@@ -138,7 +105,7 @@ describe("unhandled rejection reasons with no primitive conversion", () => {
     ])("reports %s as the rejection itself", (_label, reason, rejectionType) => {
         rejectWith(reason);
 
-        expect(sink.exceptionCalls).toEqual([
+        expect(telemetry.current.exceptions).toEqual([
             expect.objectContaining({
                 source: "unhandledrejection",
                 handled: false,
@@ -146,74 +113,61 @@ describe("unhandled rejection reasons with no primitive conversion", () => {
                 properties: { rejectionType },
             }),
         ]);
-        expect(sink.eventCalls).toEqual([
-            expect.objectContaining({
-                name: "app.loaded",
-                properties: expect.objectContaining({
-                    readyReason: "error",
-                }),
-            }),
-        ]);
+        expect(telemetry.current.eventNames()).toEqual(["app.loaded"]);
     });
 
     it("passes an ADO-style error object through so its status survives", () => {
         const reason = { status: 401, message: "TF400813: not authorized" };
+
         rejectWith(reason);
 
-        expect(sink.exceptionCalls).toEqual([
-            expect.objectContaining({
-                error: reason,
-                source: "unhandledrejection",
-            }),
+        expect(telemetry.current.exceptions).toEqual([
+            expect.objectContaining({ error: reason, source: "unhandledrejection" }),
         ]);
     });
 
     it("does not attach a rejection type for a real Error", () => {
         const reason = new TypeError("boom");
+
         rejectWith(reason);
 
-        const [info] = sink.exceptionCalls as { properties?: object }[];
-        expect(info).toBeDefined();
-        expect(info.properties ?? {}).not.toHaveProperty("rejectionType");
+        expect(telemetry.current.exceptions).toEqual([expect.objectContaining({ error: reason })]);
+        expect(telemetry.current.exceptions[0]).not.toHaveProperty("properties.rejectionType");
     });
 });
 
 describe("claimed unhandled rejections", () => {
-    let sink: ReturnType<typeof fakeSink>;
-
     beforeEach(() => {
-        sink = fakeSink();
-        __resetTelemetryForTests(sink);
-        __resetBootTimingForTests();
-        __uninstallGlobalErrorHandlersForTests();
-        markBootStart(timingEnvironment);
         installGlobalErrorHandlers();
-    });
-
-    afterEach(() => {
-        __uninstallGlobalErrorHandlersForTests();
-        __resetBootTimingForTests();
-        __resetTelemetryForTests();
     });
 
     // The owner recovers (e.g. re-sends the SDK handshake) and reports only if
     // that fails, so the global net must neither report nor end boot.
-    it("skips a claimed rejection entirely, and reports it again once released", () => {
+    it("skips a claimed rejection entirely, and keeps the browser from logging it", () => {
         const release = claimUnhandledRejections((r) => r === "owned");
-        // Handled by its owner, so the browser mustn't log it as uncaught either.
+
         expect(rejectWith("owned").defaultPrevented).toBe(true);
-        expect(sink.exceptionCalls).toHaveLength(0);
-        expect(sink.eventCalls).toHaveLength(0);
+        expect(telemetry.current.exceptions).toEqual([]);
+        expect(telemetry.current.events).toEqual([]);
 
         release();
+    });
+
+    it("reports the rejection again once the claim is released", () => {
+        const release = claimUnhandledRejections((r) => r === "owned");
+
+        release();
+
         expect(rejectWith("owned").defaultPrevented).toBe(false);
-        expect(sink.exceptionCalls).toHaveLength(1);
+        expect(telemetry.current.exceptions).toHaveLength(1);
     });
 
     it("still reports rejections the claim doesn't recognise", () => {
         const release = claimUnhandledRejections((r) => r === "owned");
+
         rejectWith("other");
-        expect(sink.exceptionCalls).toHaveLength(1);
+
+        expect(telemetry.current.exceptions).toHaveLength(1);
         release();
     });
 
@@ -223,11 +177,11 @@ describe("claimed unhandled rejections", () => {
         });
 
         rejectWith("anything");
-        expect(sink.exceptionCalls).toHaveLength(1);
+
+        expect(telemetry.current.exceptions).toHaveLength(1);
         release();
     });
 });
-
 describe("rejectionTypeOf", () => {
     it.each<[string, unknown, string]>([
         ["null", null, "null"],

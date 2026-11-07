@@ -43,8 +43,13 @@ describe("useCommentApiRouting", () => {
         expect(hook.current.commentApi).toBe(first);
         await hook.rerender(routing(second, "b.md"));
         expect(hook.current.commentApi).toBe(second);
-        await hook.rerender(routing(undefined, "c.md"));
-        expect(hook.current.commentApi).toBe(second);
+    });
+
+    it("keeps the last CommentApi when the host stops passing one", async () => {
+        const api = new LocalOnlyCommentApi();
+        const hook = await mount(useCommentApiRouting, routing(api, "a.md"));
+        await hook.rerender(routing(undefined, "b.md"));
+        expect(hook.current.commentApi).toBe(api);
     });
 
     it("resolves mention identities through the effective CommentApi", async () => {
@@ -125,10 +130,15 @@ describe("useThreadViews", () => {
         return hook.current.currentThreadsRaw;
     }
 
-    it("shows a past PR's cached threads, or none until they load", async () => {
+    it("shows a past PR's cached threads", async () => {
         expect(await historicalThreads(7)).toEqual([t7]);
-        expect(await historicalThreads(8)).toEqual([]);
-        expect(await historicalThreads(null)).toEqual([]);
+    });
+
+    it.each([
+        { name: "a past PR whose threads haven't loaded", prId: 8 },
+        { name: "a past version without a PR", prId: null },
+    ])("shows no threads for $name", async ({ prId }) => {
+        expect(await historicalThreads(prId)).toEqual([]);
     });
 });
 

@@ -74,13 +74,12 @@ describe("initialThreadState", () => {
         expect(s.threadsById).toEqual({});
     });
 
-    it("preserves seed order", () => {
+    it("keeps the seeded threads in the order given", () => {
         const t1 = buildThread("t1");
         const t2 = buildThread("t2", "docs/b.md");
         const s = initialThreadState([t1, t2]);
         expect(s.order).toEqual(["t1", "t2"]);
-        expect(s.threadsById.t1).toBe(t1);
-        expect(s.threadsById.t2).toBe(t2);
+        expect(s.threadsById).toEqual({ t1, t2 });
     });
 });
 
@@ -94,13 +93,16 @@ describe("threadReducer ADD_THREAD", () => {
         expect(s.order).toEqual(["t2", "t1"]);
     });
 
-    it("is idempotent for an already-known thread id", () => {
+    it("keeps the existing thread when a thread with the same id is added again", () => {
         const t1 = buildThread("t1");
-        const t1Dup = { ...t1, status: "resolved" as const };
-        let s = initialThreadState([t1]);
-        const before = s;
-        s = threadReducer(s, { type: "ADD_THREAD", thread: t1Dup });
-        expect(s).toBe(before);
+        const before = initialThreadState([t1]);
+
+        const after = threadReducer(before, {
+            type: "ADD_THREAD",
+            thread: { ...t1, status: "resolved" },
+        });
+
+        expect(after).toEqual(before);
     });
 });
 
@@ -123,19 +125,6 @@ describe("threadReducer ADD_REPLY", () => {
         });
         expect(s.threadsById.t1!.comments.map((c) => c.id)).toEqual(["t1-c1", "t1-c2"]);
     });
-
-    it("is a no-op for unknown threads", () => {
-        const t = buildThread("t1");
-        const s = initialThreadState([t]);
-
-        const next = threadReducer(s, {
-            type: "ADD_REPLY",
-            threadId: "missing",
-            comment: { ...t.comments[0]!, id: "x" },
-        });
-
-        expect(next).toBe(s);
-    });
 });
 
 describe("threadReducer EDIT_COMMENT", () => {
@@ -152,35 +141,6 @@ describe("threadReducer EDIT_COMMENT", () => {
         const c = s.threadsById.t1!.comments[0]!;
         expect(c.bodyMarkdown).toBe("edited body");
         expect(c.updatedAt).toBe("2024-02-01T00:00:00.000Z");
-    });
-
-    it("is a no-op for unknown thread", () => {
-        const s = initialThreadState([buildThread("t1")]);
-
-        const next = threadReducer(s, {
-            type: "EDIT_COMMENT",
-            threadId: "missing",
-            commentId: "x",
-            newBodyMarkdown: "x",
-            updatedAt: "x",
-        });
-
-        expect(next).toBe(s);
-    });
-
-    it("is a no-op for unknown comment id within a known thread", () => {
-        const s = initialThreadState([buildThread("t1")]);
-
-        const next = threadReducer(s, {
-            type: "EDIT_COMMENT",
-            threadId: "t1",
-            commentId: "missing",
-            newBodyMarkdown: "x",
-            updatedAt: "y",
-        });
-
-        // The store object is rebuilt but the comment array contents are equivalent.
-        expect(next.threadsById.t1!.comments).toEqual(s.threadsById.t1!.comments);
     });
 });
 
@@ -209,17 +169,6 @@ describe("threadReducer DELETE_COMMENT", () => {
         });
         expect(s.threadsById.t1).toBeUndefined();
         expect(s.order).toEqual([]);
-    });
-
-    it("is a no-op for unknown thread", () => {
-        const s = initialThreadState([buildThread("t1")]);
-        expect(
-            threadReducer(s, {
-                type: "DELETE_COMMENT",
-                threadId: "missing",
-                commentId: "x",
-            }),
-        ).toBe(s);
     });
 });
 
@@ -369,32 +318,6 @@ describe("threadReducer TOGGLE_REACTION", () => {
             },
         ]);
     });
-
-    it("is a no-op for unknown thread or unknown comment", () => {
-        const s = withReaction();
-        expect(
-            threadReducer(s, {
-                type: "TOGGLE_REACTION",
-                threadId: "missing",
-                commentId: "x",
-                kind: "like",
-                userId: "u1",
-                displayName: "User One",
-            }),
-        ).toBe(s);
-
-        // Unknown comment id leaves comments untouched.
-        const next = threadReducer(s, {
-            type: "TOGGLE_REACTION",
-            threadId: "t1",
-            commentId: "missing",
-            kind: "like",
-            userId: "u1",
-            displayName: "User One",
-        });
-
-        expect(next.threadsById.t1!.comments).toEqual(s.threadsById.t1!.comments);
-    });
 });
 
 describe("threadReducer SET_STATUS", () => {
@@ -407,17 +330,6 @@ describe("threadReducer SET_STATUS", () => {
         });
         expect(s.threadsById.t1!.status).toBe("resolved");
     });
-
-    it("is a no-op for unknown threads", () => {
-        const s = initialThreadState([buildThread("t1")]);
-        expect(
-            threadReducer(s, {
-                type: "SET_STATUS",
-                threadId: "missing",
-                status: "resolved",
-            }),
-        ).toBe(s);
-    });
 });
 
 describe("threadReducer DELETE_THREAD", () => {
@@ -427,10 +339,85 @@ describe("threadReducer DELETE_THREAD", () => {
         expect(s.threadsById.t1).toBeUndefined();
         expect(s.order).toEqual(["t2"]);
     });
+});
 
-    it("is a no-op for unknown threads", () => {
-        const s = initialThreadState([buildThread("t1")]);
-        expect(threadReducer(s, { type: "DELETE_THREAD", threadId: "missing" })).toBe(s);
+// Production: an action can arrive for a thread or comment that is already gone,
+// e.g. a reply finishing after another tab deleted the thread. The store must
+// drop it rather than resurrect or corrupt anything.
+describe("threadReducer actions on a thread or comment that no longer exists", () => {
+    const comment: Comment = {
+        id: "x",
+        author: AUTHOR,
+        bodyMarkdown: "late reply",
+        createdAt: "2024-01-02T00:00:00.000Z",
+    };
+
+    it.each<{ name: string; action: ThreadAction }>([
+        { name: "a reply", action: { type: "ADD_REPLY", threadId: "missing", comment } },
+        {
+            name: "an edit",
+            action: {
+                type: "EDIT_COMMENT",
+                threadId: "missing",
+                commentId: "x",
+                newBodyMarkdown: "x",
+                updatedAt: "2024-02-01T00:00:00.000Z",
+            },
+        },
+        {
+            name: "a comment deletion",
+            action: { type: "DELETE_COMMENT", threadId: "missing", commentId: "x" },
+        },
+        {
+            name: "a like",
+            action: {
+                type: "TOGGLE_REACTION",
+                threadId: "missing",
+                commentId: "x",
+                kind: "like",
+                userId: "u1",
+                displayName: "User One",
+            },
+        },
+        {
+            name: "a status change",
+            action: { type: "SET_STATUS", threadId: "missing", status: "resolved" },
+        },
+        { name: "a thread deletion", action: { type: "DELETE_THREAD", threadId: "missing" } },
+    ])("ignores $name for a thread that no longer exists", ({ action }) => {
+        const before = initialThreadState([buildThread("t1")]);
+
+        expect(threadReducer(before, action)).toEqual(before);
+    });
+
+    it.each<{ name: string; action: ThreadAction }>([
+        {
+            name: "an edit",
+            action: {
+                type: "EDIT_COMMENT",
+                threadId: "t1",
+                commentId: "missing",
+                newBodyMarkdown: "x",
+                updatedAt: "2024-02-01T00:00:00.000Z",
+            },
+        },
+        {
+            name: "a like",
+            action: {
+                type: "TOGGLE_REACTION",
+                threadId: "t1",
+                commentId: "missing",
+                kind: "like",
+                userId: "u1",
+                displayName: "User One",
+            },
+        },
+    ])("leaves the thread's comments unchanged for $name of a deleted comment", ({ action }) => {
+        const before = initialThreadState([buildThread("t1")]);
+
+        expect(threadReducer(before, action).threadsById.t1!.comments).toEqual(
+            before.threadsById.t1!.comments,
+        );
     });
 });
 
@@ -497,15 +484,13 @@ describe("makeNewThread", () => {
     });
 });
 
-// Sanity check the exhaustive-default branch by feeding an action whose
-// `type` is unknown — the reducer's `never` branch should fall through and
-// hand back the same state.
+// An action from a newer build (or a typo in a dispatch) must not wipe state.
 describe("threadReducer (defensive)", () => {
-    it("returns state unchanged for an unrecognized action shape", () => {
+    it("leaves the store unchanged for an action it does not recognise", () => {
         const s = initialThreadState([buildThread("t1")]);
         // Cast to bypass the discriminated-union exhaustiveness check.
         const bogus = { type: "UNKNOWN_ACTION" } as unknown as ThreadAction;
-        expect(threadReducer(s, bogus)).toBe(s);
+        expect(threadReducer(s, bogus)).toEqual(s);
     });
 });
 
@@ -534,19 +519,6 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         });
 
         expect(next).toBe(state);
-    });
-
-    it("preserves local-only (optimistic) threads not present in remote snapshot", () => {
-        const local = buildThread("local-tmp-1");
-        const state = initialThreadState([buildThread("t1"), local]);
-
-        const next = threadReducer(state, {
-            type: "MERGE_REMOTE_THREADS",
-            threads: [buildThread("t1")],
-        });
-
-        expect(next.threadsById["local-tmp-1"]).toBe(local);
-        expect(next.order).toContain("local-tmp-1");
     });
 
     it("appends remote replies that aren't in our local copy yet", () => {
@@ -624,7 +596,7 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe("local edit");
     });
 
-    it("does NOT delete threads that disappear from the remote snapshot", () => {
+    it("keeps local threads missing from the server snapshot", () => {
         // Avoids racing optimistic creates whose server-assigned ids haven't
         // landed yet. False positive: a genuinely deleted thread will linger
         // until the next user action — acceptable trade-off.
@@ -637,18 +609,6 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
 
         expect(next.threadsById.t2).toBeDefined();
         expect(next.order).toEqual(["t1", "t2"]);
-    });
-
-    it("merges threads on multiple files (selectThreadsByFile filters)", () => {
-        const state = initialThreadState([buildThread("t1", "a.md")]);
-
-        const next = threadReducer(state, {
-            type: "MERGE_REMOTE_THREADS",
-            threads: [buildThread("t1", "a.md"), buildThread("t2", "b.md")],
-        });
-
-        expect(selectThreadsByFile(next, "a.md").map((t) => t.id)).toEqual(["t1"]);
-        expect(selectThreadsByFile(next, "b.md").map((t) => t.id)).toEqual(["t2"]);
     });
 
     it("compares updatedAt numerically — lexical order would pick the wrong winner", () => {

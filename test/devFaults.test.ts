@@ -61,20 +61,32 @@ const okFetch = () =>
         ReturnType<typeof vi.fn>;
 
 describe("fault config storage", () => {
-    it("round-trips, and clearing removes the key", () => {
+    it("has no faults until some are written, then reads them back", () => {
         const s = memoryStorage();
+
         expect(readFaults(s)).toEqual({});
+
         writeFaults(s, { slowApiMs: 5 });
+
         expect(readFaults(s)).toEqual({ slowApiMs: 5 });
+    });
+
+    it("removes the stored key when every fault is cleared", () => {
+        const s = memoryStorage();
+        writeFaults(s, { slowApiMs: 5 });
+
         writeFaults(s, {});
+
         expect(s.map.has(FAULTS_STORAGE_KEY)).toBe(false);
     });
 
-    it("treats corrupt or non-object values as no faults", () => {
+    it.each([
+        { name: "corrupt JSON", stored: "{not json" },
+        { name: "a non-object value", stored: "5" },
+    ])("treats $name as no faults", ({ stored }) => {
         const s = memoryStorage();
-        s.setItem(FAULTS_STORAGE_KEY, "{not json");
-        expect(readFaults(s)).toEqual({});
-        s.setItem(FAULTS_STORAGE_KEY, "5");
+        s.setItem(FAULTS_STORAGE_KEY, stored);
+
         expect(readFaults(s)).toEqual({});
     });
 });
@@ -90,9 +102,14 @@ describe("dead-window token", () => {
         expect(recoverAtMs).toBe(Math.floor(until / 1000) * 1000);
     });
 
-    it("is only handed out while the window is open", () => {
-        expect(activeDeadToken({}, NOW)).toBeNull();
-        expect(activeDeadToken({ deadWindow: { untilMs: NOW } }, NOW)).toBeNull();
+    it.each([
+        { name: "there is no dead window", config: {} },
+        { name: "the window has just ended", config: { deadWindow: { untilMs: NOW } } },
+    ])("is not handed out when $name", ({ config }) => {
+        expect(activeDeadToken(config, NOW)).toBeNull();
+    });
+
+    it("is handed out while the window is open", () => {
         expect(activeDeadToken({ deadWindow: { untilMs: NOW + 1 } }, NOW)).toMatch(/\.dev-fault$/);
     });
 });
@@ -206,41 +223,79 @@ describe("createFaultyFetch", () => {
 });
 
 describe("faultsApi", () => {
-    it("drives every fault through sessionStorage", () => {
+    type Api = ReturnType<typeof faultsApi>;
+
+    it.each([
+        {
+            name: "opens a two-minute dead window by default",
+            act: (api: Api) => api.deadWindow(),
+            expected: { deadWindow: { untilMs: NOW + 120_000 } },
+        },
+        {
+            name: "opens a dead window of a chosen length and reload budget",
+            act: (api: Api) => api.deadWindow({ seconds: 30, healAfterBoots: 0 }),
+            expected: { deadWindow: { untilMs: NOW + 30_000, healAfterBoots: 0 } },
+        },
+        {
+            name: "answers plain 401s for a minute by default",
+            act: (api: Api) => api.plain401(),
+            expected: { plain401: { untilMs: NOW + 60_000 } },
+        },
+        {
+            name: "answers plain 401s for a chosen number of seconds",
+            act: (api: Api) => api.plain401(5),
+            expected: { plain401: { untilMs: NOW + 5_000 } },
+        },
+        {
+            name: "slows every ADO request",
+            act: (api: Api) => api.slowApi(250),
+            expected: { slowApiMs: 250 },
+        },
+        {
+            name: "slows only the next few ADO requests",
+            act: (api: Api) => api.slowApi(16_000, 1),
+            expected: { slowApiMs: 16_000, slowApiRemaining: 1 },
+        },
+        {
+            name: "hides the page for a chosen number of seconds",
+            act: (api: Api) => api.hidden(20),
+            expected: { hiddenUntilMs: NOW + 20_000 },
+        },
+        {
+            name: "fails the next write",
+            act: (api: Api) => api.failNextWrite(),
+            expected: { failNextWrite: true },
+        },
+    ])("$name", ({ act, expected }) => {
+        const api = faultsApi(deps());
+
+        act(api);
+
+        expect(api.status()).toEqual(expected);
+    });
+
+    it("turning the slowdown off also forgets its request limit", () => {
+        const api = faultsApi(deps());
+        api.slowApi(16_000, 1);
+
+        api.slowApi(0);
+
+        expect(api.status()).toEqual({});
+    });
+
+    it("clears every fault from sessionStorage", () => {
         const d = deps();
         const api = faultsApi(d);
-        expect(api.deadWindow()).toEqual({
-            deadWindow: { untilMs: NOW + 120_000 },
-        });
-        api.deadWindow({ seconds: 30, healAfterBoots: 0 });
-        expect(api.status().deadWindow).toEqual({
-            untilMs: NOW + 30_000,
-            healAfterBoots: 0,
-        });
-        api.plain401();
-        expect(api.status().plain401).toEqual({ untilMs: NOW + 60_000 });
-        api.plain401(5);
-        expect(api.status().plain401).toEqual({ untilMs: NOW + 5_000 });
+        api.deadWindow();
         api.slowApi(250);
-        expect(api.status().slowApiMs).toBe(250);
-        api.slowApi(16_000, 1);
-        expect(api.status()).toMatchObject({
-            slowApiMs: 16_000,
-            slowApiRemaining: 1,
-        });
-        api.slowApi(0);
-        expect(api.status().slowApiMs).toBeUndefined();
-        expect(api.status().slowApiRemaining).toBeUndefined();
-        api.hidden(20);
-        expect(api.status().hiddenUntilMs).toBe(NOW + 20_000);
         api.failNextWrite();
-        expect(api.status().failNextWrite).toBe(true);
+
         api.clear();
+
         expect(api.status()).toEqual({});
         expect(d.storage.map.size).toBe(0);
     });
 });
-
 describe("simulateHidden", () => {
     afterEach(() => {
         delete (document as { visibilityState?: unknown }).visibilityState;

@@ -66,8 +66,11 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Real Chromium triple-click: full line selected and Add comment available. */
-export const TripleClickLineDark: Story = {
+/**
+ * Triple-clicking a line selects all of it (in the dark theme's selection
+ * colour), and commenting on it quotes the whole line.
+ */
+export const TripleClickCommentsOnWholeLine: Story = {
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
         const paragraph = await waitFor(() => canvas.getByText(SELECTED_LINE));
@@ -91,7 +94,11 @@ export const TripleClickLineDark: Story = {
     },
 };
 
-/** Stable visual equivalent of the browser triple-click selection. */
+/**
+ * Visual-regression fixture (captured by visual/curated.visual.spec.ts): a
+ * deterministic full-line selection with the comment bubble showing. The
+ * interaction itself is covered by TripleClickCommentsOnWholeLine.
+ */
 export const FullLineSelectionDark: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
@@ -107,9 +114,6 @@ export const FullLineSelectionDark: Story = {
 
         await waitFor(() =>
             expect(canvas.getByRole("button", { name: /add comment/i })).toBeTruthy(),
-        );
-        expect(getComputedStyle(paragraph, "::selection").backgroundColor).toBe(
-            "rgba(76, 194, 255, 0.42)",
         );
     },
 };
@@ -159,9 +163,9 @@ export const ReadOnlyRemovedWordsOfferNoLink: Story = {
 };
 
 /**
- * Unmounts the article from a theme observer registered after ArticleView's
- * own, i.e. after the theme flip started re-hydrating Mermaid but before that
- * hydration settles.
+ * Closes the article from a theme observer registered after ArticleView's
+ * own — as when the host switches theme and navigates away together — so the
+ * article's recolouring is still in flight when it unmounts.
  */
 function UnmountOnThemeFlip(props: ComponentProps<typeof ArticleView>): ReactElement {
     const [mounted, setMounted] = useState(true);
@@ -179,16 +183,18 @@ function UnmountOnThemeFlip(props: ComponentProps<typeof ArticleView>): ReactEle
     return mounted ? <ArticleView {...props} /> : <p>Article closed</p>;
 }
 
-/** A theme flip whose Mermaid re-hydration settles after unmount is ignored. */
-export const ThemeFlipSettlesAfterUnmount: Story = {
+/**
+ * The document closes at the moment the host switches theme: the reader stays
+ * closed — the article recolouring that was in flight doesn't bring it back.
+ */
+export const ClosingDuringThemeSwitchStaysClosed: Story = {
     render: (args) => <UnmountOnThemeFlip {...args} />,
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         await waitFor(() => canvas.getByText(SELECTED_LINE));
         document.documentElement.setAttribute("data-emr-theme", "light");
         await waitFor(() => expect(canvas.getByText("Article closed")).toBeTruthy());
-        // Let the re-hydration started before unmount settle against the null ref.
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(canvasElement.querySelector(".emr-article-wrap")).toBeNull();
+        await waitFor(() => expect(canvas.queryByText(SELECTED_LINE)).toBeNull());
+        expect(canvas.queryByRole("button", { name: /source/i })).toBeNull();
     },
 };

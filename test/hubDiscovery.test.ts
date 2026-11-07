@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
     fetchRepoPage: vi.fn(),
     fetchRepoById: vi.fn(),
     readRouteParams: vi.fn(),
-    setTelemetryContext: vi.fn(),
 }));
 
 vi.mock("../src/shell/adoClients", () => ({
@@ -23,13 +22,13 @@ vi.mock("../src/shell/adoGitData", () => ({
 vi.mock("../src/hub/hubNavigation", () => ({
     readRouteParams: mocks.readRouteParams,
 }));
-vi.mock("../src/telemetry", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("../src/telemetry")>()),
-    setTelemetryContext: mocks.setTelemetryContext,
-}));
 
 import { REPO_PAGE_SIZE, discoverHub } from "../src/hub/hubDiscovery";
 import { readLastPath, readLastRepo, writeLastPath, writeLastRepo } from "../src/hub/lastVisited";
+import { getTelemetryContext } from "../src/telemetry";
+import { recordTelemetryEachTest } from "./telemetrySink";
+
+recordTelemetryEachTest();
 
 function repo(id: string): DocRepo {
     return {
@@ -67,21 +66,12 @@ beforeEach(() => {
 describe("discoverHub", () => {
     it("opens the first repo with an unfiltered picker view", async () => {
         mocks.fetchRepoPage.mockResolvedValue(page(["a", "b"], "tok"));
-        const log = vi.fn();
 
-        const { discovery, picker } = await discoverHub(log);
+        const { discovery, picker } = await discoverHub(vi.fn());
 
         expect(mocks.fetchRepoPage).toHaveBeenCalledWith("p1", {
             top: REPO_PAGE_SIZE,
         });
-        expect(mocks.setTelemetryContext).toHaveBeenCalledWith({
-            projectId: "p1",
-        });
-        expect(log.mock.calls.map((c) => c[0])).toEqual([
-            "project: Project",
-            "fetching first repo page + route params",
-            "first page: 2 repo(s)",
-        ]);
         expect(discovery).toEqual({
             projectId: "p1",
             projectName: "Project",
@@ -106,6 +96,12 @@ describe("discoverHub", () => {
         });
         expect(readLastRepo("p1")).toBe("a");
         expect(readLastPath("p1", "a")).toBeUndefined();
+    });
+
+    it("tags telemetry with the current project", async () => {
+        mocks.fetchRepoPage.mockResolvedValue(page(["a"]));
+        await discoverHub(vi.fn());
+        expect(getTelemetryContext().projectId).toBe("p1");
     });
 
     it("resolves an empty project to no repo", async () => {

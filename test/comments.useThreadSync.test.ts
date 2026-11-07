@@ -16,16 +16,9 @@ import {
 } from "../src/comments/useThreadSync";
 import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 import type { CommentThread } from "../src/types";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 // React 18 sets this so `act` can run synchronously in jsdom.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -170,7 +163,6 @@ afterEach(() => {
     unmount();
     vi.useRealTimers();
     setVisibility("visible");
-    trackUserFacingErrorMock.mockClear();
 });
 
 describe("useThreadSync — gating", () => {
@@ -467,7 +459,7 @@ describe("useThreadSync — refreshNow + isRefreshing", () => {
 });
 
 describe("useThreadSync — error handling", () => {
-    it("forwards thrown errors to onError without rejecting", async () => {
+    it("hands a failed first load to onError and reports the degraded refresh", async () => {
         const onError = vi.fn();
         const boom = new Error("network down");
 
@@ -480,12 +472,14 @@ describe("useThreadSync — error handling", () => {
         await flush();
         expect(onThreads).not.toHaveBeenCalled();
         expect(onError).toHaveBeenCalledWith(boom);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: boom,
-            source: "ThreadSync.poll",
-            operation: "comments-refresh",
-            impact: "degraded",
-        });
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: boom,
+                source: "ThreadSync.poll",
+                operation: "comments-refresh",
+                impact: "degraded",
+            }),
+        ]);
     });
 
     it("falls back to console.warn when onError is not provided", async () => {
@@ -540,7 +534,7 @@ describe("useThreadSync — failure backoff", () => {
         await tick(4_000);
         expect(fetchThreads).toHaveBeenCalledTimes(5);
 
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+        expect(telemetry.current.userFacingErrors()).toHaveLength(1);
     });
 
     it("returns to the normal cadence after a success and reports a new streak again", async () => {
@@ -577,9 +571,9 @@ describe("useThreadSync — failure backoff", () => {
         // A new background streak reports on its second failure, not its first.
         fail = true;
         await tick(1_000);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+        expect(telemetry.current.userFacingErrors()).toHaveLength(1);
         await tick(1_000);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+        expect(telemetry.current.userFacingErrors()).toHaveLength(2);
     });
 
     // Production: lone `TF400893` network blips on a background poll were
@@ -609,7 +603,7 @@ describe("useThreadSync — failure backoff", () => {
         fail = false;
         await tick(1_000);
         expect(fetchThreads).toHaveBeenCalledTimes(3);
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     it("reports a failed manual refresh at once, even mid-healthy", async () => {
@@ -636,7 +630,7 @@ describe("useThreadSync — failure backoff", () => {
             handle.controls!.refreshNow();
         });
         await flush();
-        expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+        expect(telemetry.current.userFacingErrors()).toHaveLength(1);
     });
 
     describe("claimFailure", () => {
@@ -681,7 +675,7 @@ describe("useThreadSync — failure backoff", () => {
             });
             await flush();
             expect(claimFailure).toHaveBeenLastCalledWith(expect.any(SessionRefreshingError), true);
-            expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+            expect(telemetry.current.userFacingErrors()).toEqual([]);
         });
 
         it("treats a failure before anything has loaded as one the user waits on", async () => {
@@ -700,7 +694,7 @@ describe("useThreadSync — failure backoff", () => {
             await flush();
             expect(claimFailure).toHaveBeenCalledWith(boom, true);
             // Not claimed → the poller reports it as usual.
-            expect(trackUserFacingErrorMock).toHaveBeenCalledOnce();
+            expect(telemetry.current.userFacingErrors()).toHaveLength(1);
         });
     });
 
@@ -873,17 +867,30 @@ describe("nextPollDelayMs", () => {
         expect(nextPollDelayMs({ ...base, failureStreak: 3, maxBackoffMs: 1_000 })).toBe(30_000);
     });
 
-    it("waits until just after recoverAtMs, clamped to [interval, 11 min]", () => {
-        const at = (offsetMs: number) =>
+    it.each([
+        {
+            name: "just after a recovery 4 minutes away",
+            offsetMs: 4 * 60_000,
+            delay: 4 * 60_000 + RECOVER_BUFFER_MS,
+        },
+        {
+            name: "the normal interval when recovery already passed",
+            offsetMs: -60_000,
+            delay: 30_000,
+        },
+        {
+            name: "at most the cap for a recovery an hour away",
+            offsetMs: 60 * 60_000,
+            delay: MAX_RECOVER_WAIT_MS,
+        },
+    ])("waits $name", ({ offsetMs, delay }) => {
+        expect(
             nextPollDelayMs({
                 ...base,
                 failureStreak: 1,
                 error: { recoverAtMs: base.nowMs + offsetMs },
-            });
-
-        expect(at(4 * 60_000)).toBe(4 * 60_000 + RECOVER_BUFFER_MS);
-        expect(at(-60_000)).toBe(30_000);
-        expect(at(60 * 60_000)).toBe(MAX_RECOVER_WAIT_MS);
+            }),
+        ).toBe(delay);
     });
 
     // Review finding: when the host never re-mints, the token is past its AAD
@@ -911,10 +918,13 @@ describe("nextPollDelayMs", () => {
         ).toBe(8 * 60_000 + RECOVER_BUFFER_MS);
     });
 
-    it("ignores a recoverAtMs hint that isn't a finite number", () => {
-        for (const error of [{ recoverAtMs: "soon" }, { recoverAtMs: NaN }, null, "x"]) {
-            expect(nextPollDelayMs({ ...base, failureStreak: 2, error })).toBe(60_000);
-        }
+    it.each([
+        ["a non-numeric recoverAtMs", { recoverAtMs: "soon" }],
+        ["a NaN recoverAtMs", { recoverAtMs: NaN }],
+        ["a null error", null],
+        ["a string error", "x"],
+    ])("ignores the recovery hint on %s and keeps backing off", (_label, error) => {
+        expect(nextPollDelayMs({ ...base, failureStreak: 2, error })).toBe(60_000);
     });
 });
 
@@ -1130,6 +1140,6 @@ describe("useThreadSync — torn-down and stale sessions", () => {
             await Promise.resolve();
         });
         expect(onError).not.toHaveBeenCalled();
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 });

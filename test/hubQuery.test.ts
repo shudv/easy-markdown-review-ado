@@ -26,11 +26,13 @@ describe("parseHubQuery", () => {
         });
     });
 
-    it("returns null when a required key is missing", () => {
-        expect(parseHubQuery({})).toBeNull();
-        expect(parseHubQuery({ emrRepo: "r", emrProj: "p" })).toBeNull();
-        expect(parseHubQuery({ emrRepo: "r", emrPath: "/x.md" })).toBeNull();
-        expect(parseHubQuery({ emrProj: "p", emrPath: "/x.md" })).toBeNull();
+    it.each<{ name: string; query: Record<string, string> }>([
+        { name: "an empty query", query: {} },
+        { name: "a query without a path", query: { emrRepo: "r", emrProj: "p" } },
+        { name: "a query without a project", query: { emrRepo: "r", emrPath: "/x.md" } },
+        { name: "a query without a repo", query: { emrProj: "p", emrPath: "/x.md" } },
+    ])("has no target for $name", ({ query }) => {
+        expect(parseHubQuery(query)).toBeNull();
     });
 
     it("maps empty optional values to undefined", () => {

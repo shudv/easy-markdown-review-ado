@@ -72,16 +72,12 @@ describe("withDeepLinkTarget — comment", () => {
         expect(new URL(out!).searchParams.get("comment")).toBe("t-9");
     });
 
-    it("returns undefined for an empty base URL", () => {
-        expect(withDeepLinkTarget("", comment("t-1"))).toBeUndefined();
-    });
-
-    it("returns undefined for a blank thread id", () => {
-        expect(withDeepLinkTarget("https://example.com/x", comment("   "))).toBeUndefined();
-    });
-
-    it("returns undefined for an unparseable base URL", () => {
-        expect(withDeepLinkTarget("not a url", comment("t-1"))).toBeUndefined();
+    it.each([
+        { name: "an empty base URL", base: "", threadId: "t-1" },
+        { name: "a blank thread id", base: "https://example.com/x", threadId: "   " },
+        { name: "an unparseable base URL", base: "not a url", threadId: "t-1" },
+    ])("offers no link for $name", ({ base, threadId }) => {
+        expect(withDeepLinkTarget(base, comment(threadId))).toBeUndefined();
     });
 });
 
@@ -120,22 +116,15 @@ describe("readCommentParam", () => {
         expect(readCommentParam({ comment: "  t-3  " })).toBe("t-3");
     });
 
-    it("returns undefined when the param is absent", () => {
-        expect(readCommentParam({ path: "docs/a.md" })).toBeUndefined();
-    });
-
-    it("returns undefined for a blank value", () => {
-        expect(readCommentParam({ comment: "   " })).toBeUndefined();
-    });
-
-    it("returns undefined for a non-string value", () => {
-        // The host can hand back odd shapes; guard defensively.
-        expect(readCommentParam({ comment: undefined })).toBeUndefined();
-    });
-
-    it("returns undefined for null / undefined params", () => {
-        expect(readCommentParam(null)).toBeUndefined();
-        expect(readCommentParam(undefined)).toBeUndefined();
+    // The host can hand back odd shapes, so each of these must read as "no target".
+    it.each([
+        { name: "the param is absent", params: { path: "docs/a.md" } },
+        { name: "the value is blank", params: { comment: "   " } },
+        { name: "the value is not a string", params: { comment: undefined } },
+        { name: "the params are null", params: null },
+        { name: "there are no params", params: undefined },
+    ])("finds no comment when $name", ({ params }) => {
+        expect(readCommentParam(params)).toBeUndefined();
     });
 });
 
@@ -144,18 +133,21 @@ describe("readAnchorParam", () => {
         expect(readAnchorParam({ anchor: "classifiers-&-hashing" })).toBe("classifiers-&-hashing");
     });
 
-    it("tolerates a leading # pasted from an in-page link", () => {
-        expect(readAnchorParam({ anchor: "#goals" })).toBe("goals");
-        expect(readAnchorParam({ anchor: "##goals" })).toBe("goals");
-        // Only LEADING #s are stripped.
-        expect(readAnchorParam({ anchor: "c#-notes" })).toBe("c#-notes");
+    it.each([
+        { name: "a leading # pasted from an in-page link", anchor: "#goals", expected: "goals" },
+        { name: "repeated leading #s", anchor: "##goals", expected: "goals" },
+        { name: "a # inside the anchor, kept", anchor: "c#-notes", expected: "c#-notes" },
+    ])("tolerates $name", ({ anchor, expected }) => {
+        expect(readAnchorParam({ anchor })).toBe(expected);
     });
 
-    it("returns undefined when absent, blank, or only #", () => {
-        expect(readAnchorParam({})).toBeUndefined();
-        expect(readAnchorParam({ anchor: "  " })).toBeUndefined();
-        expect(readAnchorParam({ anchor: "#" })).toBeUndefined();
-        expect(readAnchorParam(null)).toBeUndefined();
+    it.each([
+        { name: "the param is absent", params: {} },
+        { name: "the value is blank", params: { anchor: "  " } },
+        { name: "the value is only #", params: { anchor: "#" } },
+        { name: "the params are null", params: null },
+    ])("finds no anchor when $name", ({ params }) => {
+        expect(readAnchorParam(params)).toBeUndefined();
     });
 });
 
@@ -164,16 +156,20 @@ describe("readPathParam", () => {
         expect(readPathParam({ path: "docs/a.md" })).toBe("/docs/a.md");
     });
 
-    it("keeps ADO's leading-slash form (collapsing repeats)", () => {
-        expect(readPathParam({ path: "/docs/a.md" })).toBe("/docs/a.md");
-        expect(readPathParam({ path: "//docs/a.md" })).toBe("/docs/a.md");
+    it.each([
+        { name: "keeps ADO's leading-slash form", path: "/docs/a.md" },
+        { name: "collapses repeated leading slashes", path: "//docs/a.md" },
+    ])("$name", ({ path }) => {
+        expect(readPathParam({ path })).toBe("/docs/a.md");
     });
 
-    it("returns undefined when absent, blank, or only slashes", () => {
-        expect(readPathParam({})).toBeUndefined();
-        expect(readPathParam({ path: " " })).toBeUndefined();
-        expect(readPathParam({ path: "/" })).toBeUndefined();
-        expect(readPathParam(undefined)).toBeUndefined();
+    it.each([
+        { name: "the param is absent", params: {} },
+        { name: "the value is blank", params: { path: " " } },
+        { name: "the value is only a slash", params: { path: "/" } },
+        { name: "there are no params", params: undefined },
+    ])("finds no path when $name", ({ params }) => {
+        expect(readPathParam(params)).toBeUndefined();
     });
 });
 
@@ -238,9 +234,11 @@ describe("readTextParam", () => {
         expect(readTextParam({ text: " pre-,quote " })).toBe("pre-,quote");
     });
 
-    it("returns undefined when absent or blank", () => {
-        expect(readTextParam({})).toBeUndefined();
-        expect(readTextParam({ text: "  " })).toBeUndefined();
-        expect(readTextParam(null)).toBeUndefined();
+    it.each([
+        { name: "the param is absent", params: {} },
+        { name: "the value is blank", params: { text: "  " } },
+        { name: "the params are null", params: null },
+    ])("finds no text when $name", ({ params }) => {
+        expect(readTextParam(params)).toBeUndefined();
     });
 });

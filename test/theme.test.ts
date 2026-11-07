@@ -1,4 +1,5 @@
-// Tests for the theme module's pure helpers AND DOM side-effects.
+// Tests for the theme module's DOM side-effects: mirroring the Azure DevOps host
+// theme onto <html> and keeping it in sync as the host changes.
 //
 // @vitest-environment jsdom
 
@@ -6,482 +7,319 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyTheme, refreshHostTheme, resolveHostTheme, syncHostTheme } from "../src/theme/theme";
 
-describe("applyTheme", () => {
-    beforeEach(() => {
-        document.documentElement.removeAttribute("data-emr-theme");
-    });
+type MatchMediaWindow = { matchMedia?: typeof window.matchMedia };
 
-    it("sets the data-emr-theme attribute on <html> for a known theme", () => {
-        // Real theme ids so the resolved light/dark styling is applied, not just
-        // the attribute write.
-        applyTheme("light");
-        expect(document.documentElement.getAttribute("data-emr-theme")).toBe("light");
-        applyTheme("dark");
-        expect(document.documentElement.getAttribute("data-emr-theme")).toBe("dark");
-    });
+const restores: Array<() => void> = [];
 
-    it("writes an unknown theme id through to the attribute without throwing", () => {
-        // The function is typed against EmrTheme; cast through unknown so we can
-        // pass an unrecognized id. An unknown theme still writes through to the
-        // attribute without throwing (it just resolves to a light default). The
-        // markdown-darkness side-effect (setMarkdownDark(false)) is a
-        // stylesheet swap that resolves to empty under vitest's `?raw`
-        // handling, so it's not observable here — we assert only the
-        // attribute write-through, which is the testable contract.
-        applyTheme("brand-new-theme" as unknown as Parameters<typeof applyTheme>[0]);
-        expect(document.documentElement.getAttribute("data-emr-theme")).toBe("brand-new-theme");
-    });
+afterEach(() => {
+    restores
+        .splice(0)
+        .reverse()
+        .forEach((restore) => restore());
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute("data-emr-theme");
+    document.body.className = "";
 });
 
-describe("syncHostTheme", () => {
-    let disconnect: () => void = () => {};
+const themeAttribute = () => document.documentElement.getAttribute("data-emr-theme");
 
-    afterEach(() => {
-        disconnect();
-    });
-
-    it("returns an unsubscribe function and disconnects without throwing", () => {
-        const stop = syncHostTheme();
-        expect(typeof stop).toBe("function");
-        disconnect = stop;
-        expect(() => stop()).not.toThrow();
-    });
-
-    it("re-evaluates when body attributes mutate", async () => {
-        // Provide a deterministic computed background via stubbing
-        // getComputedStyle. We use a 'spy' rather than vi.stubGlobal to
-        // restore the jsdom default cleanly.
-        const original = globalThis.getComputedStyle;
-        let lumaSignal = "rgb(255, 255, 255)"; // light
-
-        const stub = vi.fn((_el: Element) => ({
-            getPropertyValue: (prop: string) => (prop === "--background-color" ? lumaSignal : ""),
-            backgroundColor: lumaSignal,
-        })) as unknown as typeof getComputedStyle;
-
-        globalThis.getComputedStyle = stub;
-
-        try {
-            const stop = syncHostTheme();
-            disconnect = stop;
-            // Initial pass evaluates light → no `data-emr-markdown-theme` darkness.
-            // Flip to a dark colour and trigger a body class mutation.
-            lumaSignal = "rgb(10, 10, 10)";
-            document.body.className = "vss-theme-dark";
-            // MutationObserver in jsdom is async (microtask).
-            await new Promise<void>((resolve) => queueMicrotask(resolve));
-
-            // The managed <style> tag should now be installed.
-            const styleEl = document.head.querySelector("style[data-emr-markdown-theme]");
-
-            expect(styleEl).not.toBeNull();
-        } finally {
-            globalThis.getComputedStyle = original;
-        }
-    });
-
-    it("re-evaluates when a watched media query fires its change event", () => {
-        // Capture the `change` listeners syncHostTheme registers on each media
-        // query so we can fire one directly — this exercises the live-update
-        // handler that flips the theme when the OS toggles colour scheme.
-        const changeHandlers: Array<() => void> = [];
-
-        const originalMM = (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-
-        (window as unknown as { matchMedia: typeof window.matchMedia }).matchMedia = vi.fn(
-            (query: string) => ({
-                matches: false,
-                media: query,
-                addEventListener: (_type: string, cb: () => void) => changeHandlers.push(cb),
-                removeEventListener: () => {},
-                addListener: () => {},
-                removeListener: () => {},
-                onchange: null,
-                dispatchEvent: () => false,
-            }),
-        ) as unknown as typeof window.matchMedia;
-
-        let lumaForHandlerTest = "rgb(255, 255, 255)"; // light at registration
-        const restoreCS = stubComputedBackground(() => lumaForHandlerTest);
-
-        try {
-            const stop = syncHostTheme();
-            disconnect = stop;
-            expect(changeHandlers.length).toBeGreaterThan(0);
-            document.documentElement.removeAttribute("data-emr-theme");
-            // Flip the host to dark, then fire the captured media-query change.
-            lumaForHandlerTest = "rgb(10, 10, 10)";
-            changeHandlers.forEach((h) => h());
-            expect(document.documentElement.getAttribute("data-emr-theme")).toBe("dark");
-        } finally {
-            restoreCS();
-
-            if (originalMM) {
-                (window as { matchMedia?: typeof window.matchMedia }).matchMedia = originalMM;
-            } else {
-                delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-            }
-        }
-    });
-});
-
-// Helpers shared by the high-contrast / live-update tests below.
-function stubComputedBackground(
-    getColor: () => string,
-    getPrimary: () => string = () => "",
-): () => void {
+/** Stub the host's injected background colour and accent (`--palette-primary`). */
+function stubHostColors(getBackground: () => string, getPrimary: () => string = () => ""): void {
     const original = globalThis.getComputedStyle;
     globalThis.getComputedStyle = vi.fn((_el: Element) => ({
         getPropertyValue: (prop: string) =>
             prop === "--background-color"
-                ? getColor()
+                ? getBackground()
                 : prop === "--palette-primary"
                   ? getPrimary()
                   : "",
-        backgroundColor: getColor(),
+        backgroundColor: getBackground(),
     })) as unknown as typeof getComputedStyle;
-
-    return () => {
+    restores.push(() => {
         globalThis.getComputedStyle = original;
-    };
+    });
 }
 
-function stubMatchMedia(
-    isForced: () => boolean,
-    prefersDark: () => boolean = () => false,
-): () => void {
-    const original = (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
+/** Replace `window.matchMedia` (or remove it, with `undefined`). */
+function replaceMatchMedia(matchMedia: unknown): void {
+    const original = (window as MatchMediaWindow).matchMedia;
 
-    (window as unknown as { matchMedia: typeof window.matchMedia }).matchMedia = vi.fn(
-        (query: string) => ({
+    if (matchMedia === undefined) {
+        delete (window as MatchMediaWindow).matchMedia;
+    } else {
+        (window as unknown as { matchMedia: unknown }).matchMedia = matchMedia;
+    }
+
+    restores.push(() => {
+        if (original) {
+            (window as MatchMediaWindow).matchMedia = original;
+        } else {
+            delete (window as MatchMediaWindow).matchMedia;
+        }
+    });
+}
+
+/** Stub the OS signals: forced-colors (Windows High Contrast) and dark preference. */
+function stubOsColors(
+    forced: boolean,
+    prefersDark = false,
+    onChange: (handler: () => void) => void = () => {},
+): void {
+    replaceMatchMedia(
+        vi.fn((query: string) => ({
             matches: query.includes("forced-colors")
-                ? isForced()
-                : query.includes("prefers-color-scheme: dark")
-                  ? prefersDark()
-                  : false,
+                ? forced
+                : query.includes("prefers-color-scheme: dark") && prefersDark,
             media: query,
-            addEventListener: () => {},
+            addEventListener: (_type: string, handler: () => void) => onChange(handler),
             removeEventListener: () => {},
             addListener: () => {},
             removeListener: () => {},
             onchange: null,
             dispatchEvent: () => false,
-        }),
-    ) as unknown as typeof window.matchMedia;
-
-    return () => {
-        if (original) {
-            (window as { matchMedia?: typeof window.matchMedia }).matchMedia = original;
-        } else {
-            delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-        }
-    };
+        })),
+    );
 }
 
+describe("applyTheme", () => {
+    it.each(["light", "dark"] as const)("marks <html> with the %s theme", (theme) => {
+        applyTheme(theme);
+
+        expect(themeAttribute()).toBe(theme);
+    });
+
+    it("writes an unknown theme id through without throwing", () => {
+        applyTheme("brand-new-theme" as unknown as Parameters<typeof applyTheme>[0]);
+
+        expect(themeAttribute()).toBe("brand-new-theme");
+    });
+});
+
 describe("resolveHostTheme", () => {
-    it("mirrors dark/light by background luminance when not high-contrast", () => {
-        const restoreCS = stubComputedBackground(() => "rgb(255, 255, 255)");
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
-
-        const restoreCS2 = stubComputedBackground(() => "rgb(10, 10, 10)");
-        const restoreMM2 = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("dark");
-        } finally {
-            restoreCS2();
-            restoreMM2();
-        }
-    });
-
-    it("upgrades to the high-contrast palette under forced-colors, taking dark/light from prefers-color-scheme", () => {
+    it.each([
+        {
+            name: "mirrors a light host background as light",
+            background: "rgb(255, 255, 255)",
+            expected: "light",
+        },
+        {
+            name: "mirrors a dark host background as dark",
+            background: "rgb(10, 10, 10)",
+            expected: "dark",
+        },
+        {
+            name: "treats a host without a background colour as light",
+            background: "",
+            expected: "light",
+        },
         // Real ADO behaviour: under forced-colors the host FREEZES the injected
-        // `--background-color` at the pre-HC theme's value (light here), so the
-        // background can't tell HC-dark from HC-light. Darkness must come from the
-        // OS `prefers-color-scheme`. Regression guard for the bug where a dark
-        // high-contrast desktop resolved to `hc-light` (white) because the frozen
-        // background read as light.
-        const restoreCS = stubComputedBackground(() => "rgb(255, 255, 255)");
-
-        const restoreMM = stubMatchMedia(
-            () => true,
-            () => true,
-        );
-
-        try {
-            expect(resolveHostTheme()).toBe("hc-dark");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
-
-        const restoreCS2 = stubComputedBackground(() => "rgb(255, 255, 255)");
-
-        const restoreMM2 = stubMatchMedia(
-            () => true,
-            () => false,
-        );
-
-        try {
-            expect(resolveHostTheme()).toBe("hc-light");
-        } finally {
-            restoreCS2();
-            restoreMM2();
-        }
-    });
-
-    it("upgrades to hc-light when ADO's picker mirrors an achromatic primary (forced-colors stays false)", () => {
+        // `--background-color` at the pre-HC theme's value, so darkness must come
+        // from the OS `prefers-color-scheme`. Regression guard for a dark
+        // high-contrast desktop that resolved to `hc-light` (white).
+        {
+            name: "uses the OS dark preference under forced colors, despite a frozen light background",
+            background: "rgb(255, 255, 255)",
+            forced: true,
+            prefersDark: true,
+            expected: "hc-dark",
+        },
+        {
+            name: "uses the OS light preference under forced colors",
+            background: "rgb(255, 255, 255)",
+            forced: true,
+            expected: "hc-light",
+        },
         // ADO's in-app HC theme is delivered as CSS vars, not OS forced-colors: the
-        // accent collapses to grey (`--palette-primary` 0,0,0) and a real HC
-        // background is injected, so luminance still resolves light vs dark.
-        const restoreCS = stubComputedBackground(
-            () => "rgb(255, 255, 255)",
-            () => "0, 0, 0",
+        // accent collapses to grey and a real HC background is injected.
+        {
+            name: "detects ADO's high-contrast picker from an achromatic accent on light",
+            background: "rgb(255, 255, 255)",
+            primary: "0, 0, 0",
+            expected: "hc-light",
+        },
+        {
+            name: "detects ADO's high-contrast picker from an achromatic accent on dark",
+            background: "rgb(0, 0, 0)",
+            primary: "255, 255, 255",
+            expected: "hc-dark",
+        },
+        {
+            name: "stays on the regular palette when the accent is coloured",
+            background: "rgb(255, 255, 255)",
+            primary: "0, 120, 212",
+            expected: "light",
+        },
+    ])("$name", ({ background, primary = "", forced = false, prefersDark = false, expected }) => {
+        stubHostColors(
+            () => background,
+            () => primary,
         );
+        stubOsColors(forced, prefersDark);
 
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("hc-light");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
-    });
-
-    it("upgrades to hc-dark when the achromatic primary sits on a dark background", () => {
-        const restoreCS = stubComputedBackground(
-            () => "rgb(0, 0, 0)",
-            () => "255, 255, 255",
-        );
-
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("hc-dark");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
-    });
-
-    it("stays on the regular palette when the primary is coloured", () => {
-        const restoreCS = stubComputedBackground(
-            () => "rgb(255, 255, 255)",
-            () => "0, 120, 212",
-        );
-
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
+        expect(resolveHostTheme()).toBe(expected);
     });
 });
 
 describe("refreshHostTheme", () => {
-    afterEach(() => {
-        document.documentElement.removeAttribute("data-emr-theme");
-    });
-
     it("re-mirrors the host theme onto <html> on demand", () => {
-        const restoreCS = stubComputedBackground(() => "rgb(12, 12, 12)");
-        const restoreMM = stubMatchMedia(() => false);
+        stubHostColors(() => "rgb(12, 12, 12)");
+        stubOsColors(false);
 
-        try {
-            refreshHostTheme();
-            expect(document.documentElement.getAttribute("data-emr-theme")).toBe("dark");
+        refreshHostTheme();
 
-            const styleEl = document.head.querySelector("style[data-emr-markdown-theme]");
-
-            expect(styleEl).not.toBeNull();
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
+        expect(themeAttribute()).toBe("dark");
+        expect(document.head.querySelector("style[data-emr-markdown-theme]")).not.toBeNull();
     });
 });
 
-describe("syncHostTheme — live themeApplied trigger", () => {
-    afterEach(() => {
-        document.documentElement.removeAttribute("data-emr-theme");
+describe("syncHostTheme", () => {
+    let background = "rgb(255, 255, 255)";
+
+    beforeEach(() => {
+        background = "rgb(255, 255, 255)";
+        stubHostColors(() => background);
     });
 
-    it("re-evaluates when the SDK dispatches a themeApplied event", () => {
-        let signal = "rgb(255, 255, 255)"; // light
-        const restoreCS = stubComputedBackground(() => signal);
-        const restoreMM = stubMatchMedia(() => false);
+    it("mirrors the host theme straight away", () => {
+        stubOsColors(false);
+
+        restores.push(syncHostTheme());
+
+        expect(themeAttribute()).toBe("light");
+    });
+
+    it("follows a live host theme switch announced by the SDK's themeApplied event", () => {
+        // A reload is NOT required: the themeApplied window event drives the re-sync.
+        stubOsColors(false);
+        restores.push(syncHostTheme());
+
+        background = "rgb(8, 8, 8)";
+        window.dispatchEvent(new Event("themeApplied"));
+
+        expect(themeAttribute()).toBe("dark");
+    });
+
+    it("follows the host when it swaps the body's theme class", async () => {
+        restores.push(syncHostTheme());
+
+        background = "rgb(10, 10, 10)";
+        document.body.className = "vss-theme-dark";
+        // MutationObserver in jsdom is async (microtask).
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+        expect(themeAttribute()).toBe("dark");
+    });
+
+    it("follows the OS colour scheme as soon as it changes", () => {
+        const onChange: Array<() => void> = [];
+        stubOsColors(false, false, (handler) => onChange.push(handler));
+        restores.push(syncHostTheme());
+
+        background = "rgb(10, 10, 10)";
+        onChange[0]!();
+
+        expect(themeAttribute()).toBe("dark");
+    });
+
+    it("stops following the host once unsubscribed", () => {
+        stubOsColors(false);
         const stop = syncHostTheme();
 
-        try {
-            expect(document.documentElement.getAttribute("data-emr-theme")).toBe("light");
-            // Host flips to dark and the SDK re-applies the theme: a reload is
-            // NOT required — the themeApplied window event drives the re-sync.
-            signal = "rgb(8, 8, 8)";
-            window.dispatchEvent(new Event("themeApplied"));
-            expect(document.documentElement.getAttribute("data-emr-theme")).toBe("dark");
-        } finally {
-            stop();
-            restoreCS();
-            restoreMM();
-        }
+        stop();
+        background = "rgb(8, 8, 8)";
+        window.dispatchEvent(new Event("themeApplied"));
+
+        expect(themeAttribute()).toBe("light");
     });
 });
 
 describe("theme resolution under hostile environments", () => {
-    it("treats the host as light when getComputedStyle throws", () => {
+    it("treats the host as light when getComputedStyle throws (detached frame)", () => {
         const original = globalThis.getComputedStyle;
         globalThis.getComputedStyle = (() => {
             throw new Error("detached frame");
         }) as unknown as typeof getComputedStyle;
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
+        restores.push(() => {
             globalThis.getComputedStyle = original;
-            restoreMM();
-        }
-    });
+        });
+        stubOsColors(false);
 
-    it("still subscribes (and cleans up) when matchMedia throws", () => {
-        const original = (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-
-        (window as unknown as { matchMedia: typeof window.matchMedia }).matchMedia = (() => {
-            throw new Error("unsupported query");
-        }) as unknown as typeof window.matchMedia;
-
-        try {
-            let stop: () => void = () => {};
-            expect(() => {
-                stop = syncHostTheme();
-            }).not.toThrow();
-            expect(typeof stop).toBe("function");
-            expect(() => stop()).not.toThrow();
-        } finally {
-            if (original) {
-                (window as { matchMedia?: typeof window.matchMedia }).matchMedia = original;
-            } else {
-                delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-            }
-
-            document.documentElement.removeAttribute("data-emr-theme");
-        }
-    });
-
-    it("treats the host as light when matchMedia is unavailable", () => {
-        // `isForcedColors` bails out (returning false) when `matchMedia` is not a
-        // function, so the result is driven purely by background luminance.
-        const restoreCS = stubComputedBackground(() => "rgb(255, 255, 255)");
-
-        const original = (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-
-        delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
-            if (original) {
-                (window as { matchMedia?: typeof window.matchMedia }).matchMedia = original;
-            }
-
-            restoreCS();
-        }
+        expect(resolveHostTheme()).toBe("light");
     });
 
     it("treats the host as light when getComputedStyle is unavailable", () => {
-        // `isHostDark` returns false when `getComputedStyle` is not a function.
         const original = globalThis.getComputedStyle;
         (globalThis as { getComputedStyle?: typeof getComputedStyle }).getComputedStyle = undefined;
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
+        restores.push(() => {
             globalThis.getComputedStyle = original;
-            restoreMM();
-        }
+        });
+        stubOsColors(false);
+
+        expect(resolveHostTheme()).toBe("light");
+    });
+
+    it("judges by background alone when matchMedia is unavailable", () => {
+        stubHostColors(() => "rgb(255, 255, 255)");
+        replaceMatchMedia(undefined);
+
+        expect(resolveHostTheme()).toBe("light");
+    });
+
+    it("still syncs, and cleans up, when matchMedia throws", () => {
+        stubHostColors(() => "rgb(255, 255, 255)");
+        replaceMatchMedia(() => {
+            throw new Error("unsupported query");
+        });
+
+        const stop = syncHostTheme();
+
+        expect(themeAttribute()).toBe("light");
+        expect(stop).not.toThrow();
     });
 });
 
 describe("theme — non-DOM safety", () => {
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
     it("applyTheme is a no-op when there is no document", () => {
         vi.stubGlobal("document", undefined);
+
         expect(() => applyTheme("light")).not.toThrow();
     });
 
     it("refreshHostTheme is a no-op when there is no document", () => {
         vi.stubGlobal("document", undefined);
+
         expect(() => refreshHostTheme()).not.toThrow();
     });
 
     it("syncHostTheme returns a safe no-op unsubscribe when there is no document", () => {
         vi.stubGlobal("document", undefined);
+
         const stop = syncHostTheme();
-        expect(typeof stop).toBe("function");
-        expect(() => stop()).not.toThrow();
+
+        expect(stop).not.toThrow();
     });
 });
 
 describe("theme — partial DOM environments", () => {
-    afterEach(() => {
-        vi.unstubAllGlobals();
-        document.documentElement.removeAttribute("data-emr-theme");
-    });
-
     it.each(["window", "MutationObserver"])(
         "syncHostTheme still mirrors the theme when %s is missing",
         (name) => {
+            stubHostColors(() => "rgb(255, 255, 255)");
             vi.stubGlobal(name, undefined);
 
-            const restoreCS = stubComputedBackground(() => "rgb(255, 255, 255)");
+            const stop = syncHostTheme();
 
-            try {
-                const stop = syncHostTheme();
-                expect(document.documentElement.getAttribute("data-emr-theme")).toBe("light");
-                expect(() => stop()).not.toThrow();
-            } finally {
-                restoreCS();
-            }
+            expect(themeAttribute()).toBe("light");
+            expect(stop).not.toThrow();
         },
     );
-    it("treats the host as light when no background colour resolves", () => {
-        const restoreCS = stubComputedBackground(() => "");
-        const restoreMM = stubMatchMedia(() => false);
-
-        try {
-            expect(resolveHostTheme()).toBe("light");
-        } finally {
-            restoreCS();
-            restoreMM();
-        }
-    });
 
     it("treats the host as light and observes only <html> when there is no body", () => {
         const body = document.body;
         body.remove();
+        restores.push(() => document.documentElement.appendChild(body));
 
-        try {
-            expect(document.body).toBeNull();
-            expect(resolveHostTheme()).toBe("light");
-            const stop = syncHostTheme();
-            expect(() => stop()).not.toThrow();
-        } finally {
-            document.documentElement.appendChild(body);
-        }
+        expect(resolveHostTheme()).toBe("light");
+        expect(syncHostTheme()).not.toThrow();
     });
 });

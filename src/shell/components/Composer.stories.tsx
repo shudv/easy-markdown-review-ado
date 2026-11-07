@@ -59,9 +59,8 @@ export const WriteAndPreview: Story = {
         await userEvent.type(ta, "Hello **world**");
 
         await userEvent.click(canvas.getByRole("button", { name: "Preview" }));
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-preview strong")).toBeTruthy(),
-        );
+        // The preview renders the Markdown: "world" shows in bold.
+        await waitFor(() => expect(canvas.getByText("world").tagName).toBe("STRONG"));
         await userEvent.click(canvas.getByRole("button", { name: "Write" }));
 
         await userEvent.click(canvas.getByRole("button", { name: "Comment" }));
@@ -103,8 +102,9 @@ export const UserMention: Story = {
         });
 
         expect(option).toBeTruthy();
-        // Resize while the picker is open re-positions it (scroll/resize listener).
+        // Resizing the window keeps the open picker attached to the textarea.
         window.dispatchEvent(new Event("resize"));
+        expect(canvas.getByRole("listbox")).toBeTruthy();
         ta.focus();
         await userEvent.keyboard("{ArrowDown}");
         await userEvent.keyboard("{ArrowUp}");
@@ -115,9 +115,8 @@ export const UserMention: Story = {
             timeout: 3000,
         });
         expect(ta.value).not.toContain("@<");
-        // Pick the same suggestion again — the label collides, so the composer
-        // appends a numeric suffix ("@Alex Rivera 2") to keep each pick uniquely
-        // matchable (covers the uniqueMentionLabel collision path).
+        // Mentioning the same person again gets a distinct label ("@Alex Rivera 2")
+        // so each pick still maps back to the right person on submit.
         ta.focus();
         await userEvent.type(ta, "@al");
         await waitFor(() => canvas.getByRole("option", { name: /Alex Rivera/ }), {
@@ -128,12 +127,18 @@ export const UserMention: Story = {
         await waitFor(() => expect(ta.value).toContain("@Alex Rivera 2"), {
             timeout: 3000,
         });
-        // Caret-moving key re-evaluates the mention trigger (no picker now).
+        // Moving the caret away from an unfinished mention closes its suggestions.
         ta.focus();
-        await userEvent.keyboard("{ArrowLeft}");
-        // Toggle Preview (exercises the encodedValue re-encode path) and back.
+        await userEvent.type(ta, "@al", { skipClick: true });
+        await waitFor(() => canvas.getByRole("listbox"), { timeout: 3000 });
+        await userEvent.keyboard("{Home}");
+        await waitFor(() => expect(canvas.queryByRole("listbox")).toBeNull());
+        // A Preview round-trip keeps the readable mentions in the editor.
         await userEvent.click(canvas.getByRole("button", { name: "Preview" }));
         await userEvent.click(canvas.getByRole("button", { name: "Write" }));
+        expect((canvas.getByRole("textbox") as HTMLTextAreaElement).value).toContain(
+            "@Alex Rivera 2",
+        );
         // Submitting persists the ADO-native `@<id>` token, never the display name.
         await userEvent.click(canvas.getByRole("button", { name: "Comment" }));
         await waitFor(() => {
@@ -182,16 +187,30 @@ export const PullRequestMentionEscape: Story = {
     },
 };
 
-/** Breaking the trigger before the debounce fires cancels the pending search. */
+const newlineSearch = Object.assign(new LocalOnlyCommentApi(), {
+    searchUsers: fn((query: string) => localApi.searchUsers(query)),
+});
+
+/**
+ * Typing "@a" and moving straight on to a new line abandons that mention: no
+ * search goes out for it, and a later real mention still gets suggestions.
+ */
 export const MentionAbandoned: Story = {
+    decorators: [withApi(newlineSearch)],
+    beforeEach: () => {
+        newlineSearch.searchUsers.mockClear();
+    },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         const ta = canvas.getByRole("textbox") as HTMLTextAreaElement;
         await userEvent.click(ta);
-        // Type a trigger then immediately a newline (invalidates it) within the
-        // 250ms debounce window, so the queued search timer is cleared.
         await userEvent.type(ta, "@a{Enter}", { delay: 1 });
-        await waitFor(() => expect(canvas.queryAllByRole("option")).toHaveLength(0));
+        await expect(canvas.queryByRole("listbox")).toBeNull();
+        await userEvent.type(ta, "@al", { skipClick: true });
+        await waitFor(() => canvas.getByRole("option", { name: /Alex Rivera/ }), {
+            timeout: 3000,
+        });
+        await expect(newlineSearch.searchUsers.mock.calls).toEqual([["al"]]);
     },
 };
 
@@ -294,20 +313,28 @@ export const SupersededMentionSearchesDropped: Story = {
     play: async ({ canvasElement }) => {
         const { pending } = staleSearch;
         const users = await localApi.searchUsers("al");
+
+        const newest = users.filter(
+            (user) => user.kind === "user" && user.displayName === "Alex Rivera",
+        );
+
         const { canvas, ta } = await startMention(canvasElement);
         await waitFor(() => expect(pending).toHaveLength(1), { timeout: 3000 });
         await userEvent.type(ta, "e", { skipClick: true });
         await waitFor(() => expect(pending).toHaveLength(2), { timeout: 3000 });
-        pending[0]!.resolve(users);
         await userEvent.type(ta, "x", { skipClick: true });
         await waitFor(() => expect(pending).toHaveLength(3), { timeout: 3000 });
-        pending[1]!.reject(new Error("superseded"));
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        await expect(canvas.getByRole("listbox")).toBeTruthy();
-        await expect(canvas.queryAllByRole("option")).toHaveLength(0);
 
-        pending[2]!.resolve(users);
-        await waitFor(() => expect(canvas.getAllByRole("option").length).toBeGreaterThan(0));
+        pending[2]!.resolve(newest);
+        await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(newest.length));
+
+        // The older searches land late: one with more people, one failing.
+        pending[0]!.resolve(users);
+        pending[1]!.reject(new Error("superseded"));
+        // The author keeps working the picker; it still shows only the newest results.
+        await userEvent.keyboard("{ArrowDown}");
+        await expect(canvas.getByRole("listbox")).toBeTruthy();
+        await expect(canvas.getAllByRole("option")).toHaveLength(newest.length);
     },
 };
 
@@ -323,14 +350,16 @@ export const MentionResultsAfterTriggerErased: Story = {
         await userEvent.clear(ta);
         await waitFor(() => expect(canvas.queryByRole("listbox")).toBeNull());
         pending[0]!.resolve(await localApi.searchUsers("al"));
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        // The author has moved on to plain text; the late suggestions stay away.
+        await userEvent.type(ta, "Looks good", { skipClick: true });
+        await expect(ta.value).toBe("Looks good");
         await expect(canvas.queryByRole("listbox")).toBeNull();
     },
 };
 
 /**
- * Switching to Preview hides the open picker; a later resize has no textarea
- * to anchor it to and leaves it hidden.
+ * Switching to Preview while @mention suggestions are open hides them, and
+ * resizing the window meanwhile doesn't bring them back over the preview.
  */
 export const MentionPickerHiddenInPreview: Story = {
     play: async ({ canvasElement }) => {
@@ -340,15 +369,16 @@ export const MentionPickerHiddenInPreview: Story = {
         });
         // A keyboard-style click: a pointer press outside would cancel the picker.
         canvas.getByRole("button", { name: "Preview" }).click();
-        await waitFor(() => expect(canvasElement.querySelector(".emr-preview")).toBeTruthy());
+        await waitFor(() => expect(canvas.queryByRole("textbox")).toBeNull());
         window.dispatchEvent(new Event("resize"));
         await expect(canvas.queryByRole("listbox")).toBeNull();
     },
 };
 
 /**
- * Committing a mention and switching to Preview in the same task unmounts the
- * textarea before its deferred refocus frame runs; the commit still lands.
+ * Picking a suggestion and switching to Preview before the next frame (the
+ * editor is gone before it can take focus back — as when the rail re-stacks a
+ * draft card right after a pick) still keeps the picked mention.
  */
 export const MentionCommitThenPreview: Story = {
     play: async ({ canvasElement }) => {
@@ -382,17 +412,23 @@ function ClosableComposer(props: ComponentProps<typeof Composer>): ReactElement 
 
     return (
         <>
-            <button type="button" onClick={() => setOpen(false)}>
-                Close composer
+            <button type="button" onClick={() => setOpen((shown) => !shown)}>
+                {open ? "Close composer" : "Open composer"}
             </button>
             {open ? <Composer {...props} /> : null}
         </>
     );
 }
 
-/** Closing the composer mid-debounce cancels the queued mention search. */
+/**
+ * Closing the composer right after typing "@al" drops that pending mention
+ * search; a mention typed after reopening searches normally.
+ */
 export const UnmountCancelsPendingMentionSearch: Story = {
     decorators: [withApi(unmountSearch)],
+    beforeEach: () => {
+        unmountSearch.searchUsers.mockClear();
+    },
     render: (args) => <ClosableComposer {...args} />,
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
@@ -401,7 +437,12 @@ export const UnmountCancelsPendingMentionSearch: Story = {
         await userEvent.type(ta, "@al", { skipClick: true, delay: null });
         canvas.getByRole("button", { name: "Close composer" }).click();
         await waitFor(() => expect(canvas.queryByRole("textbox")).toBeNull());
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await expect(unmountSearch.searchUsers).not.toHaveBeenCalled();
+
+        await userEvent.click(canvas.getByRole("button", { name: "Open composer" }));
+        await userEvent.type(canvas.getByRole("textbox"), "@bo");
+        await waitFor(() => expect(unmountSearch.searchUsers).toHaveBeenCalled(), {
+            timeout: 3000,
+        });
+        await expect(unmountSearch.searchUsers.mock.calls).toEqual([["bo"]]);
     },
 };

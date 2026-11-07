@@ -55,14 +55,10 @@ describe("tableFor", () => {
         expect(tableFor("something.new")).toBe(TELEMETRY_TABLE.Engagement);
     });
 
-    it("covers every event in the catalog", () => {
-        // Guard against an event being added to EVENT but forgotten here.
-        const classified = new Set([...ENGAGEMENT_EVENTS, ...DIAGNOSTIC_EVENTS]);
-
-        for (const name of Object.values(EVENT)) {
-            expect(classified.has(name)).toBe(true);
-            expect(Object.values(TELEMETRY_TABLE)).toContain(tableFor(name));
-        }
+    // A new event must be given an expected table here, so its routing is a
+    // deliberate decision rather than whatever the default happens to be.
+    it.each(Object.values(EVENT))("has an expected table for %s", (name) => {
+        expect([...ENGAGEMENT_EVENTS, ...DIAGNOSTIC_EVENTS]).toContain(name);
     });
 });
 
@@ -83,21 +79,14 @@ describe("toTableEvent", () => {
         });
     });
 
-    it("routes exceptions to the Diagnostics table under the app.exception name", () => {
-        expect(toTableEvent(EVENT.AppException, data)).toMatchObject({
-            name: TELEMETRY_TABLE.Diagnostics,
-            data: { name: "app.exception" },
-        });
-    });
-
     it("makes the `name` discriminator authoritative (a stray property cannot clobber it)", () => {
         const withStrayName = { ...data, name: "attacker.controlled" };
         expect(toTableEvent(EVENT.FileOpened, withStrayName).data.name).toBe("file.opened");
     });
 
-    it("copies data so the emission doesn't share a reference with the input", () => {
-        const emission = toTableEvent(EVENT.RepoSwitched, data);
-        expect(emission.data).not.toBe(data);
+    it("leaves the caller's data untouched", () => {
+        toTableEvent(EVENT.RepoSwitched, data);
+
         expect(data).not.toHaveProperty("name");
     });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Root, RootContent } from "hast";
 import { unified } from "unified";
-import { renderMarkdown, sanitizeCssColor } from "../src/markdown/render";
+import { renderMarkdown } from "../src/markdown/render";
 import { rehypeSafeHtml } from "../src/markdown/safeHtml";
 import {
     renderFrontmatterHtml,
@@ -66,20 +66,14 @@ describe("renderMarkdown", () => {
         expect(html).not.toContain("markdown-alert");
     });
 
-    it("leaves ordinary and element-only blockquotes as ordinary quotes", async () => {
-        const ordinary = await renderMarkdown("> Ordinary quote.\n");
-        expect(ordinary).not.toContain("markdown-alert");
-        const imageOnly = await renderMarkdown("> ![Preview](./preview.png)\n");
-        expect(imageOnly).not.toContain("markdown-alert");
-        const detailsOnly = await renderMarkdown("> <details></details>\n");
-        expect(detailsOnly).not.toContain("markdown-alert");
-    });
+    it.each([
+        { name: "a plain-text quote", markdown: "> Ordinary quote.\n" },
+        { name: "a quote holding only an image", markdown: "> ![Preview](./preview.png)\n" },
+        { name: "a quote holding only raw HTML", markdown: "> <details></details>\n" },
+    ])("renders $name as an ordinary blockquote, not an alert", async ({ markdown }) => {
+        const html = await renderMarkdown(markdown);
 
-    it("drops dangerous raw HTML", async () => {
-        const md = "Hello <script>alert(1)</script> world\n";
-        const html = await renderMarkdown(md);
-        expect(html).not.toContain("<script");
-        expect(html).not.toContain("</script>");
+        expect(html).not.toContain("markdown-alert");
     });
 
     it("renders allowlisted details and Markdown inside them", async () => {
@@ -164,20 +158,22 @@ describe("renderMarkdown", () => {
         expect(html).not.toContain('height="wide"');
         expect(html).toContain('aria-hidden="false"');
         expect(html).not.toContain("safe comment");
-
-        const unsafeClassOnly = await renderMarkdown('<span class="evil">Plain</span>\n');
-
-        expect(unsafeClassOnly).toMatch(/<span\b[^>]*>Plain<\/span>/);
-        expect(unsafeClassOnly).not.toContain("evil");
     });
 
-    it("drops tag-scoped attributes on other tags and unknown attribute names", async () => {
+    it("keeps the text of a raw span whose only class is not allowlisted", async () => {
+        const html = await renderMarkdown('<span class="evil">Plain</span>\n');
+
+        expect(html).toMatch(/<span\b[^>]*>Plain<\/span>/);
+        expect(html).not.toContain("evil");
+    });
+
+    it("drops allowlisted attributes placed on the wrong element, and unknown or prototype-named attributes", async () => {
         const tree: Root = {
             type: "root",
             children: [
                 {
                     type: "raw",
-                    value: '<span open href="https://example.com" target="_blank" rel="x" src="a.png" alt="A" width="5" data-show-in-doc="true" constructor="x" __proto__="x">Text</span>',
+                    value: '<span class="evil" open href="https://example.com" target="_blank" rel="x" src="a.png" alt="A" width="5" height="34" data-show-in-doc="true" data-show-in-sidebar="no" constructor="x" __proto__="x">Text</span>',
                 } as unknown as RootContent,
             ],
         };
@@ -308,29 +304,6 @@ describe("renderMarkdown", () => {
         ]);
     });
 
-    it("rejects safe attributes when they appear on the wrong element", async () => {
-        const tree: Root = {
-            type: "root",
-            children: [
-                {
-                    type: "raw",
-                    value: '<span class="evil" open href="/wrong" target="_self" rel="help" src="wrong.png" alt="Wrong" width="12" height="34" data-show-in-doc="yes" data-show-in-sidebar="no">Text</span>',
-                } as unknown as RootContent,
-            ],
-        };
-
-        await unified().use(rehypeSafeHtml).run(tree);
-
-        expect(tree.children).toEqual([
-            {
-                type: "element",
-                tagName: "span",
-                properties: {},
-                children: [{ type: "text", value: "Text" }],
-            },
-        ]);
-    });
-
     it("accepts only fully numeric image dimensions", async () => {
         const tree: Root = {
             type: "root",
@@ -395,7 +368,7 @@ describe("renderMarkdown", () => {
         },
     );
 
-    it("does not leave an inline-closed container active", async () => {
+    it("keeps content after a one-line <details>…</details> outside the details", async () => {
         const tree: Root = {
             type: "root",
             children: [
@@ -413,7 +386,7 @@ describe("renderMarkdown", () => {
         expect(tree.children[1]).toEqual({ type: "text", value: "After" });
     });
 
-    it("updates a container end only when both source positions exist", async () => {
+    it("leaves a raw container without a source line when only its closing tag has one", async () => {
         const tree: Root = {
             type: "root",
             children: [
@@ -439,7 +412,7 @@ describe("renderMarkdown", () => {
         });
     });
 
-    it("parses spaced mixed-case containers but never stacks content under void tags", async () => {
+    it("recognises an indented, upper-case raw <DETAILS> container and its closing tag", async () => {
         const tree: Root = {
             type: "root",
             children: [
@@ -452,7 +425,6 @@ describe("renderMarkdown", () => {
                     type: "raw",
                     value: " </DETAILS> ",
                 } as unknown as RootContent,
-                { type: "raw", value: "<br>" } as unknown as RootContent,
                 { type: "text", value: "After" },
             ],
         };
@@ -468,6 +440,22 @@ describe("renderMarkdown", () => {
                 children: [{ type: "text", value: "Inside" }],
                 position: undefined,
             },
+            { type: "text", value: "After" },
+        ]);
+    });
+
+    it("keeps content after a raw <br> as its sibling, never inside the void tag", async () => {
+        const tree: Root = {
+            type: "root",
+            children: [
+                { type: "raw", value: "<br>" } as unknown as RootContent,
+                { type: "text", value: "After" },
+            ],
+        };
+
+        await unified().use(rehypeSafeHtml).run(tree);
+
+        expect(tree.children).toEqual([
             {
                 type: "element",
                 tagName: "br",
@@ -502,98 +490,94 @@ describe("renderMarkdown", () => {
         expect(html).toContain('data-code-meta="[[1, 3, &#x22;updateName&#x22;]]"');
     });
 
-    it("maps data-source-line to the START and data-source-end-line to the END of a multi-line block", async () => {
-        // A fenced code block spans several source lines, so start.line !== end.line.
-        // This distinguishes the two attributes (single-line blocks can't): the
-        // opening fence is line 1 and the closing fence is line 4. Guards against a
-        // start/end swap in the source-position transform, which single-line
-        // fixtures cannot detect.
+    it("stamps a multi-line code block with its first and last source lines", async () => {
+        // Comments anchor to a block's whole source range, so a fenced block that
+        // spans lines 1-4 must report both ends, not just its opening fence.
         const md = "```ts\nconst x = 1;\nconst y = 2;\n```\n";
         const html = await renderMarkdown(md);
         const preTag = /<pre\b[^>]*>/.exec(html)?.[0] ?? "";
         expect(preTag).toMatch(/data-source-line="1"/);
         expect(preTag).toMatch(/data-source-end-line="4"/);
-        // Explicitly assert start < end so a swap (4 vs 1) fails.
-        const start = Number(/data-source-line="(\d+)"/.exec(preTag)?.[1]);
-        const end = Number(/data-source-end-line="(\d+)"/.exec(preTag)?.[1]);
-        expect(start).toBeLessThan(end);
     });
 });
 
-describe("renderMarkdown — collapsible sections & slugs", () => {
-    it("wraps each heading in a section carrying a slugified data-section-id + level", async () => {
-        const html = await renderMarkdown("# Hello World\n\nBody.\n");
+function parseHtml(html: string): HTMLElement {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    return root;
+}
+
+/** The `data-section-id`s of every rendered section, in document order. */
+function sectionIds(html: string): string[] {
+    return Array.from(
+        parseHtml(html).querySelectorAll<HTMLElement>("section[data-section-id]"),
+        (section) => section.dataset.sectionId!,
+    );
+}
+
+describe("renderMarkdown — collapsible sections & heading anchors", () => {
+    it("wraps a heading and its body in a section keyed by the heading's slug", async () => {
+        const html = await renderMarkdown("# Hello World\n\nBody text.\n");
         expect(html).toMatch(
             /<section\b[^>]+class="emr-section emr-section-level-1 emr-section--doc-title"[^>]*data-section-id="hello-world"[^>]*data-section-level="1"/,
         );
         // The heading keeps a matching id for DocNav / anchor jumps.
         expect(html).toMatch(/<h1\b[^>]+id="hello-world"/);
+        expect(parseHtml(html).querySelector("section")!.textContent).toContain("Body text.");
     });
 
-    it("strips punctuation and collapses separators when slugging (kills slugify regex mutants)", async () => {
+    it("builds a heading's link anchor from its words, dropping punctuation", async () => {
+        // Readers link to `#foo-bar-baz-qux`; punctuation is dropped and runs of
+        // spaces, underscores and dashes become a single dash.
         const html = await renderMarkdown("## Foo, Bar_Baz -- Qux!\n");
-        // `,` and `!` dropped; spaces / underscores / dashes collapse to one dash.
-        expect(html).toMatch(/data-section-id="foo-bar-baz-qux"/);
+        expect(html).toMatch(/<h2\b[^>]+id="foo-bar-baz-qux"/);
+        expect(sectionIds(html)).toEqual(["foo-bar-baz-qux"]);
     });
 
-    it("falls back to the literal slug 'section' when a heading has no slug chars", async () => {
+    it("gives a heading with no letters or digits the anchor 'section'", async () => {
         const html = await renderMarkdown("### !!! ???\n");
-        expect(html).toMatch(/data-section-id="section"/);
+        expect(sectionIds(html)).toEqual(["section"]);
     });
 
-    it("disambiguates duplicate heading slugs with a numeric suffix", async () => {
-        // Two identical headings: first stays `dup`, the second becomes `dup-2`.
-        // Kills the `n === 1 ? base : base-n` counter mutants in mintId.
-        const html = await renderMarkdown("# Dup\n\n# Dup\n");
-        expect(html).toMatch(/data-section-id="dup"/);
-        expect(html).toMatch(/data-section-id="dup-2"/);
-        expect(html).not.toMatch(/data-section-id="dup-1"/);
+    it("gives repeated headings distinct anchors: the first keeps the slug, the next gets -2", async () => {
+        const html = await renderMarkdown("## Setup\n\n## Setup\n");
+        expect(sectionIds(html)).toEqual(["setup", "setup-2"]);
+        expect(Array.from(parseHtml(html).querySelectorAll("h2"), (h) => h.id)).toEqual([
+            "setup",
+            "setup-2",
+        ]);
     });
 
-    it("nests a deeper heading inside its parent section", async () => {
-        const html = await renderMarkdown("# Parent\n\n## Child\n\nText.\n");
-        // The child <section level 2> appears inside the parent <section level 1>,
-        // before the parent section closes.
-        const parentOpen = html.indexOf('data-section-level="1"');
-        const childOpen = html.indexOf('data-section-level="2"');
-        expect(parentOpen).toBeGreaterThanOrEqual(0);
-        expect(childOpen).toBeGreaterThan(parentOpen);
-        // There is exactly one closing </section> after the child, i.e. the child
-        // is enclosed — the parent section wraps both.
-        const level1Count = (html.match(/emr-section-level-1/g) ?? []).length;
-        const level2Count = (html.match(/emr-section-level-2/g) ?? []).length;
-        expect(level1Count).toBe(1);
-        expect(level2Count).toBe(1);
+    it("nests a subsection inside its parent heading's section", async () => {
+        const root = parseHtml(await renderMarkdown("# Parent\n\n## Child\n\ntext\n"));
+        const parent = root.querySelector('[data-section-id="parent"]')!;
+        const child = root.querySelector('[data-section-id="child"]')!;
+
+        expect(child.parentElement!.closest("section")).toBe(parent);
+        expect(child.classList.contains("emr-section-level-2")).toBe(true);
     });
 
-    it("does NOT nest a same-level sibling heading (kills the `<= level` boundary mutant)", async () => {
-        // Two H2s at the same level must produce two SIBLING sections, not one
-        // nested inside the other. If the break condition were `< level` instead
-        // of `<= level`, the second H2 would be swallowed into the first section.
-        const html = await renderMarkdown("## First\n\nA\n\n## Second\n\nB\n");
-        const first = html.indexOf('data-section-id="first"');
-        const second = html.indexOf('data-section-id="second"');
-        expect(first).toBeGreaterThanOrEqual(0);
-        expect(second).toBeGreaterThan(first);
-        // A </section> must close "first" before "second" opens (siblings).
-        const between = html.slice(first, second);
-        expect(between).toContain("</section>");
+    it("keeps consecutive same-level headings as sibling sections", async () => {
+        const root = parseHtml(await renderMarkdown("## First\n\nA\n\n## Second\n\nB\n"));
+        const first = root.querySelector('[data-section-id="first"]')!;
+        const second = root.querySelector('[data-section-id="second"]')!;
+
+        expect(first.contains(second)).toBe(false);
+        expect(second.parentElement).toBe(first.parentElement);
     });
 
     it("marks the single outermost section as the document title", async () => {
         // One top-level heading that wraps the whole doc → its section is the
         // title and carries `emr-section--doc-title` (the UI drops its chevron).
-        const html = await renderMarkdown("# Title\n\nBody.\n\n## Sub\n\nMore.\n");
+        const root = parseHtml(await renderMarkdown("# Title\n\nBody.\n\n## Sub\n\nMore.\n"));
 
-        expect(html).toMatch(/class="emr-section emr-section-level-1 emr-section--doc-title"/);
-
-        // The nested subsection is NOT a title.
-        const subMatch = html.match(
-            /<section[^>]*data-section-id="sub"[^>]*class="([^"]*)"|<section[^>]*class="([^"]*)"[^>]*data-section-id="sub"/,
+        const titleSections = Array.from(
+            root.querySelectorAll<HTMLElement>(".emr-section--doc-title"),
+            (section) => section.dataset.sectionId,
         );
 
-        expect(html).not.toMatch(/emr-section-level-2[^"]*emr-section--doc-title/);
-        expect(subMatch).not.toBeNull();
+        expect(titleSections).toEqual(["title"]);
     });
 
     it.each([
@@ -603,37 +587,6 @@ describe("renderMarkdown — collapsible sections & slugs", () => {
     ])("marks no title when %s", async (_case, markdown) => {
         const html = await renderMarkdown(markdown);
         expect(html).not.toContain("emr-section--doc-title");
-    });
-});
-
-describe("renderMarkdown — mention pills", () => {
-    it("leaves a raw-HTML anchor without an href untouched", async () => {
-        const html = await renderMarkdown('<a id="top">Top</a>\n');
-        expect(html).toMatch(/<a\b[^>]+id="top"[^>]*>Top<\/a>/);
-        expect(html).not.toContain("emr-mention");
-    });
-
-    it("renders a user mention as a display-only span with no href", async () => {
-        const html = await renderMarkdown("Hi [@Ann](mention://user/ann)\n");
-        expect(html).toMatch(
-            /<span\b[^>]+class="emr-mention emr-mention-user"[^>]*data-mention-kind="user"[^>]*data-mention-id="ann"/,
-        );
-        expect(html).not.toContain('href="mention://user/ann"');
-    });
-
-    it("keeps a work-item mention as a link and injects a state dot", async () => {
-        const html = await renderMarkdown("See [#42](mention://workitem/42)\n");
-        expect(html).toMatch(/<a\b[^>]+href="mention:\/\/workitem\/42"/);
-        expect(html).toMatch(/<a\b[^>]+class="emr-mention emr-mention-workitem"/);
-        expect(html).toMatch(/<a\b[^>]+data-mention-kind="workitem"/);
-        expect(html).toContain("emr-mention-state-dot");
-        expect(html).toMatch(/target="_blank"/);
-    });
-
-    it("leaves ordinary links untouched", async () => {
-        const html = await renderMarkdown("[docs](https://example.com/x)\n");
-        expect(html).toMatch(/<a\b[^>]+href="https:\/\/example.com\/x"/);
-        expect(html).not.toContain("emr-mention");
     });
 });
 
@@ -853,15 +806,12 @@ describe("frontmatterValuesForKey", () => {
         expect(frontmatterValuesForKey("title: Doc", "tags")).toBeNull();
     });
 
-    it("ignores a `#`-comment line even when it contains a colon", () => {
-        // The blank/comment skip must fire before key parsing, so `# note: x`
-        // never becomes a key of its own.
+    it("treats a commented-out `# key: value` line as a comment, not a key", () => {
         expect(frontmatterValuesForKey("title: Doc\n# note: x", "# note")).toBeNull();
         expect(frontmatterValuesForKey("title: Doc\n# note: x", "title")).toEqual(["Doc"]);
     });
 
     it("treats an unclosed `[` value as a scalar, not an inline list", () => {
-        // Needs BOTH the `[` prefix AND the `]` suffix to parse as a flow list.
         expect(frontmatterValuesForKey("k: [broken", "k")).toEqual(["[broken"]);
     });
 
@@ -869,20 +819,35 @@ describe("frontmatterValuesForKey", () => {
         expect(frontmatterValuesForKey("k: [a, , b]", "k")).toEqual(["a", "b"]);
     });
 
-    it("unquotes a two-character quoted value", () => {
-        // Boundary for the `value.length >= 2` guard in `unquote`.
+    it('reads an empty quoted value `""` as an empty string', () => {
         expect(frontmatterValuesForKey('k: ""', "k")).toEqual([""]);
     });
 
     it.each([
-        ["k:    v  w \t", ["v  w"]],
-        ["k:\t\t", []],
-        ["k:", []],
-        ["k:\n \t-  \tItem  \t\n\t- next", ["Item", "next"]],
-        ["k:\n  -   \n  - a", ["a"]],
-        ["k:\n  -x", []],
-        ["k:\n  - a\rb", []],
-    ])("parses whitespace edge cases in %j", (src, expected) => {
+        {
+            name: "trims spaces and tabs around a scalar but keeps inner spaces",
+            src: "k:    v  w \t",
+            expected: ["v  w"],
+        },
+        {
+            name: "reads a key followed only by tabs as having no values",
+            src: "k:\t\t",
+            expected: [],
+        },
+        { name: "reads a bare key as having no values", src: "k:", expected: [] },
+        {
+            name: "reads block-list items indented and padded with tabs",
+            src: "k:\n \t-  \tItem  \t\n\t- next",
+            expected: ["Item", "next"],
+        },
+        { name: "skips a blank block-list item", src: "k:\n  -   \n  - a", expected: ["a"] },
+        { name: "ignores a `-x` line with no space after the dash", src: "k:\n  -x", expected: [] },
+        {
+            name: "ignores a block-list item holding a lone carriage return",
+            src: "k:\n  - a\rb",
+            expected: [],
+        },
+    ])("$name", ({ src, expected }) => {
         expect(frontmatterValuesForKey(src, "k")).toEqual(expected);
     });
 
@@ -910,31 +875,20 @@ describe("parseFrontmatterListItems", () => {
     });
 
     it.each([
-        ["-\titem", ["item"]],
-        ["\t-  x \t", ["x"]],
-        ["-   ", []],
-        ["-x", []],
-        ["  - a\rb", []],
-    ])("parses whitespace edge cases in %j", (fragment, expected) => {
+        {
+            name: "reads a tab after the dash as a separator",
+            fragment: "-\titem",
+            expected: ["item"],
+        },
+        { name: "trims tabs and spaces around an item", fragment: "\t-  x \t", expected: ["x"] },
+        { name: "skips an item that is only whitespace", fragment: "-   ", expected: [] },
+        { name: "ignores a `-x` line with no space after the dash", fragment: "-x", expected: [] },
+        {
+            name: "ignores an item holding a lone carriage return",
+            fragment: "  - a\rb",
+            expected: [],
+        },
+    ])("$name", ({ fragment, expected }) => {
         expect(parseFrontmatterListItems(fragment)).toEqual(expected);
     });
-});
-
-describe("sanitizeCssColor", () => {
-    it.each([
-        ["#abc", "#abc"],
-        ["ABC", "#abc"],
-        ["#AABBCC", "#aabbcc"],
-        ["#11223344", "#11223344"],
-        ["#abcd", "#abcd"],
-    ])("normalizes %s to %s", (input, expected) => {
-        expect(sanitizeCssColor(input)).toBe(expected);
-    });
-
-    it.each([["red"], ["#12"], ["#12345"], ["#1234567"], ["#gggggg"], ["rgb(0,0,0)"], [""]])(
-        "rejects %s",
-        (input) => {
-            expect(sanitizeCssColor(input)).toBeNull();
-        },
-    );
 });

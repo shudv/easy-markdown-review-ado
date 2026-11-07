@@ -44,32 +44,35 @@ describe("statusToKind", () => {
 });
 
 describe("isAlmSearchError", () => {
-    it("detects AlmSearchError instances", () => {
+    it("recognises a search failure and exposes its kind, status and message", () => {
         const e = new AlmSearchError("auth", "unauthorized", 401);
+
         expect(isAlmSearchError(e)).toBe(true);
         expect(e).toBeInstanceOf(Error);
-        expect(e.name).toBe("AlmSearchError");
-        expect(e.kind).toBe("auth");
-        expect(e.status).toBe(401);
-        expect(e.message).toBe("unauthorized");
+        expect(e).toMatchObject({
+            name: "AlmSearchError",
+            kind: "auth",
+            status: 401,
+            message: "unauthorized",
+        });
     });
 
-    it("leaves `status` undefined when none is supplied", () => {
+    it("recognises a network failure, which carries no HTTP status", () => {
         const e = new AlmSearchError("network", "offline");
-        expect(e.status).toBeUndefined();
+
         expect(isAlmSearchError(e)).toBe(true);
+        expect(e.status).toBeUndefined();
     });
 
-    it("rejects plain Errors and non-objects", () => {
-        expect(isAlmSearchError(new Error("nope"))).toBe(false);
-        expect(isAlmSearchError(null)).toBe(false);
-        expect(isAlmSearchError("kind")).toBe(false);
-        expect(isAlmSearchError({})).toBe(false);
-    });
-
-    it("rejects plain objects, even ones shaped like an AlmSearchError", () => {
-        expect(isAlmSearchError({ kind: 123 })).toBe(false);
-        expect(isAlmSearchError({ kind: "auth", status: 401 })).toBe(false);
+    it.each([
+        { name: "a plain Error", value: new Error("nope") },
+        { name: "null", value: null },
+        { name: "a string", value: "kind" },
+        { name: "an empty object", value: {} },
+        { name: "an object with a non-string kind", value: { kind: 123 } },
+        { name: "a plain object shaped like a search error", value: { kind: "auth", status: 401 } },
+    ])("does not treat $name as a search failure", ({ value }) => {
+        expect(isAlmSearchError(value)).toBe(false);
     });
 });
 
@@ -123,17 +126,17 @@ describe("AlmSearchRestClient", () => {
         }
     });
 
-    it("propagates an AbortSignal through to fetch", async () => {
-        const fetchImpl = vi.fn(async (_url, init) => {
-            expect((init as RequestInit).signal).toBeDefined();
-
-            return jsonResponse({});
-        });
-
+    it("lets the caller cancel the request", async () => {
+        const fetchImpl = vi.fn(async () => jsonResponse({}));
         const client = new AlmSearchRestClient("org", async () => "TOK", fetchImpl);
-
         const ac = new AbortController();
+
         await client.searchCode(REQ, "P", ac.signal);
+
+        expect(fetchImpl).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ signal: ac.signal }),
+        );
     });
 
     it("preserves an AbortError instead of reporting it as a network failure", async () => {
@@ -153,9 +156,7 @@ describe("AlmSearchRestClient", () => {
         });
     });
 
-    it("falls back to a generic message when the failure cannot be stringified", async () => {
-        // A non-Error rejection whose String() coercion itself throws — errMsg
-        // must still produce a usable message instead of propagating the throw.
+    it("reports a usable message even when the network failure can't be turned into text", async () => {
         const hostile = {
             [Symbol.toPrimitive]() {
                 throw new Error("cannot stringify");
@@ -345,14 +346,11 @@ describe("AlmSearchRestClient", () => {
 });
 
 describe("createAlmSearchClient", () => {
-    it("returns `no-config` when org name is missing", () => {
-        const r = createAlmSearchClient({ getToken: async () => "x" });
-        expect(r.ok).toBe(false);
-    });
-
-    it("returns `no-config` when the token provider is missing", () => {
-        const r = createAlmSearchClient({ orgName: "org" });
-        expect(r.ok).toBe(false);
+    it.each([
+        { name: "the organization name is missing", options: { getToken: async () => "x" } },
+        { name: "the token provider is missing", options: { orgName: "org" } },
+    ])("reports no client when $name", ({ options }) => {
+        expect(createAlmSearchClient(options)).toMatchObject({ ok: false });
     });
 
     it("returns a REST-backed client when both inputs are present", () => {

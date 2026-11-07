@@ -34,7 +34,7 @@ export function orderComments(items: readonly OrderableComment[]): string[] {
 }
 
 /** Comparator implementing the anchored-then-unanchored, newest-first order. */
-export function compareComments(a: OrderableComment, b: OrderableComment): number {
+function compareComments(a: OrderableComment, b: OrderableComment): number {
     const aAnchored = a.anchorY !== null;
     const bAnchored = b.anchorY !== null;
     // Anchored comments always precede unanchored ones.

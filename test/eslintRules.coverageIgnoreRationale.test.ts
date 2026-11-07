@@ -3,7 +3,7 @@
 //
 // @vitest-environment node
 
-import { RuleTester } from "eslint";
+import { Linter, RuleTester } from "eslint";
 import { describe, expect, it } from "vitest";
 
 import { coverageIgnoreRationale } from "../scripts/eslint-rules/coverage-ignore-rationale.mjs";
@@ -17,19 +17,6 @@ const tester = new RuleTester({
         sourceType: "module",
         parserOptions: { ecmaFeatures: { jsx: true } },
     },
-});
-
-describe("coverage-ignore-rationale meta", () => {
-    it("declares a message for every messageId the rule reports", () => {
-        expect(Object.keys(coverageIgnoreRationale.meta.messages)).toStrictEqual([
-            "missingReason",
-            "shortReason",
-            "unknownDirective",
-            "unmatchedStop",
-            "unclosedStart",
-            "stopWithText",
-        ]);
-    });
 });
 
 const REASON = "the SDK host owns this path";
@@ -55,6 +42,7 @@ tester.run("coverage-ignore-rationale", coverageIgnoreRationale, {
             errors: [{ messageId: "missingReason" }],
         },
         {
+            // A line count is not a reason.
             code: "/* v8 ignore next 2 */\nconst a = 1;",
             errors: [{ messageId: "missingReason" }],
         },
@@ -100,4 +88,36 @@ tester.run("coverage-ignore-rationale", coverageIgnoreRationale, {
             errors: [{ messageId: "missingReason" }],
         },
     ],
+});
+
+describe("coverage-ignore-rationale messages", () => {
+    function lint(code: string): string[] {
+        const linter = new Linter();
+
+        return linter
+            .verify(code, {
+                plugins: {
+                    emr: { rules: { "coverage-ignore-rationale": coverageIgnoreRationale } },
+                },
+                rules: { "emr/coverage-ignore-rationale": "error" },
+            })
+            .map((problem) => problem.message);
+    }
+
+    it.each([
+        {
+            name: "shows the developer the exact comment to write for their tool and directive",
+            code: "/* c8 ignore start */\nconst a = 1;\n/* c8 ignore stop */",
+            expected:
+                "Coverage ignore needs a reason in the same comment: `/* c8 ignore start -- <why this can't be reached or tested> */`.",
+        },
+        {
+            name: "tells the developer how many words their reason has and needs",
+            code: "/* v8 ignore next -- defensive */\nconst a = 1;",
+            expected:
+                "Coverage-ignore reason is too short (1 words). Say why this code can't be reached or tested (at least 4 words).",
+        },
+    ])("$name", ({ code, expected }) => {
+        expect(lint(code)).toEqual([expected]);
+    });
 });

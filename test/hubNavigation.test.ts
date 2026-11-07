@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdk = vi.hoisted(() => ({
     getService: vi.fn(),
@@ -43,11 +43,24 @@ describe("readRouteParams", () => {
         expect(sdk.getService).toHaveBeenCalledWith("nav-service");
     });
 
-    it("falls back to {} when the host returns nothing or fails", async () => {
-        sdk.getService.mockResolvedValueOnce(navService(undefined));
+    it("reads no params when the host has none", async () => {
+        sdk.getService.mockResolvedValue(navService(undefined));
         await expect(readRouteParams()).resolves.toEqual({});
-        sdk.getService.mockRejectedValueOnce(new Error("no host"));
+    });
+
+    it("reads no params when the navigation service is unavailable", async () => {
+        sdk.getService.mockRejectedValue(new Error("no host"));
         await expect(readRouteParams()).resolves.toEqual({});
+    });
+});
+
+describe("without a navigation service", () => {
+    it.each([
+        { name: "opening a link in a new tab", run: () => openInNewTab("https://x.test") },
+        { name: "updating the route", run: () => setRouteQuery({ path: "" }) },
+    ])("$name quietly does nothing", async ({ run }) => {
+        sdk.getService.mockRejectedValue(new Error("no host"));
+        await expect(run()).resolves.toBeUndefined();
     });
 });
 
@@ -57,11 +70,6 @@ describe("openInNewTab", () => {
         sdk.getService.mockResolvedValue(nav);
         await openInNewTab("https://example.test/file");
         expect(nav.openNewWindow).toHaveBeenCalledWith("https://example.test/file", "");
-    });
-
-    it("swallows a missing navigation service", async () => {
-        sdk.getService.mockRejectedValue(new Error("no host"));
-        await expect(openInNewTab("https://x.test")).resolves.toBeUndefined();
     });
 });
 
@@ -87,11 +95,6 @@ describe("setRouteQuery", () => {
         const updater = vi.fn(() => ({ path: "" }));
         await setRouteQuery(updater);
         expect(updater).toHaveBeenCalledWith({});
-    });
-
-    it("swallows a missing navigation service", async () => {
-        sdk.getService.mockRejectedValue(new Error("no host"));
-        await expect(setRouteQuery({ path: "" })).resolves.toBeUndefined();
     });
 });
 
@@ -125,15 +128,30 @@ describe("resolveOrgUrl", () => {
         expect(resolveOrgUrl()).toBe("https://dev.azure.com/contoso");
     });
 
-    it("falls back to the referrer heuristic", () => {
-        sdk.getHost.mockReturnValueOnce(undefined);
-        const fromReferrer = resolveOrgUrl();
-        sdk.getHost.mockImplementationOnce(() => {
-            throw new Error("not initialized");
+    describe("falls back to the org in the host page's URL", () => {
+        beforeEach(() => {
+            vi.spyOn(Document.prototype, "referrer", "get").mockReturnValue(
+                "https://dev.azure.com/fabrikam/Proj/_apps/hub/x",
+            );
         });
-        expect(resolveOrgUrl()).toBe(fromReferrer);
-        sdk.getHost.mockReturnValueOnce({ name: "" });
-        expect(resolveOrgUrl()).toBe(fromReferrer);
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it.each([
+            {
+                name: "before the SDK is initialised",
+                host: () => {
+                    throw new Error("not initialized");
+                },
+            },
+            { name: "when the host context is missing", host: () => undefined },
+            { name: "when the host has no name", host: () => ({ name: "" }) },
+        ])("$name", ({ host }) => {
+            sdk.getHost.mockImplementation(host);
+            expect(resolveOrgUrl()).toBe("https://dev.azure.com/fabrikam");
+        });
     });
 });
 
@@ -144,9 +162,10 @@ describe("readCurrentUser", () => {
             displayName: "Ada Lovelace",
             imageUrl: "",
         });
-        const user = readCurrentUser();
-        expect(user.id).toBe("u1");
-        expect(user.displayName).toBe("Ada Lovelace");
-        expect(user.initials).toBe("AL");
+        expect(readCurrentUser()).toMatchObject({
+            id: "u1",
+            displayName: "Ada Lovelace",
+            initials: "AL",
+        });
     });
 });

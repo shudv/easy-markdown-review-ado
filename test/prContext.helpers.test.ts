@@ -71,33 +71,27 @@ describe("contentCommitForPath", () => {
         lastMergeSourceCommit: { commitId: "pr-source" },
     } as Parameters<typeof contentCommitForPath>[0]["pr"];
 
-    it("reads changed files from the diff target and deleted ones from the base", () => {
-        const ctx = {
-            changedMdFiles: files,
-            baseCommit: "base",
-            targetCommit: "target",
-            pr,
-        };
+    it.each([
+        { name: "a changed file from the diff target", path: "/a.md", expected: "target" },
+        { name: "a deleted file from the diff base", path: "/b.md", expected: "base" },
+        { name: "an unchanged file from the diff target", path: "/unknown.md", expected: "target" },
+    ])("reads $name", ({ path, expected }) => {
+        const ctx = { changedMdFiles: files, baseCommit: "base", targetCommit: "target", pr };
 
-        expect(contentCommitForPath(ctx, "/a.md")).toBe("target");
-        expect(contentCommitForPath(ctx, "/b.md")).toBe("base");
-        expect(contentCommitForPath(ctx, "/unknown.md")).toBe("target");
+        expect(contentCommitForPath(ctx, path)).toBe(expected);
     });
 
-    it("falls back to the PR's last-merge commits", () => {
-        const ctx = { changedMdFiles: files, pr };
-        expect(contentCommitForPath(ctx, "/a.md")).toBe("pr-source");
-        expect(contentCommitForPath(ctx, "/b.md")).toBe("pr-target");
+    it.each([
+        { name: "a changed file from the PR's source", path: "/a.md", expected: "pr-source" },
+        { name: "a deleted file from the PR's target", path: "/b.md", expected: "pr-target" },
+    ])("without diff commits, reads $name", ({ path, expected }) => {
+        expect(contentCommitForPath({ changedMdFiles: files, pr }, path)).toBe(expected);
     });
 
-    it("is undefined when no commit is known", () => {
-        const ctx = {
-            changedMdFiles: files,
-            pr: {} as typeof pr,
-        };
+    it.each(["/a.md", "/b.md"])("has no commit for %s when none is known", (path) => {
+        const ctx = { changedMdFiles: files, pr: {} as typeof pr };
 
-        expect(contentCommitForPath(ctx, "/a.md")).toBeUndefined();
-        expect(contentCommitForPath(ctx, "/b.md")).toBeUndefined();
+        expect(contentCommitForPath(ctx, path)).toBeUndefined();
     });
 });
 
@@ -135,9 +129,11 @@ describe("commentAuthorFromUser", () => {
 });
 
 describe("prBranchVersion", () => {
-    it("names the PR source branch as a Files version", () => {
-        expect(prBranchVersion({ sourceRefName: "refs/heads/feature/x" })).toBe("GBfeature/x");
-        expect(prBranchVersion({ sourceRefName: "topic" })).toBe("GBtopic");
+    it.each([
+        ["refs/heads/feature/x", "GBfeature/x"],
+        ["topic", "GBtopic"],
+    ])("names the PR source branch %s as the Files version %s", (sourceRefName, expected) => {
+        expect(prBranchVersion({ sourceRefName })).toBe(expected);
     });
 
     it("is undefined without a source branch", () => {

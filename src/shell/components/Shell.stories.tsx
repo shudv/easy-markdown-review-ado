@@ -277,6 +277,38 @@ function balloonFor(canvasElement: HTMLElement, tid: string): HTMLElement {
     return b;
 }
 
+/** The comments pane (rail). */
+function commentsPane(canvasElement: HTMLElement): HTMLElement {
+    return within(canvasElement).getByRole("complementary", { name: "Comments" });
+}
+
+/** The document navigation pane. */
+function docNav(canvasElement: HTMLElement): HTMLElement {
+    return within(canvasElement).getByRole("complementary", { name: "Document navigation" });
+}
+
+/** The reader's bottom status bar. */
+function statusBar(canvasElement: HTMLElement): HTMLElement {
+    return within(canvasElement).getByRole("toolbar", { name: "Reader status and controls" });
+}
+
+/** The PR-update picker's list, while it is open. */
+function updatesList(canvasElement: HTMLElement): HTMLElement | null {
+    return within(canvasElement).queryByRole("listbox", { name: "Review iterations" });
+}
+
+/** The reader's "Reconnecting to Azure DevOps" notice, if shown. */
+function reconnectNotice(canvasElement: HTMLElement): HTMLElement | null {
+    return within(canvasElement).queryByText(/^Reconnecting to Azure DevOps/);
+}
+
+/** The heading of the reader's "couldn't load" panel, if shown. */
+function loadErrorPanel(canvasElement: HTMLElement): HTMLElement | null {
+    return within(canvasElement).queryByRole("heading", {
+        name: /^Couldn’t (open this document|load this version)$/,
+    });
+}
+
 /** Reply to an active thread; the new comment appears in the balloon. */
 export const ThreadReply: Story = {
     play: async ({ canvasElement }) => {
@@ -378,17 +410,14 @@ export const ThreadCycle: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const status = within(canvasElement.querySelector<HTMLElement>(".emr-statusbar")!);
+        const status = within(statusBar(canvasElement));
 
         const nextBtn = await waitFor(() => status.getByRole("button", { name: "Next comment" }));
 
         await userEvent.click(nextBtn);
         await userEvent.click(status.getByRole("button", { name: "Previous comment" }));
         expect(
-            within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!).queryByRole(
-                "button",
-                { name: "Next comment" },
-            ),
+            within(commentsPane(canvasElement)).queryByRole("button", { name: "Next comment" }),
         ).toBeNull();
     },
 };
@@ -402,9 +431,9 @@ export const CyclerExpandsCollapsedTray: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const railU = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const railU = within(commentsPane(canvasElement));
 
-        const status = within(canvasElement.querySelector<HTMLElement>(".emr-statusbar")!);
+        const status = within(statusBar(canvasElement));
 
         const trayName = /General comments/;
 
@@ -441,7 +470,7 @@ export const OnlyThisFileScopesFilterCounts: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const railU = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const railU = within(commentsPane(canvasElement));
 
         // The "Comments" header doubles as the filter-menu trigger.
         const trigger = await waitFor(() => railU.getByRole("button", { name: /Filter comments/ }));
@@ -480,7 +509,7 @@ export const ThreadSearch: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const railU = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const railU = within(commentsPane(canvasElement));
 
         await userEvent.click(railU.getByRole("button", { name: "Search comments" }));
 
@@ -521,7 +550,7 @@ export const ThreadSearch: Story = {
 export const ResolveReopenDelete: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
-        const rail = canvasElement.querySelector<HTMLElement>(".emr-rail-col")!;
+        const rail = commentsPane(canvasElement);
         const railU = within(rail);
 
         // Reveal the resolved thread by switching the filter to "All comments".
@@ -531,12 +560,16 @@ export const ResolveReopenDelete: Story = {
         const resolved = await waitFor(() => balloonFor(canvasElement, "t-resolved"));
 
         const ru = within(resolved);
-        // Reopen it.
+        // Reopen it: the Resolved chip goes away.
         await userEvent.click(ru.getByRole("button", { name: "More options" }));
         await userEvent.click(ru.getByText("Reopen thread"));
+        await waitFor(() =>
+            expect(
+                within(balloonFor(canvasElement, "t-resolved")).queryByText("Resolved"),
+            ).toBeNull(),
+        );
 
-        // Mark the (now active) thread as pending via the menu — exercises the
-        // generic status setter distinct from resolve/reopen.
+        // Mark the (now active) thread as pending via the menu.
         const reopened = within(balloonFor(canvasElement, "t-resolved"));
         await userEvent.click(reopened.getByRole("button", { name: "More options" }));
         await userEvent.click(reopened.getByText("Mark as pending"));
@@ -546,7 +579,7 @@ export const ResolveReopenDelete: Story = {
             ).toBeVisible(),
         );
 
-        // Close the (now pending) thread — exercises the dedicated close handler.
+        // Close the (now pending) thread.
         const pending = within(balloonFor(canvasElement, "t-resolved"));
         await userEvent.click(pending.getByRole("button", { name: "More options" }));
         await userEvent.click(pending.getByText("Close thread"));
@@ -558,11 +591,11 @@ export const ResolveReopenDelete: Story = {
 
         // Resolve the active thread via its menu.
         const active = balloonFor(canvasElement, "t-active");
-        const au = within(active);
         const c1 = active.querySelector<HTMLElement>('[data-comment-id="c1"]')!;
         const c1u = within(c1);
         await userEvent.click(c1u.getByRole("button", { name: "More options" }));
         await userEvent.click(c1u.getByText("Resolve thread"));
+        await waitFor(() => expect(within(active).getByText("Resolved")).toBeVisible());
 
         // Delete the non-first comment (c2) from the active thread; the thread
         // survives because a comment remains.
@@ -575,7 +608,6 @@ export const ResolveReopenDelete: Story = {
 
         // Delete the entire second thread.
         const t2 = balloonFor(canvasElement, "t-active2");
-        void au;
         const t2u = within(t2);
         await userEvent.click(t2u.getByRole("button", { name: "More options" }));
         await userEvent.click(t2u.getByText("Delete thread"));
@@ -617,8 +649,8 @@ export const OrphanedFileComments: Story = {
                 ],
             },
             {
-                // A general thread — exercises the `filePath === ""` skip in the
-                // orphaned-file bucketing.
+                // A PR-level (general) thread: it belongs in General, not in the
+                // removed-files tray.
                 id: "t-general2",
                 filePath: "",
                 general: true,
@@ -634,8 +666,8 @@ export const OrphanedFileComments: Story = {
                 ],
             },
             {
-                // Anchored to a slashless file that isn't in pr.files → orphaned-file
-                // tray; resolved so it also drives the hidden-set + hasHideable paths.
+                // A resolved thread on a file that's no longer in the PR: it lands in
+                // the removed-files tray and is hidden by the Active filter.
                 id: "t-gone",
                 filePath: "GONE.md",
                 status: "resolved",
@@ -650,8 +682,8 @@ export const OrphanedFileComments: Story = {
                 ],
             },
             {
-                // A second orphaned-file thread that is ACTIVE (not resolved), so the
-                // hidden-set loop's "not resolved" branch is exercised too.
+                // A still-open thread on another removed file stays visible under the
+                // Active filter.
                 id: "t-gone-active",
                 filePath: "docs/OLD.md",
                 status: "active",
@@ -672,7 +704,7 @@ export const OrphanedFileComments: Story = {
             timeout: 5000,
         });
 
-        const railU = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const railU = within(commentsPane(canvasElement));
 
         // The resolved orphaned-file thread is hidden by the default Active filter,
         // so switch the filter to "All comments" to reveal it.
@@ -759,7 +791,7 @@ export const HubHidesCrossFileTrays: Story = {
             timeout: 5000,
         });
 
-        const railU = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const railU = within(commentsPane(canvasElement));
 
         // The open file's own comment renders.
         await waitFor(() => expect(canvasElement.querySelector(".emr-balloon")).toBeTruthy());
@@ -869,7 +901,7 @@ export const UnanchoredDraft: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = within(commentsPane(canvasElement));
 
         await userEvent.click(rail.getByRole("button", { name: "New comment" }));
 
@@ -1129,7 +1161,7 @@ export const DraftGuardReplyDirection: Story = {
         await waitForHighlight(canvasElement, "t-active");
         const canvas = within(canvasElement);
 
-        // Clicking a balloon's body selects the thread (exercises the scroll path).
+        // Clicking a balloon's body selects the thread (and scrolls to its anchor).
         const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
 
         await userEvent.click(within(balloon).getByText("First thought about the design here."));
@@ -1217,7 +1249,7 @@ export const DraftSurvivesFileSwitch: Story = {
         await waitForHighlight(canvasElement, "t-active");
         const canvas = within(canvasElement);
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         // Open a new-comment draft on a.md and type.
         const para = await waitFor(() => {
@@ -1275,7 +1307,7 @@ export const FileSwitching: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         // Switch to the second file.
         await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
@@ -1293,7 +1325,7 @@ export const FileSwitching: Story = {
 
         // Switch to a file whose loader throws -> error panel.
         await userEvent.click(nav.getByRole("button", { name: /broken\.md/ }));
-        await waitFor(() => expect(canvasElement.querySelector(".emr-error")).toBeTruthy(), {
+        await waitFor(() => expect(loadErrorPanel(canvasElement)).toBeTruthy(), {
             timeout: 5000,
         });
     },
@@ -1319,7 +1351,7 @@ export const DeepLinkRouting: Story = {
         );
 
         // Selecting a different file reports the new path to the host.
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
         await waitForHighlight(canvasElement, "t-active");
@@ -1420,6 +1452,8 @@ export const DeepLinkCommentMissing: Story = {
     },
 };
 
+let deliverLinkedThreads: () => void = () => {};
+
 /**
  * The host's threads load after the document: a linked thread that's merely
  * not loaded YET isn't reported missing — it activates once it arrives, and
@@ -1429,14 +1463,18 @@ export const DeepLinkCommentWaitsForThreads: Story = {
     args: {
         initialThreads: [],
         initialActiveThreadId: "t-active2",
-        fetchRemoteThreads: async () => {
-            await new Promise((r) => setTimeout(r, 300));
-
-            return threads();
-        },
+        fetchRemoteThreads: () =>
+            new Promise<CommentThread[]>((resolve) => {
+                deliverLinkedThreads = () => resolve(threads());
+            }),
     },
     beforeEach: recordLinksOpened,
     play: async ({ canvasElement }) => {
+        // The document is up while the host is still fetching its threads.
+        await waitFor(() => expect(canvasElement.querySelector(".emr-rendered")).not.toBeNull());
+        await settleFrames();
+        await expect(linksOpened).toEqual([]);
+        deliverLinkedThreads();
         await waitFor(
             () =>
                 expect(
@@ -1473,7 +1511,7 @@ export const ActiveThreadReportsToRoute: Story = {
         });
 
         // Switching documents clears the active thread, reported as `null`.
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
         await waitFor(() => expect(args.onActiveThreadChange).toHaveBeenCalledWith(null), {
@@ -1608,7 +1646,7 @@ export const HeldCommentKeepsNewerDraft: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = within(commentsPane(canvasElement));
 
         await userEvent.click(rail.getByRole("button", { name: "New comment" }));
 
@@ -1717,7 +1755,7 @@ export const ReconnectHoldsChangesAndSavesOnce: Story = {
 
         // The banner reassures, and offers no reload that would drop the change.
         const notice = await waitFor(() => {
-            const el = canvasElement.querySelector<HTMLElement>(".emr-toast--info");
+            const el = reconnectNotice(canvasElement)?.closest<HTMLElement>('[role="status"]');
 
             if (!el) throw new Error("no reconnect notice yet");
 
@@ -1741,7 +1779,7 @@ export const ReconnectHoldsChangesAndSavesOnce: Story = {
         await waitFor(() =>
             expect(within(balloon).getByText("Edit made while reconnecting")).toBeTruthy(),
         );
-        await waitFor(() => expect(canvasElement.querySelector(".emr-toast--info")).toBeNull());
+        await waitFor(() => expect(reconnectNotice(canvasElement)).toBeNull());
         await expect(reconnectingApi.edits).toEqual(["Edit made while reconnecting"]);
 
         // A reply in a second reconnect window: held, then posted exactly once.
@@ -1819,7 +1857,7 @@ export const PlainUnauthorizedIsNotReconnecting: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = within(commentsPane(canvasElement));
 
         await userEvent.click(rail.getByRole("button", { name: "New comment" }));
 
@@ -1832,7 +1870,7 @@ export const PlainUnauthorizedIsNotReconnecting: Story = {
         const canvas = within(canvasElement);
         const toast = await waitFor(() => canvas.getByRole("alert"));
         await expect(toast.textContent).toContain("didn't go through");
-        await expect(canvasElement.querySelector(".emr-toast--info")).toBeNull();
+        await expect(reconnectNotice(canvasElement)).toBeNull();
         await expect(adoSession.getSnapshot()).toMatchObject({
             state: "live",
             heldWrites: 0,
@@ -1850,7 +1888,7 @@ export const PlainUnauthorizedIsNotReconnecting: Story = {
         );
         await expect(plainUnauthorizedApi.attempts).toBe(2);
         await expect(plainUnauthorizedApi.saved).toBe(1);
-        await expect(canvasElement.querySelector(".emr-toast--info")).toBeNull();
+        await expect(reconnectNotice(canvasElement)).toBeNull();
     },
 };
 
@@ -1868,6 +1906,10 @@ export const ReadOnly: Story = {
     },
 };
 
+/**
+ * A document deleted in the PR still opens at its previous version, read-only:
+ * a notice says why and no reply affordances are offered.
+ */
 export const DeletedDocumentReadOnly: Story = {
     args: {
         pr: {
@@ -1904,7 +1946,8 @@ export const DeletedDocumentReadOnly: Story = {
             ),
         ).toBeTruthy();
         expect(canvas.queryByText("@mention or reply")).toBeNull();
-        expect(canvasElement.querySelector(".emr-docnav-diff-toggle")).toBeNull();
+        // A wholesale deletion has no line-level changes to toggle.
+        expect(canvas.queryByRole("button", { name: "Changes" })).toBeNull();
     },
 };
 
@@ -1916,7 +1959,9 @@ export const SingleFile: Story = {
     },
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
-        expect(canvasElement.querySelector(".emr-docnav")).toBeNull();
+        expect(
+            within(canvasElement).queryByRole("complementary", { name: "Document navigation" }),
+        ).toBeNull();
     },
 };
 
@@ -2019,13 +2064,13 @@ export const ReaderStatusBarControls: Story = {
             expect(canvasElement.querySelector(".emr-word-added")?.textContent).toBe("2"),
         );
         expect(canvasElement.querySelector(".emr-word-removed")?.textContent).toBe("1");
-        expect(canvasElement.querySelector(".emr-statusbar-iteration.is-open")).not.toBeNull();
+        expect(updatesList(canvasElement)).not.toBeNull();
         await userEvent.click(canvas.getByRole("option", { name: /1 Define review goals/ }));
         await waitFor(() =>
             expect(canvas.getByRole("button", { name: "Base → Update 1" })).toBeTruthy(),
         );
         await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
-        expect(canvasElement.querySelector(".emr-statusbar-iteration.is-open")).not.toBeNull();
+        expect(updatesList(canvasElement)).not.toBeNull();
 
         // Focus mode: hide the nav, then the comments — the app root reflects it.
         await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
@@ -2083,7 +2128,7 @@ export const IterationSelectionPersistsAcrossFiles: Story = {
         );
 
         // Open the other file: the comparison is kept and the file renders at it.
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
         await waitFor(
@@ -2182,11 +2227,11 @@ export const IterationFileMissingAtAnUpdate: Story = {
         await waitForHighlight(canvasElement, "t-active");
         const canvas = within(canvasElement);
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         const pickUpdate = async (current: string, option: RegExp) => {
             // Choosing an update leaves the picker open; only open it if closed.
-            if (!canvasElement.querySelector(".emr-statusbar-iteration.is-open")) {
+            if (!updatesList(canvasElement)) {
                 await userEvent.click(canvas.getByRole("button", { name: current }));
             }
 
@@ -2208,13 +2253,13 @@ export const IterationFileMissingAtAnUpdate: Story = {
             ),
         );
         await expect(notice()).toBeNull();
-        await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+        await expect(loadErrorPanel(canvasElement)).toBeNull();
         await expect(canvasElement.querySelector(".emr-word-added")).toBeNull();
 
         // Base → Update 1: it doesn't exist yet at the newer end either.
         await pickUpdate("Update 1 → 2", /^1 Define review goals/);
         await waitFor(() => expect(notice()?.textContent).toContain("Not added yet at Update 1"));
-        await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+        await expect(loadErrorPanel(canvasElement)).toBeNull();
 
         // The file the PR deletes by Update 2 is still there at Update 1…
         await userEvent.click(nav.getByRole("button", { name: /old\.md/ }));
@@ -2498,13 +2543,20 @@ export const IterationLinkRoundTrip: Story = {
         await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
         await waitFor(() => expect(args.onIterationRangeChange).toHaveBeenLastCalledWith(null));
 
-        // Selecting the same comparison again doesn't re-report it.
+        // Selecting the same comparison again doesn't re-report it: the next
+        // report is the next real change.
         const calls = (args.onIterationRangeChange as ReturnType<typeof fn>).mock.calls.length;
 
         await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
-        await new Promise((r) => setTimeout(r, 100));
+        await userEvent.click(canvas.getByRole("option", { name: /^1 / }));
+        await waitFor(() =>
+            expect(args.onIterationRangeChange).toHaveBeenLastCalledWith({
+                fromUpdate: 0,
+                toUpdate: 1,
+            }),
+        );
         await expect((args.onIterationRangeChange as ReturnType<typeof fn>).mock.calls.length).toBe(
-            calls,
+            calls + 1,
         );
     },
 };
@@ -2523,7 +2575,7 @@ export const RangeChangesDimUntouchedFiles: Story = {
         await waitForHighlight(canvasElement, "t-active");
         const canvas = within(canvasElement);
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         const rowOf = (name: RegExp) =>
             nav.getByRole("button", { name }).closest<HTMLElement>(".emr-docnav-item")!;
@@ -2585,7 +2637,11 @@ export const RangeChangesLoadFailure: Story = {
             }),
         );
         await waitFor(() => expect(args.loadRangeChanges).toHaveBeenCalled());
-        await new Promise((r) => setTimeout(r, 100));
+        // Once the host's lookup has failed, no file row is dimmed.
+        await (args.loadRangeChanges as ReturnType<typeof fn>).mock.results[0]!.value.catch(
+            () => undefined,
+        );
+        await settleFrames();
         await expect(canvasElement.querySelector(".is-unchanged-in-range")).toBeNull();
     },
 };
@@ -2768,7 +2824,7 @@ export const NavResize: Story = {
 
         const navRail = canvasElement.querySelector<HTMLElement>(".emr-body__nav")!;
 
-        const docNav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        const navPane = docNav(canvasElement);
 
         const firstRow = canvasElement.querySelector<HTMLElement>(
             ".emr-docnav-item.emr-docnav-file",
@@ -2776,13 +2832,13 @@ export const NavResize: Story = {
 
         const badge = firstRow.querySelector<HTMLElement>(".emr-docnav-badge")!;
         expect(getComputedStyle(navRail).paddingLeft).toBe("0px");
-        expect(getComputedStyle(docNav).paddingRight).toBe("0px");
+        expect(getComputedStyle(navPane).paddingRight).toBe("0px");
         expect(firstRow.getBoundingClientRect().left).toBeCloseTo(
             navRail.getBoundingClientRect().left,
             1,
         );
         expect(firstRow.getBoundingClientRect().right).toBeCloseTo(
-            docNav.getBoundingClientRect().right,
+            navPane.getBoundingClientRect().right,
             1,
         );
         expect(badge.getBoundingClientRect().right).toBeLessThan(
@@ -3080,10 +3136,9 @@ export const CommentDragToReopen: Story = {
 };
 
 /**
- * Layout invariant guard: the comment rail carries a hard CSS min/max-width and
- * an always-present drag handle, so NO scale value — even a corrupt, oversized,
- * or `NaN` one from a bad pref — can balloon the pane past its cap, collapse it,
- * or make it unresizable. Runs in a real browser so the CSS caps are exercised.
+ * A corrupt saved comment-pane width (oversized, or not a number at all, e.g.
+ * from an older version's prefs) can't balloon the pane past its maximum,
+ * squeeze it below its minimum, or take away its resize handle.
  */
 export const CommentRailWidthClamped: Story = {
     play: async ({ canvasElement }) => {
@@ -3099,8 +3154,7 @@ export const CommentRailWidthClamped: Story = {
         const cs = getComputedStyle(rail);
         const maxPx = parseFloat(cs.maxWidth);
         const minPx = parseFloat(cs.minWidth);
-        // A finite hard cap AND floor must exist (regression guard if either is
-        // dropped from styles.scss).
+        // The pane has a real maximum and minimum width.
         expect(maxPx).toBeGreaterThan(0);
         expect(minPx).toBeGreaterThan(0);
         expect(maxPx).toBeGreaterThanOrEqual(minPx);
@@ -3227,9 +3281,9 @@ export const RemoteSyncFileRefreshFails: Story = {
  * Per-document routing mode: each file resolves its own `CommentApi` via
  * `commentApiForPath`, lazily loads its threads via `loadThreadsForPath`, and
  * resolves its own routed-PR pill via `routedPrForPath`. Switching files
- * exercises the per-path API cache, the per-document thread loader (including
- * its failure path on `/broken.md`), and the per-file routed-PR pill (shown
- * for `/a.md`, hidden for files with no resolved routing PR).
+ * shows each file's own threads (a file whose threads fail to load still
+ * opens), reuses a file's comment API when you come back to it, and shows the
+ * routed-PR pill only for files that have one (`/a.md`).
  */
 export const PerDocumentHousing: Story = {
     args: (() => {
@@ -3303,7 +3357,7 @@ export const PerDocumentHousing: Story = {
         await userEvent.click(bal.getByRole("button", { name: "Reply" }));
         await waitFor(() => expect(bal.getByText("Routed reply")).toBeTruthy());
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         // Switch to a doc with no resolved routing PR — distinct per-path API +
         // lazy thread load resolving to no threads, and the pill disappears.
@@ -3338,7 +3392,7 @@ export const PerDocumentHousing: Story = {
 
         // A doc whose thread loader rejects surfaces the inline error state.
         await userEvent.click(nav.getByRole("button", { name: /broken\.md/ }));
-        await waitFor(() => expect(canvasElement.querySelector(".emr-error")).toBeTruthy(), {
+        await waitFor(() => expect(loadErrorPanel(canvasElement)).toBeTruthy(), {
             timeout: 5000,
         });
     },
@@ -3399,7 +3453,7 @@ export const CommentHistoryStepper: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = () => within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = () => within(commentsPane(canvasElement));
 
         const older = await waitFor(() => rail().getByRole("button", { name: "Older version" }));
 
@@ -3428,7 +3482,7 @@ export const CommentHistoryStepper: Story = {
 
         // Switch away and back to A: its history is already cached, so the loader
         // is not re-run.
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
         await waitFor(
@@ -3461,7 +3515,7 @@ export const CommentHistoryStepperLoadErrors: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = within(commentsPane(canvasElement));
 
         const older = await waitFor(() => rail.getByRole("button", { name: "Older version" }));
 
@@ -3488,7 +3542,7 @@ export const CommentHistoryStepperHistoryError: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const status = within(canvasElement.querySelector<HTMLElement>(".emr-statusbar")!);
+        const status = within(statusBar(canvasElement));
 
         await waitFor(() => expect(status.queryByRole("button", { name: /Iteration/ })).toBeNull());
     },
@@ -3520,7 +3574,7 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
 
-        const rail = () => within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = () => within(commentsPane(canvasElement));
 
         const older = await waitFor(() => rail().getByRole("button", { name: "Older version" }));
 
@@ -3630,17 +3684,12 @@ export const MentionResolvesToName: Story = {
 };
 
 /**
-/**
- * The very first document's loader rejects, so Shell surfaces its inline
- * error panel before any Markdown renders. Guards the boot-completion path
- * where the content fetch settles as a FAILURE (the shell fires the terminal
- * "error" ready-signal instead of waiting forever for content that never
- * arrives).
+ * The PR's only document fails to load on open: instead of a reader stuck on
+ * "loading", the user gets an explanation that names the file.
  */
 export const DocumentLoadErrorOnBoot: Story = {
     args: {
-        // Single file whose loader always throws — the initial render can never
-        // produce HTML, exercising the `else if (error)` boot-ready branch.
+        // The only file, and its loader always throws.
         pr: {
             prId: 7,
             title: "Markdown review demo",
@@ -3657,9 +3706,15 @@ export const DocumentLoadErrorOnBoot: Story = {
         initialThreads: [],
     },
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".emr-error")).toBeTruthy(), {
-            timeout: 5000,
-        });
+        const canvas = within(canvasElement);
+        await waitFor(
+            () =>
+                expect(
+                    canvas.getByRole("heading", { name: "Couldn’t open this document" }),
+                ).toBeVisible(),
+            { timeout: 5000 },
+        );
+        await expect(canvas.getAllByText(BROKEN).length).toBeGreaterThan(0);
     },
 };
 
@@ -4342,7 +4397,7 @@ export const DeepLinkHeadingDroppedOnFileSwitch: Story = {
     },
     beforeEach: recordAnchorCue,
     play: async ({ canvasElement }) => {
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /a\.md/ }));
         await waitForHighlight(canvasElement, "t-active");
@@ -4424,7 +4479,7 @@ export const DocumentsMissingDocFallsBack: Story = {
         await expect(notice.textContent).toContain(GONE);
         await expect(notice.textContent).toContain(`Showing ${A} instead.`);
         await expect(args.onSelectPath).toHaveBeenCalledWith(A);
-        await expect(canvasElement.querySelector(".emr-error")).toBeNull();
+        await expect(loadErrorPanel(canvasElement)).toBeNull();
         await expect(reportedOperations).not.toContain("document-load");
 
         await userEvent.click(canvas.getByRole("button", { name: "Dismiss" }));
@@ -4441,7 +4496,7 @@ export const DocumentsMissingDocNoticeClearsOnNavigate: Story = {
         const canvas = within(canvasElement);
         await waitFor(() => canvas.getByText(/is no longer in this repository/));
 
-        const nav = within(canvasElement.querySelector<HTMLElement>(".emr-docnav")!);
+        const nav = within(docNav(canvasElement));
 
         await userEvent.click(nav.getByRole("button", { name: /notes\.md/ }));
         await articleBody(canvasElement, "Just another document");
@@ -4682,7 +4737,7 @@ export const HeadingLinksHiddenOnHistoricalVersion: Story = {
             expect(canvasElement.querySelector(".emr-rendered .emr-heading-link")).not.toBeNull(),
         );
 
-        const rail = () => within(canvasElement.querySelector<HTMLElement>(".emr-rail-col")!);
+        const rail = () => within(commentsPane(canvasElement));
 
         await userEvent.click(
             await waitFor(() => rail().getByRole("button", { name: "Older version" })),
@@ -5114,7 +5169,7 @@ export const NavOutlineToggle: Story = {
     play: async ({ canvasElement }) => {
         await waitForHighlight(canvasElement, "t-active");
         const canvas = within(canvasElement);
-        const nav = canvasElement.querySelector<HTMLElement>(".emr-docnav")!;
+        const nav = docNav(canvasElement);
 
         const headingRow = () => within(nav).queryByRole("button", { name: "Notes" });
 

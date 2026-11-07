@@ -7,6 +7,7 @@ import {
     writeLastPath,
     writeLastRepo,
 } from "../src/hub/lastVisited";
+import { failStorage } from "./readerStorageFailures";
 
 describe("lastVisited cache", () => {
     beforeEach(() => {
@@ -17,13 +18,11 @@ describe("lastVisited cache", () => {
     });
 
     it("stores everything under a single JSON key", () => {
-        expect(LAST_VISITED_KEY).toBe("emr.docs.lastVisited");
         writeLastRepo("proj", "repoA");
         writeLastPath("proj", "repoA", "/docs/x.md");
+
         expect(localStorage).toHaveLength(1);
-        const raw = localStorage.getItem(LAST_VISITED_KEY);
-        expect(raw).not.toBeNull();
-        expect(JSON.parse(raw!)).toEqual({
+        expect(JSON.parse(localStorage.getItem("emr.docs.lastVisited")!)).toEqual({
             proj: { repo: "repoA", paths: { repoA: "/docs/x.md" } },
         });
     });
@@ -61,37 +60,41 @@ describe("lastVisited cache", () => {
         expect(readLastPath("proj", "repoA")).toBe("/a.md");
     });
 
-    it("degrades to no memory when the stored JSON is corrupt", () => {
-        localStorage.setItem(LAST_VISITED_KEY, "{not json");
+    it.each([
+        { name: "corrupt JSON", stored: "{not json" },
+        { name: "a number", stored: "42" },
+        { name: "null", stored: "null" },
+        { name: "a string", stored: '"text"' },
+        { name: "a boolean", stored: "false" },
+    ])("remembers nothing when storage holds $name", ({ stored }) => {
+        localStorage.setItem(LAST_VISITED_KEY, stored);
+
         expect(readLastRepo("proj")).toBeUndefined();
         expect(readLastPath("proj", "repo")).toBeUndefined();
-    });
-
-    it("ignores a non-object JSON payload", () => {
-        for (const payload of ["42", "null", '"text"', "false"]) {
-            localStorage.setItem(LAST_VISITED_KEY, payload);
-            expect(readLastRepo("proj")).toBeUndefined();
-        }
     });
 
     it("returns no path when a stored project has no paths map", () => {
         localStorage.setItem(LAST_VISITED_KEY, JSON.stringify({ proj: { repo: "repoA" } }));
+
         expect(readLastPath("proj", "repoA")).toBeUndefined();
     });
 
-    it("swallows read failures and degrades to no memory", () => {
-        vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("storage disabled");
-        });
+    it("remembers nothing when storage cannot be read", () => {
+        failStorage("getItem");
+
         expect(readLastRepo("proj")).toBeUndefined();
         expect(readLastPath("proj", "repo")).toBeUndefined();
     });
 
-    it("swallows write failures silently", () => {
-        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("quota exceeded");
-        });
-        expect(() => writeLastRepo("proj", "repoA")).not.toThrow();
-        expect(() => writeLastPath("proj", "repo", "/x.md")).not.toThrow();
-    });
+    it.each([
+        { name: "repo", remember: () => writeLastRepo("proj", "repoA") },
+        { name: "path", remember: () => writeLastPath("proj", "repo", "/x.md") },
+    ])(
+        "carries on without remembering the $name when storage cannot be written",
+        ({ remember }) => {
+            failStorage("setItem");
+
+            expect(remember).not.toThrow();
+        },
+    );
 });

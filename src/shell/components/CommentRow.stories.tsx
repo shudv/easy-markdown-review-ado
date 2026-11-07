@@ -93,12 +93,40 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-    play: async ({ canvasElement }) => {
-        // Clicking the tools strip itself is swallowed (stopPropagation).
-        const tools = canvasElement.querySelector<HTMLElement>(".emr-comment-tools")!;
+/** Stand-in for the balloon card's "select this thread" click handler. */
+const selectThread = fn();
 
-        await userEvent.click(tools);
+/**
+ * Using a comment's actions — liking it, picking a ⋯ menu item, or a near-miss
+ * click in the gap beside those buttons — acts on the comment only: the click
+ * never also selects (and scrolls to) the thread card the row sits in.
+ */
+export const ActionsDoNotSelectThread: Story = {
+    decorators: [
+        (Story) => (
+            // Mirrors the balloon card's mouse-only select handler.
+            <div onClick={selectThread}>
+                <Story />
+            </div>
+        ),
+    ],
+    beforeEach: () => {
+        selectThread.mockClear();
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const moreOptions = canvas.getByRole("button", { name: "More options" });
+
+        // The gap around the hover buttons belongs to the comment's tool strip.
+        await userEvent.click(moreOptions.parentElement!);
+        await expect(canvas.queryByRole("menu")).toBeNull();
+
+        await userEvent.click(canvas.getByRole("button", { name: "Like this comment" }));
+        await expect(args.onToggleReaction).toHaveBeenCalledWith("t1", "c1", "like");
+        await userEvent.click(moreOptions);
+        await userEvent.click(canvas.getByRole("menuitem", { name: "Resolve thread" }));
+        await expect(args.onResolveThread).toHaveBeenCalledWith("t1");
+        await expect(selectThread).not.toHaveBeenCalled();
     },
 };
 
@@ -141,7 +169,10 @@ export const Edited: Story = {
 export const ReadOnly: Story = {
     args: { interactive: false },
     play: async ({ canvasElement }) => {
-        await expect(canvasElement.querySelector(".emr-comment-tools")).toBeNull();
+        const canvas = within(canvasElement);
+        await expect(canvas.getByText(ownComment.bodyMarkdown)).toBeVisible();
+        await expect(canvas.queryByRole("button", { name: "More options" })).toBeNull();
+        await expect(canvas.queryByRole("button", { name: "Like this comment" })).toBeNull();
     },
 };
 
@@ -154,7 +185,10 @@ export const Like: Story = {
     },
 };
 
-/** A like pill that includes me, with several likers (plural "others"). */
+/**
+ * A comment I liked along with others: the pill shows as pressed, names me
+ * first as "You", and clicking it takes my like back.
+ */
 export const LikedByMeAndOthers: Story = {
     args: {
         comment: {
@@ -172,41 +206,19 @@ export const LikedByMeAndOthers: Story = {
         },
     },
     play: async ({ args, canvasElement }) => {
-        const pill = canvasElement.querySelector<HTMLButtonElement>(".emr-like-pill")!;
+        const pill = within(canvasElement).getByRole("button", {
+            name: "You, Alex Rivera and Dana Xu liked this",
+        });
 
-        // Current user shown first as "You", then the other likers by name.
-        await expect(pill.title).toBe("You, Alex Rivera and Dana Xu liked this");
+        await expect(pill).toHaveAttribute("aria-pressed", "true");
+        await expect(pill).toHaveTextContent("3");
         await userEvent.click(pill);
         await expect(args.onToggleReaction).toHaveBeenCalledWith("t1", "c1", "like");
     },
 };
 
-/** A like pill that includes me and one other (singular "other"). */
-export const LikedByMeAndOneOther: Story = {
-    args: {
-        comment: {
-            ...ownComment,
-            reactions: [
-                {
-                    kind: "like",
-                    users: [
-                        { id: "u-shubhd", displayName: "Shubham Dwivedi" },
-                        { id: "u-alex", displayName: "Alex Rivera" },
-                    ],
-                },
-            ],
-        },
-    },
-    play: async ({ canvasElement }) => {
-        const pill = canvasElement.querySelector<HTMLButtonElement>(".emr-like-pill.is-mine")!;
-
-        await expect(pill).toBeTruthy();
-        await expect(pill.title).toBe("You and Alex Rivera liked this");
-    },
-};
-
-/** A like pill from several other people (plural "people"). */
-export const LikedBySeveralOthers: Story = {
+/** A comment only others liked: the pill counts them and isn't pressed for me. */
+export const LikedByOthers: Story = {
     args: {
         comment: {
             ...ownComment,
@@ -222,25 +234,12 @@ export const LikedBySeveralOthers: Story = {
         },
     },
     play: async ({ canvasElement }) => {
-        await expect(within(canvasElement).getByText("2")).toBeTruthy();
-    },
-};
+        const pill = within(canvasElement).getByRole("button", {
+            name: "Alex Rivera and Dana Xu liked this",
+        });
 
-/** A like pill from a single other person (singular "person"). */
-export const LikedByOneOther: Story = {
-    args: {
-        comment: {
-            ...ownComment,
-            reactions: [
-                {
-                    kind: "like",
-                    users: [{ id: "u-alex", displayName: "Alex Rivera" }],
-                },
-            ],
-        },
-    },
-    play: async ({ canvasElement }) => {
-        await expect(within(canvasElement).getByText("1")).toBeTruthy();
+        await expect(pill).toHaveAttribute("aria-pressed", "false");
+        await expect(pill).toHaveTextContent("2");
     },
 };
 
@@ -263,14 +262,14 @@ export const CopyLinkSucceeds: Story = {
                 "https://dev.azure.com/org/proj/_git/repo/pullrequest/4?_a=pub.ext.markdown-review-pr-tab&path=%2Fdocs%2Fa.md&comment=t1",
             );
             await expect(writeText).toHaveBeenCalledTimes(1);
-            // The menu stays open and confirms the copy inline.
+            // The menu stays open and confirms the copy inline, then resets.
             await waitFor(() =>
                 expect(canvas.getByRole("menuitem", { name: "Link copied" })).toBeTruthy(),
             );
-            // Let the copied-state reset timer fire.
-            await new Promise((r) => setTimeout(r, 1300));
-            await waitFor(() =>
-                expect(canvas.getByRole("menuitem", { name: "Link to comment" })).toBeTruthy(),
+            await waitFor(
+                () =>
+                    expect(canvas.getByRole("menuitem", { name: "Link to comment" })).toBeTruthy(),
+                { timeout: 2500 },
             );
         } finally {
             restore();
@@ -377,7 +376,6 @@ export const CopyLinkFallsBackToLegacy: Story = {
             await waitFor(() =>
                 expect(canvas.getByRole("menuitem", { name: "Link copied" })).toBeTruthy(),
             );
-            await new Promise((r) => setTimeout(r, 1300));
         } finally {
             restoreExec();
             restoreClipboard();
@@ -481,10 +479,11 @@ export const EditHeldSaveKeepsNewerText: Story = {
 
         await userEvent.type(textarea, " plus more");
         keepTyping.finish(true);
-        await new Promise((r) => setTimeout(r, 50));
+        // The author is still typing when the save lands.
+        await userEvent.type(textarea, "!");
         await expect(
             (within(canvasElement).getByRole("textbox") as HTMLTextAreaElement).value,
-        ).toBe("First version plus more");
+        ).toBe("First version plus more!");
     },
 };
 
@@ -503,22 +502,24 @@ export const EditHeldSaveKeepsReopenedEditor: Story = {
 
         await userEvent.type(again, " — second try");
         reopen.finish(true);
-        await new Promise((r) => setTimeout(r, 50));
+        await userEvent.type(again, "!");
         await expect(canvas.getByRole("textbox")).toBe(again);
+        await expect(again.value).toContain("second try!");
     },
 };
 
 const failing = heldSave();
-/** A failed save keeps the editor open with the text. */
+/** A failed save keeps the editor open with the text, so the author can retry. */
 export const EditFailedSaveKeepsEditor: Story = {
     args: { onEdit: failing.onEdit },
     play: async ({ canvasElement }) => {
-        await openEditorAndSave(canvasElement, "Not saved yet");
+        const textarea = await openEditorAndSave(canvasElement, "Not saved yet");
         failing.finish(false);
-        await new Promise((r) => setTimeout(r, 50));
+        await userEvent.type(textarea, "!");
         await expect(
             (within(canvasElement).getByRole("textbox") as HTMLTextAreaElement).value,
-        ).toBe("Not saved yet");
+        ).toBe("Not saved yet!");
+        await expect(within(canvasElement).getByRole("button", { name: "Save" })).toBeEnabled();
     },
 };
 

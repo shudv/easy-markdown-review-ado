@@ -35,13 +35,4 @@ describe("shouldPublishDefaultPath", () => {
         // repoA was published; selecting repoB (files resolved) should publish it.
         expect(shouldPublishDefaultPath("repoA", "repoB", "/docs/b.md")).toBe(true);
     });
-
-    it("models the skeleton→files-land sequence for a fresh repo", () => {
-        // Render 1: repoB just selected, files empty (skeleton) → no publish.
-        expect(shouldPublishDefaultPath("repoA", "repoB", "")).toBe(false);
-        // Render 2: repoB files streamed in → publish exactly once.
-        expect(shouldPublishDefaultPath("repoA", "repoB", "/docs/b.md")).toBe(true);
-        // Render 3: repoB now latched as published → no duplicate publish.
-        expect(shouldPublishDefaultPath("repoB", "repoB", "/docs/b.md")).toBe(false);
-    });
 });

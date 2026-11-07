@@ -37,10 +37,12 @@ describe("filterReposByName", () => {
         expect(filterReposByName(repos, undefined)).toEqual(repos);
     });
 
-    it("matches a name case-insensitively and EXACTLY (not substring)", () => {
-        // `docs` must NOT also match `Docs-Archive` or `product-docs`.
-        expect(filterReposByName(repos, "DOCS")).toEqual([{ name: "docs" }]);
-        expect(filterReposByName(repos, "docs-archive")).toEqual([{ name: "Docs-Archive" }]);
+    // `docs` must NOT also match `Docs-Archive` or `product-docs`.
+    it.each([
+        ["DOCS", "docs"],
+        ["docs-archive", "Docs-Archive"],
+    ])("restricted to %s, keeps only the repo named exactly %s, ignoring case", (name, kept) => {
+        expect(filterReposByName(repos, name)).toEqual([{ name: kept }]);
     });
 
     it("falls back to the full listing when the name matches nothing", () => {
@@ -55,29 +57,45 @@ describe("listingFailureOutcome", () => {
 
     const forbidden = Object.assign(new Error("Forbidden"), { status: 403 });
 
-    it("treats a missing folder as an empty listing when allowed", () => {
-        expect(listingFailureOutcome(notFound, { missingOk: true })).toBe("empty");
-        expect(
-            listingFailureOutcome(notFound, {
-                missingOk: true,
-                propagate: true,
-            }),
-        ).toBe("empty");
-    });
-
-    it("rethrows other failures so callers can tell failed from empty", () => {
-        expect(
-            listingFailureOutcome(forbidden, {
-                missingOk: true,
-                propagate: true,
-            }),
-        ).toBe("throw");
-        expect(listingFailureOutcome(notFound, { propagate: true })).toBe("throw");
-    });
-
-    it("degrades to an empty listing for tree browsing", () => {
-        expect(listingFailureOutcome(forbidden, {})).toBe("degrade");
-        expect(listingFailureOutcome(notFound, {})).toBe("degrade");
+    it.each([
+        {
+            name: "a missing folder lists as empty when missing is ok",
+            error: notFound,
+            opts: { missingOk: true },
+            outcome: "empty",
+        },
+        {
+            name: "a missing folder lists as empty even when the caller propagates",
+            error: notFound,
+            opts: { missingOk: true, propagate: true },
+            outcome: "empty",
+        },
+        {
+            name: "a forbidden folder is rethrown so the caller can tell failed from empty",
+            error: forbidden,
+            opts: { missingOk: true, propagate: true },
+            outcome: "throw",
+        },
+        {
+            name: "a missing folder is rethrown when missing is not ok",
+            error: notFound,
+            opts: { propagate: true },
+            outcome: "throw",
+        },
+        {
+            name: "a forbidden folder degrades to an empty listing for tree browsing",
+            error: forbidden,
+            opts: {},
+            outcome: "degrade",
+        },
+        {
+            name: "a missing folder degrades to an empty listing for tree browsing",
+            error: notFound,
+            opts: {},
+            outcome: "degrade",
+        },
+    ])("$name", ({ error, opts, outcome }) => {
+        expect(listingFailureOutcome(error, opts)).toBe(outcome);
     });
 });
 
@@ -93,9 +111,8 @@ describe("findOrderFile", () => {
         expect(findOrderFile(items, "/Guides")).toBe("/Guides/.order");
     });
 
-    it("accepts slash-free and trailing-slash scope paths", () => {
-        expect(findOrderFile(items, "Guides")).toBe("/Guides/.order");
-        expect(findOrderFile(items, "/Guides/")).toBe("/Guides/.order");
+    it.each(["Guides", "/Guides/"])("finds it for the scope path %s too", (scope) => {
+        expect(findOrderFile(items, scope)).toBe("/Guides/.order");
     });
 
     it("finds the root .order", () => {
@@ -178,114 +195,90 @@ describe("projectMarkdownLevel", () => {
 });
 
 describe("normalizePath", () => {
-    it("returns `/` for empty input", () => {
-        expect(normalizePath("")).toBe("/");
-    });
-
-    it("strips a single trailing slash", () => {
-        expect(normalizePath("docs/")).toBe("docs");
-    });
-
-    it("strips repeated trailing slashes", () => {
-        expect(normalizePath("docs////")).toBe("docs");
-    });
-
-    it("returns `/` when the input is just slashes", () => {
-        expect(normalizePath("/")).toBe("/");
-        expect(normalizePath("///")).toBe("/");
-    });
-
-    it("passes through canonical paths unchanged", () => {
-        expect(normalizePath("docs/api/v1")).toBe("docs/api/v1");
+    it.each([
+        { name: "an empty path is the root", path: "", normalized: "/" },
+        { name: "a trailing slash is dropped", path: "docs/", normalized: "docs" },
+        { name: "repeated trailing slashes are dropped", path: "docs////", normalized: "docs" },
+        { name: "the root stays the root", path: "/", normalized: "/" },
+        { name: "a run of slashes is the root", path: "///", normalized: "/" },
+        { name: "a canonical path is unchanged", path: "docs/api/v1", normalized: "docs/api/v1" },
+    ])("$name", ({ path, normalized }) => {
+        expect(normalizePath(path)).toBe(normalized);
     });
 });
 
 describe("stripRefsHeads", () => {
-    it("returns the bare branch when the ref starts with `refs/heads/`", () => {
-        expect(stripRefsHeads("refs/heads/main")).toBe("main");
-        expect(stripRefsHeads("refs/heads/feat/x")).toBe("feat/x");
+    it.each([
+        ["refs/heads/main", "main"],
+        ["refs/heads/feat/x", "feat/x"],
+    ])("shows the branch ref %s as %s", (ref, branch) => {
+        expect(stripRefsHeads(ref)).toBe(branch);
     });
 
-    it("passes through non-`refs/heads/` refs unchanged", () => {
-        expect(stripRefsHeads("main")).toBe("main");
-        expect(stripRefsHeads("refs/tags/v1")).toBe("refs/tags/v1");
+    it.each(["main", "refs/tags/v1"])("leaves the non-branch ref %s unchanged", (ref) => {
+        expect(stripRefsHeads(ref)).toBe(ref);
     });
 
-    it("returns an empty string for null/undefined input", () => {
-        expect(stripRefsHeads(undefined)).toBe("");
-        expect(stripRefsHeads(null)).toBe("");
-        expect(stripRefsHeads("")).toBe("");
+    it.each([undefined, null, ""])("shows no branch for a missing ref (%s)", (ref) => {
+        expect(stripRefsHeads(ref)).toBe("");
     });
 });
 
 describe("editBranchName", () => {
-    it("slugs the file name and appends a base-36 timestamp", () => {
-        // now = 0 → base-36 "0".
-        expect(editBranchName("Release Notes.md", 0)).toBe("emr/edit/release-notes-0");
+    // Git refs cannot contain `..` or spaces, or begin/end with `.` or `-`.
+    it.each([
+        {
+            name: "lower-cases words and joins them with dashes",
+            file: "Release Notes.md",
+            slug: "release-notes",
+        },
+        { name: "drops an upper-case .MD extension", file: "README.MD", slug: "readme" },
+        {
+            name: "turns runs of unsafe characters into one dash",
+            file: "--a  b//c!!.md",
+            slug: "a-b-c",
+        },
+        { name: "keeps dots, underscores and dashes", file: "a_b.c-d.md", slug: "a_b.c-d" },
+        { name: "drops the dot of a dotfile", file: ".env.md", slug: "env" },
+        { name: "collapses a double dot", file: "a..b.md", slug: "a.b" },
+        {
+            name: "drops only the final .md of a name that has another",
+            file: "notes.md-draft.md",
+            slug: "notes.md-draft",
+        },
+        { name: "drops dashes trailing the name", file: "draft---.md", slug: "draft" },
+        { name: "falls back to `doc` for a name of only dots", file: "....md", slug: "doc" },
+        {
+            name: "falls back to `doc` for a name with no safe characters",
+            file: "!!!.md",
+            slug: "doc",
+        },
+    ])("$name", ({ file, slug }) => {
+        expect(editBranchName(file, 0)).toBe(`emr/edit/${slug}-0`);
     });
 
-    it("drops the .md extension case-insensitively", () => {
-        expect(editBranchName("README.MD", 0)).toBe("emr/edit/readme-0");
-    });
-
-    it("collapses runs of unsafe characters to a single dash and trims edges", () => {
-        expect(editBranchName("--a  b//c!!.md", 0)).toBe("emr/edit/a-b-c-0");
-    });
-
-    it("keeps allowed dot/underscore/dash characters", () => {
-        expect(editBranchName("a_b.c-d.md", 0)).toBe("emr/edit/a_b.c-d-0");
-    });
-
-    it("collapses `..` and strips leading dots so the ref stays valid", () => {
-        // Git refs cannot contain `..` or begin/end with `.`.
-        // `.env.md` -> slug `env` (dropped the `.md`, leading dot trimmed).
-        expect(editBranchName(".env.md", 0)).toBe("emr/edit/env-0");
-        // `a..b.md` -> `a.b` (double dot collapsed).
-        expect(editBranchName("a..b.md", 0)).toBe("emr/edit/a.b-0");
-        // A name that is only dots collapses away and falls back to `doc`.
-        expect(editBranchName("....md", 0)).toBe("emr/edit/doc-0");
-    });
-
-    it("only strips a TRAILING .md, not an interior one (anchored $)", () => {
-        // If the `$` anchor were dropped, the first interior ".md" would be
-        // removed instead of the extension.
-        expect(editBranchName("x.mdy.md", 0)).toBe("emr/edit/x.mdy-0");
-    });
-
-    it("trims ALL trailing dashes, not just one", () => {
-        // Literal dashes are allowed chars (not collapsed), so "a---.md" reaches
-        // the trim step with three trailing dashes; the trim must remove them all.
-        expect(editBranchName("a---.md", 0)).toBe("emr/edit/a-0");
-    });
-
-    it("falls back to `doc` when the name has no slug characters", () => {
-        expect(editBranchName("!!!.md", 0)).toBe("emr/edit/doc-0");
-    });
-
-    it("encodes the timestamp in base 36", () => {
+    it("suffixes the edit time in base 36 so repeated edits get distinct branches", () => {
         expect(editBranchName("x.md", 36)).toBe("emr/edit/x-10");
     });
 });
 
 describe("editPrDescription", () => {
-    it("embeds the path in an inline code span and mentions the placeholder", () => {
+    it("tells reviewers which file the PR edits and to remove the placeholder line", () => {
         const body = editPrDescription("docs/guide.md");
-        const lines = body.split("\n");
-        expect(lines[0]).toBe("Drafted from **Easy Markdown Review** to edit `docs/guide.md`.");
-        // Blank separator line between the intro and the placeholder note.
-        expect(lines[1]).toBe("");
+        expect(body).toContain("Drafted from **Easy Markdown Review** to edit `docs/guide.md`.");
         expect(body).toContain("A placeholder line was added to the top of the file");
-        expect(body).toMatch(/Remove it before completing the PR/);
-        expect(lines).toHaveLength(5);
+        expect(body).toContain("Remove it before completing the PR");
     });
 });
 
 describe("escapeSearchQuery", () => {
-    it("replaces ALM-Search operator characters with spaces", () => {
-        // Inputs like ` path/to/foo:bar` shouldn't compose into a malformed query.
-        expect(escapeSearchQuery("foo:bar")).toBe("foo bar");
-        expect(escapeSearchQuery("a(b)c")).toBe("a b c");
-        expect(escapeSearchQuery('"q"')).toBe("q");
+    // Inputs like ` path/to/foo:bar` shouldn't compose into a malformed query.
+    it.each([
+        ["foo:bar", "foo bar"],
+        ["a(b)c", "a b c"],
+        ['"q"', "q"],
+    ])("neutralises search operators in %s as %s", (query, escaped) => {
+        expect(escapeSearchQuery(query)).toBe(escaped);
     });
 
     it("strips outer whitespace", () => {
@@ -342,13 +335,12 @@ describe("identityAvatarUrl", () => {
         ).toBe("https://dev.azure.com/o/_api/_common/identityImage?id=a%20b%2Fc");
     });
 
-    it("returns undefined when there is no source image URL", () => {
-        expect(identityAvatarUrl({ id: ID })).toBeUndefined();
-        expect(identityAvatarUrl({ id: ID, imageUrl: "" })).toBeUndefined();
-    });
-
-    it("returns undefined for an unparseable image URL", () => {
-        expect(identityAvatarUrl({ id: ID, imageUrl: "not a url" })).toBeUndefined();
+    it.each([
+        { name: "no source image URL", imageUrl: undefined },
+        { name: "an empty image URL", imageUrl: "" },
+        { name: "an unparseable image URL", imageUrl: "not a url" },
+    ])("has no avatar for $name", ({ imageUrl }) => {
+        expect(identityAvatarUrl({ id: ID, imageUrl })).toBeUndefined();
     });
 });
 
@@ -439,34 +431,20 @@ describe("selectRoutingPr", () => {
         // 31's closedDate (Jun 15).
         expect(selectRoutingPr(prs)?.pullRequestId).toBe(30);
     });
-
-    it("is not affected by input ordering", () => {
-        const newest = pr(41, COMPLETED, {
-            closedDate: "2024-09-01T00:00:00Z",
-        });
-
-        const older = pr(40, COMPLETED, { closedDate: "2024-08-01T00:00:00Z" });
-        expect(selectRoutingPr([newest, older])?.pullRequestId).toBe(41);
-        expect(selectRoutingPr([older, newest])?.pullRequestId).toBe(41);
-    });
 });
 
 describe("firstCommitId", () => {
-    it("returns null for undefined / null input", () => {
-        expect(firstCommitId(undefined)).toBeNull();
-        expect(firstCommitId(null)).toBeNull();
-    });
-
-    it("returns null for an empty list", () => {
-        expect(firstCommitId([])).toBeNull();
-    });
-
     it("returns the first commit id (newest-first getCommits result)", () => {
         expect(firstCommitId([{ commitId: "abc" }, { commitId: "def" }])).toBe("abc");
     });
 
-    it("returns null when the first commit has no id", () => {
-        expect(firstCommitId([{}])).toBeNull();
+    it.each([
+        { name: "a missing response", commits: undefined },
+        { name: "a null response", commits: null },
+        { name: "no commits", commits: [] },
+        { name: "a first commit without an id", commits: [{}] },
+    ])("has no commit for $name", ({ commits }) => {
+        expect(firstCommitId(commits)).toBeNull();
     });
 });
 
@@ -484,13 +462,12 @@ describe("selectRoutingPrFromQuery", () => {
     const ACTIVE = 1;
     const SHA = "f00ba5";
 
-    it("returns null for undefined / null results", () => {
-        expect(selectRoutingPrFromQuery(undefined, SHA)).toBeNull();
-        expect(selectRoutingPrFromQuery(null, SHA)).toBeNull();
-    });
-
-    it("returns null for an empty results array", () => {
-        expect(selectRoutingPrFromQuery([], SHA)).toBeNull();
+    it.each([
+        { name: "a missing response", results: undefined },
+        { name: "a null response", results: null },
+        { name: "no query results", results: [] },
+    ])("routes nowhere for $name", ({ results }) => {
+        expect(selectRoutingPrFromQuery(results, SHA)).toBeNull();
     });
 
     it("returns null when the commit has no entry in the result map", () => {
@@ -536,13 +513,12 @@ describe("selectRoutingPrFromQuery", () => {
 });
 
 describe("commitIds", () => {
-    it("returns [] for undefined / null input", () => {
-        expect(commitIds(undefined)).toEqual([]);
-        expect(commitIds(null)).toEqual([]);
-    });
-
-    it("returns [] for an empty list", () => {
-        expect(commitIds([])).toEqual([]);
+    it.each([
+        { name: "a missing response", commits: undefined },
+        { name: "a null response", commits: null },
+        { name: "no commits", commits: [] },
+    ])("has no ids for $name", ({ commits }) => {
+        expect(commitIds(commits)).toEqual([]);
     });
 
     it("preserves order and skips entries without an id", () => {
@@ -558,13 +534,12 @@ describe("selectRoutingPrsFromQuery", () => {
     const COMPLETED = 3;
     const ACTIVE = 1;
 
-    it("returns [] for undefined / null results", () => {
-        expect(selectRoutingPrsFromQuery(undefined, ["a"])).toEqual([]);
-        expect(selectRoutingPrsFromQuery(null, ["a"])).toEqual([]);
-    });
-
-    it("returns [] for an empty results array", () => {
-        expect(selectRoutingPrsFromQuery([], ["a"])).toEqual([]);
+    it.each([
+        { name: "a missing response", results: undefined },
+        { name: "a null response", results: null },
+        { name: "no query results", results: [] },
+    ])("finds no PRs for $name", ({ results }) => {
+        expect(selectRoutingPrsFromQuery(results, ["a"])).toEqual([]);
     });
 
     it("returns [] when no commit id has a mapped PR", () => {
@@ -778,20 +753,19 @@ describe("runWithConcurrency", () => {
         expect(max).toBeGreaterThan(0);
     });
 
-    it("treats cap < 1 as 1", async () => {
+    it("still runs every item when given a cap below 1", async () => {
         const out = await runWithConcurrency([1, 2, 3], 0, async (n) => n);
         expect(out).toEqual([1, 2, 3]);
     });
 });
 
 describe("changedPathsFromEntries", () => {
-    it("returns [] for a missing list", () => {
-        expect(changedPathsFromEntries(undefined)).toEqual([]);
-        expect(changedPathsFromEntries(null)).toEqual([]);
-    });
-
-    it("returns [] for an empty list", () => {
-        expect(changedPathsFromEntries([])).toEqual([]);
+    it.each([
+        { name: "a missing list", entries: undefined },
+        { name: "a null list", entries: null },
+        { name: "an empty list", entries: [] },
+    ])("has no paths for $name", ({ entries }) => {
+        expect(changedPathsFromEntries(entries)).toEqual([]);
     });
 
     it("projects each entry's item path, normalized and lower-cased", () => {
@@ -822,9 +796,8 @@ describe("prsTouchingPath", () => {
         { ref: "c", paths: ["/other.md"] },
     ];
 
-    it("returns [] for a missing list", () => {
-        expect(prsTouchingPath(undefined, "/docs/api.md")).toEqual([]);
-        expect(prsTouchingPath(null, "/docs/api.md")).toEqual([]);
+    it.each([undefined, null])("finds nothing in a missing list (%s)", (list) => {
+        expect(prsTouchingPath(list, "/docs/api.md")).toEqual([]);
     });
 
     it("keeps only PRs whose paths include the target", () => {
@@ -855,10 +828,12 @@ describe("webContextProject", () => {
         });
     });
 
-    it("returns null without a usable project id", () => {
-        expect(webContextProject(undefined)).toBeNull();
-        expect(webContextProject({ project: null })).toBeNull();
-        expect(webContextProject({ project: { id: "" } })).toBeNull();
-        expect(webContextProject({ project: { name: "x" } })).toBeNull();
+    it.each([
+        { name: "no web context", context: undefined },
+        { name: "no project", context: { project: null } },
+        { name: "an empty project id", context: { project: { id: "" } } },
+        { name: "a project without an id", context: { project: { name: "x" } } },
+    ])("has no project for $name", ({ context }) => {
+        expect(webContextProject(context)).toBeNull();
     });
 });

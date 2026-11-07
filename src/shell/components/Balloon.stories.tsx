@@ -187,20 +187,15 @@ export const ReadOnly: Story = {
     },
 };
 
-/** Without an onHeightChange callback the measure effect is a no-op; inline:false
- *  with no topPx pins the card to the top. */
-export const NoHeightCallback: Story = {
-    args: { onHeightChange: undefined, topPx: undefined },
-    play: async ({ canvasElement }) => {
-        const canvas = within(canvasElement);
-        await expect(canvas.getByText("First comment")).toBeTruthy();
-    },
-};
-
-/** A card that grows on its own (no prop change) re-reports its height. */
+/**
+ * A positioned card that grows after it was placed (say, an image in a
+ * comment finishes loading) reports its new height, so the host can push the
+ * cards below it down instead of overlapping them.
+ */
 export const ReportsHeightOnResize: Story = {
     args: { onHeightChange: fn() },
     play: async ({ args, canvasElement }) => {
+        // The card hosting the thread, which the content below makes taller.
         const card = canvasElement.querySelector<HTMLElement>("[data-thread-id='t1']")!;
 
         const before = card.getBoundingClientRect().height;
@@ -233,12 +228,16 @@ export const NativeMedia: Story = {
         }),
     },
     play: async ({ canvasElement }) => {
-        const media = await waitFor(() =>
-            canvasElement.querySelector<HTMLElement>(".emr-comment-media"),
-        );
+        const canvas = within(canvasElement);
 
-        await expect(media?.hasAttribute("role")).toBe(false);
-        await expect(media?.hasAttribute("tabindex")).toBe(false);
-        await expect(canvasElement.querySelector(".emr-comment-attachment")).toBeTruthy();
+        // The image shows inline as plain content, not as an interactive control.
+        await expect(await canvas.findByRole("img", { name: "Wide layout preview" })).toBeVisible();
+        await expect(canvas.queryByRole("button", { name: /Wide layout preview/ })).toBeNull();
+
+        const attachment = canvas.getByRole("link", {
+            name: "review-notes.pdf (attachment, opens in new tab)",
+        });
+
+        await expect(attachment).toHaveAttribute("target", "_blank");
     },
 };

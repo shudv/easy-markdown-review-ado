@@ -4,7 +4,7 @@
 
 - Public base: `3326f9f` (#32).
 - Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
-- New product boundary: `e01ef29` (source branch `chore/four-space-indent`; not
+- New product boundary: `fa7994f` (source branch `chore/four-space-indent`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.1`.
 - Strategy: replay the product tree delta without importing private history.
@@ -21,13 +21,20 @@
 | `61b5787`     | Prettier indents with 4 spaces and wraps at 100 columns, and the repository is reformatted; VS Code workspace settings match the formatter (4-space tabs, no indentation detection, LF, Prettier as default formatter and a recommended extension). Reflow follow-ups: `eslint --fix` blank lines, one `react-hooks/refs` disable kept above its line, two functions back under the 80-line limit, two `it.each` tables. |
 | `8baddb5`     | Unit tests are type-checked: `test/tsconfig.json` (ES2023 lib for Node/jsdom) replaces `tsconfig.test.json`, which inherited the root `exclude` of `test`, and `tsconfig.eslint.json`; `npm run typecheck:test`, type-aware ESLint and the editor share it. The 40 errors it surfaced in 18 test files are fixed, and `coverage-ignore-rationale.mjs` gets a `.d.mts`.                                                   |
 | `e01ef29`     | The source removes its local multi-agent Agency review tooling (agents, contracts, `review:local` runner and `test:review` tests, which were never mirrored). Mirrored as the matching cleanup: the cspell `.agency/**` ignore path and three words only that tooling used.                                                                                                                                              |
+| `fa7994f`     | Tests are rewritten as scenarios: mutant-only tests are reworded or removed, duplicates removed, the rendered-diff suites become one suite per feature (`markdown.diff.<feature>`), tests record telemetry through `test/telemetrySink.ts` instead of mocking it, and stories use role/label/text queries. Eight test-only exports become module-private.                                                                |
 
 ### Public-specific adaptations retained
 
 - Keep all adaptations and exclusions from the earlier syncs below.
-- `test/markdown.diffScenarios.test.ts` keeps its public link example
-  (`example.visualstudio.com`, `docs/ReviewGuide/README.md`) inside the
-  reformatted file.
+- The public link example (`example.visualstudio.com`,
+  `docs/ReviewGuide/README.md`) now lives in
+  `test/markdown.diff.inlineChanges.test.ts` (the source split
+  `markdown.diffScenarios.test.ts` into per-feature suites) and stays in
+  `ArticleView.productionDiffs.stories.tsx`.
+- The RepoPicker story's hover-tolerant chevron check is no longer needed: the
+  rewritten story no longer asserts the chevron's resting opacity.
+- The source's `verifyMarketplaceVersion.test.ts` edits are not mirrored; that
+  test covers the private Marketplace helper, which is excluded.
 - Public-only files (`.github/workflows/*`, this ledger) and adapted files
   (`package.json`, `vss-extension.json`, the feedback contacts in
   `DocumentsApp.tsx` and `PrTabApp.tsx`, and the rest) are reformatted in
@@ -37,7 +44,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `e01ef29` and
+Compare the next source product tree against the merged form of `fa7994f` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

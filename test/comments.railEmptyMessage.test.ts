@@ -17,35 +17,17 @@ describe("chooseRailEmptyMessage", () => {
         );
     });
 
-    it("stays silent when the Active filter empties the rail", () => {
-        expect(
-            chooseRailEmptyMessage({
-                ...base,
-                filterMode: "active",
-                fileThreadCount: 2,
-            }),
-        ).toBeNull();
-    });
-
-    it("stays silent when the Resolved filter empties the rail", () => {
-        expect(
-            chooseRailEmptyMessage({
-                ...base,
-                filterMode: "resolved",
-                fileThreadCount: 3,
-            }),
-        ).toBeNull();
-    });
-
-    it("stays silent when the My-comments filter empties the rail", () => {
-        expect(
-            chooseRailEmptyMessage({
-                ...base,
-                filterMode: "mine",
-                fileThreadCount: 4,
-            }),
-        ).toBeNull();
-    });
+    // The rail header already names the active filter, so an empty line adds nothing.
+    it.each([
+        { filterMode: "active", fileThreadCount: 2 },
+        { filterMode: "resolved", fileThreadCount: 3 },
+        { filterMode: "mine", fileThreadCount: 4 },
+    ] as const)(
+        "stays silent when the $filterMode filter hides every thread",
+        ({ filterMode, fileThreadCount }) => {
+            expect(chooseRailEmptyMessage({ ...base, filterMode, fileThreadCount })).toBeNull();
+        },
+    );
 
     it("does not blame the filter when it is showing everything", () => {
         // filterMode 'all' can't be hiding anything, so an empty rail falls through

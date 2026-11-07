@@ -7,6 +7,7 @@ import {
     readCollapsedDirs,
     writeCollapsedDirs,
 } from "../src/shell/components/navStorage";
+import { failStorage } from "./readerStorageFailures";
 
 beforeEach(() => {
     sessionStorage.clear();
@@ -77,50 +78,48 @@ describe("collapsed dirs set", () => {
         expect(readCollapsedDirs("k2")).toEqual(new Set(["b"]));
     });
 
-    it("returns an empty set when stored JSON is malformed", () => {
-        sessionStorage.setItem("emr.docnav.collapsedDirs.bad", "{not json");
-        expect(readCollapsedDirs("bad")).toEqual(new Set());
-    });
+    it.each([
+        { name: "malformed JSON", stored: "{not json" },
+        { name: "JSON that is not a list", stored: '{"a":1}' },
+    ])("shows every folder expanded when storage holds $name", ({ stored }) => {
+        sessionStorage.setItem("emr.docnav.collapsedDirs.k", stored);
 
-    it("returns an empty set when stored JSON is not an array", () => {
-        sessionStorage.setItem("emr.docnav.collapsedDirs.obj", '{"a":1}');
-        expect(readCollapsedDirs("obj")).toEqual(new Set());
+        expect(readCollapsedDirs("k")).toEqual(new Set());
     });
 });
 
-describe("storage failures are swallowed (private mode / quota)", () => {
-    it("persistSectionState never throws when setItem fails", () => {
-        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("quota");
-        });
-        expect(() => persistSectionState("doc", "sec", true)).not.toThrow();
+describe("when browser storage is unavailable (private mode / quota)", () => {
+    it.each([
+        {
+            name: "collapsing a section",
+            method: "setItem",
+            save: () => persistSectionState("doc", "sec", true),
+        },
+        {
+            name: "expanding a section",
+            method: "removeItem",
+            save: () => persistSectionState("doc", "sec", false),
+        },
+        {
+            name: "collapsing a folder",
+            method: "setItem",
+            save: () => writeCollapsedDirs("k", new Set(["a"])),
+        },
+    ] as const)("$name still works without saving it", ({ method, save }) => {
+        failStorage(method);
+
+        expect(save).not.toThrow();
     });
 
-    it("persistSectionState never throws when removeItem fails", () => {
-        vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-            throw new Error("denied");
-        });
-        expect(() => persistSectionState("doc", "sec", false)).not.toThrow();
-    });
+    it("shows every section expanded", () => {
+        failStorage("getItem");
 
-    it("readSectionState defaults to expanded when getItem fails", () => {
-        vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("denied");
-        });
         expect(readSectionState("doc", "sec")).toBe(false);
     });
 
-    it("writeCollapsedDirs never throws when setItem fails", () => {
-        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("quota");
-        });
-        expect(() => writeCollapsedDirs("k", new Set(["a"]))).not.toThrow();
-    });
+    it("shows every folder expanded", () => {
+        failStorage("getItem");
 
-    it("readCollapsedDirs returns an empty set when getItem fails", () => {
-        vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("denied");
-        });
         expect(readCollapsedDirs("k")).toEqual(new Set());
     });
 });

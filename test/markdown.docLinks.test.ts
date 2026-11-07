@@ -13,19 +13,17 @@ import {
 describe("resolveDocLink", () => {
     const from = "/docs/design.md";
 
-    it("treats empty, scheme, and protocol-relative hrefs as external", () => {
-        for (const href of [
-            "",
-            "   ",
-            "https://example.com/x",
-            "http://example.com",
-            "mailto:a@b.com",
-            "mention://user/ann",
-            "tel:+15555550100",
-            "//cdn.example.com/a",
-        ]) {
-            expect(resolveDocLink(from, href)).toEqual({ kind: "external" });
-        }
+    it.each([
+        { name: "an empty href", href: "" },
+        { name: "a whitespace-only href", href: "   " },
+        { name: "an https URL", href: "https://example.com/x" },
+        { name: "an http URL", href: "http://example.com" },
+        { name: "a mailto: link", href: "mailto:a@b.com" },
+        { name: "a mention link", href: "mention://user/ann" },
+        { name: "a tel: link", href: "tel:+15555550100" },
+        { name: "a protocol-relative URL", href: "//cdn.example.com/a" },
+    ])("treats $name as external", ({ href }) => {
+        expect(resolveDocLink(from, href)).toEqual({ kind: "external" });
     });
 
     it("returns a pure in-page fragment as an anchor", () => {
@@ -55,7 +53,9 @@ describe("resolveDocLink", () => {
         expect(resolveDocLink(from, "../api/rest.md")).toMatchObject({
             path: "/api/rest.md",
         });
-        // Extra `..` past the root simply clamps at the root.
+    });
+
+    it("stops `../` traversal at the repository root", () => {
         expect(resolveDocLink(from, "../../../x.md")).toMatchObject({
             path: "/x.md",
         });
@@ -84,12 +84,19 @@ describe("resolveDocLink", () => {
         });
     });
 
-    it("flags a non-Markdown target", () => {
-        expect(resolveDocLink(from, "../assets/diagram.png")).toMatchObject({
-            path: "/assets/diagram.png",
-            isMarkdown: false,
-        });
-        expect(resolveDocLink(from, "/src/index.ts")).toMatchObject({
+    it.each([
+        { name: "an image", href: "../assets/diagram.png", path: "/assets/diagram.png" },
+        { name: "a source file", href: "/src/index.ts", path: "/src/index.ts" },
+        {
+            name: "a file whose name only contains `.md`",
+            href: "./archive.md.txt",
+            path: "/docs/archive.md.txt",
+        },
+    ])("flags $name as a non-Markdown repo file", ({ href, path }) => {
+        expect(resolveDocLink(from, href)).toEqual({
+            kind: "repo-file",
+            path,
+            hash: "",
             isMarkdown: false,
         });
     });
@@ -113,11 +120,13 @@ describe("resolveDocLink", () => {
         });
     });
 
-    it("decodes percent-encoded paths, tolerating malformed encoding", () => {
+    it("decodes percent-encoded paths", () => {
         expect(resolveDocLink(from, "./my%20doc.md")).toMatchObject({
             path: "/docs/my doc.md",
         });
-        // A malformed `%` sequence is kept verbatim rather than throwing.
+    });
+
+    it("keeps a malformed percent sequence verbatim instead of failing", () => {
         expect(resolveDocLink(from, "./bad%zz.md")).toMatchObject({
             path: "/docs/bad%zz.md",
         });
@@ -129,21 +138,11 @@ describe("resolveDocLink", () => {
         });
     });
 
-    it("only treats a scheme at the START of the href as external", () => {
-        // A colon later in a relative path must NOT be read as a scheme: the
-        // leading `./` keeps it an in-repo link, not an external URL.
+    it("keeps a relative file name containing a colon as an in-repo link", () => {
         expect(resolveDocLink(from, "./notes:v2.md")).toMatchObject({
             kind: "repo-file",
             path: "/docs/notes:v2.md",
             isMarkdown: true,
-        });
-    });
-
-    it("only treats a .md/.markdown suffix at the END as Markdown", () => {
-        expect(resolveDocLink(from, "./archive.md.txt")).toMatchObject({
-            kind: "repo-file",
-            path: "/docs/archive.md.txt",
-            isMarkdown: false,
         });
     });
 
@@ -199,11 +198,18 @@ describe("buildReposFileUrl", () => {
 });
 
 describe("samePath", () => {
-    it("ignores leading slashes and case", () => {
-        expect(samePath("/docs/X.md", "docs/x.md")).toBe(true);
-        expect(samePath("/a.md", "/b.md")).toBe(false);
-        // All leading slashes are stripped before comparing, not just the first.
-        expect(samePath("//docs/x.md", "/docs/x.md")).toBe(true);
+    it.each([
+        { name: "differ only in letter case", a: "/docs/X.md", b: "/docs/x.md", expected: true },
+        { name: "differ only by a leading slash", a: "/docs/x.md", b: "docs/x.md", expected: true },
+        {
+            name: "differ by several leading slashes",
+            a: "//docs/x.md",
+            b: "/docs/x.md",
+            expected: true,
+        },
+        { name: "name different files", a: "/a.md", b: "/b.md", expected: false },
+    ])("returns $expected for paths that $name", ({ a, b, expected }) => {
+        expect(samePath(a, b)).toBe(expected);
     });
 });
 

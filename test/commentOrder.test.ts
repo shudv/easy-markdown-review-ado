@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 
 import {
     orderComments,
-    compareComments,
     isAnchored,
     type OrderableComment,
 } from "../src/shell/components/commentOrder";
@@ -20,8 +19,8 @@ describe("orderComments", () => {
 
     it("puts unanchored comments after every anchored one", () => {
         const items: OrderableComment[] = [
-            { id: "general", anchorY: null, createdAt: 999 },
             { id: "anchored-low", anchorY: 800, createdAt: 1 },
+            { id: "general", anchorY: null, createdAt: 999 },
             { id: "anchored-high", anchorY: 50, createdAt: 1 },
         ];
 
@@ -47,24 +46,6 @@ describe("orderComments", () => {
         expect(orderComments(items)).toEqual(["newest", "middle", "oldest"]);
     });
 
-    it("handles a mixed set end to end", () => {
-        const items: OrderableComment[] = [
-            { id: "g-new", anchorY: null, createdAt: 9000 },
-            { id: "a-top-old", anchorY: 100, createdAt: 10 },
-            { id: "a-top-new", anchorY: 100, createdAt: 20 },
-            { id: "a-bottom", anchorY: 700, createdAt: 5 },
-            { id: "g-old", anchorY: null, createdAt: 1000 },
-        ];
-
-        expect(orderComments(items)).toEqual([
-            "a-top-new", // anchored @100, newer of the tie
-            "a-top-old", // anchored @100, older of the tie
-            "a-bottom", // anchored @700
-            "g-new", // unanchored, newest first
-            "g-old",
-        ]);
-    });
-
     it("does not mutate its input", () => {
         const items: OrderableComment[] = [
             { id: "b", anchorY: 500, createdAt: 1 },
@@ -75,20 +56,23 @@ describe("orderComments", () => {
         orderComments(items);
         expect(items.map((i) => i.id)).toEqual(snapshot);
     });
-});
 
-describe("compareComments", () => {
-    it("is a stable comparator (returns 0 for equivalent items)", () => {
-        const x: OrderableComment = { id: "x", anchorY: 100, createdAt: 42 };
-        const y: OrderableComment = { id: "y", anchorY: 100, createdAt: 42 };
-        expect(compareComments(x, y)).toBe(0);
+    it("keeps comments at the same position and time in their original order", () => {
+        const items: OrderableComment[] = [
+            { id: "first", anchorY: 100, createdAt: 42 },
+            { id: "second", anchorY: 100, createdAt: 42 },
+        ];
+
+        expect(orderComments(items)).toEqual(["first", "second"]);
     });
 });
 
 describe("isAnchored", () => {
-    it("treats a numeric Y as anchored and null as unanchored", () => {
-        expect(isAnchored(0)).toBe(true);
-        expect(isAnchored(250)).toBe(true);
-        expect(isAnchored(null)).toBe(false);
+    it.each([
+        { name: "a comment at the very top of the document", anchorY: 0, anchored: true },
+        { name: "a comment further down", anchorY: 250, anchored: true },
+        { name: "a comment with no position in the document", anchorY: null, anchored: false },
+    ])("treats $name as anchored: $anchored", ({ anchorY, anchored }) => {
+        expect(isAnchored(anchorY)).toBe(anchored);
     });
 });

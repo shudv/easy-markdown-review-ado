@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import { renderMarkdownSync } from "../src/markdown/render";
+import { lines, render, view } from "./markdownDiffHarness";
 import {
     decorateDiffRanges,
     DIFF_BLOCK_CLASS,
@@ -106,14 +108,6 @@ function* corpus(): Generator<Doc> {
     }
 }
 
-function render(md: string): HTMLElement {
-    const root = document.createElement("div");
-    root.className = "markdown-body emr-rendered";
-    root.innerHTML = renderMarkdownSync(md);
-
-    return root;
-}
-
 /** Text node holding a line's unique token. */
 function tokenNode(root: HTMLElement, token: string): Text | null {
     const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -208,41 +202,55 @@ function audit(
     return result;
 }
 
-describe("diff ownership invariant", () => {
-    const docs = Array.from(corpus());
-
-    it("covers every container × child shape at two depths", () => {
-        expect(docs).toHaveLength(2 * 3 * (1 + 5 + 25));
+/**
+ * Audits `doc` with the whole container added, then with every token line
+ * added and (on its own) edited, re-decorating the same rendered root.
+ */
+function auditEveryChange(doc: Doc): Audit {
+    const root = render(doc.lines.join("\n"));
+    const result: Audit = { lost: [], misplaced: [] };
+    const changes: [number, number][] = [doc.span];
+    doc.lines.forEach((line, i) => {
+        if (/\bt\d+\b/.test(line)) changes.push([i + 1, i + 1]);
     });
 
-    it.each(docs.map((doc) => [doc.name, doc] as const))(
+    for (const change of changes) {
+        const added = audit(doc, root, change, "added");
+        result.lost.push(...added.lost);
+        result.misplaced.push(...added.misplaced);
+
+        if (change[0] === change[1]) {
+            result.lost.push(...audit(doc, root, change, "modified").lost);
+        }
+    }
+
+    return result;
+}
+
+describe("diff ownership invariant", () => {
+    it.each(Array.from(corpus(), (doc) => [doc.name, doc] as const))(
         "%s: paints every changed line where it renders, and nothing else",
         (_name, doc) => {
-            const root = render(doc.lines.join("\n"));
-            const lost: string[] = [];
-            const misplaced: string[] = [];
-            const changes: [number, number][] = [doc.span];
-            doc.lines.forEach((line, i) => {
-                if (/\bt\d+\b/.test(line)) changes.push([i + 1, i + 1]);
-            });
-
-            for (const change of changes) {
-                const added = audit(doc, root, change, "added");
-                lost.push(...added.lost);
-                misplaced.push(...added.misplaced);
-
-                if (change[0] === change[1]) {
-                    lost.push(...audit(doc, root, change, "modified").lost);
-                }
-            }
-
-            expect(lost).toEqual([]);
-            expect(misplaced).toEqual([]);
+            expect(auditEveryChange(doc)).toEqual({ lost: [], misplaced: [] });
         },
     );
 });
 
-describe("diff ownership regressions", () => {
+describe("containers own only their lead content", () => {
+    it("does not paint a quote's unchanged lead when a paragraph is added", () => {
+        expect(
+            view(
+                lines("> Line one.", "", "After."),
+                lines("> Line one.", ">", "> Line two.", "", "After."),
+            ),
+        ).toEqual(["p added wash: Line two."]);
+    });
+
+    it("does not paint a list item's unchanged lead when a paragraph is added", () => {
+        expect(
+            view(lines("- one", "- two"), lines("- one", "", "  more one", "", "- two")),
+        ).toEqual(["p added wash: more one"]);
+    });
     // The shape of a real ADO hunk pair: a placeholder paragraph rewritten into a
     // deeply nested checklist (one coarse `edit` hunk), then a removed TODO quote
     // paired with a continuation paragraph inside the innermost parent item.

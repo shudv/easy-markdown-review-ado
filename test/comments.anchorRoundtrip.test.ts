@@ -187,19 +187,14 @@ describe("round-trip (A) preview selection → source line/column for ADO", () =
     // The genuinely fragile case: the selection CROSSES an inline element
     // boundary, so Markdown markers (** or `) land INSIDE the rendered text and
     // the DOM string is NOT a contiguous substring of the source.
-    it("maps a plain→bold spanning selection to its source line", () => {
-        const anchor = selectFlatRange(root, "paragraph with bold text");
-        expect(anchor).not.toBeNull();
-        expect(anchor!.exact).toBe("paragraph with bold text");
-        const located = withSourceLocation(anchor!, source);
-        expect(located.line).toBe(10);
-    });
+    it.each([
+        { name: "a plain→bold spanning selection", needle: "paragraph with bold text" },
+        { name: "a selection running across a code span", needle: "and a code span inline" },
+    ])("maps $name to its source line", ({ needle }) => {
+        const anchor = selectFlatRange(root, needle);
 
-    it("maps a selection spanning across a code span to its source line", () => {
-        const anchor = selectFlatRange(root, "and a code span inline");
-        expect(anchor).not.toBeNull();
-        const located = withSourceLocation(anchor!, source);
-        expect(located.line).toBe(10);
+        expect(anchor?.exact).toBe(needle);
+        expect(withSourceLocation(anchor!, source).line).toBe(10);
     });
 });
 

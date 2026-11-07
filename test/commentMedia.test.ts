@@ -1,72 +1,77 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { decorateCommentMedia, isAdoPullRequestAttachmentUrl } from "../src/comments/commentMedia";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
+const telemetry = recordTelemetryEachTest();
 
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const ATTACHMENTS =
+    "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments";
+
+function mountComment(html: string): HTMLDivElement {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    return root;
+}
+
+/** Pretend the browser already finished loading `image` (or failed to). */
+function markImageSettled(image: HTMLImageElement, naturalWidth: number): void {
+    Object.defineProperties(image, {
+        complete: { configurable: true, value: true },
+        naturalWidth: { configurable: true, value: naturalWidth },
+    });
+}
 
 describe("isAdoPullRequestAttachmentUrl", () => {
-    it("recognizes absolute and relative PR attachment URLs", () => {
-        expect(
-            isAdoPullRequestAttachmentUrl(
-                "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf?download=true",
-            ),
-        ).toBe(true);
-        expect(
-            isAdoPullRequestAttachmentUrl(
-                "/project/_apis/git/repositories/repo/pullRequests/47/attachments/demo.gif",
-            ),
-        ).toBe(true);
-        expect(
-            isAdoPullRequestAttachmentUrl(
-                "https://contoso.visualstudio.com/project/_apis/git/repositories/repo/pullRequests/47/attachments/demo.gif",
-            ),
-        ).toBe(true);
+    it.each([
+        ["an absolute dev.azure.com attachment link", `${ATTACHMENTS}/design.pdf?download=true`],
+        [
+            "a relative attachment path",
+            "/project/_apis/git/repositories/repo/pullRequests/47/attachments/demo.gif",
+        ],
+        [
+            "a legacy visualstudio.com attachment link",
+            "https://contoso.visualstudio.com/project/_apis/git/repositories/repo/pullRequests/47/attachments/demo.gif",
+        ],
+    ])("recognizes %s", (_label, url) => {
+        expect(isAdoPullRequestAttachmentUrl(url)).toBe(true);
     });
 
-    it("rejects non-ADO hosts, non-HTTPS URLs, ordinary links, and malformed URLs", () => {
-        expect(
-            isAdoPullRequestAttachmentUrl(
-                "https://example.test/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
-            ),
-        ).toBe(false);
-        expect(
-            isAdoPullRequestAttachmentUrl(
-                // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// attachment URL is rejected
-                "http://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
-            ),
-        ).toBe(false);
-        expect(isAdoPullRequestAttachmentUrl("https://example.com/design.pdf")).toBe(false);
-        expect(isAdoPullRequestAttachmentUrl("https://[invalid")).toBe(false);
+    it.each([
+        [
+            "an attachment path on a non-ADO host",
+            "https://example.test/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
+        ],
+        [
+            "an attachment link over plain http",
+            // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// attachment URL is rejected
+            "http://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
+        ],
+        ["an ordinary file link", "https://example.com/design.pdf"],
+        ["a malformed URL", "https://[invalid"],
+    ])("rejects %s", (_label, url) => {
+        expect(isAdoPullRequestAttachmentUrl(url)).toBe(false);
     });
 });
 
 describe("decorateCommentMedia", () => {
-    it("contains images in a noninteractive media frame", () => {
-        const root = document.createElement("div");
-        root.innerHTML = '<p><img src="https://example.com/large.png" alt="Design"></p>';
+    it("frames an image without turning the frame into an interactive control", () => {
+        const root = mountComment('<p><img src="https://example.com/large.png" alt="Design"></p>');
 
-        const cleanup = decorateCommentMedia(root);
+        decorateCommentMedia(root);
         const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
 
         expect(frame.hasAttribute("role")).toBe(false);
         expect(frame.hasAttribute("tabindex")).toBe(false);
         expect(frame.hasAttribute("aria-label")).toBe(false);
-
-        cleanup();
     });
 
-    it("reuses an existing media frame", () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<span class="emr-comment-media"><img src="https://example.com/framed.png" alt="Framed"></span>';
+    it("does not wrap an already-framed image in a second frame", () => {
+        const root = mountComment(
+            '<span class="emr-comment-media"><img src="https://example.com/framed.png" alt="Framed"></span>',
+        );
+
         const existing = root.firstElementChild;
 
         decorateCommentMedia(root);
@@ -75,10 +80,11 @@ describe("decorateCommentMedia", () => {
         expect(root.querySelectorAll(".emr-comment-media")).toHaveLength(1);
     });
 
-    it("keeps a linked image's anchor as the only interactive surface", () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<a href="https://example.com/full.png"><img src="https://example.com/preview.png" alt="Preview"></a>';
+    it("keeps a linked image's link as the only interactive surface", () => {
+        const root = mountComment(
+            '<a href="https://example.com/full.png"><img src="https://example.com/preview.png" alt="Preview"></a>',
+        );
+
         decorateCommentMedia(root);
 
         const link = root.querySelector<HTMLAnchorElement>("a")!;
@@ -89,66 +95,65 @@ describe("decorateCommentMedia", () => {
         expect(link.querySelectorAll(".emr-comment-media")).toHaveLength(1);
     });
 
-    it("labels images without alt text and settles completed direct images", () => {
-        const root = document.createElement("div");
-        root.innerHTML = '<img src="https://example.com/loaded.png" alt="">';
-        const image = root.querySelector<HTMLImageElement>("img")!;
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 320 },
-        });
+    it("shows an already-loaded external image without an error state", () => {
+        const root = mountComment('<img src="https://example.com/loaded.png" alt="">');
+        markImageSettled(root.querySelector("img")!, 320);
 
         decorateCommentMedia(root);
 
-        const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
-        expect(frame.classList.contains("is-error")).toBe(false);
+        expect(root.querySelector(".emr-comment-media")?.classList.contains("is-error")).toBe(
+            false,
+        );
     });
 
-    it("marks a completed direct image failure unavailable", () => {
-        const root = document.createElement("div");
-        root.innerHTML = '<img src="https://example.com/missing.png" alt="Missing">';
-        const image = root.querySelector<HTMLImageElement>("img")!;
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 0 },
-        });
+    it("marks a broken external image unavailable without reporting it as an app failure", () => {
+        const root = mountComment('<img src="https://example.com/missing.png" alt="Missing">');
+        markImageSettled(root.querySelector("img")!, 0);
 
         decorateCommentMedia(root);
 
         expect(root.querySelector(".emr-comment-media")?.classList.contains("is-error")).toBe(true);
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
-    it("decorates non-image ADO attachments without changing ordinary links", () => {
-        const root = document.createElement("div");
-        root.innerHTML = [
-            '<a href="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/notes.pdf">notes.pdf</a>',
-            '<a href="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/unnamed.pdf"></a>',
-            '<a href="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/preview.png"><img src="https://example.com/preview.png" alt="Preview"></a>',
-            '<a href="https://example.com/guide">Guide</a>',
-        ].join("");
+    it("opens a PR attachment link in a new tab and labels it as an attachment", () => {
+        const root = mountComment(`<a href="${ATTACHMENTS}/notes.pdf">notes.pdf</a>`);
 
         decorateCommentMedia(root);
 
-        const links = root.querySelectorAll<HTMLAnchorElement>("a");
-        expect(links[0]!.classList.contains("emr-comment-attachment")).toBe(true);
-        expect(links[0]!.target).toBe("_blank");
-        expect(links[0]!.rel).toBe("noopener noreferrer");
-        expect(links[1]!.getAttribute("aria-label")).toBe(
+        const link = root.querySelector("a")!;
+        expect(link.classList.contains("emr-comment-attachment")).toBe(true);
+        expect(link.target).toBe("_blank");
+        expect(link.rel).toBe("noopener noreferrer");
+        expect(link.getAttribute("aria-label")).toBe("notes.pdf (attachment, opens in new tab)");
+    });
+
+    it("labels an attachment link that has no text as 'Attachment'", () => {
+        const root = mountComment(`<a href="${ATTACHMENTS}/unnamed.pdf"></a>`);
+
+        decorateCommentMedia(root);
+
+        expect(root.querySelector("a")!.getAttribute("aria-label")).toBe(
             "Attachment (attachment, opens in new tab)",
         );
-        expect(links[2]!.classList.contains("emr-comment-attachment")).toBe(false);
-        expect(links[3]!.classList.contains("emr-comment-attachment")).toBe(false);
+    });
+
+    it.each([
+        [
+            "an attachment link wrapping an image",
+            `<a href="${ATTACHMENTS}/preview.png"><img src="https://example.com/preview.png" alt="Preview"></a>`,
+        ],
+        ["an external link", '<a href="https://example.com/guide">Guide</a>'],
+    ])("leaves %s as an ordinary link", (_label, html) => {
+        const root = mountComment(html);
+
+        decorateCommentMedia(root);
+
+        expect(root.querySelector("a")!.classList.contains("emr-comment-attachment")).toBe(false);
     });
 
     it("replaces ADO image URLs with authenticated object URLs", async () => {
-        const root = document.createElement("div");
-
-        const original =
-            "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.png";
-
-        root.innerHTML = `<img src="${original}" alt="Design">`;
-
+        const root = mountComment(`<img src="${ATTACHMENTS}/design.png" alt="Design">`);
         const resolveImage = vi.fn().mockResolvedValue("blob:authenticated-image");
 
         decorateCommentMedia(root, resolveImage);
@@ -157,6 +162,7 @@ describe("decorateCommentMedia", () => {
 
         expect(frame.classList.contains("is-loading")).toBe(true);
         expect(frame.getAttribute("aria-disabled")).toBe("true");
+        // The unauthenticated original fails while the object URL is still on its way.
         image.dispatchEvent(new Event("error"));
         expect(frame.classList.contains("is-error")).toBe(false);
         await vi.waitFor(() => expect(image.src).toBe("blob:authenticated-image"));
@@ -170,14 +176,8 @@ describe("decorateCommentMedia", () => {
     });
 
     it("uses a completed direct image when authenticated loading is unavailable", async () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<img src="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/direct.png" alt="Direct">';
-        const image = root.querySelector<HTMLImageElement>("img")!;
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 480 },
-        });
+        const root = mountComment(`<img src="${ATTACHMENTS}/direct.png" alt="Direct">`);
+        markImageSettled(root.querySelector("img")!, 480);
 
         decorateCommentMedia(root, async () => undefined);
         const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
@@ -186,45 +186,34 @@ describe("decorateCommentMedia", () => {
         expect(frame.classList.contains("is-error")).toBe(false);
     });
 
-    it("shows an unavailable state when authenticated and direct loading fail", async () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<img src="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/missing.png" alt="Missing">';
-
+    it("shows an unavailable state and reports it once when authenticated and direct loading fail", async () => {
+        const root = mountComment(`<img src="${ATTACHMENTS}/missing.png" alt="Missing">`);
         const resolveImage = vi.fn(async () => undefined);
+
         decorateCommentMedia(root, resolveImage);
         const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
         const image = frame.querySelector<HTMLImageElement>("img")!;
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 0 },
-        });
+        markImageSettled(image, 0);
 
-        await vi.waitFor(() => expect(resolveImage).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
+        // A later error event for the same image must not report again.
         image.dispatchEvent(new Event("error"));
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({
-                message: "Comment image failed to load",
+
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({ message: "Comment image failed to load" }),
+                source: "CommentMedia.decorate",
+                operation: "comment-image-load",
+                impact: "degraded",
             }),
-            source: "CommentMedia.decorate",
-            operation: "comment-image-load",
-            impact: "degraded",
-        });
+        ]);
         expect(frame.classList.contains("is-loading")).toBe(false);
         expect(frame.getAttribute("aria-disabled")).toBeNull();
     });
 
     it("falls back to an unavailable state when the attachment resolver rejects", async () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<img src="https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/rejected.png" alt="Rejected">';
-        const image = root.querySelector<HTMLImageElement>("img")!;
-        Object.defineProperties(image, {
-            complete: { configurable: true, value: true },
-            naturalWidth: { configurable: true, value: 0 },
-        });
+        const root = mountComment(`<img src="${ATTACHMENTS}/rejected.png" alt="Rejected">`);
+        markImageSettled(root.querySelector("img")!, 0);
 
         decorateCommentMedia(root, async () => {
             throw new Error("attachment unavailable");
@@ -232,14 +221,14 @@ describe("decorateCommentMedia", () => {
 
         const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
         await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({
-                message: "attachment unavailable",
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({ message: "attachment unavailable" }),
+                source: "CommentMedia.decorate",
+                operation: "comment-image-load",
+                impact: "degraded",
             }),
-            source: "CommentMedia.decorate",
-            operation: "comment-image-load",
-            impact: "degraded",
-        });
+        ]);
     });
 
     it("does not apply a resolved object URL after cleanup", async () => {
@@ -249,12 +238,8 @@ describe("decorateCommentMedia", () => {
             resolve = done;
         });
 
-        const root = document.createElement("div");
-
-        const original =
-            "https://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.png";
-
-        root.innerHTML = `<img src="${original}" alt="Design">`;
+        const original = `${ATTACHMENTS}/design.png`;
+        const root = mountComment(`<img src="${original}" alt="Design">`);
 
         const cleanup = decorateCommentMedia(root, () => pending);
         const image = root.querySelector<HTMLImageElement>("img")!;

@@ -34,30 +34,22 @@ function relTokens(el: Element): string[] {
 
 describe("renderMarkdown — security", () => {
     describe("URL scheme blocking on <a href>", () => {
-        it("blocks javascript: links", async () => {
-            const html = await renderMarkdown("[click](javascript:alert(1))");
-            expect(html).not.toMatch(/href="javascript:/i);
-            expect(html).toContain("data-emr-blocked-scheme");
-        });
-
-        it("blocks vbscript: links", async () => {
-            const html = await renderMarkdown("[x](vbscript:msgbox(1))");
-            expect(html).not.toMatch(/href="vbscript:/i);
-            expect(html).toContain("data-emr-blocked-scheme");
-        });
-
-        it("blocks data:text/html links", async () => {
-            const html = await renderMarkdown(
-                "[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)",
-            );
-
-            expect(html).not.toMatch(/href="data:/i);
-            expect(html).toContain("data-emr-blocked-scheme");
-        });
-
-        it("blocks file: links", async () => {
-            const html = await renderMarkdown("[x](file:///etc/passwd)");
-            expect(html).not.toMatch(/href="file:/i);
+        it.each([
+            {
+                name: "javascript:",
+                markdown: "[click](javascript:alert(1))",
+                scheme: "javascript:",
+            },
+            { name: "vbscript:", markdown: "[x](vbscript:msgbox(1))", scheme: "vbscript:" },
+            {
+                name: "data:text/html",
+                markdown: "[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)",
+                scheme: "data:",
+            },
+            { name: "file:", markdown: "[x](file:///etc/passwd)", scheme: "file:" },
+        ])("blocks a $name link and marks it as blocked", async ({ markdown, scheme }) => {
+            const html = await renderMarkdown(markdown);
+            expect(html).not.toContain(`href="${scheme}`);
             expect(html).toContain("data-emr-blocked-scheme");
         });
 
@@ -72,9 +64,7 @@ describe("renderMarkdown — security", () => {
             expect(html).toContain('href="//cdn.example.com/a"');
         });
 
-        it("ignores leading whitespace when classifying schemes", async () => {
-            // `[x](   javascript:alert(1)   )` — markdown trims surrounding space
-            // but defenders sometimes rely on case/spacing tricks. Verify both.
+        it("blocks a javascript: link disguised with mixed case and a leading space", async () => {
             const html = await renderMarkdown("[x]( JaVaScRiPt:alert(1))");
             expect(html).not.toMatch(/href="[^"]*javascript:/i);
         });
@@ -115,25 +105,23 @@ describe("renderMarkdown — security", () => {
     });
 
     describe("URL scheme blocking on <img src>", () => {
-        it("blocks javascript: image src", async () => {
-            const html = await renderMarkdown("![x](javascript:alert(1))");
-            expect(html).not.toMatch(/src="javascript:/i);
-            expect(html).toContain("data-emr-blocked-scheme");
-        });
-
-        it("blocks data:image/svg+xml (can carry script payloads)", async () => {
-            const html = await renderMarkdown(
-                "![x](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxzY3JpcHQ%2BYWxlcnQoMSk8L3NjcmlwdD48L3N2Zz4=)",
-            );
-
-            expect(html).not.toMatch(/src="data:/i);
-            expect(html).toContain("data-emr-blocked-scheme");
-        });
-
-        it("blocks data:text/html on img src", async () => {
-            const html = await renderMarkdown("![x](data:text/html,<script>alert(1)</script>)");
-
-            expect(html).not.toMatch(/src="data:/i);
+        it.each([
+            { name: "javascript:", markdown: "![x](javascript:alert(1))", scheme: "javascript:" },
+            {
+                // SVG images can carry script payloads.
+                name: "data:image/svg+xml",
+                markdown:
+                    "![x](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxzY3JpcHQ%2BYWxlcnQoMSk8L3NjcmlwdD48L3N2Zz4=)",
+                scheme: "data:",
+            },
+            {
+                name: "data:text/html",
+                markdown: "![x](data:text/html,<script>alert(1)</script>)",
+                scheme: "data:",
+            },
+        ])("blocks a $name image source and marks it as blocked", async ({ markdown, scheme }) => {
+            const html = await renderMarkdown(markdown);
+            expect(html).not.toContain(`src="${scheme}`);
             expect(html).toContain("data-emr-blocked-scheme");
         });
 
@@ -157,18 +145,23 @@ describe("renderMarkdown — security", () => {
     });
 
     describe("raw HTML pass-through", () => {
-        it("strips <script> tags", async () => {
-            const html = await renderMarkdown("Hi <script>alert(1)</script> there");
+        it.each([
+            { name: "<script>", markdown: "Hi <script>alert(1)</script> there", tag: "<script" },
+            {
+                name: "<iframe>",
+                markdown: 'Hi <iframe src="https://evil.example/"></iframe> there',
+                tag: "<iframe",
+            },
+            {
+                name: "<object>",
+                markdown: '<object data="javascript:alert(1)"></object>',
+                tag: "<object",
+            },
+            { name: "<embed>", markdown: '<embed src="javascript:alert(1)" />', tag: "<embed" },
+        ])("strips raw $name elements", async ({ markdown, tag }) => {
+            const html = await renderMarkdown(markdown);
 
-            expect(html).not.toMatch(/<script/i);
-        });
-
-        it("strips <iframe> tags", async () => {
-            const html = await renderMarkdown(
-                'Hi <iframe src="https://evil.example/"></iframe> there',
-            );
-
-            expect(html).not.toMatch(/<iframe/i);
+            expect(html).not.toContain(tag);
         });
 
         it("strips inline event handlers expressed as raw HTML", async () => {
@@ -178,23 +171,12 @@ describe("renderMarkdown — security", () => {
 
             expect(html).not.toMatch(/onclick=/i);
         });
-
-        it("strips <object> and <embed>", async () => {
-            const html = await renderMarkdown(
-                '<object data="javascript:alert(1)"></object>' +
-                    '<embed src="javascript:alert(1)" />',
-            );
-
-            expect(html).not.toMatch(/<object/i);
-            expect(html).not.toMatch(/<embed/i);
-        });
     });
 
     describe("rel hardening", () => {
-        it("does not emit target on plain markdown links (current renderer behavior)", async () => {
-            // The pipeline currently does not add target=_blank. This test pins
-            // that behavior so a future change is forced to also re-check
-            // rel hardening in `rehypeSanitizeUrls`.
+        it("keeps plain Markdown links in the current tab (no target)", async () => {
+            // rel hardening below only matters for links that open a new context;
+            // if Markdown links ever gain a target, re-check `rehypeSanitizeUrls`.
             const html = await renderMarkdown("[x](https://example.com)");
             expect(html).not.toMatch(/target=/i);
         });

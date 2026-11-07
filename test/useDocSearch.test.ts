@@ -13,20 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDocSearch } from "../src/shell/components/useDocSearch";
 import type { FileInfo } from "../src/types";
 import type { FileSearchOutcome } from "../src/shell/almSearch";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-// Spy on telemetry so we can assert the exact `searchPerformed` payload the
-// hook emits (success flag, counts, failure reason).
-const trackMock = vi.fn();
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        track: (...args: unknown[]) => trackMock(...args),
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -81,8 +70,6 @@ afterEach(() => {
     container?.remove();
     container = null;
     vi.useRealTimers();
-    trackMock.mockClear();
-    trackUserFacingErrorMock.mockClear();
 });
 
 /** Advance fake timers inside act() and flush the resulting microtasks. */
@@ -135,8 +122,6 @@ describe("useDocSearch — open/close affordance", () => {
 
 describe("useDocSearch — remote merge", () => {
     beforeEach(() => vi.useFakeTimers());
-
-    afterEach(() => trackMock.mockClear());
 
     it("does not call the remote searcher for queries shorter than 2 chars", async () => {
         const onSearchFiles = vi.fn();
@@ -193,7 +178,7 @@ describe("useDocSearch — remote merge", () => {
         });
         // Only the local hit remains.
         expect(h.current!.searchResults.map((f) => f.path)).toEqual(["local.md"]);
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     it("treats a rejected remote search as an unknown unavailability", async () => {
@@ -207,12 +192,14 @@ describe("useDocSearch — remote merge", () => {
 
         expect(h.current!.searchUnavailable).toEqual({ reason: "unknown" });
         expect(h.current!.searchResults).toEqual([]);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({ message: "boom" }),
-            source: "DocNav.search",
-            operation: "code-search",
-            impact: "degraded",
-        });
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({ message: "boom" }),
+                source: "DocNav.search",
+                operation: "code-search",
+                impact: "degraded",
+            }),
+        ]);
     });
 
     it("recovers from unavailable back to ok on a later successful query", async () => {
@@ -228,14 +215,16 @@ describe("useDocSearch — remote merge", () => {
         act(() => h.current!.setSearchQuery("aa"));
         await flush(300);
         expect(h.current!.searchUnavailable).not.toBeNull();
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({
-                message: "Code Search request failed",
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: "Code Search request failed",
+                }),
+                source: "DocNav.search",
+                operation: "code-search",
+                impact: "degraded",
             }),
-            source: "DocNav.search",
-            operation: "code-search",
-            impact: "degraded",
-        });
+        ]);
 
         outcome = { kind: "ok", files: [file("found.md")] };
         act(() => h.current!.setSearchQuery("aaa"));
@@ -244,7 +233,7 @@ describe("useDocSearch — remote merge", () => {
         expect(h.current!.searchResults.map((f) => f.path)).toEqual(["found.md"]);
     });
 
-    it("sets remoteLoading true during the debounce and clears it after settle", async () => {
+    it("shows remote loading while the code search is in flight", async () => {
         let resolveOutcome: (o: FileSearchOutcome) => void = () => {};
 
         const onSearchFiles = vi.fn(
@@ -256,13 +245,11 @@ describe("useDocSearch — remote merge", () => {
 
         const h = mount({ files: [], onSearchFiles });
         act(() => h.current!.setSearchQuery("abc"));
-        // After the debounce fires but before the promise settles, loading is on.
         await act(async () => {
             vi.advanceTimersByTime(250);
             await Promise.resolve();
         });
         expect(h.current!.remoteLoading).toBe(true);
-        // Settling the fetch flips loading back off.
         await act(async () => {
             resolveOutcome({ kind: "ok", files: [] });
             await Promise.resolve();
@@ -271,22 +258,22 @@ describe("useDocSearch — remote merge", () => {
         expect(h.current!.remoteLoading).toBe(false);
     });
 
-    it("does not fire the remote search until the debounce elapses", async () => {
+    it("searches remotely once, for the final query, after the user stops typing", async () => {
         const onSearchFiles = vi.fn(
-            async (): Promise<FileSearchOutcome> => ({ kind: "ok", files: [] }),
+            async (_query: string): Promise<FileSearchOutcome> => ({ kind: "ok", files: [] }),
         );
 
         const h = mount({ files: [], onSearchFiles });
+        act(() => h.current!.setSearchQuery("ab"));
+        await flush(100);
         act(() => h.current!.setSearchQuery("abc"));
-        // Just short of the 250ms debounce: no call yet.
-        await flush(249);
-        expect(onSearchFiles).not.toHaveBeenCalled();
-        // Crossing the threshold fires exactly one call.
-        await flush(1);
-        expect(onSearchFiles).toHaveBeenCalledTimes(1);
+        await flush(100);
+        act(() => h.current!.setSearchQuery("abcd"));
+        await flush(300);
+        expect(onSearchFiles).toHaveBeenCalledExactlyOnceWith("abcd", expect.anything());
     });
 
-    it("emits a success telemetry event with the result count", async () => {
+    it("reports a successful search with its result count", async () => {
         const onSearchFiles = vi.fn(
             async (): Promise<FileSearchOutcome> => ({
                 kind: "ok",
@@ -297,7 +284,7 @@ describe("useDocSearch — remote merge", () => {
         const h = mount({ files: [], onSearchFiles });
         act(() => h.current!.setSearchQuery("abcd"));
         await flush(300);
-        expect(trackMock).toHaveBeenCalledWith(
+        expect(telemetry.current.events).toContainEqual(
             expect.objectContaining({
                 name: "search.performed",
                 properties: expect.objectContaining({ succeeded: true }),
@@ -306,7 +293,7 @@ describe("useDocSearch — remote merge", () => {
         );
     });
 
-    it("emits a failure telemetry event carrying the failure reason", async () => {
+    it("reports an unavailable search with its reason, without counting it as an error", async () => {
         const onSearchFiles = vi.fn(
             async (): Promise<FileSearchOutcome> => ({
                 kind: "unavailable",
@@ -317,7 +304,7 @@ describe("useDocSearch — remote merge", () => {
         const h = mount({ files: [], onSearchFiles });
         act(() => h.current!.setSearchQuery("abcd"));
         await flush(300);
-        expect(trackMock).toHaveBeenCalledWith(
+        expect(telemetry.current.events).toContainEqual(
             expect.objectContaining({
                 name: "search.performed",
                 properties: expect.objectContaining({
@@ -327,7 +314,7 @@ describe("useDocSearch — remote merge", () => {
                 measurements: expect.objectContaining({ resultCount: 0 }),
             }),
         );
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     it("does not count no-config as a reliability failure", async () => {
@@ -342,7 +329,7 @@ describe("useDocSearch — remote merge", () => {
         act(() => h.current!.setSearchQuery("abcd"));
         await flush(300);
         expect(h.current!.searchUnavailable?.reason).toBe("no-config");
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 });
 
@@ -398,7 +385,7 @@ describe("useDocSearch — superseded remote searches", () => {
         const { calls, h } = await supersedeInFlightSearch();
         await settle(() => calls[0]!.reject(new Error("aborted")));
         expect(h.current!.searchUnavailable).toBeNull();
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
         expect(h.current!.remoteLoading).toBe(true);
     });
 });

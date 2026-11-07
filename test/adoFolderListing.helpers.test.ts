@@ -5,16 +5,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listMarkdownLevel } from "../src/shell/adoFolderListing.helpers";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 /** Terminal REST failures, so `withRetry` gives up at once. */
 const notFound = () => Object.assign(new Error("missing"), { status: 404 });
@@ -29,7 +22,7 @@ function fakeClient(opts: { items?: unknown[] | Error; orderText?: string | Erro
 
             return opts.items ?? [];
         }),
-        getItemText: vi.fn(async () => {
+        getItemText: vi.fn(async (..._args: unknown[]) => {
             if (opts.orderText instanceof Error) throw opts.orderText;
 
             return opts.orderText ?? "";
@@ -49,7 +42,6 @@ const wikiItems = [
 ];
 
 beforeEach(() => {
-    trackUserFacingErrorMock.mockReset();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
@@ -74,6 +66,8 @@ describe("listMarkdownLevel", () => {
 
         const listing = await listMarkdownLevel(scopeFor(client), repo, "/Guides");
 
+        const branchTip = { version: "main", versionType: 0, versionOptions: 0 };
+
         expect(client.getItems).toHaveBeenCalledWith(
             "r1",
             "p1",
@@ -83,13 +77,19 @@ describe("listMarkdownLevel", () => {
             false,
             false,
             false,
-            { version: "main", versionType: 0, versionOptions: 0 },
+            branchTip,
         );
-        expect(client.getItemText.mock.calls[0]!.slice(0, 3)).toEqual([
+        expect(client.getItemText).toHaveBeenCalledWith(
             "r1",
             "/Guides/.order",
             "p1",
-        ]);
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            branchTip,
+        );
         expect(listing).toEqual({
             files: [
                 expect.objectContaining({ path: "/Guides/Intro.md" }),
@@ -110,11 +110,17 @@ describe("listMarkdownLevel", () => {
             { atCommitId: "c0ffee" },
         );
 
-        expect(client.getItems.mock.calls[0]![8]).toEqual({
-            version: "c0ffee",
-            versionType: 2,
-            versionOptions: 0,
-        });
+        expect(client.getItems).toHaveBeenCalledWith(
+            "r1",
+            "p1",
+            "/",
+            1,
+            false,
+            false,
+            false,
+            false,
+            { version: "c0ffee", versionType: 2, versionOptions: 0 },
+        );
         expect(client.getItemText).not.toHaveBeenCalled();
         expect(listing).not.toHaveProperty("order");
     });
@@ -127,9 +133,9 @@ describe("listMarkdownLevel", () => {
         );
 
         expect(listing).toEqual({ files: [], folders: [] });
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({ operation: "folder-listing-load" }),
-        );
+        ]);
     });
 
     it("lists a missing folder as empty when missing is ok", async () => {
@@ -141,7 +147,7 @@ describe("listMarkdownLevel", () => {
         );
 
         expect(listing).toEqual({ files: [], folders: [] });
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     it("rethrows other failures when the caller propagates", async () => {
@@ -162,9 +168,9 @@ describe("listMarkdownLevel", () => {
 
         expect(listing).not.toHaveProperty("order");
         expect(listing.files.map((f) => f.path)).toEqual(["/Guides/Intro.md", "/Guides/Setup.md"]);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({ operation: "wiki-order-load" }),
-        );
+        ]);
     });
 
     it("doesn't report a .order file that vanished", async () => {
@@ -175,6 +181,6 @@ describe("listMarkdownLevel", () => {
         );
 
         expect(listing).not.toHaveProperty("order");
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 });

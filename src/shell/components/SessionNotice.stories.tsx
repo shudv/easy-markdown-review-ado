@@ -48,11 +48,11 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Nothing renders while the session is live. */
+/** While the app's Azure DevOps session is live, no notice shows. */
 export const Live: Story = {
-    args: { monitor: new AdoSessionMonitor() },
+    args: {},
     play: async ({ canvasElement }) => {
-        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+        await expect(within(canvasElement).queryByRole("status")).toBeNull();
     },
 };
 
@@ -64,7 +64,7 @@ export const QuietUntilUserWaits: Story = {
     args: { monitor: refreshingMonitor({ reloadHost: fn(), quiet: true }) },
     play: async ({ args, canvasElement }) => {
         await expect(args.monitor!.getSnapshot().state).toBe("refreshing");
-        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
+        await expect(within(canvasElement).queryByRole("status")).toBeNull();
         args.monitor!.claimPollFailure(
             new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000),
             true,
@@ -92,7 +92,7 @@ export const Reconnecting: Story = {
         // A reload is only requested; the notice stays until the session is back.
         await expect(canvas.getByRole("status")).toBeTruthy();
         args.monitor!.noteSuccess(Date.now());
-        await waitFor(() => expect(canvasElement.querySelector(".emr-toast")).toBeNull());
+        await waitFor(() => expect(canvas.queryByRole("status")).toBeNull());
     },
 };
 
@@ -130,13 +130,5 @@ export const NoReloadAvailable: Story = {
         const canvas = within(canvasElement);
         await expect(canvas.getByRole("status")).toBeTruthy();
         await expect(canvas.queryByRole("button")).toBeNull();
-    },
-};
-
-/** Defaults to the app-wide monitor, which is live in the story harness. */
-export const AppWideMonitor: Story = {
-    args: {},
-    play: async ({ canvasElement }) => {
-        await expect(canvasElement.querySelector(".emr-toast")).toBeNull();
     },
 };

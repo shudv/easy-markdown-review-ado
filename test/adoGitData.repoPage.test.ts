@@ -68,9 +68,10 @@ describe("normalizeRepoFilter", () => {
         expect(normalizeRepoFilter("  pay  ")).toBe("pay");
     });
 
-    it("maps blank/undefined to undefined (unfiltered first page)", () => {
-        expect(normalizeRepoFilter("   ")).toBeUndefined();
-        expect(normalizeRepoFilter("")).toBeUndefined();
-        expect(normalizeRepoFilter()).toBeUndefined();
-    });
+    it.each(["   ", "", undefined])(
+        "lists the unfiltered first page for the filter %j",
+        (filter) => {
+            expect(normalizeRepoFilter(filter)).toBeUndefined();
+        },
+    );
 });

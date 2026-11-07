@@ -12,46 +12,58 @@ import {
 } from "../src/telemetry/authFailureCapture";
 
 describe("isAdoApiUrl", () => {
-    it("matches ADO REST URLs only", () => {
-        expect(isAdoApiUrl("https://dev.azure.com/org/proj/_apis/git/x")).toBe(true);
-        expect(isAdoApiUrl("https://office.visualstudio.com/p/_apis/git/x")).toBe(true);
-        expect(isAdoApiUrl("https://dev.azure.com/org/_git/repo")).toBe(false);
-        expect(isAdoApiUrl("https://example.com/foo")).toBe(false);
+    it.each([
+        ["https://dev.azure.com/org/proj/_apis/git/x", true],
+        ["https://office.visualstudio.com/p/_apis/git/x", true],
+        ["https://dev.azure.com/org/_git/repo", false],
+        ["https://example.com/foo", false],
+    ])("treats %s as an ADO REST call: %s", (url, expected) => {
+        expect(isAdoApiUrl(url)).toBe(expected);
     });
 });
 
 describe("isLegacyHost", () => {
-    it("is true only for {org}.visualstudio.com", () => {
-        expect(isLegacyHost("https://office.visualstudio.com/p/_apis/git/x")).toBe(true);
-        expect(isLegacyHost("https://dev.azure.com/office/p/_apis/git/x")).toBe(false);
-        expect(isLegacyHost("https://almsearch.dev.azure.com/o/_apis/x")).toBe(false);
+    it.each([
+        ["https://office.visualstudio.com/p/_apis/git/x", true],
+        ["https://dev.azure.com/office/p/_apis/git/x", false],
+        ["https://almsearch.dev.azure.com/o/_apis/x", false],
+    ])("treats %s as a legacy {org}.visualstudio.com host: %s", (url, expected) => {
+        expect(isLegacyHost(url)).toBe(expected);
     });
 });
 
 describe("apiAreaOf", () => {
-    it("strips ids and dot-joins the first two segments, lowercased", () => {
-        expect(apiAreaOf("https://office.visualstudio.com/p/_apis/git/pullRequests/5345858")).toBe(
-            "git.pullrequests",
-        );
+    it.each([
+        {
+            name: "drops a numeric id and lowercases the controller",
+            url: "https://office.visualstudio.com/p/_apis/git/pullRequests/5345858",
+            expected: "git.pullrequests",
+        },
+        {
+            name: "drops a repository GUID",
+            url: "https://dev.azure.com/o/_apis/git/repositories/20053a6a-db9f-40dc-9deb-53536822791d/pullRequests",
+            expected: "git.repositories",
+        },
+        {
+            name: "keeps only the area when the next segment is a project name",
+            url: "https://dev.azure.com/o/_apis/projects/SecretProject",
+            expected: "projects",
+        },
+        {
+            name: "keeps only the area when the next segment is a repository name",
+            url: "https://dev.azure.com/o/_apis/git/SecretRepoName",
+            expected: "git",
+        },
+    ])("$name", ({ url, expected }) => {
+        expect(apiAreaOf(url)).toBe(expected);
     });
 
-    it("drops GUID segments", () => {
-        expect(
-            apiAreaOf(
-                "https://dev.azure.com/o/_apis/git/repositories/20053a6a-db9f-40dc-9deb-53536822791d/pullRequests",
-            ),
-        ).toBe("git.repositories");
-    });
-
-    it("returns undefined when there is nothing after _apis", () => {
-        expect(apiAreaOf("https://dev.azure.com/o/_apis/")).toBeUndefined();
-        expect(apiAreaOf("https://dev.azure.com/o/_git/repo")).toBeUndefined();
-    });
-
-    it("collapses to just the area when the second segment isn't an allow-listed controller (e.g. a project/repo name)", () => {
-        expect(apiAreaOf("https://dev.azure.com/o/_apis/projects/SecretProject")).toBe("projects");
-        expect(apiAreaOf("https://dev.azure.com/o/_apis/git/SecretRepoName")).toBe("git");
-    });
+    it.each([["https://dev.azure.com/o/_apis/"], ["https://dev.azure.com/o/_git/repo"]])(
+        "reports no area for %s, which names no API",
+        (url) => {
+            expect(apiAreaOf(url)).toBeUndefined();
+        },
+    );
 });
 
 describe("authFailureInput", () => {
@@ -81,13 +93,26 @@ describe("authFailureInput", () => {
 });
 
 describe("createThrottle", () => {
-    it("allows the first hit per key, blocks within the cooldown, re-allows after", () => {
-        let now = 1000;
-        const allow = createThrottle(30_000, () => now);
+    it("reports the first failure for a key and suppresses repeats within the cooldown", () => {
+        const allow = createThrottle(30_000, () => 1000);
+
         expect(allow("401:git.pullrequests")).toBe(true);
         expect(allow("401:git.pullrequests")).toBe(false);
-        expect(allow("403:git.pullrequests")).toBe(true); // different key
+    });
+
+    it("reports a different failure independently during another's cooldown", () => {
+        const allow = createThrottle(30_000, () => 1000);
+        allow("401:git.pullrequests");
+
+        expect(allow("403:git.pullrequests")).toBe(true);
+    });
+
+    it("reports the same failure again once the cooldown has passed", () => {
+        let now = 1000;
+        const allow = createThrottle(30_000, () => now);
+        allow("401:git.pullrequests");
         now += 30_001;
+
         expect(allow("401:git.pullrequests")).toBe(true);
     });
 });

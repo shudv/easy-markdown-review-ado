@@ -117,10 +117,12 @@ describe("renderMarkdown — mermaid placeholders", () => {
         expect(html).toMatch(/data-mermaid-src="[^"]*%22[^"]*"/);
     });
 
-    it("leaves non-mermaid code blocks alone", async () => {
-        const md = "```js\nconst x = 1;\n```\n";
-        const html = await renderMarkdown(md);
-        expect(html).toContain("language-js");
+    it.each([
+        { name: "a code block in another language", markdown: "```js\nconst x = 1;\n```\n" },
+        { name: "a code block without a language", markdown: "```\nplain code\n```\n" },
+    ])("leaves $name as ordinary code", async ({ markdown }) => {
+        const html = await renderMarkdown(markdown);
+        expect(html).toMatch(/<pre\b[^>]*><code\b/);
         expect(html).not.toContain("emr-mermaid");
     });
 
@@ -130,14 +132,6 @@ describe("renderMarkdown — mermaid placeholders", () => {
         const html = await renderMarkdown("```mermaid\n```\n");
         expect(html).not.toContain("emr-mermaid");
         expect(html).toContain("language-mermaid");
-    });
-
-    it("leaves a non-mermaid code fence untouched", async () => {
-        // A fence with no language has no className list at all; the placeholder
-        // plugin must skip it rather than treating it as a diagram.
-        const html = await renderMarkdown("```\nplain code\n```\n");
-        expect(html).not.toContain("emr-mermaid");
-        expect(html).toContain("plain code");
     });
 });
 

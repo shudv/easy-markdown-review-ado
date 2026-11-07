@@ -3,21 +3,18 @@ import { describe, it, expect } from "vitest";
 import { autoExpandKey, planRootAutoExpand } from "../src/hub/autoExpand";
 
 describe("autoExpandKey", () => {
-    it("strips leading slashes so the key is canonical", () => {
-        expect(autoExpandKey("repo-1", "/docs")).toBe(autoExpandKey("repo-1", "docs"));
-        expect(autoExpandKey("repo-1", "///docs")).toBe("repo-1\u0000docs");
-        expect(autoExpandKey("repo-1", "docs//nested")).toBe("repo-1\u0000docs//nested");
+    it.each(["/docs", "///docs"])("treats %s and docs as the same folder", (path) => {
+        expect(autoExpandKey("repo-1", path)).toBe(autoExpandKey("repo-1", "docs"));
     });
 
     it("scopes the key by repo id", () => {
         expect(autoExpandKey("repo-1", "/docs")).not.toBe(autoExpandKey("repo-2", "/docs"));
     });
 
-    it("separates repo and folder with a NUL so prefixes never collide", () => {
-        expect(autoExpandKey("a", "b")).toBe("a\u0000b");
+    it("never confuses a repo/folder pair with one split at a different point", () => {
+        expect(autoExpandKey("a", "bc")).not.toBe(autoExpandKey("ab", "c"));
     });
 });
-
 describe("planRootAutoExpand", () => {
     const base = {
         repoId: "repo-docsonly",
@@ -78,32 +75,20 @@ describe("planRootAutoExpand", () => {
         expect(plan.used).toBe(40);
     });
 
-    it("plans nothing when the budget is already exhausted", () => {
+    it.each([
+        { name: "used up", used: 40 },
+        { name: "already overrun", used: 41 },
+    ])("plans nothing when the budget is $name", ({ used }) => {
         const plan = planRootAutoExpand({
             ...base,
             fileCount: 0,
             unloadedFolders: ["/a"],
-            used: 40,
+            used,
             max: 40,
         });
 
-        expect(plan.folders).toEqual([]);
-        expect(plan.keys).toEqual([]);
-        expect(plan.used).toBe(40);
+        expect(plan).toEqual({ folders: [], keys: [], used });
     });
-
-    it("plans nothing when usage has exceeded the budget", () => {
-        const plan = planRootAutoExpand({
-            ...base,
-            fileCount: 0,
-            unloadedFolders: ["/a"],
-            used: 41,
-            max: 40,
-        });
-
-        expect(plan).toEqual({ folders: [], keys: [], used: 41 });
-    });
-
     it("plans nothing when there are no unloaded folders", () => {
         const plan = planRootAutoExpand({
             ...base,

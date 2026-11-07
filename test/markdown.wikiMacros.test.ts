@@ -61,11 +61,17 @@ describe("[[_TOC_]]", () => {
             ],
             ["Appendix", "#appendix", []],
         ]);
+    });
 
-        // Every link target exists in the rendered document.
-        for (const a of nav.querySelectorAll("a")) {
-            expect(root.querySelector(a.getAttribute("href")!)).not.toBeNull();
-        }
+    it("links every contents entry to a heading anchor that exists on the page", () => {
+        const root = parse(
+            renderMarkdownSync("# Design\n\n[[_TOC_]]\n\n## Goals\n## Rollout & risks\n"),
+        );
+
+        const tocLinks = Array.from(root.querySelectorAll("nav a"), (a) => a.getAttribute("href"));
+        const headingAnchors = Array.from(root.querySelectorAll("h1, h2"), (h) => `#${h.id}`);
+
+        expect(tocLinks).toEqual(headingAnchors);
     });
 
     it("keeps the macro's source line for diffs and line anchors", () => {
@@ -109,7 +115,7 @@ describe("[[_TOC_]]", () => {
         );
     });
 
-    it("renders every macro on the page from one heading scan", () => {
+    it("renders a table of contents for each [[_TOC_]] on the page", () => {
         const root = parse(renderMarkdownSync("[[_TOC_]]\n\n# A\n\n[[_TOC_]]\n"));
 
         expect(root.querySelectorAll("nav.emr-wiki-toc")).toHaveLength(2);

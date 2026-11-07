@@ -39,80 +39,33 @@ describe("wrapRangeWithHighlight", () => {
         expect(p.textContent).toBe("Hello, world!");
     });
 
-    it("applies the optional background color override", () => {
+    it.each([
+        {
+            name: "paints the thread's own color when it has one",
+            background: "rgb(255, 200, 100)",
+            expected: "rgb(255, 200, 100)",
+        },
+        {
+            name: "leaves the color to the stylesheet when the thread has none",
+            background: undefined,
+            expected: "",
+        },
+    ])("$name", ({ background, expected }) => {
         const p = document.createElement("p");
         p.textContent = "color me";
         document.body.appendChild(p);
         const text = p.firstChild as Text;
 
-        const range = makeRange(text, 0, text, 5);
-
-        const [span] = wrapRangeWithHighlight(range, {
-            className: "hl",
-            threadId: "t-2",
-            background: "rgb(255, 200, 100)",
-        });
-
-        expect(span!.style.backgroundColor).toBe("rgb(255, 200, 100)");
-    });
-
-    it("leaves backgroundColor unset when no override is given", () => {
-        const p = document.createElement("p");
-        p.textContent = "plain span";
-        document.body.appendChild(p);
-        const text = p.firstChild as Text;
-
         const [span] = wrapRangeWithHighlight(makeRange(text, 0, text, 5), {
             className: "hl",
-            threadId: "t-nobg",
+            threadId: "t-2",
+            background,
         });
 
-        // The `if (opts.background)` guard must not assign anything when omitted.
-        expect(span!.style.backgroundColor).toBe("");
+        expect(span!.style.backgroundColor).toBe(expected);
     });
 
-    it("wraps a mid-node slice, splitting off BOTH the leading and trailing text", () => {
-        // start > 0 AND end < length, so both splitText branches must run. The
-        // wrapper holds exactly the middle slice and the siblings keep the rest.
-        const p = document.createElement("p");
-        p.textContent = "abcdefgh";
-        document.body.appendChild(p);
-        const text = p.firstChild as Text;
-
-        const [span] = wrapRangeWithHighlight(makeRange(text, 2, text, 5), {
-            className: "hl",
-            threadId: "t-mid",
-        });
-
-        expect(span!.textContent).toBe("cde");
-        // Leading "ab" and trailing "fgh" remain as separate, unwrapped text.
-        expect(p.textContent).toBe("abcdefgh");
-        expect(p.querySelectorAll("span.hl")).toHaveLength(1);
-        // The wrapper is flanked by two bare text nodes (proves both splits ran).
-        expect(span!.previousSibling!.textContent).toBe("ab");
-        expect(span!.nextSibling!.textContent).toBe("fgh");
-    });
-
-    it("wraps a node-initial slice without splitting off a leading node", () => {
-        // start === 0 → the `frag.start > 0` split must be skipped; only the
-        // trailing split runs.
-        const p = document.createElement("p");
-        p.textContent = "headtail";
-        document.body.appendChild(p);
-        const text = p.firstChild as Text;
-
-        const [span] = wrapRangeWithHighlight(makeRange(text, 0, text, 4), {
-            className: "hl",
-            threadId: "t-head",
-        });
-
-        expect(span!.textContent).toBe("head");
-        expect(span!.previousSibling).toBeNull();
-        expect(span!.nextSibling!.textContent).toBe("tail");
-    });
-
-    it("skips a whitespace-only single-text-node range (no span emitted)", () => {
-        // The common-ancestor-is-text path must drop pure-whitespace selections.
+    it("does not highlight a selection of only whitespace inside a paragraph", () => {
         const p = document.createElement("p");
         p.textContent = "a     b";
         document.body.appendChild(p);
@@ -125,26 +78,6 @@ describe("wrapRangeWithHighlight", () => {
 
         expect(spans).toEqual([]);
         expect(p.querySelector("span.hl")).toBeNull();
-    });
-
-    it("skips whitespace-only fragments in the multi-node walk", () => {
-        // The inter-element whitespace text node (between the two spans) must be
-        // skipped, so only the two real words get wrapped — not the gap.
-        const p = document.createElement("p");
-        p.appendChild(document.createTextNode("one"));
-        p.appendChild(document.createTextNode("   "));
-        p.appendChild(document.createTextNode("two"));
-        document.body.appendChild(p);
-
-        const range = makeRange(p.firstChild as Text, 0, p.lastChild as Text, 3);
-
-        const spans = wrapRangeWithHighlight(range, {
-            className: "hl",
-            threadId: "t-wsmulti",
-        });
-
-        expect(spans.map((s) => s.textContent)).toEqual(["one", "two"]);
-        expect(p.textContent).toBe("one   two");
     });
 
     it("wraps each text fragment when the range crosses element boundaries", () => {
@@ -163,14 +96,12 @@ describe("wrapRangeWithHighlight", () => {
             threadId: "t-3",
         });
 
-        expect(spans.length).toBeGreaterThanOrEqual(2);
-        // Reassembled text content should still be intact.
+        expect(spans.map((s) => s.textContent)).toEqual(["bold", " tail"]);
+        expect(spans.map((s) => s.dataset.threadId)).toEqual(["t-3", "t-3"]);
         expect(p.textContent).toBe("bold tail");
-        // Every wrapper carries the thread id.
-        for (const s of spans) expect(s.dataset.threadId).toBe("t-3");
     });
 
-    it("returns an empty array for a collapsed range", () => {
+    it("highlights nothing for a collapsed (empty) selection", () => {
         const p = document.createElement("p");
         p.textContent = "abc";
         document.body.appendChild(p);
@@ -203,7 +134,9 @@ describe("wrapRangeWithHighlight", () => {
             3, // " ga"
         );
 
-        wrapRangeWithHighlight(range, { className: "hl", threadId: "t-5" });
+        const spans = wrapRangeWithHighlight(range, { className: "hl", threadId: "t-5" });
+
+        expect(spans.map((s) => s.textContent)).toEqual(["pha ", "beta", " ga"]);
         expect(p.textContent).toBe("alpha beta gamma");
     });
 

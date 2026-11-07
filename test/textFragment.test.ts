@@ -117,13 +117,15 @@ describe("buildTextFragment", () => {
         expect(found.startContainer.parentElement!.textContent).toContain("Later");
     });
 
-    it("spans inline formatting and block boundaries", () => {
+    it.each([
+        ["inline formatting", "bold words and italics"],
+        ["a block boundary", "italics.next"],
+    ])("links a selection across %s", (_label, text) => {
         const root = mount(
             `<p>Keep <strong>bold words</strong> and <em>italics</em>.</p><ul><li>next item</li></ul>`,
         );
 
-        expect(roundTrip(root, "bold words and italics")).toBe("bold words and italics");
-        expect(roundTrip(root, "italics.next")).toBe("italics.next");
+        expect(roundTrip(root, text)).toBe(text);
     });
 
     it("ignores removed-diff content and injected controls", () => {
@@ -156,25 +158,30 @@ describe("findTextFragment", () => {
         expect(found?.toString()).toBe("Blocks   Deploys\nwhen");
     });
 
-    it("honours a suffix on a start…end quote", () => {
-        const root = mount(`<p>a one b end x. a two b end y.</p>`);
-        expect(
-            findTextFragment(root, {
-                start: "a",
-                end: "end",
-                suffix: "x",
-            })?.toString(),
-        ).toBe("a one b end");
-        // Without a prefix the first start wins (as in browser text fragments);
-        // the builder adds one whenever that would land on the wrong span.
-        expect(
-            findTextFragment(root, {
-                prefix: "x.",
-                start: "a",
-                end: "end",
-                suffix: "y",
-            })?.toString(),
-        ).toBe("a two b end");
+    // Without a prefix the first start wins (as in browser text fragments); the
+    // builder adds one whenever that would land on the wrong span.
+    it.each<{ name: string; html: string; fragment: TextFragment; expected: string }>([
+        {
+            name: "the first span when its suffix matches",
+            html: "<p>a one b end x. a two b end y.</p>",
+            fragment: { start: "a", end: "end", suffix: "x" },
+            expected: "a one b end",
+        },
+        {
+            name: "a later span when the prefix points there",
+            html: "<p>a one b end x. a two b end y.</p>",
+            fragment: { prefix: "x.", start: "a", end: "end", suffix: "y" },
+            expected: "a two b end",
+        },
+        {
+            name: "a later end when the first end fails its suffix",
+            html: "<p>a one b end x c end y.</p>",
+            fragment: { start: "a", end: "end", suffix: "y" },
+            expected: "a one b end x c end",
+        },
+    ])("resolves a start…end quote to $name", ({ html, fragment, expected }) => {
+        const root = mount(html);
+        expect(findTextFragment(root, fragment)?.toString()).toBe(expected);
     });
 
     it("builds a self-disambiguating start…end link", () => {
@@ -187,28 +194,19 @@ describe("findTextFragment", () => {
         expect(found.startOffset).toBeGreaterThan(long.length);
     });
 
-    it("returns null when the text is gone or a prefix can't fit", () => {
+    it.each<[string, TextFragment]>([
+        ["the quoted text is gone", { start: "gamma" }],
+        ["the prefix no longer precedes it", { prefix: "zzz", start: "alpha" }],
+        ["the end text is gone", { start: "alpha", end: "omega" }],
+        ["the suffix no longer follows it", { start: "alpha", suffix: "x" }],
+        ["the quote is only whitespace", { start: "   " }],
+    ])("finds nothing when %s", (_label, fragment) => {
         const root = mount(`<p>alpha beta</p>`);
-        expect(findTextFragment(root, { start: "gamma" })).toBeNull();
-        expect(findTextFragment(root, { prefix: "zzz", start: "alpha" })).toBeNull();
-        expect(findTextFragment(root, { start: "alpha", end: "omega" })).toBeNull();
-        expect(findTextFragment(root, { start: "alpha", suffix: "x" })).toBeNull();
-        expect(findTextFragment(root, { start: "   " })).toBeNull();
+        expect(findTextFragment(root, fragment)).toBeNull();
     });
 });
 
 describe("edge cases", () => {
-    it("skips an end that fails its suffix and tries the next", () => {
-        const root = mount(`<p>a one b end x c end y.</p>`);
-        expect(
-            findTextFragment(root, {
-                start: "a",
-                end: "end",
-                suffix: "y",
-            })?.toString(),
-        ).toBe("a one b end x c end");
-    });
-
     it("keeps characters whose lower case changes length", () => {
         const root = mount(`<p>Say İstanbul twice.</p>`);
         expect(findTextFragment(root, { start: "İstanbul" })?.toString()).toBe("İstanbul");
@@ -255,12 +253,14 @@ describe("serialize / parse", () => {
         ).toBe("pre-,a%2Cb,end,-post");
     });
 
-    it("rejects malformed values", () => {
-        expect(parseTextFragment("")).toBeNull();
-        expect(parseTextFragment("a,b,c")).toBeNull();
-        expect(parseTextFragment("%E0%A4%A")).toBeNull();
-        expect(parseTextFragment("a,")).toBeNull();
-        expect(parseTextFragment("pre-,-post")).toBeNull();
+    it.each([
+        ["an empty value", ""],
+        ["too many parts", "a,b,c"],
+        ["broken percent-encoding", "%E0%A4%A"],
+        ["an empty end", "a,"],
+        ["context with no quote", "pre-,-post"],
+    ])("rejects a link value with %s", (_label, value) => {
+        expect(parseTextFragment(value)).toBeNull();
     });
 });
 

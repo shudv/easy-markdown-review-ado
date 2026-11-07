@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ReactElement, useCallback, useState } from "react";
-import { expect, fn, userEvent, waitFor } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { DocRepo } from "../shell/types";
 import { RepoPicker } from "./RepoPicker";
@@ -15,20 +15,28 @@ const allRepos: DocRepo[] = Array.from({ length: 24 }, (_, index) => ({
     detailsLoaded: false,
 }));
 
-const loadMore = fn();
+/**
+ * A paging host the play function drives step by step: `onLoadMore` only
+ * records the request; the story then reports the request as started and
+ * delivers the next page when it chooses — like a host that first waits for a
+ * fresh access token, then for the REST call.
+ */
+const pagingHost = {
+    loadMore: fn(),
+    startLoading: () => {},
+    deliverNextPage: () => {},
+};
 
 function PaginatedPicker(): ReactElement {
     const [repos, setRepos] = useState(() => allRepos.slice(0, 16));
     const [loading, setLoading] = useState(false);
 
-    const handleLoadMore = useCallback(() => {
-        loadMore();
-        setLoading(true);
-        window.setTimeout(() => {
-            setRepos(allRepos);
-            setLoading(false);
-        }, 100);
-    }, []);
+    pagingHost.startLoading = () => setLoading(true);
+
+    pagingHost.deliverNextPage = () => {
+        setRepos(allRepos);
+        setLoading(false);
+    };
 
     return (
         <div style={{ width: 260 }}>
@@ -40,7 +48,7 @@ function PaginatedPicker(): ReactElement {
                 paginated
                 hasMore={repos.length < allRepos.length}
                 loading={loading}
-                onLoadMore={handleLoadMore}
+                onLoadMore={pagingHost.loadMore}
                 onFilter={fn()}
             />
         </div>
@@ -61,47 +69,57 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const StablePagination: Story = {
+/** Scroll `list` to its end, as the reader's wheel would, and wait for the scroll event. */
+async function scrollToEnd(list: HTMLElement, offset = 0): Promise<void> {
+    const scrolled = new Promise((resolve) => {
+        list.addEventListener("scroll", resolve, { once: true });
+    });
+
+    list.scrollTop = list.scrollHeight - list.clientHeight - offset;
+    await scrolled;
+}
+
+/**
+ * Scrolling to the end of a long repository list asks the host for the next
+ * page exactly once — even if the reader keeps scrolling before the host
+ * reports it is loading — shows "Loading repositories…" without the list
+ * jumping, then appends the new repositories.
+ */
+export const ScrollingLoadsNextPage: Story = {
     render: () => <PaginatedPicker />,
-    beforeEach: () => loadMore.mockClear(),
+    beforeEach: () => {
+        pagingHost.loadMore.mockClear();
+    },
     play: async ({ canvasElement }) => {
-        const trigger = canvasElement.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!;
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "repository-01" }));
 
-        const chevron = trigger.querySelector<SVGElement>(".emr-docnav-repo-chevron")!;
+        const list = canvas.getByRole("listbox", { name: "Repository" });
 
-        // Browser tests use a real pointer, which can rest over the centered trigger.
-        const restingOpacity = trigger.matches(":hover, :focus-visible") ? "0.75" : "0";
-
-        expect(getComputedStyle(chevron).opacity).toBe(restingOpacity);
-        expect(chevron.getBoundingClientRect().width).toBe(16);
-        expect(
-            trigger.getBoundingClientRect().right - chevron.getBoundingClientRect().right,
-        ).toBeCloseTo(5, 1);
-        await userEvent.click(trigger);
-        expect(getComputedStyle(chevron).opacity).toBe("0.75");
-
-        const list = await waitFor(() => {
-            const element = document.querySelector<HTMLElement>(".emr-docnav-repo-list");
-
-            if (!element || element.scrollHeight <= element.clientHeight) {
-                throw new Error("repository list is not scrollable");
-            }
-
-            return element;
-        });
+        await expect(within(list).getAllByRole("option")).toHaveLength(16);
+        await expect(canvas.getByRole("textbox", { name: "Filter repositories" })).toHaveFocus();
 
         const heightBeforeLoading = list.scrollHeight;
 
-        list.scrollTop = list.scrollHeight;
-        list.dispatchEvent(new Event("scroll", { bubbles: true }));
-        list.dispatchEvent(new Event("scroll", { bubbles: true }));
-        list.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await scrollToEnd(list);
+        await waitFor(() => expect(pagingHost.loadMore).toHaveBeenCalledTimes(1));
 
-        await waitFor(() => expect(loadMore).toHaveBeenCalledTimes(1));
-        await waitFor(() => expect(list.textContent).toContain("Loading repositories…"));
-        expect(list.scrollHeight).toBe(heightBeforeLoading);
-        await waitFor(() => expect(list.querySelectorAll('[role="option"]')).toHaveLength(24));
-        expect(loadMore).toHaveBeenCalledTimes(1);
+        // Still at the end while the request hasn't started: no second request.
+        await scrollToEnd(list, 4);
+        await scrollToEnd(list);
+        await expect(pagingHost.loadMore).toHaveBeenCalledTimes(1);
+
+        pagingHost.startLoading();
+        await waitFor(() =>
+            expect(within(list).getByRole("status")).toHaveTextContent("Loading repositories…"),
+        );
+        await expect(list.scrollHeight).toBe(heightBeforeLoading);
+        await scrollToEnd(list, 4);
+
+        pagingHost.deliverNextPage();
+        await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(24));
+        await expect(within(list).queryByRole("status")).toBeNull();
+        await expect(pagingHost.loadMore).toHaveBeenCalledTimes(1);
     },
 };
 
@@ -119,7 +137,7 @@ function FilteringPicker(): ReactElement {
     return (
         <div style={{ width: 260 }}>
             <RepoPicker
-                repos={allRepos}
+                repos={allRepos.filter((repo) => repo.name.includes(filter))}
                 selectedId={allRepos[0]!.id}
                 selectedName={allRepos[0]!.name}
                 onSelect={fn()}
@@ -131,28 +149,34 @@ function FilteringPicker(): ReactElement {
     );
 }
 
-/** Closing after a filter re-queries page one exactly once. */
-export const FilterResetsOnceOnClose: Story = {
+/**
+ * Like Azure DevOps, closing the picker clears its keyword filter: the host
+ * re-queries the unfiltered first page once, and reopening shows every
+ * repository with an empty filter box.
+ */
+export const ClosingClearsFilter: Story = {
     render: () => <FilteringPicker />,
-    beforeEach: () => filterCalls.mockClear(),
+    beforeEach: () => {
+        filterCalls.mockClear();
+    },
     play: async ({ canvasElement }) => {
-        await userEvent.click(
-            canvasElement.querySelector<HTMLButtonElement>(".emr-docnav-repo-btn")!,
-        );
+        const canvas = within(canvasElement);
+        const trigger = canvas.getByRole("button", { name: "repository-01" });
+        await userEvent.click(trigger);
 
-        const input = await waitFor(() => {
-            const el = document.querySelector<HTMLInputElement>(".emr-docnav-repo-filter-input");
+        const input = canvas.getByRole("textbox", { name: "Filter repositories" });
+        await userEvent.click(input);
+        await userEvent.paste("repository-2");
+        await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(5));
+        await expect(filterCalls).toHaveBeenCalledWith("repository-2");
 
-            if (!el) throw new Error("filter input not shown");
-
-            return el;
-        });
-
-        await userEvent.type(input, "rep");
-        await waitFor(() => expect(filterCalls).toHaveBeenCalledWith("rep"));
         await userEvent.keyboard("{Escape}");
-        // Longer than the 250 ms debounce, so a stray second re-query would land.
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
-        expect(filterCalls.mock.calls).toEqual([["rep"], [""]]);
+        await expect(canvas.queryByRole("listbox")).toBeNull();
+        await expect(trigger).toHaveFocus();
+
+        await userEvent.click(trigger);
+        await expect(canvas.getByRole("textbox", { name: "Filter repositories" })).toHaveValue("");
+        await waitFor(() => expect(canvas.getAllByRole("option")).toHaveLength(24));
+        await expect(filterCalls.mock.calls).toEqual([["repository-2"], [""]]);
     },
 };

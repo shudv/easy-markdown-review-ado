@@ -109,20 +109,25 @@ describe("ReaderLoadingShell", () => {
         expect(shell.querySelector(".emr-rail")).toBeTruthy();
     });
 
-    it("restores hidden comments and renders either header slot", () => {
+    it("restores hidden comments", () => {
         localStorage.setItem(layoutStorageKey("hub"), JSON.stringify({ showComments: false }));
 
-        let shell = mount("hub", { titleSlot: <span>Repository</span> });
+        const shell = mount("hub");
+
         expect(shell.classList.contains("is-comments-hidden")).toBe(true);
-        expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe("Repository");
+    });
+
+    it.each([
+        { name: "title", options: { titleSlot: <span>Repository</span> }, expected: "Repository" },
+        {
+            name: "header actions",
+            options: { headerActions: <button>Refresh</button> },
+            expected: "Refresh",
+        },
+    ])("shows the caller's $name in place of the header placeholder", ({ options, expected }) => {
+        const shell = mount("hub", options);
+
+        expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe(expected);
         expect(shell.querySelector(".emr-docnav-header.emr-skel-header")).toBeNull();
-
-        act(() => root!.unmount());
-        root = null;
-        container!.remove();
-        container = null;
-
-        shell = mount("hub", { headerActions: <button>Refresh</button> });
-        expect(shell.querySelector(".emr-docnav-header")?.textContent).toBe("Refresh");
     });
 });

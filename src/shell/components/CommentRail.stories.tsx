@@ -121,12 +121,20 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Active thread is the priority balloon; others stack above and below it. */
+/**
+ * The rail lists the file's threads beside their anchors (the active one as
+ * the priority balloon), folds away the hidden resolved thread, and gathers
+ * threads whose anchor text is gone under "Comments with no anchor".
+ */
 export const Default: Story = {
     play: async ({ canvasElement }) => {
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-rail-positioned")).toBeTruthy(),
-        );
+        const canvas = within(canvasElement);
+        await waitFor(() => expect(canvas.getByText("Comment on Second anchor")).toBeTruthy());
+        await expect(canvas.getByText("Comment on First anchor")).toBeTruthy();
+        await expect(canvas.getByText("Comment on Third anchor")).toBeTruthy();
+        await expect(canvas.queryByText("Comment on Hidden resolved")).toBeNull();
+        await expect(canvas.getByText("Comments with no anchor")).toBeTruthy();
+        await expect(canvas.getByText("Comment on Orphaned anchor")).toBeTruthy();
     },
 };
 
@@ -226,9 +234,7 @@ export const OnlyThisFileScope: Story = {
     args: { onlyThisFile: true, orphanedFileThreads: ORPHANED_FILE },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-rail-positioned")).toBeTruthy(),
-        );
+        await waitFor(() => expect(canvas.getByText("Comment on First anchor")).toBeTruthy());
         // Neither cross-file tray is offered under the "only this file" scope.
         expect(canvas.queryByRole("button", { name: /General comments/ })).toBeNull();
         expect(
@@ -240,10 +246,11 @@ export const OnlyThisFileScope: Story = {
 };
 
 /**
- * An embed that doesn't wire `onOnlyThisFileChange` still renders the scope
- * toggle; choosing it is a harmless no-op that leaves the scope unchanged.
+ * A host that keeps every file's comments in scope (it doesn't take scope
+ * changes) still lists "Hide comments not on this file", but choosing it
+ * leaves the option unchecked and the PR-wide trays in place.
  */
-export const OnlyThisFileUnwired: Story = {
+export const OnlyThisFileFixedByHost: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         await userEvent.click(canvas.getByRole("button", { name: /^Filter comments/ }));
@@ -254,6 +261,7 @@ export const OnlyThisFileUnwired: Story = {
 
         await userEvent.click(scope);
         await expect(scope.getAttribute("aria-checked")).toBe("false");
+        await expect(canvas.getByRole("button", { name: /General comments/ })).toBeTruthy();
     },
 };
 
@@ -303,7 +311,13 @@ export const WithDraft: Story = {
         draftY: 120,
     },
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".is-draft")).toBeTruthy());
+        const canvas = within(canvasElement);
+        await waitFor(() =>
+            expect(canvas.getByPlaceholderText("Comment as Shubham Dwivedi…")).toBeTruthy(),
+        );
+        // The header quotes the selection, shortened to fit.
+        const quote = canvas.getByText(/A very long selected passage/);
+        await expect(quote.textContent).not.toContain("in the header");
     },
 };
 
@@ -328,7 +342,7 @@ export const ImplicitDraft: Story = {
         await userEvent.click(canvas.getByRole("button", { name: "New comment" }));
         await expect(args.onAddComment).toHaveBeenCalledOnce();
         await expect(canvas.queryByText(/Anchored to:/)).toBeNull();
-        await expect(canvasElement.querySelector(".is-draft")).toBeTruthy();
+        await expect(canvas.getByPlaceholderText("Comment as Shubham Dwivedi…")).toBeTruthy();
     },
 };
 
@@ -344,11 +358,24 @@ export const DraftShortAnchor: Story = {
         await waitFor(() => expect(canvas.getByText(/Short bit/)).toBeTruthy());
     },
 };
+/** With no thread selected, the cards simply stack top-down in document order. */
 export const TopDownStacking: Story = {
     args: {
         activeThreadId: null,
         routedPr: undefined,
         headerActions: undefined,
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const first = await waitFor(() => canvas.getByText("Comment on First anchor"));
+        const second = canvas.getByText("Comment on Second anchor");
+        const third = canvas.getByText("Comment on Third anchor");
+        await expect(first.getBoundingClientRect().top).toBeLessThan(
+            second.getBoundingClientRect().top,
+        );
+        await expect(second.getBoundingClientRect().top).toBeLessThan(
+            third.getBoundingClientRect().top,
+        );
     },
 };
 
@@ -357,9 +384,7 @@ export const HidePrPill: Story = {
     args: { hidePrPill: true },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-rail-positioned")).toBeTruthy(),
-        );
+        await waitFor(() => expect(canvas.getByText("Comment on First anchor")).toBeTruthy());
         await expect(canvas.queryByText(/PR #/)).toBeNull();
     },
 };
@@ -429,7 +454,9 @@ export const EmptyActiveFilter: Story = {
                 name: /Filter comments — Active comments/,
             }),
         ).toBeTruthy();
-        await expect(canvasElement.querySelector(".emr-rail-empty")).toBeNull();
+        // The rail isn't empty because there is nothing to comment on, so it doesn't
+        // invite a new thread.
+        await expect(canvas.queryByText(/Select any text to start a thread/)).toBeNull();
         await expect(canvas.queryByText("Comment on Resolved note")).toBeNull();
     },
 };

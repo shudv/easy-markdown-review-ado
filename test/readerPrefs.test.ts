@@ -29,8 +29,6 @@ import {
     clampNavWidthPct,
     clampCommentWidthPct,
     widthScale,
-    PANE_CLOSE_AT_PCT,
-    PANE_REOPEN_TRIGGER_PX,
     dragClosesPane,
     dragReopensPane,
     sanitizeReaderPrefs,
@@ -39,6 +37,7 @@ import {
     readerMinWidth,
     maxRailWidthPct,
 } from "../src/shell/readerPrefs";
+import { failStorage } from "./readerStorageFailures";
 
 const spacingPrefs = (pct: number) => ({
     lineSpacingPct: pct,
@@ -59,15 +58,19 @@ describe("readerPrefs — curated font list", () => {
         ]);
     });
 
-    it("resolves a known font id to its definition", () => {
-        expect(resolveReaderFont("sitka").name).toBe("Sitka");
-        expect(resolveReaderFont("atkinson").name).toBe("Atkinson Hyperlegible");
+    it.each([
+        ["sitka", "Sitka"],
+        ["atkinson", "Atkinson Hyperlegible"],
+    ])("resolves the font id %s to %s", (id, name) => {
+        expect(resolveReaderFont(id).name).toBe(name);
     });
 
-    it("falls back to the default font for unknown and removed ids", () => {
-        expect(resolveReaderFont("does-not-exist")).toBe(READER_FONTS[0]);
-        expect(resolveReaderFont("palatino")).toBe(READER_FONTS[0]);
-        expect(resolveReaderFont("").id).toBe(DEFAULT_FONT_ID);
+    it.each([
+        { name: "an unknown id", id: "does-not-exist" },
+        { name: "a removed font", id: "palatino" },
+        { name: "an empty id", id: "" },
+    ])("falls back to the default font for $name", ({ id }) => {
+        expect(resolveReaderFont(id)).toBe(READER_FONTS[0]);
     });
 
     it("keeps System plus only locally available curated fonts", async () => {
@@ -90,31 +93,52 @@ describe("readerPrefs — curated font list", () => {
 });
 
 describe("readerPrefs — continuous reader percentages", () => {
-    it("rounds and clamps arbitrary percentages", () => {
-        expect(clampReaderPct(100)).toBe(100);
-        expect(clampReaderPct(108.4)).toBe(108);
-        expect(clampReaderPct(-50)).toBe(READER_PERCENT_MIN);
-        expect(clampReaderPct(9999)).toBe(READER_PERCENT_MAX);
+    it.each([
+        { name: "keeps an in-range value", pct: 100, expected: 100 },
+        { name: "rounds a fractional value", pct: 108.4, expected: 108 },
+        { name: "raises a negative value to the minimum", pct: -50, expected: READER_PERCENT_MIN },
+        { name: "caps a huge value at the maximum", pct: 9999, expected: READER_PERCENT_MAX },
+    ])("$name", ({ pct, expected }) => {
+        expect(clampReaderPct(pct)).toBe(expected);
     });
 
-    it("sticks values near the default to exactly 100", () => {
-        expect(snapReaderPct(97)).toBe(100);
-        expect(snapReaderPct(103)).toBe(100);
-        expect(snapReaderPct(96)).toBe(96);
-        expect(snapReaderPct(104)).toBe(104);
+    it.each([
+        { pct: 97, expected: 100 },
+        { pct: 103, expected: 100 },
+        { pct: 96, expected: 96 },
+        { pct: 104, expected: 104 },
+    ])("snaps $pct% to $expected% (values near the default stick to 100)", ({ pct, expected }) => {
+        expect(snapReaderPct(pct)).toBe(expected);
     });
 
-    it("nudges by five points and clamps at both ends", () => {
-        expect(nudgeReaderPct(100, 1)).toBe(105);
-        expect(nudgeReaderPct(100, -1)).toBe(95);
-        expect(nudgeReaderPct(READER_PERCENT_MAX, 1)).toBe(READER_PERCENT_MAX);
-        expect(nudgeReaderPct(READER_PERCENT_MIN, -1)).toBe(READER_PERCENT_MIN);
+    it.each([
+        { name: "grows by five points", pct: 100, direction: 1, expected: 105 },
+        { name: "shrinks by five points", pct: 100, direction: -1, expected: 95 },
+        {
+            name: "stays at the maximum",
+            pct: READER_PERCENT_MAX,
+            direction: 1,
+            expected: READER_PERCENT_MAX,
+        },
+        {
+            name: "stays at the minimum",
+            pct: READER_PERCENT_MIN,
+            direction: -1,
+            expected: READER_PERCENT_MIN,
+        },
+    ] as const)("a nudge $name", ({ pct, direction, expected }) => {
+        expect(nudgeReaderPct(pct, direction)).toBe(expected);
     });
 
-    it("uses separate 100–200 bounds for spacing percentages", () => {
+    it("snaps spacing below its 100% floor up to 100", () => {
         expect(snapReaderPct(80, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)).toBe(100);
-        expect(nudgeReaderPct(195, 1, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)).toBe(200);
-        expect(nudgeReaderPct(200, 1, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)).toBe(200);
+    });
+
+    it.each([
+        { name: "reaches", pct: 195 },
+        { name: "stays at", pct: 200 },
+    ])("a spacing nudge $name the 200% ceiling", ({ pct }) => {
+        expect(nudgeReaderPct(pct, 1, READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)).toBe(200);
     });
 
     it("maps a coupled 125% to a conservative general-purpose balance", () => {
@@ -153,66 +177,80 @@ describe("readerPrefs — continuous reader percentages", () => {
 });
 
 describe("readerPrefs — nav-width resizing", () => {
-    it("clamps a (drag-derived) percentage into the range, rounded", () => {
-        expect(clampNavWidthPct(100)).toBe(100);
-        expect(clampNavWidthPct(108.4)).toBe(108); // continuous — just rounded
-        expect(clampNavWidthPct(-50)).toBe(NAV_WIDTH_MIN_PCT);
-        expect(clampNavWidthPct(9999)).toBe(NAV_WIDTH_MAX_PCT);
+    it.each([
+        { name: "keeps an in-range width", pct: 100, expected: 100 },
+        { name: "rounds a dragged width", pct: 108.4, expected: 108 },
+        { name: "raises a negative width to the minimum", pct: -50, expected: NAV_WIDTH_MIN_PCT },
+        { name: "caps a huge width at the maximum", pct: 9999, expected: NAV_WIDTH_MAX_PCT },
+    ])("$name", ({ pct, expected }) => {
+        expect(clampNavWidthPct(pct)).toBe(expected);
     });
 
     it("floors the comment rail higher than the nav (cramped when too narrow)", () => {
         expect(COMMENT_WIDTH_MIN_PCT).toBeGreaterThan(NAV_WIDTH_MIN_PCT);
-        expect(clampCommentWidthPct(100)).toBe(100); // in range → unchanged
-        expect(clampCommentWidthPct(108.4)).toBe(108); // continuous — just rounded
-        expect(clampCommentWidthPct(60)).toBe(COMMENT_WIDTH_MIN_PCT); // below floor
-        expect(clampCommentWidthPct(9999)).toBe(NAV_WIDTH_MAX_PCT); // capped
+        expect(clampCommentWidthPct(60)).toBe(COMMENT_WIDTH_MIN_PCT);
+    });
+
+    it.each([
+        { name: "keeps an in-range width", pct: 100, expected: 100 },
+        { name: "rounds a dragged width", pct: 108.4, expected: 108 },
+        { name: "caps a huge width at the maximum", pct: 9999, expected: NAV_WIDTH_MAX_PCT },
+    ])("comment rail: $name", ({ pct, expected }) => {
+        expect(clampCommentWidthPct(pct)).toBe(expected);
     });
 });
 
 describe("readerPrefs — widthScale (CSS scale guard)", () => {
-    it("maps an in-range pct to a 0.5–1.3 factor", () => {
-        expect(widthScale(100)).toBe(1);
-        expect(widthScale(50)).toBeCloseTo(0.5, 5);
-        expect(widthScale(130)).toBeCloseTo(1.3, 5);
+    it.each([
+        { name: "the default width", pct: 100, expected: 1 },
+        { name: "the narrowest width", pct: 50, expected: 0.5 },
+        { name: "the widest width", pct: 130, expected: 1.3 },
+        { name: "a width past the maximum, capped", pct: 500, expected: 1.3 },
+        { name: "a width below the minimum, floored", pct: 10, expected: 0.5 },
+    ])("scales $name", ({ pct, expected }) => {
+        expect(widthScale(pct)).toBeCloseTo(expected, 5);
     });
 
-    it("clamps an out-of-range pct so a pane can't balloon or collapse", () => {
-        expect(widthScale(500)).toBeCloseTo(1.3, 5); // capped at +30%
-        expect(widthScale(10)).toBeCloseTo(0.5, 5); // floored at -50%
-    });
-
-    it("falls back to 1 for a non-finite pct (never emits NaN into CSS)", () => {
-        expect(widthScale(NaN)).toBe(1);
-        expect(widthScale(Infinity)).toBe(1);
-        expect(widthScale(undefined as unknown as number)).toBe(1);
+    it.each([
+        { name: "NaN", pct: Number.NaN },
+        { name: "Infinity", pct: Infinity },
+        { name: "a missing value", pct: undefined as unknown as number },
+    ])("never emits NaN into CSS: $name scales by 1", ({ pct }) => {
+        expect(widthScale(pct)).toBe(1);
     });
 });
 
 describe("readerPrefs — drag-to-close / reopen thresholds", () => {
-    it("auto-closes a pane only once the drag target drops below the floor", () => {
-        expect(PANE_CLOSE_AT_PCT).toBe(45);
-        expect(dragClosesPane(44)).toBe(true); // just under → collapse
-        expect(dragClosesPane(0)).toBe(true); // dragged to closure
-        expect(dragClosesPane(45)).toBe(false); // exactly at the threshold → stay open
-        expect(dragClosesPane(50)).toBe(false); // at the min width → stay open
+    it.each([
+        { name: "just under the 45% floor closes", pct: 44, expected: true },
+        { name: "all the way to zero closes", pct: 0, expected: true },
+        { name: "exactly at the floor stays open", pct: 45, expected: false },
+        { name: "at the minimum width stays open", pct: 50, expected: false },
+    ])("dragging a pane $name", ({ pct, expected }) => {
+        expect(dragClosesPane(pct)).toBe(expected);
     });
 
-    it("reopens a closed pane only past the inward-grab trigger", () => {
-        expect(PANE_REOPEN_TRIGGER_PX).toBe(24);
-        expect(dragReopensPane(24)).toBe(true); // exactly at trigger → reopen
-        expect(dragReopensPane(40)).toBe(true); // well past → reopen
-        expect(dragReopensPane(23)).toBe(false); // just short → stay closed
-        expect(dragReopensPane(0)).toBe(false); // no inward travel → stay closed
+    it.each([
+        { name: "exactly the 24px trigger reopens it", px: 24, expected: true },
+        { name: "well past the trigger reopens it", px: 40, expected: true },
+        { name: "just short of the trigger keeps it closed", px: 23, expected: false },
+        { name: "no inward travel keeps it closed", px: 0, expected: false },
+    ])("pulling a closed pane $name", ({ px, expected }) => {
+        expect(dragReopensPane(px)).toBe(expected);
     });
 });
 
 describe("readerPrefs — sanitize", () => {
-    it("returns a fresh copy of the defaults for non-object input", () => {
-        expect(sanitizeReaderPrefs(null)).toEqual(DEFAULT_READER_PREFS);
-        expect(sanitizeReaderPrefs(undefined)).toEqual(DEFAULT_READER_PREFS);
-        expect(sanitizeReaderPrefs(42)).toEqual(DEFAULT_READER_PREFS);
-        expect(sanitizeReaderPrefs("nope")).toEqual(DEFAULT_READER_PREFS);
-        // A fresh object, not the shared default reference.
+    it.each([
+        { name: "null", stored: null },
+        { name: "undefined", stored: undefined },
+        { name: "a number", stored: 42 },
+        { name: "a string", stored: "nope" },
+    ])("returns the defaults for $name", ({ stored }) => {
+        expect(sanitizeReaderPrefs(stored)).toEqual(DEFAULT_READER_PREFS);
+    });
+
+    it("returns a copy the caller can change without touching the shared defaults", () => {
         expect(sanitizeReaderPrefs(null)).not.toBe(DEFAULT_READER_PREFS);
     });
 
@@ -246,11 +284,11 @@ describe("readerPrefs — sanitize", () => {
         });
     });
 
-    it("clamps an out-of-range comment/nav width so a pane can't balloon", () => {
-        expect(sanitizeReaderPrefs({ commentWidthPct: 500 }).commentWidthPct).toBe(
-            NAV_WIDTH_MAX_PCT,
-        );
-        expect(sanitizeReaderPrefs({ navWidthPct: 500 }).navWidthPct).toBe(NAV_WIDTH_MAX_PCT);
+    it.each([
+        { name: "comment rail", field: "commentWidthPct" },
+        { name: "nav", field: "navWidthPct" },
+    ] as const)("caps a stored $name width so the pane can't balloon", ({ field }) => {
+        expect(sanitizeReaderPrefs({ [field]: 500 })[field]).toBe(NAV_WIDTH_MAX_PCT);
     });
 
     it("coerces each invalid field back to its default", () => {
@@ -268,28 +306,36 @@ describe("readerPrefs — sanitize", () => {
             commentWidthPct: "wide",
         });
 
-        expect(out.fontId).toBe(DEFAULT_FONT_ID);
-        expect(out.sizePct).toBe(DEFAULT_SIZE_PCT);
-        expect(out.lineSpacingPct).toBe(DEFAULT_LINE_SPACING_PCT);
-        expect(out.paragraphSpacingPct).toBe(DEFAULT_PARAGRAPH_SPACING_PCT);
-        expect(out.letterSpacingPct).toBe(DEFAULT_LETTER_SPACING_PCT);
-        expect(out.wordSpacingPct).toBe(DEFAULT_WORD_SPACING_PCT);
-        expect(out.showNav).toBe(true);
-        expect(out.showOutline).toBe(true);
-        expect(out.showComments).toBe(true);
-        expect(out.navWidthPct).toBe(DEFAULT_NAV_WIDTH_PCT);
-        expect(out.commentWidthPct).toBe(DEFAULT_COMMENT_WIDTH_PCT);
+        expect(out).toEqual({
+            fontId: DEFAULT_FONT_ID,
+            sizePct: DEFAULT_SIZE_PCT,
+            lineSpacingPct: DEFAULT_LINE_SPACING_PCT,
+            paragraphSpacingPct: DEFAULT_PARAGRAPH_SPACING_PCT,
+            letterSpacingPct: DEFAULT_LETTER_SPACING_PCT,
+            wordSpacingPct: DEFAULT_WORD_SPACING_PCT,
+            showNav: true,
+            showOutline: true,
+            showComments: true,
+            navWidthPct: DEFAULT_NAV_WIDTH_PCT,
+            commentWidthPct: DEFAULT_COMMENT_WIDTH_PCT,
+        });
     });
 
-    it("rejects a non-finite size", () => {
-        expect(sanitizeReaderPrefs({ sizePct: Number.NaN }).sizePct).toBe(DEFAULT_SIZE_PCT);
-        expect(sanitizeReaderPrefs({ sizePct: Infinity }).sizePct).toBe(DEFAULT_SIZE_PCT);
-        expect(sanitizeReaderPrefs({ lineSpacingPct: Number.NaN }).lineSpacingPct).toBe(
-            DEFAULT_LINE_SPACING_PCT,
-        );
-        expect(sanitizeReaderPrefs({ wordSpacingPct: Infinity }).wordSpacingPct).toBe(
-            DEFAULT_WORD_SPACING_PCT,
-        );
+    it.each([
+        { name: "a NaN size", stored: { sizePct: Number.NaN }, field: "sizePct" },
+        { name: "an infinite size", stored: { sizePct: Infinity }, field: "sizePct" },
+        {
+            name: "a NaN line spacing",
+            stored: { lineSpacingPct: Number.NaN },
+            field: "lineSpacingPct",
+        },
+        {
+            name: "an infinite word spacing",
+            stored: { wordSpacingPct: Infinity },
+            field: "wordSpacingPct",
+        },
+    ] as const)("replaces $name with the default", ({ stored, field }) => {
+        expect(sanitizeReaderPrefs(stored)[field]).toBe(DEFAULT_READER_PREFS[field]);
     });
 });
 
@@ -411,61 +457,107 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     });
 
     it("degrades to defaults when reading throws", () => {
-        vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("blocked");
-        });
+        failStorage("getItem");
+
         expect(readReaderPrefs("pr")).toEqual(DEFAULT_READER_PREFS);
     });
 
-    it("swallows write failures", () => {
-        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("quota");
-        });
+    it("carries on without saving when storage cannot be written", () => {
+        failStorage("setItem");
+
         expect(() => writeReaderPrefs("pr", DEFAULT_READER_PREFS)).not.toThrow();
     });
 });
 
 describe("readerPrefs — anchored-layout width budget", () => {
-    it("sums the visible columns + the document scrollbar", () => {
+    it.each([
         // nav 340 + doc 440 + doc bar 12 + rail 340 (native scrollbar inside)
-        expect(readerMinWidth(true, true)).toBe(1132);
+        {
+            name: "sums both rails, the document and its scrollbar",
+            nav: true,
+            rail: true,
+            expected: 1132,
+        },
+        {
+            name: "drops the nav width when the nav is hidden",
+            nav: false,
+            rail: true,
+            expected: 792,
+        },
+        { name: "drops the rail when comments are hidden", nav: true, rail: false, expected: 792 },
+        {
+            name: "needs only the document + its scrollbar with both panels hidden",
+            nav: false,
+            rail: false,
+            expected: 452,
+        },
+    ])("$name", ({ nav, rail, expected }) => {
+        expect(readerMinWidth(nav, rail)).toBe(expected);
     });
 
-    it("drops the nav width when the nav is hidden", () => {
-        expect(readerMinWidth(false, true)).toBe(792);
+    it.each([
+        {
+            name: "a wider nav",
+            nav: true,
+            rail: true,
+            navPct: 130,
+            railPct: 100,
+            expected: 442 + 440 + 12 + 340,
+        },
+        {
+            name: "a wider comment rail",
+            nav: true,
+            rail: true,
+            navPct: 100,
+            railPct: 130,
+            expected: 340 + 440 + 12 + 442,
+        },
+        {
+            name: "both rails resized",
+            nav: true,
+            rail: true,
+            navPct: 130,
+            railPct: 70,
+            expected: 442 + 440 + 12 + 238,
+        },
+        {
+            name: "a narrower nav with comments hidden",
+            nav: true,
+            rail: false,
+            navPct: 70,
+            railPct: 100,
+            expected: 238 + 440 + 12,
+        },
+        {
+            name: "a hidden nav's width preference ignored",
+            nav: false,
+            rail: true,
+            navPct: 130,
+            railPct: 130,
+            expected: 440 + 12 + 442,
+        },
+    ])("scales the budget for $name", ({ nav, rail, navPct, railPct, expected }) => {
+        expect(readerMinWidth(nav, rail, navPct, railPct)).toBe(expected);
     });
 
-    it("drops the rail when comments are hidden", () => {
-        expect(readerMinWidth(true, false)).toBe(792);
-    });
-
-    it("needs only the document + its scrollbar with both panels hidden", () => {
-        expect(readerMinWidth(false, false)).toBe(452);
-    });
-
-    it("scales each rail's share by its own width preference", () => {
-        // nav 340 × 130% = 442, + doc 440 + doc bar 12 + rail 340 (comment defaults 100%)
-        expect(readerMinWidth(true, true, 130)).toBe(442 + 440 + 12 + 340);
-        // The comment rail scales INDEPENDENTLY: nav 340 + doc 440 + bar 12 + rail 442.
-        expect(readerMinWidth(true, true, 100, 130)).toBe(340 + 440 + 12 + 442);
-        // Both scaled at once.
-        expect(readerMinWidth(true, true, 130, 70)).toBe(442 + 440 + 12 + 238);
-        // A narrower nav lowers the budget (340 × 70% = 238); comments hidden so no rail.
-        expect(readerMinWidth(true, false, 70)).toBe(238 + 440 + 12);
-        // A hidden nav ignores the nav scale; the comment scale still applies.
-        expect(readerMinWidth(false, true, 130, 130)).toBe(440 + 12 + 442);
-    });
-
-    it("caps a rail's drag at the space left once the other rail + doc floor fit", () => {
-        // Roomy frame → the design max (130%) is the only limit.
-        expect(maxRailWidthPct(2000, 340)).toBe(NAV_WIDTH_MAX_PCT);
-        // Tight frame → floored to exactly what fits beside a 340px other rail.
+    it.each([
+        {
+            name: "a roomy frame allows the design maximum",
+            frame: 2000,
+            other: 340,
+            expected: NAV_WIDTH_MAX_PCT,
+        },
         // (1231 − 440 − 12 − 340) / 340 = 129.1% → floor 129.
-        expect(maxRailWidthPct(1231, 340)).toBe(129);
-        // Too little room → never below the design min (50%).
-        expect(maxRailWidthPct(900, 340)).toBe(NAV_WIDTH_MIN_PCT);
-        // A wider "other rail" leaves less room for this one.
+        { name: "a tight frame allows only what fits", frame: 1231, other: 340, expected: 129 },
+        {
+            name: "a cramped frame still allows the design minimum",
+            frame: 900,
+            other: 340,
+            expected: NAV_WIDTH_MIN_PCT,
+        },
         // (1231 − 440 − 12 − 442) / 340 = 99.1% → floor 99.
-        expect(maxRailWidthPct(1231, 442)).toBe(99);
+        { name: "a wider other rail leaves less room", frame: 1231, other: 442, expected: 99 },
+    ])("caps a rail's drag: $name", ({ frame, other, expected }) => {
+        expect(maxRailWidthPct(frame, other)).toBe(expected);
     });
 });

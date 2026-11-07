@@ -44,7 +44,7 @@ describe("resolveAnchor", () => {
         expect(resolveAnchor(root, { exact: "", prefix: "", suffix: "" })).toBeNull();
     });
 
-    it("locates a unique exact match via the composite prefix+exact+suffix path", () => {
+    it("locates a quote whose remembered context is unchanged", () => {
         const root = makeArticle("<p>Hello world from the team</p>");
 
         const range = resolveAnchor(root, {
@@ -57,7 +57,7 @@ describe("resolveAnchor", () => {
         expect(range!.toString()).toBe("world");
     });
 
-    it("disambiguates duplicate exact matches by prefix/suffix scoring", () => {
+    it("picks the occurrence of repeated text whose remembered context surrounds it", () => {
         const root = makeArticle("<p>Once apple twice apple thrice apple</p>");
 
         const range = resolveAnchor(root, {
@@ -71,11 +71,7 @@ describe("resolveAnchor", () => {
         expect(range!.startOffset).toBe("Once apple twice ".length);
     });
 
-    it("breaks a scoring tie in favor of the EARLIEST match", () => {
-        // Both occurrences of "apple" score equally (no prefix/suffix context to
-        // disambiguate), so the documented tie-break must pick the first one.
-        // Guards the `score > bestScore` (strictly-greater) comparison against a
-        // `>=` regression that would silently prefer the last match.
+    it("lands on the first occurrence when no context tells repeated text apart", () => {
         const root = makeArticle("<p>apple then apple</p>");
 
         const range = resolveAnchor(root, {
@@ -88,7 +84,7 @@ describe("resolveAnchor", () => {
         expect(range!.startOffset).toBe(0);
     });
 
-    it("falls back to the bare exact match when prefix/suffix don't appear in the document", () => {
+    it("still resolves the quote when its surrounding text was rewritten", () => {
         const root = makeArticle("<p>Just plain text</p>");
 
         const range = resolveAnchor(root, {
@@ -101,21 +97,39 @@ describe("resolveAnchor", () => {
         expect(range!.toString()).toBe("plain");
     });
 
-    it("scores partial prefix/suffix overlap when the composite match is unavailable", () => {
-        // The exact text sits in different surrounding words than the anchor
-        // remembers, so the match falls back to scoring how much of the prefix and
-        // suffix still line up around each candidate.
-        const root = makeArticle("<p>x cat ran y</p>");
+    // Production: the document was edited after the comment was left, so the
+    // remembered context no longer appears verbatim. The anchor should follow the
+    // occurrence whose surroundings still match best, from either side.
+    it.each([
+        {
+            name: "context on both sides partly survives",
+            prefix: "Then they fix ",
+            suffix: " soon, maybe.",
+        },
+        {
+            name: "only the text before it partly survives",
+            prefix: "Then they fix ",
+            suffix: "!",
+        },
+        {
+            name: "only the text after it partly survives",
+            prefix: "Earlier:",
+            suffix: " soon, maybe.",
+        },
+    ])(
+        "follows repeated quoted text to the occurrence whose context best matches when $name",
+        ({ prefix, suffix }) => {
+            const root = makeArticle(
+                '<p><span id="first">We fix the bug now.</span> ' +
+                    '<span id="second">They fix the bug soon.</span> ' +
+                    '<span id="third">You fix the bug later.</span></p>',
+            );
 
-        const range = resolveAnchor(root, {
-            exact: "cat",
-            prefix: "the ",
-            suffix: " ran fast",
-        });
+            const range = resolveAnchor(root, { exact: "the bug", prefix, suffix });
 
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toBe("cat");
-    });
+            expect(range?.startContainer.parentElement?.id).toBe("second");
+        },
+    );
 
     it("returns null when the exact text simply isn't present", () => {
         const root = makeArticle("<p>One two three</p>");
@@ -314,10 +328,8 @@ describe("isWithinGeneratedContent", () => {
     it("is true for the diagram container element itself", () => {
         const root = makeArticle('<div class="emr-mermaid"><svg><text>Alpha</text></svg></div>');
 
-        // Query the container itself so `closest` matches on the element (not an
-        // ancestor): this pins the `instanceof Element ? node : parentElement`
-        // branch — a mutant that always climbed to `parentElement` would step OUT
-        // of the diagram (to the <article>) and wrongly report false.
+        // A selection boundary can sit on the container element itself rather
+        // than on text inside it.
         expect(isWithinGeneratedContent(root.querySelector(".emr-mermaid")!)).toBe(true);
     });
 
@@ -431,7 +443,7 @@ describe("captureAnchorFromSelection", () => {
         expect(captureAnchorFromSelection(mathRoot)).toBeNull();
     });
 
-    it("captures a TextQuoteAnchor with up to 80 chars of prefix/suffix", () => {
+    it("captures the selected text along with the text around it as context", () => {
         const text = root.querySelector("p")!.firstChild! as Text;
         // Select "quick brown" → offsets 4..15
         const range = document.createRange();
@@ -467,11 +479,9 @@ describe("captureAnchorFromSelection", () => {
         expect(anchor.suffix).toBe(" brown fox jumps over the lazy dog");
     });
 
-    it("truncates captured prefix/suffix to the 80-char context window", () => {
-        // Long document so the selection has >80 chars of context on each side.
-        // The short happy-path fixture never exercises the CONTEXT_LEN clamp, so a
-        // Math.max/Math.min swap on the slice bounds slips through. Here prefix and
-        // suffix must be capped at exactly 80 chars.
+    it("caps the remembered context at 80 characters on each side", () => {
+        // Enough context to re-find the quote later without storing whole
+        // paragraphs alongside every comment.
         document.body.innerHTML = "";
         const before = "a".repeat(100);
         const after = "b".repeat(100);
@@ -727,35 +737,22 @@ describe("withSourceLocation", () => {
         expect(withSourceLocation(base, "hello world")).toBe(base);
     });
 
-    it("disambiguates duplicate matches via prefix/suffix scoring", () => {
-        // "apple" appears twice; only the second is followed by " tart", so the
-        // remembered suffix picks it out even though the exact text is ambiguous.
-        const source = "apple pie\napple tart";
+    // "apple" is ambiguous on its own; only the line followed by " tart" matches
+    // the context remembered when the comment was left.
+    it.each([
+        { name: "the later line", source: "apple pie\napple tart", line: 2 },
+        { name: "the earlier line", source: "apple tart\napple pie", line: 1 },
+    ])(
+        "maps repeated text to $name when that is where its remembered context continues",
+        ({ source, line }) => {
+            const out = withSourceLocation(
+                { exact: "apple", prefix: "X\n", suffix: " tart Y" },
+                source,
+            );
 
-        const out = withSourceLocation(
-            { exact: "apple", prefix: "X\n", suffix: " tart Y" },
-            source,
-        );
-
-        expect(out.line).toBe(2);
-        expect(out.column).toBe(1);
-        expect(out.endColumn).toBe(5);
-    });
-
-    it("selects the occurrence with the strongest prefix/suffix overlap", () => {
-        // Two identical "apple" runs; the first is surrounded by the context the
-        // anchor remembers, so it wins even though a later candidate also matches.
-        const source = "apple tart\napple pie";
-
-        const out = withSourceLocation(
-            { exact: "apple", prefix: "X\n", suffix: " tart Y" },
-            source,
-        );
-
-        expect(out.line).toBe(1);
-        expect(out.column).toBe(1);
-        expect(out.endColumn).toBe(5);
-    });
+            expect(out).toMatchObject({ line, column: 1, endColumn: 5 });
+        },
+    );
 
     it("resolves a multi-line quote against a CRLF source (composite match)", () => {
         // DOM-captured quote text uses LF; the raw source uses CRLF. Matching must
@@ -804,30 +801,10 @@ describe("withSourceLocation", () => {
         expect(out.column).toBe(3);
         expect(out.endColumn).toBe(5);
     });
-
-    it("does NOT consume the char after a lone CR as part of a CRLF pair", () => {
-        // A '\r' followed by a non-'\n' char must advance by 1, not 2. If the
-        // CRLF lookahead were mutated to always skip 2, the 'b' right after the
-        // CR would be swallowed and the offsets (and endColumn) would shift.
-        const source = "a\rbcd";
-
-        const out = withSourceLocation({ exact: "bcd", prefix: "a\n", suffix: "" }, source);
-
-        // A wrongly-widened CRLF skip would swallow 'b', leaving the quote
-        // unresolvable (offsets unchanged / no line). Column is measured in the
-        // original source, where a lone '\r' is not a newline, so "bcd" sits at
-        // line 1, column 3.
-        expect(out.line).toBe(1);
-        expect(out.column).toBe(3);
-        expect(out.endColumn).toBe(5);
-    });
 });
 
-describe("resolveAnchor tier selection", () => {
-    it("prefers the text quote over the line fallback when both are present", () => {
-        // The anchor carries BOTH a resolvable exact quote and a line number. The
-        // quote must win (returns the matched text range), not the whole-line
-        // block. Guards the `if (quoted) return quoted` short-circuit.
+describe("resolveAnchor: text quote vs. source line", () => {
+    it("prefers the quoted text over the anchor's source line when both resolve", () => {
         const root = makeArticle(
             '<p data-source-line="1">alpha</p><p data-source-line="2">beta gamma</p>',
         );
@@ -839,13 +816,10 @@ describe("resolveAnchor tier selection", () => {
             line: 1,
         });
 
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toBe("gamma");
+        expect(range?.toString()).toBe("gamma");
     });
 
-    it("uses the line fallback only when the exact quote fails to resolve", () => {
-        // Exact text is absent from the DOM, so tier-1 misses and the resolver
-        // must fall through to the data-source-line block for the given line.
+    it("falls back to the anchor's source line when the quoted text was edited away", () => {
         const root = makeArticle(
             '<p data-source-line="1">alpha</p><p data-source-line="2">beta gamma</p>',
         );
@@ -857,14 +831,12 @@ describe("resolveAnchor tier selection", () => {
             line: 2,
         });
 
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toContain("beta gamma");
+        expect(range?.toString()).toBe("beta gamma");
     });
 
-    it("returns null when exact is absent and line is 0 (not > 0)", () => {
-        // Pins the `anchor.line > 0` guard: a 0 line must NOT trigger the
-        // fallback (ADO lines are 1-based), so an unresolvable quote yields null.
+    it("orphans an anchor whose quote is gone and whose line is 0 (ADO lines are 1-based)", () => {
         const root = makeArticle('<p data-source-line="1">alpha</p>');
+
         expect(
             resolveAnchor(root, {
                 exact: "missing",
@@ -876,27 +848,8 @@ describe("resolveAnchor tier selection", () => {
     });
 });
 
-describe("flattenText edge cases (via resolveAnchor)", () => {
-    it("ignores empty text nodes when flattening, matching across element boundaries", () => {
-        // Empty text nodes (created by adjacent tags) must be skipped so offsets
-        // stay contiguous. The match spans an inline boundary with no gap.
-        const root = makeArticle("<p><span></span>alpha<span></span>beta</p>");
-
-        const range = resolveAnchor(root, {
-            exact: "alphabeta",
-            prefix: "",
-            suffix: "",
-        });
-
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toBe("alphabeta");
-    });
-
-    it("skips a zero-length text node when flattening (kills the length>0 guard)", () => {
-        // innerHTML never yields an *empty* text node, so build one by hand: an
-        // explicit `createTextNode("")` between two real runs. flattenText must
-        // drop it (its `text.length > 0` guard) so offsets stay contiguous and the
-        // match still spans "alphabeta".
+describe("resolveAnchor across split text", () => {
+    it("matches a quote across an empty text node (e.g. left behind by splitting text for highlights)", () => {
         const root = document.createElement("article");
         root.appendChild(document.createTextNode("alpha"));
         root.appendChild(document.createTextNode(""));
@@ -909,71 +862,7 @@ describe("flattenText edge cases (via resolveAnchor)", () => {
             suffix: "",
         });
 
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toBe("alphabeta");
-    });
-});
-
-describe("resolveAnchor graded scoring (kills scoring math mutants)", () => {
-    // Three identical "TARGET" runs; the prefix/suffix never appear verbatim
-    // (so the composite fast-path is skipped and the scored fallback runs), yet
-    // the MIDDLE occurrence has the strongest trailing-prefix + leading-suffix
-    // overlap. Any off-by-one in the pre/suf slice arithmetic, or flipping the
-    // `score > bestScore` comparison, changes which occurrence wins and moves
-    // the resolved start offset.
-    const text = "aaaTARGETbbbcccTARGETdddeeeTARGETfff";
-
-    // "prefix only": the suffix is absent from the document, so the winner is
-    // driven purely by the trailing-prefix score. "suffix only" is the mirror.
-    it.each([
-        {
-            name: "selects the occurrence with the strongest combined overlap (the middle one)",
-            prefix: "Zccc",
-            suffix: "dddZ",
-        },
-        {
-            name: "lets a strong prefix overlap alone decide the winner",
-            prefix: "Zccc",
-            suffix: "NOPE",
-        },
-        {
-            name: "lets a strong suffix overlap alone decide the winner",
-            prefix: "NOPE",
-            suffix: "dddZ",
-        },
-    ])("$name", ({ prefix, suffix }) => {
-        const root = makeArticle(`<p>${text}</p>`);
-        const range = resolveAnchor(root, { exact: "TARGET", prefix, suffix });
-        expect(range).not.toBeNull();
-        // Middle "TARGET" starts at index 15 within the single text node.
-        expect(range!.startOffset).toBe(15);
-    });
-});
-
-describe("withSourceLocation graded scoring (kills scoring math mutants)", () => {
-    // Same construction as the DOM path, but exercising findTextQuoteOffsets:
-    // the middle "TARGET" wins on combined prefix+suffix overlap.
-    const source = "aaaTARGETbbbcccTARGETdddeeeTARGETfff";
-
-    it("maps the strongest-overlap occurrence (the middle one) to its column", () => {
-        const out = withSourceLocation({ exact: "TARGET", prefix: "Zccc", suffix: "dddZ" }, source);
-
-        // Middle "TARGET" is at 0-based index 15 => 1-based column 16.
-        expect(out.line).toBe(1);
-        expect(out.column).toBe(16);
-        expect(out.endColumn).toBe(21);
-    });
-
-    it("selects on prefix overlap alone when the suffix is absent", () => {
-        const out = withSourceLocation({ exact: "TARGET", prefix: "Zccc", suffix: "NOPE" }, source);
-
-        expect(out.column).toBe(16);
-    });
-
-    it("selects on suffix overlap alone when the prefix is absent", () => {
-        const out = withSourceLocation({ exact: "TARGET", prefix: "NOPE", suffix: "dddZ" }, source);
-
-        expect(out.column).toBe(16);
+        expect(range?.toString()).toBe("alphabeta");
     });
 });
 

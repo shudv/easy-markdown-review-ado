@@ -1,9 +1,8 @@
 // Tests for boot-time measurement: markBootStart + markAppReady idempotency,
 // the readyReason payload, and the "no-op outside a real boot" guard.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { __resetTelemetryForTests } from "../src/telemetry/telemetry";
 import {
     type BootTimingEnvironment,
     markBootAfterAutoReload,
@@ -14,22 +13,15 @@ import {
     markAppReady,
     __resetBootTimingForTests,
 } from "../src/telemetry/bootTiming";
-import type { TelemetrySink } from "../src/telemetry/types";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-function fakeSink() {
-    const sink: TelemetrySink & {
-        eventCalls: Array<{ event: unknown; ctx: unknown }>;
-    } = {
-        name: "fake",
-        eventCalls: [],
-        init: vi.fn(),
-        setContext: vi.fn(),
-        trackEvent: vi.fn((event, ctx) => sink.eventCalls.push({ event, ctx })),
-        trackException: vi.fn(),
-        flush: vi.fn(),
-    };
+const telemetry = recordTelemetryEachTest();
 
-    return sink;
+/** The single `app.loaded` event a boot reported. */
+function appLoaded() {
+    expect(telemetry.current.eventNames()).toEqual(["app.loaded"]);
+
+    return telemetry.current.events[0]!;
 }
 
 function fakeEnvironment(initiallyVisible = true) {
@@ -63,11 +55,7 @@ function fakeEnvironment(initiallyVisible = true) {
 }
 
 describe("bootTiming", () => {
-    let sink: ReturnType<typeof fakeSink>;
-
     beforeEach(() => {
-        sink = fakeSink();
-        __resetTelemetryForTests(sink);
         __resetBootTimingForTests();
     });
 
@@ -81,17 +69,8 @@ describe("bootTiming", () => {
         clock.advance(25);
         markAppReady("content");
 
-        expect(sink.eventCalls).toHaveLength(1);
+        const event = appLoaded();
 
-        const { event } = sink.eventCalls[0]! as {
-            event: {
-                name: string;
-                properties?: Record<string, unknown>;
-                measurements?: Record<string, number>;
-            };
-        };
-
-        expect(event.name).toBe("app.loaded");
         expect(event.properties).toEqual({
             readyReason: "content",
             bootHadHiddenInterval: false,
@@ -103,6 +82,14 @@ describe("bootTiming", () => {
             authRefreshWaitMs: 0,
             renderReadyMs: 25,
         });
+    });
+
+    it("stops watching page visibility once the app is ready", () => {
+        const clock = fakeEnvironment();
+        markBootStart(clock.environment);
+
+        markAppReady("content");
+
         expect(clock.hasListener()).toBe(false);
     });
 
@@ -116,14 +103,9 @@ describe("bootTiming", () => {
         clock.advance(50);
         markAppReady("content");
 
-        const { event } = sink.eventCalls[0]! as {
-            event: {
-                properties: Record<string, unknown>;
-                measurements: Record<string, number>;
-            };
-        };
+        const event = appLoaded();
 
-        expect(event.properties.bootHadHiddenInterval).toBe(true);
+        expect(event.properties).toMatchObject({ bootHadHiddenInterval: true });
         expect(event.measurements).toMatchObject({
             bootTimeMs: 100,
             activeBootTimeMs: 70,
@@ -139,9 +121,7 @@ describe("bootTiming", () => {
         clock.advance(10);
         markAppReady("content");
 
-        const { event } = sink.eventCalls[0]! as {
-            event: { measurements: Record<string, number> };
-        };
+        const event = appLoaded();
 
         expect(event.measurements).toMatchObject({
             bootTimeMs: 50,
@@ -164,9 +144,7 @@ describe("bootTiming", () => {
         clock.advance(30);
         markAppReady("content");
 
-        const { event } = sink.eventCalls[0]! as {
-            event: { measurements: Record<string, number> };
-        };
+        const event = appLoaded();
 
         expect(event.measurements).toEqual({
             bootTimeMs: 70,
@@ -186,30 +164,25 @@ describe("bootTiming", () => {
         clock.advance(12);
         markAppReady("error");
 
-        const { event } = sink.eventCalls[0]! as {
-            event: { measurements: Record<string, number> };
-        };
+        const event = appLoaded();
 
-        expect(event.measurements.authRefreshWaitMs).toBe(12);
+        expect(event.measurements).toMatchObject({ authRefreshWaitMs: 12 });
     });
 
-    it("is idempotent — only the first markAppReady wins", () => {
+    it("reports a boot once — only the first markAppReady wins", () => {
         markBootStart();
         markAppReady("content");
         markAppReady("empty");
         markAppReady("error");
-        expect(sink.eventCalls).toHaveLength(1);
+
+        expect(appLoaded().properties).toMatchObject({ readyReason: "content" });
     });
 
     it("defaults readyReason to 'content'", () => {
         markBootStart();
         markAppReady();
 
-        const { event } = sink.eventCalls[0]! as {
-            event: { properties?: Record<string, unknown> };
-        };
-
-        expect(event.properties).toEqual({
+        expect(appLoaded().properties).toEqual({
             readyReason: "content",
             bootHadHiddenInterval: false,
         });
@@ -218,26 +191,21 @@ describe("bootTiming", () => {
     it("no-ops when boot was never started (e.g. Storybook / standalone)", () => {
         // No markBootStart() call.
         markAppReady("content");
-        expect(sink.eventCalls).toHaveLength(0);
+
+        expect(telemetry.current.events).toEqual([]);
     });
 
-    it("re-arms after a fresh markBootStart", () => {
+    it("reports the next boot after a fresh markBootStart", () => {
         markBootStart();
         markAppReady("content");
-        expect(sink.eventCalls).toHaveLength(1);
 
         markBootStart();
         markAppReady("empty");
-        expect(sink.eventCalls).toHaveLength(2);
 
-        const { event } = sink.eventCalls[1]! as {
-            event: { properties?: Record<string, unknown> };
-        };
-
-        expect(event.properties).toEqual({
-            readyReason: "empty",
-            bootHadHiddenInterval: false,
-        });
+        expect(telemetry.current.events.map((event) => event.properties)).toEqual([
+            { readyReason: "content", bootHadHiddenInterval: false },
+            { readyReason: "empty", bootHadHiddenInterval: false },
+        ]);
     });
 
     it("tags a boot that follows our automatic reload, until the next boot", () => {
@@ -249,11 +217,7 @@ describe("bootTiming", () => {
         markBootStart();
         markAppReady("content");
 
-        const props = sink.eventCalls.map(
-            ({ event }) => (event as { properties?: Record<string, unknown> }).properties,
-        );
-
-        expect(props).toEqual([
+        expect(telemetry.current.events.map((event) => event.properties)).toEqual([
             {
                 readyReason: "content",
                 bootHadHiddenInterval: false,

@@ -50,6 +50,17 @@ function rangeOverText(root: Element, from: string, to: string): Range {
     return r;
 }
 
+/** The text node whose data contains `needle`. */
+function textNodeContaining(root: Element, needle: string): Text {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if ((n as Text).data.includes(needle)) return n as Text;
+    }
+
+    throw new Error(`text "${needle}" not found`);
+}
+
 const whitespaceOnly = (spans: HTMLSpanElement[]): HTMLSpanElement[] =>
     spans.filter((s) => s.textContent.trim() === "");
 
@@ -81,10 +92,7 @@ describe("large selection highlight wrapping", () => {
         // Table structure is preserved — no cells lost, no stray spans hoisted
         // into <tr>/<table> (every highlight span lives inside a cell).
         expect(root.querySelectorAll("th,td")).toHaveLength(cellsBefore);
-
-        for (const s of spans) {
-            expect(s.closest("td, th"), "highlight span must sit inside a cell").not.toBeNull();
-        }
+        expect(spans.filter((s) => s.closest("td, th") === null)).toEqual([]);
 
         // The real cell contents are highlighted.
         const texts = spans.map((s) => s.textContent);
@@ -141,22 +149,11 @@ describe("large selection highlight wrapping", () => {
 
         // Range from end of "Alpha paragraph." to start of "Beta" spans only the
         // inter-block whitespace text node(s).
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-
-        let alpha: Text | null = null;
-        let beta: Text | null = null;
-        let n: Node | null = walker.nextNode();
-
-        while (n) {
-            const t = n as Text;
-            if (t.data.includes("Alpha")) alpha = t;
-            if (t.data.includes("Beta")) beta = t;
-            n = walker.nextNode();
-        }
-
+        const alpha = textNodeContaining(root, "Alpha");
+        const beta = textNodeContaining(root, "Beta");
         const r = document.createRange();
-        r.setStart(alpha!, alpha!.data.length); // just after "…paragraph."
-        r.setEnd(beta!, 0); // just before "Beta"
+        r.setStart(alpha, alpha.data.length); // just after "…paragraph."
+        r.setEnd(beta, 0); // just before "Beta"
 
         const spans = wrapRangeWithHighlight(r, {
             className: "emr-highlight",

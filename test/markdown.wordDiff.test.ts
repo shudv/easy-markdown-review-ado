@@ -16,225 +16,227 @@ function join(ops: WordDiffOp[], kinds: WordDiffOp["kind"][]): string {
 }
 
 describe("tokenizeWords", () => {
-    it("returns an empty array for the empty string", () => {
-        expect(tokenizeWords("")).toEqual([]);
+    it.each([
+        { name: "empty text", text: "", tokens: [] },
+        {
+            name: "words, whitespace and punctuation",
+            text: "Hi, there!",
+            tokens: ["Hi", ",", " ", "there", "!"],
+        },
+        { name: "a run of spaces", text: "a   b", tokens: ["a", "   ", "b"] },
+        { name: "an identifier with digits and underscores", text: "v2_beta", tokens: ["v2_beta"] },
+        { name: "accented words", text: "café résumé", tokens: ["café", " ", "résumé"] },
+        {
+            name: "Japanese kanji and kana, one character each",
+            text: "今日は東京",
+            tokens: ["今", "日", "は", "東", "京"],
+        },
+        {
+            name: "katakana, one character each",
+            text: "カタカナー",
+            tokens: ["カ", "タ", "カ", "ナ", "ー"],
+        },
+        {
+            name: "a Latin word inside Chinese text",
+            text: "使用API调用",
+            tokens: ["使", "用", "API", "调", "用"],
+        },
+        {
+            name: "Korean words separated by spaces",
+            text: "날씨가 좋다",
+            tokens: ["날씨가", " ", "좋다"],
+        },
+        {
+            name: "a line break followed by indentation",
+            text: "a\n    b",
+            tokens: ["a", "\n", "    ", "b"],
+        },
+        {
+            name: "trailing spaces before CRLF and CR line breaks",
+            text: "a  \r\nb\rc",
+            tokens: ["a", "  ", "\r\n", "b", "\r", "c"],
+        },
+    ])("splits $name", ({ text, tokens }) => {
+        expect(tokenizeWords(text)).toEqual(tokens);
     });
 
-    it("splits words, whitespace, and punctuation into separate tokens", () => {
-        expect(tokenizeWords("Hi, there!")).toEqual(["Hi", ",", " ", "there", "!"]);
-    });
-
-    it("keeps a whitespace run as a single token", () => {
-        expect(tokenizeWords("a   b")).toEqual(["a", "   ", "b"]);
-    });
-
-    it("treats digits and underscores as word characters", () => {
-        expect(tokenizeWords("v2_beta")).toEqual(["v2_beta"]);
-    });
-
-    it("round-trips: joining tokens reproduces the input exactly", () => {
-        const s = "The `widget-cli`\n  tool — v2.0, ready?";
-        expect(tokenizeWords(s).join("")).toBe(s);
-    });
-
-    it("tokenizes non-ASCII letters as words", () => {
-        expect(tokenizeWords("café résumé")).toEqual(["café", " ", "résumé"]);
-    });
-
-    it("splits CJK ideographs and kana into single-character tokens", () => {
-        expect(tokenizeWords("今日は東京")).toEqual(["今", "日", "は", "東", "京"]);
-        expect(tokenizeWords("カタカナー")).toEqual(["カ", "タ", "カ", "ナ", "ー"]);
-    });
-
-    it("keeps Latin words whole next to CJK text", () => {
-        expect(tokenizeWords("使用API调用")).toEqual(["使", "用", "API", "调", "用"]);
-    });
-
-    it("keeps Hangul words whole (Korean separates words with spaces)", () => {
-        expect(tokenizeWords("날씨가 좋다")).toEqual(["날씨가", " ", "좋다"]);
-    });
-
-    it("separates line breaks from indentation", () => {
-        expect(tokenizeWords("a\n    b")).toEqual(["a", "\n", "    ", "b"]);
-        expect(tokenizeWords("a  \r\nb\rc")).toEqual(["a", "  ", "\r\n", "b", "\r", "c"]);
+    it("keeps every character, so the tokens join back into the original text", () => {
+        const text = "The `widget-cli`\n  tool — v2.0, ready?";
+        expect(tokenizeWords(text).join("")).toBe(text);
     });
 });
 
 describe("diffWords", () => {
-    it("returns nothing for two empty strings", () => {
-        expect(diffWords("", "")).toEqual([]);
-    });
-
-    it("returns a single equal run for identical text", () => {
-        expect(diffWords("same text", "same text")).toEqual([
-            { kind: "equal", value: "same text" },
-        ]);
-    });
-
-    it("marks a pure insertion as added", () => {
-        const ops = diffWords("", "brand new");
-        expect(ops).toEqual([{ kind: "added", value: "brand new" }]);
-    });
-
-    it("marks a pure deletion as removed", () => {
-        const ops = diffWords("all gone", "");
-        expect(ops).toEqual([{ kind: "removed", value: "all gone" }]);
-    });
-
-    it("detects a single changed word amid unchanged context", () => {
-        const ops = diffWords("The quick brown fox", "The quick red fox");
-        // equal+added reconstructs the modified string.
-        expect(join(ops, ["equal", "added"])).toBe("The quick red fox");
-        // equal+removed reconstructs the original string.
-        expect(join(ops, ["equal", "removed"])).toBe("The quick brown fox");
-        // "brown" removed, "red" added; "fox" untouched (not split mid-word).
-        expect(ops.some((o) => o.kind === "removed" && o.value.includes("brown"))).toBe(true);
-        expect(ops.some((o) => o.kind === "added" && o.value.includes("red"))).toBe(true);
-    });
-
-    it("reconstructs both sides for a multi-word edit", () => {
-        const original = "look for a stack trace in the console";
-        const modified = "check the network tab in the console";
-        const ops = diffWords(original, modified);
-        expect(join(ops, ["equal", "removed"])).toBe(original);
-        expect(join(ops, ["equal", "added"])).toBe(modified);
-    });
-
-    it("keeps a trailing addition separate from the equal prefix", () => {
-        const ops = diffWords("hello", "hello world");
-        expect(join(ops, ["equal", "added"])).toBe("hello world");
-        expect(ops[0]).toEqual({ kind: "equal", value: "hello" });
-        expect(ops.at(-1)?.kind).toBe("added");
-    });
-
-    it("merges adjacent runs of the same kind", () => {
-        const ops = diffWords("a b c", "a x y c");
-
-        // No two consecutive ops share a kind.
-        for (let i = 1; i < ops.length; i++) {
-            expect(ops[i]!.kind).not.toBe(ops[i - 1]!.kind);
-        }
-    });
-
-    it("never emits an empty-value op", () => {
-        const ops = diffWords("one two three", "one three");
-        expect(ops.every((o) => o.value.length > 0)).toBe(true);
-    });
-
-    it("handles punctuation-only changes", () => {
-        const ops = diffWords("Ready.", "Ready?");
-        expect(join(ops, ["equal", "added"])).toBe("Ready?");
-        expect(join(ops, ["equal", "removed"])).toBe("Ready.");
-    });
-
-    it("preserves whitespace exactly on both sides", () => {
-        const original = "one  two";
-        const modified = "one two three";
-        const ops = diffWords(original, modified);
-        expect(join(ops, ["equal", "removed"])).toBe(original);
-        expect(join(ops, ["equal", "added"])).toBe(modified);
-    });
-
-    it("does NOT split a word to share a substring with a neighbour", () => {
-        // "here" and "everywhere" share the suffix "here"; a char-level cleanup
-        // would split "everywhere" into "everyw"+"here". Word-level must treat
-        // them as whole-word replace.
-        const ops = diffWords("review of files here.", "review of files everywhere.");
-
-        const added = ops.find((o) => o.kind === "added");
-        const removed = ops.find((o) => o.kind === "removed");
-        expect(added?.value).toContain("everywhere");
-        expect(added?.value).not.toBe("everyw");
-        expect(removed?.value).toContain("here");
-        // No equal op contains a bare partial word "here" carved out of a word.
-        expect(join(ops, ["equal", "added"])).toBe("review of files everywhere.");
-        expect(join(ops, ["equal", "removed"])).toBe("review of files here.");
-    });
-
-    it("isolates a single changed CJK character", () => {
-        expect(diffWords("我们今天去公园玩。", "我们明天去公园玩。")).toEqual([
-            { kind: "equal", value: "我们" },
-            { kind: "removed", value: "今" },
-            { kind: "added", value: "明" },
-            { kind: "equal", value: "天去公园玩。" },
-        ]);
-    });
-
-    it("re-indents code by marking only the added spaces", () => {
-        expect(diffWords("def f():\n  return 1", "def f():\n    return 1")).toEqual([
-            { kind: "equal", value: "def f():\n  " },
-            { kind: "added", value: "  " },
-            { kind: "equal", value: "return 1" },
-        ]);
-    });
-
-    it("dedents code by marking only the removed spaces", () => {
-        expect(diffWords("if x:\n    y", "if x:\n  y")).toEqual([
-            { kind: "equal", value: "if x:\n  " },
-            { kind: "removed", value: "  " },
-            { kind: "equal", value: "y" },
-        ]);
-    });
-
-    it("keeps a tab-for-spaces swap as a replacement", () => {
-        expect(diffWords("\treturn", "    return")).toEqual([
-            { kind: "removed", value: "\t" },
-            { kind: "added", value: "    " },
-            { kind: "equal", value: "return" },
-        ]);
-    });
-
-    it("adds trailing whitespace without re-adding the line break", () => {
-        expect(diffWords("a\nb", "a  \nb")).toEqual([
-            { kind: "equal", value: "a" },
-            { kind: "added", value: "  " },
-            { kind: "equal", value: "\nb" },
-        ]);
-    });
-
-    it("aligns a removed line to its line boundaries", () => {
-        expect(
-            diffWords(
-                "Sentence one.\nSentence two.\nSentence three.",
-                "Sentence one.\nSentence three.",
-            ),
-        ).toEqual([
-            { kind: "equal", value: "Sentence one.\n" },
-            { kind: "removed", value: "Sentence two.\n" },
-            { kind: "equal", value: "Sentence three." },
-        ]);
-    });
-
-    it("aligns an inserted paragraph between blank lines", () => {
-        expect(diffWords("a\n\nb", "a\n\nx\n\nb")).toEqual([
-            { kind: "equal", value: "a\n\n" },
-            { kind: "added", value: "x\n\n" },
-            { kind: "equal", value: "b" },
-        ]);
-    });
-
-    it("aligns a removed sentence to sentence boundaries", () => {
-        expect(diffWords("One. Two. Three.", "One. Three.")).toEqual([
-            { kind: "equal", value: "One. " },
-            { kind: "removed", value: "Two. " },
-            { kind: "equal", value: "Three." },
-        ]);
-    });
-
-    it("slides a repeated phrase to the start of the text", () => {
-        expect(diffWords("a b c", "a b a b c")).toEqual([
-            { kind: "added", value: "a b " },
-            { kind: "equal", value: "a b c" },
-        ]);
+    it.each<{ name: string; original: string; modified: string; ops: WordDiffOp[] }>([
+        { name: "two empty texts have no changes", original: "", modified: "", ops: [] },
+        {
+            name: "identical text is one unchanged run",
+            original: "same text",
+            modified: "same text",
+            ops: [{ kind: "equal", value: "same text" }],
+        },
+        {
+            name: "text written from nothing is all added",
+            original: "",
+            modified: "brand new",
+            ops: [{ kind: "added", value: "brand new" }],
+        },
+        {
+            name: "text cleared completely is all removed",
+            original: "all gone",
+            modified: "",
+            ops: [{ kind: "removed", value: "all gone" }],
+        },
+        {
+            name: "a replaced word is removed then added between unchanged context",
+            original: "The quick brown fox",
+            modified: "The quick red fox",
+            ops: [
+                { kind: "equal", value: "The quick " },
+                { kind: "removed", value: "brown" },
+                { kind: "added", value: "red" },
+                { kind: "equal", value: " fox" },
+            ],
+        },
+        {
+            name: "an appended word follows the unchanged text",
+            original: "hello",
+            modified: "hello world",
+            ops: [
+                { kind: "equal", value: "hello" },
+                { kind: "added", value: " world" },
+            ],
+        },
+        {
+            name: "a word sharing a suffix with its replacement is replaced whole",
+            original: "review of files here.",
+            modified: "review of files everywhere.",
+            ops: [
+                { kind: "equal", value: "review of files " },
+                { kind: "removed", value: "here" },
+                { kind: "added", value: "everywhere" },
+                { kind: "equal", value: "." },
+            ],
+        },
+        {
+            name: "one changed CJK character is isolated",
+            original: "我们今天去公园玩。",
+            modified: "我们明天去公园玩。",
+            ops: [
+                { kind: "equal", value: "我们" },
+                { kind: "removed", value: "今" },
+                { kind: "added", value: "明" },
+                { kind: "equal", value: "天去公园玩。" },
+            ],
+        },
+        {
+            name: "re-indented code marks only the added spaces",
+            original: "def f():\n  return 1",
+            modified: "def f():\n    return 1",
+            ops: [
+                { kind: "equal", value: "def f():\n  " },
+                { kind: "added", value: "  " },
+                { kind: "equal", value: "return 1" },
+            ],
+        },
+        {
+            name: "code with its indentation reduced marks only the removed spaces",
+            original: "if x:\n    y",
+            modified: "if x:\n  y",
+            ops: [
+                { kind: "equal", value: "if x:\n  " },
+                { kind: "removed", value: "  " },
+                { kind: "equal", value: "y" },
+            ],
+        },
+        {
+            name: "a tab swapped for spaces is a replacement",
+            original: "\treturn",
+            modified: "    return",
+            ops: [
+                { kind: "removed", value: "\t" },
+                { kind: "added", value: "    " },
+                { kind: "equal", value: "return" },
+            ],
+        },
+        {
+            name: "added trailing whitespace leaves the line break unchanged",
+            original: "a\nb",
+            modified: "a  \nb",
+            ops: [
+                { kind: "equal", value: "a" },
+                { kind: "added", value: "  " },
+                { kind: "equal", value: "\nb" },
+            ],
+        },
+        {
+            name: "a removed line is aligned to its line boundaries",
+            original: "Sentence one.\nSentence two.\nSentence three.",
+            modified: "Sentence one.\nSentence three.",
+            ops: [
+                { kind: "equal", value: "Sentence one.\n" },
+                { kind: "removed", value: "Sentence two.\n" },
+                { kind: "equal", value: "Sentence three." },
+            ],
+        },
+        {
+            name: "an inserted paragraph is aligned between blank lines",
+            original: "a\n\nb",
+            modified: "a\n\nx\n\nb",
+            ops: [
+                { kind: "equal", value: "a\n\n" },
+                { kind: "added", value: "x\n\n" },
+                { kind: "equal", value: "b" },
+            ],
+        },
+        {
+            name: "a removed sentence is aligned to sentence boundaries",
+            original: "One. Two. Three.",
+            modified: "One. Three.",
+            ops: [
+                { kind: "equal", value: "One. " },
+                { kind: "removed", value: "Two. " },
+                { kind: "equal", value: "Three." },
+            ],
+        },
+        {
+            name: "a repeated phrase is shown as added at the start",
+            original: "a b c",
+            modified: "a b a b c",
+            ops: [
+                { kind: "added", value: "a b " },
+                { kind: "equal", value: "a b c" },
+            ],
+        },
+    ])("$name", ({ original, modified, ops }) => {
+        expect(diffWords(original, modified)).toEqual(ops);
     });
 
     it("never slides an edit into the middle of a word", () => {
         // Character-level boundary sliding would prefer `the cat{+s cat+}`.
-        const ops = diffWords("the cat", "the cats cat");
-        expect(ops).toContainEqual({ kind: "added", value: "cats " });
+        expect(diffWords("the cat", "the cats cat")).toContainEqual({
+            kind: "added",
+            value: "cats ",
+        });
     });
 
-    it("keeps both sides reconstructable across many random edits", () => {
+    it.each([
+        {
+            name: "a multi-word rewrite",
+            original: "look for a stack trace in the console",
+            modified: "check the network tab in the console",
+        },
+        { name: "a punctuation-only change", original: "Ready.", modified: "Ready?" },
+        { name: "collapsed double spaces", original: "one  two", modified: "one two three" },
+    ])("rebuilds both sides exactly for $name", ({ original, modified }) => {
+        const ops = diffWords(original, modified);
+        expect(join(ops, ["equal", "removed"])).toBe(original);
+        expect(join(ops, ["equal", "added"])).toBe(modified);
+    });
+
+    // Deterministic pseudo-random edits over a tiny vocabulary that mixes words,
+    // a shared prefix (cat/cats), whitespace, line breaks and CJK.
+    const randomEdits = (() => {
         let seed = 7;
 
         const random = () => {
@@ -250,94 +252,108 @@ describe("diffWords", () => {
                 "",
             );
 
-        for (let run = 0; run < 400; run++) {
+        return Array.from({ length: 400 }, () => {
             const original = text(Math.floor(random() * 12));
-            const modified = text(Math.floor(random() * 12));
-            const ops = diffWords(original, modified);
-            expect(join(ops, ["equal", "removed"])).toBe(original);
-            expect(join(ops, ["equal", "added"])).toBe(modified);
-            expect(ops.every((op) => op.value.length > 0)).toBe(true);
 
-            for (let i = 1; i < ops.length; i++) {
-                expect(ops[i]!.kind).not.toBe(ops[i - 1]!.kind);
-            }
-        }
+            return [original, text(Math.floor(random() * 12))] as const;
+        });
+    })();
+
+    /** Why `diffWords(original, modified)` breaks the diff contract, or null if it holds. */
+    const contractViolation = ([original, modified]: readonly [string, string]) => {
+        const ops = diffWords(original, modified);
+
+        const problems = [
+            join(ops, ["equal", "removed"]) !== original && "does not rebuild the original",
+            join(ops, ["equal", "added"]) !== modified && "does not rebuild the modified text",
+            ops.some((op) => op.value.length === 0) && "has an empty run",
+            ops.slice(1).some((op, i) => op.kind === ops[i]!.kind) && "repeats a run kind",
+        ].filter(Boolean);
+
+        return problems.length > 0 ? { original, modified, problems } : null;
+    };
+
+    it("rebuilds both sides from non-empty, alternating runs for any mix of words, spaces, line breaks and CJK", () => {
+        expect(randomEdits.map(contractViolation).filter(Boolean)).toEqual([]);
     });
 });
 
 describe("diffCharacters", () => {
-    it("isolates a TeX exponent edit at character granularity", () => {
-        const original = String.raw`g_i`;
-        const modified = String.raw`g_i^2`;
-        const ops = diffCharacters(original, modified);
+    it("isolates an added TeX exponent", () => {
+        const ops = diffCharacters(String.raw`g_i`, String.raw`g_i^2`);
 
-        expect(join(ops, ["equal", "removed"])).toBe(original);
-        expect(join(ops, ["equal", "added"])).toBe(modified);
-        expect(ops).toContainEqual({ kind: "added", value: "^2" });
-        expect(ops).not.toContainEqual({ kind: "removed", value: "g_i" });
+        expect(ops).toEqual([
+            { kind: "equal", value: "g_i" },
+            { kind: "added", value: "^2" },
+        ]);
     });
 
-    it("isolates a TeX character removal", () => {
+    it("isolates a removed TeX exponent", () => {
         expect(diffCharacters(String.raw`g_i^2`, String.raw`g_i`)).toContainEqual({
             kind: "removed",
             value: "^2",
         });
     });
 
-    it("handles identical and empty source", () => {
-        expect(diffCharacters("", "")).toEqual([]);
-        expect(diffCharacters("x", "x")).toEqual([{ kind: "equal", value: "x" }]);
+    it.each([
+        { name: "two empty sources have no changes", original: "", modified: "", ops: [] },
+        {
+            name: "identical source is one unchanged run",
+            original: "x",
+            modified: "x",
+            ops: [{ kind: "equal", value: "x" }],
+        },
+    ])("$name", ({ original, modified, ops }) => {
+        expect(diffCharacters(original, modified)).toEqual(ops);
     });
 });
 
+// The share of the CURRENT text (unchanged + added) that is unchanged; it
+// decides whether a block is word-diffed or shown as a rewrite.
 describe("unchangedRatio", () => {
-    it("is 1 for an empty op list", () => {
-        expect(unchangedRatio([])).toBe(1);
-    });
-
-    it("is 1 when everything is equal", () => {
-        expect(unchangedRatio([{ kind: "equal", value: "same words here" }])).toBe(1);
-    });
-
-    it("is 0 when nothing is equal", () => {
-        expect(
-            unchangedRatio([
+    it.each<{ name: string; ops: WordDiffOp[]; ratio: number }>([
+        { name: "no text at all counts as fully unchanged", ops: [], ratio: 1 },
+        {
+            name: "unchanged text counts as fully unchanged",
+            ops: [{ kind: "equal", value: "same words here" }],
+            ratio: 1,
+        },
+        {
+            name: "a complete replacement counts as nothing unchanged",
+            ops: [
                 { kind: "removed", value: "old" },
                 { kind: "added", value: "new" },
-            ]),
-        ).toBe(0);
+            ],
+            ratio: 0,
+        },
+        {
+            name: "6 unchanged of 10 current characters is 0.6",
+            ops: [
+                { kind: "equal", value: "aaaaaa" },
+                { kind: "added", value: "bbbb" },
+            ],
+            ratio: 0.6,
+        },
+        {
+            name: "removed text does not lower the ratio",
+            ops: [
+                { kind: "equal", value: "ab" },
+                { kind: "removed", value: "cd" },
+            ],
+            ratio: 1,
+        },
+    ])("$name", ({ ops, ratio }) => {
+        expect(unchangedRatio(ops)).toBeCloseTo(ratio, 5);
     });
 
-    it("reports the fraction of the modified text that is unchanged", () => {
-        // 6 equal chars out of 10 on the modified side (equal + added).
-        const ratio = unchangedRatio([
-            { kind: "equal", value: "aaaaaa" }, // 6
-            { kind: "added", value: "bbbb" }, // 4
-        ]);
-
-        expect(ratio).toBeCloseTo(0.6, 5);
-    });
-
-    it("excludes removed text from the denominator (modified side only)", () => {
-        // equal=2, added=0, removed=2 → modified side is just the 2 equal chars.
-        const ratio = unchangedRatio([
-            { kind: "equal", value: "ab" }, // 2
-            { kind: "removed", value: "cd" }, // 2 (ignored)
-        ]);
-
-        expect(ratio).toBeCloseTo(1, 5);
-    });
-
-    it("counts a long replacement that keeps a shared prefix as mostly unchanged", () => {
-        // Real-world case: a reworded sentence sharing a leading clause. Removed
-        // text must NOT drag the ratio below the inline threshold.
+    it("keeps a reworded sentence that shares its leading clause above the inline threshold", () => {
         const ratio = unchangedRatio([
             { kind: "equal", value: "If it fails, open the console and " }, // 34
             { kind: "removed", value: "look for a stack trace" }, // ignored
             { kind: "added", value: "check the network tab" }, // 21
         ]);
 
-        // 34 / (34 + 21) ≈ 0.62 — comfortably above a 0.3 inline threshold.
+        // 34 / (34 + 21) ≈ 0.62 — comfortably above the 0.3 inline threshold.
         expect(ratio).toBeGreaterThan(0.5);
     });
 });

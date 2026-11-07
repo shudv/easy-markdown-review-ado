@@ -18,9 +18,11 @@ describe("initialsOf", () => {
     it("uses the first two letters of a single name", () => {
         expect(initialsOf("Alice")).toBe("AL");
     });
-    it("uses first + last initials for multi-word names", () => {
-        expect(initialsOf("Ada  Lovelace")).toBe("AL");
-        expect(initialsOf("  Grace Brewster Hopper ")).toBe("GH");
+    it.each([
+        ["Ada  Lovelace", "AL"],
+        ["  Grace Brewster Hopper ", "GH"],
+    ])("uses first + last initials for the multi-word name %j", (name, initials) => {
+        expect(initialsOf(name)).toBe(initials);
     });
     it("returns an empty string for a blank name", () => {
         expect(initialsOf("   ")).toBe("");
@@ -40,10 +42,12 @@ describe("formatError", () => {
     it("pretty-prints non-null objects", () => {
         expect(formatError({ a: 1 })).toBe(JSON.stringify({ a: 1 }, null, 2));
     });
-    it("stringifies primitives and null", () => {
-        expect(formatError("oops")).toBe("oops");
-        expect(formatError(null)).toBe("null");
-        expect(formatError(42)).toBe("42");
+    it.each([
+        ["oops", "oops"],
+        [null, "null"],
+        [42, "42"],
+    ])("stringifies the thrown value %j", (thrown, text) => {
+        expect(formatError(thrown)).toBe(text);
     });
 });
 
@@ -51,11 +55,11 @@ describe("assembleHubDeepLinkUrl", () => {
     const EXT = { publisherId: "pub", extensionId: "ext" };
     const T = { kind: "comment" as const, threadId: "t" };
 
-    it("returns undefined without an org or project", () => {
-        expect(assembleHubDeepLinkUrl(hubDoc("", "Proj", "r", "/x.md"), EXT, T)).toBeUndefined();
-        expect(
-            assembleHubDeepLinkUrl(hubDoc("https://dev.azure.com/org", "", "r", "/x.md"), EXT, T),
-        ).toBeUndefined();
+    it.each([
+        { name: "an org", org: "", project: "Proj" },
+        { name: "a project", org: "https://dev.azure.com/org", project: "" },
+    ])("has no link without $name", ({ org, project }) => {
+        expect(assembleHubDeepLinkUrl(hubDoc(org, project, "r", "/x.md"), EXT, T)).toBeUndefined();
     });
 
     it("returns undefined when the base URL is malformed", () => {
@@ -125,33 +129,27 @@ describe("routeUpdatesForPath", () => {
             comment: "",
             text: "",
         });
-        // Already slash-free: only leading slashes are ever stripped.
+    });
+
+    it("keeps an already slash-free path as-is", () => {
         expect(routeUpdatesForPath({}, "r1", "docs/a.md").path).toBe("docs/a.md");
     });
 
-    it("keeps a deep link when re-publishing the same document", () => {
-        // The hub publishes the deep-linked document on load; that must not wipe
-        // the `?anchor=` / `?comment=` the recipient arrived with.
-        expect(
-            routeUpdatesForPath(
-                {
-                    repo: "r1",
-                    path: "docs/a.md",
-                    anchor: "goals",
-                    comment: "42",
-                },
-                "r1",
-                "/docs/a.md",
-            ),
-        ).toEqual({ repo: "r1", path: "docs/a.md" });
-        // Leading slashes on either side don't make it a different document.
-        expect(
-            routeUpdatesForPath(
-                { repo: "r1", path: "//docs/a.md", anchor: "goals" },
-                "r1",
-                "//docs/a.md",
-            ),
-        ).toEqual({ repo: "r1", path: "docs/a.md" });
+    // The hub publishes the deep-linked document on load; that must not wipe
+    // the `?anchor=` / `?comment=` the recipient arrived with.
+    it.each([
+        {
+            name: "the same document",
+            current: { repo: "r1", path: "docs/a.md", anchor: "goals", comment: "42" },
+            path: "/docs/a.md",
+        },
+        {
+            name: "the same document spelled with extra leading slashes",
+            current: { repo: "r1", path: "//docs/a.md", anchor: "goals" },
+            path: "//docs/a.md",
+        },
+    ])("keeps a deep link when re-publishing $name", ({ current, path }) => {
+        expect(routeUpdatesForPath(current, "r1", path)).toEqual({ repo: "r1", path: "docs/a.md" });
     });
 
     it("drops the heading, text and comment when moving to a different document", () => {
@@ -228,11 +226,11 @@ describe("buildHubDocUrl", () => {
         );
     });
 
-    it("returns undefined without an org or project", () => {
-        expect(buildHubDocUrl(hubDoc("", "Proj", "r", "/x.md"), EXT)).toBeUndefined();
-        expect(
-            buildHubDocUrl(hubDoc("https://dev.azure.com/org", "", "r", "/x.md"), EXT),
-        ).toBeUndefined();
+    it.each([
+        { name: "an org", org: "", project: "Proj" },
+        { name: "a project", org: "https://dev.azure.com/org", project: "" },
+    ])("has no URL without $name", ({ org, project }) => {
+        expect(buildHubDocUrl(hubDoc(org, project, "r", "/x.md"), EXT)).toBeUndefined();
     });
 
     it("returns undefined when the base URL is malformed", () => {

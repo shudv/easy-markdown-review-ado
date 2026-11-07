@@ -16,7 +16,7 @@ describe("replaceEmojiShortcodes", () => {
         expect(replaceEmojiShortcodes(":fire: :rocket:")).toBe("🔥 🚀");
     });
 
-    it("ignores Object.prototype names", () => {
+    it("leaves names of built-in object properties as typed", () => {
         const input = ":constructor: :__proto__: :tostring: :hasownproperty:";
         expect(replaceEmojiShortcodes(input)).toBe(input);
     });
@@ -33,11 +33,13 @@ describe("replaceEmojiShortcodes", () => {
         expect(replaceEmojiShortcodes("ratio 3:4 and :: here")).toBe("ratio 3:4 and :: here");
     });
 
-    it("maps every entry to a non-empty emoji", () => {
-        for (const [name, emoji] of Object.entries(EMOJI_SHORTCODES)) {
-            // eslint-disable-next-line vitest/valid-expect -- vitest's expect(value, message) overload: names the failing shortcode
-            expect(emoji, name).not.toBe("");
-            expect(replaceEmojiShortcodes(`:${name}:`)).toBe(emoji);
-        }
+    it("recognises every shortcode in the table and maps it to a non-empty emoji", () => {
+        const names = Object.keys(EMOJI_SHORTCODES);
+        const emoji = Object.values(EMOJI_SHORTCODES);
+
+        expect(emoji).not.toContain("");
+        expect(replaceEmojiShortcodes(names.map((name) => `:${name}:`).join(" "))).toBe(
+            emoji.join(" "),
+        );
     });
 });

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { RailToolbar } from "./RailToolbar";
@@ -39,7 +39,7 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** The search field opens and handles keys. */
+/** The search field opens, passes typing to the host, and Escape on empty text closes it. */
 export const Default: Story = {
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
@@ -55,8 +55,9 @@ export const Default: Story = {
 
         await userEvent.type(input, "abc");
         await expect(args.onCommentQueryChange).toHaveBeenCalled();
-        // Non-Escape keys are ignored; Escape with no text collapses the field.
+        // Enter doesn't close the field; Escape with no text collapses it.
         await userEvent.type(input, "{Enter}");
+        await expect(canvas.getByRole("searchbox", { name: "Search comments" })).toBe(input);
         await userEvent.type(input, "{Escape}");
         await waitFor(() =>
             expect(canvas.queryByRole("searchbox", { name: "Search comments" })).toBeNull(),
@@ -112,6 +113,11 @@ export const RoutedPrNoLink: Story = {
     args: {
         routedPr: { prId: 7, title: "Fix typo", status: "completed" as const },
     },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByText(/PR #7/)).toBeVisible();
+        await expect(canvas.queryByRole("link", { name: /PR #7/ })).toBeNull();
+    },
 };
 
 /** `hidePrPill` suppresses the routed-PR badge (PR tab, where it's implicit). */
@@ -158,6 +164,11 @@ export const Minimal: Story = {
         resolvedThreadCount: 0,
         filterCounts: { all: 0, active: 0, resolved: 0, mine: 0 },
     },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.queryByText(/PR #/)).toBeNull();
+        await expect(canvas.queryByRole("button", { name: /Filter comments/ })).toBeNull();
+    },
 };
 
 /** With no comments and no query, the search affordance is hidden entirely. */
@@ -199,22 +210,31 @@ export const SearchPreopen: Story = {
     },
 };
 
-/** A query set externally while collapsed re-opens the search field. */
+/**
+ * A comment search started elsewhere (the host sets the query while the field
+ * is collapsed) re-opens the field showing that query.
+ */
 export const ExternalQueryReopens: Story = {
     render: (args) => {
         const [query, setQuery] = useState("");
-        useEffect(() => {
-            const id = setTimeout(() => setQuery("external"), 0);
 
-            return () => clearTimeout(id);
-        }, []);
-
-        return <RailToolbar {...args} commentQuery={query} onCommentQueryChange={setQuery} />;
+        return (
+            <>
+                <button type="button" onClick={() => setQuery("external")}>
+                    Search from host
+                </button>
+                <RailToolbar {...args} commentQuery={query} onCommentQueryChange={setQuery} />
+            </>
+        );
     },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
+        await expect(canvas.queryByRole("searchbox", { name: "Search comments" })).toBeNull();
+        await userEvent.click(canvas.getByRole("button", { name: "Search from host" }));
         await waitFor(() =>
-            expect(canvas.getByRole("searchbox", { name: "Search comments" })).toBeTruthy(),
+            expect(canvas.getByRole("searchbox", { name: "Search comments" })).toHaveValue(
+                "external",
+            ),
         );
     },
 };

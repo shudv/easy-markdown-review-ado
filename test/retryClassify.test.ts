@@ -7,62 +7,51 @@ import { describe, expect, it } from "vitest";
 import { extractStatus, isAbortError, isRetryable } from "../src/shell/retryClassify";
 
 describe("extractStatus", () => {
-    it("reads a numeric `status`", () => {
-        expect(extractStatus({ status: 503 })).toBe(503);
+    it.each([
+        { name: "a numeric status", error: { status: 503 }, expected: 503 },
+        { name: "a statusCode", error: { statusCode: 429 }, expected: 429 },
+        { name: "an httpStatusCode", error: { httpStatusCode: 404 }, expected: 404 },
+        {
+            name: "a nested serverError.status",
+            error: { serverError: { status: 500 } },
+            expected: 500,
+        },
+    ])("reads $name", ({ error, expected }) => {
+        expect(extractStatus(error)).toBe(expected);
     });
 
-    it("reads `statusCode` / `httpStatusCode` fallbacks", () => {
-        expect(extractStatus({ statusCode: 429 })).toBe(429);
-        expect(extractStatus({ httpStatusCode: 404 })).toBe(404);
-    });
-
-    it("reads a nested `serverError.status`", () => {
-        expect(extractStatus({ serverError: { status: 500 } })).toBe(500);
-    });
-
-    it("ignores a non-numeric nested serverError.status", () => {
-        // `serverError` present but its status isn't a number → no status found
-        // (guards the `typeof serverError.status === "number"` check).
-        expect(extractStatus({ serverError: { status: "500" } })).toBeUndefined();
-    });
-
-    it("ignores out-of-range / non-numeric statuses", () => {
-        expect(extractStatus({ status: 99 })).toBeUndefined();
-        expect(extractStatus({ status: 600 })).toBeUndefined();
-        expect(extractStatus({ status: "503" })).toBeUndefined();
-    });
-
-    it("accepts the inclusive range boundaries 100 and 599", () => {
-        // Guards the `>= 100` / `<= 599` bounds against off-by-one mutations.
-        expect(extractStatus({ status: 100 })).toBe(100);
-        expect(extractStatus({ status: 599 })).toBe(599);
-    });
-
-    it("returns undefined for non-objects and nulls", () => {
-        expect(extractStatus(null)).toBeUndefined();
-        expect(extractStatus("boom")).toBeUndefined();
-        expect(extractStatus(undefined)).toBeUndefined();
-        expect(extractStatus({})).toBeUndefined();
+    it.each([
+        { name: "a number below the HTTP range", error: { status: 99 } },
+        { name: "a number above the HTTP range", error: { status: 600 } },
+        { name: "a status given as a string", error: { status: "503" } },
+        { name: "a nested status given as a string", error: { serverError: { status: "500" } } },
+        { name: "an object without a status", error: {} },
+        { name: "null", error: null },
+        { name: "undefined", error: undefined },
+        { name: "a thrown string", error: "boom" },
+    ])("finds no status in $name", ({ error }) => {
+        expect(extractStatus(error)).toBeUndefined();
     });
 });
 
 describe("isAbortError", () => {
-    it("detects an AbortError by name", () => {
-        const e = new Error("aborted");
-        e.name = "AbortError";
-        expect(isAbortError(e)).toBe(true);
+    it.each([
+        {
+            name: "an Error named AbortError",
+            error: Object.assign(new Error("x"), { name: "AbortError" }),
+        },
+        { name: "a DOMException with the abort code", error: { code: 20 } },
+    ])("recognises $name as a cancellation", ({ error }) => {
+        expect(isAbortError(error)).toBe(true);
     });
 
-    it("detects the DOMException abort code", () => {
-        expect(isAbortError({ code: 20 })).toBe(true);
-    });
-
-    it("is false for ordinary errors", () => {
-        expect(isAbortError(new Error("nope"))).toBe(false);
-        expect(isAbortError(null)).toBe(false);
+    it.each([
+        { name: "an ordinary Error", error: new Error("nope") },
+        { name: "null", error: null },
+    ])("does not treat $name as a cancellation", ({ error }) => {
+        expect(isAbortError(error)).toBe(false);
     });
 });
-
 describe("isRetryable — reads", () => {
     it("never retries an aborted request", () => {
         const e = new Error("x");

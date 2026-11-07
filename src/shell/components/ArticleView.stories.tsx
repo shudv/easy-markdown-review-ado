@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, type ReactElement, useEffect, useState } from "react";
-import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
 import { renderExcalidrawSvgBlob } from "../../markdown/excalidraw";
@@ -110,9 +110,21 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/**
+ * Each comment's quoted text is highlighted in the article, and the host is
+ * told where the anchors landed so it can line up the comment cards.
+ */
 export const Default: Story = {
     play: async ({ args, canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".emr-highlight")).toBeTruthy());
+        // The quote spans the bold run, so its highlight comes in fragments.
+        await waitFor(() =>
+            expect(
+                Array.from(
+                    canvasElement.querySelectorAll('.emr-highlight[data-thread-id="t1"]'),
+                    (fragment) => fragment.textContent,
+                ).join(""),
+            ).toBe("want Word-doc-style review"),
+        );
         await expect(args.onAnchorsResolved).toHaveBeenCalled();
     },
 };
@@ -677,10 +689,12 @@ export const RepositoryImage: Story = {
         ),
     },
     play: async ({ args, canvasElement }) => {
-        const image = await waitFor(() => {
-            const element = canvasElement.querySelector<HTMLImageElement>(".emr-repo-image");
+        const canvas = within(canvasElement);
 
-            if (!element?.src.startsWith("blob:")) {
+        const image = await waitFor(() => {
+            const element = canvas.getByRole<HTMLImageElement>("img", { name: "Architecture" });
+
+            if (!element.src.startsWith("blob:")) {
                 throw new Error("repository image has not hydrated");
             }
 
@@ -689,13 +703,17 @@ export const RepositoryImage: Story = {
 
         await expect(args.resolveDocumentImage).toHaveBeenCalledWith("/assets/architecture.svg");
         await waitFor(() => expect(image.naturalWidth).toBeGreaterThan(0));
-        await expect(
-            canvasElement.querySelector<HTMLImageElement>('img[alt="External"]')?.src,
-        ).toBe("https://example.com/external.png");
+        await expect(canvas.getByRole("img", { name: "External" })).toHaveAttribute(
+            "src",
+            "https://example.com/external.png",
+        );
     },
 };
 
-/** Direct ArticleView embeds may use their storage key as the document path. */
+/**
+ * An embed that knows its document only by its storage key still resolves
+ * relative images against that path.
+ */
 export const RepositoryImageStorageFallback: Story = {
     args: {
         pristineHtml: renderMarkdownSync("# Image\n\n![Fallback](./fallback.svg)"),
@@ -717,9 +735,9 @@ export const RepositoryImageStorageFallback: Story = {
     },
     play: async ({ args, canvasElement }) => {
         await waitFor(() =>
-            expect(canvasElement.querySelector<HTMLImageElement>(".emr-repo-image")?.src).toMatch(
-                /^blob:/,
-            ),
+            expect(
+                within(canvasElement).getByRole<HTMLImageElement>("img", { name: "Fallback" }).src,
+            ).toMatch(/^blob:/),
         );
         await expect(args.resolveDocumentImage).toHaveBeenCalledWith("/docs/fallback.svg");
     },
@@ -768,7 +786,10 @@ export const ExcalidrawDrawing: Story = {
     },
 };
 
-/** Clicking a highlight opens its thread; the draft highlight is inert. */
+/**
+ * Clicking a comment highlight opens its thread; clicking the in-progress draft
+ * highlight or plain article text opens nothing.
+ */
 export const ClickHighlight: Story = {
     play: async ({ args, canvasElement }) => {
         await waitFor(() =>
@@ -777,65 +798,54 @@ export const ClickHighlight: Story = {
 
         const hl = canvasElement.querySelector<HTMLElement>('.emr-highlight[data-thread-id="t1"]')!;
 
-        hl.click();
+        await userEvent.click(hl);
         await expect(args.onHighlightClick).toHaveBeenCalledWith("t1");
 
-        const draft = canvasElement.querySelector<HTMLElement>(
-            '.emr-highlight[data-thread-id="__draft__"]',
-        );
-
-        draft?.click();
-        // Clicking empty article space hits no highlight (early return).
-        canvasElement.querySelector<HTMLElement>(".emr-rendered")!.click();
+        await userEvent.click(within(canvasElement).getByText("Markdown files"));
+        await userEvent.click(within(canvasElement).getByText(/right here in the page/));
+        await expect(args.onHighlightClick).toHaveBeenCalledTimes(1);
     },
 };
 
 /** Only the section chevron collapses; heading text remains selectable. */
 export const CollapseSection: Story = {
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".emr-section h2")).toBeTruthy());
+        const canvas = within(canvasElement);
+        const heading = await canvas.findByRole("heading", { name: "Approach" });
+        const toggle = within(heading).getByRole("button", { name: "Collapse section" });
+        const body = canvas.getByText(/Reviewers comment on the/);
 
-        const heading = canvasElement.querySelector<HTMLElement>(".emr-section > h2")!;
-
-        const toggle = heading.querySelector<HTMLButtonElement>(".emr-section-toggle")!;
-
-        heading.click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(heading.parentElement?.getAttribute("data-collapsed")).toBeNull();
-        toggle.click();
-        await waitFor(() =>
-            expect(heading.parentElement?.getAttribute("data-collapsed")).toBe("true"),
-        );
-        expect(toggle.getAttribute("aria-label")).toBe("Expand section");
-        expect(toggle.getAttribute("aria-expanded")).toBe("false");
-        toggle.click();
-        await waitFor(() =>
-            expect(heading.parentElement?.getAttribute("data-collapsed")).toBeNull(),
-        );
-        expect(toggle.getAttribute("aria-label")).toBe("Collapse section");
-        expect(toggle.getAttribute("aria-expanded")).toBe("true");
+        // Clicking the heading text (to select it) doesn't fold; the chevron does.
+        await userEvent.click(heading);
+        await userEvent.click(toggle);
+        await waitFor(() => expect(body).not.toBeVisible());
+        expect(toggle).toHaveAccessibleName("Expand section");
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await userEvent.click(toggle);
+        await waitFor(() => expect(body).toBeVisible());
+        expect(toggle).toHaveAccessibleName("Collapse section");
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
     },
 };
 
 /**
  * The document-title section (the single H1 wrapping the whole doc) is not
- * collapsible — clicking its heading does nothing.
+ * collapsible — it has no chevron, and clicking its heading folds nothing.
  */
 export const TitleNotCollapsible: Story = {
     play: async ({ canvasElement }) => {
-        const title = await waitFor(() => {
-            const h1 = canvasElement.querySelector<HTMLElement>(".emr-section--doc-title > h1");
+        const canvas = within(canvasElement);
+        const title = await canvas.findByRole("heading", { level: 1, name: "Goals" });
 
-            if (!h1) throw new Error("no doc-title heading");
-
-            return h1;
-        });
-
-        title.click();
-        // It never gains a collapsed state.
-        await new Promise((r) => setTimeout(r, 50));
-        expect(title.parentElement?.getAttribute("data-collapsed")).toBeNull();
-        expect(title.querySelector(".emr-section-toggle")).toBeNull();
+        expect(within(title).queryByRole("button", { name: /section/ })).toBeNull();
+        await userEvent.click(title);
+        // A nested section still folds, and the document stays readable around it.
+        await userEvent.click(canvas.getByRole("button", { name: "Collapse section" }));
+        const expand = await canvas.findByRole("button", { name: "Expand section" });
+        expect(canvas.getByText(/Word-doc-style/)).toBeVisible();
+        // Unfold again: the folded state is remembered for this document.
+        await userEvent.click(expand);
+        await canvas.findByRole("button", { name: "Collapse section" });
     },
 };
 
@@ -868,10 +878,8 @@ export const HeadingLinkCopies: Story = {
         const [title, approach] = await liveHeadings(canvasElement);
 
         for (const heading of [title!, approach!]) {
-            const button = heading.querySelector<HTMLButtonElement>(":scope > .emr-heading-link")!;
+            const button = within(heading).getByRole("button", { name: "Copy link to section" });
 
-            await expect(button).toBeTruthy();
-            await expect(button.getAttribute("aria-label")).toBe("Copy link to section");
             await expect(button.textContent).toBe("");
             // The link button sits after the heading text (the chevron, if any,
             // stays first), and the heading's name is still just its text.
@@ -879,12 +887,11 @@ export const HeadingLinkCopies: Story = {
             await expect(heading.getAttribute("aria-label")).toBe(heading.textContent.trim());
         }
 
-        const button = approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+        const button = within(approach!).getByRole("button", { name: "Copy link to section" });
 
-        button.click();
+        await userEvent.click(button);
         await expect(args.onCopyHeadingLink).toHaveBeenCalledWith("approach");
-        await waitFor(() => expect(button.classList.contains("is-copied")).toBe(true));
-        await expect(button.getAttribute("aria-label")).toBe("Link copied");
+        await waitFor(() => expect(button).toHaveAccessibleName("Link copied"));
         await expect(button.title).toBe("Link copied");
         await waitFor(() =>
             expect(within(canvasElement).getByRole("status").textContent).toBe("Link copied"),
@@ -893,11 +900,9 @@ export const HeadingLinkCopies: Story = {
         await expect(approach!.parentElement?.getAttribute("data-collapsed")).toBeNull();
         await expect(args.onHighlightClick).not.toHaveBeenCalled();
         // The confirmation resets so the link can be copied again.
-        await waitFor(
-            () => expect(button.getAttribute("aria-label")).toBe("Copy link to section"),
-            { timeout: 2000 },
-        );
-        await expect(button.classList.contains("is-copied")).toBe(false);
+        await waitFor(() => expect(button).toHaveAccessibleName("Copy link to section"), {
+            timeout: 2000,
+        });
     },
 };
 
@@ -909,17 +914,17 @@ export const HeadingLinkCopyFails: Story = {
     play: async ({ canvasElement }) => {
         const [title] = await liveHeadings(canvasElement);
 
-        const button = title!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+        const button = within(title!).getByRole("button", { name: "Copy link to section" });
 
-        button.click();
-        await waitFor(() => expect(button.classList.contains("is-failed")).toBe(true));
-        await expect(button.getAttribute("aria-label")).toBe("Couldn't copy link");
+        await userEvent.click(button);
+        await waitFor(() => expect(button).toHaveAccessibleName("Couldn't copy link"));
         await waitFor(() =>
             expect(within(canvasElement).getByRole("status").textContent).toBe(
                 "Couldn't copy link",
             ),
         );
-        await waitFor(() => expect(button.classList.contains("is-failed")).toBe(false), {
+        // The failure notice clears so the reader can try again.
+        await waitFor(() => expect(button).toHaveAccessibleName("Copy link to section"), {
             timeout: 3000,
         });
     },
@@ -932,34 +937,28 @@ export const HeadingLinkCopyFails: Story = {
 export const NoHeadingLinksWithoutHost: Story = {
     play: async ({ canvasElement }) => {
         await liveHeadings(canvasElement);
-        await expect(canvasElement.querySelector(".emr-heading-link")).toBeNull();
+        await expect(
+            within(canvasElement).queryByRole("button", { name: "Copy link to section" }),
+        ).toBeNull();
         await expect(within(canvasElement).queryByRole("status")).toBeNull();
     },
 };
 
-/** The mermaid "view source" button opens the source modal. */
+/**
+ * A rendered diagram's "</> Source" button opens its source in a dialog;
+ * Escape closes it again. (The broken diagram offers no source button.)
+ */
 export const MermaidSource: Story = {
     play: async ({ canvasElement }) => {
-        const btn = await waitFor(
-            () => {
-                const b = canvasElement.querySelector<HTMLElement>(".emr-mermaid-source-btn");
+        const canvas = within(canvasElement);
+        const btn = await canvas.findByRole("button", { name: "</> Source" }, { timeout: 15000 });
 
-                if (!b) throw new Error("no button yet");
-
-                return b;
-            },
-            { timeout: 15000 },
-        );
-
-        btn.click();
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-generated-source-overlay")).toBeTruthy(),
-        );
-        // Closing the modal clears the source state.
-        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-generated-source-overlay")).toBeNull(),
-        );
+        await expect(canvas.getAllByRole("button", { name: "</> Source" })).toHaveLength(1);
+        await userEvent.click(btn);
+        const dialog = await canvas.findByRole("dialog", { name: "Mermaid diagram source" });
+        await expect(within(dialog).getByText("graph TD; A-->B;")).toBeVisible();
+        await userEvent.keyboard("{Escape}");
+        await waitFor(() => expect(canvas.queryByRole("dialog")).toBeNull());
     },
 };
 
@@ -1023,16 +1022,26 @@ export const SelectionBubble: Story = {
 
         const addBtn = await waitFor(() => canvas.getByRole("button", { name: /add comment/i }));
 
-        // A mousedown inside the bubble must NOT dismiss it.
-        addBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-        addBtn.click();
-        await expect(args.onSelection).toHaveBeenCalled();
-        // A mousedown outside clears any bubble.
+        // Pressing the bubble's button doesn't dismiss the bubble first.
+        await userEvent.click(addBtn);
+        await expect(args.onSelection).toHaveBeenCalledTimes(1);
+
+        // Select again, then press the mouse outside: the bubble goes away.
+        sel.removeAllRanges();
+        sel.addRange(range);
+        para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+        await waitFor(() => canvas.getByRole("button", { name: /add comment/i }));
         document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-        // A mouseup with no selection collapses the bubble (anchor === null).
-        window.getSelection()!.removeAllRanges();
+        await waitFor(() =>
+            expect(canvas.queryByRole("button", { name: /add comment/i })).toBeNull(),
+        );
+
+        // Releasing the mouse without a selection doesn't bring it back.
+        sel.removeAllRanges();
         para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
         await new Promise((r) => requestAnimationFrame(() => r(null)));
+        await expect(canvas.queryByRole("button", { name: /add comment/i })).toBeNull();
+        await expect(args.onSelection).toHaveBeenCalledTimes(1);
     },
 };
 
@@ -1077,7 +1086,7 @@ export const SelectionInDeletedRegion: Story = {
             .dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
         await new Promise((r) => requestAnimationFrame(() => r(null)));
         // No bubble, and no selection reported to the host.
-        expect(canvasElement.querySelector(".emr-selection-bubble")).toBeNull();
+        expect(within(canvasElement).queryByRole("button", { name: /add comment/i })).toBeNull();
         await expect(args.onSelection).not.toHaveBeenCalled();
     },
 };
@@ -1094,27 +1103,29 @@ export const PreCollapsed: Story = {
         },
     ],
     play: async ({ canvasElement }) => {
-        await waitFor(() =>
-            expect(canvasElement.querySelector(".emr-section[data-collapsed='true']")).toBeTruthy(),
-        );
+        const canvas = within(canvasElement);
+        const toggle = await canvas.findByRole("button", { name: "Expand section" });
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expect(canvas.getByText(/Reviewers comment on the/)).not.toBeVisible();
     },
 };
 
-/** Read-only mode suppresses the selection bubble. */
+/** Read-only mode (and no shareable link) offers no bubble for a selection. */
 export const ReadOnly: Story = {
     args: { readOnly: true, draftAnchor: null, diff: undefined },
-    play: async ({ canvasElement }) => {
-        const para = await waitFor(() => {
-            const p = canvasElement.querySelector<HTMLElement>(".emr-rendered p");
-
-            if (!p) throw new Error("no paragraph");
-
-            return p;
-        });
-
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const para = await canvas.findByText(/Reviewers comment on the/);
+        const range = document.createRange();
+        range.setStart(para.firstChild!, 0);
+        range.setEnd(para.firstChild!, 9);
+        window.getSelection()!.removeAllRanges();
+        window.getSelection()!.addRange(range);
         para.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
         await new Promise((r) => requestAnimationFrame(() => r(null)));
-        await expect(canvasElement.querySelector(".emr-selection-bubble")).toBeNull();
+        await expect(canvas.queryByRole("button", { name: /add comment/i })).toBeNull();
+        await expect(canvas.queryByRole("button", { name: /copy link/i })).toBeNull();
+        await expect(args.onSelection).not.toHaveBeenCalled();
     },
 };
 
@@ -1166,7 +1177,8 @@ export const SelectionLinkCopies: Story = {
             }),
         );
         await waitFor(
-            () => expect(canvasElement.querySelector(".emr-selection-bubble")).toBeNull(),
+            () =>
+                expect(canvas.queryByRole("button", { name: "Copy link to selection" })).toBeNull(),
             { timeout: 3000 },
         );
     },
@@ -1268,7 +1280,7 @@ export const HeadingLinkKeepsFocusOnRewrap: Story = {
     play: async ({ canvasElement }) => {
         const [, approach] = await liveHeadings(canvasElement);
 
-        const before = approach!.querySelector<HTMLButtonElement>(".emr-heading-link")!;
+        const before = within(approach!).getByRole("button", { name: "Copy link to section" });
 
         before.focus();
         await expect(document.activeElement).toBe(before);
@@ -1278,7 +1290,7 @@ export const HeadingLinkKeepsFocusOnRewrap: Story = {
         await waitFor(() => expect(before.isConnected).toBe(false));
         // …and focus follows to its replacement.
         const active = document.activeElement as HTMLElement;
-        await expect(active.classList.contains("emr-heading-link")).toBe(true);
-        await expect(active.dataset.headingId).toBe("approach");
+        await expect(active).toHaveAccessibleName("Copy link to section");
+        await expect(active.closest("h1, h2")).toHaveAccessibleName("Approach");
     },
 };

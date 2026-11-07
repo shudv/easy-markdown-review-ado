@@ -19,6 +19,7 @@ import {
     saveDraft,
     type PersistedDraft,
 } from "../src/shell/draftStorage";
+import { failStorage } from "./readerStorageFailures";
 
 const anchor: TextQuoteAnchor = {
     exact: "hello world",
@@ -93,16 +94,25 @@ afterEach(() => {
 });
 
 describe("draftStorageKey", () => {
-    it("namespaces per experience", () => {
-        expect(draftStorageKey("pr")).toBe("emr:comment-draft:pr");
-        expect(draftStorageKey("hub")).toBe("emr:comment-draft:hub");
+    // Drafts already saved in users' browsers live under these keys.
+    it.each([
+        ["pr", "emr:comment-draft:pr"],
+        ["hub", "emr:comment-draft:hub"],
+    ] as const)("keeps %s drafts under %s", (experience, key) => {
+        expect(draftStorageKey(experience)).toBe(key);
     });
 });
 
 describe("save / load / clear round-trip", () => {
     it("persists and reads a new-comment draft back", () => {
         saveDraft("pr", newDraft());
+
         expect(loadDraft("pr")).toEqual(newDraft());
+    });
+
+    it("keeps the PR tab's draft out of the Documents hub", () => {
+        saveDraft("pr", newDraft());
+
         expect(loadDraft("hub")).toBeNull();
     });
 
@@ -132,59 +142,29 @@ describe("loadDraft validation", () => {
         expect(loadDraft("pr")).toBeNull();
     });
 
-    it("rejects an empty body", () => {
-        window.localStorage.setItem(draftStorageKey("pr"), JSON.stringify(newDraft({ body: "" })));
-        expect(loadDraft("pr")).toBeNull();
-    });
-
-    it("rejects a missing path", () => {
-        window.localStorage.setItem(
-            draftStorageKey("pr"),
-            JSON.stringify({ threadId: "t1", anchor: null, body: "hi" }),
-        );
-        expect(loadDraft("pr")).toBeNull();
-    });
-
-    it("rejects a missing threadId", () => {
-        window.localStorage.setItem(
-            draftStorageKey("pr"),
-            JSON.stringify({ path: "a.md", anchor, body: "hi" }),
-        );
-        expect(loadDraft("pr")).toBeNull();
-    });
-
-    it("rejects a new-comment draft without a usable anchor", () => {
-        window.localStorage.setItem(
-            draftStorageKey("pr"),
-            JSON.stringify({
-                path: "a.md",
-                threadId: NEW_DRAFT_THREAD_ID,
-                anchor: null,
-                body: "hi",
-            }),
-        );
-        expect(loadDraft("pr")).toBeNull();
-    });
-
-    it("rejects a new-comment anchor without exact text", () => {
-        window.localStorage.setItem(
-            draftStorageKey("pr"),
-            JSON.stringify({
+    it.each([
+        { name: "an empty body", draft: newDraft({ body: "" }) },
+        { name: "a missing path", draft: { threadId: "t1", anchor: null, body: "hi" } },
+        { name: "a missing threadId", draft: { path: "a.md", anchor, body: "hi" } },
+        {
+            name: "a new-comment draft without an anchor",
+            draft: { path: "a.md", threadId: NEW_DRAFT_THREAD_ID, anchor: null, body: "hi" },
+        },
+        {
+            name: "a new-comment anchor without exact text",
+            draft: {
                 path: "a.md",
                 threadId: NEW_DRAFT_THREAD_ID,
                 anchor: { prefix: "x" },
                 body: "hi",
-            }),
-        );
+            },
+        },
+    ])("rejects $name", ({ draft }) => {
+        window.localStorage.setItem(draftStorageKey("pr"), JSON.stringify(draft));
+
         expect(loadDraft("pr")).toBeNull();
     });
-
-    it("accepts a reply draft with a null anchor", () => {
-        saveDraft("pr", replyDraft({ anchor: null }));
-        expect(loadDraft("pr")).not.toBeNull();
-    });
 });
-
 describe("draftSnippet", () => {
     it("collapses whitespace and trims", () => {
         expect(draftSnippet("  hello   world\n\nagain  ")).toBe("hello world again");
@@ -201,35 +181,26 @@ describe("draftSnippet", () => {
     });
 });
 
-describe("storage-error tolerance", () => {
-    it("swallows getItem failures", () => {
-        const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-            throw new Error("blocked");
-        });
+describe("when browser storage is unavailable", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("finds no draft to restore", () => {
+        failStorage("getItem");
 
         expect(loadDraft("pr")).toBeNull();
-        spy.mockRestore();
     });
 
-    it("swallows setItem failures", () => {
-        const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-            throw new Error("quota");
-        });
+    it.each([
+        { name: "saving", method: "setItem", act: () => saveDraft("pr", newDraft()) },
+        { name: "discarding", method: "removeItem", act: () => clearDraft("pr") },
+    ] as const)("carries on when $name a draft fails", ({ method, act }) => {
+        failStorage(method);
 
-        expect(() => saveDraft("pr", newDraft())).not.toThrow();
-        spy.mockRestore();
-    });
-
-    it("swallows removeItem failures", () => {
-        const spy = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
-            throw new Error("blocked");
-        });
-
-        expect(() => clearDraft("pr")).not.toThrow();
-        spy.mockRestore();
+        expect(act).not.toThrow();
     });
 });
-
 describe("createThrottledDraftWriter", () => {
     it("writes the first change immediately (leading edge)", () => {
         vi.useFakeTimers();
@@ -258,7 +229,7 @@ describe("createThrottledDraftWriter", () => {
         expect(loadDraft("pr")?.body).toBe("b");
     });
 
-    it("flush persists a queued write early", () => {
+    it("flushing saves the latest pending change right away", () => {
         vi.useFakeTimers();
         const w = createThrottledDraftWriter("pr", 500);
         w.schedule(newDraft({ body: "a" }));
@@ -267,14 +238,14 @@ describe("createThrottledDraftWriter", () => {
         expect(loadDraft("pr")?.body).toBe("ab");
     });
 
-    it("flush with no queued write is a no-op-safe", () => {
+    it("flushing with nothing typed saves nothing", () => {
         vi.useFakeTimers();
         const w = createThrottledDraftWriter("pr", 500);
         expect(() => w.flush()).not.toThrow();
         expect(loadDraft("pr")).toBeNull();
     });
 
-    it("cancel drops a queued write", () => {
+    it("cancelling drops the pending change", () => {
         vi.useFakeTimers();
         const w = createThrottledDraftWriter("pr", 500);
         w.schedule(newDraft({ body: "a" }));
@@ -284,7 +255,7 @@ describe("createThrottledDraftWriter", () => {
         expect(loadDraft("pr")?.body).toBe("a");
     });
 
-    it("cancel with no queued write is safe", () => {
+    it("cancelling with nothing typed is safe", () => {
         const w = createThrottledDraftWriter("pr", 500);
         expect(() => w.cancel()).not.toThrow();
     });

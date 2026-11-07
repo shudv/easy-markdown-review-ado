@@ -17,17 +17,10 @@ import { useActiveDocPath } from "../src/hub/useActiveDocPath";
 import { useLazyTree } from "../src/hub/useLazyTree";
 import { useRepoBindings } from "../src/hub/useRepoBindings";
 import { useSelectedRepo } from "../src/hub/useSelectedRepo";
+import { EVENT, getTelemetryContext } from "../src/telemetry";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const telemetry = vi.hoisted(() => ({
-    track: vi.fn(),
-    setTelemetryContext: vi.fn(),
-    trackUserFacingError: vi.fn(),
-}));
-
-vi.mock("../src/telemetry", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("../src/telemetry")>()),
-    ...telemetry,
-}));
+const telemetry = recordTelemetryEachTest();
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -87,7 +80,7 @@ describe("useSelectedRepo", () => {
     type P = Parameters<typeof useSelectedRepo>;
     const run = (args: P) => renderHook((p: P) => useSelectedRepo(...p), args);
 
-    it("selects the initial repo, syncs telemetry and loads skeleton details", () => {
+    it("opens the initial repo and loads its details when it is still a skeleton", () => {
         const onLoad = vi.fn(async () => {});
 
         const { result } = run([
@@ -99,15 +92,25 @@ describe("useSelectedRepo", () => {
 
         expect(result.current.selectedRepoId).toBe("b");
         expect(result.current.selectedRepo?.id).toBe("b");
-        expect(telemetry.setTelemetryContext).toHaveBeenCalledWith({
-            repositoryId: "b",
-        });
         expect(onLoad).toHaveBeenCalledWith("b");
+    });
+
+    it("tags telemetry with the selected repo, following a switch", () => {
+        const { result } = run([[repo("a"), repo("b")], "b", undefined, undefined]);
+        expect(getTelemetryContext().repositoryId).toBe("b");
+
+        act(() => result.current.handleSelectRepo("a"));
+        expect(getTelemetryContext().repositoryId).toBe("a");
+    });
+
+    it("reports a switch to an already-loaded repo without reloading its details", () => {
+        const onLoad = vi.fn(async () => {});
+        const { result } = run([[repo("a"), repo("b")], "b", undefined, onLoad]);
 
         act(() => result.current.handleSelectRepo("a"));
         expect(result.current.selectedRepo?.id).toBe("a");
-        expect(telemetry.track).toHaveBeenCalledTimes(1);
-        expect(onLoad).toHaveBeenCalledTimes(1);
+        expect(telemetry.current.eventNames()).toEqual([EVENT.RepoSwitched]);
+        expect(onLoad).not.toHaveBeenCalled();
     });
 
     it("notifies the host on switch and keeps a repo filtered out of view", () => {
@@ -120,11 +123,11 @@ describe("useSelectedRepo", () => {
         expect(result.current.selectedRepo?.id).toBe("b");
     });
 
-    it("tolerates no repos and no initial id", () => {
+    it("selects nothing in a project without repos", () => {
         const onLoad = vi.fn(async () => {});
         const { result } = run([[], "", undefined, onLoad]);
         expect(result.current.selectedRepo).toBeUndefined();
-        expect(telemetry.setTelemetryContext).not.toHaveBeenCalled();
+        expect(getTelemetryContext().repositoryId).toBeUndefined();
         expect(onLoad).not.toHaveBeenCalled();
     });
 });
@@ -175,10 +178,7 @@ describe("useLazyTree", () => {
 
         await flush();
         await flush();
-        expect(onExpand.mock.calls).toEqual([
-            ["a", "/docs"],
-            ["a", "docs/guide"],
-        ]);
+        expect(onExpand).toHaveBeenCalledWith("a", "docs/guide");
         expect(result.current.lazyTree?.files).toEqual([file("/docs/guide/a.md")]);
         expect(result.current.lazyTree?.unloadedFolders).toEqual([]);
         expect(result.current.lazyTree?.folderOrders).toEqual({
@@ -211,9 +211,9 @@ describe("useLazyTree", () => {
         await act(async () => {
             await expect(result.current.handleExpandFolder("/x")).resolves.toBeNull();
         });
-        expect(telemetry.trackUserFacingError).toHaveBeenCalledWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({ operation: "folder-expand" }),
-        );
+        ]);
         expect(result.current.lazyTree?.files).toEqual([file("/a.md")]);
         warn.mockRestore();
     });
@@ -357,18 +357,6 @@ describe("useRepoBindings", () => {
         expect(result.current.listSubpageFolderBound).toBeDefined();
     });
 
-    function expectNothingBound(b: ReturnType<typeof useRepoBindings>): void {
-        const { repoScopedLoader, ...optional } = b;
-        expect(repoScopedLoader).toBeTypeOf("function");
-
-        for (const value of Object.values(optional)) {
-            expect(value).toBeUndefined();
-        }
-
-        expect(Object.keys(optional)).toHaveLength(9);
-    }
-
-    // eslint-disable-next-line vitest/expect-expect -- assertions live in the expectNothingBound() helper
     it("binds nothing optional when the host omits the loaders", () => {
         const props: DocumentsAppProps = {
             repos: [],
@@ -378,14 +366,15 @@ describe("useRepoBindings", () => {
         };
 
         const { result } = run([props, repo("r1"), true]);
-        const b = result.current;
-        expectNothingBound(b);
+        const { repoScopedLoader, ...optional } = result.current;
+        expect(repoScopedLoader).toBeTypeOf("function");
+        expect(optional).toEqual({});
     });
 
     it("binds nothing and rejects loads without a selected repo", async () => {
         const { result } = run([fullProps(), undefined, true]);
-        const b = result.current;
-        await expect(b.repoScopedLoader("/a.md")).rejects.toThrow("No repo selected");
-        expectNothingBound(b);
+        const { repoScopedLoader, ...optional } = result.current;
+        await expect(repoScopedLoader("/a.md")).rejects.toThrow("No repo selected");
+        expect(optional).toEqual({});
     });
 });

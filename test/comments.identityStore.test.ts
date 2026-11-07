@@ -18,28 +18,51 @@ describe("IdentityStore — seed / get", () => {
         expect(s.get("ABC-123")?.displayName).toBe("Ada");
     });
 
-    it("ignores entries with no display name and never overwrites", () => {
+    it("keeps the first name it learnt for an identity", () => {
         const s = new IdentityStore();
         s.seed([{ id: "x", displayName: "First" }]);
-        s.seed([{ id: "x", displayName: "Second" }]); // must NOT clobber
-        s.seed([{ id: "y" }]); // no name → ignored
+        s.seed([{ id: "x", displayName: "Second" }]);
         expect(s.get("x")?.displayName).toBe("First");
+    });
+
+    it("ignores an identity seeded without a display name", () => {
+        const s = new IdentityStore();
+        s.seed([{ id: "y" }]);
         expect(s.get("y")).toBeUndefined();
     });
 
-    it("bumps version + notifies subscribers only on real change", () => {
+    it("notifies subscribers and bumps the version when a new identity arrives", () => {
+        const s = new IdentityStore();
+        const cb = vi.fn();
+        s.subscribe(cb);
+        const v0 = s.getVersion();
+
+        s.seed([{ id: "a", displayName: "A" }]);
+
+        expect(s.getVersion()).toBe(v0 + 1);
+        expect(cb).toHaveBeenCalledOnce();
+    });
+
+    it("does not notify subscribers when nothing new was learnt", () => {
+        const s = new IdentityStore();
+        s.seed([{ id: "a", displayName: "A" }]);
+        const cb = vi.fn();
+        s.subscribe(cb);
+
+        s.seed([{ id: "a", displayName: "A-again" }]);
+
+        expect(cb).not.toHaveBeenCalled();
+    });
+
+    it("stops notifying a subscriber after it unsubscribes", () => {
         const s = new IdentityStore();
         const cb = vi.fn();
         const unsub = s.subscribe(cb);
-        const v0 = s.getVersion();
-        s.seed([{ id: "a", displayName: "A" }]);
-        expect(s.getVersion()).toBe(v0 + 1);
-        expect(cb).toHaveBeenCalledTimes(1);
-        s.seed([{ id: "a", displayName: "A-again" }]); // no change (already present)
-        expect(cb).toHaveBeenCalledTimes(1);
         unsub();
+
         s.seed([{ id: "b", displayName: "B" }]);
-        expect(cb).toHaveBeenCalledTimes(1); // unsubscribed
+
+        expect(cb).not.toHaveBeenCalled();
     });
 });
 
@@ -57,13 +80,12 @@ describe("IdentityStore — ensure / resolve", () => {
         s.ensure(["id2", "id3"]); // id2 already queued; id3 new
         await Promise.resolve(); // let the microtask flush run
         await Promise.resolve();
-        expect(resolver).toHaveBeenCalledTimes(1);
-        expect([...resolver.mock.calls[0]![0]].sort()).toEqual(["id1", "id2", "id3"]);
+        expect(resolver).toHaveBeenCalledExactlyOnceWith(["id1", "id2", "id3"]);
         expect(s.get("id1")?.displayName).toBe("Name id1");
         expect(s.get("id3")?.displayName).toBe("Name id3");
     });
 
-    it("does not re-resolve ids already known or in flight", async () => {
+    it("does not ask the service for an identity it already knows", async () => {
         const resolver = vi.fn<IdentityResolver>(async () => ({}));
         const s = new IdentityStore(resolver);
         s.seed([{ id: "known", displayName: "K" }]);
@@ -72,7 +94,7 @@ describe("IdentityStore — ensure / resolve", () => {
         expect(resolver).not.toHaveBeenCalled();
     });
 
-    it("is a no-op with no resolver (dev/standalone)", async () => {
+    it("leaves identities unresolved when there is no service to ask (dev/standalone)", async () => {
         const s = new IdentityStore();
         s.ensure(["a", "b"]);
         await Promise.resolve();
@@ -100,8 +122,7 @@ describe("IdentityStore — ensure / resolve", () => {
         await Promise.resolve();
         await Promise.resolve();
         // The resolver receives the dashed GUID, never the storage-key form.
-        expect(resolver).toHaveBeenCalledTimes(1);
-        expect(resolver.mock.calls[0]![0]).toEqual([DASHED]);
+        expect(resolver).toHaveBeenCalledExactlyOnceWith([DASHED]);
         // A pill keyed by EITHER form resolves to the same identity.
         expect(s.get(ENTITY)?.displayName).toBe("Grace Hopper");
         expect(s.get(DASHED.toUpperCase())?.displayName).toBe("Grace Hopper");
@@ -185,20 +206,23 @@ describe("hydrateUserMentions", () => {
         expect(el.getAttribute("data-mention-label")).toBe("@Grace Hopper");
     });
 
-    it("leaves unknown ids showing the GUID and queues them for resolution", () => {
+    it("keeps showing an unknown id and asks the service for its name", async () => {
         const resolver = vi.fn<IdentityResolver>(async () => ({}));
         const s = new IdentityStore(resolver);
         const root = pill("unknown-guid");
+
         hydrateUserMentions(root, s);
-        const el = root.querySelector<HTMLElement>(".emr-mention")!;
-        expect(el.textContent).toBe("@unknown-guid"); // unchanged
-        expect(resolver).toBeDefined();
+        await Promise.resolve();
+
+        expect(root.querySelector(".emr-mention")!.textContent).toBe("@unknown-guid");
+        expect(resolver).toHaveBeenCalledWith(["unknown-guid"]);
     });
 
-    it("is a no-op when root or store is null", () => {
-        const s = new IdentityStore();
-        expect(() => hydrateUserMentions(null, s)).not.toThrow();
-        expect(() => hydrateUserMentions(document.createElement("div"), null)).not.toThrow();
+    it.each([
+        ["no rendered comment yet", null, new IdentityStore()],
+        ["no identity store", document.createElement("div"), null],
+    ])("does nothing when there is %s", (_label, root, store) => {
+        expect(() => hydrateUserMentions(root, store)).not.toThrow();
     });
 
     it("skips pills that carry no data-mention-id", () => {
@@ -212,14 +236,24 @@ describe("hydrateUserMentions", () => {
         expect(root.querySelector(".emr-mention")!.textContent).toBe("@someone");
     });
 
-    it("does not re-touch a pill whose label is already current", () => {
+    // Hydration runs on every render; rewriting an unchanged pill would churn
+    // the DOM (and anything observing it) for nothing.
+    it("makes no DOM changes when re-run over pills that already show the name", () => {
         const s = new IdentityStore();
         s.seed([{ id: "g1", displayName: "Ada" }]);
         const root = pill("g1");
         hydrateUserMentions(root, s);
-        const el = root.querySelector<HTMLElement>(".emr-mention")!;
-        const spy = vi.spyOn(el, "textContent", "set");
-        hydrateUserMentions(root, s); // second pass — label unchanged
-        expect(spy).not.toHaveBeenCalled();
+        const observer = new MutationObserver(() => {});
+        observer.observe(root, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+        });
+
+        hydrateUserMentions(root, s);
+
+        expect(observer.takeRecords()).toEqual([]);
+        observer.disconnect();
     });
 });

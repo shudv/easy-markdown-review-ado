@@ -98,7 +98,10 @@ describe("Avatar", () => {
         expect(container!.querySelector("img")!.getAttribute("src")).toBe(
             author("second").avatarUrl,
         );
+    });
 
+    it("swaps to initials for a new author without a photo", () => {
+        render(<Avatar author={author("first")} />);
         render(<Avatar author={{ ...author("third"), avatarUrl: undefined }} />);
         expect(container!.querySelector("img")).toBeNull();
         expect(container!.textContent).toBe("TH");

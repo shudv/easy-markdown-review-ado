@@ -36,7 +36,6 @@ describe("buildFolderTree", () => {
     });
 
     it("skips files whose path is only slashes", () => {
-        // `"/"` strips to no segments, so the file contributes nothing.
         expect(buildFolderTree<F>([{ path: "/" }])).toEqual([]);
     });
 
@@ -280,23 +279,19 @@ describe("buildFolderTree — wiki .order", () => {
 });
 
 describe("normalizeFolderPath", () => {
-    it("strips a leading slash (ADO-shaped paths)", () => {
-        expect(normalizeFolderPath("/docs")).toBe("docs");
-    });
-
-    it("strips a trailing slash", () => {
-        expect(normalizeFolderPath("docs/")).toBe("docs");
-    });
-
-    it("strips both leading and trailing slashes", () => {
-        expect(normalizeFolderPath("/docs/api/")).toBe("docs/api");
-    });
-
-    it("leaves an already-bare path untouched", () => {
-        expect(normalizeFolderPath("docs/api")).toBe("docs/api");
+    it.each([
+        { name: "strips a leading slash (ADO-shaped paths)", path: "/docs", expected: "docs" },
+        { name: "strips a trailing slash", path: "docs/", expected: "docs" },
+        {
+            name: "strips both leading and trailing slashes",
+            path: "/docs/api/",
+            expected: "docs/api",
+        },
+        { name: "leaves an already-bare path untouched", path: "docs/api", expected: "docs/api" },
+    ])("$name", ({ path, expected }) => {
+        expect(normalizeFolderPath(path)).toBe(expected);
     });
 });
-
 describe("mergeWikiPages", () => {
     /** Pretty-print with merged pages shown as `PAGE+DIR`. */
     function ppMerged(nodes: ReadonlyArray<TreeNode<F>>, depth = 0): string {

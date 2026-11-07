@@ -26,18 +26,9 @@ import {
     useAdoSession,
 } from "../src/shell/adoSession";
 import { SessionRefreshingError } from "../src/shell/adoAuthToken";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackMock = vi.fn();
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        track: (...args: unknown[]) => trackMock(...args),
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,23 +63,14 @@ const FRESH = token(T0 + 65 * 60_000, T0 + 75 * 60_000);
 const refreshing = () => new SessionRefreshingError("refreshing", T0 + 9 * 60_000);
 
 function eventsNamed(phase: "start" | "end") {
-    return trackMock.mock.calls
-        .map(
-            ([e]) =>
-                e as {
-                    name: string;
-                    properties: Record<string, unknown>;
-                    measurements: Record<string, number>;
-                },
-        )
-        .filter((e) => e.name === "auth.sessionRefresh" && e.properties.phase === phase);
+    return telemetry.current.events.filter(
+        (e) => e.name === "auth.sessionRefresh" && e.properties?.phase === phase,
+    );
 }
 
 beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(T0);
-    trackMock.mockClear();
-    trackUserFacingErrorMock.mockClear();
 });
 
 afterEach(() => {
@@ -101,7 +83,7 @@ describe("AdoSessionMonitor — entering a spell", () => {
         expect(m.report(new Error("TF400813"), "poll")).toBe(false);
         expect(m.report({ status: 401 }, "poll")).toBe(false);
         expect(m.getSnapshot().state).toBe("live");
-        expect(trackMock).not.toHaveBeenCalled();
+        expect(telemetry.current.events).toEqual([]);
     });
 
     it("enters refreshing once per spell and emits one start event", () => {
@@ -215,24 +197,21 @@ describe("AdoSessionMonitor — early resume", () => {
         const m = new AdoSessionMonitor();
         m.configure({ getToken });
         m.report(refreshing(), "poll");
-        await vi.advanceTimersByTimeAsync(SESSION_SLOW_AFTER_MS);
-        const before = getToken.mock.calls.length;
-        await vi.advanceTimersByTimeAsync(SESSION_SLOW_POLL_MS - 1);
-        // At most the one fast poll still pending from before the threshold.
-        expect(getToken.mock.calls.length - before).toBeLessThanOrEqual(1);
-        const mid = getToken.mock.calls.length;
+        // Past the threshold, plus time for the last fast poll to fire.
+        await vi.advanceTimersByTimeAsync(SESSION_SLOW_AFTER_MS + SESSION_SLOW_POLL_MS - 1);
+        getToken.mockClear();
         await vi.advanceTimersByTimeAsync(SESSION_SLOW_POLL_MS);
-        expect(getToken.mock.calls.length - mid).toBe(1);
+        expect(getToken).toHaveBeenCalledOnce();
     });
 
     it("ends the spell when any ADO call succeeds", () => {
         const m = new AdoSessionMonitor();
         m.noteSuccess(Date.now());
-        expect(trackMock).not.toHaveBeenCalled();
+        expect(telemetry.current.events).toEqual([]);
         m.report(refreshing(), "poll");
         m.noteSuccess(Date.now());
         expect(m.getSnapshot().state).toBe("live");
-        expect(eventsNamed("end")[0]!.properties.outcome).toBe("success");
+        expect(eventsNamed("end")[0]!.properties).toMatchObject({ outcome: "success" });
     });
 
     it("discards a token read that lands after the spell already ended", async () => {
@@ -317,13 +296,13 @@ describe("AdoSessionMonitor — held writes", () => {
         });
         expect(attempt).toHaveBeenCalledOnce();
         // The user is waiting on this write: one degradation, not a failure.
-        expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({
                 source: "AdoSession",
                 operation: "comment-write",
                 impact: "degraded",
             }),
-        );
+        ]);
 
         current = FRESH;
         await vi.advanceTimersByTimeAsync(SESSION_POLL_MS);
@@ -334,7 +313,7 @@ describe("AdoSessionMonitor — held writes", () => {
             surfaced: false,
             heldWrites: 0,
         });
-        expect(eventsNamed("end")[0]!.measurements.heldWrites).toBe(1);
+        expect(eventsNamed("end")[0]!.measurements).toMatchObject({ heldWrites: 1 });
     });
 
     it("fails with the original error when the hold times out", async () => {
@@ -348,7 +327,7 @@ describe("AdoSessionMonitor — held writes", () => {
         expect(m.getSnapshot().heldWrites).toBe(0);
     });
 
-    it("defaults the hold to HELD_WRITE_MAX_WAIT_MS", async () => {
+    it("gives up on a held write after HELD_WRITE_MAX_WAIT_MS by default", async () => {
         const m = new AdoSessionMonitor();
         const write = m.holdWrite(() => Promise.reject(refreshing()));
         let settled = false;
@@ -387,7 +366,7 @@ describe("AdoSessionMonitor — surfacing to the user", () => {
             state: "refreshing",
             surfaced: false,
         });
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     it.each([
@@ -401,12 +380,14 @@ describe("AdoSessionMonitor — surfacing to the user", () => {
         m.surface(reason);
         m.surface("refresh");
         expect(m.getSnapshot().surfaced).toBe(true);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
-            error: err,
-            source: "AdoSession",
-            operation,
-            impact: "degraded",
-        });
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: err,
+                source: "AdoSession",
+                operation,
+                impact: "degraded",
+            }),
+        ]);
     });
 
     it("clears on recovery, so the next spell can surface again", () => {
@@ -421,21 +402,21 @@ describe("AdoSessionMonitor — surfacing to the user", () => {
 
         m.report(refreshing(), "poll");
         m.surface("refresh");
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(2);
+        expect(telemetry.current.userFacingErrors()).toHaveLength(2);
     });
 
     it("ignores a surface request while live", () => {
         const m = new AdoSessionMonitor();
         m.surface("refresh");
         expect(m.getSnapshot().surfaced).toBe(false);
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     describe("claimPollFailure", () => {
         it("leaves any other failure to the poller", () => {
             const m = new AdoSessionMonitor();
             expect(m.claimPollFailure(new Error("TF400893"), true)).toBe(false);
-            expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+            expect(telemetry.current.userFacingErrors()).toEqual([]);
         });
 
         it("owns a dead-window failure, quietly while nobody waits", () => {
@@ -444,7 +425,7 @@ describe("AdoSessionMonitor — surfacing to the user", () => {
             m.report(err, "poll");
             expect(m.claimPollFailure(err, false)).toBe(true);
             expect(m.getSnapshot().surfaced).toBe(false);
-            expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+            expect(telemetry.current.userFacingErrors()).toEqual([]);
         });
 
         it("surfaces it once the user waits on a refresh", () => {
@@ -453,9 +434,9 @@ describe("AdoSessionMonitor — surfacing to the user", () => {
             m.report(err, "poll");
             expect(m.claimPollFailure(err, true)).toBe(true);
             expect(m.getSnapshot().surfaced).toBe(true);
-            expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith(
+            expect(telemetry.current.userFacingErrors()).toEqual([
                 expect.objectContaining({ operation: "comments-refresh" }),
-            );
+            ]);
         });
     });
 });
@@ -483,7 +464,7 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
         m.report(refreshing(), "boot");
         await expect(m.reloadHost("auto")).resolves.toBe(true);
         expect(reloadHost).toHaveBeenCalledOnce();
-        expect(eventsNamed("end")[0]!.properties.outcome).toBe("reload-auto");
+        expect(eventsNamed("end")[0]!.properties).toMatchObject({ outcome: "reload-auto" });
         expect(m.getSnapshot().state).toBe("refreshing");
         expect(recovered).not.toHaveBeenCalled();
 
@@ -497,7 +478,7 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
 
         m.report(refreshing(), "write");
         await m.reloadHost("user");
-        expect(eventsNamed("end")[1]!.properties.outcome).toBe("reload-user");
+        expect(eventsNamed("end")[1]!.properties).toMatchObject({ outcome: "reload-user" });
     });
 
     it("keeps a held write held through a reload request", async () => {
@@ -520,29 +501,34 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
     });
 
     // Review finding: failed reloads were swallowed with no signal at all.
-    it("reports a reload that throws or rejects, and says it didn't happen", async () => {
-        const m = new AdoSessionMonitor();
-        // (Not "boot": the page-hide test below counts open boot spells.)
-        m.report(refreshing(), "poll");
-        m.configure({
+    it.each([
+        {
+            name: "a user reload that throws is reported as a failed action",
+            trigger: "user",
             reloadHost: () => {
                 throw new Error("no nav service");
             },
-        });
-        await expect(m.reloadHost("user")).resolves.toBe(false);
-        expect(trackUserFacingErrorMock).toHaveBeenLastCalledWith(
+            impact: "action-failed",
+        },
+        {
+            name: "an automatic reload that rejects is reported as a degradation",
+            trigger: "auto",
+            reloadHost: () => Promise.reject(new Error("denied")),
+            impact: "degraded",
+        },
+    ] as const)("$name, and the spell stays open", async ({ trigger, reloadHost, impact }) => {
+        const m = new AdoSessionMonitor();
+        // (Not "boot": the page-hide test below counts open boot spells.)
+        m.report(refreshing(), "poll");
+        m.configure({ reloadHost });
+        await expect(m.reloadHost(trigger)).resolves.toBe(false);
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({
                 source: "AdoSession.reloadHost",
                 operation: "host-reload",
-                impact: "action-failed",
+                impact,
             }),
-        );
-        m.configure({ reloadHost: () => Promise.reject(new Error("denied")) });
-        await expect(m.reloadHost("auto")).resolves.toBe(false);
-        expect(trackUserFacingErrorMock).toHaveBeenLastCalledWith(
-            expect.objectContaining({ impact: "degraded" }),
-        );
-        // The spell is still open and was not closed out as a reload.
+        ]);
         expect(m.getSnapshot().state).toBe("refreshing");
         expect(eventsNamed("end")).toHaveLength(0);
     });
@@ -556,11 +542,11 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
 
         // Other monitors in this file also listen on the shared jsdom window, so
         // count only this spell's events.
-        const bootEnds = () => eventsNamed("end").filter((e) => e.properties.trigger === "boot");
+        const bootEnds = () => eventsNamed("end").filter((e) => e.properties?.trigger === "boot");
 
         window.dispatchEvent(new Event("pagehide"));
         expect(bootEnds()).toHaveLength(1);
-        expect(bootEnds()[0]!.properties.outcome).toBe("left");
+        expect(bootEnds()[0]!.properties).toMatchObject({ outcome: "left" });
         // `pagehide` also fires entering the back/forward cache; a restored page
         // keeps watching and still recovers.
         expect(m.getSnapshot().state).toBe("refreshing");
@@ -638,46 +624,59 @@ describe("claimAutoReload", () => {
         expect(claimAutoReload(memoryStorage("garbage"), 1_000)).toBe(true);
     });
 
-    it("refuses without durable storage, so a reload can never loop", () => {
-        expect(claimAutoReload(undefined, 1)).toBe(false);
-
-        const throwing = {
-            getItem: () => {
-                throw new Error("SecurityError");
+    it.each([
+        { name: "no storage at all", storage: undefined },
+        {
+            name: "storage that can't be read",
+            storage: {
+                getItem: () => {
+                    throw new Error("SecurityError");
+                },
+                setItem: () => {},
             },
-            setItem: () => {},
-        };
-
-        expect(claimAutoReload(throwing, 1)).toBe(false);
-        // Storage that silently drops writes can't hold the guard either.
-        const dropping = { getItem: () => null, setItem: () => {} };
-        expect(claimAutoReload(dropping, 1)).toBe(false);
-
-        // Nor can storage that refuses writes (quota / private mode).
-        const full = {
-            getItem: () => null,
-            setItem: () => {
-                throw new Error("QuotaExceededError");
+        },
+        {
+            name: "storage that silently drops writes",
+            storage: { getItem: () => null, setItem: () => {} },
+        },
+        {
+            name: "storage that refuses writes (quota / private mode)",
+            storage: {
+                getItem: () => null,
+                setItem: () => {
+                    throw new Error("QuotaExceededError");
+                },
             },
-        };
-
-        expect(claimAutoReload(full, 1)).toBe(false);
+        },
+    ])("refuses with $name, so a reload can never loop", ({ storage }) => {
+        expect(claimAutoReload(storage, 1)).toBe(false);
     });
 });
 
 describe("autoReloadAllowed", () => {
-    it("peeks without recording a claim", () => {
+    function memoryStorage() {
         const map = new Map<string, string>();
 
-        const storage = {
+        return {
+            map,
             getItem: (k: string) => map.get(k) ?? null,
             setItem: (k: string, v: string) => void map.set(k, v),
         };
+    }
 
+    it("allows a reload without recording a claim", () => {
+        const storage = memoryStorage();
         expect(autoReloadAllowed(storage, 1_000)).toBe(true);
-        expect(map.size).toBe(0);
+        expect(storage.map.size).toBe(0);
+    });
+
+    it("refuses while a recorded reload is in its cooldown", () => {
+        const storage = memoryStorage();
         claimAutoReload(storage, 1_000);
         expect(autoReloadAllowed(storage, 1_000 + AUTO_RELOAD_COOLDOWN_MS - 1)).toBe(false);
+    });
+
+    it("refuses without storage", () => {
         expect(autoReloadAllowed(undefined, 1)).toBe(false);
     });
 });
@@ -697,10 +696,12 @@ describe("autoReloadRecentlyTried", () => {
         expect(autoReloadRecentlyTried(s, 5_000 + AUTO_RELOAD_COOLDOWN_MS)).toBe(false);
     });
 
-    it("is false with no reload, a clock that went backwards, or no storage", () => {
-        expect(autoReloadRecentlyTried(storageWith(), 5_000)).toBe(false);
-        expect(autoReloadRecentlyTried(storageWith("5000"), 4_999)).toBe(false);
-        expect(autoReloadRecentlyTried(undefined, 5_000)).toBe(false);
+    it.each([
+        { name: "no reload was recorded", storage: storageWith(), now: 5_000 },
+        { name: "the clock went backwards", storage: storageWith("5000"), now: 4_999 },
+        { name: "there is no storage", storage: undefined, now: 5_000 },
+    ])("is false when $name", ({ storage, now }) => {
+        expect(autoReloadRecentlyTried(storage, now)).toBe(false);
     });
 
     it("is false where reading storage throws", () => {
@@ -745,14 +746,11 @@ describe("followsRecentAutoReload", () => {
         };
     };
 
-    it("recognises the load right after our automatic reload", () => {
-        expect(followsRecentAutoReload(storageWith("10000"), 10_000)).toBe(true);
-        expect(
-            followsRecentAutoReload(
-                storageWith("10000"),
-                10_000 + AUTO_RELOAD_RESULT_WINDOW_MS - 1,
-            ),
-        ).toBe(true);
+    it.each([
+        { name: "immediately", now: 10_000 },
+        { name: "at the end of the result window", now: 10_000 + AUTO_RELOAD_RESULT_WINDOW_MS - 1 },
+    ])("recognises the load right after our automatic reload, $name", ({ now }) => {
+        expect(followsRecentAutoReload(storageWith("10000"), now)).toBe(true);
     });
 
     // PR review: a later manual reload or navigation inside the window must
@@ -768,24 +766,26 @@ describe("followsRecentAutoReload", () => {
         expect(followsRecentAutoReload(s, 20_100)).toBe(true);
     });
 
-    it("ignores an old reload, a clock that went backwards, or none at all", () => {
-        expect(
-            followsRecentAutoReload(storageWith("10000"), 10_000 + AUTO_RELOAD_RESULT_WINDOW_MS),
-        ).toBe(false);
-        expect(followsRecentAutoReload(storageWith("10000"), 9_999)).toBe(false);
-        expect(followsRecentAutoReload(storageWith(null), 10_000)).toBe(false);
-    });
-
-    it("is false without readable storage", () => {
-        expect(followsRecentAutoReload(undefined, 1)).toBe(false);
-
-        const throwing = {
-            getItem: () => {
-                throw new Error("SecurityError");
+    it.each([
+        {
+            name: "a reload older than the result window",
+            storage: storageWith("10000"),
+            now: 10_000 + AUTO_RELOAD_RESULT_WINDOW_MS,
+        },
+        { name: "a clock that went backwards", storage: storageWith("10000"), now: 9_999 },
+        { name: "no automatic reload", storage: storageWith(null), now: 10_000 },
+        { name: "no storage", storage: undefined, now: 1 },
+        {
+            name: "storage that can't be read",
+            storage: {
+                getItem: () => {
+                    throw new Error("SecurityError");
+                },
+                setItem: () => {},
             },
-            setItem: () => {},
-        };
-
-        expect(followsRecentAutoReload(throwing, 1)).toBe(false);
+            now: 1,
+        },
+    ])("is false after $name", ({ storage, now }) => {
+        expect(followsRecentAutoReload(storage, now)).toBe(false);
     });
 });

@@ -277,8 +277,8 @@ export function widthScale(pct: number): number {
 // the freed document edge past `PANE_REOPEN_TRIGGER_PX` reopens it. Both drive
 // the same showNav/showComments state the status-bar toggles do, so the two
 // stay in lockstep.
-export const PANE_CLOSE_AT_PCT = 45;
-export const PANE_REOPEN_TRIGGER_PX = 24;
+const PANE_CLOSE_AT_PCT = 45;
+const PANE_REOPEN_TRIGGER_PX = 24;
 
 /** True when a resize drag's target width pct is small enough to auto-close. */
 export function dragClosesPane(targetPct: number): boolean {

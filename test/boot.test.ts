@@ -28,37 +28,43 @@ function makeDeps(calls: string[], overrides: Partial<BootDeps> = {}): BootDeps 
 }
 
 describe("orchestrateBoot", () => {
-    it("runs the happy path in strict order", async () => {
+    it("initialises, waits for ready, runs the app, then reports success — the order the Azure DevOps SDK requires", async () => {
+        // The host contract: rendering before `ready` or skipping
+        // `notifyLoadSucceeded` causes timing-dependent startup failures.
         const calls: string[] = [];
         const deps = makeDeps(calls);
+
         await orchestrateBoot(deps);
+
         expect(calls).toEqual(["init", "ready", "run", "notifySucceeded"]);
-        expect(deps.notifyFailed).not.toHaveBeenCalled();
-        expect(deps.onError).not.toHaveBeenCalled();
     });
 
-    it("does not render (run) or notify success before ready resolves", async () => {
-        const calls: string[] = [];
-        let readyResolved = false;
+    it("does not start the app until a slow host handshake has completed", async () => {
+        let finishHandshake!: () => void;
 
-        const deps = makeDeps(calls, {
-            ready: vi.fn(async () => {
-                // A microtask hop; run must not have executed yet.
-                await Promise.resolve();
-                readyResolved = true;
-                calls.push("ready");
-            }),
-            run: vi.fn(async () => {
-                expect(readyResolved).toBe(true);
-                calls.push("run");
-            }),
+        const deps = makeDeps([], {
+            ready: vi.fn(
+                () =>
+                    new Promise<void>((resolve) => {
+                        finishHandshake = resolve;
+                    }),
+            ),
         });
 
-        await orchestrateBoot(deps);
-        expect(calls).toEqual(["init", "ready", "run", "notifySucceeded"]);
+        const booting = orchestrateBoot(deps);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(deps.run).not.toHaveBeenCalled();
+
+        finishHandshake();
+        await booting;
+
+        expect(deps.run).toHaveBeenCalled();
+        expect(deps.notifySucceeded).toHaveBeenCalled();
     });
 
-    it("skips ready/run/success and notifies failure when init rejects", async () => {
+    it("reports the failure, and neither runs the app nor reports success, when the SDK fails to initialise", async () => {
         const calls: string[] = [];
         const boom = new Error("init failed");
 
@@ -69,15 +75,13 @@ describe("orchestrateBoot", () => {
         });
 
         await orchestrateBoot(deps);
+
         expect(calls).toEqual(["onError", "notifyFailed"]);
-        expect(deps.ready).not.toHaveBeenCalled();
-        expect(deps.run).not.toHaveBeenCalled();
-        expect(deps.notifySucceeded).not.toHaveBeenCalled();
         expect(deps.onError).toHaveBeenCalledWith(boom);
         expect(deps.notifyFailed).toHaveBeenCalledWith(boom);
     });
 
-    it("notifies failure (not success) when run rejects after ready", async () => {
+    it("reports a failure, not success, when the app fails to start after the handshake", async () => {
         const calls: string[] = [];
         const boom = new Error("render failed");
 
@@ -88,15 +92,13 @@ describe("orchestrateBoot", () => {
         });
 
         await orchestrateBoot(deps);
+
         expect(calls).toEqual(["init", "ready", "onError", "notifyFailed"]);
-        expect(deps.notifySucceeded).not.toHaveBeenCalled();
         expect(deps.notifyFailed).toHaveBeenCalledWith(boom);
     });
 
-    it("wraps a non-Error rejection into an Error for notifyFailed", async () => {
-        const calls: string[] = [];
-
-        const deps = makeDeps(calls, {
+    it("hands the host a real Error when the app fails with a thrown string", async () => {
+        const deps = makeDeps([], {
             run: vi.fn(async () => {
                 throw "string failure";
             }),
@@ -104,13 +106,10 @@ describe("orchestrateBoot", () => {
 
         await orchestrateBoot(deps);
 
-        const arg = (deps.notifyFailed as ReturnType<typeof vi.fn>).mock.calls[0][0];
-
-        expect(arg).toBeInstanceOf(Error);
-        expect((arg as Error).message).toBe("string failure");
+        expect(deps.notifyFailed).toHaveBeenCalledWith(new Error("string failure"));
     });
 
-    it("swallows a throw from notifyFailed (host API unavailable)", async () => {
+    it("completes quietly when the host cannot be told about the failure (SDK never initialised)", async () => {
         const deps = makeDeps([], {
             init: vi.fn(async () => {
                 throw new Error("init failed");
@@ -123,7 +122,7 @@ describe("orchestrateBoot", () => {
         await expect(orchestrateBoot(deps)).resolves.toBeUndefined();
     });
 
-    it("still notifies failure when the error sink itself throws", async () => {
+    it("still reports the failure to the host when error logging itself throws", async () => {
         const boom = new Error("run failed");
 
         const deps = makeDeps([], {
@@ -136,6 +135,7 @@ describe("orchestrateBoot", () => {
         });
 
         await orchestrateBoot(deps);
+
         expect(deps.notifyFailed).toHaveBeenCalledWith(boom);
     });
 });

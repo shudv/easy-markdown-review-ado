@@ -78,15 +78,17 @@ describe("useCommentPosting", () => {
         onSubmitDraft(`Ping @<${GUID}>`);
         await settle();
 
-        const action = opts.dispatch.mock.calls[0]![0] as Extract<
-            ThreadAction,
-            { type: "ADD_THREAD" }
-        >;
-
-        expect(action.thread.comments.map((c) => c.id)).toEqual(["c-server"]);
-        expect(action.thread.mentionedIdentities).toEqual([
-            expect.objectContaining({ id: GUID, displayName: "Ada" }),
-        ]);
+        expect(opts.dispatch).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: "ADD_THREAD",
+                thread: expect.objectContaining({
+                    comments: [expect.objectContaining({ id: "c-server" })],
+                    mentionedIdentities: [
+                        expect.objectContaining({ id: GUID, displayName: "Ada" }),
+                    ],
+                }),
+            }),
+        );
     });
 });
 
@@ -122,40 +124,86 @@ async function mountMutations(threadsById: Record<string, CommentThread>) {
 }
 
 describe("useThreadMutations", () => {
-    it("leaves the store untouched when a write fails", async () => {
-        const { opts, actions } = await mountMutations({ t1: thread() });
-        actions.onResolve("t1");
-        actions.onReopen("t1");
-        actions.onMarkPending("t1");
-        actions.onCloseThread("t1");
-        actions.onDeleteComment("t1", "c1");
-        actions.onDeleteThread("t1");
+    type Mutations = Awaited<ReturnType<typeof mountMutations>>["actions"];
+    type Api = ReturnType<typeof stubApi>;
+
+    it.each<{
+        name: string;
+        run: (actions: Mutations) => void;
+        write: (api: Api) => unknown;
+        args: unknown[];
+    }>([
+        {
+            name: "resolving a thread",
+            run: (a) => a.onResolve("t1"),
+            write: (api) => api.setStatus,
+            args: ["t1", "resolved"],
+        },
+        {
+            name: "reopening a thread",
+            run: (a) => a.onReopen("t1"),
+            write: (api) => api.setStatus,
+            args: ["t1", "active"],
+        },
+        {
+            name: "marking a thread pending",
+            run: (a) => a.onMarkPending("t1"),
+            write: (api) => api.setStatus,
+            args: ["t1", "pending"],
+        },
+        {
+            name: "closing a thread",
+            run: (a) => a.onCloseThread("t1"),
+            write: (api) => api.setStatus,
+            args: ["t1", "closed"],
+        },
+        {
+            name: "deleting a comment",
+            run: (a) => a.onDeleteComment("t1", "c1"),
+            write: (api) => api.deleteComment,
+            args: ["t1", "c1"],
+        },
+        {
+            name: "deleting a thread",
+            run: (a) => a.onDeleteThread("t1"),
+            write: (api) => api.deleteComment,
+            args: ["t1", "c1"],
+        },
+        {
+            name: "toggling a reaction",
+            run: (a) => a.onToggleReaction("t1", "c1", "like"),
+            write: (api) => api.toggleReaction,
+            args: ["t1", "c1", "like", true],
+        },
+    ])(
+        "leaves the store and active thread untouched when $name fails to save",
+        async ({ run, write, args }) => {
+            const { opts, actions } = await mountMutations({ t1: thread() });
+            run(actions);
+            await settle();
+            expect(write(opts.commentApi)).toHaveBeenCalledWith(...args);
+            expect(opts.dispatch).not.toHaveBeenCalled();
+            expect(opts.setActiveThreadId).not.toHaveBeenCalled();
+        },
+    );
+
+    const liked = thread([{ kind: "like", users: [{ id: "me", displayName: "Me" }] }]);
+
+    it.each<{ name: string; threadsById: Record<string, CommentThread>; add: boolean }>([
+        { name: "adds a like to a thread that is not loaded yet", threadsById: {}, add: true },
+        { name: "adds a like to a comment nobody liked", threadsById: { t1: thread() }, add: true },
+        {
+            name: "removes the like the current user already gave",
+            threadsById: { t1: liked },
+            add: false,
+        },
+    ])("$name", async ({ threadsById, add }) => {
+        const { opts, actions } = await mountMutations(threadsById);
         actions.onToggleReaction("t1", "c1", "like");
         await settle();
-        expect(opts.commentApi.setStatus).toHaveBeenCalledTimes(4);
-        expect(opts.commentApi.deleteComment).toHaveBeenCalledTimes(2);
-        expect(opts.dispatch).not.toHaveBeenCalled();
-        expect(opts.setActiveThreadId).not.toHaveBeenCalled();
-    });
-
-    it("adds a like unless the current user already gave one", async () => {
-        const liked = thread([{ kind: "like", users: [{ id: "me", displayName: "Me" }] }]);
-
-        const cases: Array<[Record<string, CommentThread>, boolean]> = [
-            [{}, true],
-            [{ t1: thread() }, true],
-            [{ t1: liked }, false],
-        ];
-
-        for (const [threadsById, add] of cases) {
-            const { opts, actions } = await mountMutations(threadsById);
-            actions.onToggleReaction("t1", "c1", "like");
-            await settle();
-            expect(opts.commentApi.toggleReaction).toHaveBeenCalledWith("t1", "c1", "like", add);
-        }
+        expect(opts.commentApi.toggleReaction).toHaveBeenCalledWith("t1", "c1", "like", add);
     });
 });
-
 describe("useThreadSelection", () => {
     async function selectWhileComparing(htmlByPath: Record<string, string>) {
         const requestDraft = vi.fn<(target: DraftTarget) => void>();
@@ -172,20 +220,25 @@ describe("useThreadSelection", () => {
 
         onSelectionMade(anchor);
 
-        return requestDraft.mock.calls[0]![0].anchor;
+        return requestDraft;
     }
 
     it("re-anchors an earlier update's selection on the latest version", async () => {
-        const relocated = await selectWhileComparing({
+        const requestDraft = await selectWhileComparing({
             "docs/a.md": '<p data-source-line="4">Some quoted text</p>',
         });
 
-        expect(relocated).not.toBe(anchor);
-        expect(relocated).toMatchObject({ exact: "quoted" });
+        expect(requestDraft).toHaveBeenCalledWith({
+            path: "docs/a.md",
+            threadId: expect.any(String),
+            anchor: { ...anchor, line: 4, endLine: 4 },
+        });
     });
 
     it("keeps the selection's own anchor when the latest version lacks it", async () => {
-        expect(await selectWhileComparing({})).toBe(anchor);
+        const requestDraft = await selectWhileComparing({});
+
+        expect(requestDraft).toHaveBeenCalledWith(expect.objectContaining({ anchor }));
     });
 });
 

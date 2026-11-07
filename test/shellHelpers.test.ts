@@ -1,6 +1,6 @@
 // Unit tests for the pure helpers extracted from `Shell.tsx`.
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     absentAtUpdateMessage,
@@ -30,44 +30,42 @@ import {
 import { SessionRefreshingError } from "../src/shell/adoAuthToken";
 
 describe("bindRepositoryImageResolver", () => {
-    it("binds document/version context and preserves an absent resolver", async () => {
+    it("leaves image resolution off when the host has no resolver", () => {
         expect(bindRepositoryImageResolver(undefined, "/docs/guide.md", null)).toBeUndefined();
+    });
+
+    it.each([
+        { name: "the current version at the branch head", commit: null, at: undefined },
+        { name: "a historical version at its commit", commit: "commit-1", at: "commit-1" },
+    ])("resolves images of $name", async ({ commit, at }) => {
         const resolveImage = vi.fn().mockResolvedValue("blob:image");
+        const resolve = bindRepositoryImageResolver(resolveImage, "/docs/guide.md", commit)!;
 
-        const current = bindRepositoryImageResolver(resolveImage, "/docs/guide.md", null)!;
-
-        const historical = bindRepositoryImageResolver(resolveImage, "/docs/guide.md", "commit-1")!;
-
-        await expect(current("/assets/a.png")).resolves.toBe("blob:image");
-        await expect(historical("/assets/a.png")).resolves.toBe("blob:image");
-        expect(resolveImage).toHaveBeenNthCalledWith(
-            1,
-            "/docs/guide.md",
-            "/assets/a.png",
-            undefined,
-        );
-        expect(resolveImage).toHaveBeenNthCalledWith(
-            2,
-            "/docs/guide.md",
-            "/assets/a.png",
-            "commit-1",
-        );
+        await expect(resolve("/assets/a.png")).resolves.toBe("blob:image");
+        expect(resolveImage).toHaveBeenCalledWith("/docs/guide.md", "/assets/a.png", at);
     });
 });
 
 describe("reviewRangeLabel", () => {
-    it("names a comparison of PR updates the way the picker does", () => {
-        expect(reviewRangeLabel({ fromUpdate: 0, toUpdate: 5 }, 5)).toBe("All updates");
-        expect(reviewRangeLabel({ fromUpdate: 0, toUpdate: 3 }, 5)).toBe("Base → Update 3");
-        expect(reviewRangeLabel({ fromUpdate: 4, toUpdate: 5 }, 5)).toBe("Update 4 → 5");
-    });
+    it.each([
+        { fromUpdate: 0, toUpdate: 5, label: "All updates" },
+        { fromUpdate: 0, toUpdate: 3, label: "Base → Update 3" },
+        { fromUpdate: 4, toUpdate: 5, label: "Update 4 → 5" },
+    ])(
+        'names updates $fromUpdate to $toUpdate of 5 "$label" like the picker',
+        ({ fromUpdate, toUpdate, label }) => {
+            expect(reviewRangeLabel({ fromUpdate, toUpdate }, 5)).toBe(label);
+        },
+    );
 });
 
 describe("isItemNotFoundError", () => {
-    it("recognises a missing file by HTTP 404, however the SDK shapes it", () => {
-        expect(isItemNotFoundError({ status: 404 })).toBe(true);
-        expect(isItemNotFoundError({ statusCode: 404 })).toBe(true);
-        expect(isItemNotFoundError({ serverError: { status: 404 } })).toBe(true);
+    it.each([
+        { name: "status", error: { status: 404 } },
+        { name: "statusCode", error: { statusCode: 404 } },
+        { name: "serverError.status", error: { serverError: { status: 404 } } },
+    ])("recognises a missing file by HTTP 404 in $name", ({ error }) => {
+        expect(isItemNotFoundError(error)).toBe(true);
     });
 
     it("recognises ADO's TF401174 'item could not be found' message", () => {
@@ -80,11 +78,13 @@ describe("isItemNotFoundError", () => {
         ).toBe(true);
     });
 
-    it("does not treat auth, server, or network failures as 'not found'", () => {
-        expect(isItemNotFoundError({ status: 401 })).toBe(false);
-        expect(isItemNotFoundError({ status: 500 })).toBe(false);
-        expect(isItemNotFoundError(new Error("Failed to fetch"))).toBe(false);
-        expect(isItemNotFoundError(undefined)).toBe(false);
+    it.each([
+        { name: "an auth failure", error: { status: 401 } },
+        { name: "a server failure", error: { status: 500 } },
+        { name: "a network failure", error: new Error("Failed to fetch") },
+        { name: "a missing error", error: undefined },
+    ])("does not treat $name as 'not found'", ({ error }) => {
+        expect(isItemNotFoundError(error)).toBe(false);
     });
 });
 
@@ -101,10 +101,14 @@ describe("absentAtUpdateMessage", () => {
         expect(message.body).toContain("deleted in this pull request by Update 3");
     });
 
-    it("falls back to a neutral explanation (e.g. a moved file)", () => {
-        expect(absentAtUpdateMessage("modified", 1).title).toBe("Not present at Update 1");
-        expect(absentAtUpdateMessage(undefined, 1).body).toContain("moved or renamed");
-    });
+    it.each(["modified", undefined] as const)(
+        "explains a %s file missing at an update neutrally (e.g. moved)",
+        (changeType) => {
+            const message = absentAtUpdateMessage(changeType, 1);
+            expect(message.title).toBe("Not present at Update 1");
+            expect(message.body).toContain("moved or renamed");
+        },
+    );
 });
 
 describe("errorMessage", () => {
@@ -112,11 +116,13 @@ describe("errorMessage", () => {
         expect(errorMessage(new Error("boom"))).toBe("boom");
     });
 
-    it("stringifies non-Error throwables", () => {
-        expect(errorMessage("plain string")).toBe("plain string");
-        expect(errorMessage(42)).toBe("42");
-        expect(errorMessage(null)).toBe("null");
-        expect(errorMessage({ toString: () => "obj" })).toBe("obj");
+    it.each([
+        { name: "a string", thrown: "plain string", message: "plain string" },
+        { name: "a number", thrown: 42, message: "42" },
+        { name: "null", thrown: null, message: "null" },
+        { name: "an object", thrown: { toString: () => "obj" }, message: "obj" },
+    ])("stringifies $name thrown instead of an Error", ({ thrown, message }) => {
+        expect(errorMessage(thrown)).toBe(message);
     });
 });
 
@@ -181,19 +187,12 @@ describe("friendlyWriteError", () => {
 });
 
 describe("clearIfSet", () => {
-    it("clears a set value to null", () => {
-        expect(clearIfSet("thread-1")).toBeNull();
-        expect(clearIfSet(7)).toBeNull();
+    it.each(["thread-1", 7, 0, ""])("clears the set value %j", (value) => {
+        expect(clearIfSet(value)).toBeNull();
     });
 
     it("preserves an already-empty reference", () => {
         expect(clearIfSet(null)).toBeNull();
-    });
-
-    it("clears falsy-but-valid values (0, empty string)", () => {
-        // The helper is named clearIfSet: a present `0` is set and must clear.
-        expect(clearIfSet(0)).toBeNull();
-        expect(clearIfSet("")).toBeNull();
     });
 });
 
@@ -202,9 +201,8 @@ describe("clearIfEquals", () => {
         expect(clearIfEquals("t1")("t1")).toBeNull();
     });
 
-    it("leaves a non-matching value untouched", () => {
-        expect(clearIfEquals("t1")("t2")).toBe("t2");
-        expect(clearIfEquals("t1")(null)).toBeNull();
+    it.each(["t2", null])("leaves the non-matching value %j untouched", (value) => {
+        expect(clearIfEquals("t1")(value)).toBe(value);
     });
 });
 
@@ -222,52 +220,47 @@ describe("patchIfSet", () => {
         expect(patch(null)).toBeNull();
     });
 
-    it("patches falsy-but-valid values (0)", () => {
+    it("patches a zero value, which is set", () => {
         expect(patchIfSet((n: number) => n + 1)(0)).toBe(1);
     });
 });
 
 describe("isCommentUiClickTarget", () => {
-    it("returns true for highlights, balloons, and selection bubbles", () => {
-        const root = document.createElement("div");
-        root.innerHTML =
-            '<span class="emr-highlight"><b id="h">x</b></span>' +
-            '<div class="emr-balloon"><i id="b">x</i></div>' +
-            '<div class="emr-selection-bubble"><i id="s">x</i></div>' +
-            '<div class="emr-draft-guard-overlay"><i id="g">x</i></div>' +
-            '<div class="emr-rail-header"><button id="n">next</button></div>' +
-            '<div class="emr-rail-section-header"><b id="t">tray</b></div>' +
-            '<div class="emr-statusbar-comment-stepper"><button id="c">next</button></div>';
-        document.body.appendChild(root);
-
-        expect(isCommentUiClickTarget(root.querySelector("#h"))).toBe(true);
-        expect(isCommentUiClickTarget(root.querySelector("#b"))).toBe(true);
-        expect(isCommentUiClickTarget(root.querySelector("#s"))).toBe(true);
-        expect(isCommentUiClickTarget(root.querySelector("#g"))).toBe(true);
-        // Rail/status controls and section toggles are comment UI.
-        expect(isCommentUiClickTarget(root.querySelector("#n"))).toBe(true);
-        expect(isCommentUiClickTarget(root.querySelector("#t"))).toBe(true);
-        expect(isCommentUiClickTarget(root.querySelector("#c"))).toBe(true);
-
-        document.body.removeChild(root);
+    afterEach(() => {
+        document.body.innerHTML = "";
     });
 
-    it("returns false for outside content", () => {
-        const outside = document.createElement("div");
-        outside.className = "outside";
-        document.body.appendChild(outside);
+    function clickTargetInside(className: string): Element {
+        const container = document.body.appendChild(document.createElement("div"));
+        container.className = className;
 
-        expect(isCommentUiClickTarget(outside)).toBe(false);
+        return container.appendChild(document.createElement("i"));
+    }
+
+    it.each([
+        { name: "a highlight", className: "emr-highlight" },
+        { name: "a balloon", className: "emr-balloon" },
+        { name: "the selection bubble", className: "emr-selection-bubble" },
+        { name: "the draft guard", className: "emr-draft-guard-overlay" },
+        { name: "the rail header", className: "emr-rail-header" },
+        { name: "a rail section toggle", className: "emr-rail-section-header" },
+        { name: "the status-bar comment stepper", className: "emr-statusbar-comment-stepper" },
+    ])("treats a click inside $name as comment UI", ({ className }) => {
+        expect(isCommentUiClickTarget(clickTargetInside(className))).toBe(true);
+    });
+
+    it("does not treat a click on document content as comment UI", () => {
+        expect(isCommentUiClickTarget(clickTargetInside("outside"))).toBe(false);
+    });
+
+    it("does not treat a click with no target as comment UI", () => {
         expect(isCommentUiClickTarget(null)).toBe(false);
-
-        document.body.removeChild(outside);
     });
 });
 
 describe("countWords", () => {
-    it("returns 0 for empty input", () => {
-        expect(countWords("")).toBe(0);
-        expect(countWords("   \n\t ")).toBe(0);
+    it.each(["", "   \n\t "])("counts no words in the blank text %j", (text) => {
+        expect(countWords(text)).toBe(0);
     });
 
     it("counts plain prose words", () => {
@@ -356,26 +349,22 @@ describe("buildHistoryStops", () => {
 });
 
 describe("stepStopIndex", () => {
-    it("moves toward older (positive delta) within bounds", () => {
-        expect(stepStopIndex(0, 1, 3)).toBe(1);
-        expect(stepStopIndex(1, 1, 3)).toBe(2);
-    });
-
-    it("moves toward Current (negative delta) within bounds", () => {
-        expect(stepStopIndex(2, -1, 3)).toBe(1);
-    });
-
-    it("clamps at the Current end", () => {
-        expect(stepStopIndex(0, -1, 3)).toBe(0);
-    });
-
-    it("clamps at the oldest end", () => {
-        expect(stepStopIndex(2, 1, 3)).toBe(2);
-    });
-
-    it("clamps to 0 for an empty list", () => {
-        expect(stepStopIndex(0, 1, 0)).toBe(0);
-        expect(stepStopIndex(0, -1, 0)).toBe(0);
+    it.each([
+        { name: "steps from Current to the next older stop", from: 0, delta: 1, count: 3, to: 1 },
+        { name: "steps further back in history", from: 1, delta: 1, count: 3, to: 2 },
+        { name: "steps toward Current", from: 2, delta: -1, count: 3, to: 1 },
+        { name: "stays on Current when stepping newer", from: 0, delta: -1, count: 3, to: 0 },
+        {
+            name: "stays on the oldest stop when stepping older",
+            from: 2,
+            delta: 1,
+            count: 3,
+            to: 2,
+        },
+        { name: "stays at 0 stepping older without stops", from: 0, delta: 1, count: 0, to: 0 },
+        { name: "stays at 0 stepping newer without stops", from: 0, delta: -1, count: 0, to: 0 },
+    ])("$name", ({ from, delta, count, to }) => {
+        expect(stepStopIndex(from, delta, count)).toBe(to);
     });
 });
 
@@ -389,42 +378,40 @@ describe("review iteration selection", () => {
         });
     });
 
-    it("represents one update as its previous-to-current interval", () => {
-        expect(oneReviewUpdate(5, 7)).toEqual({
-            fromUpdate: 4,
-            toUpdate: 5,
-        });
-        expect(oneReviewUpdate(1, 7)).toEqual({
-            fromUpdate: 0,
-            toUpdate: 1,
-        });
+    it.each([
+        [5, 4],
+        [1, 0],
+    ])("represents update %i alone as the interval from update %i", (update, fromUpdate) => {
+        expect(oneReviewUpdate(update, 7)).toEqual({ fromUpdate, toUpdate: update });
     });
 
-    it("starts a selected range before its earliest included update", () => {
-        expect(betweenReviewUpdates(5, 2, 7)).toEqual({
-            fromUpdate: 1,
-            toUpdate: 5,
-        });
-        expect(betweenReviewUpdates(3, 3, 7)).toEqual({
-            fromUpdate: 2,
-            toUpdate: 3,
-        });
-    });
+    it.each([
+        { name: "updates 2 to 5", newest: 5, earliest: 2, fromUpdate: 1 },
+        { name: "update 3 to itself", newest: 3, earliest: 3, fromUpdate: 2 },
+    ])(
+        "starts the selected range $name before its earliest update",
+        ({ newest, earliest, fromUpdate }) => {
+            expect(betweenReviewUpdates(newest, earliest, 7)).toEqual({
+                fromUpdate,
+                toUpdate: newest,
+            });
+        },
+    );
 
-    it("maps comparison endpoints into newest-first stop indexes", () => {
-        expect(resolveReviewIterationRange({ fromUpdate: 4, toUpdate: 5 }, 7)).toEqual({
-            range: { fromUpdate: 4, toUpdate: 5 },
-            isAllChanges: false,
-            activeStopIndex: 2,
-            baselineStopIndex: 3,
-        });
-        expect(resolveReviewIterationRange({ fromUpdate: 2, toUpdate: 5 }, 7)).toEqual({
-            range: { fromUpdate: 2, toUpdate: 5 },
-            isAllChanges: false,
-            activeStopIndex: 2,
-            baselineStopIndex: 5,
-        });
-    });
+    it.each([
+        { fromUpdate: 4, toUpdate: 5, activeStopIndex: 2, baselineStopIndex: 3 },
+        { fromUpdate: 2, toUpdate: 5, activeStopIndex: 2, baselineStopIndex: 5 },
+    ])(
+        "maps updates $fromUpdate → $toUpdate of 7 to newest-first stops $activeStopIndex and $baselineStopIndex",
+        ({ fromUpdate, toUpdate, activeStopIndex, baselineStopIndex }) => {
+            expect(resolveReviewIterationRange({ fromUpdate, toUpdate }, 7)).toEqual({
+                range: { fromUpdate, toUpdate },
+                isAllChanges: false,
+                activeStopIndex,
+                baselineStopIndex,
+            });
+        },
+    );
 
     it("uses the PR base before update 1 and clamps stale indices", () => {
         expect(resolveReviewIterationRange({ fromUpdate: 99, toUpdate: 100 }, 7)).toEqual({
@@ -497,6 +484,9 @@ describe("sourceDiffRanges", () => {
                 linesDeleted: 1,
             },
         ]);
+    });
+
+    it("diffs a one-line file without a trailing newline", () => {
         expect(sourceDiffRanges("old", "new")).toEqual([
             {
                 startLine: 1,
@@ -524,7 +514,7 @@ describe("sourceDiffRanges", () => {
         ]);
     });
 
-    it("tracks original and modified line counters across separate hunks", () => {
+    it("places each change at its own lines when a file has several", () => {
         expect(
             sourceDiffRanges(
                 "keep one\nold two\nstable three\nstable four\nstable five\nkeep six\n",
@@ -562,25 +552,40 @@ describe("historyChevronTooltip", () => {
         ...over,
     });
 
-    it("reports the end of history when there is no target", () => {
-        expect(historyChevronTooltip("older", undefined)).toBe("No earlier versions");
-        expect(historyChevronTooltip("newer", undefined)).toBe("Already at the current version");
+    it.each([
+        ["older", "No earlier versions"],
+        ["newer", "Already at the current version"],
+    ] as const)("tells there is nothing %s at the end of history: %s", (direction, tooltip) => {
+        expect(historyChevronTooltip(direction, undefined)).toBe(tooltip);
     });
 
-    it("names a historical PR target (with and without a title)", () => {
-        expect(historyChevronTooltip("older", stop())).toBe("Older version — PR #8: Refine docs");
-        expect(historyChevronTooltip("newer", stop({ title: undefined }))).toBe(
-            "Newer version — PR #8",
-        );
-    });
-
-    it("names the current head, with or without a routing PR", () => {
-        expect(
-            historyChevronTooltip("newer", stop({ isCurrent: true, prId: 12, title: undefined })),
-        ).toBe("Newer version — current version (PR #12)");
-        expect(
-            historyChevronTooltip("newer", stop({ isCurrent: true, prId: null, title: undefined })),
-        ).toBe("Newer version — current version");
+    it.each([
+        {
+            name: "an older PR with a title",
+            direction: "older" as const,
+            target: stop(),
+            tooltip: "Older version — PR #8: Refine docs",
+        },
+        {
+            name: "a newer PR without a title",
+            direction: "newer" as const,
+            target: stop({ title: undefined }),
+            tooltip: "Newer version — PR #8",
+        },
+        {
+            name: "the current head with a routing PR",
+            direction: "newer" as const,
+            target: stop({ isCurrent: true, prId: 12, title: undefined }),
+            tooltip: "Newer version — current version (PR #12)",
+        },
+        {
+            name: "the current head without a routing PR",
+            direction: "newer" as const,
+            target: stop({ isCurrent: true, prId: null, title: undefined }),
+            tooltip: "Newer version — current version",
+        },
+    ])("names $name", ({ direction, target, tooltip }) => {
+        expect(historyChevronTooltip(direction, target)).toBe(tooltip);
     });
 });
 

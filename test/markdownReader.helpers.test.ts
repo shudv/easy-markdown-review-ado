@@ -3,44 +3,29 @@ import { describe, it, expect } from "vitest";
 import { parseVersionSpec } from "../src/hub/markdownReader.helpers";
 
 describe("parseVersionSpec", () => {
-    it("decodes a GB branch spec", () => {
-        expect(parseVersionSpec("GBmain")).toEqual({
-            kind: "branch",
-            value: "main",
-        });
+    it.each([
+        { name: "a GB branch spec", spec: "GBmain", expected: { kind: "branch", value: "main" } },
+        {
+            name: "a branch with slashes (feature/foo)",
+            spec: "GBfeature/foo",
+            expected: { kind: "branch", value: "feature/foo" },
+        },
+        {
+            name: "a GC commit spec",
+            spec: "GCabc123",
+            expected: { kind: "commit", value: "abc123" },
+        },
+        { name: "a GT tag spec", spec: "GTv1.0", expected: { kind: "tag", value: "v1.0" } },
+    ])("decodes $name", ({ spec, expected }) => {
+        expect(parseVersionSpec(spec)).toEqual(expected);
     });
 
-    it("decodes a GC commit spec", () => {
-        expect(parseVersionSpec("GCabc123")).toEqual({
-            kind: "commit",
-            value: "abc123",
-        });
-    });
-
-    it("decodes a GT tag spec", () => {
-        expect(parseVersionSpec("GTv1.0")).toEqual({
-            kind: "tag",
-            value: "v1.0",
-        });
-    });
-
-    it("keeps slashes in a branch value (feature/foo)", () => {
-        expect(parseVersionSpec("GBfeature/foo")).toEqual({
-            kind: "branch",
-            value: "feature/foo",
-        });
-    });
-
-    it("returns null for a missing spec", () => {
-        expect(parseVersionSpec(undefined)).toBeNull();
-        expect(parseVersionSpec("")).toBeNull();
-    });
-
-    it("returns null when the prefix carries no value", () => {
-        expect(parseVersionSpec("GB")).toBeNull();
-    });
-
-    it("returns null for an unrecognised prefix", () => {
-        expect(parseVersionSpec("XYmain")).toBeNull();
+    it.each([
+        { name: "there is no version in the URL", spec: undefined },
+        { name: "the version is empty", spec: "" },
+        { name: "the prefix carries no value", spec: "GB" },
+        { name: "the prefix is not recognised", spec: "XYmain" },
+    ])("returns null (use the default branch) when $name", ({ spec }) => {
+        expect(parseVersionSpec(spec)).toBeNull();
     });
 });

@@ -1,17 +1,19 @@
-// Isolated test for the KaTeX library-load failure path. The shared
-// `katexPromise` cache inside the SUT means a load failure can only be
-// exercised in a module instance where the dynamic `import("katex")` is
-// rigged to reject — so this lives in its own file with its own mock.
+// Isolated tests for a failed KaTeX chunk load. The SUT caches its loader
+// promise per module instance, so the failure must happen in a module instance
+// where the dynamic `import("katex")` is rigged to reject — hence this file.
 //
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
-let loadAttempts = 0;
-// Reject the first load, then resolve, so the retry is observable.
+import { hydrateMath } from "../src/markdown/mathHydrate";
+import { recordTelemetryEachTest } from "./telemetrySink";
+
+const katex = vi.hoisted(() => ({ available: false, loads: 0 }));
+
 vi.mock("katex", () => {
-    loadAttempts += 1;
-    if (loadAttempts === 1) throw new Error("chunk load failed");
+    katex.loads += 1;
+    if (!katex.available) throw new Error("chunk load failed");
 
     return {
         default: {
@@ -20,58 +22,66 @@ vi.mock("katex", () => {
     };
 });
 
-import { hydrateMath } from "../src/markdown/mathHydrate";
+const telemetry = recordTelemetryEachTest();
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
+function mountEquation(source: string): HTMLElement {
+    const root = document.createElement("div");
+    root.innerHTML =
+        `<div class="emr-math" data-math-src="${encodeURIComponent(source)}">` +
+        `<pre class="emr-math-fallback"><code>${source}</code></pre></div>`;
+    document.body.appendChild(root);
 
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+    return root;
+}
 
-describe("hydrateMath — library load failure", () => {
-    it("flags the placeholder, then recovers on a later pass", async () => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const root = document.createElement("div");
-        root.innerHTML =
-            `<div class="emr-math" data-math-src="${encodeURIComponent("x^2")}">` +
-            `<pre class="emr-math-fallback"><code>x^2</code></pre></div>`;
-        document.body.appendChild(root);
-        const element = root.querySelector<HTMLElement>(".emr-math")!;
+describe("hydrateMath — KaTeX chunk fails to load", () => {
+    beforeEach(() => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
 
-        await expect(hydrateMath(root)).resolves.toBeUndefined();
-        expect(element.dataset.mathError).toBe("load-failed");
-        // Not hydrated — the fallback stays readable and eligible for a retry.
-        expect(element.dataset.hydrated).toBeUndefined();
-        expect(trackUserFacingErrorMock).toHaveBeenCalledExactlyOnceWith({
-            error: expect.anything(),
-            source: "Math.hydrate",
-            operation: "math-library-load",
-            impact: "degraded",
-        });
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
 
-        // The rejected loader promise must not stay cached, or every later pass
-        // would fail without ever re-attempting the chunk.
+    // Runs first: KaTeX must not have loaded yet in this module instance.
+    it("keeps the equation's source readable, flags it, and reports the degraded rendering", async () => {
+        const root = mountEquation("x^2");
+        const equation = root.querySelector<HTMLElement>(".emr-math")!;
+
         await hydrateMath(root);
-        expect(loadAttempts).toBeGreaterThan(1);
-        expect(element.dataset.hydrated).toBe("true");
-        expect(element.dataset.mathError).toBeUndefined();
-        expect(element.querySelector(".katex")).not.toBeNull();
 
-        // ...but once it succeeds the promise is cached again, so a further pass
-        // reuses it rather than re-importing the chunk.
-        const attemptsAfterRecovery = loadAttempts;
-        root.insertAdjacentHTML(
-            "beforeend",
-            `<span class="emr-math" data-math-src="${encodeURIComponent("y^2")}"></span>`,
-        );
+        expect(equation.dataset.mathError).toBe("load-failed");
+        expect(equation.dataset.hydrated).toBeUndefined();
+        expect(equation.querySelector(".emr-math-fallback")?.textContent).toBe("x^2");
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                source: "Math.hydrate",
+                operation: "math-library-load",
+                impact: "degraded",
+            }),
+        ]);
+    });
+
+    it("renders the equation on a later pass once the chunk loads", async () => {
+        katex.available = true;
+        const root = mountEquation("y^2");
+        const equation = root.querySelector<HTMLElement>(".emr-math")!;
+        equation.dataset.mathError = "load-failed";
+
         await hydrateMath(root);
-        expect(loadAttempts).toBe(attemptsAfterRecovery);
-        expect(root.querySelectorAll('.emr-math[data-hydrated="true"]')).toHaveLength(2);
 
-        warn.mockRestore();
+        expect(equation.dataset.hydrated).toBe("true");
+        expect(equation.dataset.mathError).toBeUndefined();
+        expect(equation.querySelector(".katex")).not.toBeNull();
+    });
+
+    it("downloads KaTeX only once for later passes after it has loaded", async () => {
+        katex.available = true;
+        await hydrateMath(mountEquation("a^2"));
+        const loadsAfterFirstRender = katex.loads;
+
+        await hydrateMath(mountEquation("b^2"));
+
+        expect(katex.loads).toBe(loadsAfterFirstRender);
     });
 });

@@ -45,35 +45,33 @@ describe("isMyThread", () => {
 });
 
 describe("threadMatchesFilter", () => {
-    const active = thread("a", "active", [OTHER]);
-    const pending = thread("p", "pending", [OTHER]);
-    const resolved = thread("r", "resolved", [OTHER]);
-    const closed = thread("c", "closed", [OTHER]);
-    const mine = thread("m", "resolved", [ME]);
+    const AUTHOR_IDS = { me: ME, "a teammate": OTHER };
 
-    it("all: matches every thread", () => {
-        for (const t of [active, pending, resolved, closed, mine]) {
-            expect(threadMatchesFilter(t, "all", ME)).toBe(true);
-        }
-    });
-
-    it("active: matches non-resolved-like statuses only", () => {
-        expect(threadMatchesFilter(active, "active", ME)).toBe(true);
-        expect(threadMatchesFilter(pending, "active", ME)).toBe(true);
-        expect(threadMatchesFilter(resolved, "active", ME)).toBe(false);
-        expect(threadMatchesFilter(closed, "active", ME)).toBe(false);
-    });
-
-    it("resolved: matches resolved-like statuses only", () => {
-        expect(threadMatchesFilter(resolved, "resolved", ME)).toBe(true);
-        expect(threadMatchesFilter(closed, "resolved", ME)).toBe(true);
-        expect(threadMatchesFilter(active, "resolved", ME)).toBe(false);
-    });
-
-    it("mine: matches threads the user participated in, regardless of status", () => {
-        expect(threadMatchesFilter(mine, "mine", ME)).toBe(true);
-        expect(threadMatchesFilter(active, "mine", ME)).toBe(false);
-    });
+    it.each([
+        { mode: "all", status: "active", author: "a teammate", shown: true },
+        { mode: "all", status: "closed", author: "a teammate", shown: true },
+        { mode: "active", status: "active", author: "a teammate", shown: true },
+        { mode: "active", status: "pending", author: "a teammate", shown: true },
+        { mode: "active", status: "resolved", author: "a teammate", shown: false },
+        { mode: "active", status: "closed", author: "a teammate", shown: false },
+        { mode: "resolved", status: "resolved", author: "a teammate", shown: true },
+        { mode: "resolved", status: "closed", author: "a teammate", shown: true },
+        { mode: "resolved", status: "active", author: "a teammate", shown: false },
+        { mode: "mine", status: "resolved", author: "me", shown: true },
+        { mode: "mine", status: "active", author: "a teammate", shown: false },
+    ] satisfies Array<{
+        mode: CommentFilterMode;
+        status: ThreadStatus;
+        author: "me" | "a teammate";
+        shown: boolean;
+    }>)(
+        "$mode filter shows a $status thread by $author: $shown",
+        ({ mode, status, author, shown }) => {
+            expect(threadMatchesFilter(thread("t", status, [AUTHOR_IDS[author]]), mode, ME)).toBe(
+                shown,
+            );
+        },
+    );
 });
 
 describe("comment search", () => {
@@ -81,21 +79,30 @@ describe("comment search", () => {
     resolved.comments[0]!.bodyMarkdown = "Already addressed in the revision";
     resolved.comments[0]!.author.displayName = "Alex Rivera";
 
-    it("matches body and author without case sensitivity", () => {
-        expect(threadMatchesQuery(resolved, "  ADDRESSED ")).toBe(true);
-        expect(threadMatchesQuery(resolved, "alex rivera")).toBe(true);
-        expect(threadMatchesQuery(resolved, "missing")).toBe(false);
-        expect(threadMatchesQuery(resolved, "   ")).toBe(true);
+    it.each([
+        {
+            name: "a word from the body, ignoring case and padding",
+            query: "  ADDRESSED ",
+            hit: true,
+        },
+        { name: "the author's name", query: "alex rivera", hit: true },
+        { name: "text that appears nowhere", query: "missing", hit: false },
+        { name: "a blank query", query: "   ", hit: true },
+    ])("matching $name: $hit", ({ query, hit }) => {
+        expect(threadMatchesQuery(resolved, query)).toBe(hit);
     });
 
-    it("searches every status while an empty query uses the active filter", () => {
+    it("finds a resolved thread while searching even though the Active filter hides it", () => {
         expect(threadVisibleForCommentView(resolved, "addressed", "active", ME)).toBe(true);
+    });
+
+    it("applies the Active filter again once the search is cleared", () => {
         expect(threadVisibleForCommentView(resolved, "", "active", ME)).toBe(false);
     });
 });
 
 describe("countCommentFilters", () => {
-    it("tallies overlapping buckets in one pass", () => {
+    it("counts each thread under every filter it appears in, as Azure DevOps does", () => {
         const threads = [
             thread("a", "active", [OTHER]),
             thread("p", "pending", [ME]),
@@ -136,11 +143,7 @@ describe("commentFilterOptions + labels", () => {
         ]);
     });
 
-    it("labels every mode", () => {
-        const modes: CommentFilterMode[] = ["all", "active", "resolved", "mine"];
-
-        for (const m of modes) {
-            expect(commentFilterLabel(m).length).toBeGreaterThan(0);
-        }
+    it("names the selected mode on the filter trigger", () => {
+        expect(commentFilterLabel("mine")).toBe("My comments");
     });
 });

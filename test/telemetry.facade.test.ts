@@ -18,19 +18,14 @@ import { hashId } from "../src/telemetry/sanitize";
 import type { TelemetrySink } from "../src/telemetry/types";
 
 function fakeSink() {
-    const sink: TelemetrySink & {
-        eventCalls: Array<{ event: unknown; ctx: unknown }>;
-        exceptionCalls: Array<{ info: unknown; ctx: unknown }>;
-    } = {
+    const sink = {
         name: "fake",
-        eventCalls: [],
-        exceptionCalls: [],
         init: vi.fn(),
         setContext: vi.fn(),
-        trackEvent: vi.fn((event, ctx) => sink.eventCalls.push({ event, ctx })),
-        trackException: vi.fn((info, ctx) => sink.exceptionCalls.push({ info, ctx })),
+        trackEvent: vi.fn(),
+        trackException: vi.fn(),
         flush: vi.fn(),
-    };
+    } satisfies TelemetrySink;
 
     return sink;
 }
@@ -47,57 +42,54 @@ describe("telemetry facade", () => {
         const sink = fakeSink();
         __resetTelemetryForTests(sink);
         setTelemetryContext({ projectId: "p1", repositoryId: "r1" });
+
         track(events.commentEdited());
 
-        expect(sink.eventCalls).toHaveLength(1);
-        const { event, ctx } = sink.eventCalls[0]!;
-        expect((event as { name: string }).name).toBe("comment.edited");
-        expect(ctx).toMatchObject({ projectId: "p1", repositoryId: "r1" });
+        expect(sink.trackEvent).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ name: "comment.edited" }),
+            expect.objectContaining({ projectId: "p1", repositoryId: "r1" }),
+        );
     });
 
     it("hashes the raw pull-request id so it never ships verbatim", () => {
-        const sink = fakeSink();
-        __resetTelemetryForTests(sink);
         setTelemetryContext({ pullRequestId: 98765 });
 
         expect(getTelemetryContext().pullRequestId).toBe(hashId(98765));
-        expect(getTelemetryContext().pullRequestId).not.toBe("98765");
     });
 
     it("sanitizes event properties before handing them to the sink", () => {
         const sink = fakeSink();
         __resetTelemetryForTests(sink);
-        // Construct an event with a deliberately unsafe property bag.
+
         track({
             name: "test.event",
             properties: { repoName: "secret-repo", anchorKind: "line" },
             measurements: { count: 3, bad: NaN },
         });
 
-        const { event } = sink.eventCalls[0]!;
-
-        const e = event as {
-            properties: Record<string, unknown>;
-            measurements: Record<string, number>;
-        };
-
-        expect(e.properties).toEqual({ anchorKind: "line" });
-        expect(e.properties).not.toHaveProperty("repoName");
-        expect(e.measurements).toEqual({ count: 3 });
+        expect(sink.trackEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                properties: { anchorKind: "line" },
+                measurements: { count: 3 },
+            }),
+            expect.anything(),
+        );
     });
 
     it("forwards exceptions with sanitized properties", () => {
         const sink = fakeSink();
         __resetTelemetryForTests(sink);
+
         trackException({
             error: new Error("boom"),
             source: "unit",
             properties: { repoName: "leak", phase: "save" },
         });
 
-        const { info } = sink.exceptionCalls[0]!;
-        const i = info as { properties: Record<string, unknown> };
-        expect(i.properties).toEqual({ phase: "save" });
+        expect(sink.trackException).toHaveBeenCalledWith(
+            expect.objectContaining({ properties: { phase: "save" } }),
+            expect.anything(),
+        );
     });
 
     it.each([
@@ -118,21 +110,23 @@ describe("telemetry facade", () => {
                 impact,
             });
 
-            expect(sink.exceptionCalls).toHaveLength(1);
-            const { info } = sink.exceptionCalls[0]!;
-            expect(info).toMatchObject({
-                error,
-                source: "Reader.load",
-                handled: true,
-                severity,
-                properties: { impact, operation: "document-load" },
-            });
+            expect(sink.trackException).toHaveBeenCalledExactlyOnceWith(
+                expect.objectContaining({
+                    error,
+                    source: "Reader.load",
+                    handled: true,
+                    severity,
+                    properties: { impact, operation: "document-load" },
+                }),
+                expect.anything(),
+            );
         },
     );
 
     it("allows a critical severity override for boot failures", () => {
         const sink = fakeSink();
         __resetTelemetryForTests(sink);
+
         trackUserFacingError({
             error: new Error("boot failed"),
             source: "pr-tab.boot",
@@ -141,10 +135,11 @@ describe("telemetry facade", () => {
             severity: "critical",
         });
 
-        const { info } = sink.exceptionCalls[0]!;
-        expect(info).toMatchObject({ severity: "critical" });
+        expect(sink.trackException).toHaveBeenCalledWith(
+            expect.objectContaining({ severity: "critical" }),
+            expect.anything(),
+        );
     });
-
     it("never throws when a sink misbehaves", () => {
         const angry = fakeSink();
         angry.trackEvent = vi.fn(() => {
@@ -154,21 +149,16 @@ describe("telemetry facade", () => {
         expect(() => track(events.appLoaded())).not.toThrow();
     });
 
-    it("defaults to a no-op sink (no key configured in tests)", () => {
-        // __EMR_TELEMETRY_CONFIG__ is undefined under Vitest, so init must not
-        // throw and must not attempt egress.
-        expect(() => initTelemetry({ appName: "pr-tab" })).not.toThrow();
-        expect(getTelemetryContext().appName).toBe("pr-tab");
-    });
-
     it("stamps slicing dimensions (version + environment) into context", () => {
         initTelemetry({ appName: "documents-hub" });
-        const ctx = getTelemetryContext();
-        expect(ctx.appName).toBe("documents-hub");
+
         // appVersion is build-stamped; under Vitest it falls back to the default.
-        expect(typeof ctx.appVersion).toBe("string");
-        expect(ctx.environment).toBe("development");
-        expect(typeof ctx.sessionId).toBe("string");
+        expect(getTelemetryContext()).toMatchObject({
+            appName: "documents-hub",
+            appVersion: expect.any(String),
+            environment: "development",
+            sessionId: expect.any(String),
+        });
     });
 
     it("records the installed extension version passed by the entry point", () => {
@@ -184,9 +174,9 @@ describe("telemetry facade", () => {
         expect(getTelemetryContext().extensionVersion).toBeUndefined();
     });
 
-    it("defaults to a no-op sink that swallows every call", () => {
-        // No key configured under Vitest, so initTelemetry installs the inlined
-        // NOOP_SINK. Every public call must be a safe no-op.
+    it("falls back to a no-op sink that accepts every call when no telemetry key is configured", () => {
+        // __EMR_TELEMETRY_CONFIG__ is undefined under Vitest, as in a local
+        // build without a key: nothing may be sent and nothing may throw.
         initTelemetry({ appName: "pr-tab" });
         expect(() => {
             setTelemetryContext({ projectId: "p1" });
@@ -212,7 +202,7 @@ describe("telemetry facade", () => {
         }
     });
 
-    it("swallows a throwing sink.flush()", () => {
+    it("never throws when the sink fails to flush", () => {
         const angry = fakeSink();
         angry.flush = vi.fn(() => {
             throw new Error("flush failure");

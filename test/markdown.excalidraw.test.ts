@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { excalidrawSceneBytes } from "../src/shell/components/excalidrawScene.fixture";
 
 const exportToSvgMock = vi.fn();
+let libraryLoads = 0;
 
 function mockLibrary(load: "ok" | "fail"): void {
     vi.doMock("@excalidraw/excalidraw", () => {
+        libraryLoads += 1;
         if (load === "fail") throw new Error("library unavailable");
 
         return { exportToSvg: exportToSvgMock };
@@ -41,6 +43,7 @@ const assetWindow = window as Window & { EXCALIDRAW_ASSET_PATH?: string };
 
 beforeEach(() => {
     exportToSvgMock.mockReset().mockResolvedValue(svgElement());
+    libraryLoads = 0;
     delete assetWindow.EXCALIDRAW_ASSET_PATH;
 });
 
@@ -49,12 +52,14 @@ afterEach(() => {
 });
 
 describe("isExcalidrawPath", () => {
-    it("matches .excalidraw and .excalidraw.json files only", async () => {
+    it.each([
+        ["/docs/flow.excalidraw", true],
+        ["/docs/flow.EXCALIDRAW.json", true],
+        ["/docs/flow.excalidraw.svg", false],
+        ["/docs/flow.json", false],
+    ])("treats %s as a drawing: %s", async (path, expected) => {
         const { isExcalidrawPath } = await freshModule();
-        expect(isExcalidrawPath("/docs/flow.excalidraw")).toBe(true);
-        expect(isExcalidrawPath("/docs/flow.EXCALIDRAW.json")).toBe(true);
-        expect(isExcalidrawPath("/docs/flow.excalidraw.svg")).toBe(false);
-        expect(isExcalidrawPath("/docs/flow.json")).toBe(false);
+        expect(isExcalidrawPath(path)).toBe(expected);
     });
 });
 
@@ -83,7 +88,7 @@ describe("parseExcalidrawScene", () => {
         });
     });
 
-    it("defaults the canvas colour and files when the scene omits them", async () => {
+    it("defaults the canvas colour and files when the scene has invalid ones", async () => {
         const { parseExcalidrawScene } = await freshModule();
         expect(
             parseExcalidrawScene(
@@ -99,6 +104,10 @@ describe("parseExcalidrawScene", () => {
             files: null,
             viewBackgroundColor: "#ffffff",
         });
+    });
+
+    it("defaults the canvas colour and files when the scene omits them", async () => {
+        const { parseExcalidrawScene } = await freshModule();
         expect(parseExcalidrawScene('{"type":"excalidraw","elements":[]}')).toEqual({
             elements: [],
             files: null,
@@ -118,16 +127,8 @@ describe("parseExcalidrawScene", () => {
     ])("rejects %s as a scene error", async (_label, text, message) => {
         const { parseExcalidrawScene, ExcalidrawSceneError } = await freshModule();
 
-        let caught: unknown;
-
-        try {
-            parseExcalidrawScene(text);
-        } catch (error) {
-            caught = error;
-        }
-
-        expect(caught).toBeInstanceOf(ExcalidrawSceneError);
-        expect(caught).toMatchObject({ name: "ExcalidrawSceneError", message });
+        expect(() => parseExcalidrawScene(text)).toThrow(ExcalidrawSceneError);
+        expect(() => parseExcalidrawScene(text)).toThrow(message);
     });
 });
 
@@ -138,22 +139,19 @@ describe("renderExcalidrawSvgBlob", () => {
 
         expect(blob.type).toBe("image/svg+xml");
         expect(await readBlob(blob)).toContain('viewBox="0 0 480 112"');
-        const input = exportToSvgMock.mock.calls[0]![0];
-        expect(input.appState).toEqual({
-            exportBackground: true,
-            exportEmbedScene: false,
-            exportWithDarkMode: false,
-            viewBackgroundColor: "#ffffff",
+        expect(exportToSvgMock).toHaveBeenCalledWith({
+            elements: ["doc", "doc-label", "review", "review-label", "flow"].map((id) =>
+                expect.objectContaining({ id }),
+            ),
+            files: {},
+            exportPadding: 16,
+            appState: {
+                exportBackground: true,
+                exportEmbedScene: false,
+                exportWithDarkMode: false,
+                viewBackgroundColor: "#ffffff",
+            },
         });
-        expect(input.exportPadding).toBe(16);
-        expect(input.files).toEqual({});
-        expect(input.elements.map((el: { id: string }) => el.id)).toEqual([
-            "doc",
-            "doc-label",
-            "review",
-            "review-label",
-            "flow",
-        ]);
     });
 
     it("serves fonts from the bundle when webpack provides a public path", async () => {
@@ -171,22 +169,22 @@ describe("renderExcalidrawSvgBlob", () => {
         expect(assetWindow.EXCALIDRAW_ASSET_PATH).toBeUndefined();
     });
 
-    it("loads the library once across renders", async () => {
+    it("downloads the library once for several drawings", async () => {
         const { renderExcalidrawSvgBlob } = await freshModule();
-        vi.stubGlobal("__webpack_public_path__", "https://cdn.example/");
         await renderExcalidrawSvgBlob(excalidrawSceneBytes());
-        assetWindow.EXCALIDRAW_ASSET_PATH = "untouched";
         await renderExcalidrawSvgBlob(excalidrawSceneBytes());
+
         expect(exportToSvgMock).toHaveBeenCalledTimes(2);
-        expect(assetWindow.EXCALIDRAW_ASSET_PATH).toBe("untouched");
+        expect(libraryLoads).toBe(1);
     });
 
-    it("rejects a non-scene file before loading the library", async () => {
-        const { renderExcalidrawSvgBlob, ExcalidrawSceneError } = await freshModule("fail");
+    it("rejects a non-scene file without downloading the library", async () => {
+        const { renderExcalidrawSvgBlob, ExcalidrawSceneError } = await freshModule();
 
         await expect(
             renderExcalidrawSvgBlob(new TextEncoder().encode("nope").buffer),
         ).rejects.toBeInstanceOf(ExcalidrawSceneError);
+        expect(libraryLoads).toBe(0);
     });
 
     it("retries the library load after a failure", async () => {

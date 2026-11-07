@@ -37,13 +37,24 @@ function stubClipboard(impl: { writeText: () => Promise<void> } | undefined) {
     };
 }
 
-export const Open: Story = {};
+/** A diagram's source opens in a labelled dialog with its code and a copy action. */
+export const Open: Story = {
+    play: async ({ canvasElement }) => {
+        const dialog = within(canvasElement).getByRole("dialog", {
+            name: "Mermaid diagram source",
+        });
 
-/** A null source renders nothing. */
+        await expect(within(dialog).getByText("Diagram source")).toBeVisible();
+        await expect(within(dialog).getByText(/A\[Start\] --> B\{Choice\}/)).toBeVisible();
+        await expect(within(dialog).getByRole("button", { name: "Copy source" })).toBeEnabled();
+    },
+};
+
+/** With no source to show, no dialog is open. */
 export const Closed: Story = {
     args: { source: null },
     play: async ({ canvasElement }) => {
-        await expect(canvasElement.querySelector(".emr-generated-source-modal")).toBeNull();
+        await expect(within(canvasElement).queryByRole("dialog")).toBeNull();
     },
 };
 
@@ -66,17 +77,18 @@ export const MovesFocusInAndBack: Story = {
         const canvas = within(canvasElement);
         const opener = canvas.getByRole("button", { name: "Source" });
         await userEvent.click(opener);
-        await expect(document.activeElement).toBe(
-            canvasElement.querySelector(".emr-generated-source-modal"),
+        await expect(canvas.getByRole("dialog")).toContainElement(
+            document.activeElement as HTMLElement,
         );
         await userEvent.keyboard("{Escape}");
-        await expect(document.activeElement).toBe(opener);
+        await expect(canvas.queryByRole("dialog")).toBeNull();
+        await expect(opener).toHaveFocus();
     },
 };
 
+/** Escape closes the dialog; other keys don't. */
 export const ClosesOnEscape: Story = {
     play: async ({ args }) => {
-        // A non-Escape key is ignored; Escape closes.
         await userEvent.keyboard("a");
         await expect(args.onClose).not.toHaveBeenCalled();
         await userEvent.keyboard("{Escape}");
@@ -84,15 +96,16 @@ export const ClosesOnEscape: Story = {
     },
 };
 
+/** Clicking the dimmed backdrop around the dialog closes it. */
 export const ClosesOnOverlayClick: Story = {
     play: async ({ args, canvasElement }) => {
-        const overlay = canvasElement.querySelector<HTMLElement>(".emr-generated-source-overlay")!;
-
-        await userEvent.click(overlay);
+        // The labelled dialog element is the full-screen backdrop; the panel sits inside it.
+        await userEvent.click(within(canvasElement).getByRole("dialog"));
         await expect(args.onClose).toHaveBeenCalledTimes(1);
     },
 };
 
+/** The Close button closes the dialog. */
 export const ClosesOnButton: Story = {
     play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
@@ -101,14 +114,16 @@ export const ClosesOnButton: Story = {
     },
 };
 
-/** Copy succeeds → label flips to "Copied" then reverts. */
+/** Copy puts the source on the clipboard; the label flips to "Copied" then reverts. */
 export const CopySucceeds: Story = {
     play: async ({ canvasElement }) => {
-        const restore = stubClipboard({ writeText: () => Promise.resolve() });
+        const writeText = fn(() => Promise.resolve());
+        const restore = stubClipboard({ writeText });
 
         try {
             const canvas = within(canvasElement);
             await userEvent.click(canvas.getByRole("button", { name: "Copy source" }));
+            await expect(writeText).toHaveBeenCalledWith(SOURCE);
             await waitFor(() =>
                 expect(canvas.getByRole("button", { name: "Copied" })).toBeTruthy(),
             );
@@ -122,34 +137,30 @@ export const CopySucceeds: Story = {
     },
 };
 
-/** Copy is rejected → label stays "Copy" (failure is swallowed). */
-export const CopyFails: Story = {
+/**
+ * When the host frame blocks the clipboard, or the browser has none (a
+ * non-secure context), Copy quietly does nothing: it never claims "Copied".
+ */
+export const CopyBlocked: Story = {
     play: async ({ canvasElement }) => {
-        const restore = stubClipboard({
-            writeText: () => Promise.reject(new Error("blocked")),
-        });
+        const canvas = within(canvasElement);
+        const writeText = fn(() => Promise.reject(new Error("blocked")));
+        let restore = stubClipboard({ writeText });
 
         try {
-            const canvas = within(canvasElement);
             await userEvent.click(canvas.getByRole("button", { name: "Copy source" }));
-            await waitFor(() =>
-                expect(canvas.getByRole("button", { name: "Copy source" })).toBeTruthy(),
-            );
+            await expect(writeText).toHaveBeenCalledTimes(1);
+            await expect(canvas.getByRole("button", { name: "Copy source" })).toBeTruthy();
         } finally {
             restore();
         }
-    },
-};
 
-/** Copy stays graceful when no clipboard API is available (no error thrown). */
-export const CopyWithoutClipboard: Story = {
-    play: async ({ canvasElement }) => {
-        const restore = stubClipboard(undefined);
+        restore = stubClipboard(undefined);
 
         try {
-            const canvas = within(canvasElement);
             await userEvent.click(canvas.getByRole("button", { name: "Copy source" }));
             await expect(canvas.getByRole("button", { name: "Copy source" })).toBeTruthy();
+            await expect(canvas.queryByRole("button", { name: "Copied" })).toBeNull();
         } finally {
             restore();
         }
@@ -188,20 +199,14 @@ export const WithSourceDiff: Story = {
         await userEvent.click(canvas.getByRole("button", { name: "Show source changes" }));
         await userEvent.click(canvas.getByRole("button", { name: "Before" }));
         await expect(canvas.queryByRole("button", { name: /source changes/i })).toBeNull();
+        // Both the source pane and the rendered preview now show the old diagram.
+        await expect(
+            canvas.getByText("graph TD A[Start] --> B{Choice} B -->|yes| C[Do it]"),
+        ).toBeVisible();
         await waitFor(
             () => {
-                expect(
-                    canvasElement.querySelector(".emr-generated-source-code code")?.textContent,
-                ).toBe("graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Do it]");
-
-                const preview = canvasElement.querySelector<HTMLElement>(
-                    ".emr-generated-source-preview .emr-mermaid",
-                );
-
-                expect(preview?.dataset.mermaidSrc).toBe(
-                    encodeURIComponent("graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Do it]"),
-                );
-                expect(preview?.dataset.hydrated).toBe("true");
+                expect(canvas.getByText("Do it")).toBeVisible();
+                expect(canvas.queryByText("Ship it")).toBeNull();
             },
             // Switching to Before re-renders through Mermaid, which is lazily
             // imported — too slow for the 1s default when the suite runs in parallel.
@@ -211,50 +216,36 @@ export const WithSourceDiff: Story = {
 };
 
 /**
- * The overlay centres the callout, so a content-driven resize would shift the
- * header out from under the pointer that just clicked a toggle.
+ * Switching between Changes, plain source and Before (a much smaller diagram)
+ * keeps the dialog's toolbar where it was, so the reviewer can keep clicking
+ * the toggles without chasing them around the screen.
  */
-export const StableHeightAcrossToggles: Story = {
+export const TogglesStayUnderPointer: Story = {
     args: {
         source: "graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Ship it]\n  B -->|no| D[Skip]\n  C --> E[Done]\n  D --> E",
         originalSource: "graph TD\n  A[Start] --> B{Go}",
     },
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
+        const before = canvas.getByRole("button", { name: "Before" });
 
-        const modal = canvasElement.querySelector<HTMLElement>(".emr-generated-source-modal")!;
+        await waitFor(() => expect(canvas.getByText("Ship it")).toBeVisible(), LAZY_RENDER);
 
-        const hydratedSrc = () =>
-            canvasElement.querySelector<HTMLElement>(
-                '.emr-generated-source-preview .emr-mermaid[data-hydrated="true"]',
-            )?.dataset.mermaidSrc;
+        const baseline = before.getBoundingClientRect();
 
-        await waitFor(() => expect(hydratedSrc()).toBeTruthy(), LAZY_RENDER);
-
-        // The frame height is keyed off this, so a diagram would silently get the
-        // shorter equation frame if it went missing.
-        await expect(
-            modal.querySelector<HTMLElement>(".emr-generated-source-body")?.dataset.kind,
-        ).toBe("mermaid");
-
-        const baseline = modal.getBoundingClientRect();
-
-        const measure = () => {
-            const { height, top } = modal.getBoundingClientRect();
-            expect(height).toBe(baseline.height);
+        const expectToolbarInPlace = () => {
+            const { top, left } = before.getBoundingClientRect();
             expect(top).toBe(baseline.top);
+            expect(left).toBe(baseline.left);
         };
 
         await userEvent.click(canvas.getByRole("button", { name: "Hide source changes" }));
-        measure();
+        expectToolbarInPlace();
         await userEvent.click(canvas.getByRole("button", { name: "Show source changes" }));
-        measure();
-        await userEvent.click(canvas.getByRole("button", { name: "Before" }));
-        await waitFor(
-            () => expect(hydratedSrc()).toBe(encodeURIComponent("graph TD\n  A[Start] --> B{Go}")),
-            LAZY_RENDER,
-        );
-        measure();
+        expectToolbarInPlace();
+        await userEvent.click(before);
+        await waitFor(() => expect(canvas.getByText("Go")).toBeVisible(), LAZY_RENDER);
+        expectToolbarInPlace();
     },
 };
 
@@ -286,10 +277,16 @@ export const UnchangedSource: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         await expect(canvas.getByText("Diagram source")).toBeTruthy();
+        await expect(canvas.queryByRole("button", { name: "Before" })).toBeNull();
         await expect(canvasElement.querySelector(".emr-word-added")).toBeNull();
     },
 };
 
+/**
+ * An equation changed in the PR: Changes marks the added LaTeX, and Before
+ * toggles both the source and the rendered preview to the earlier equation
+ * and back.
+ */
 export const EquationSourceDiff: Story = {
     args: {
         kind: "math",
@@ -336,6 +333,7 @@ export const EquationSourceDiff: Story = {
     },
 };
 
+/** A wide equation's source renders as math that fits the dialog without scrollbars. */
 export const EquationSource: Story = {
     args: {
         kind: "math",
@@ -361,24 +359,25 @@ export const EquationSource: Story = {
             const el = canvasElement.querySelector<HTMLElement>(selector)!;
             expect(el.scrollWidth).toBeLessThanOrEqual(el.clientWidth);
         }
-
-        await expect(
-            canvasElement.querySelector<HTMLElement>(".emr-generated-source-body")?.dataset.kind,
-        ).toBe("math");
     },
 };
 
-export const EquationCopySucceeds: Story = {
+/** Copying while Before is shown copies the earlier equation the reviewer is looking at. */
+export const EquationCopyBeforeVersion: Story = {
     args: {
         kind: "math",
-        source: String.raw`x^2`,
+        source: String.raw`x^2 + y^2`,
+        originalSource: String.raw`x^2`,
     },
     play: async ({ canvasElement }) => {
-        const restore = stubClipboard({ writeText: () => Promise.resolve() });
+        const writeText = fn(() => Promise.resolve());
+        const restore = stubClipboard({ writeText });
 
         try {
             const canvas = within(canvasElement);
+            await userEvent.click(canvas.getByRole("button", { name: "Before" }));
             await userEvent.click(canvas.getByRole("button", { name: "Copy source" }));
+            await expect(writeText).toHaveBeenCalledWith(String.raw`x^2`);
             await waitFor(() =>
                 expect(canvas.getByRole("button", { name: "Copied" })).toBeTruthy(),
             );

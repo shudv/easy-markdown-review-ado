@@ -5,6 +5,7 @@ import { expect, waitFor, within } from "storybook/test";
 import { Avatar, AvatarImageContext } from "./Avatar";
 import type { AvatarImageResolver } from "./Avatar";
 import { FIXTURE_AUTHORS } from "../../comments/fixtures";
+import type { CommentAuthor } from "../../types";
 
 const meta = {
     title: "Components/Avatar",
@@ -19,14 +20,29 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Medium: Story = {};
+/** Without a photo, the avatar shows the author's initials, named in its tooltip. */
+async function expectInitials(canvasElement: HTMLElement, author: CommentAuthor): Promise<void> {
+    const initials = within(canvasElement).getByText(author.initials);
 
-export const Small: Story = {
-    args: { size: "sm" },
+    await expect(initials).toBeVisible();
+    await expect(within(canvasElement).getByTitle(author.displayName)).toContainElement(initials);
+}
+
+/** The regular avatar beside a comment. */
+export const Medium: Story = {
+    play: ({ canvasElement }) => expectInitials(canvasElement, FIXTURE_AUTHORS.shubhd!),
 };
 
+/** The compact avatar used in comment rows. */
+export const Small: Story = {
+    args: { size: "sm" },
+    play: ({ canvasElement }) => expectInitials(canvasElement, FIXTURE_AUTHORS.shubhd!),
+};
+
+/** Another reviewer gets their own initials (and colour). */
 export const Reviewer: Story = {
     args: { author: FIXTURE_AUTHORS.alex! },
+    play: ({ canvasElement }) => expectInitials(canvasElement, FIXTURE_AUTHORS.alex!),
 };
 
 // A 1x1 SVG data URL — loads without network, so the photo (not the initials
@@ -47,7 +63,7 @@ export const Photo: Story = {
     },
     play: async ({ canvasElement }) => {
         const img = await waitFor(() => {
-            const el = canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+            const el = canvasElement.querySelector("img");
 
             expect(el).toBeTruthy();
 
@@ -96,7 +112,7 @@ export const Resolved: Story = {
     decorators: [withResolver(async () => PHOTO)],
     play: async ({ canvasElement }) => {
         const img = await waitFor(() => {
-            const el = canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+            const el = canvasElement.querySelector("img");
 
             expect(el).toBeTruthy();
 

@@ -72,28 +72,20 @@ export const TargetCalloutOpen: Story = {
             canvas.getByRole("button", { name: "Show link hostname change" }),
         );
 
-        const paragraph = trigger.closest("p")!;
-
-        const addedProse = Array.from(paragraph.querySelectorAll<HTMLElement>(".emr-word-added"))
-            .filter((mark) => !mark.closest(".emr-diff-metadata"))
-            .map((mark) => mark.textContent)
-            .join(" ");
-
-        expect(addedProse).toContain("now hosted in the shared repository");
-        expect(paragraph.querySelector(".emr-diff-before-trigger")).toBeNull();
+        // The new prose is marked as added inline, and no Before comparison is offered.
+        expect(canvas.getByText(/now hosted in the shared repository/)).toHaveClass(
+            "emr-word-added",
+        );
+        expect(canvas.queryByRole("button", { name: /Show previous/ })).toBeNull();
 
         await userEvent.click(trigger);
-        await waitFor(() => expect(trigger.getAttribute("aria-expanded")).toBe("true"));
+        await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"));
 
-        const targetDiff = canvasElement.querySelector<HTMLElement>(
-            ".emr-diff-metadata-target-diff",
-        )!;
+        // The callout diffs the old relative target against the new cross-host URL.
+        const callout = within(canvas.getByRole("dialog", { name: "Link target change" }));
 
-        expect(targetDiff.querySelector(".emr-word-removed")?.textContent).toBe("..");
-        expect(targetDiff.querySelector(".emr-word-added")?.textContent).toContain(
-            "example.visualstudio.com",
-        );
-        expect(targetDiff.textContent).toContain("/docs/ReviewGuide");
-        expect(targetDiff.textContent).toContain("example.visualstudio.com");
+        expect(callout.getByText("..")).toHaveClass("emr-word-removed");
+        expect(callout.getByText(/example\.visualstudio\.com/)).toHaveClass("emr-word-added");
+        expect(callout.getByText(/\/docs\/ReviewGuide/)).toBeVisible();
     },
 };

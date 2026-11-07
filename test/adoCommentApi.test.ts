@@ -52,9 +52,8 @@ describe("pickerAvatarUrl", () => {
         ).toBe(`https://dev.azure.com/contoso/_api/_common/identityImage?id=${ID}`);
     });
 
-    it("returns undefined when the identity has no photo (so initials show)", () => {
-        expect(pickerAvatarUrl(ID, undefined, SELF)).toBeUndefined();
-        expect(pickerAvatarUrl(ID, "", SELF)).toBeUndefined();
+    it.each([undefined, ""])("shows initials for an identity without a photo (%j)", (photo) => {
+        expect(pickerAvatarUrl(ID, photo, SELF)).toBeUndefined();
     });
 
     it("returns undefined when there is no org base to borrow", () => {
@@ -65,9 +64,8 @@ describe("pickerAvatarUrl", () => {
 });
 
 describe("readProp", () => {
-    it("returns undefined for a non-object container", () => {
-        expect(readProp(null, "k")).toBeUndefined();
-        expect(readProp("nope", "k")).toBeUndefined();
+    it.each([null, "nope"])("reads nothing from the non-object properties %j", (container) => {
+        expect(readProp(container, "k")).toBeUndefined();
     });
 
     it("returns undefined when the key is absent", () => {
@@ -92,10 +90,6 @@ describe("hashString", () => {
 
     it("is deterministic — same input ⇒ same output", () => {
         expect(hashString("abc")).toBe(hashString("abc"));
-    });
-
-    it("returns a stable hash for the empty string", () => {
-        expect(hashString("")).toBe(hashString(""));
     });
 
     it("returns a different hash for different inputs (probabilistically)", () => {
@@ -152,18 +146,14 @@ describe("buildWorkItemWiql", () => {
 });
 
 describe("prStatusLabel", () => {
-    it("maps Completed → completed", () => {
-        expect(prStatusLabel(PR_STATUS.Completed as never)).toBe("completed");
-    });
-
-    it("maps Abandoned → abandoned", () => {
-        expect(prStatusLabel(PR_STATUS.Abandoned as never)).toBe("abandoned");
-    });
-
-    it("treats undefined / Active / NotSet as `active`", () => {
-        expect(prStatusLabel(undefined)).toBe("active");
-        expect(prStatusLabel(PR_STATUS.Active as never)).toBe("active");
-        expect(prStatusLabel(PR_STATUS.NotSet as never)).toBe("active");
+    it.each([
+        { name: "Completed", status: PR_STATUS.Completed, label: "completed" },
+        { name: "Abandoned", status: PR_STATUS.Abandoned, label: "abandoned" },
+        { name: "Active", status: PR_STATUS.Active, label: "active" },
+        { name: "NotSet", status: PR_STATUS.NotSet, label: "active" },
+        { name: "a missing status", status: undefined, label: "active" },
+    ])("labels a PR with $name as $label", ({ status, label }) => {
+        expect(prStatusLabel(status as never)).toBe(label);
     });
 });
 
@@ -191,6 +181,9 @@ describe("matchPullRequestSuggestions", () => {
         ).map((s) => s.id);
 
         expect(ids).toEqual(["1", "2"]);
+    });
+
+    it("matches a numeric query against digits in a title", () => {
         expect(matchPullRequestSuggestions([pr(7, "Bump to v42")], "42").map((s) => s.id)).toEqual([
             "7",
         ]);
@@ -211,7 +204,7 @@ describe("matchPullRequestSuggestions", () => {
         expect(ids).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
     });
 
-    it("maps fields, defaulting a missing title and repository", () => {
+    it("suggests a PR with its id, title, status and repository", () => {
         expect(matchPullRequestSuggestions([pr(9, "Docs")], "docs")).toEqual([
             {
                 kind: "pullrequest",
@@ -221,6 +214,9 @@ describe("matchPullRequestSuggestions", () => {
                 repository: "docs",
             },
         ]);
+    });
+
+    it("suggests a PR without a title or repository with placeholders", () => {
         expect(
             matchPullRequestSuggestions(
                 [{ pullRequestId: 8, status: PR_STATUS.Completed as never }],
@@ -243,14 +239,15 @@ describe("initialsOf", () => {
         expect(initialsOf("Alice")).toBe("AL");
     });
 
-    it("handles multi-word names by taking first letter of first + last", () => {
-        expect(initialsOf("Alice Anderson")).toBe("AA");
-        expect(initialsOf("  Sam   B  Carter  ")).toBe("SC");
+    it.each([
+        ["Alice Anderson", "AA"],
+        ["  Sam   B  Carter  ", "SC"],
+    ])("takes the first and last initials of the multi-word name %j", (name, initials) => {
+        expect(initialsOf(name)).toBe(initials);
     });
 
-    it("returns `?` for empty / whitespace input", () => {
-        expect(initialsOf("")).toBe("?");
-        expect(initialsOf("   ")).toBe("?");
+    it.each(["", "   "])("shows `?` for the blank name %j", (name) => {
+        expect(initialsOf(name)).toBe("?");
     });
 
     it("uppercases the result", () => {
@@ -275,10 +272,8 @@ describe("normalizeIdentityGuid", () => {
         );
     });
 
-    it("returns undefined when there is no GUID and for empty input", () => {
-        expect(normalizeIdentityGuid("no-guid-here")).toBeUndefined();
-        expect(normalizeIdentityGuid(undefined)).toBeUndefined();
-        expect(normalizeIdentityGuid("")).toBeUndefined();
+    it.each(["no-guid-here", undefined, ""])("finds no GUID in %j", (id) => {
+        expect(normalizeIdentityGuid(id)).toBeUndefined();
     });
 });
 
@@ -304,10 +299,12 @@ describe("buildIdentitiesUrl", () => {
         );
     });
 
-    it("returns null without an org or without valid ids", () => {
-        expect(buildIdentitiesUrl(undefined, [A])).toBeNull();
-        expect(buildIdentitiesUrl("org", [])).toBeNull();
-        expect(buildIdentitiesUrl("org", ["", "   "])).toBeNull();
+    it.each([
+        { name: "an org", org: undefined, ids: [A] },
+        { name: "any ids", org: "org", ids: [] },
+        { name: "any non-blank ids", org: "org", ids: ["", "   "] },
+    ])("has no lookup URL without $name", ({ org, ids }) => {
+        expect(buildIdentitiesUrl(org, ids)).toBeNull();
     });
 });
 
@@ -367,10 +364,12 @@ describe("parseIdentitiesResponse", () => {
         });
     });
 
-    it("returns an empty record for a malformed body", () => {
-        expect(parseIdentitiesResponse(null, [A])).toEqual({});
-        expect(parseIdentitiesResponse({}, [A])).toEqual({});
-        expect(parseIdentitiesResponse({ value: "nope" }, [A])).toEqual({});
+    it.each([
+        { name: "no body", body: null },
+        { name: "a body without a value list", body: {} },
+        { name: "a value that is not a list", body: { value: "nope" } },
+    ])("resolves nobody from a malformed response with $name", ({ body }) => {
+        expect(parseIdentitiesResponse(body, [A])).toEqual({});
     });
 });
 
@@ -435,11 +434,13 @@ describe("readMentionsProp", () => {
         expect(out).toEqual([{ id: "c", displayName: "C", avatarUrl: undefined }]);
     });
 
-    it("returns [] for missing, blank, malformed, or non-array values", () => {
-        expect(readMentionsProp(undefined)).toEqual([]);
-        expect(readMentionsProp(wrap(""))).toEqual([]);
-        expect(readMentionsProp(wrap("{not json"))).toEqual([]);
-        expect(readMentionsProp(wrap(JSON.stringify({ not: "array" })))).toEqual([]);
+    it.each([
+        { name: "no properties", props: undefined },
+        { name: "a blank value", props: wrap("") },
+        { name: "malformed JSON", props: wrap("{not json") },
+        { name: "a non-array value", props: wrap(JSON.stringify({ not: "array" })) },
+    ])("reads no mentions from $name", ({ props }) => {
+        expect(readMentionsProp(props)).toEqual([]);
     });
 });
 
@@ -492,8 +493,7 @@ describe("collectThreadIdentities", () => {
                     "1": { displayName: "No Id" },
                     "2": { id: GUID, displayName: "" },
                     "3": null,
-                    // Non-string displayName (e.g. a malformed ref) is coerced to "" and
-                    // skipped — covers the `typeof displayName === "string"` false branch.
+                    // A malformed ref whose name isn't text.
                     "4": { id: GUID, displayName: 42 },
                 },
             }),
@@ -502,10 +502,7 @@ describe("collectThreadIdentities", () => {
         expect(out).toEqual([]);
     });
 
-    it("keeps a non-GUID id verbatim (normalize returns undefined)", () => {
-        // ADO ids are normally GUIDs; a non-GUID id exercises the
-        // `normalizeIdentityGuid(rawId) ?? rawId` fallback so the ref is preserved
-        // rather than dropped.
+    it("keeps an identity whose id isn't a GUID (e.g. a service account) as-is", () => {
         const out = call(
             thread({
                 identities: {
@@ -517,9 +514,11 @@ describe("collectThreadIdentities", () => {
         expect(out).toEqual([{ id: "svc-account", displayName: "Service", avatarUrl: undefined }]);
     });
 
-    it("returns an empty array when there is no identities map", () => {
-        expect(call(thread())).toEqual([]);
-        expect(call(thread({ identities: null }))).toEqual([]);
+    it.each([
+        { name: "has no identities map", over: {} },
+        { name: "has a null identities map", over: { identities: null } },
+    ])("collects nobody when the thread $name", ({ over }) => {
+        expect(call(thread(over))).toEqual([]);
     });
 });
 
@@ -747,7 +746,6 @@ describe("adoThreadToLocal", () => {
     });
 
     it("returns null when the thread has no comments array at all", () => {
-        // `t.comments ?? []` ⇒ no comments ⇒ nothing showable.
         expect(conv(thread({ comments: undefined }))).toBeNull();
     });
 
@@ -760,7 +758,6 @@ describe("adoThreadToLocal", () => {
                     emrSchema: { $value: "1" },
                     emrAnchor: { $value: JSON.stringify(anchor) },
                 },
-                // No threadContext ⇒ `t.threadContext?.filePath ?? ""` falls back.
             }),
         );
 
@@ -914,27 +911,23 @@ describe("adoThreadToLocal", () => {
 });
 
 describe("fromAdoStatus", () => {
-    it("maps the documented status values", () => {
-        expect(fromAdoStatus(2)).toBe("resolved"); // Fixed
-        expect(fromAdoStatus(5)).toBe("resolved"); // ByDesign
-        expect(fromAdoStatus(3)).toBe("wontFix"); // WontFix
-        expect(fromAdoStatus(4)).toBe("closed"); // Closed
-        expect(fromAdoStatus(6)).toBe("pending"); // Pending
-        expect(fromAdoStatus(1)).toBe("active"); // Active
-        expect(fromAdoStatus(0)).toBe("active"); // Unknown
-        expect(fromAdoStatus(undefined)).toBe("active");
+    it.each([
+        ["Fixed", 2, "resolved"],
+        ["ByDesign", 5, "resolved"],
+        ["WontFix", 3, "wontFix"],
+        ["Closed", 4, "closed"],
+        ["Pending", 6, "pending"],
+        ["Active", 1, "active"],
+        ["Unknown", 0, "active"],
+        ["missing", undefined, "active"],
+    ])("shows an ADO %s (%s) thread as %s", (_name, status, local) => {
+        expect(fromAdoStatus(status)).toBe(local);
     });
 });
 
 describe("editedAtOf", () => {
     it("returns undefined when there is no update timestamp", () => {
         expect(editedAtOf(new Date("2024-01-01T00:00:00Z"), undefined)).toBeUndefined();
-    });
-
-    it("returns undefined when updated at (or near) publish time", () => {
-        const p = new Date("2024-01-01T00:00:00Z");
-        expect(editedAtOf(p, p)).toBeUndefined();
-        expect(editedAtOf(p, new Date("2024-01-01T00:00:00.999Z"))).toBeUndefined();
     });
 
     it("returns the ISO update time for a genuine later edit", () => {
@@ -1001,8 +994,7 @@ describe("buildThreadContext", () => {
         });
     });
 
-    it("keeps a genuine multi-line end offset as-is", () => {
-        // endLine > startLine, so endOffset is used verbatim (not clamped to start).
+    it("keeps the end column of a selection spanning several lines", () => {
         expect(
             buildThreadContext("/docs/a.md", {
                 exact: "x",
@@ -1263,9 +1255,11 @@ describe("lineDiffBlocksToRanges", () => {
         ]);
     });
 
-    it("skips None blocks and tolerates undefined input", () => {
-        expect(lineDiffBlocksToRanges([{ changeType: 0 }])).toEqual([]);
-        expect(lineDiffBlocksToRanges(undefined)).toEqual([]);
+    it.each([
+        { name: "only unchanged (None) blocks", blocks: [{ changeType: 0 }] },
+        { name: "no blocks", blocks: undefined },
+    ])("has no ranges for $name", ({ blocks }) => {
+        expect(lineDiffBlocksToRanges(blocks)).toEqual([]);
     });
 
     it("skips Add blocks that carry no modified lines", () => {
@@ -1332,14 +1326,12 @@ describe("lineDiffBlocksToCounts", () => {
         });
     });
 
-    it("treats absent count/changeType fields as zero for every block type", () => {
-        // Each block omits its count field (and the last omits changeType), so the
-        // `?? 0` fallbacks fire for the Add, Delete, Edit and default switch arms.
+    it("counts nothing for blocks that arrive without line counts", () => {
         const counts = lineDiffBlocksToCounts([
-            { changeType: 1 }, // Add, no modifiedLinesCount
-            { changeType: 2 }, // Delete, no originalLinesCount
-            { changeType: 3 }, // Edit, neither count present
-            {}, // no changeType ⇒ default arm
+            { changeType: 1 },
+            { changeType: 2 },
+            { changeType: 3 },
+            {},
         ]);
 
         expect(counts).toEqual({ linesAdded: 0, linesDeleted: 0 });

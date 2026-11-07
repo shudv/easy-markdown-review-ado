@@ -112,12 +112,20 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/**
+ * People suggestions: someone with a photo shows it (standalone, the URL is
+ * used directly); someone without one shows their initials.
+ */
 export const People: Story = {
     play: async ({ canvasElement }) => {
-        // A user with a photo renders an <img>; one without falls back to initials.
-        // (No resolver in context → the URL is used directly, like standalone.)
+        const canvas = within(canvasElement);
+        await expect(canvas.getAllByRole("option").map((row) => row.textContent)).toEqual([
+            expect.stringContaining("Shubham Dwivedi"),
+            expect.stringContaining("Alex Rivera"),
+        ]);
+
         const img = await waitFor(() => {
-            const el = canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+            const el = canvas.getByRole("option", { name: /Alex Rivera/ }).querySelector("img");
 
             expect(el).toBeTruthy();
 
@@ -125,7 +133,7 @@ export const People: Story = {
         });
 
         expect(img.getAttribute("src")).toBe("https://example.com/alex.png");
-        await expect(within(canvasElement).getByText("SD")).toBeTruthy();
+        await expect(canvas.getByText("SD")).toBeTruthy();
     },
 };
 
@@ -163,7 +171,9 @@ export const PeopleWithResolvedPhotos: Story = {
     decorators: [withResolver(async () => PHOTO)],
     play: async ({ canvasElement }) => {
         const img = await waitFor(() => {
-            const el = canvasElement.querySelector<HTMLImageElement>("img.emr-avatar-img");
+            const el = within(canvasElement)
+                .getByRole("option", { name: /Alex Rivera/ })
+                .querySelector("img");
 
             expect(el).toBeTruthy();
 
@@ -174,14 +184,29 @@ export const PeopleWithResolvedPhotos: Story = {
     },
 };
 
+/** Work item suggestions list each item's number and title. */
 export const WorkItems: Story = {
     args: { kind: "workitem", query: "fix", suggestions: workItemSuggestions },
+    play: async ({ canvasElement }) => {
+        const options = within(canvasElement).getAllByRole("option");
+        await expect(options).toHaveLength(workItemSuggestions.length);
+        await expect(options[0]).toHaveTextContent("412");
+        await expect(options[0]).toHaveTextContent("Fix anchor drift on edited lines");
+    },
 };
 
+/** Pull request suggestions list each PR's number and title. */
 export const PullRequests: Story = {
     args: { kind: "pullrequest", query: "story", suggestions: prSuggestions },
+    play: async ({ canvasElement }) => {
+        const options = within(canvasElement).getAllByRole("option");
+        await expect(options).toHaveLength(prSuggestions.length);
+        await expect(options[0]).toHaveTextContent("29466");
+        await expect(options[0]).toHaveTextContent("Storybook component visual testing");
+    },
 };
 
+/** While the search runs, the picker says it is searching. */
 export const Loading: Story = {
     args: { loading: true, suggestions: [] },
     play: async ({ canvasElement }) => {
@@ -189,6 +214,7 @@ export const Loading: Story = {
     },
 };
 
+/** A search with no results says so. */
 export const NoMatches: Story = {
     args: { suggestions: [] },
     play: async ({ canvasElement }) => {

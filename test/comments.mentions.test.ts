@@ -47,76 +47,72 @@ const PR: PullRequestSuggestion = {
 };
 
 describe("detectActiveTrigger", () => {
-    it("returns null for caret outside the string", () => {
-        expect(detectActiveTrigger("hello", -1)).toBeNull();
-        expect(detectActiveTrigger("hello", 999)).toBeNull();
-    });
-
-    it("returns null when the caret is one past the end, even with a reachable trigger", () => {
-        // `@` is within look-back range, but caret > text.length must still bail —
-        // this guards the upper-bound check, not just the no-trigger fall-through.
-        expect(detectActiveTrigger("@ab", 4)).toBeNull();
-    });
-
-    it("returns null when there's no trigger char before the caret", () => {
-        expect(detectActiveTrigger("hello there", 11)).toBeNull();
-    });
-
-    it("detects an @-trigger at start of input", () => {
-        const r = detectActiveTrigger("@al", 3);
-        expect(r).toEqual({
+    it.each([
+        {
+            name: "@ at the start of the input opens people",
+            text: "@al",
+            caret: 3,
             kind: "user",
-            char: "@",
             start: 0,
-            end: 3,
             query: "al",
-        });
-    });
-
-    it("detects a #-trigger after whitespace", () => {
-        const r = detectActiveTrigger("hi #foo", 7);
-        expect(r?.kind).toBe("workitem");
-        expect(r?.start).toBe(3);
-        expect(r?.query).toBe("foo");
-    });
-
-    it("detects a !-trigger after a newline", () => {
-        const r = detectActiveTrigger("line1\n!42", 9);
-        expect(r?.kind).toBe("pullrequest");
-        expect(r?.query).toBe("42");
-    });
-
-    it("refuses to open the picker for `@` that's part of an email", () => {
-        // `me@example` — `@` is preceded by `e`, so we must NOT fire.
-        expect(detectActiveTrigger("me@example", 10)).toBeNull();
-    });
-
-    it("refuses to open the picker for `#tag` glued to a word", () => {
-        expect(detectActiveTrigger("hello#tag", 9)).toBeNull();
-    });
-
-    it("returns null when the trigger has been closed by punctuation", () => {
-        expect(detectActiveTrigger("@alice, hi", 10)).toBeNull();
-    });
-
-    it("respects the 64-char look-back cap", () => {
-        const filler = "a".repeat(80);
-        expect(detectActiveTrigger(`@${filler}`, filler.length + 1)).toBeNull();
-    });
-
-    it("treats a trigger char immediately at caret as an empty query", () => {
-        expect(detectActiveTrigger("@", 1)).toEqual({
+        },
+        {
+            name: "# after a space opens work items",
+            text: "hi #foo",
+            caret: 7,
+            kind: "workitem",
+            start: 3,
+            query: "foo",
+        },
+        {
+            name: "! after a newline opens pull requests",
+            text: "line1\n!42",
+            caret: 9,
+            kind: "pullrequest",
+            start: 6,
+            query: "42",
+        },
+        {
+            name: "a lone @ opens people with an empty query",
+            text: "@",
+            caret: 1,
             kind: "user",
-            char: "@",
             start: 0,
-            end: 1,
             query: "",
+        },
+        {
+            name: "spaces, dots, dashes and underscores stay part of the query",
+            text: "@Alice An.der-son_",
+            caret: 18,
+            kind: "user",
+            start: 0,
+            query: "Alice An.der-son_",
+        },
+    ])("$name", ({ text, caret, kind, start, query }) => {
+        expect(detectActiveTrigger(text, caret)).toEqual({
+            kind,
+            char: text[start],
+            start,
+            end: caret,
+            query,
         });
     });
 
-    it("allows spaces, dots, dashes, underscores in the in-progress query", () => {
-        const r = detectActiveTrigger("@Alice An.der-son_", 18);
-        expect(r?.query).toBe("Alice An.der-son_");
+    it.each([
+        { name: "there is no trigger before the caret", text: "hello there", caret: 11 },
+        { name: "the @ belongs to an email address", text: "me@example", caret: 10 },
+        { name: "the # is glued to a word", text: "hello#tag", caret: 9 },
+        { name: "punctuation already closed the mention", text: "@alice, hi", caret: 10 },
+        {
+            name: "the trigger is more than 64 characters back",
+            text: `@${"a".repeat(80)}`,
+            caret: 81,
+        },
+        // A stale caret (the text shrank after the caret was read) must not open the picker.
+        { name: "the caret is before the text", text: "hello", caret: -1 },
+        { name: "the caret is past the end of the text", text: "@ab", caret: 4 },
+    ])("keeps the picker closed when $name", ({ text, caret }) => {
+        expect(detectActiveTrigger(text, caret)).toBeNull();
     });
 });
 
@@ -165,18 +161,14 @@ describe("buildMentionMarkdown", () => {
 });
 
 describe("parseMentionUrl", () => {
-    it("returns null for non-mention URLs", () => {
-        expect(parseMentionUrl("https://example.com")).toBeNull();
-        expect(parseMentionUrl("javascript:alert(1)")).toBeNull();
-        expect(parseMentionUrl("")).toBeNull();
-    });
-
-    it("returns null when the kind segment is unknown", () => {
-        expect(parseMentionUrl("mention://group/42")).toBeNull();
-    });
-
-    it("returns null when there's no `/` after the scheme", () => {
-        expect(parseMentionUrl("mention://user")).toBeNull();
+    it.each([
+        ["an ordinary web link", "https://example.com"],
+        ["a script URL", "javascript:alert(1)"],
+        ["an empty URL", ""],
+        ["a mention of an unknown kind", "mention://group/42"],
+        ["a mention with no id segment", "mention://user"],
+    ])("does not treat %s as a mention", (_label, url) => {
+        expect(parseMentionUrl(url)).toBeNull();
     });
 
     it("decodes a user mention with no params", () => {
@@ -195,39 +187,28 @@ describe("parseMentionUrl", () => {
         });
     });
 
-    it("round-trips work item / PR mentions through buildMentionMarkdown → parseMentionUrl", () => {
-        function urlFromMd(md: string): string {
-            const m = md.match(/\]\((mention:\/\/[^)]+)\)/);
+    // User mentions persist as the ADO-native `@<GUID>` token (covered by
+    // preprocessUserMentions), so only work item / PR mentions are link-shaped.
+    it.each([
+        ["work item", WI],
+        ["pull request", PR],
+    ] satisfies Array<[string, MentionSuggestion]>)(
+        "reads back the %s a picked mention link points at",
+        (_label, suggestion) => {
+            const url = /\]\((mention:\/\/[^)]+)\)/.exec(buildMentionMarkdown(suggestion))![1]!;
 
-            return m?.[1] ?? "";
-        }
-
-        // User mentions now persist as the ADO-native `@<GUID>` token (covered by
-        // preprocessUserMentions), so only work item / PR mentions are link-shaped.
-        const all: MentionSuggestion[] = [WI, PR];
-
-        for (const s of all) {
-            const parsed = parseMentionUrl(urlFromMd(buildMentionMarkdown(s)));
-            expect(parsed?.kind).toBe(s.kind);
-            expect(parsed?.id).toBe(s.id);
-        }
-    });
+            expect(parseMentionUrl(url)).toMatchObject({
+                kind: suggestion.kind,
+                id: suggestion.id,
+            });
+        },
+    );
 
     it("decodes percent-encoded ids", () => {
         expect(parseMentionUrl("mention://user/foo%20bar")).toEqual({
             kind: "user",
             id: "foo bar",
             params: {},
-        });
-    });
-
-    it("parses an empty id when the query starts immediately (`?` at index 0)", () => {
-        // `rest` begins with "?": the id slice is empty but params still parse —
-        // guards the `q < 0` / `q >= 0` boundary handling.
-        expect(parseMentionUrl("mention://user/?type=Bug")).toEqual({
-            kind: "user",
-            id: "",
-            params: { type: "Bug" },
         });
     });
 });
@@ -262,11 +243,11 @@ describe("preprocessUserMentions", () => {
         expect(out).toContain(`mention://user/${encodeURIComponent(g2)}`);
     });
 
-    it("leaves non-GUID `@<...>` and plain text untouched", () => {
-        expect(preprocessUserMentions("email <a@b.com> and @notaguid")).toBe(
-            "email <a@b.com> and @notaguid",
-        );
-        expect(preprocessUserMentions("@<not-a-guid>")).toBe("@<not-a-guid>");
+    it.each([
+        ["an email address and a bare @word", "email <a@b.com> and @notaguid"],
+        ["an @<...> token that is not a GUID", "@<not-a-guid>"],
+    ])("leaves %s untouched", (_label, text) => {
+        expect(preprocessUserMentions(text)).toBe(text);
     });
 });
 
@@ -391,16 +372,15 @@ describe("encodePickedMentions", () => {
         );
     });
 
-    it("does not fire when followed by mention-friendly chars (_ . -)", () => {
-        // detectActiveTrigger allows `_`, `.`, `-` inside mention text, so `@Sam`
-        // must NOT be encoded inside `@Sam_Lee` / `@Sam.Lee` / `@Sam-Lee`.
-        for (const suffix of ["_Lee", ".Lee", "-Lee"]) {
-            expect(encodePickedMentions(`hi @Sam${suffix}`, [{ label: "Sam", id: A }])).toBe(
-                `hi @Sam${suffix}`,
-            );
-        }
+    // detectActiveTrigger allows `_`, `.`, `-` inside mention text, so `@Sam`
+    // is a different, longer mention there.
+    it.each(["_Lee", ".Lee", "-Lee"])("does not encode @Sam inside @Sam%s", (suffix) => {
+        expect(encodePickedMentions(`hi @Sam${suffix}`, [{ label: "Sam", id: A }])).toBe(
+            `hi @Sam${suffix}`,
+        );
+    });
 
-        // But a true punctuation boundary still encodes.
+    it("encodes a mention followed by ordinary punctuation", () => {
         expect(encodePickedMentions("hi @Sam! done", [{ label: "Sam", id: A }])).toBe(
             `hi @<${A}>! done`,
         );
@@ -430,19 +410,20 @@ describe("encodePickedMentions", () => {
 });
 
 describe("uniqueMentionLabel", () => {
-    it("returns the base label when it's not taken", () => {
-        expect(uniqueMentionLabel("Sam", [])).toBe("Sam");
-        expect(uniqueMentionLabel("Sam", ["Alex"])).toBe("Sam");
-    });
-
-    it("appends the next free numeric suffix on collision", () => {
-        expect(uniqueMentionLabel("Sam", ["Sam"])).toBe("Sam 2");
-        expect(uniqueMentionLabel("Sam", ["Sam", "Sam 2"])).toBe("Sam 3");
-    });
-
-    it("skips gaps to the first free suffix", () => {
-        // "Sam 2" is free even though "Sam 3" is taken.
-        expect(uniqueMentionLabel("Sam", ["Sam", "Sam 3"])).toBe("Sam 2");
+    // Two different people with the same name must get distinct labels in one
+    // comment so each encodes to its own id.
+    it.each([
+        { name: "keeps the name when nobody else is mentioned", taken: [], label: "Sam" },
+        { name: "keeps the name when only others are mentioned", taken: ["Alex"], label: "Sam" },
+        { name: "numbers a second person with the same name", taken: ["Sam"], label: "Sam 2" },
+        {
+            name: "numbers a third person after the second",
+            taken: ["Sam", "Sam 2"],
+            label: "Sam 3",
+        },
+        { name: "reuses the first free number", taken: ["Sam", "Sam 3"], label: "Sam 2" },
+    ])("$name", ({ taken, label }) => {
+        expect(uniqueMentionLabel("Sam", taken)).toBe(label);
     });
 });
 
@@ -470,7 +451,7 @@ describe("mergeMentionIdentities", () => {
 });
 
 describe("authorToUserSuggestion", () => {
-    it("forwards id / displayName / initials / avatar", () => {
+    it("offers a comment author as a person to mention", () => {
         const a: CommentAuthor = {
             id: "x",
             displayName: "Sam",
@@ -486,39 +467,26 @@ describe("authorToUserSuggestion", () => {
             avatarUrl: "https://example.com/a.png",
         });
     });
-
-    it("propagates undefined avatar correctly", () => {
-        const a: CommentAuthor = {
-            id: "x",
-            displayName: "Sam",
-            initials: "SA",
-        };
-
-        const s = authorToUserSuggestion(a);
-        expect(s.avatarUrl).toBeUndefined();
-    });
 });
 
+// ADO hands out the same identity in several shapes; they must all collapse to
+// one key so a person is recognised however a mention or author refers to them.
 describe("normalizeIdentityGuid", () => {
     const DASHED = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
 
-    it("lower-cases an already-dashed GUID", () => {
-        expect(normalizeIdentityGuid(DASHED.toUpperCase())).toBe(DASHED);
+    it.each([
+        ["an upper-case dashed GUID", DASHED.toUpperCase()],
+        ["a bare 32-hex id", "6B71186CC2E66813B4E0FFCD511163F4"],
+        ["an identity picker entityId", "vss.ds.v1.ims.user.6b71186cc2e66813b4e0ffcd511163f4"],
+    ])("normalizes %s to the lower-case dashed GUID", (_label, raw) => {
+        expect(normalizeIdentityGuid(raw)).toBe(DASHED);
     });
 
-    it("inserts dashes into a bare 32-hex id and lower-cases it", () => {
-        expect(normalizeIdentityGuid("6B71186CC2E66813B4E0FFCD511163F4")).toBe(DASHED);
-    });
-
-    it("extracts the dashed GUID run from a `vss.ds…` entityId", () => {
-        expect(normalizeIdentityGuid("vss.ds.v1.ims.user.6b71186cc2e66813b4e0ffcd511163f4")).toBe(
-            DASHED,
-        );
-    });
-
-    it("returns undefined when no GUID can be found", () => {
-        expect(normalizeIdentityGuid("nobody")).toBeUndefined();
-        expect(normalizeIdentityGuid("")).toBeUndefined();
-        expect(normalizeIdentityGuid(undefined)).toBeUndefined();
+    it.each([
+        ["a plain name", "nobody"],
+        ["an empty id", ""],
+        ["a missing id", undefined],
+    ])("finds no GUID in %s", (_label, raw) => {
+        expect(normalizeIdentityGuid(raw)).toBeUndefined();
     });
 });

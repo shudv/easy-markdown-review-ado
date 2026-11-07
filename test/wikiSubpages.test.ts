@@ -3,16 +3,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { loadWikiSubpages, subpagesCommit } from "../src/shell/wikiSubpages";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 describe("loadWikiSubpages", () => {
     it("lists the page's subpage folder, in .order order", async () => {
@@ -49,12 +42,14 @@ describe("loadWikiSubpages", () => {
             }),
         ).resolves.toBeUndefined();
         expect(warn).toHaveBeenCalledWith("[wiki] listing subpages failed:", failure);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: failure,
-            source: "Shell.subpages",
-            operation: "subpages-load",
-            impact: "degraded",
-        });
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: failure,
+                source: "Shell.subpages",
+                operation: "subpages-load",
+                impact: "degraded",
+            }),
+        ]);
         warn.mockRestore();
     });
 });
@@ -68,8 +63,7 @@ describe("subpagesCommit", () => {
         expect(subpagesCommit(true, "abc")).toBe("abc");
     });
 
-    it("can't list a historical version without a commit", () => {
-        expect(subpagesCommit(true, null)).toBeNull();
-        expect(subpagesCommit(true, undefined)).toBeNull();
+    it.each([null, undefined])("can't list a historical version whose commit is %s", (commit) => {
+        expect(subpagesCommit(true, commit)).toBeNull();
     });
 });

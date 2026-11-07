@@ -11,7 +11,7 @@ describe("repairSequenceSemicolons", () => {
         ).toBe("sequenceDiagram\n  A->>B: Admit#59; require SAW#59; persist\n  B-->>A: ok");
     });
 
-    it("covers every arrow form, notes, and block labels", () => {
+    it("escapes ';' in async, lost and two-way messages, notes, and alt/else labels", () => {
         const src = [
             "sequenceDiagram",
             "  A-)B: async; call",

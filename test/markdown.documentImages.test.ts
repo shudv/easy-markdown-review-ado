@@ -6,173 +6,217 @@ import {
     resolveRepositoryImagePath,
 } from "../src/markdown/documentImages";
 import { ExcalidrawSceneError } from "../src/markdown/excalidraw";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
+const telemetry = recordTelemetryEachTest();
 
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+function mountImage(src: string): HTMLElement {
+    const root = document.createElement("div");
+    root.innerHTML = `<img src="${src}" alt="Image">`;
+
+    return root;
+}
 
 describe("repositoryImageMimeType", () => {
-    it("recognizes browser image formats and falls back safely", () => {
-        expect(repositoryImageMimeType("/assets/photo.avif")).toBe("image/avif");
-        expect(repositoryImageMimeType("/assets/legacy.bmp")).toBe("image/bmp");
-        expect(repositoryImageMimeType("/assets/diagram.SVG")).toBe("image/svg+xml");
-        expect(repositoryImageMimeType("/assets/favicon.ico")).toBe("image/x-icon");
-        expect(repositoryImageMimeType("/assets/photo.jpeg")).toBe("image/jpeg");
-        expect(repositoryImageMimeType("/assets/photo.jpg")).toBe("image/jpeg");
-        expect(repositoryImageMimeType("/assets/tour.gif")).toBe("image/gif");
-        expect(repositoryImageMimeType("/assets/screenshot.png")).toBe("image/png");
-        expect(repositoryImageMimeType("/assets/screenshot.webp")).toBe("image/webp");
+    it.each([
+        ["/assets/photo.avif", "image/avif"],
+        ["/assets/legacy.bmp", "image/bmp"],
+        ["/assets/diagram.SVG", "image/svg+xml"],
+        ["/assets/favicon.ico", "image/x-icon"],
+        ["/assets/photo.jpeg", "image/jpeg"],
+        ["/assets/photo.jpg", "image/jpeg"],
+        ["/assets/tour.gif", "image/gif"],
+        ["/assets/screenshot.png", "image/png"],
+        ["/assets/screenshot.webp", "image/webp"],
+    ])("serves %s as %s", (path, mimeType) => {
+        expect(repositoryImageMimeType(path)).toBe(mimeType);
+    });
+
+    it("falls back to a generic binary type for a file without a known extension", () => {
         expect(repositoryImageMimeType("/assets/no-extension")).toBe("application/octet-stream");
     });
 });
 
 describe("resolveRepositoryImagePath", () => {
-    it("resolves sibling, parent, root, encoded, and bare relative paths", () => {
-        expect(resolveRepositoryImagePath("/docs/guide.md", "diagram.png")).toBe(
-            "/docs/diagram.png",
-        );
-        expect(resolveRepositoryImagePath("/docs/guides/install.md", "../../assets/a.svg")).toBe(
-            "/assets/a.svg",
-        );
-        expect(resolveRepositoryImagePath("docs/guide.md", "/assets/root.png")).toBe(
-            "/assets/root.png",
-        );
-        expect(resolveRepositoryImagePath("/docs/guide.md", "./my%20diagram.png?raw=1#x")).toBe(
-            "/docs/my diagram.png",
-        );
-        expect(resolveRepositoryImagePath("/docs/guide.md", "assets/name:variant.png")).toBe(
-            "/docs/assets/name:variant.png",
-        );
+    it.each([
+        {
+            name: "a sibling file",
+            doc: "/docs/guide.md",
+            src: "diagram.png",
+            expected: "/docs/diagram.png",
+        },
+        {
+            name: "a parent-relative path",
+            doc: "/docs/guides/install.md",
+            src: "../../assets/a.svg",
+            expected: "/assets/a.svg",
+        },
+        {
+            name: "a repository-root path",
+            doc: "docs/guide.md",
+            src: "/assets/root.png",
+            expected: "/assets/root.png",
+        },
+        {
+            name: "an encoded path with a query and fragment",
+            doc: "/docs/guide.md",
+            src: "./my%20diagram.png?raw=1#x",
+            expected: "/docs/my diagram.png",
+        },
+        {
+            name: "a bare relative path containing a colon",
+            doc: "/docs/guide.md",
+            src: "assets/name:variant.png",
+            expected: "/docs/assets/name:variant.png",
+        },
+    ])("resolves $name against the document's folder", ({ doc, src, expected }) => {
+        expect(resolveRepositoryImagePath(doc, src)).toBe(expected);
     });
 
-    it("rejects external, protocol-relative, fragment, empty, and malformed paths", () => {
-        expect(
-            resolveRepositoryImagePath("/docs/guide.md", "https://example.com/a.png"),
-        ).toBeNull();
-        expect(resolveRepositoryImagePath("/docs/guide.md", "//example.com/a.png")).toBeNull();
-        expect(resolveRepositoryImagePath("/docs/guide.md", "#diagram")).toBeNull();
-        expect(resolveRepositoryImagePath("/docs/guide.md", "  ")).toBeNull();
-        expect(resolveRepositoryImagePath("/docs/guide.md", "%zz")).toBeNull();
+    it.each([
+        { name: "an external URL", src: "https://example.com/a.png" },
+        { name: "a protocol-relative URL", src: "//example.com/a.png" },
+        { name: "a fragment", src: "#diagram" },
+        { name: "a blank source", src: "  " },
+        { name: "a malformed percent sequence", src: "%zz" },
+    ])("does not treat $name as a repository image", ({ src }) => {
+        expect(resolveRepositoryImagePath("/docs/guide.md", src)).toBeNull();
     });
 });
 
 describe("hydrateDocumentImages", () => {
-    it("replaces repository images with resolved object URLs", async () => {
-        const root = document.createElement("div");
-        root.innerHTML = [
-            '<img src="../assets/diagram.svg" alt="Architecture">',
-            '<img src="https://example.com/external.png" alt="External">',
-        ].join("");
+    it("shows a repository image as loading until its object URL has loaded", async () => {
+        const root = mountImage("../assets/diagram.svg");
         const resolveImage = vi.fn().mockResolvedValue("blob:repository-image");
 
         hydrateDocumentImages(root, "/docs/guide.md", resolveImage);
-        const images = root.querySelectorAll<HTMLImageElement>("img");
+        const image = root.querySelector<HTMLImageElement>("img")!;
         const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
 
-        expect(images[0]!.hasAttribute("src")).toBe(false);
-        expect(images[0]!.getAttribute("aria-busy")).toBe("true");
-        expect(frame.classList.contains("is-loading")).toBe(true);
-        expect(images[0]!.classList.contains("is-loading")).toBe(true);
-        await vi.waitFor(() => expect(images[0]!.src).toBe("blob:repository-image"));
-        images[0]!.dispatchEvent(new Event("load"));
         expect(resolveImage).toHaveBeenCalledWith("/assets/diagram.svg");
-        expect(images[0]!.getAttribute("aria-busy")).toBeNull();
+        expect(image.hasAttribute("src")).toBe(false);
+        expect(image.getAttribute("aria-busy")).toBe("true");
+        expect(frame.classList.contains("is-loading")).toBe(true);
+        expect(image.classList.contains("is-loading")).toBe(true);
+
+        await vi.waitFor(() => expect(image.src).toBe("blob:repository-image"));
+        image.dispatchEvent(new Event("load"));
+
+        expect(image.getAttribute("aria-busy")).toBeNull();
         expect(frame.classList.contains("is-loading")).toBe(false);
-        expect(images[1]!.src).toBe("https://example.com/external.png");
     });
 
-    it("shows an unavailable state and ignores late results after cleanup", async () => {
-        const root = document.createElement("div");
-        root.innerHTML = '<img src="./missing.png" alt="Missing">';
+    it("leaves external images untouched", () => {
+        const root = mountImage("https://example.com/external.png");
 
-        const cleanup = hydrateDocumentImages(root, "/docs/guide.md", async () => undefined);
+        hydrateDocumentImages(root, "/docs/guide.md", vi.fn());
+
+        expect(root.querySelector(".emr-repo-image-frame")).toBeNull();
+        expect(root.querySelector("img")!.src).toBe("https://example.com/external.png");
+    });
+
+    it("shows an image the repository has no content for as unavailable and reports it", async () => {
+        const root = mountImage("./missing.png");
+
+        hydrateDocumentImages(root, "/docs/guide.md", async () => undefined);
 
         const image = root.querySelector<HTMLImageElement>("img")!;
         const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
         await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
+        expect(frame.classList.contains("is-loading")).toBe(false);
         expect(frame.dataset.imagePath).toBe("/docs/missing.png");
         expect(image.getAttribute("aria-busy")).toBeNull();
-
-        frame.classList.add("is-loading");
-        image.dispatchEvent(new Event("error"));
-        expect(frame.classList.contains("is-loading")).toBe(false);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({
-                message: "Repository image not available",
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({ message: "Repository image not available" }),
+                source: "DocumentImage.hydrate",
+                operation: "repository-image-load",
+                impact: "degraded",
             }),
-            source: "DocumentImage.hydrate",
-            operation: "repository-image-load",
-            impact: "degraded",
-        });
-
-        let resolve!: (value: string) => void;
-
-        const pending = new Promise<string>((done) => {
-            resolve = done;
-        });
-
-        root.innerHTML = '<img src="./late.png" alt="Late">';
-        const lateImage = root.querySelector<HTMLImageElement>("img")!;
-
-        const lateCleanup = hydrateDocumentImages(root, "/docs/guide.md", () => pending);
-
-        cleanup();
-        frame.className = "emr-repo-image-frame is-loading";
-        image.className = "emr-repo-image is-loading";
-        image.dispatchEvent(new Event("load"));
-        image.dispatchEvent(new Event("error"));
-        expect(frame.className).toBe("emr-repo-image-frame is-loading");
-        expect(image.className).toBe("emr-repo-image is-loading");
-        lateCleanup();
-        resolve("blob:late");
-        await pending;
-        await Promise.resolve();
-        expect(lateImage.hasAttribute("src")).toBe(false);
+        ]);
     });
 
-    it("shows an unavailable state when the repository resolver rejects", async () => {
-        const root = document.createElement("div");
-        root.innerHTML = '<img src="./broken.png" alt="Broken">';
+    it("shows an unavailable state and reports it when the repository resolver rejects", async () => {
+        const root = mountImage("./broken.png");
+
         hydrateDocumentImages(root, "/docs/guide.md", async () => {
             throw new Error("repository unavailable");
         });
 
         const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
         await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith({
-            error: expect.objectContaining({
-                message: "repository unavailable",
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                error: expect.objectContaining({ message: "repository unavailable" }),
+                operation: "repository-image-load",
             }),
-            source: "DocumentImage.hydrate",
-            operation: "repository-image-load",
-            impact: "degraded",
-        });
+        ]);
     });
 
     it("reports an image that fetched but can't be displayed", async () => {
-        trackUserFacingErrorMock.mockClear();
-        const root = document.createElement("div");
-        root.innerHTML = '<img src="./not-an-image.png" alt="Pointer">';
+        const root = mountImage("./not-an-image.png");
         hydrateDocumentImages(root, "/docs/guide.md", async () => "blob:x");
         const image = root.querySelector<HTMLImageElement>("img")!;
         await vi.waitFor(() => expect(image.src).toBe("blob:x"));
 
         image.dispatchEvent(new Event("error"));
 
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+        expect(root.querySelector(".emr-repo-image-frame")!.classList.contains("is-error")).toBe(
+            true,
+        );
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({
                 error: expect.objectContaining({
                     message: "Repository image couldn't be displayed",
                 }),
             }),
-        );
+        ]);
+    });
+
+    it("reports a broken image once even when the browser also fires an error for it", async () => {
+        const root = mountImage("./missing.png");
+        hydrateDocumentImages(root, "/docs/guide.md", async () => undefined);
+        const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
+        await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
+
+        root.querySelector("img")!.dispatchEvent(new Event("error"));
+
+        expect(telemetry.current.userFacingErrors()).toHaveLength(1);
+    });
+
+    it("stops updating an image's frame once the document is cleaned up", async () => {
+        const root = mountImage("./diagram.png");
+        const cleanup = hydrateDocumentImages(root, "/docs/guide.md", async () => "blob:x");
+        const image = root.querySelector<HTMLImageElement>("img")!;
+        const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
+        await vi.waitFor(() => expect(image.src).toBe("blob:x"));
+
+        cleanup();
+        image.dispatchEvent(new Event("load"));
+        image.dispatchEvent(new Event("error"));
+
+        expect(frame.className).toBe("emr-repo-image-frame is-loading");
+        expect(image.getAttribute("aria-busy")).toBe("true");
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
+    });
+
+    it("ignores an image that resolves after the document was cleaned up", async () => {
+        const root = mountImage("./late.png");
+        let resolve!: (value: string) => void;
+
+        const pending = new Promise<string>((done) => {
+            resolve = done;
+        });
+
+        const cleanup = hydrateDocumentImages(root, "/docs/guide.md", () => pending);
+        const image = root.querySelector<HTMLImageElement>("img")!;
+
+        cleanup();
+        resolve("blob:late");
+        await pending;
+        await Promise.resolve();
+
+        expect(image.hasAttribute("src")).toBe(false);
     });
 
     // A broken image link in the author's Markdown is content health.
@@ -186,9 +230,7 @@ describe("hydrateDocumentImages", () => {
     ])(
         "shows a missing repository image (%s) as unavailable without reporting it",
         async (_label, failure) => {
-            trackUserFacingErrorMock.mockClear();
-            const root = document.createElement("div");
-            root.innerHTML = '<img src="./gone.png" alt="Gone">';
+            const root = mountImage("./gone.png");
             hydrateDocumentImages(root, "/docs/guide.md", async () => {
                 throw failure;
             });
@@ -197,7 +239,7 @@ describe("hydrateDocumentImages", () => {
 
             await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
             expect(frame.dataset.imagePath).toBe("/docs/gone.png");
-            expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+            expect(telemetry.current.userFacingErrors()).toEqual([]);
         },
     );
 

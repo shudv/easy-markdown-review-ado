@@ -4,29 +4,23 @@ import { anchorKindOf } from "../src/shell/anchorKind";
 import type { TextQuoteAnchor } from "../src/types";
 
 describe("anchorKindOf", () => {
-    it("classifies a non-empty selection as text-quote", () => {
-        const anchor: TextQuoteAnchor = {
-            exact: "hello",
-            prefix: "",
-            suffix: "",
-        };
-
-        expect(anchorKindOf(anchor)).toBe("text-quote");
-    });
-
-    it("classifies an empty-selection anchor with a source line as line", () => {
-        const anchor: TextQuoteAnchor = {
-            exact: "",
-            prefix: "",
-            suffix: "",
-            line: 12,
-        };
-
-        expect(anchorKindOf(anchor)).toBe("line");
-    });
-
-    it("classifies a whole-file anchor (no exact, no line) as file-level", () => {
-        const anchor: TextQuoteAnchor = { exact: "", prefix: "", suffix: "" };
-        expect(anchorKindOf(anchor)).toBe("file-level");
+    it.each<{ name: string; anchor: TextQuoteAnchor; kind: ReturnType<typeof anchorKindOf> }>([
+        {
+            name: "a comment on selected text",
+            anchor: { exact: "hello", prefix: "", suffix: "" },
+            kind: "text-quote",
+        },
+        {
+            name: "a comment on a source line with no selected text",
+            anchor: { exact: "", prefix: "", suffix: "", line: 12 },
+            kind: "line",
+        },
+        {
+            name: "a comment on the whole file",
+            anchor: { exact: "", prefix: "", suffix: "" },
+            kind: "file-level",
+        },
+    ])("classifies $name as $kind", ({ anchor, kind }) => {
+        expect(anchorKindOf(anchor)).toBe(kind);
     });
 });

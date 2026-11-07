@@ -159,8 +159,8 @@ describe("buildRailModel", () => {
         expect(model.cycleThreadIds).toEqual(["of-new", "of-old"]);
     });
 
-    it("reports hasVisibleComments across every group", () => {
-        const empty = buildRailModel({
+    it("reports no visible comments for an empty rail", () => {
+        const model = buildRailModel({
             currentThreads: [],
             generalThreads: [],
             orphanedFileThreads: [],
@@ -171,9 +171,11 @@ describe("buildRailModel", () => {
             onlyThisFile: false,
         });
 
-        expect(empty.hasVisibleComments).toBe(false);
+        expect(model.hasVisibleComments).toBe(false);
+    });
 
-        const withOrphanTray = buildRailModel({
+    it("still reports visible comments when the only thread's anchor no longer resolves", () => {
+        const model = buildRailModel({
             currentThreads: [thread("o", "2020-01-01T00:00:00Z")],
             generalThreads: [],
             orphanedFileThreads: [],
@@ -184,8 +186,8 @@ describe("buildRailModel", () => {
             onlyThisFile: false,
         });
 
-        expect(withOrphanTray.hasAnchoredThreads).toBe(false);
-        expect(withOrphanTray.hasVisibleComments).toBe(true);
+        expect(model.hasAnchoredThreads).toBe(false);
+        expect(model.hasVisibleComments).toBe(true);
     });
 
     it("treats a thread with a missing/invalid timestamp as oldest", () => {

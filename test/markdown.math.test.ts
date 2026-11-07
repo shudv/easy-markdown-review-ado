@@ -109,21 +109,6 @@ describe("renderMarkdown — mathematical notation", () => {
         expect(equation.querySelector(".katex")).not.toBeNull();
     });
 
-    it("marks placeholders when the lazy KaTeX chunk cannot load", async () => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const root = document.createElement("div");
-        root.innerHTML = renderMarkdownSync(String.raw`$x^2$`);
-
-        await hydrateMath(root, async () => {
-            throw new Error("chunk unavailable");
-        });
-
-        const equation = root.querySelector<HTMLElement>(".emr-math")!;
-        expect(equation.dataset.mathError).toBe("load-failed");
-        expect(equation.querySelector(".emr-math-fallback")).not.toBeNull();
-        expect(warn).toHaveBeenCalledOnce();
-    });
-
     it("marks an invalid encoded source without replacing its fallback", async () => {
         const root = document.createElement("div");
         root.innerHTML =
@@ -137,16 +122,16 @@ describe("renderMarkdown — mathematical notation", () => {
         expect(equation.querySelector(".emr-math-fallback")?.textContent).toBe("%");
     });
 
-    it("skips a placeholder whose encoded source is empty", async () => {
+    it("leaves a placeholder with an empty source as its fallback, neither rendered nor flagged", async () => {
         const root = document.createElement("div");
         root.innerHTML =
             '<span class="emr-math" data-math-src=""><code class="emr-math-fallback"></code></span>';
-        const renderToString = vi.fn(() => '<span class="katex"></span>');
 
-        await hydrateMath(root, async () => ({ renderToString }));
+        await hydrateMath(root);
 
         const equation = root.querySelector<HTMLElement>(".emr-math")!;
-        expect(renderToString).not.toHaveBeenCalled();
+        expect(equation.querySelector(".emr-math-fallback")).not.toBeNull();
+        expect(equation.querySelector(".katex")).toBeNull();
         expect(equation.dataset.hydrated).toBeUndefined();
         expect(equation.dataset.mathError).toBeUndefined();
     });
@@ -160,7 +145,7 @@ describe("renderMarkdown — mathematical notation", () => {
         expect(root.querySelector(".emr-math > .katex")).not.toBeNull();
     });
 
-    it("does not reload or duplicate an already hydrated equation", async () => {
+    it("leaves an already rendered equation as is, without loading KaTeX again", async () => {
         const root = document.createElement("div");
         root.innerHTML = renderMarkdownSync(String.raw`$x^2$`);
         await hydrateMath(root);

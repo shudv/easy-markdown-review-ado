@@ -21,10 +21,12 @@ function el(className: string): Element {
 }
 
 describe("classifyDiffElement", () => {
-    it("maps each decorated class to its hue (deleted wins)", () => {
-        expect(classifyDiffElement(el("emr-diff-deleted-marker"))).toBe("deleted");
-        expect(classifyDiffElement(el("emr-diff-block emr-diff-block--added"))).toBe("added");
-        expect(classifyDiffElement(el("emr-diff-block emr-diff-block--modified"))).toBe("modified");
+    it.each([
+        ["emr-diff-deleted-marker", "deleted"],
+        ["emr-diff-block emr-diff-block--added", "added"],
+        ["emr-diff-block emr-diff-block--modified", "modified"],
+    ])("marks an element with class %s as %s", (className, kind) => {
+        expect(classifyDiffElement(el(className))).toBe(kind);
     });
     it("returns null for an undecorated element", () => {
         expect(classifyDiffElement(el("emr-diff-block"))).toBeNull();
@@ -38,14 +40,30 @@ describe("markerFraction", () => {
             height: 0.05,
         });
     });
-    it("clamps into 0..1 and guards a zero-height document", () => {
-        expect(markerFraction(2000, 5000, 1000)).toEqual({ top: 1, height: 1 });
-        expect(markerFraction(10, 10, 0)).toEqual({ top: 0, height: 0 });
-        // A negative offset (element above the content top) clamps to 0.
-        expect(markerFraction(-100, 50, 1000)).toEqual({
-            top: 0,
-            height: 0.05,
-        });
+    it.each([
+        {
+            name: "an element past the end of the content pins to the bottom",
+            offset: 2000,
+            height: 5000,
+            content: 1000,
+            fraction: { top: 1, height: 1 },
+        },
+        {
+            name: "an element above the content top pins to the top",
+            offset: -100,
+            height: 50,
+            content: 1000,
+            fraction: { top: 0, height: 0.05 },
+        },
+        {
+            name: "an empty document places markers at the top with no height",
+            offset: 10,
+            height: 10,
+            content: 0,
+            fraction: { top: 0, height: 0 },
+        },
+    ])("$name", ({ offset, height, content, fraction }) => {
+        expect(markerFraction(offset, height, content)).toEqual(fraction);
     });
 });
 
@@ -91,7 +109,7 @@ describe("mergeMarkers", () => {
 });
 
 describe("resolveOverlaps", () => {
-    it("keeps non-overlapping ticks, sorted (occupied above and below)", () => {
+    it("keeps non-overlapping ticks, in document order", () => {
         const out = resolveOverlaps([
             { top: 0.1, height: 0.05, kind: "added" },
             { top: 0.4, height: 0.05, kind: "deleted" },
@@ -100,7 +118,9 @@ describe("resolveOverlaps", () => {
         ]);
 
         expect(out.map((m) => m.top)).toEqual([0.1, 0.4, 0.6, 0.8]);
-        expect(out).toHaveLength(4);
+    });
+
+    it("draws nothing for a document without changes", () => {
         expect(resolveOverlaps([])).toEqual([]);
     });
     it("splits the enclosing block around a deletion inside it", () => {
@@ -175,9 +195,11 @@ describe("scrollTargetForFraction", () => {
         // fraction 0.5 of a 2000px doc = 1000; minus half of a 400px viewport = 800.
         expect(scrollTargetForFraction(0.5, 2000, 400)).toBe(800);
     });
-    it("clamps to the scrollable range at both ends", () => {
-        expect(scrollTargetForFraction(0, 2000, 400)).toBe(0);
-        expect(scrollTargetForFraction(1, 2000, 400)).toBe(1600);
+    it.each([
+        { name: "the top scrolls to the start", fraction: 0, target: 0 },
+        { name: "the bottom scrolls to the end, not past it", fraction: 1, target: 1600 },
+    ])("clicking $name", ({ fraction, target }) => {
+        expect(scrollTargetForFraction(fraction, 2000, 400)).toBe(target);
     });
 });
 
@@ -204,7 +226,7 @@ describe("thumbMetrics", () => {
             heightPx: 50,
         });
     });
-    it("reaches the bottom EXACTLY at max scroll (no overshoot)", () => {
+    it("sits flush with the track bottom at max scroll", () => {
         // maxScroll = 300; at the bottom the thumb bottom == track bottom (200).
         const m = thumbMetrics(300, geometry(100, 400, 200, 20));
         expect(m.heightPx).toBe(50);

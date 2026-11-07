@@ -63,19 +63,27 @@ describe("wikiPageTitle", () => {
 });
 
 describe("orderRank / compareRanks", () => {
-    it("ranks listed names by position and unlisted names last", () => {
-        const rank = orderRank(["Overview", "Guides/", "FAQ.md"]);
-        expect(rank("Overview")).toBe(0);
-        expect(rank("Guides")).toBe(1);
-        expect(rank("FAQ")).toBe(2);
-        expect(rank("Other")).toBe(Infinity);
+    const rank = orderRank(["Overview", "Guides/", "FAQ.md"]);
+
+    it.each([
+        { name: "a listed page", page: "Overview", expected: 0 },
+        { name: "a folder listed with a trailing slash", page: "Guides", expected: 1 },
+        { name: "a page listed with its .md extension", page: "FAQ", expected: 2 },
+        { name: "an unlisted page, last", page: "Other", expected: Infinity },
+    ])("ranks $name by its position", ({ page, expected }) => {
+        expect(rank(page)).toBe(expected);
     });
 
-    it("prefers an exact match, then falls back to case-insensitive", () => {
-        const rank = orderRank(["faq", "FAQ", "Intro", "intro"]);
-        expect(rank("FAQ")).toBe(1);
-        expect(rank("Faq")).toBe(0);
-        expect(rank("intro")).toBe(3);
+    it.each([
+        {
+            name: "an exact-case match over an earlier case-insensitive one",
+            page: "FAQ",
+            expected: 1,
+        },
+        { name: "the first case-insensitive match when none is exact", page: "Faq", expected: 0 },
+        { name: "an exact-case match listed later", page: "intro", expected: 3 },
+    ])("prefers $name", ({ page, expected }) => {
+        expect(orderRank(["faq", "FAQ", "Intro", "intro"])(page)).toBe(expected);
     });
 
     it("ranks everything unlisted without an order", () => {
@@ -86,10 +94,12 @@ describe("orderRank / compareRanks", () => {
         expect(orderRank(["A", "B", "A"])("A")).toBe(0);
     });
 
-    it("compares ranks with ties at zero", () => {
-        expect(compareRanks(0, 1)).toBe(-1);
-        expect(compareRanks(2, 1)).toBe(1);
-        expect(compareRanks(Infinity, Infinity)).toBe(0);
+    it.each([
+        { name: "an earlier rank first", a: 0, b: 1, expected: -1 },
+        { name: "a later rank after", a: 2, b: 1, expected: 1 },
+        { name: "two unlisted pages as tied", a: Infinity, b: Infinity, expected: 0 },
+    ])("compares $name", ({ a, b, expected }) => {
+        expect(compareRanks(a, b)).toBe(expected);
     });
 });
 
@@ -111,19 +121,22 @@ describe("withFirstPageFirst", () => {
         ]);
     });
 
-    it("leaves the files as they are without a usable root order", () => {
-        expect(withFirstPageFirst(files, undefined)).toBe(files);
-        expect(withFirstPageFirst(files, ["Missing"])).toBe(files);
+    it.each([
+        { name: "there is no root order", order: undefined },
+        { name: "no listed page exists", order: ["Missing"] },
+    ])("leaves the files as they are when $name", ({ order }) => {
+        expect(withFirstPageFirst(files, order)).toBe(files);
     });
 });
 
 describe("subpagesFolderOf", () => {
-    it("drops the page's .md extension", () => {
-        expect(subpagesFolderOf("/Guides.md")).toBe("/Guides");
-        expect(subpagesFolderOf("/a/Page.MD")).toBe("/a/Page");
+    it.each([
+        ["/Guides.md", "/Guides"],
+        ["/a/Page.MD", "/a/Page"],
+    ])("finds the subpages of %s in %s", (page, folder) => {
+        expect(subpagesFolderOf(page)).toBe(folder);
     });
 });
-
 describe("subpagesFromListing", () => {
     it("orders pages by .order, then the rest by title", () => {
         const subpages = subpagesFromListing({

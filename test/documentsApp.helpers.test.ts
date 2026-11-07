@@ -42,23 +42,19 @@ const recentPr = {
 };
 
 describe("seedLazyTree", () => {
-    it("seeds files, a copy of the top-level folders, and the root order", () => {
-        const folders = ["docs"];
-
+    it("seeds files, the top-level folders to expand, and the root order", () => {
         const r = repo({
             files: [file("a.md")],
-            topLevelFolders: folders,
+            topLevelFolders: ["docs"],
             rootOrder: ["a"],
         });
 
-        const tree = seedLazyTree(r);
-        expect(tree).toEqual({
+        expect(seedLazyTree(r)).toEqual({
             repoId: "r1",
             files: [file("a.md")],
             unloadedFolders: ["docs"],
             folderOrders: { "": ["a"] },
         });
-        expect(tree.unloadedFolders).not.toBe(folders);
     });
 
     it("defaults missing folders and order to empty", () => {
@@ -88,7 +84,7 @@ describe("mergeFolderListing", () => {
         expect(next.repoId).toBe("r1");
         expect(next.files.map((f) => f.path)).toEqual(["docs/a.md", "docs/b.md", "z.md"]);
         expect(next.unloadedFolders).toEqual(["docs/sub", "other"]);
-        expect(next.folderOrders).toBe(entry.folderOrders);
+        expect(next.folderOrders).toEqual({ "": ["z"] });
         // The input entry is untouched.
         expect(entry.files.map((f) => f.path)).toEqual(["z.md", "docs/b.md"]);
     });
@@ -116,9 +112,14 @@ describe("pickSelectedRepo", () => {
         expect(pickSelectedRepo([a], "b", b)).toBe(b);
     });
 
-    it("falls back to the first repo otherwise", () => {
-        expect(pickSelectedRepo([a], "x", b)).toBe(a);
-        expect(pickSelectedRepo([a], "x", undefined)).toBe(a);
+    it.each([
+        { name: "a different repo was open before", cached: b },
+        { name: "no repo was open before", cached: undefined },
+    ])("falls back to the first repo for an unknown id when $name", ({ cached }) => {
+        expect(pickSelectedRepo([a], "x", cached)).toBe(a);
+    });
+
+    it("selects nothing in a project without repos", () => {
         expect(pickSelectedRepo([], "x", undefined)).toBeUndefined();
     });
 });
@@ -164,9 +165,11 @@ describe("buildRoutedPr", () => {
         });
     });
 
-    it("returns null without a repo or recent PR", () => {
-        expect(buildRoutedPr(undefined)).toBeNull();
-        expect(buildRoutedPr(repo())).toBeNull();
+    it.each([
+        { name: "no repo is selected", selected: undefined },
+        { name: "the repo has no recent PR", selected: repo() },
+    ])("shows no PR pill when $name", ({ selected }) => {
+        expect(buildRoutedPr(selected)).toBeNull();
     });
 });
 
@@ -196,18 +199,19 @@ describe("resolveCommentGating", () => {
         });
     });
 
-    it("gates per-document mode only on an explicit Contribute denial", () => {
+    it("locks per-document mode with a message on an explicit Contribute denial", () => {
         expect(resolveCommentGating(true, repo({ canComment: false }))).toEqual({
             readOnly: true,
             shellReadOnly: true,
             shellReadOnlyMessage: COMMENT_PERMISSION_DENIED_MESSAGE,
         });
-        expect(resolveCommentGating(true, repo())).toEqual({
-            readOnly: true,
-            shellReadOnly: false,
-            shellReadOnlyMessage: undefined,
-        });
-        expect(resolveCommentGating(true, undefined)).toEqual({
+    });
+
+    it.each([
+        { name: "the permission is unknown", selected: repo() },
+        { name: "no repo is selected", selected: undefined },
+    ])("leaves per-document mode to each document when $name", ({ selected }) => {
+        expect(resolveCommentGating(true, selected)).toEqual({
             readOnly: true,
             shellReadOnly: false,
             shellReadOnlyMessage: undefined,
@@ -224,9 +228,11 @@ describe("buildMentionLinks", () => {
         });
     });
 
-    it("returns null when org or project is missing", () => {
-        expect(buildMentionLinks(undefined, "Proj", "Repo")).toBeNull();
-        expect(buildMentionLinks("https://org", undefined, "Repo")).toBeNull();
+    it.each([
+        { name: "the org", org: undefined, project: "Proj" },
+        { name: "the project", org: "https://org", project: undefined },
+    ])("can't link mentions without $name", ({ org, project }) => {
+        expect(buildMentionLinks(org, project, "Repo")).toBeNull();
     });
 });
 
@@ -293,20 +299,21 @@ describe("pickDeepLinkSeeds", () => {
 });
 
 describe("menuFocusTarget", () => {
-    it("enters the list from outside with the arrow keys", () => {
-        expect(menuFocusTarget("ArrowDown", -1, 3)).toBe(0);
-        expect(menuFocusTarget("ArrowUp", -1, 3)).toBe(2);
-    });
-
-    it("wraps arrow navigation within the list", () => {
-        expect(menuFocusTarget("ArrowDown", 2, 3)).toBe(0);
-        expect(menuFocusTarget("ArrowUp", 0, 3)).toBe(2);
-        expect(menuFocusTarget("ArrowDown", 0, 3)).toBe(1);
-    });
-
-    it("jumps to the ends with Home / End", () => {
-        expect(menuFocusTarget("Home", 1, 3)).toBe(0);
-        expect(menuFocusTarget("End", 1, 3)).toBe(2);
+    it.each([
+        {
+            name: "ArrowDown from outside enters at the first item",
+            key: "ArrowDown",
+            from: -1,
+            to: 0,
+        },
+        { name: "ArrowUp from outside enters at the last item", key: "ArrowUp", from: -1, to: 2 },
+        { name: "ArrowDown moves to the next item", key: "ArrowDown", from: 0, to: 1 },
+        { name: "ArrowDown on the last item wraps to the first", key: "ArrowDown", from: 2, to: 0 },
+        { name: "ArrowUp on the first item wraps to the last", key: "ArrowUp", from: 0, to: 2 },
+        { name: "Home jumps to the first item", key: "Home", from: 1, to: 0 },
+        { name: "End jumps to the last item", key: "End", from: 1, to: 2 },
+    ])("$name", ({ key, from, to }) => {
+        expect(menuFocusTarget(key, from, 3)).toBe(to);
     });
 
     it("ignores other keys", () => {

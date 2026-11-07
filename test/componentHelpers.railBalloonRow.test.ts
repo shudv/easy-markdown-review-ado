@@ -27,32 +27,41 @@ const anchor: TextQuoteAnchor = { exact: "quoted" } as TextQuoteAnchor;
 const thread = (id: string) => ({ id }) as CommentThread;
 
 describe("SelectionBubble helpers", () => {
-    it("labels the copy outcome only once it's known", () => {
-        expect(selectionLinkResultLabel("idle")).toBeNull();
-        expect(selectionLinkResultLabel("pending")).toBeNull();
-        expect(selectionLinkResultLabel("copied")).toBe("Link copied");
-        expect(selectionLinkResultLabel("failed")).toBe("Couldn't copy link");
+    it.each([
+        ["idle", null],
+        ["pending", null],
+        ["copied", "Link copied"],
+        ["failed", "Couldn't copy link"],
+    ] as const)("announces a %s copy as %j", (outcome, label) => {
+        expect(selectionLinkResultLabel(outcome)).toBe(label);
     });
 
-    it("flags the outcome on the link button class", () => {
-        expect(selectionLinkButtonClass("idle")).toBe("emr-selection-bubble-link");
-        expect(selectionLinkButtonClass("copied")).toBe("emr-selection-bubble-link is-copied");
-        expect(selectionLinkButtonClass("failed")).toBe("emr-selection-bubble-link is-failed");
+    it.each([
+        ["idle", "emr-selection-bubble-link"],
+        ["copied", "emr-selection-bubble-link is-copied"],
+        ["failed", "emr-selection-bubble-link is-failed"],
+    ] as const)("styles the link button after a %s copy as %s", (outcome, className) => {
+        expect(selectionLinkButtonClass(outcome)).toBe(className);
     });
 });
 
 describe("Balloon helpers", () => {
-    it("labels every display status", () => {
-        expect(balloonStatusLabel("active")).toBe("Active");
-        expect(balloonStatusLabel("resolved")).toBe("Resolved");
-        expect(balloonStatusLabel("wontFix")).toBe("Won't fix");
-        expect(balloonStatusLabel("closed")).toBe("Closed");
-        expect(balloonStatusLabel("pending")).toBe("Pending");
-        expect(balloonStatusLabel("orphaned")).toBe("Anchor missing");
+    it.each([
+        ["active", "Active"],
+        ["resolved", "Resolved"],
+        ["wontFix", "Won't fix"],
+        ["closed", "Closed"],
+        ["pending", "Pending"],
+        ["orphaned", "Anchor missing"],
+    ] as const)("labels a %s thread %s", (status, label) => {
+        expect(balloonStatusLabel(status)).toBe(label);
     });
 
-    it("builds the class list in a stable order", () => {
+    it("styles a plain balloon with the base class only", () => {
         expect(balloonClassName({ isActive: false, resolved: false })).toBe("emr-balloon");
+    });
+
+    it("adds a class for each state of an inline, active, resolved, orphaned general balloon", () => {
         expect(
             balloonClassName({
                 inline: true,
@@ -64,96 +73,157 @@ describe("Balloon helpers", () => {
         ).toBe("emr-balloon inline is-active is-resolved is-orphaned is-general");
     });
 
-    it("positions only non-inline balloons", () => {
-        expect(balloonStyle(true, 40)).toEqual({});
-        expect(balloonStyle(false, 40)).toEqual({ top: 40 });
-        expect(balloonStyle(undefined, undefined)).toEqual({ top: 0 });
+    it.each([
+        { name: "an inline balloon flows with the text", inline: true, top: 40, style: {} },
+        { name: "a rail balloon sits at its anchor", inline: false, top: 40, style: { top: 40 } },
+        {
+            name: "an unmeasured rail balloon sits at the top",
+            inline: undefined,
+            top: undefined,
+            style: { top: 0 },
+        },
+    ])("$name", ({ inline, top, style }) => {
+        expect(balloonStyle(inline, top)).toEqual(style);
     });
 });
 
 describe("CommentRail layout", () => {
-    it("places the draft only while it can be shown", () => {
+    it("places the draft at its anchor while the rail is open", () => {
         expect(railDraftY(false, anchor, 12)).toBe(12);
-        expect(railDraftY(true, anchor, 12)).toBeNull();
-        expect(railDraftY(false, null, 12)).toBeNull();
-        expect(railDraftY(false, anchor, null)).toBeNull();
     });
 
-    it("expands a tray when opened, active, or matched by search", () => {
-        const threads = [thread("a")];
-
-        const base = {
-            collapsed: true,
-            threads,
-            activeThreadId: null,
-            searchActive: false,
-        };
-
-        expect(isRailTrayExpanded(base)).toBe(false);
-        expect(isRailTrayExpanded({ ...base, collapsed: false })).toBe(true);
-        expect(isRailTrayExpanded({ ...base, activeThreadId: "a" })).toBe(true);
-        expect(isRailTrayExpanded({ ...base, activeThreadId: "b" })).toBe(false);
-        expect(isRailTrayExpanded({ ...base, searchActive: true })).toBe(true);
-        expect(isRailTrayExpanded({ ...base, threads: [], searchActive: true })).toBe(false);
+    it.each([
+        { name: "the rail is collapsed", collapsed: true, draft: anchor, y: 12 },
+        { name: "there is no draft", collapsed: false, draft: null, y: 12 },
+        {
+            name: "the draft's anchor is not measured yet",
+            collapsed: false,
+            draft: anchor,
+            y: null,
+        },
+    ])("hides the draft when $name", ({ collapsed, draft, y }) => {
+        expect(railDraftY(collapsed, draft, y)).toBeNull();
     });
 
-    it("shows the header for writers, comments, or a visible routed PR", () => {
-        const base = {
-            readOnly: true,
-            totalCommentCount: 0,
-            orphanedFileThreadCount: 0,
-            hasRoutedPr: false,
-            hidePrPill: undefined,
-        };
+    const tray = {
+        collapsed: true,
+        threads: [thread("a")],
+        activeThreadId: null,
+        searchActive: false,
+    };
 
-        expect(shouldShowRailHeader(base)).toBe(false);
-        expect(shouldShowRailHeader({ ...base, readOnly: false })).toBe(true);
-        expect(shouldShowRailHeader({ ...base, totalCommentCount: 1 })).toBe(true);
-        expect(shouldShowRailHeader({ ...base, orphanedFileThreadCount: 1 })).toBe(true);
-        expect(shouldShowRailHeader({ ...base, hasRoutedPr: true })).toBe(true);
-        expect(
-            shouldShowRailHeader({
-                ...base,
-                hasRoutedPr: true,
-                hidePrPill: true,
-            }),
-        ).toBe(false);
+    it.each([
+        { name: "stays closed by default", state: tray, expanded: false },
+        {
+            name: "opens when the user expands it",
+            state: { ...tray, collapsed: false },
+            expanded: true,
+        },
+        {
+            name: "opens when it holds the active thread",
+            state: { ...tray, activeThreadId: "a" },
+            expanded: true,
+        },
+        {
+            name: "stays closed when another thread is active",
+            state: { ...tray, activeThreadId: "b" },
+            expanded: false,
+        },
+        {
+            name: "opens while a search matches its threads",
+            state: { ...tray, searchActive: true },
+            expanded: true,
+        },
+        {
+            name: "stays closed during a search when it has no matches",
+            state: { ...tray, threads: [], searchActive: true },
+            expanded: false,
+        },
+    ])("a collapsed tray $name", ({ state, expanded }) => {
+        expect(isRailTrayExpanded(state)).toBe(expanded);
     });
 
-    it("only offers empty-state copy when nothing is anchored and no draft", () => {
-        const model = {
-            orderedAnchoredIds: [] as string[],
-            orphanedThreads: [] as CommentThread[],
-            visibleGeneralThreads: [] as CommentThread[],
-            visibleOrphanedFileThreads: [] as CommentThread[],
-        };
+    const header = {
+        readOnly: true,
+        totalCommentCount: 0,
+        orphanedFileThreadCount: 0,
+        hasRoutedPr: false,
+        hidePrPill: undefined,
+    };
 
-        const opts = {
-            hasDraft: false,
-            commentQuery: "",
-            filterMode: "all" as const,
-            fileThreadCount: 0,
-            readOnly: false,
-        };
+    it.each([
+        { name: "hides for a reader of a file without comments", state: header, shown: false },
+        {
+            name: "shows for someone who can comment",
+            state: { ...header, readOnly: false },
+            shown: true,
+        },
+        {
+            name: "shows when the file has comments",
+            state: { ...header, totalCommentCount: 1 },
+            shown: true,
+        },
+        {
+            name: "shows when the file has orphaned threads",
+            state: { ...header, orphanedFileThreadCount: 1 },
+            shown: true,
+        },
+        { name: "shows for a routed PR", state: { ...header, hasRoutedPr: true }, shown: true },
+        {
+            name: "hides when the routed PR's pill is hidden",
+            state: { ...header, hasRoutedPr: true, hidePrPill: true },
+            shown: false,
+        },
+    ])("the rail header $name", ({ state, shown }) => {
+        expect(shouldShowRailHeader(state)).toBe(shown);
+    });
 
-        expect(railEmptyMessageFor({ ...model, orderedAnchoredIds: ["a"] }, opts)).toBeNull();
-        expect(railEmptyMessageFor(model, { ...opts, hasDraft: true })).toBeNull();
-        expect(railEmptyMessageFor(model, { ...opts, commentQuery: "x" })).toBe(
+    const emptyRail = {
+        orderedAnchoredIds: [] as string[],
+        orphanedThreads: [] as CommentThread[],
+        visibleGeneralThreads: [] as CommentThread[],
+        visibleOrphanedFileThreads: [] as CommentThread[],
+    };
+
+    const emptyOpts = {
+        hasDraft: false,
+        commentQuery: "",
+        filterMode: "all" as const,
+        fileThreadCount: 0,
+        readOnly: false,
+    };
+
+    it.each([
+        {
+            name: "anchored comments are shown",
+            rail: { ...emptyRail, orderedAnchoredIds: ["a"] },
+            opts: emptyOpts,
+        },
+        { name: "a draft is open", rail: emptyRail, opts: { ...emptyOpts, hasDraft: true } },
+        {
+            name: "general comments are shown below",
+            rail: { ...emptyRail, visibleGeneralThreads: [thread("g")] },
+            opts: emptyOpts,
+        },
+    ])("shows no empty-state copy when $name", ({ rail, opts }) => {
+        expect(railEmptyMessageFor(rail, opts)).toBeNull();
+    });
+
+    it("says no comments match a search that found nothing", () => {
+        expect(railEmptyMessageFor(emptyRail, { ...emptyOpts, commentQuery: "x" })).toBe(
             "No comments match \u201cx\u201d.",
         );
+    });
 
-        const withOther = railEmptyMessageFor(
-            { ...model, visibleGeneralThreads: [thread("g")] },
-            opts,
+    it("invites a new thread on a file without comments", () => {
+        expect(railEmptyMessageFor(emptyRail, emptyOpts)).toBe(
+            "No comments on this file yet. Select any text to start a thread.",
         );
-
-        const withoutOther = railEmptyMessageFor(model, opts);
-        expect(withOther).not.toBe(withoutOther);
     });
 });
 
 describe("CommentRow helpers", () => {
-    it("gates edit/delete on own comments in interactive rows", () => {
+    it("lets the author edit, delete and react in an interactive row", () => {
         expect(
             commentRowPermissions({
                 isOwn: true,
@@ -161,12 +231,10 @@ describe("CommentRow helpers", () => {
                 isFirst: false,
                 canLink: false,
             }),
-        ).toEqual({
-            canEdit: true,
-            canDelete: true,
-            canReact: true,
-            hasMenuItems: true,
-        });
+        ).toEqual({ canEdit: true, canDelete: true, canReact: true, hasMenuItems: true });
+    });
+
+    it("offers nothing in a non-interactive row, even to the author", () => {
         expect(
             commentRowPermissions({
                 isOwn: true,
@@ -174,52 +242,68 @@ describe("CommentRow helpers", () => {
                 isFirst: false,
                 canLink: false,
             }),
-        ).toEqual({
-            canEdit: false,
-            canDelete: false,
-            canReact: false,
-            hasMenuItems: false,
+        ).toEqual({ canEdit: false, canDelete: false, canReact: false, hasMenuItems: false });
+    });
+
+    const someoneElses = { isOwn: false, interactive: true, isFirst: false, canLink: false };
+
+    it.each([
+        { name: "has no menu for a reply without a link", row: someoneElses, hasMenu: false },
+        {
+            name: "has a menu to copy the comment's link",
+            row: { ...someoneElses, canLink: true },
+            hasMenu: true,
+        },
+        {
+            name: "has a menu with thread actions on the first comment",
+            row: { ...someoneElses, isFirst: true },
+            hasMenu: true,
+        },
+    ])("another user's comment $name", ({ row, hasMenu }) => {
+        expect(commentRowPermissions(row).hasMenuItems).toBe(hasMenu);
+    });
+
+    const likers = [
+        { id: "me", displayName: "Me" },
+        { id: "you", displayName: "You" },
+    ];
+
+    it.each([
+        { name: "nobody liked", reactions: undefined, viewer: "me", liked: false, count: 0 },
+        {
+            name: "the viewer liked",
+            reactions: [{ kind: "like" as const, users: likers }],
+            viewer: "me",
+            liked: true,
+            count: 2,
+        },
+        {
+            name: "others liked",
+            reactions: [{ kind: "like" as const, users: likers }],
+            viewer: "them",
+            liked: false,
+            count: 2,
+        },
+    ])("summarizes likes when $name", ({ reactions, viewer, liked, count }) => {
+        expect(summarizeLikes(reactions, viewer)).toMatchObject({
+            likedByMe: liked,
+            likeCount: count,
         });
     });
 
-    it("has menu items for a link, or thread actions on the first comment", () => {
-        const base = { isOwn: false, interactive: true, isFirst: false };
-        expect(commentRowPermissions({ ...base, canLink: false }).hasMenuItems).toBe(false);
-        expect(commentRowPermissions({ ...base, canLink: true }).hasMenuItems).toBe(true);
-        expect(commentRowPermissions({ ...base, isFirst: true, canLink: false }).hasMenuItems).toBe(
-            true,
-        );
+    it.each([
+        ["idle", "Link to comment"],
+        ["copied", "Link copied"],
+        ["failed", "Couldn't copy link"],
+    ] as const)("labels the link item after a %s copy as %s", (outcome, label) => {
+        expect(commentLinkLabel(outcome)).toBe(label);
     });
 
-    it("summarizes like reactions for the viewer", () => {
-        expect(summarizeLikes(undefined, "me")).toMatchObject({
-            likedByMe: false,
-            likeCount: 0,
-        });
-
-        const users = [
-            { id: "me", displayName: "Me" },
-            { id: "you", displayName: "You" },
-        ];
-
-        expect(summarizeLikes([{ kind: "like", users }], "me")).toMatchObject({
-            likedByMe: true,
-            likeCount: 2,
-        });
-        expect(summarizeLikes([{ kind: "like", users }], "them")).toMatchObject({
-            likedByMe: false,
-            likeCount: 2,
-        });
-    });
-
-    it("labels the link item by copy outcome", () => {
-        expect(commentLinkLabel("idle")).toBe("Link to comment");
-        expect(commentLinkLabel("copied")).toBe("Link copied");
-        expect(commentLinkLabel("failed")).toBe("Couldn't copy link");
-    });
-
-    it("formats timestamps, passing invalid input through", () => {
-        expect(formatFullTime("not a date")).toBe("not a date");
+    it("formats a timestamp as a full date and time", () => {
         expect(formatFullTime("2026-05-11T11:41:00Z")).toContain(" at ");
+    });
+
+    it("shows an unparseable timestamp as-is", () => {
+        expect(formatFullTime("not a date")).toBe("not a date");
     });
 });

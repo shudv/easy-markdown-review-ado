@@ -145,20 +145,36 @@ describe("redactText", () => {
         expect(redactText(undefined)).toBeUndefined();
     });
 
-    it("redacts e-mail addresses, URLs and filesystem paths", () => {
-        expect(redactText("mail me at jane.doe@contoso.com now")).toBe("mail me at [email] now");
-        expect(redactText("fetch https://api.example.com/v1/x failed")).toBe("fetch [url] failed");
-        expect(redactText("open file:///C:/Users/jane/notes.md")).toBe("open [url]");
-        expect(redactText("at C:\\Users\\jane\\app\\main.ts:10")).toBe("at [path]:10");
-        expect(redactText("at /home/jane/app/main.ts:10")).toBe("at [path]:10");
+    it.each([
+        {
+            name: "an e-mail address",
+            text: "mail me at jane.doe@contoso.com now",
+            expected: "mail me at [email] now",
+        },
+        {
+            name: "a web URL",
+            text: "fetch https://api.example.com/v1/x failed",
+            expected: "fetch [url] failed",
+        },
+        { name: "a file URL", text: "open file:///C:/Users/jane/notes.md", expected: "open [url]" },
+        {
+            name: "a Windows path",
+            text: "at C:\\Users\\jane\\app\\main.ts:10",
+            expected: "at [path]:10",
+        },
+        { name: "a POSIX path", text: "at /home/jane/app/main.ts:10", expected: "at [path]:10" },
+    ])("redacts $name", ({ text, expected }) => {
+        expect(redactText(text)).toBe(expected);
     });
 
-    it("keeps non-sensitive text and truncates past the cap", () => {
+    it("keeps non-sensitive text", () => {
         expect(redactText("Cannot read property of undefined")).toBe(
             "Cannot read property of undefined",
         );
-        const long = "x".repeat(20);
-        expect(redactText(long, 8)).toBe("xxxxxxxx…");
+    });
+
+    it("truncates text past the cap", () => {
+        expect(redactText("x".repeat(20), 8)).toBe("xxxxxxxx…");
     });
 });
 

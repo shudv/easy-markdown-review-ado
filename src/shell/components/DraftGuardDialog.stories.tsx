@@ -37,26 +37,28 @@ export const KeepEditing: Story = {
     },
 };
 
-/** Escape keeps the draft; clicking the backdrop keeps it too. */
+/**
+ * Escape and a click on the dimmed backdrop both keep the draft; typing other
+ * keys or clicking inside the dialog card doesn't dismiss it.
+ */
 export const DismissAffordances: Story = {
     play: async ({ args, canvasElement }) => {
-        // A non-Escape key is ignored (the handler's early-return branch).
+        const canvas = within(canvasElement);
+        const dialog = canvas.getByRole("dialog", { name: "Unsaved comment draft" });
+
+        await expect(within(dialog).getByText(args.snippet)).toBeVisible();
         await userEvent.keyboard("a");
         await expect(args.onKeepEditing).not.toHaveBeenCalled();
 
         await userEvent.keyboard("{Escape}");
-        await expect(args.onKeepEditing).toHaveBeenCalled();
+        await expect(args.onKeepEditing).toHaveBeenCalledTimes(1);
 
-        // Clicking the overlay (outside the card) also keeps the draft.
-        const overlay = canvasElement.querySelector<HTMLElement>(".emr-draft-guard-overlay")!;
-
-        overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        // The labelled dialog element is the full-screen backdrop around the card.
+        await userEvent.click(dialog);
         await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
 
-        // A click on the card itself (not the overlay) does not dismiss.
-        const card = canvasElement.querySelector<HTMLElement>(".emr-draft-guard")!;
-
-        card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await userEvent.click(canvas.getByText("You already have an unsaved comment"));
         await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
+        await expect(args.onDiscard).not.toHaveBeenCalled();
     },
 };

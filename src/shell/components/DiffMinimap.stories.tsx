@@ -104,7 +104,7 @@ function Reader({
             >
                 edited
             </p>
-            {/* A bare diff-block with no hue modifier is skipped (covers the guard). */}
+            {/* A bare diff-block with no change kind isn't a change: no tick. */}
             <p
                 className="emr-diff-block"
                 style={{
@@ -275,16 +275,22 @@ export const ScrollbarWithoutDiffs: Story = {
 export const NotScrollable: Story = {
     render: () => <Reader short withDiffs={false} />,
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".emr-body")).toBeTruthy());
+        await waitFor(() => expect(within(canvasElement).getByTestId("scroller")).toBeTruthy());
         await expect(canvasElement.querySelector(".emr-diff-ruler")).toBeNull();
     },
 };
 
-/** Diffs rendered without an article wrap still chart (wrap listener optional). */
-export const NoArticleWrap: Story = {
-    render: () => <Reader withWrap={false} />,
+/**
+ * A long view in the reader pane that isn't a rendered Markdown article still
+ * gets the custom scrollbar, without change ticks.
+ */
+export const ScrollbarOutsideArticle: Story = {
+    render: () => <Reader withWrap={false} withDiffs={false} />,
     play: async ({ canvasElement }) => {
-        await waitFor(() => expect(canvasElement.querySelector(".emr-diff-ruler")).toBeTruthy());
+        await waitFor(() =>
+            expect(canvasElement.querySelector(".emr-diff-ruler-thumb")).toBeTruthy(),
+        );
+        await expect(canvasElement.querySelector(".emr-diff-ruler-mark")).toBeNull();
     },
 };
 
@@ -455,7 +461,10 @@ function DetachableReader({ initiallyMounted }: { initiallyMounted: boolean }): 
     );
 }
 
-/** With no scroller attached there is nothing to measure → no bar. */
+/**
+ * While the reader pane isn't showing (e.g. a "more room needed" notice
+ * replaces it), there is nothing to scroll and the bar draws nothing.
+ */
 export const ScrollerNotAttached: Story = {
     render: () => <DetachableReader initiallyMounted={false} />,
     play: async ({ canvasElement }) => {
@@ -465,8 +474,9 @@ export const ScrollerNotAttached: Story = {
 };
 
 /**
- * Once its scroller unmounts, the bar's scroll sync, re-measure, click-to-page
- * and thumb drag all become no-ops instead of touching a missing element.
+ * The reader pane goes away while the bar is still on screen: a late scroll or
+ * resize, a click on the track or a grab of the thumb leaves the bar as it was
+ * instead of failing on the missing reader.
  */
 export const ScrollerRemovedAfterMount: Story = {
     render: () => <DetachableReader initiallyMounted />,

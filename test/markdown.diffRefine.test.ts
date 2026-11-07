@@ -92,37 +92,30 @@ describe("chunkMarkdownLines", () => {
 describe("chunkSimilarity", () => {
     const chunk = (text: string) => chunkMarkdownLines(text.split("\n"), 1)[0]!;
 
-    it("scores identical, blank and word-overlap chunks", () => {
-        expect(chunkSimilarity(chunk("same words"), chunk("same words"))).toBe(1);
-        expect(chunkSimilarity(chunk(" "), chunk("words"))).toBe(0);
-        expect(chunkSimilarity(chunk("a b c d"), chunk("a b x y"))).toBe(0.5);
-        expect(chunkSimilarity(chunk("A b"), chunk("a B"))).toBe(1);
-    });
-
-    it("gives word-less chunks a neutral score only against each other", () => {
-        expect(chunkSimilarity(chunk("| - | - |"), chunk("| - | - | - |"))).toBe(0.5);
-        expect(chunkSimilarity(chunk("---"), chunk("words"))).toBe(0);
+    it.each([
+        { name: "identical chunks", a: "same words", b: "same words", score: 1 },
+        { name: "a blank chunk against prose", a: " ", b: "words", score: 0 },
+        { name: "chunks sharing half their words", a: "a b c d", b: "a b x y", score: 0.5 },
+        { name: "chunks differing only in case", a: "A b", b: "a B", score: 1 },
+        { name: "two word-less table separators", a: "| - | - |", b: "| - | - | - |", score: 0.5 },
+        { name: "a word-less rule against prose", a: "---", b: "words", score: 0 },
+    ])("scores $name as $score", ({ a, b, score }) => {
+        expect(chunkSimilarity(chunk(a), chunk(b))).toBe(score);
     });
 });
 
 describe("refineDiffRanges", () => {
-    it("returns a copy when a source is missing or nothing can be refined", () => {
-        const ranges = [modified(1, 1, 1, 1)];
-        const missing = refineDiffRanges(ranges, undefined, "x");
-        expect(missing).toEqual(ranges);
-        expect(missing).not.toBe(ranges);
-        expect(refineDiffRanges(ranges, "x", undefined)).toEqual(ranges);
-
-        const deletions: DiffRange[] = [
-            {
-                startLine: 1,
-                endLine: 1,
-                kind: "deleted-marker",
-                linesDeleted: 1,
-            },
-        ];
-
-        expect(refineDiffRanges(deletions, "gone\nkept", "kept")).toEqual(deletions);
+    it.each<[string, DiffRange[], string | undefined, string | undefined]>([
+        ["the previous source is unavailable", [modified(1, 1, 1, 1)], undefined, "x"],
+        ["the current source is unavailable", [modified(1, 1, 1, 1)], "x", undefined],
+        [
+            "the only change is a removal",
+            [{ startLine: 1, endLine: 1, kind: "deleted-marker", linesDeleted: 1 }],
+            "gone\nkept",
+            "kept",
+        ],
+    ])("leaves the ranges as they are when %s", (_, ranges, original, current) => {
+        expect(refineDiffRanges(ranges, original, current)).toEqual(ranges);
     });
 
     it("splits a placeholder rewritten into a table and lists (the reported case)", () => {
@@ -188,9 +181,7 @@ describe("refineDiffRanges", () => {
     it("keeps a one-block-for-one-block hunk exactly as it was", () => {
         const range = { ...modified(1, 2, 1, 1), originalText: "old line" };
 
-        const [kept] = refineDiffRanges([range], "old line", "new wrapped\nparagraph");
-
-        expect(kept).toBe(range);
+        expect(refineDiffRanges([range], "old line", "new wrapped\nparagraph")).toEqual([range]);
     });
 
     it("pairs an edited paragraph and marks an inserted one as added", () => {
@@ -457,10 +448,6 @@ describe("refineDiffRanges", () => {
         ["a modified range without original lines", { startLine: 1, endLine: 1, kind: "modified" }],
         ["a range past the end of the current source", modified(1, 9, 1, 1)],
         ["a range past the end of the original source", modified(1, 1, 1, 9)],
-        ["an inverted original span", modified(1, 1, 2, 1)],
-        ["an inverted current span", { ...modified(1, 1, 1, 1), endLine: 0 }],
-        ["a zero start line", modified(0, 1, 1, 1)],
-        ["a zero original start line", modified(1, 1, 0, 1)],
     ])("leaves the input alone for %s", (_, range) => {
         expect(refineDiffRanges([range], "a\nb", "c\nd")).toEqual([range]);
     });

@@ -65,7 +65,7 @@ export function isHighContrastPrimary(primary: string): boolean {
 }
 
 /** Rec.709 luminance threshold below which a background reads as "dark". */
-export const DARK_LUMA_THRESHOLD = 0.5;
+const DARK_LUMA_THRESHOLD = 0.5;
 
 /** True when a parsed luminance is present and below the dark threshold. */
 export function isDarkLuminance(luma: number | null): boolean {

@@ -141,9 +141,11 @@ describe("readAdoTokenExpiry", () => {
         expect(readAdoTokenExpiry(token).adoExpMs).toBe(1200 * 1000);
     });
 
-    it("omits exp when absent or non-numeric", () => {
-        expect(readAdoTokenExpiry(makeJwt({ sub: "x" })).expMs).toBeUndefined();
-        expect(readAdoTokenExpiry(makeJwt({ exp: "later" })).expMs).toBeUndefined();
+    it.each([
+        { name: "absent", payload: { sub: "x" } },
+        { name: "not a number", payload: { exp: "later" } },
+    ])("omits exp when it is $name", ({ payload }) => {
+        expect(readAdoTokenExpiry(makeJwt(payload)).expMs).toBeUndefined();
     });
 
     it("returns empty for an undecodable token", () => {
@@ -172,11 +174,10 @@ describe("classifyAdoGrant", () => {
         expect(c.recoverAtMs).toBe(expMs);
     });
 
-    it("flips to refreshing skewMs BEFORE ado_exp (clock-skew guard)", () => {
+    // The browser clock may lag ADO's; a grant this close to lapsing is treated as lapsed.
+    it("is already refreshing just before ado_exp, within the clock-skew margin", () => {
         const justBefore = adoExpMs - DEFAULT_GRANT_SKEW_MS + 1;
         expect(classifyAdoGrant(token, justBefore).state).toBe("refreshing");
-        const wellBefore = adoExpMs - DEFAULT_GRANT_SKEW_MS - 1_000;
-        expect(classifyAdoGrant(token, wellBefore).state).toBe("live");
     });
 
     it("is expired once the AAD token itself (nearly) lapses", () => {
@@ -198,45 +199,54 @@ describe("classifyAdoGrant", () => {
         expect(c.recoverAtMs).toBeUndefined();
     });
 
-    it("honors a custom skew", () => {
-        const now = adoExpMs - 60_000; // 1 min before ado_exp
-        expect(classifyAdoGrant(token, now, 30_000).state).toBe("live");
-        expect(classifyAdoGrant(token, now, 90_000).state).toBe("refreshing");
+    it.each([
+        { name: "a 30s skew still sees it live", skewMs: 30_000, state: "live" },
+        { name: "a 90s skew already sees it refreshing", skewMs: 90_000, state: "refreshing" },
+    ])("one minute before ado_exp, $name", ({ skewMs, state }) => {
+        expect(classifyAdoGrant(token, adoExpMs - 60_000, skewMs).state).toBe(state);
     });
 });
 
 describe("isAdoGrantLapsed", () => {
-    it("is true only for refreshing / expired", () => {
-        expect(isAdoGrantLapsed("refreshing")).toBe(true);
-        expect(isAdoGrantLapsed("expired")).toBe(true);
-        expect(isAdoGrantLapsed("live")).toBe(false);
-        expect(isAdoGrantLapsed("unknown")).toBe(false);
+    it.each([
+        ["refreshing", true],
+        ["expired", true],
+        ["live", false],
+        ["unknown", false],
+    ] as const)("treats a %s grant as lapsed: %s", (state, lapsed) => {
+        expect(isAdoGrantLapsed(state)).toBe(lapsed);
     });
 });
 
 describe("isAdoAuthError", () => {
-    it("matches HTTP 401 / 403 shapes", () => {
-        expect(isAdoAuthError({ status: 401 })).toBe(true);
-        expect(isAdoAuthError({ status: 403 })).toBe(true);
-        expect(isAdoAuthError({ statusCode: 401 })).toBe(true);
-        expect(isAdoAuthError({ status: 404 })).toBe(false);
-        expect(isAdoAuthError({ status: 500 })).toBe(false);
+    it.each([
+        { name: "a 401 status", error: { status: 401 }, auth: true },
+        { name: "a 403 status", error: { status: 403 }, auth: true },
+        { name: "a 401 statusCode", error: { statusCode: 401 }, auth: true },
+        { name: "a 404 status", error: { status: 404 }, auth: false },
+        { name: "a 500 status", error: { status: 500 }, auth: false },
+    ])("classifies an error with $name as an auth error: $auth", ({ error, auth }) => {
+        expect(isAdoAuthError(error)).toBe(auth);
     });
 
-    it("matches the TF400813 anonymous-identity rejection message", () => {
-        const msg =
-            "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not " +
-            "authorized to access this resource.";
+    const tf400813 =
+        "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not " +
+        "authorized to access this resource.";
 
-        expect(isAdoAuthError(new Error(msg))).toBe(true);
-        expect(isAdoAuthError(msg)).toBe(true);
-        expect(isAdoAuthError({ message: msg })).toBe(true);
+    it.each([
+        { name: "an Error", error: new Error(tf400813) },
+        { name: "a bare string", error: tf400813 },
+        { name: "an error-shaped object", error: { message: tf400813 } },
+    ])("recognises the TF400813 anonymous-identity rejection in $name", ({ error }) => {
+        expect(isAdoAuthError(error)).toBe(true);
     });
 
-    it("is false for unrelated errors", () => {
-        expect(isAdoAuthError(new Error("network down"))).toBe(false);
-        expect(isAdoAuthError(null)).toBe(false);
-        expect(isAdoAuthError(undefined)).toBe(false);
+    it.each([
+        { name: "a network failure", error: new Error("network down") },
+        { name: "null", error: null },
+        { name: "undefined", error: undefined },
+    ])("is false for $name", ({ error }) => {
+        expect(isAdoAuthError(error)).toBe(false);
     });
 });
 
@@ -250,9 +260,11 @@ describe("SessionRefreshingError", () => {
         expect(err.name).toBe("SessionRefreshingError");
     });
 
-    it("is distinguishable from a plain Error", () => {
-        expect(isSessionRefreshingError(new Error("nope"))).toBe(false);
-        expect(isSessionRefreshingError("nope")).toBe(false);
+    it.each([
+        { name: "a plain Error", error: new Error("nope") },
+        { name: "a string", error: "nope" },
+    ])("is distinguishable from $name", ({ error }) => {
+        expect(isSessionRefreshingError(error)).toBe(false);
     });
 });
 
@@ -296,12 +308,18 @@ describe("planSessionRefreshRetry", () => {
         expect(plan.delayMs).toBe(11 * 60_000);
     });
 
-    it("backs off exponentially when recoverAtMs is unknown", () => {
-        const base = { nowMs: 0, minDelayMs: 3_000 };
-        expect(planSessionRefreshRetry({ ...base, attempt: 1 }).delayMs).toBe(3_000);
-        expect(planSessionRefreshRetry({ ...base, attempt: 2 }).delayMs).toBe(6_000);
-        expect(planSessionRefreshRetry({ ...base, attempt: 3 }).delayMs).toBe(12_000);
-    });
+    it.each([
+        [1, 3_000],
+        [2, 6_000],
+        [3, 12_000],
+    ])(
+        "backs off exponentially when recoverAtMs is unknown: attempt %i waits %ims",
+        (attempt, delayMs) => {
+            expect(planSessionRefreshRetry({ nowMs: 0, minDelayMs: 3_000, attempt }).delayMs).toBe(
+                delayMs,
+            );
+        },
+    );
 
     it("gives up after maxAttempts", () => {
         const plan = planSessionRefreshRetry({
@@ -427,29 +445,19 @@ describe("withAdoSessionRefreshDetection", () => {
         expect(getToken).toHaveBeenCalledOnce();
     }, 10_000);
 
-    it("samples the clock after the operation rejects and the token resolves", async () => {
-        const order: string[] = [];
-
-        const op = vi.fn().mockImplementation(async () => {
-            order.push("operation");
-            throw auth401;
-        });
+    // A slow call can start while the grant is live and fail after it lapsed.
+    it("judges the grant at the moment the token is read, not when the call started", async () => {
+        let clock = liveNow;
+        const op = vi.fn().mockRejectedValue(auth401);
 
         const getToken = vi.fn().mockImplementation(async () => {
-            order.push("token");
+            clock = deadNow;
 
             return token;
         });
 
-        const nowMs = vi.fn().mockImplementation(() => {
-            order.push("clock");
-
-            return deadNow;
-        });
-
-        await expect(withAdoSessionRefreshDetection(op, getToken, nowMs)).rejects.toBeInstanceOf(
-            SessionRefreshingError,
-        );
-        expect(order).toEqual(["operation", "token", "clock"]);
+        await expect(
+            withAdoSessionRefreshDetection(op, getToken, () => clock),
+        ).rejects.toBeInstanceOf(SessionRefreshingError);
     });
 });

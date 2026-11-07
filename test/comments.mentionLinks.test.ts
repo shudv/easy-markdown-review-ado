@@ -1,9 +1,7 @@
 // Tests for the mention-link hydrator. The hydrator is a pure DOM
 // function — it scans for `<a class="emr-mention" data-mention-kind="…">`
 // anchors carrying `mention://` placeholder hrefs and rewrites them to
-// real ADO web URLs using the supplied context. These tests exercise
-// every branch of `hydrateMentionLinks` + `buildMentionWebUrl` via the
-// public API.
+// real ADO web URLs using the supplied context.
 //
 // @vitest-environment jsdom
 
@@ -196,42 +194,24 @@ describe("hydrateMentionLinks — bulk + idempotency", () => {
 });
 
 describe("hydrateMentionLinks — orgUrl scheme validation", () => {
-    it("refuses to build a link when orgUrl has a dangerous scheme", () => {
+    // The org URL comes from the host; anything that isn't a plain web URL must
+    // not become a clickable link in a comment.
+    it.each([
+        ["a script URL", "javascript:alert(1)"],
+        ["an unparseable URL", "not a url"],
+        ["a data: URL", "data:text/plain,hi"],
+        ["a file: URL", "file:///C:/Windows"],
+        ["an ftp: URL", "ftp://ftp.example.com/path"],
+    ])("leaves the placeholder when the org URL is %s", (_label, orgUrl) => {
         const root = mountHtml(
             '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
         );
 
-        hydrateMentionLinks(root, {
-            orgUrl: "javascript:alert(1)",
-            projectName: "P",
-        });
-        // The placeholder stays; nothing navigable is produced.
-        expect(root.querySelector("a")!.getAttribute("href")).toBe("mention://workitem/1");
-        expect(root.querySelector("a")!.getAttribute("target")).toBeNull();
-    });
+        hydrateMentionLinks(root, { orgUrl, projectName: "P" });
 
-    it("refuses to build a link when orgUrl is not a valid URL", () => {
-        const root = mountHtml(
-            '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
-        );
-
-        hydrateMentionLinks(root, { orgUrl: "not a url", projectName: "P" });
-        expect(root.querySelector("a")!.getAttribute("href")).toBe("mention://workitem/1");
-    });
-
-    it("refuses other non-http(s) schemes (data:, file:, ftp:)", () => {
-        for (const orgUrl of [
-            "data:text/plain,hi",
-            "file:///C:/Windows",
-            "ftp://ftp.example.com/path",
-        ]) {
-            const root = mountHtml(
-                '<a class="emr-mention" data-mention-kind="workitem" data-mention-id="1" href="mention://workitem/1">#1</a>',
-            );
-
-            hydrateMentionLinks(root, { orgUrl, projectName: "P" });
-            expect(root.querySelector("a")!.getAttribute("href")).toBe("mention://workitem/1");
-        }
+        const a = root.querySelector("a")!;
+        expect(a.getAttribute("href")).toBe("mention://workitem/1");
+        expect(a.getAttribute("target")).toBeNull();
     });
 
     it("accepts http:// orgUrls (e.g. on-prem / private deployments)", () => {

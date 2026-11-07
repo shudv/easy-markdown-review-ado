@@ -213,32 +213,23 @@ describe("initWithHandshakeRetry", () => {
         expect(release).toHaveBeenCalledOnce();
     });
 
-    it("listens to window rejections and claims through telemetry by default", async () => {
+    it("retries when the host's refusal surfaces as an unhandled rejection on the page", async () => {
         vi.useRealTimers();
-        const added = vi.spyOn(window, "addEventListener");
-        const removed = vi.spyOn(window, "removeEventListener");
-        let accept!: () => void;
 
-        const done = initWithHandshakeRetry({
-            init: () => new Promise<void>((resolve) => (accept = resolve)),
-            delaysMs: [],
-        });
+        const init = vi
+            .fn<() => Promise<void>>()
+            .mockReturnValueOnce(new Promise<void>(() => {}))
+            .mockResolvedValueOnce(undefined);
 
-        const [, onRejection] = added.mock.calls.find(([type]) => type === "unhandledrejection")!;
+        const done = initWithHandshakeRetry({ init, delaysMs: [0] });
 
-        const event = new Event("unhandledrejection") as PromiseRejectionEvent;
-        Object.defineProperty(event, "reason", {
-            value: new Error("unrelated"),
-        });
-        window.dispatchEvent(event);
-        accept();
+        const refusal = new Event("unhandledrejection") as PromiseRejectionEvent;
+        Object.defineProperty(refusal, "reason", { value: REFUSAL });
+        window.dispatchEvent(refusal);
+
         await expect(done).resolves.toBeUndefined();
-        expect(removed).toHaveBeenCalledWith("unhandledrejection", onRejection);
-
-        added.mockRestore();
-        removed.mockRestore();
+        expect(init).toHaveBeenCalledTimes(2);
     });
-
     it("follows the production retry schedule by default", async () => {
         const sdk = sdkInit(stream);
         sdk.refuse(HANDSHAKE_RETRY_DELAYS_MS.length + 1);

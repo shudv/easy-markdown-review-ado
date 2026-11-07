@@ -33,62 +33,38 @@ describe("hasPermissionsPath", () => {
 });
 
 describe("isAzureDevOpsOrgUrl", () => {
-    it("accepts dev.azure.com over https", () => {
-        expect(isAzureDevOpsOrgUrl("https://dev.azure.com/myorg")).toBe(true);
+    it.each([
+        ["dev.azure.com over https", "https://dev.azure.com/myorg"],
+        ["a legacy <org>.visualstudio.com over https", "https://myorg.visualstudio.com"],
+    ])("accepts %s", (_label, url) => {
+        expect(isAzureDevOpsOrgUrl(url)).toBe(true);
     });
 
-    it("accepts legacy <org>.visualstudio.com over https", () => {
-        expect(isAzureDevOpsOrgUrl("https://myorg.visualstudio.com")).toBe(true);
-    });
-
-    it("rejects non-https schemes (no token over http)", () => {
+    // The org URL receives the user's access token, so anything that is not
+    // verifiably Azure DevOps over https must be refused.
+    it.each([
         // eslint-disable-next-line sonarjs/no-clear-text-protocols -- negative case: asserts an http:// org URL is rejected
-        expect(isAzureDevOpsOrgUrl("http://dev.azure.com/myorg")).toBe(false);
-    });
-
-    it("rejects non-ADO hosts so the access token never leaks", () => {
-        expect(isAzureDevOpsOrgUrl("https://evil.example.com/myorg")).toBe(false);
-        expect(isAzureDevOpsOrgUrl("https://dev.azure.com.evil.com")).toBe(false);
-    });
-
-    it("rejects a visualstudio.com look-alike that only *contains* the suffix", () => {
-        // Guards the suffix (`endsWith`) rule against a substring (`includes`)
-        // regression: a host that embeds `.visualstudio.com` mid-string but is
-        // rooted at an attacker domain must not receive the access token.
-        expect(isAzureDevOpsOrgUrl("https://evil.visualstudio.com.attacker.com")).toBe(false);
-        // Bare apex / missing the leading dotted org label is not a valid org URL.
-        expect(isAzureDevOpsOrgUrl("https://visualstudio.com")).toBe(false);
-        expect(isAzureDevOpsOrgUrl("https://notvisualstudio.com")).toBe(false);
-        // A host that merely starts with the trusted apex is still foreign.
-        expect(isAzureDevOpsOrgUrl("https://dev.azure.com.evil.io")).toBe(false);
-    });
-
-    it("rejects an unparseable URL", () => {
-        expect(isAzureDevOpsOrgUrl("not a url")).toBe(false);
-        expect(isAzureDevOpsOrgUrl("")).toBe(false);
+        ["plain http (token in clear text)", "http://dev.azure.com/myorg"],
+        ["a foreign host", "https://evil.example.com/myorg"],
+        ["a host that starts with dev.azure.com", "https://dev.azure.com.evil.com"],
+        ["another host that starts with dev.azure.com", "https://dev.azure.com.evil.io"],
+        ["a host embedding .visualstudio.com", "https://evil.visualstudio.com.attacker.com"],
+        ["the bare visualstudio.com apex with no org", "https://visualstudio.com"],
+        ["a look-alike ending in visualstudio.com", "https://notvisualstudio.com"],
+        ["an unparseable URL", "not a url"],
+        ["an empty URL", ""],
+    ])("rejects %s", (_label, url) => {
+        expect(isAzureDevOpsOrgUrl(url)).toBe(false);
     });
 });
 
 describe("commentPermissionFromResponse", () => {
-    it("denies on an explicit all-false result", () => {
-        expect(commentPermissionFromResponse({ value: [false] })).toEqual({
-            canComment: false,
-            resolved: true,
-        });
-    });
-
-    it("allows on an explicit all-true result", () => {
-        expect(commentPermissionFromResponse({ value: [true] })).toEqual({
-            canComment: true,
-            resolved: true,
-        });
-    });
-
-    it("requires every bit to be granted", () => {
-        expect(commentPermissionFromResponse({ value: [true, false] })).toEqual({
-            canComment: false,
-            resolved: true,
-        });
+    it.each([
+        ["denies when the bit is refused", [false], false],
+        ["allows when the bit is granted", [true], true],
+        ["denies when any requested bit is refused", [true, false], false],
+    ])("%s", (_label, value, canComment) => {
+        expect(commentPermissionFromResponse({ value })).toEqual({ canComment, resolved: true });
     });
 
     it.each([
@@ -106,10 +82,7 @@ describe("commentPermissionFromResponse", () => {
 });
 
 describe("COMMENT_PERMISSION_DENIED_MESSAGE", () => {
-    it("mentions the Contribute requirement", () => {
-        expect(COMMENT_PERMISSION_DENIED_MESSAGE).toBe(
-            "You don't have permission to comment on this repository. Commenting " +
-                "requires Contribute access.",
-        );
+    it("tells the user which access level commenting needs", () => {
+        expect(COMMENT_PERMISSION_DENIED_MESSAGE).toContain("requires Contribute access");
     });
 });

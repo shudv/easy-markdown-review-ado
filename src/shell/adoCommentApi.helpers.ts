@@ -313,15 +313,15 @@ export function fromAdoStatus(s: number | undefined): ThreadStatus {
 // ---------------------------------------------------------------------------
 
 /** `parentCommentId` ADO expects for the FIRST (root) comment of a thread. */
-export const ROOT_PARENT_COMMENT_ID = 0;
+const ROOT_PARENT_COMMENT_ID = 0;
 /**
  * `parentCommentId` ADO expects for a REPLY. ADO numbers a thread's comments
  * from 1, so a reply parents onto the root comment id `1` (not `0`).
  */
-export const REPLY_PARENT_COMMENT_ID = 1;
+const REPLY_PARENT_COMMENT_ID = 1;
 
 /** ADO `CommentType.Text`. */
-export const COMMENT_TYPE_TEXT = 1;
+const COMMENT_TYPE_TEXT = 1;
 
 /** Shape of the comment payload we POST (structural, SDK-free). */
 export interface AdoCommentPayload {

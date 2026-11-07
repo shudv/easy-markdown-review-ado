@@ -21,25 +21,41 @@ function fakeSleep() {
 }
 
 describe("computeBackoffMs", () => {
-    it("grows exponentially and applies full jitter", () => {
-        // random() = 1 (well, <1) → returns floor(random * exp). Use 0.5.
-        expect(computeBackoffMs(0, 300, 4000, () => 0.5)).toBe(150);
-        expect(computeBackoffMs(1, 300, 4000, () => 0.5)).toBe(300);
-        expect(computeBackoffMs(2, 300, 4000, () => 0.5)).toBe(600);
-    });
-
-    it("caps the exponential term at maxDelayMs", () => {
-        expect(computeBackoffMs(10, 300, 4000, () => 1)).toBe(4000);
-    });
-
-    it("can return 0 with a zero random draw", () => {
-        expect(computeBackoffMs(3, 300, 4000, () => 0)).toBe(0);
+    it.each([
+        {
+            name: "the first retry waits up to the base delay",
+            retryIndex: 0,
+            random: 0.5,
+            expected: 150,
+        },
+        {
+            name: "the second retry waits up to twice the base",
+            retryIndex: 1,
+            random: 0.5,
+            expected: 300,
+        },
+        {
+            name: "the third retry waits up to four times the base",
+            retryIndex: 2,
+            random: 0.5,
+            expected: 600,
+        },
+        {
+            name: "a late retry is capped at the maximum delay",
+            retryIndex: 10,
+            random: 1,
+            expected: 4000,
+        },
+        { name: "full jitter can retry immediately", retryIndex: 3, random: 0, expected: 0 },
+    ])("$name", ({ retryIndex, random, expected }) => {
+        expect(computeBackoffMs(retryIndex, 300, 4000, () => random)).toBe(expected);
     });
 });
 
 describe("parseRetryAfterMs", () => {
     it("parses a delta-seconds header from a Response-like error", () => {
         const headers = new Headers({ "Retry-After": "2" });
+
         expect(parseRetryAfterMs({ headers })).toBe(2000);
     });
 
@@ -47,8 +63,10 @@ describe("parseRetryAfterMs", () => {
         const now = 1_000_000;
         const when = new Date(now + 5000).toUTCString();
         const headers = new Headers({ "Retry-After": when });
+
         // toUTCString truncates to whole seconds, so allow a <1s slack.
         const ms = parseRetryAfterMs({ headers }, now)!;
+
         expect(ms).toBeGreaterThanOrEqual(4000);
         expect(ms).toBeLessThanOrEqual(5000);
     });
@@ -57,9 +75,7 @@ describe("parseRetryAfterMs", () => {
         expect(parseRetryAfterMs({ retryAfter: "3" })).toBe(3000);
     });
 
-    it("falls back to a lowercase `retry-after` header", () => {
-        // A header bag whose `get` only answers the lowercase name, exercising the
-        // `?? headers.get("retry-after")` fallback.
+    it("reads a lowercase `retry-after` from a case-sensitive header bag", () => {
         const headers = {
             get: (name: string) => (name === "retry-after" ? "4" : null),
         };
@@ -67,19 +83,18 @@ describe("parseRetryAfterMs", () => {
         expect(parseRetryAfterMs({ headers })).toBe(4000);
     });
 
-    it("returns undefined when the header bag yields no value", () => {
-        const headers = { get: () => null };
-        expect(parseRetryAfterMs({ headers })).toBeUndefined();
-    });
-
-    it("returns undefined when absent or unparseable", () => {
-        expect(parseRetryAfterMs({})).toBeUndefined();
-        expect(parseRetryAfterMs(null)).toBeUndefined();
-        const headers = new Headers({ "Retry-After": "not-a-date" });
-        expect(parseRetryAfterMs({ headers })).toBeUndefined();
+    it.each([
+        { name: "an error without a hint", error: {} },
+        { name: "a null error", error: null },
+        { name: "headers without Retry-After", error: { headers: { get: () => null } } },
+        {
+            name: "an unparseable Retry-After",
+            error: { headers: new Headers({ "Retry-After": "not-a-date" }) },
+        },
+    ])("finds no hint in $name", ({ error }) => {
+        expect(parseRetryAfterMs(error)).toBeUndefined();
     });
 });
-
 describe("withRetry", () => {
     it("returns the first successful result without sleeping", async () => {
         const { sleep, delays } = fakeSleep();
@@ -193,15 +208,17 @@ describe("withRetry", () => {
         expect(delays).toEqual([2000]);
     });
 
-    it("fires the onRetry hook before each retry", async () => {
+    it("tells the onRetry hook which attempt failed before retrying it", async () => {
         const { sleep } = fakeSleep();
         const onRetry = vi.fn();
 
         const fn = vi.fn().mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce("ok");
 
         await withRetry(fn, { mode: "read", sleep, random: () => 0, onRetry });
-        expect(onRetry).toHaveBeenCalledTimes(1);
-        expect(onRetry.mock.calls[0]![0]).toMatchObject({ attempt: 1 });
+
+        expect(onRetry).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ attempt: 1, error: { status: 503 } }),
+        );
     });
 
     it("does not retry once the signal is aborted", async () => {
@@ -252,9 +269,7 @@ describe("withRetry", () => {
         releaseSleep?.();
     });
 
-    it("propagates a sleep rejection during backoff (with a signal present)", async () => {
-        // Exercises the abortable-sleep path where the injected sleep itself
-        // rejects (not the signal). The rejection must surface from withRetry.
+    it("surfaces a failing backoff timer instead of hanging a cancellable request", async () => {
         const controller = new AbortController();
         const rejectingSleep = () => Promise.reject(new Error("sleep boom"));
         const fn = vi.fn().mockRejectedValue({ status: 503 });
@@ -286,7 +301,7 @@ describe("withRetry", () => {
         expect(delays).toEqual([]);
     });
 
-    it("rejects with undefined without calling fn when attempts is 0", async () => {
+    it("gives up without running the operation when the caller allows zero attempts", async () => {
         const fn = vi.fn().mockResolvedValue("unused");
         await expect(withRetry(fn, { mode: "read", attempts: 0 })).rejects.toBeUndefined();
         expect(fn).not.toHaveBeenCalled();
@@ -319,7 +334,7 @@ describe("withRetry", () => {
         expect(seen).toEqual([1, 2, 3]);
     });
 
-    it("uses the real setTimeout path when no sleep is injected", async () => {
+    it("waits on a real timer between attempts when no sleep is injected", async () => {
         vi.useFakeTimers();
 
         try {

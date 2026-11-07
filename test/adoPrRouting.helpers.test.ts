@@ -11,16 +11,9 @@ import {
     mostRecentRoutingPr,
     routingPrForDoc,
 } from "../src/shell/adoPrRouting.helpers";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
-const trackUserFacingErrorMock = vi.fn();
-vi.mock("../src/telemetry", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../src/telemetry")>();
-
-    return {
-        ...actual,
-        trackUserFacingError: (...args: unknown[]) => trackUserFacingErrorMock(...args),
-    };
-});
+const telemetry = recordTelemetryEachTest();
 
 /** Terminal REST failures, so `withRetry` gives up at once. */
 const notFound = () => Object.assign(new Error("missing"), { status: 404 });
@@ -70,7 +63,6 @@ function scopeFor(client: ReturnType<typeof fakeClient>) {
 }
 
 beforeEach(() => {
-    trackUserFacingErrorMock.mockReset();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
@@ -106,16 +98,18 @@ describe("mostRecentRoutingPr", () => {
         const found = await mostRecentRoutingPr(scopeFor(fakeClient({ prs: failure() })), repo);
 
         expect(found).toBeNull();
-        expect(trackUserFacingErrorMock).toHaveBeenCalledWith(
+        expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({ operation: "repository-pr-routing" }),
-        );
+        ]);
     });
 
-    it("degrades to no PR when the response can't be read", async () => {
+    it("degrades to no PR and reports it when the PR list is malformed", async () => {
         const found = await mostRecentRoutingPr(scopeFor(fakeClient({ prs: [null] })), repo);
 
         expect(found).toBeNull();
-        expect(trackUserFacingErrorMock).toHaveBeenCalledTimes(1);
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({ operation: "repository-pr-routing" }),
+        ]);
     });
 });
 
@@ -178,21 +172,32 @@ describe("routingPrForDoc", () => {
         const client = fakeClient({ commits: notFound() });
         await routingPrForDoc(scopeFor(client), repo, "/a.md");
         expect(client.getPullRequests).toHaveBeenCalled();
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
-    it("reports failed commit and PR lookups, then falls back", async () => {
-        await routingPrForDoc(scopeFor(fakeClient({ commits: failure() })), repo, "/a.md");
-        await routingPrForDoc(
-            scopeFor(fakeClient({ commits: [{ commitId: "c1" }], query: failure() })),
-            repo,
-            "/a.md",
-        );
-        expect(trackUserFacingErrorMock.mock.calls.map(([e]) => e.operation)).toEqual([
-            "document-routing-commit-load",
-            "document-pr-routing",
-        ]);
-    });
+    it.each([
+        {
+            name: "the file's commits can't be listed",
+            failing: { commits: failure() },
+            operation: "document-routing-commit-load",
+        },
+        {
+            name: "the PR lookup for its last commit fails",
+            failing: { commits: [{ commitId: "c1" }], query: failure() },
+            operation: "document-pr-routing",
+        },
+    ])(
+        "reports it and falls back to the repo's latest PR when $name",
+        async ({ failing, operation }) => {
+            const latest = pr(9, "2024-04-01");
+            const client = fakeClient({ ...failing, prs: [latest] });
+
+            await expect(routingPrForDoc(scopeFor(client), repo, "/a.md")).resolves.toEqual(latest);
+            expect(telemetry.current.userFacingErrors()).toEqual([
+                expect.objectContaining({ operation }),
+            ]);
+        },
+    );
 });
 
 describe("docPrHistory", () => {
@@ -219,51 +224,56 @@ describe("docPrHistory", () => {
             [2, "m2", "https://dev.azure.com/o/p/_git/Docs/pullrequest/2"],
             [1, "m1", "https://dev.azure.com/o/p/_git/Docs/pullrequest/1"],
         ]);
-        expect(client.getCommits.mock.calls[0]![1]).toMatchObject({
-            $top: 2,
-            $skip: 4,
-        });
-        expect(client.getPullRequestQuery.mock.calls[0]![0]).toEqual({
-            queries: [{ type: 1, items: ["c2", "c1"] }],
-        });
+        expect(client.getCommits).toHaveBeenCalledWith(
+            "r1",
+            expect.objectContaining({ itemPath: "/a.md", $top: 2, $skip: 4 }),
+            "p1",
+        );
+        expect(client.getPullRequestQuery).toHaveBeenCalledWith(
+            { queries: [{ type: 1, items: ["c2", "c1"] }] },
+            "r1",
+            "p1",
+        );
     });
 
     it("is empty without a PR query when the file has no commits", async () => {
         const client = fakeClient({ commits: [] });
         await expect(docPrHistory(scopeFor(client), repo, "/a.md")).resolves.toEqual([]);
-        expect(client.getCommits.mock.calls[0]![1]).toMatchObject({
-            $top: 30,
-            $skip: 0,
-        });
         expect(client.getPullRequestQuery).not.toHaveBeenCalled();
+    });
+
+    it("reads the first page of 30 commits by default", async () => {
+        const client = fakeClient({ commits: [] });
+        await docPrHistory(scopeFor(client), repo, "/a.md");
+        expect(client.getCommits).toHaveBeenCalledWith(
+            "r1",
+            expect.objectContaining({ $top: 30, $skip: 0 }),
+            "p1",
+        );
     });
 
     it("is empty when the file is gone from the branch, quietly", async () => {
         await expect(
             docPrHistory(scopeFor(fakeClient({ commits: notFound() })), repo, "/a"),
         ).resolves.toEqual([]);
-        expect(trackUserFacingErrorMock).not.toHaveBeenCalled();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
-    it("reports failed commit and PR lookups as empty history", async () => {
-        await expect(
-            docPrHistory(scopeFor(fakeClient({ commits: failure() })), repo, "/a"),
-        ).resolves.toEqual([]);
-        await expect(
-            docPrHistory(
-                scopeFor(
-                    fakeClient({
-                        commits: [{ commitId: "c1" }],
-                        query: failure(),
-                    }),
-                ),
-                repo,
-                "/a",
-            ),
-        ).resolves.toEqual([]);
-        expect(trackUserFacingErrorMock.mock.calls.map(([e]) => e.operation)).toEqual([
-            "history-commit-load",
-            "history-pr-load",
+    it.each([
+        {
+            name: "the file's commits can't be listed",
+            failing: { commits: failure() },
+            operation: "history-commit-load",
+        },
+        {
+            name: "the PR lookup for its commits fails",
+            failing: { commits: [{ commitId: "c1" }], query: failure() },
+            operation: "history-pr-load",
+        },
+    ])("shows an empty history and reports it when $name", async ({ failing, operation }) => {
+        await expect(docPrHistory(scopeFor(fakeClient(failing)), repo, "/a")).resolves.toEqual([]);
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({ operation }),
         ]);
     });
 });

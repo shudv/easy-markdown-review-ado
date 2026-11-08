@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+    ExcalidrawSceneError,
+    isExcalidrawPath,
+    parseExcalidrawScene,
+} from "../src/markdown/excalidraw";
 import { excalidrawSceneBytes } from "../src/shell/components/excalidrawScene.fixture";
 
 const exportToSvgMock = vi.fn();
@@ -16,6 +21,8 @@ function mockLibrary(load: "ok" | "fail"): void {
 
 type ExcalidrawModule = typeof import("../src/markdown/excalidraw");
 
+// The renderer caches its library download at module level, so each render
+// scenario starts from a freshly imported module with its own library mock.
 async function freshModule(load: "ok" | "fail" = "ok"): Promise<ExcalidrawModule> {
     vi.resetModules();
     mockLibrary(load);
@@ -57,16 +64,13 @@ describe("isExcalidrawPath", () => {
         ["/docs/flow.EXCALIDRAW.json", true],
         ["/docs/flow.excalidraw.svg", false],
         ["/docs/flow.json", false],
-    ])("treats %s as a drawing: %s", async (path, expected) => {
-        const { isExcalidrawPath } = await freshModule();
+    ])("treats %s as a drawing: %s", (path, expected) => {
         expect(isExcalidrawPath(path)).toBe(expected);
     });
 });
 
 describe("parseExcalidrawScene", () => {
-    it("keeps live elements, files, and the canvas colour", async () => {
-        const { parseExcalidrawScene } = await freshModule();
-
+    it("keeps live elements, files, and the canvas colour", () => {
         const scene = parseExcalidrawScene(
             JSON.stringify({
                 type: "excalidraw",
@@ -88,8 +92,7 @@ describe("parseExcalidrawScene", () => {
         });
     });
 
-    it("defaults the canvas colour and files when the scene has invalid ones", async () => {
-        const { parseExcalidrawScene } = await freshModule();
+    it("defaults the canvas colour and files when the scene has invalid ones", () => {
         expect(
             parseExcalidrawScene(
                 JSON.stringify({
@@ -106,8 +109,7 @@ describe("parseExcalidrawScene", () => {
         });
     });
 
-    it("defaults the canvas colour and files when the scene omits them", async () => {
-        const { parseExcalidrawScene } = await freshModule();
+    it("defaults the canvas colour and files when the scene omits them", () => {
         expect(parseExcalidrawScene('{"type":"excalidraw","elements":[]}')).toEqual({
             elements: [],
             files: null,
@@ -124,9 +126,7 @@ describe("parseExcalidrawScene", () => {
             "File is not an Excalidraw scene",
         ],
         ["missing elements", '{"type":"excalidraw"}', "File is not an Excalidraw scene"],
-    ])("rejects %s as a scene error", async (_label, text, message) => {
-        const { parseExcalidrawScene, ExcalidrawSceneError } = await freshModule();
-
+    ])("rejects %s as a scene error", (_label, text, message) => {
         expect(() => parseExcalidrawScene(text)).toThrow(ExcalidrawSceneError);
         expect(() => parseExcalidrawScene(text)).toThrow(
             expect.objectContaining({ name: "ExcalidrawSceneError", message }),

@@ -29,7 +29,8 @@ const changed = new Set([
     ...git("ls-files", "--others", "--exclude-standard"),
 ]);
 
-const sources = [...changed].filter((path) => /^src\/.+\.tsx?$/.test(path)).sort();
+// .tsx is never mutated (stryker.config.json), so it isn't listed either.
+const sources = [...changed].filter((path) => /^src\/.+(?<!\.d)\.ts$/.test(path)).sort();
 
 if (sources.length === 0) {
     console.log(`No source files changed against ${base}; nothing to mutate.`);
@@ -37,11 +38,13 @@ if (sources.length === 0) {
 }
 
 // Stryker applies `!` patterns after the files listed, so the config's
-// exclusions (fixtures, SDK glue, Storybook-only code, .tsx) still hold.
+// exclusions (fixtures, SDK glue, Storybook-only code) still hold.
 const config = JSON.parse(readFileSync("stryker.config.json", "utf8"));
 const exclusions = config.mutate.filter((pattern) => pattern.startsWith("!"));
 
-console.log(`Mutating ${sources.length} changed source file(s) against ${base}:`);
+console.log(
+    `Mutating ${sources.length} changed source file(s) against ${base} (the config's other exclusions still apply):`,
+);
 for (const path of sources) console.log(`  ${path}`);
 
 const require = createRequire(import.meta.url);

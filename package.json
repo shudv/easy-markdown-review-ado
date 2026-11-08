@@ -36,6 +36,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:mutation": "stryker run --incremental",
+        "test:mutation:changed": "node scripts/mutation-changed.mjs",
         "test:mutation:full": "stryker run --force",
         "storybook": "storybook dev -p 6006",
         "build-storybook": "storybook build",

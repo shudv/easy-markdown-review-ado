@@ -74,6 +74,19 @@ npm run build
 npm run test:visual:docker
 ```
 
+Mutation testing isn't part of CI (a full run takes hours). Before a PR that
+changes logic, run it on what you changed:
+
+```pwsh
+npm run test:mutation:changed   # src files changed vs origin/main (pass --base <ref> to compare elsewhere)
+npm run test:mutation           # whole codebase, reusing results for unchanged code and tests
+npm run test:mutation:full      # whole codebase from scratch
+```
+
+The 98% threshold applies to whatever was mutated. A surviving mutant needs a
+scenario test, or a `// Stryker disable next-line <Mutator>: <reason>` comment
+when no scenario can observe it.
+
 `npm run lint` also enforces complexity and size limits on production source,
 set in [`eslint.config.mjs`](eslint.config.mjs): cyclomatic and cognitive
 complexity of 15, 80 code lines and 4 parameters per function, and 500 code

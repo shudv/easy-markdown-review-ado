@@ -4,7 +4,7 @@
 
 - Public base: `3326f9f` (#32).
 - Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
-- New product boundary: `77a6113` (source branch `chore/four-space-indent`; not
+- New product boundary: `a55da67` (source branch `chore/four-space-indent`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.1`.
 - Strategy: replay the product tree delta without importing private history.
@@ -24,6 +24,7 @@
 | `fa7994f`     | Tests are rewritten as scenarios: mutant-only tests are reworded or removed, duplicates removed, the rendered-diff suites become one suite per feature (`markdown.diff.<feature>`), tests record telemetry through `test/telemetrySink.ts` instead of mocking it, and stories use role/label/text queries. Eight test-only exports become module-private.                                                                |
 | `e8b244a`     | Mutation testing is re-scoped to match its own rule and the coverage config (comment fixtures, SDK glue and Storybook-only hooks/DOM helpers excluded; volatile Playwright output skipped when copying the sandbox); the measured score is 84.9%, so the break threshold and README rule become 84%. ESLint ignores `.stryker-tmp/`; the boot-error panel's empty-stack fallback gets a scenario test.                   |
 | `77a6113`     | Every surviving mutant is triaged: observable ones get scenario tests (including unit scenarios for the shell hooks only Storybook exercised), unobservable ones get `Stryker disable` comments with specific reasons, and dead code is marked "candidate for removal". `src/` changes are comments only. Product bugs found are listed in the PR and not fixed here.                                                    |
+| `a55da67`     | The mutation threshold rises to the measured 98% (high 99, low 95); the README rule and the Stryker config comment explain that mutants no scenario can observe are disabled in place with a written reason.                                                                                                                                                                                                             |
 
 ### Public-specific adaptations retained
 
@@ -46,7 +47,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `77a6113` and
+Compare the next source product tree against the merged form of `a55da67` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

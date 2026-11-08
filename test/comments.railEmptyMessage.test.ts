@@ -45,6 +45,12 @@ describe("chooseRailEmptyMessage", () => {
         expect(chooseRailEmptyMessage({ ...base, hasOtherSections: true })).toBeNull();
     });
 
+    it("still invites a thread on a file with no comments while a narrowing filter is selected", () => {
+        expect(chooseRailEmptyMessage({ ...base, filterMode: "active", fileThreadCount: 0 })).toBe(
+            "No comments on this file yet. Select any text to start a thread.",
+        );
+    });
+
     it("invites a thread on a genuinely empty writable file", () => {
         expect(chooseRailEmptyMessage(base)).toBe(
             "No comments on this file yet. Select any text to start a thread.",

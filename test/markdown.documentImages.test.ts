@@ -46,6 +46,12 @@ describe("resolveRepositoryImagePath", () => {
             expected: "/docs/diagram.png",
         },
         {
+            name: "a sibling file of a document path given without a leading slash",
+            doc: "docs/guide.md",
+            src: "diagram.png",
+            expected: "/docs/diagram.png",
+        },
+        {
             name: "a parent-relative path",
             doc: "/docs/guides/install.md",
             src: "../../assets/a.svg",
@@ -115,26 +121,32 @@ describe("hydrateDocumentImages", () => {
         expect(root.querySelector("img")!.src).toBe("https://example.com/external.png");
     });
 
-    it("shows an image the repository has no content for as unavailable and reports it", async () => {
-        const root = mountImage("./missing.png");
+    it.each([
+        { name: "no object URL", objectUrl: undefined },
+        { name: "an empty object URL", objectUrl: "" },
+    ])(
+        "shows an image the repository has no content for ($name) as unavailable and reports it",
+        async ({ objectUrl }) => {
+            const root = mountImage("./missing.png");
 
-        hydrateDocumentImages(root, "/docs/guide.md", async () => undefined);
+            hydrateDocumentImages(root, "/docs/guide.md", async () => objectUrl);
 
-        const image = root.querySelector<HTMLImageElement>("img")!;
-        const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
-        await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
-        expect(frame.classList.contains("is-loading")).toBe(false);
-        expect(frame.dataset.imagePath).toBe("/docs/missing.png");
-        expect(image.getAttribute("aria-busy")).toBeNull();
-        expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({
-                error: expect.objectContaining({ message: "Repository image not available" }),
-                source: "DocumentImage.hydrate",
-                operation: "repository-image-load",
-                impact: "degraded",
-            }),
-        ]);
-    });
+            const image = root.querySelector<HTMLImageElement>("img")!;
+            const frame = root.querySelector<HTMLElement>(".emr-repo-image-frame")!;
+            await vi.waitFor(() => expect(frame.classList.contains("is-error")).toBe(true));
+            expect(frame.classList.contains("is-loading")).toBe(false);
+            expect(frame.dataset.imagePath).toBe("/docs/missing.png");
+            expect(image.getAttribute("aria-busy")).toBeNull();
+            expect(telemetry.current.userFacingErrors()).toEqual([
+                expect.objectContaining({
+                    error: expect.objectContaining({ message: "Repository image not available" }),
+                    source: "DocumentImage.hydrate",
+                    operation: "repository-image-load",
+                    impact: "degraded",
+                }),
+            ]);
+        },
+    );
 
     it("shows an unavailable state and reports it when the repository resolver rejects", async () => {
         const root = mountImage("./broken.png");

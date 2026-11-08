@@ -96,8 +96,19 @@ describe("comment search", () => {
         expect(threadVisibleForCommentView(resolved, "addressed", "active", ME)).toBe(true);
     });
 
-    it("applies the Active filter again once the search is cleared", () => {
-        expect(threadVisibleForCommentView(resolved, "", "active", ME)).toBe(false);
+    it("finds a thread when only a reply mentions the search term", () => {
+        const discussion = thread("d", "active", [OTHER, ME]);
+        discussion.comments[0]!.bodyMarkdown = "Looks good overall";
+        discussion.comments[1]!.bodyMarkdown = "Please rename the helper first";
+
+        expect(threadMatchesQuery(discussion, "rename")).toBe(true);
+    });
+
+    it.each([
+        { name: "cleared", query: "" },
+        { name: "left holding only spaces", query: "   " },
+    ])("applies the Active filter again once the search is $name", ({ query }) => {
+        expect(threadVisibleForCommentView(resolved, query, "active", ME)).toBe(false);
     });
 });
 

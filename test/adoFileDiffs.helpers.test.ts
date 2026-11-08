@@ -127,6 +127,8 @@ describe("loadFileDiffs", () => {
             linesDeleted: 0,
             originalSource: undefined,
         });
+        // The path-less diff entry is ignored.
+        expect(Object.keys(out).sort()).toEqual(["/a.md", "/b.md"]);
 
         // The cache key is order-independent and omits the original source.
         const key = Object.keys(sessionStorage).find((k) =>
@@ -186,6 +188,30 @@ describe("loadFileDiffs", () => {
             "/a.md": { linesAdded: 0, linesDeleted: 0, ranges: [] },
         });
         expect(getClient).not.toHaveBeenCalled();
+    });
+
+    it("reuses the cached diffs when the same files are listed in another order", async () => {
+        await load(["/a.md", "/b.md"], fakeClient({ diffs: [] })).result;
+
+        const { getClient, result } = load(["/b.md", "/a.md"], fakeClient({}));
+        await result;
+        expect(getClient).not.toHaveBeenCalled();
+    });
+
+    it("fetches a different set of files instead of serving another set's cached diffs", async () => {
+        await load(["/a.md"], fakeClient({ diffs: [] })).result;
+
+        const other = fakeClient({ diffs: [] });
+        await load(["/b.md"], other).result;
+        expect(other.getFileDiffs).toHaveBeenCalled();
+    });
+
+    it("keeps a nested document's diffs apart from two documents whose paths run together", async () => {
+        await load(["/a.md", "/b.md"], fakeClient({ diffs: [] })).result;
+
+        const nested = fakeClient({ diffs: [] });
+        await load(["/a.md/b.md"], nested).result;
+        expect(nested.getFileDiffs).toHaveBeenCalled();
     });
 
     it("rehydrates the original source of cached deletion diffs", async () => {

@@ -31,6 +31,7 @@ type LineRun = "table" | "quote" | "other";
 
 function lineRun(line: string): LineRun {
     if (TABLE_ROW.test(line)) return "table";
+    // Stryker disable next-line StringLiteral: the run name is only compared with other run names, and "" is as distinct from "table" and "other" as "quote" is
     if (QUOTE_LINE.test(line)) return "quote";
 
     return "other";
@@ -72,12 +73,14 @@ interface ChunkBlock {
 function makeChunk(
     start: number,
     lines: readonly string[],
+    // Stryker disable next-line BooleanLiteral: only blank-line chunks take the default, and a blank chunk never pairs, so its table flag is never read
     { blockStart = start, table = false, kind = blockKind(lines[0]!) }: ChunkBlock = {},
 ): DiffChunk {
     const text = lines.join("\n");
     const words = new Map<string, number>();
     let wordCount = 0;
 
+    // Stryker disable next-line MethodExpression: words are only compared with words folded the same way, so folding both sides to upper case gives the same similarity
     for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
         words.set(word, (words.get(word) ?? 0) + 1);
         wordCount++;
@@ -117,8 +120,10 @@ export function chunkMarkdownLines(lines: readonly string[], firstLine: number):
     const chunks: DiffChunk[] = [];
     let current: string[] | null = null;
     let currentStart = 0;
+    // Stryker disable next-line StringLiteral: the first content line always opens a chunk (no chunk is open yet), which sets the run before it is ever compared
     let currentRun: LineRun = "other";
     let fence: string | null = null;
+    // Stryker disable next-line BooleanLiteral: the first content line always opens a chunk (no chunk is open yet), so the flag's starting value is never what decides it
     let afterHeading = false;
 
     const close = () => {
@@ -151,6 +156,7 @@ export function chunkMarkdownLines(lines: readonly string[], firstLine: number):
         if (line.trim() === "") {
             close();
             chunks.push(makeChunk(lineNumber, [line]));
+            // Stryker disable next-line BooleanLiteral: a blank line closes the chunk, so the next content line opens a new one whatever this flag says
             afterHeading = false;
 
             return;
@@ -187,6 +193,7 @@ export function chunkSimilarity(a: DiffChunk, b: DiffChunk): number {
     if (a.text === b.text) return 1;
     if (a.blank || b.blank) return 0;
 
+    // Stryker disable next-line LogicalOperator,ConditionalExpression: when only one side has words the shared-word count below is 0 and scores 0 just like this branch; only two word-less chunks need it
     if (a.wordCount === 0 || b.wordCount === 0) {
         return a.wordCount === b.wordCount ? WORDLESS_SIMILARITY : 0;
     }
@@ -221,6 +228,7 @@ function alignmentScores(weight: Float64Array, rows: number, cols: number): Floa
     for (let i = 1; i <= rows; i++) {
         for (let j = 1; j <= cols; j++) {
             const w = weight[(i - 1) * cols + (j - 1)]!;
+            // Stryker disable next-line ConditionalExpression,EqualityOperator: weights are never 0 (a pair weighs at least 0.4, a non-pair -1), and a -1 diagonal never beats the neighbouring cells it is compared with
             const diagonal = w > 0 ? score[(i - 1) * width + (j - 1)]! + w : -1;
             score[i * width + j] = Math.max(
                 score[(i - 1) * width + j]!,
@@ -244,10 +252,12 @@ interface AlignmentGrid {
 
 /** Whether the best path to cell (i, j) pairs `before[i-1]` with `after[j-1]`. */
 function takesDiagonal(grid: AlignmentGrid, i: number, j: number): boolean {
+    // Stryker disable next-line LogicalOperator,ConditionalExpression: in row or column 0 the weight lookup reads outside the row's cells and the score check below fails, so no diagonal is taken either way
     if (i === 0 || j === 0) return false;
     const { cols, width, weight, score } = grid;
     const w = weight[(i - 1) * cols + (j - 1)]!;
 
+    // Stryker disable next-line EqualityOperator: weights are never 0 (a pair weighs at least 0.4, a non-pair -1)
     return w > 0 && score[i * width + j] === score[(i - 1) * width + (j - 1)]! + w;
 }
 
@@ -263,6 +273,7 @@ function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
             const a = before[i - 1]!;
             const b = after[j - 1]!;
             ops.push({
+                // Stryker disable next-line StringLiteral: callers only act on "pair", "added" and "removed" ops, so an equal op under any other name is handled the same
                 type: a.text === b.text ? "equal" : "pair",
                 before: a,
                 after: b,
@@ -272,6 +283,7 @@ function backtrackAlignment(grid: AlignmentGrid): AlignmentOp[] {
             continue;
         }
 
+        // Stryker disable next-line ConditionalExpression: in row 0 every score is 0, so the score comparison is already true there
         if (j > 0 && (i === 0 || score[i * width + (j - 1)] === score[i * width + j])) {
             ops.push({ type: "added", after: after[j - 1]! });
             j--;
@@ -319,7 +331,9 @@ export function alignChunks(
 export function trimBlankChunks(run: readonly DiffChunk[]): DiffChunk[] {
     let first = 0;
     let last = run.length - 1;
+    // Stryker disable next-line EqualityOperator: a lone blank chunk the first loop leaves in place is dropped by the second loop, so the trimmed run is the same
     while (first <= last && run[first]!.blank) first++;
+    // Stryker disable next-line EqualityOperator: once the first loop stops, run[first] is not blank, so the second loop never needs to test it
     while (last >= first && run[last]!.blank) last--;
 
     return run.slice(first, last + 1);
@@ -337,6 +351,7 @@ export function clipChunks(
     for (const chunk of chunks) {
         if (chunk.end < from || chunk.start > to) continue;
 
+        // Stryker disable next-line ConditionalExpression,EqualityOperator,BlockStatement: clipping a chunk that already lies inside the window rebuilds an identical chunk, so this branch only skips the copy
         if (chunk.start >= from && chunk.end <= to) {
             clipped.push(chunk);
             continue;
@@ -361,8 +376,10 @@ export function clipChunks(
 /** Each row of a (clipped) table chunk as its own chunk. */
 function tableRows(chunk: DiffChunk): DiffChunk[] {
     return chunk.text.split("\n").map((row, index) =>
+        // Stryker disable next-line ObjectLiteral: a row chunk's block start and table flag are never read after rows are aligned (rows are not expanded again), and its kind is "table" either way
         makeChunk(chunk.start + index, [row], {
             blockStart: chunk.blockStart,
+            // Stryker disable next-line BooleanLiteral: a row chunk's table flag is never read after rows are aligned (rows are not expanded again)
             table: true,
         }),
     );
@@ -375,12 +392,15 @@ function tableRows(chunk: DiffChunk): DiffChunk[] {
  * which the renderer resolves against the whole table's original text.
  */
 export function rowAlignable(before: DiffChunk, after: DiffChunk): boolean {
+    // Stryker disable next-line LogicalOperator: a table's header line starts with a pipe and no other block's first line does, so pairing a table with a non-table fails the header comparison below anyway
     if (!before.table || !after.table) return false;
     const beforeHasHeader = before.start === before.blockStart;
     const afterHasHeader = after.start === after.blockStart;
     if (!beforeHasHeader && !afterHasHeader) return true;
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: a slice that starts below the header begins with body rows, which never repeat the header and its delimiter row, so the header comparison below fails anyway
     if (!beforeHasHeader || !afterHasHeader) return false;
 
+    // Stryker disable next-line StringLiteral: both headers are joined the same way, and a delimiter row of pipes and dashes can't make two different header/delimiter pairs join to the same text
     const header = (chunk: DiffChunk) => chunk.text.split("\n").slice(0, 2).join("\n");
 
     return header(before) === header(after);

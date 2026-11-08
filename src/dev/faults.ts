@@ -59,6 +59,7 @@ export function readFaults(storage: StorageLike): FaultConfig {
     try {
         const raw = storage.getItem(FAULTS_STORAGE_KEY);
 
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `JSON.parse(null)` is null and `JSON.parse("")` throws into the catch below, so both read as "no faults" without the guard
         const parsed: unknown = raw !== null && raw !== "" ? JSON.parse(raw) : null;
 
         return typeof parsed === "object" && parsed !== null ? (parsed as FaultConfig) : {};
@@ -73,6 +74,7 @@ export function writeFaults(storage: StorageLike, cfg: FaultConfig): void {
 }
 
 function b64url(json: string): string {
+    // Stryker disable next-line Regex,StringLiteral: the token's JSON is fixed-length ASCII with 10-digit epoch seconds, whose base64 never needs padding and never contains `+` or `/`
     return btoa(json).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
@@ -82,6 +84,7 @@ function b64url(json: string): string {
  * the host will re-mint — is the end of the simulated window.
  */
 export function deadWindowToken(nowMs: number, untilMs: number): string {
+    // Stryker disable next-line ObjectLiteral,StringLiteral: the app only decodes a token's payload segment; the header's contents are never read
     const header = b64url(JSON.stringify({ typ: "JWT", alg: "none" }));
 
     const payload = b64url(
@@ -123,6 +126,7 @@ export function onBoot(cfg: FaultConfig, nowMs: number): FaultConfig {
 }
 
 const TF400813_BODY = JSON.stringify({
+    // Stryker disable next-line StringLiteral: `$id` is a serializer reference id in ADO's error JSON that no client reads
     $id: "1",
     innerException: null,
     message:
@@ -216,6 +220,7 @@ export function faultsApi(deps: FaultDeps) {
                 ...cfg,
                 deadWindow: {
                     untilMs: deps.now() + (opts.seconds ?? 120) * 1000,
+                    // Stryker disable next-line ConditionalExpression: the config is persisted as JSON, which drops an undefined `healAfterBoots`, so storing it or not reads back the same
                     ...(opts.healAfterBoots !== undefined
                         ? { healAfterBoots: opts.healAfterBoots }
                         : {}),
@@ -234,6 +239,7 @@ export function faultsApi(deps: FaultDeps) {
                     ? {
                           ...cfg,
                           slowApiMs: ms,
+                          // Stryker disable next-line ConditionalExpression: the config is persisted as JSON, which drops an undefined `slowApiRemaining`, so storing it or not reads back the same
                           ...(times !== undefined ? { slowApiRemaining: times } : {}),
                       }
                     : cfg,

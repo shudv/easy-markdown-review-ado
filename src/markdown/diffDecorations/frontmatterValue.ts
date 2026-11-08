@@ -37,6 +37,7 @@ export function decorateFrontmatterValue(
     let originalText = "";
 
     if (kind === "modified") {
+        // Stryker disable next-line MethodExpression: the renderer writes the bare key into the key element, so there is no surrounding whitespace to trim
         const key = el.querySelector(".emr-frontmatter-key")?.textContent.trim();
 
         if (key === undefined || key === "") return false;
@@ -47,6 +48,7 @@ export function decorateFrontmatterValue(
         originalText = resolved;
     }
 
+    // Stryker disable next-line ConditionalExpression: diffing identical text yields one unchanged run, which places no marks and so also returns false below
     if (originalText === modifiedText) return false;
 
     // Word-diff the value against its pre-edit text. Unlike the prose blocks we
@@ -56,6 +58,7 @@ export function decorateFrontmatterValue(
     const ops = diffWords(originalText, modifiedText);
     const res = applyInlineWordDiff(valueEl, ops);
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: dead code: the ops were diffed against the value's own text, so they always rebuild it (res is never null), and the texts differ, so at least one mark is placed; candidate for removal
     return res != null && res.added + res.removed > 0;
 }
 
@@ -81,11 +84,13 @@ function resolveFrontmatterOriginalValue(
 ): string | null {
     const overlapping = ranges.filter(
         (r) =>
+            // Stryker disable next-line ConditionalExpression: an added range never carries previous text, so the originalText check below drops it anyway
             r.kind === "modified" &&
             r.originalText != null &&
             overlaps(rowStart, rowEnd, r.start, r.end),
     );
 
+    // Stryker disable next-line ConditionalExpression: with nothing to splice in, the value is rebuilt from the current items unchanged, which the caller treats as no change
     if (overlapping.length === 0) return null;
 
     // Shape 1: a fragment that carries the `key:` line resolves the value whole.
@@ -99,6 +104,7 @@ function resolveFrontmatterOriginalValue(
     // line L maps to current item index `L - (rowStart + 1)`. Apply back-to-front
     // so earlier indices stay valid when item counts differ.
     const firstItemLine = rowStart + 1;
+    // Stryker disable next-line ConditionalExpression,ArrayDeclaration: an empty list has no item lines, so any range reaching here starts on the key line and is rejected below before the items are read
     const originalItems = currentText === "" ? [] : currentText.split(", ");
     const sorted = [...overlapping].sort((a, b) => b.start - a.start);
 

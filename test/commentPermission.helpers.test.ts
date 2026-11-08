@@ -82,6 +82,12 @@ describe("commentPermissionFromResponse", () => {
 });
 
 describe("COMMENT_PERMISSION_DENIED_MESSAGE", () => {
+    it("tells the user they can't comment here", () => {
+        expect(COMMENT_PERMISSION_DENIED_MESSAGE).toContain(
+            "You don't have permission to comment on this repository.",
+        );
+    });
+
     it("tells the user which access level commenting needs", () => {
         expect(COMMENT_PERMISSION_DENIED_MESSAGE).toContain("requires Contribute access");
     });

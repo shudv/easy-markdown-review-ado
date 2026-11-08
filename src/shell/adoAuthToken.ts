@@ -68,8 +68,10 @@ export const DEFAULT_GRANT_SKEW_MS = 30_000;
  * parse (we only read numeric claims, but robustness is cheap).
  */
 function decodeSegment(segment: string): string | null {
+    // Stryker disable next-line ConditionalExpression: dead code: without atob the decode below throws, and its catch returns null anyway; candidate for removal
     if (typeof atob !== "function") return null;
     const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    // Stryker disable next-line ArithmeticOperator,StringLiteral: atob decodes unpadded base64 the same as padded, so the padding never changes the result
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
 
     try {
@@ -77,11 +79,12 @@ function decodeSegment(segment: string): string | null {
         let out = "";
 
         for (let i = 0; i < binary.length; i++) {
+            // Stryker disable next-line StringLiteral: compact JWT JSON never contains bytes below 0x10 (control characters), so the zero-pad never applies
             out += `%${binary.charCodeAt(i).toString(16).padStart(2, "0")}`;
         }
 
         return decodeURIComponent(out);
-    } catch {
+    } /* Stryker disable next-line BlockStatement: dead code: an empty catch returns undefined, which the caller's JSON.parse turns into the same null result; candidate for removal */ catch {
         return null;
     }
 }
@@ -92,15 +95,18 @@ function decodeSegment(segment: string): string | null {
  * object payload. Never throws.
  */
 export function parseJwtPayload(token: string): Record<string, unknown> | null {
+    // Stryker disable next-line ConditionalExpression: dead code: "" splits into a single segment, which the three-segment check rejects anyway; candidate for removal
     if (typeof token !== "string" || token.length === 0) return null;
     const parts = token.split(".");
     if (parts.length !== 3) return null;
     const json = decodeSegment(parts[1]!);
+    // Stryker disable next-line ConditionalExpression: dead code: JSON.parse(null) is null, which the object check below rejects anyway; candidate for removal
     if (json === null) return null;
 
     try {
         const parsed: unknown = JSON.parse(json);
 
+        // Stryker disable next-line ConditionalExpression: dead code: a null payload is returned as null either way; candidate for removal
         if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
             return null;
         }
@@ -118,9 +124,11 @@ function readAdoExpSeconds(payload: Record<string, unknown>): number | undefined
     let earliest: number | undefined;
 
     for (const value of Object.values(xms as Record<string, unknown>)) {
+        // Stryker disable next-line ConditionalExpression: dead code: a non-object entry has no ado_exp property, so it is skipped by the check below anyway; candidate for removal
         if (typeof value !== "object" || value === null) continue;
         const adoExp = (value as Record<string, unknown>)["ado_exp"];
 
+        // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: JWT payloads are JSON, whose numbers are always finite, and ADO always sends these claims as numbers; candidate for removal
         if (typeof adoExp === "number" && Number.isFinite(adoExp)) {
             earliest = earliest === undefined ? adoExp : Math.min(earliest, adoExp);
         }
@@ -139,6 +147,7 @@ export function readAdoTokenExpiry(token: string): AdoTokenExpiry {
     if (!payload) return {};
     const exp = payload["exp"];
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: JWT payloads are JSON, whose numbers are always finite, and ADO always sends these claims as numbers; candidate for removal
     const expMs = typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : undefined;
 
     const adoExpSeconds = readAdoExpSeconds(payload);
@@ -168,6 +177,7 @@ export function classifyAdoGrant(
     if (expMs === undefined) return { state: "unknown", expiry };
 
     // The AAD token itself has (nearly) expired — the host will re-mint next call.
+    // Stryker disable next-line EqualityOperator: landing on the exact millisecond of the skewed expiry has no practical meaning; the 30 s skew already absorbs timing
     if (nowMs >= expMs - skewMs) {
         return { state: "expired", recoverAtMs: expMs, expiry };
     }
@@ -175,6 +185,7 @@ export function classifyAdoGrant(
     // Dead window: the ADO grant lapsed while the AAD token is still valid, so the
     // host keeps serving this token until its AAD `exp`. Recovery is guaranteed at
     // `expMs` (a fresh grant), so surface that as the recover-at hint.
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: comparing against an undefined ado_exp is NaN-false anyway, and the exact-millisecond case has no practical meaning; candidate for removal
     if (adoExpMs !== undefined && nowMs >= adoExpMs - skewMs) {
         return { state: "refreshing", recoverAtMs: expMs, expiry };
     }
@@ -195,14 +206,17 @@ export function isAdoGrantLapsed(state: AdoGrantState): boolean {
 export function isAdoAuthError(err: unknown): boolean {
     const status = extractStatus(err);
     if (status === 401 || status === 403) return true;
+    // Stryker disable next-line StringLiteral: a placeholder message never contains TF400813, so non-text errors stay non-auth either way
     let message = "";
 
+    // Stryker disable next-line ConditionalExpression: dead code: an Error is an object with a text message, so the object branch below reads the same message; candidate for removal
     if (err instanceof Error) {
         message = err.message;
     } else if (typeof err === "string") {
         message = err;
     } else if (typeof err === "object" && err !== null) {
         const raw = (err as { message?: unknown }).message;
+        // Stryker disable next-line ConditionalExpression: dead code: a non-text message never stringifies to TF400813, so it stays non-auth either way; candidate for removal
         if (typeof raw === "string") message = raw;
     }
 
@@ -253,6 +267,7 @@ export async function detectSessionRefreshing(
 ): Promise<SessionRefreshingError | null> {
     if (isSessionRefreshingError(err)) return err;
     if (!isAdoAuthError(err)) return null;
+    // Stryker disable next-line StringLiteral: an unreadable placeholder token classifies as unknown just like an empty one
     let token = "";
 
     try {

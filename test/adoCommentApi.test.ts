@@ -68,8 +68,11 @@ describe("readProp", () => {
         expect(readProp(container, "k")).toBeUndefined();
     });
 
-    it("returns undefined when the key is absent", () => {
-        expect(readProp({ other: 1 }, "k")).toBeUndefined();
+    it.each([
+        ["absent", { other: 1 }],
+        ["null", { k: null }],
+    ])("returns undefined when the key is %s", (_state, properties) => {
+        expect(readProp(properties, "k")).toBeUndefined();
     });
 
     it("unwraps the ADO `$value` envelope", () => {
@@ -134,10 +137,17 @@ describe("buildWorkItemWiql", () => {
     });
 
     it("uses a `Title CONTAINS` clause for text queries", () => {
-        const q = buildWorkItemWiql("login bug");
-        expect(q).toContain("[System.Title] CONTAINS 'login bug'");
-        expect(q).toContain("ORDER BY [System.ChangedDate] DESC");
+        expect(buildWorkItemWiql("login bug")).toBe(
+            "SELECT [System.Id] FROM WorkItems WHERE [System.Title] CONTAINS 'login bug' ORDER BY [System.ChangedDate] DESC",
+        );
     });
+
+    it.each(["Sprint 12", "2fa login"])(
+        "searches titles for a query mixing words and numbers (%j)",
+        (query) => {
+            expect(buildWorkItemWiql(query)).toContain(`[System.Title] CONTAINS '${query}'`);
+        },
+    );
 
     it("escapes single quotes in the user-supplied query", () => {
         const q = buildWorkItemWiql("can't log in");
@@ -181,6 +191,14 @@ describe("matchPullRequestSuggestions", () => {
         ).map((s) => s.id);
 
         expect(ids).toEqual(["1", "2"]);
+    });
+
+    it("finds a PR by its number typed with surrounding spaces", () => {
+        expect(
+            matchPullRequestSuggestions([pr(41, "Other"), pr(42, "Unrelated")], " 42 ").map(
+                (s) => s.id,
+            ),
+        ).toEqual(["42"]);
     });
 
     it("matches a numeric query against digits in a title", () => {
@@ -301,6 +319,7 @@ describe("buildIdentitiesUrl", () => {
 
     it.each([
         { name: "an org", org: undefined, ids: [A] },
+        { name: "an org name", org: "", ids: [A] },
         { name: "any ids", org: "org", ids: [] },
         { name: "any non-blank ids", org: "org", ids: ["", "   "] },
     ])("has no lookup URL without $name", ({ org, ids }) => {
@@ -334,6 +353,13 @@ describe("parseIdentitiesResponse", () => {
 
         expect(parseIdentitiesResponse(body, [A])).toEqual({
             [A]: { displayName: "Custom Name" },
+        });
+    });
+
+    it("keys each name by the id exactly as it was requested", () => {
+        const body = { value: [{ id: A, providerDisplayName: "Ada Lovelace" }] };
+        expect(parseIdentitiesResponse(body, [` ${A.toUpperCase()} `])).toEqual({
+            [` ${A.toUpperCase()} `]: { displayName: "Ada Lovelace" },
         });
     });
 
@@ -427,7 +453,12 @@ describe("readMentionsProp", () => {
     it("skips entries missing id or displayName", () => {
         const out = readMentionsProp(
             wrap(
-                JSON.stringify([{ id: "a" }, { displayName: "B" }, { id: "c", displayName: "C" }]),
+                JSON.stringify([
+                    { id: "a" },
+                    null,
+                    { displayName: "B" },
+                    { id: "c", displayName: "C" },
+                ]),
             ),
         );
 
@@ -493,13 +524,22 @@ describe("collectThreadIdentities", () => {
                     "1": { displayName: "No Id" },
                     "2": { id: GUID, displayName: "" },
                     "3": null,
-                    // A malformed ref whose name isn't text.
+                    // Malformed refs whose id or name isn't text.
                     "4": { id: GUID, displayName: 42 },
+                    "5": { id: 42, displayName: "Numeric Id" },
                 },
             }),
         );
 
         expect(out).toEqual([]);
+    });
+
+    it("drops an avatar that isn't a URL", () => {
+        const out = call(
+            thread({ identities: { "1": { id: GUID, displayName: "Ada", imageUrl: 7 } } }),
+        );
+
+        expect(out).toEqual([{ id: GUID, displayName: "Ada", avatarUrl: undefined }]);
     });
 
     it("keeps an identity whose id isn't a GUID (e.g. a service account) as-is", () => {
@@ -833,12 +873,20 @@ describe("adoThreadToLocal", () => {
         expect(local!.general).toBeUndefined();
     });
 
-    it("bucket 1: malformed anchor JSON falls through to native handling", () => {
+    it.each([
+        { name: "malformed anchor JSON", schema: "1", anchor: "{not valid json" },
+        { name: "a non-text anchor", schema: "1", anchor: 5 },
+        {
+            name: "an anchor from another schema version",
+            schema: "2",
+            anchor: JSON.stringify({ exact: "world", prefix: "", suffix: "" }),
+        },
+    ])("bucket 1: $name falls through to native handling", ({ schema, anchor }) => {
         const local = conv(
             thread({
                 properties: {
-                    emrSchema: { $value: "1" },
-                    emrAnchor: { $value: "{not valid json" },
+                    emrSchema: { $value: schema },
+                    emrAnchor: { $value: anchor },
                 },
                 threadContext: {
                     filePath: "/docs/a.md",
@@ -889,11 +937,14 @@ describe("adoThreadToLocal", () => {
         expect(local!.anchor.endLine).toBe(9);
     });
 
-    it("bucket 2: file thread without line context gets an empty anchor", () => {
-        const local = conv(thread({ threadContext: { filePath: "/docs/a.md" } }));
+    it.each([
+        { name: "without line context", context: {} },
+        { name: "placed on line 0", context: { rightFileStart: { line: 0, offset: 0 } } },
+    ])("bucket 2: file thread $name gets an empty anchor", ({ context }) => {
+        const local = conv(thread({ threadContext: { filePath: "/docs/a.md", ...context } }));
 
         expect(local!.origin).toBe("ado");
-        expect(local!.anchor).toEqual({ exact: "", prefix: "", suffix: "" });
+        expect(local!.anchor).toStrictEqual({ exact: "", prefix: "", suffix: "" });
     });
 
     it("bucket 3: general PR-level comment with no file context", () => {
@@ -934,6 +985,12 @@ describe("editedAtOf", () => {
         expect(editedAtOf(new Date("2024-01-01T00:00:00Z"), new Date("2024-01-02T03:04:05Z"))).toBe(
             "2024-01-02T03:04:05.000Z",
         );
+    });
+
+    it("treats an update within a second of publishing as unedited", () => {
+        expect(
+            editedAtOf(new Date("2024-01-01T00:00:00.000Z"), new Date("2024-01-01T00:00:01.000Z")),
+        ).toBeUndefined();
     });
 
     it("treats a missing publishedDate as epoch (any update counts as edited)", () => {
@@ -1002,13 +1059,31 @@ describe("buildThreadContext", () => {
                 suffix: "",
                 line: 2,
                 endLine: 4,
-                column: 3,
+                column: 9,
                 endColumn: 6,
             }),
         ).toEqual({
             filePath: "/docs/a.md",
-            rightFileStart: { line: 2, offset: 3 },
+            rightFileStart: { line: 2, offset: 9 },
             rightFileEnd: { line: 4, offset: 6 },
+        });
+    });
+
+    it("anchors a comment whose source position is zeroed at the start of the file", () => {
+        expect(
+            buildThreadContext("/docs/a.md", {
+                exact: "hello",
+                prefix: "",
+                suffix: "",
+                line: 0,
+                endLine: 0,
+                column: 0,
+                endColumn: 0,
+            }),
+        ).toEqual({
+            filePath: "/docs/a.md",
+            rightFileStart: { line: 1, offset: 1 },
+            rightFileEnd: { line: 1, offset: 1 },
         });
     });
 });
@@ -1226,6 +1301,8 @@ describe("lineDiffBlocksToRanges", () => {
         ]);
 
         expect(ranges[0]).toMatchObject({
+            startLine: 4,
+            endLine: 4,
             kind: "deleted-marker",
             linesDeleted: 5,
         });

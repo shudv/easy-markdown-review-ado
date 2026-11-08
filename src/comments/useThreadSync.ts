@@ -51,6 +51,7 @@ function recoverAtMsOf(err: unknown): number | undefined {
     if (typeof err !== "object" || err === null) return undefined;
     const value = (err as { recoverAtMs?: unknown }).recoverAtMs;
 
+    // Stryker disable next-line ConditionalExpression: dead code: Number.isFinite is only true for numbers, so the typeof check never changes the result, candidate for removal
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
@@ -178,6 +179,7 @@ function abortInFlight(refs: ThreadSyncRefs): void {
 }
 
 function clearTimer(session: PollSession): void {
+    // Stryker disable next-line ConditionalExpression: dead code: clearTimeout(null) and resetting an already-null id are no-ops, candidate for removal
     if (session.timerId !== null) {
         window.clearTimeout(session.timerId);
         session.timerId = null;
@@ -283,6 +285,7 @@ function runFetch(session: PollSession, manual = false): void {
 // the remaining wait. Used by the automatic triggers (reveal / focus).
 function pollUnlessBackingOff(session: PollSession): void {
     const remainingMs =
+        // Stryker disable next-line ConditionalExpression: dead code: every failure schedules the next poll before the streak is read here, so nextDueAtMs is never null while the streak is positive, candidate for removal
         session.failureStreak > 0 && session.nextDueAtMs !== null
             ? session.nextDueAtMs - Date.now()
             : 0;
@@ -359,8 +362,10 @@ function startThreadPolling(
         refs.generationRef.current += 1;
         abortInFlight(refs);
         clearTimer(session);
+        // Stryker disable StringLiteral: a listener left behind only drives this torn-down session, whose runFetch returns at once, and its aborts/generation bumps duplicate what the live session's own listener does
         document.removeEventListener("visibilitychange", onVisibilityChange);
         window.removeEventListener("focus", onFocus);
+        // Stryker restore StringLiteral
         unsubscribeRecovered?.();
         session.setIsRefreshing(false);
     };
@@ -429,9 +434,11 @@ export function useThreadSync(opts: UseThreadSyncOptions): ThreadSyncControls {
         );
     }, [enabled, intervalMs, maxBackoffMs]);
 
+    // Stryker disable ArrayDeclaration: any constant dependency list keeps the same callback for the life of the hook
     const refreshNow = useCallback(() => {
         refreshNowRef.current();
     }, []);
+    // Stryker restore ArrayDeclaration
 
     return { refreshNow, isRefreshing };
 }

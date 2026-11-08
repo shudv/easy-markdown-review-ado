@@ -24,6 +24,8 @@ describe("sanitizeCssColor", () => {
         { name: "a 5-digit hex", input: "#12345" },
         { name: "a 7-digit hex", input: "#1234567" },
         { name: "a 9-digit hex", input: "#123456789" },
+        { name: "a # after the digits", input: "fff#" },
+        { name: "a short hex followed by another declaration", input: "#fff;x:10" },
         { name: "a declaration breakout", input: "red;background:url(javascript:alert(1))" },
         { name: "a rule breakout", input: "#fff;} body{display:none" },
         { name: "an attribute breakout", input: 'red" onload="x' },

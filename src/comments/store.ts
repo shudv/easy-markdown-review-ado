@@ -278,6 +278,7 @@ function mergeRemoteThreads(state: ThreadState, threads: CommentThread[]): Threa
 
     return {
         threadsById: nextById,
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: with nothing appended the copied order holds the same ids, and the state object is new either way, candidate for removal
         order: appended.length > 0 ? [...state.order, ...appended] : state.order,
     };
 }
@@ -314,8 +315,10 @@ function mergeOneThread(existing: CommentThread, incoming: CommentThread): Comme
 
         // Compare timestamps numerically — ISO strings with different precision
         // or offsets don't sort chronologically as plain strings.
+        // Stryker disable next-line ConditionalExpression: dead code: Date.parse(undefined) is already NaN, candidate for removal
         const remoteMs = remote.updatedAt === undefined ? NaN : Date.parse(remote.updatedAt);
 
+        // Stryker disable next-line ConditionalExpression: dead code: Date.parse(undefined) is already NaN, candidate for removal
         const localMs = local.updatedAt === undefined ? NaN : Date.parse(local.updatedAt);
 
         const remoteNewer =
@@ -356,6 +359,7 @@ function mergeOneThread(existing: CommentThread, incoming: CommentThread): Comme
 }
 
 function reactionsEqual(a: Reaction[] | undefined, b: Reaction[] | undefined): boolean {
+    // Stryker disable next-line ConditionalExpression: dead code: the same list (or two missing lists) also compares equal through the checks below, candidate for removal
     if (a === b) return true;
     if (!a || !b) return (a?.length ?? 0) === 0 && (b?.length ?? 0) === 0;
     if (a.length !== b.length) return false;

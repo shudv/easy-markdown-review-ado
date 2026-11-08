@@ -39,6 +39,7 @@ const assignDimension =
     };
 
 function assignClasses(properties: Properties, value: string): void {
+    // Stryker disable next-line Regex: splitting on single spaces only adds empty tokens, which the class allowlist rejects.
     const classes = value.split(/\s+/).filter((token) => SAFE_HTML_CLASS.test(token));
 
     if (classes.length > 0) properties.className = classes;
@@ -49,6 +50,7 @@ function assignLinkTarget(properties: Properties, value: string): void {
 }
 
 function assignLinkRel(properties: Properties, value: string): void {
+    // Stryker disable next-line Regex: splitting on single spaces only adds empty tokens, which filter(Boolean) drops.
     properties.rel = value.split(/\s+/).filter(Boolean);
 }
 
@@ -117,13 +119,16 @@ function convertNode(node: ParseNode): RootContent[] {
 }
 
 function closingTag(value: string): string | null {
+    // Stryker disable next-line OptionalChaining: the tag-name group always takes part in a match, so `[1]` is never undefined once `exec` matched.
     return /^\s*<\/([a-z][a-z0-9-]*)\s*>\s*$/i.exec(value)?.[1]?.toLowerCase() ?? null;
 }
 
 function openingContainer(value: string): string | null {
     const match = /^\s*<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.exec(value);
+    // Stryker disable next-line OptionalChaining: the tag-name group always takes part in a match, and a failed match already short-circuits at `match?.`.
     const tagName = match?.[1]?.toLowerCase();
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: a missing or non-allowlisted tag name never survives conversion as an element, so appendRawFragment finds no matching container and opens nothing either way.
     return tagName !== undefined &&
         SAFE_HTML_TAGS.has(tagName) &&
         !VOID_HTML_TAGS.has(tagName) &&
@@ -139,6 +144,7 @@ interface TransformState {
 
 /** Close the innermost open container if `close` matches its tag. */
 function closeContainer(state: TransformState, close: string, raw: RawNode): void {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: indexing an empty stack at -1 already yields undefined, so the explicit guard never changes the result; candidate for removal.
     const active = state.stack.length > 0 ? state.stack[state.stack.length - 1] : undefined;
 
     if (active?.element.tagName !== close) return;
@@ -167,9 +173,11 @@ function appendRawFragment(state: TransformState, raw: RawNode): void {
     const open = openingContainer(raw.value);
 
     const container = converted.find(
+        // Stryker disable next-line LogicalOperator,ConditionalExpression: the opening tag is the fragment's first tag, so its element is the first element parse5 emits (only whitespace text can precede it); any looser predicate finds the same node.
         (node): node is Element => node.type === "element" && node.tagName === open,
     );
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: a null `open` never finds a container and a non-null one always does (parse5 always emits the fragment's first tag), so either half alone decides the same; candidate for removal of one half.
     if (open !== null && container !== undefined) {
         state.stack.push({ element: container, parent: state.current });
         state.current = container.children;

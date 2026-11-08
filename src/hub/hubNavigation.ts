@@ -113,6 +113,7 @@ export function resolveOrgUrl(): string {
     try {
         // `getHost()` is typed non-null but is undefined until SDK init completes.
         const host = SDK.getHost() as SDK.IHostContext | undefined;
+        // Stryker disable next-line OptionalChaining: reading a name off a missing host throws into the catch below, which falls back to the referrer exactly as a missing name does
         const name = host?.name;
         if (name != null && name !== "") return `https://dev.azure.com/${name}`;
     } catch {

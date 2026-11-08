@@ -49,14 +49,51 @@ describe("preprocessMermaidBlocks", () => {
         expect(preprocessMermaidBlocks(src)).toContain("```mermaid");
     });
 
+    it.each([
+        { name: "ADO's spaced `::: mermaid` form", open: "::: mermaid", close: ":::" },
+        { name: "trailing spaces on both fences", open: ":::mermaid  ", close: "::: " },
+    ])("accepts $name", ({ open, close }) => {
+        const src = [open, "flowchart LR", "A --> B", close].join("\n");
+
+        expect(preprocessMermaidBlocks(src)).toBe(
+            ["```mermaid", "flowchart LR", "A --> B", "```"].join("\n"),
+        );
+    });
+
+    it("converts two diagrams written back to back", () => {
+        const src = [":::mermaid", "graph TD", ":::", ":::mermaid", "graph LR", ":::"].join("\n");
+
+        expect(preprocessMermaidBlocks(src)).toBe(
+            ["```mermaid", "graph TD", "```", "```mermaid", "graph LR", "```"].join("\n"),
+        );
+    });
+
+    it.each([
+        { name: "prose that mentions :::mermaid mid-line", line: "Open a diagram with :::mermaid" },
+        { name: "a colon fence with words after 'mermaid'", line: ":::mermaid flowchart" },
+    ])("leaves $name as written", ({ line }) => {
+        const src = [line, "", ":::mermaid", "graph TD", ":::"].join("\n");
+
+        expect(preprocessMermaidBlocks(src).split("\n")[0]).toBe(line);
+    });
+
     it("leaves unterminated colon blocks untouched", () => {
         const src = [":::mermaid", "flowchart LR", "A --> B"].join("\n");
         const out = preprocessMermaidBlocks(src);
         expect(out).toBe(src);
     });
 
-    it("is a no-op when no mermaid block is present", () => {
-        const src = "# Heading\n\nParagraph.\n";
+    it.each([
+        { name: "no mermaid block is present", src: "# Heading\n\nParagraph.\n" },
+        {
+            name: "a Windows (CRLF) document has no diagram",
+            src: "# Heading\r\n\r\nParagraph.\r\n",
+        },
+        {
+            name: "a CRLF document only mentions :::mermaid in prose",
+            src: "Wrap diagrams in :::mermaid fences.\r\n",
+        },
+    ])("is a no-op when $name", ({ src }) => {
         expect(preprocessMermaidBlocks(src)).toBe(src);
     });
 });
@@ -132,6 +169,17 @@ describe("renderMarkdown — mermaid placeholders", () => {
         const html = await renderMarkdown("```mermaid\n```\n");
         expect(html).not.toContain("emr-mermaid");
         expect(html).toContain("language-mermaid");
+    });
+
+    it("drops blank lines before the closing fence from the diagram source", async () => {
+        const div = document.createElement("div");
+        div.innerHTML = await renderMarkdown("```mermaid\ngraph TD\n  A --> B\n\n\n```\n");
+        const mermaid = div.querySelector<HTMLElement>(".emr-mermaid")!;
+
+        expect(mermaid.dataset.mermaidSrc).toBe(encodeURIComponent("graph TD\n  A --> B"));
+        expect(mermaid.querySelector(".emr-mermaid-fallback")!.textContent).toBe(
+            "graph TD\n  A --> B",
+        );
     });
 });
 

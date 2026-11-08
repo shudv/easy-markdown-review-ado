@@ -83,10 +83,11 @@ describe("applyInlineWordDiff", () => {
             removed: ["two"],
         },
     ])("marks $name and keeps the current text readable", ({ html, original, added, removed }) => {
-        const { el, current } = diffBlock(html, original);
+        const { el, current, result } = diffBlock(html, original);
 
         expect(marks(el)).toEqual({ added, removed });
         expect(modifiedText(el)).toBe(current);
+        expect(result).toEqual({ added: added.length, removed: removed.length });
     });
 
     it("shows a replaced word as removed before added", () => {

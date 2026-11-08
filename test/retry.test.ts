@@ -83,10 +83,20 @@ describe("parseRetryAfterMs", () => {
         expect(parseRetryAfterMs({ headers })).toBe(4000);
     });
 
+    it("prefers the response's Retry-After header over a retryAfter field", () => {
+        const headers = new Headers({ "Retry-After": "2" });
+
+        expect(parseRetryAfterMs({ headers, retryAfter: "30" })).toBe(2000);
+    });
+
     it.each([
         { name: "an error without a hint", error: {} },
         { name: "a null error", error: null },
         { name: "headers without Retry-After", error: { headers: { get: () => null } } },
+        {
+            name: "a plain header record it cannot query",
+            error: { headers: { "Retry-After": "2" } },
+        },
         {
             name: "an unparseable Retry-After",
             error: { headers: new Headers({ "Retry-After": "not-a-date" }) },
@@ -131,6 +141,32 @@ describe("withRetry", () => {
             status: 500,
         });
         expect(fn).toHaveBeenCalledTimes(3);
+    });
+
+    it("backs off longer after each failed read, and gives up without a final wait", async () => {
+        const { sleep, delays } = fakeSleep();
+        const fn = vi.fn().mockRejectedValue({ status: 503 });
+
+        await expect(withRetry(fn, { mode: "read", sleep, random: () => 0.5 })).rejects.toEqual({
+            status: 503,
+        });
+
+        // Half of 300ms, then half of 600ms; no wait after the last attempt.
+        expect(delays).toEqual([150, 300]);
+    });
+
+    it("retries a cancellable request that is never cancelled", async () => {
+        const { sleep } = fakeSleep();
+        const fn = vi.fn().mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce("ok");
+
+        await expect(
+            withRetry(fn, {
+                mode: "read",
+                sleep,
+                random: () => 0,
+                signal: new AbortController().signal,
+            }),
+        ).resolves.toBe("ok");
     });
 
     it("does not retry a terminal failure", async () => {
@@ -334,14 +370,16 @@ describe("withRetry", () => {
         expect(seen).toEqual([1, 2, 3]);
     });
 
-    it("waits on a real timer between attempts when no sleep is injected", async () => {
+    it("waits out the backoff on a real timer when no sleep is injected", async () => {
         vi.useFakeTimers();
 
         try {
             const fn = vi.fn().mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce("ok");
 
-            const p = withRetry(fn, { mode: "read", random: () => 0 });
-            await vi.runAllTimersAsync();
+            const p = withRetry(fn, { mode: "read", random: () => 1 });
+            await vi.advanceTimersByTimeAsync(299);
+            expect(fn).toHaveBeenCalledOnce();
+            await vi.advanceTimersByTimeAsync(1);
             await expect(p).resolves.toBe("ok");
         } finally {
             vi.useRealTimers();

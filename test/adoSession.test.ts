@@ -116,6 +116,15 @@ describe("AdoSessionMonitor — entering a spell", () => {
         });
     });
 
+    it("stops notifying an unsubscribed snapshot listener", () => {
+        const m = new AdoSessionMonitor();
+        const listener = vi.fn();
+        const off = m.subscribe(listener);
+        off();
+        m.report(refreshing(), "poll");
+        expect(listener).not.toHaveBeenCalled();
+    });
+
     it("stops notifying an unsubscribed recovery listener", () => {
         const m = new AdoSessionMonitor();
         const listener = vi.fn();
@@ -217,9 +226,8 @@ describe("AdoSessionMonitor — early resume", () => {
     it("discards a token read that lands after the spell already ended", async () => {
         let release!: (t: string) => void;
         const m = new AdoSessionMonitor();
-        m.configure({
-            getToken: () => new Promise<string>((r) => (release = r)),
-        });
+        const getToken = vi.fn(() => new Promise<string>((r) => (release = r)));
+        m.configure({ getToken });
         m.report(refreshing(), "poll");
         await vi.advanceTimersByTimeAsync(0);
         m.noteSuccess(Date.now());
@@ -227,6 +235,19 @@ describe("AdoSessionMonitor — early resume", () => {
         await vi.advanceTimersByTimeAsync(SESSION_POLL_MS);
         expect(m.getSnapshot().state).toBe("live");
         expect(eventsNamed("end")).toHaveLength(1);
+        // The ended spell doesn't keep asking the host for tokens.
+        expect(getToken).toHaveBeenCalledOnce();
+    });
+
+    it("stops asking the host for tokens once an ADO call proves the session is back", async () => {
+        const m = new AdoSessionMonitor();
+        const getToken = vi.fn(async () => DEAD);
+        m.configure({ getToken });
+        m.report(refreshing(), "poll");
+        await vi.advanceTimersByTimeAsync(0);
+        m.noteSuccess(Date.now());
+        await vi.advanceTimersByTimeAsync(SESSION_POLL_MS);
+        expect(getToken).toHaveBeenCalledOnce();
     });
 });
 
@@ -295,6 +316,7 @@ describe("AdoSessionMonitor — held writes", () => {
             heldWrites: 1,
         });
         expect(attempt).toHaveBeenCalledOnce();
+        expect(eventsNamed("start")[0]!.properties).toMatchObject({ trigger: "write" });
         // The user is waiting on this write: one degradation, not a failure.
         expect(telemetry.current.userFacingErrors()).toEqual([
             expect.objectContaining({
@@ -353,6 +375,7 @@ describe("AdoSessionMonitor — held writes", () => {
         await expect(write).rejects.toBe(second);
         expect(attempt).toHaveBeenCalledTimes(2);
         expect(m.getSnapshot().state).toBe("refreshing");
+        expect(eventsNamed("start").map((e) => e.properties?.trigger)).toEqual(["write", "write"]);
     });
 });
 
@@ -450,6 +473,7 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
             state: "refreshing",
             canReload: false,
         });
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
     });
 
     // Review finding: a reload is only *requested* — the host still serves the
@@ -678,6 +702,17 @@ describe("autoReloadAllowed", () => {
 
     it("refuses without storage", () => {
         expect(autoReloadAllowed(undefined, 1)).toBe(false);
+    });
+
+    it("refuses where reading storage throws (sandboxed iframe)", () => {
+        const throwing = {
+            getItem: () => {
+                throw new Error("denied");
+            },
+            setItem: () => {},
+        };
+
+        expect(autoReloadAllowed(throwing, 1)).toBe(false);
     });
 });
 

@@ -7,7 +7,7 @@ import {
     DIFF_METADATA_CLASS,
     DIFF_TOOLTIP_CLASS,
 } from "../src/markdown/diffDecorations";
-import { decorate, render, view, words } from "./markdownDiffHarness";
+import { decorate, diffView, render, view, words } from "./markdownDiffHarness";
 
 // Rendered diff of images: an image is marked with a minimal media outline
 // (never a text wash), and changes to its source, alt text or title are shown
@@ -18,6 +18,31 @@ beforeEach(() => {
 });
 
 describe("images", () => {
+    it.each([
+        {
+            name: "a paragraph of images on separate lines",
+            original: "![a](a.png)\n![b](b.png)",
+            current: "![a](a.png)\n![c](c.png)",
+            selector: "p",
+            outlined: true,
+        },
+        {
+            name: "a list item holding only an image",
+            original: "- ![old](old.png)",
+            current: "- ![new](new.png)",
+            selector: "li",
+            outlined: false,
+        },
+    ])(
+        "outlines $name as an image block: $outlined",
+        ({ original, current, selector, outlined }) => {
+            const { root } = diffView(original, current);
+
+            expect(root.querySelector(selector)?.classList.contains(DIFF_IMAGE_CLASS)).toBe(
+                outlined,
+            );
+        },
+    );
     it.each([
         {
             name: "a changed alt text on a standalone image",
@@ -87,10 +112,66 @@ describe("images", () => {
         expect(root.querySelector("p")?.classList.contains(DIFF_INLINE_CLASS)).toBe(true);
         const indicator = image.nextElementSibling!;
         expect(indicator.classList.contains(DIFF_METADATA_CLASS)).toBe(true);
-        expect(indicator.textContent).toContain("https://example.com/v1.png");
-        expect(indicator.textContent).toContain("alt: Legacy architecture");
-        expect(indicator.textContent).toContain("https://example.com/v2.png");
-        expect(indicator.textContent).toContain("alt: Current architecture");
+
+        const row = (side: string) => {
+            const el = indicator.querySelector(`.emr-diff-metadata-row--${side}`)!;
+
+            return [
+                el.querySelector(".emr-diff-metadata-label")?.textContent,
+                el.querySelector(".emr-diff-metadata-value")?.textContent,
+            ];
+        };
+
+        expect([row("before"), row("after")]).toEqual([
+            ["Before ", "https://example.com/v1.png (alt: Legacy architecture; title: Legacy)"],
+            ["After ", "https://example.com/v2.png (alt: Current architecture; title: Current)"],
+        ]);
+    });
+
+    it("opens and closes an image change's details from its button", () => {
+        const root = render("![Current](https://example.com/v2.png)");
+        decorate(root, [
+            {
+                startLine: 1,
+                endLine: 1,
+                kind: "modified",
+                originalText: "![Legacy](https://example.com/v1.png)",
+            },
+        ]);
+        const indicator = root.querySelector<HTMLElement>(`.${DIFF_METADATA_CLASS}`)!;
+        const trigger = indicator.querySelector<HTMLButtonElement>(".emr-diff-metadata-trigger")!;
+        expect(indicator.querySelector(".emr-diff-metadata-panel")?.getAttribute("role")).toBe(
+            "tooltip",
+        );
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+        trigger.click();
+        expect(indicator.classList.contains("is-open")).toBe(true);
+        expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+        trigger.click();
+        expect(indicator.classList.contains("is-open")).toBe(false);
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("explains an image whose title alone changed", () => {
+        expect(view('![a](a.png "Old title")', '![a](a.png "New title")')).toEqual([
+            "p modified inline: ⟨Image changed⟩",
+        ]);
+    });
+
+    it("describes an inline HTML image without alt text", () => {
+        const { root } = diffView('Logo: <img src="logo.png">', 'Logo: <img src="logo-v2.png">');
+
+        expect(root.querySelector(".emr-diff-metadata-row--before")?.textContent).toBe(
+            "Before logo.png (alt: no alt text)",
+        );
+    });
+
+    it("marks a paragraph of images as edited when one of its images was removed", () => {
+        const { root } = diffView("![a](a.png) ![b](b.png)", "![a](a.png)");
+
+        expect(root.querySelector("p")?.dataset.diffKind).toBe("modified");
     });
 
     it("describes title-less image source and alt changes", () => {

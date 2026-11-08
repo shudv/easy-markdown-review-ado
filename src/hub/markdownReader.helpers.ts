@@ -20,6 +20,7 @@ export interface ParsedVersionSpec {
  * prefix, so the caller falls back to the repo's default branch.
  */
 export function parseVersionSpec(spec: string | undefined): ParsedVersionSpec | null {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a blank spec has no value after its prefix, which the check below rejects anyway; candidate for removal
     if (spec === undefined || spec === "") return null;
     const value = spec.slice(2);
     if (!value) return null;

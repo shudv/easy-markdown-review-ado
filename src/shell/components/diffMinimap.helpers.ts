@@ -32,10 +32,12 @@ interface Span {
 }
 
 function clamp01(n: number): number {
+    // Stryker disable next-line EqualityOperator: at the bounds the clamp returns the bound either way
     return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 
 function clamp(n: number, lo: number, hi: number): number {
+    // Stryker disable next-line EqualityOperator: at the bounds the clamp returns the bound either way
     return n < lo ? lo : n > hi ? hi : n;
 }
 
@@ -59,6 +61,7 @@ export function thumbMetrics(
     scrollTop: number,
     { clientHeight, scrollHeight, trackPx, minThumbPx }: ThumbGeometry,
 ): { topPx: number; heightPx: number } {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: a zero-height track yields a zero thumb at the top through the general path too, and measured heights are never negative
     if (trackPx <= 0 || scrollHeight <= clientHeight) {
         return { topPx: 0, heightPx: Math.max(0, trackPx) };
     }
@@ -89,6 +92,7 @@ export function scrollFromThumbDrag(
     { clientHeight, scrollHeight, trackPx, minThumbPx }: ThumbGeometry,
 ): number {
     const maxScroll = scrollHeight - clientHeight;
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: dead code: with nothing to scroll or no track the thumb fills the track, so the `maxTop <= 0` check below returns the start position anyway; candidate for removal
     if (maxScroll <= 0 || trackPx <= 0) return startScrollTop;
 
     const heightPx = clamp(
@@ -148,6 +152,7 @@ export function mergeMarkers(markers: readonly DiffMarker[], gap: number): DiffM
     const out: DiffMarker[] = [];
 
     for (const m of sorted) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: out[-1] is undefined too, so the empty-list guard changes nothing; candidate for removal
         const prev = out.length > 0 ? out[out.length - 1] : undefined;
 
         if (prev?.kind === m.kind && m.top <= prev.top + prev.height + gap) {
@@ -169,6 +174,7 @@ function subtractSpan(spans: readonly Span[], cutTop: number, cutBottom: number)
     const out: Span[] = [];
 
     for (const s of spans) {
+        // Stryker disable next-line EqualityOperator: a cut that only touches the span's edge splits it into the same single span either way
         if (cutBottom <= s.top || cutTop >= s.bottom) {
             out.push(s); // no overlap — keep as-is
             continue;

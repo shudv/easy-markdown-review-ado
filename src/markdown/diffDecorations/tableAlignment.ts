@@ -72,6 +72,7 @@ function cellAlignmentCosts(
     isAnchor: CellAnchorTest,
 ): number[][] {
     const costs = Array.from({ length: originalLength + 1 }, () =>
+        // Stryker disable next-line ArrayDeclaration,ArithmeticOperator: every cell is written (first row and column, then row by row) before it is read, so the starting fill never matters
         Array<number>(currentLength + 1).fill(0),
     );
 
@@ -118,14 +119,18 @@ function cellAlignmentStep(
     i: number,
     j: number,
 ): TableCellAlignment {
+    // Stryker disable next-line LogicalOperator,EqualityOperator: on row or column 0 the anchor test reads a missing cell value, which is never an anchor
     if (i > 0 && j > 0 && isAnchor(i - 1, j - 1) && costs[i]![j] === costs[i - 1]![j - 1]) {
         return { kind: "equal", originalIndex: i - 1, currentIndex: j - 1 };
     }
 
+    // Stryker disable next-line EqualityOperator: in column 0 the diagonal cost is missing, so the comparison is false either way
     if (i > 0 && j > 0 && costs[i]![j] === costs[i - 1]![j - 1]! + 1) {
+        // Stryker disable next-line StringLiteral: the cell diff recomputes equal/modified for every paired cell, so the provisional name is never read
         return { kind: "modified", originalIndex: i - 1, currentIndex: j - 1 };
     }
 
+    // Stryker disable next-line EqualityOperator: in column 0 the left-hand cost is missing, so the comparison is false either way
     if (j > 0 && costs[i]![j] === costs[i]![j - 1]! + 1) {
         return { kind: "added", currentIndex: j - 1 };
     }
@@ -154,6 +159,7 @@ export function alignTableColumns(
     const currentByOriginal = new Map<number, number>();
     const originalByCurrent = new Map<number, number>();
 
+    // Stryker disable next-line EqualityOperator: one step past the end reads undefined, which never counts as a unique header
     for (let originalIndex = 0; originalIndex < original.length; originalIndex++) {
         const value = original[originalIndex]!;
 
@@ -180,6 +186,7 @@ export function alignTableColumns(
         });
     }
 
+    // Stryker disable next-line ConditionalExpression: dead code: with no matched header and differing widths both sides have unmatched headers, which the check below already rejects, candidate for removal
     if (currentByOriginal.size === 0) return null;
 
     const unmatchedOriginal = original
@@ -203,6 +210,7 @@ export function alignTableColumns(
     });
 
     for (const originalIndex of unmatchedOriginal) {
+        // Stryker disable next-line EqualityOperator: an unmatched header is never among the matched ones, so >= finds the same later headers
         const laterMapped = [...currentByOriginal.keys()].filter((index) => index > originalIndex);
 
         const currentIndex =

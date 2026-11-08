@@ -63,6 +63,7 @@ function createBeforeToggle(
     content: HTMLDivElement;
 } {
     const trigger = document.createElement("button");
+    // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
     trigger.type = "button";
     trigger.className = "emr-diff-before-trigger";
     trigger.textContent = "Before";
@@ -138,6 +139,7 @@ function buildBeforeTableContent(
 
     const body = table.tBodies.item(0) ?? table.createTBody();
     body.prepend(headerRow);
+    // Stryker disable next-line OptionalChaining: the header row was read from the table's head above, so the head always exists
     table.tHead?.remove();
     fragment.appendChild(table);
 
@@ -155,6 +157,7 @@ export function attachBlockBeforeDisclosure(
     control.className = "emr-diff-before-control emr-diff-before-control--block";
 
     const { trigger, panel, content } = createBeforeToggle(
+        // Stryker disable next-line MethodExpression: the id only has to be unique and match the trigger's aria-controls, which it does in either case
         `emr-diff-before-${block.tagName.toLowerCase()}-${span.start}-${span.end}`,
         "emr-diff-before-panel emr-diff-before-panel--block markdown-body",
     );

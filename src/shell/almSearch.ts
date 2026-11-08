@@ -203,9 +203,11 @@ export class AlmSearchRestClient implements AlmSearchClient {
 
                     return r;
                 },
+                // Stryker disable StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label
                 {
                     mode: "read",
                     label: "almSearch.searchCode",
+                    // Stryker restore StringLiteral
                     signal,
                     sleep: this.sleepImpl,
                 },
@@ -215,7 +217,9 @@ export class AlmSearchRestClient implements AlmSearchClient {
             // not be reported as an unavailable-network failure.
             if (
                 signal?.aborted ||
+                // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: only objects carry a name, and fetch never rejects with null or a primitive, so the type checks never decide anything; candidate for removal
                 (typeof err === "object" &&
+                    // Stryker disable next-line ConditionalExpression: dead code: a null rejection never comes out of fetch, so the null check never decides anything; candidate for removal
                     err !== null &&
                     (err as { name?: unknown }).name === "AbortError")
             ) {

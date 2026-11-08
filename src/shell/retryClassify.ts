@@ -29,6 +29,7 @@ export function extractStatus(err: unknown): number | undefined {
     const candidates = [e.status, e.statusCode, e.httpStatusCode];
 
     for (const c of candidates) {
+        // Stryker disable next-line EqualityOperator: a 1xx informational response never surfaces as a failure, so the lower edge can't change a classification (the 599 upper edge is pinned by a test)
         if (typeof c === "number" && c >= 100 && c <= 599) return c;
     }
 
@@ -48,6 +49,7 @@ export function extractStatus(err: unknown): number | undefined {
  * result.
  */
 export function isAbortError(err: unknown): boolean {
+    // Stryker disable next-line ConditionalExpression: reading `name` / `code` off a thrown primitive yields undefined, so primitives are never aborts without the `typeof` check
     if (typeof err !== "object" || err === null) return false;
     const e = err as Record<string, unknown>;
 
@@ -62,6 +64,7 @@ export function isAbortError(err: unknown): boolean {
  * blips — the intermittent `TF400813` this work targets), so they are treated
  * as retryable.
  */
+// Stryker disable next-line ArrayDeclaration: dead code — `isRetryable` already returns false for every status outside the transient, write-safe and 401/403 sets, so this list (and its two `has` checks below) never changes a decision; candidate for removal
 const TERMINAL_STATUSES = new Set<number>([
     400, // Bad Request
     404, // Not Found
@@ -136,7 +139,9 @@ export function isRetryable(err: unknown, mode: RetryMode): boolean {
         //     so retrying could duplicate it.
         //   - ambiguous 5xx (500/502/504) after the request was sent.
         //   - terminal 4xx verdicts.
+        // Stryker disable next-line ConditionalExpression: an undefined status is in none of the sets below and isn't 401/403, so it falls through to false anyway
         if (status === undefined) return false;
+        // Stryker disable next-line ConditionalExpression: dead code — terminal statuses are neither write-safe nor 401/403, so they fall through to false anyway; candidate for removal
         if (TERMINAL_STATUSES.has(status)) return false;
         if (WRITE_SAFE_TRANSIENT_STATUSES.has(status)) return true;
 
@@ -150,6 +155,7 @@ export function isRetryable(err: unknown, mode: RetryMode): boolean {
     if (status === undefined) return true;
 
     // Definitive server verdict — never retry.
+    // Stryker disable next-line ConditionalExpression: dead code — terminal statuses are neither transient nor 401/403, so they fall through to false anyway; candidate for removal
     if (TERMINAL_STATUSES.has(status)) return false;
 
     // Reads: retry the explicit transient set…

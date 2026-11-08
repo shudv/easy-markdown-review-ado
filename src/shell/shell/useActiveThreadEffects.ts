@@ -47,10 +47,12 @@ function useDismissActiveThread(
     // ESC clears the active thread and dismisses an *empty* draft from anywhere
     // outside a text editor. A draft holding text is preserved (users must cancel
     // it explicitly). (Composer has its own ESC handler that stops propagation.)
+    // Stryker disable ArrayDeclaration: both effects depend only on a useState setter and a ref, stable for the shell's lifetime, so their listeners are never re-bound either way
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             if (e.key !== "Escape") return;
             const target = e.target as HTMLElement | null;
+            // Stryker disable next-line OptionalChaining: a dispatched keydown always has a target element, so the `?.` never short-circuits
             if (target?.matches("textarea, input")) return;
             setActiveThreadId(clearIfSet);
             dismissEmptyDraftRef.current();
@@ -82,12 +84,14 @@ function useDismissActiveThread(
     }, [setActiveThreadId, dismissEmptyDraftRef]);
 }
 
+// Stryker restore ArrayDeclaration
 function useRailFollow(activeThreadId: string | null): void {
     // When a thread becomes active, bring its balloon into view inside the rail's
     // OWN scroll (the rail scrolls independently of the document now). The
     // document is scrolled to the anchor by the selection handlers. One effect
     // centralises rail-follow for every activation path (click, cycle, deep link).
     useEffect(() => {
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: with no active thread the follow-scroll would look for a balloon tagged "null"/"" — none exists, so it scrolls nothing either way
         if (activeThreadId === null || activeThreadId === "") return;
         const escaped = CSS.escape(activeThreadId);
         let cancelled = false;

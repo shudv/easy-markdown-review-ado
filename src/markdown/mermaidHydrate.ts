@@ -43,6 +43,7 @@ function importWithChunkRetry(): Promise<typeof import("mermaid")> {
 }
 
 function getMermaid(): Promise<MermaidApi> {
+    // Stryker disable next-line ConditionalExpression: the module system already caches the dynamic import, so building a fresh promise per pass resolves to the same API.
     if (mermaidPromise) return mermaidPromise;
     mermaidPromise = (async () => {
         const mod = await importWithChunkRetry();
@@ -69,6 +70,7 @@ function getMermaid(): Promise<MermaidApi> {
 function currentMermaidTheme(): "dark" | "default" {
     const theme = document.documentElement.getAttribute("data-emr-theme");
 
+    // Stryker disable next-line StringLiteral: any fallback that isn't a theme id reads as light, exactly like "".
     return isDarkTheme(theme ?? "") ? "dark" : "default";
 }
 
@@ -80,6 +82,7 @@ let renderSeq = 0;
 // the library chunk itself; both go through `withChunkRetry`.
 function renderWithChunkRetry(api: MermaidApi, src: string): ReturnType<MermaidApi["render"]> {
     // A fresh id per attempt: mermaid needs a unique DOM id for each render.
+    // Stryker disable next-line UpdateOperator: counting down (`emr-mermaid--1`, `--2`, …) still gives every attempt its own valid, unique id.
     return withChunkRetry(() => api.render(`emr-mermaid-${++renderSeq}`, src));
 }
 
@@ -145,6 +148,7 @@ function paint(el: HTMLElement, svg: string, theme: string, fontFamily: string):
     const svgEl = el.querySelector<SVGSVGElement>("svg")!;
     const viewBox = svgEl.getAttribute("viewBox");
 
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: Mermaid always writes a non-empty viewBox or none at all, so the empty-string check never decides anything; candidate for removal.
     if (viewBox !== null && viewBox !== "") {
         el.style.setProperty("--emr-diagram-natural-w", `${viewBox.split(" ")[2]}px`);
         svgEl.style.removeProperty("max-width");
@@ -163,6 +167,7 @@ interface HydrationPass {
 /** A placeholder's decoded `data-mermaid-src`, or `null` if absent/malformed. */
 function decodedSource(el: HTMLElement): string | null {
     const enc = el.getAttribute("data-mermaid-src");
+    // Stryker disable next-line ConditionalExpression: dead code: placeholders are selected with `[data-mermaid-src]`, so the attribute is never missing (null) here; candidate for removal (the null check only narrows the type).
     if (enc === null || enc === "") return null;
 
     try {
@@ -180,6 +185,7 @@ function markRenderFailed(pass: HydrationPass, el: HTMLElement, src: string, err
     el.setAttribute("data-mermaid-error", "render-failed");
     // Keep the fallback `<pre>` so the user can still read the source.
 
+    // Stryker disable next-line StringLiteral: developer-console text only; the reader-facing state and telemetry don't depend on it.
     console.warn("[mermaid] render failed:", error);
     if (isDiagramSyntaxError(error)) noteRenderIssueOnce(src, "syntax-error");
     else reportOnce(`render:${src}`, "diagram-render", error);
@@ -210,6 +216,7 @@ async function recoverFailedRender(
         } catch (repairErr) {
             // Still a syntax error: keep the author's original one. Anything
             // else (a chunk load, a runtime fault) is the real failure.
+            // Stryker disable next-line ConditionalExpression: when both attempts are syntax errors either one is only noted by outcome (no error payload), so swapping them changes nothing but the console text.
             if (!isDiagramSyntaxError(repairErr)) error = repairErr;
         }
     }
@@ -248,6 +255,7 @@ export async function hydrateMermaid(
         root.querySelectorAll<HTMLElement>(".emr-mermaid[data-mermaid-src]"),
     ).filter(
         (el) =>
+            // Stryker disable next-line ConditionalExpression: dead code: theme and font attributes are only ever written together with data-hydrated="true", so a placeholder not yet hydrated is always picked up by the theme/font checks below and this check never decides anything; candidate for removal.
             el.getAttribute("data-hydrated") !== "true" ||
             el.getAttribute("data-mermaid-theme") !== theme ||
             el.getAttribute("data-mermaid-font") !== fontFamily,
@@ -265,7 +273,9 @@ export async function hydrateMermaid(
             el.setAttribute("data-mermaid-error", "load-failed");
         }
 
+        // Stryker disable next-line StringLiteral: developer-console text only; the reader-facing state and telemetry don't depend on it.
         console.warn("[mermaid] failed to load library:", err);
+        // Stryker disable next-line StringLiteral: the dedupe key only has to differ from the `render:`/`issue:` keys, which any other constant (even "") does.
         reportOnce("library-load", "diagram-library-load", err);
 
         return;

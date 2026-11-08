@@ -93,6 +93,7 @@ describe("isHighContrastPrimary", () => {
 
     it.each([
         { name: "the default blue accent", primary: "0, 120, 212" },
+        { name: "a teal accent", primary: "0, 128, 128" },
         { name: "an almost-white coloured accent", primary: "255, 255, 254" },
         { name: "a coloured accent written without spaces", primary: "12,34,56" },
         { name: "no accent at all", primary: "" },
@@ -106,6 +107,11 @@ describe("isDarkLuminance", () => {
     it.each([
         { name: "a black background reads as dark", luma: 0, expected: true },
         { name: "a dark grey background reads as dark", luma: 0.2, expected: true },
+        {
+            name: "a background at exactly half luminance reads as light",
+            luma: 0.5,
+            expected: false,
+        },
         { name: "a light grey background reads as light", luma: 0.8, expected: false },
         { name: "a white background reads as light", luma: 1, expected: false },
         { name: "an unreadable background reads as light", luma: null, expected: false },

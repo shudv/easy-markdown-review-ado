@@ -17,6 +17,7 @@ const IDENTITY_TAGS = new Set(["P", "LI"]);
  * ordered list numbers itself, so a renumbered item reads the same.
  */
 function semanticSignature(root: Element): string {
+    // Stryker disable next-line ArrayDeclaration: both signatures being compared get the same leading entry, so they match or differ exactly as before
     const parts: string[] = [];
 
     const visit = (node: Node): void => {
@@ -27,9 +28,11 @@ function semanticSignature(root: Element): string {
         }
 
         const transparent = node.classList.contains("emr-highlight");
+        // Stryker disable next-line MethodExpression: both signatures being compared spell tag names the same way
         const tag = node.tagName.toLowerCase();
 
         if (!transparent) {
+            // Stryker disable next-line MethodExpression: listing an absent attribute as null on both sides compares the same as leaving it out
             const attributes = [
                 "href",
                 "src",
@@ -55,6 +58,7 @@ function semanticSignature(root: Element): string {
 
     root.childNodes.forEach(visit);
 
+    // Stryker disable next-line MethodExpression: the original and current blocks come from the same renderer, so any whitespace at their ends matches
     return parts.join("").replace(/\s+/g, " ").trim();
 }
 
@@ -75,6 +79,7 @@ export function renderSource(
     source: string | undefined,
     renderInline: (md: string) => string,
 ): HTMLElement | null {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: an empty document renders no list items, so looking an item up in it finds nothing, just like having no document
     if (source === undefined || source === "") return null;
     const container = doc.createElement("div");
     // eslint-disable-next-line no-unsanitized/property -- renderInline is renderMarkdownSync, whose output is sanitized by rehypeSafeHtml + rehypeSanitizeUrls
@@ -88,8 +93,10 @@ function listDepth(item: Element): number {
     let depth = 0;
 
     for (
+        // Stryker disable next-line OptionalChaining: a list item always sits in a list
         let parent = item.parentElement?.closest("li");
         parent;
+        // Stryker disable next-line OptionalChaining: a list item always sits in a list
         parent = parent.parentElement?.closest("li")
     ) {
         depth++;
@@ -109,6 +116,7 @@ export function listNestingChange(
     ranges: readonly ChangeRange[],
     originalDocument: () => HTMLElement | null,
 ): RenderComparison | null {
+    // Stryker disable next-line ConditionalExpression: only blocks that render identically reach here, and a non-item that renders identically to its original was not a list item before either, so no original item is found at its line
     if (item.tagName !== "LI") return null;
 
     const range = ranges.find(
@@ -118,6 +126,7 @@ export function listNestingChange(
 
     if (
         range?.originalStart == null ||
+        // Stryker disable next-line ConditionalExpression: a modified range's original start and end are always set together
         range.originalEnd == null ||
         range.end - range.start !== range.originalEnd - range.originalStart
     ) {
@@ -162,7 +171,8 @@ export function compareRendering(
     // paragraph, or a bulleted item that became numbered, reads differently.
     if (
         block.tagName === "LI"
-            ? original.parentElement!.tagName !== block.parentElement?.tagName
+            ? // Stryker disable next-line OptionalChaining: a list item always sits in a list
+              original.parentElement!.tagName !== block.parentElement?.tagName
             : original.parentElement !== scratch
     ) {
         return different;
@@ -201,8 +211,10 @@ function standaloneSource(block: HTMLElement, markdown: string): string {
     let lines = markdown.split("\n");
 
     for (
+        // Stryker disable next-line OptionalChaining: a rendered block always sits inside the article
         let quote = block.parentElement?.closest("blockquote");
         quote;
+        // Stryker disable next-line OptionalChaining: a quote always sits inside the article
         quote = quote.parentElement?.closest("blockquote")
     ) {
         if (!lines.every((line) => line.trim() === "" || /^[ \t]*>/.test(line))) {
@@ -221,9 +233,11 @@ function standaloneSource(block: HTMLElement, markdown: string): string {
 function dedentListContent(lines: readonly string[], code: boolean): string[] {
     const content = lines.filter((line) => line.trim() !== "");
 
+    // Stryker disable next-line Regex: the pattern can match empty, so its first match is always at the start of the line, anchored or not
     let indent = Math.min(...content.map((line) => /^[ \t]*/.exec(line)![0].length));
 
     // An indented (unfenced) code block keeps its own four-space indent.
+    // Stryker disable next-line StringLiteral: the anchored test only reads the first content line, which no joining separator can change
     if (code && !/^[ \t]*(?:`{3,}|~{3,})/.test(content.join("\n"))) {
         indent = Math.max(0, indent - 4);
     }

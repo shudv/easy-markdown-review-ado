@@ -51,6 +51,7 @@ export function useActiveDocPath(
         // restore is still back-filled to `?repo=…&path=…` on the first render.
         // Republishing is idempotent — `setRouteQuery` merges, preserving
         // `?comment=`.
+        // Stryker disable next-line ConditionalExpression: dead code: shouldPublishDefaultPath also refuses a repo that was already published; candidate for removal
         if (publishedRepoRef.current === selectedRepoId) return;
 
         const nextPath = resolveInitialDocPath(

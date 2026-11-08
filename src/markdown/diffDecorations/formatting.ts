@@ -29,6 +29,7 @@ const FORMAT_NAME_BY_TAG: Record<string, string> = {
 };
 
 export function formattingRanges(root: Element): FormattingRange[] {
+    // Stryker disable next-line ArrayDeclaration: both sides being compared start with the same placeholder entry, so it is never a difference
     const ranges: FormattingRange[] = [];
     let offset = 0;
 
@@ -39,6 +40,7 @@ export function formattingRanges(root: Element): FormattingRange[] {
             return;
         }
 
+        // Stryker disable next-line ConditionalExpression: a comment node has no children and no formatting tag, so visiting it records nothing either way
         if (!(node instanceof Element)) return;
         const start = offset;
         for (const child of Array.from(node.childNodes)) visit(child);
@@ -48,6 +50,7 @@ export function formattingRanges(root: Element): FormattingRange[] {
                 tag: node.tagName,
                 start,
                 end: offset,
+                // Stryker disable next-line ConditionalExpression: the detail is only read for links, and other tags have no href to record
                 detail: node.tagName === "A" ? node.getAttribute("href")! : undefined,
             });
         }
@@ -71,6 +74,7 @@ function capitalize(text: string): string {
 }
 
 function compactTooltipValue(value: string, limit = 96): string {
+    // Stryker disable next-line MethodExpression,Regex,StringLiteral: it only compacts rendered link hrefs, which the renderer percent-encodes, so they hold no whitespace
     const compact = value.replace(/\s+/g, " ").trim();
 
     return compact.length <= limit ? compact : `${compact.slice(0, limit - 1)}…`;
@@ -136,6 +140,7 @@ function formattingChangeRanges(
     const merged: Array<{ start: number; end: number }> = [];
 
     for (const range of sorted) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: indexing an empty list already yields undefined
         const previous = merged.length > 0 ? merged[merged.length - 1] : undefined;
 
         if (previous && range.start <= previous.end) {
@@ -163,6 +168,7 @@ interface TextNodeSpan {
 
 /** Every text node under `root` with its offset span in the root's text. */
 function collectTextNodeSpans(root: HTMLElement): TextNodeSpan[] {
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry without offsets overlaps no range, so it is skipped
     const nodes: TextNodeSpan[] = [];
     let offset = 0;
 
@@ -197,6 +203,7 @@ function wrapTextNodeRanges(
         const start = Math.max(range.start, entry.start) - entry.start;
         const end = Math.min(range.end, entry.end) - entry.start;
 
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: at the cursor there is no text before the mark, and appending an empty string adds nothing
         if (start > cursor) {
             fragment.append(entry.node.data.slice(cursor, start));
         }
@@ -209,6 +216,7 @@ function wrapTextNodeRanges(
         cursor = end;
     }
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: at the end of the text there is nothing left, and appending an empty string adds nothing
     if (cursor < entry.node.data.length) {
         fragment.append(entry.node.data.slice(cursor));
     }
@@ -227,6 +235,7 @@ export function wrapFormattingRanges(
             (range) => range.start < entry.end && entry.start < range.end,
         );
 
+        // Stryker disable next-line ConditionalExpression: rewrapping a text node no range overlaps rebuilds the same text, and its parent's marks were already collected
         if (overlaps.length === 0) continue;
         const parent = entry.node.parentElement;
         wrapTextNodeRanges(root.ownerDocument, entry, overlaps);
@@ -284,12 +293,15 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
     ranges: ExplainedTextRange[];
 } {
     const operations: WordDiffOp[] = [];
+    // Stryker disable next-line ArrayDeclaration: a placeholder range without offsets wraps no text, and a code block that reaches here always has word marks, so it is handled either way
     const ranges: ExplainedTextRange[] = [];
     let modified = "";
 
     const push = (kind: WordDiffOp["kind"], value: string): void => {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator,ArithmeticOperator: only unchanged runs can end up next to each other here, and two adjacent unchanged runs render the same as one
         const last = operations.length > 0 ? operations[operations.length - 1] : undefined;
 
+        // Stryker disable next-line ConditionalExpression: only unchanged runs can end up next to each other here, and two adjacent unchanged runs render the same as one
         if (last?.kind === kind) last.value += value;
         else operations.push({ kind, value });
         if (kind !== "removed") modified += value;
@@ -297,6 +309,7 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
 
     for (let i = 0; i < ops.length; i++) {
         const op = ops[i]!;
+        // Stryker disable next-line ConditionalExpression,EqualityOperator,ArithmeticOperator: reading past the last op already yields undefined
         const next = i + 1 < ops.length ? ops[i + 1] : undefined;
 
         if (

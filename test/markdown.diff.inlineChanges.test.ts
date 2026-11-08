@@ -12,7 +12,7 @@ import {
 import { applyLinkTargetIndicators } from "../src/markdown/diffDecorations/metadata";
 import { renderMarkdownSync } from "../src/markdown/render";
 import { WORD_ADDED_CLASS, WORD_REMOVED_CLASS } from "../src/markdown/wordDiffDom";
-import { decorate, expectPreciseAmber, render, view, words } from "./markdownDiffHarness";
+import { decorate, diffView, expectPreciseAmber, render, view, words } from "./markdownDiffHarness";
 
 // Inline changes inside prose and table cells: word edits, formatting added /
 // removed / switched, links wrapped or retargeted, and image metadata. The
@@ -354,6 +354,61 @@ describe("inline changes end to end", () => {
 });
 
 describe("formatting changes", () => {
+    it.each([
+        {
+            name: "bold and italic added together",
+            original: "Make plain here.",
+            current: "Make ***plain*** here.",
+            shown: ["p modified inline: Make ⟨Bold and italic formatting added⟩plain here."],
+        },
+        {
+            name: "a bold italic link added",
+            original: "Make plain here.",
+            current: "Make [***plain***](https://x.example) here.",
+            shown: [
+                "p modified inline: Make ⟨Bold, italic and link to https://x.example formatting added⟩plain here.",
+            ],
+        },
+        {
+            name: "a bold link turned back into plain text",
+            original: "Make [**plain**](https://x.example) here.",
+            current: "Make plain here.",
+            shown: [
+                "p modified inline: Make ⟨Bold and link to https://x.example formatting removed⟩plain here.",
+            ],
+        },
+        {
+            name: "bold added at the start while italics were dropped at the end",
+            original: "Start here and *finish* now.",
+            current: "**Start** here and finish now.",
+            shown: [
+                "p modified inline: ⟨Bold formatting added⟩Start here and ⟨Italic formatting removed⟩finish now.",
+            ],
+        },
+    ])("explains $name", ({ original, current, shown }) => {
+        expect(view(original, current)).toEqual(shown);
+    });
+
+    it.each([
+        {
+            name: "bold moved onto the touching next word",
+            original: "**ab**cd text",
+            current: "ab**cd** text",
+            marked: ["ab", "cd"],
+        },
+        {
+            name: "an italic phrase narrowed to one bold word",
+            original: "*one two three* end",
+            current: "one **two** three end",
+            marked: ["one ", "two", " three"],
+        },
+    ])("explains $name as one change over all its text", ({ original, current, marked }) => {
+        const { root } = diffView(original, current);
+
+        const marks = Array.from(root.querySelectorAll<HTMLElement>(`.${DIFF_FORMAT_CLASS}`));
+        expect(marks.map((mark) => mark.textContent)).toEqual(marked);
+        expect(new Set(marks.map((mark) => mark.dataset.diffTooltip)).size).toBe(1);
+    });
     it("explains newly bold text with an accessible amber callout and no word marks", () => {
         const root = render("This is **bold** now.");
 
@@ -644,6 +699,87 @@ describe("link changes", () => {
 });
 
 describe("applyLinkTargetIndicators", () => {
+    /** A paragraph whose only link was retargeted from v1 to v2, decorated. */
+    function retargetedLink() {
+        const root = render("Read the [guide](https://example.com/v2).");
+        document.body.appendChild(root);
+        decorate(root, [
+            {
+                startLine: 1,
+                endLine: 1,
+                kind: "modified",
+                originalText: "Read the [guide](https://example.com/v1).",
+            },
+        ]);
+        const indicator = root.querySelector<HTMLElement>(`.${DIFF_METADATA_CLASS}`)!;
+
+        return {
+            indicator,
+            trigger: indicator.querySelector<HTMLButtonElement>(".emr-diff-metadata-trigger")!,
+            panel: indicator.querySelector<HTMLElement>(".emr-diff-metadata-panel")!,
+        };
+    }
+
+    it("labels a link change's button and the details it controls", () => {
+        const { trigger, panel } = retargetedLink();
+
+        expect(trigger.getAttribute("aria-label")).toBe("Show link target change");
+        expect(trigger.title).toBe("Show link target change");
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        expect(trigger.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+        expect(panel.id).not.toBe("");
+        expect(trigger.getAttribute("aria-controls")).toBe(panel.id);
+        expect(panel.getAttribute("role")).toBe("dialog");
+        expect(panel.getAttribute("aria-label")).toBe("Link target change");
+    });
+
+    it("opens and closes a link change's details from its button", () => {
+        const { indicator, trigger } = retargetedLink();
+
+        trigger.click();
+        expect(indicator.classList.contains("is-open")).toBe(true);
+        expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+        trigger.click();
+        expect(indicator.classList.contains("is-open")).toBe(false);
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("opens a link change's details as a popover where the browser supports one", () => {
+        const { indicator, trigger, panel } = retargetedLink();
+        const shown: boolean[] = [];
+        Object.assign(panel, { togglePopover: (force: boolean) => shown.push(force) });
+
+        trigger.click();
+
+        expect(shown).toEqual([true]);
+        expect(trigger.getAttribute("aria-expanded")).toBe("true");
+        expect(indicator.classList.contains("is-open")).toBe(false);
+    });
+
+    it.each([
+        { state: "open", expanded: "true" },
+        { state: "closed", expanded: "false" },
+    ])(
+        "keeps the link button in step when the browser turns its details $state",
+        ({ state, expanded }) => {
+            const { trigger, panel } = retargetedLink();
+
+            panel.dispatchEvent(Object.assign(new Event("toggle"), { newState: state }));
+
+            expect(trigger.getAttribute("aria-expanded")).toBe(expanded);
+        },
+    );
+
+    it("places a link change's details under its button once they open", async () => {
+        const { trigger, panel } = retargetedLink();
+        trigger.getBoundingClientRect = () => new DOMRect(40, 100, 20, 20);
+
+        panel.dispatchEvent(Object.assign(new Event("toggle"), { newState: "open" }));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
+        expect(panel.style.top).toBe("126px");
+    });
     it("skips a target change for a link that is no longer rendered", () => {
         const paragraph = document.createElement("p");
         paragraph.innerHTML = `<a href="https://new.example/">one</a>`;

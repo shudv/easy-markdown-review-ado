@@ -120,6 +120,7 @@ export function coveredByDecoratedAncestor(el: HTMLElement): boolean {
     for (
         let ancestor = el.parentElement!.closest<HTMLElement>(`.${DIFF_BLOCK_CLASS}`);
         ancestor;
+        // Stryker disable next-line OptionalChaining: a decorated ancestor always sits inside the article root, so it has a parent
         ancestor = ancestor.parentElement?.closest<HTMLElement>(`.${DIFF_BLOCK_CLASS}`) ?? null
     ) {
         if (ancestorPaintCovers(ancestor, el)) return true;
@@ -171,6 +172,7 @@ export function classifyBlock(
  * Structural descendants (for example a nested list) remain outside.
  */
 export function applyLineWash(block: HTMLElement): boolean {
+    // Stryker disable next-line BooleanLiteral: dead code: the only caller (decorateBlock) ignores applyLineWash's returned flag, candidate for removal
     if (!LINE_WASH_TAGS.has(block.tagName)) return false;
 
     const target =
@@ -178,6 +180,7 @@ export function applyLineWash(block: HTMLElement): boolean {
             ? block.querySelector<HTMLElement>("code")
             : inlineProseTarget(block);
 
+    // Stryker disable next-line BooleanLiteral: dead code: the only caller (decorateBlock) ignores applyLineWash's returned flag, candidate for removal
     if (!target) return false;
 
     const nodes: ChildNode[] = [];
@@ -207,10 +210,12 @@ export function applyLineWash(block: HTMLElement): boolean {
                 (node.matches(media) || node.querySelector(media) !== null),
         )
     ) {
+        // Stryker disable next-line BooleanLiteral: dead code: the only caller (decorateBlock) ignores applyLineWash's returned flag, candidate for removal
         return false;
     }
 
     if (nodes.length === 0 || nodes.every((node) => (node.textContent ?? "").trim().length === 0)) {
+        // Stryker disable next-line BooleanLiteral: dead code: the only caller (decorateBlock) ignores applyLineWash's returned flag, candidate for removal
         return false;
     }
 
@@ -220,6 +225,7 @@ export function applyLineWash(block: HTMLElement): boolean {
     wrapper.append(...nodes);
     block.dataset.diffLineWash = "true";
 
+    // Stryker disable next-line BooleanLiteral: dead code: the only caller (decorateBlock) ignores applyLineWash's returned flag, candidate for removal
     return true;
 }
 
@@ -313,6 +319,7 @@ export function findInteriorEdit(
         },
     );
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry in the absorbed set matches no real deletion, so no marker is suppressed by it
     for (const deletion of interiorEdit?.deletions ?? []) {
         pass.absorbedDeletions.add(deletion);
     }

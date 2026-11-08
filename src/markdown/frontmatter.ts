@@ -82,13 +82,16 @@ function parseFrontmatter(raw: string): FrontmatterEntry[] {
         // `raw` is the content BETWEEN the fences, so its first line is source
         // line 2 (line 1 is the opening `---`).
         const sourceLine = i + 2;
+        // Stryker disable next-line MethodExpression: dead code: an untrimmed blank or indented-comment line is still rejected below — the list-item pattern needs a `-` and the key pattern can't start with whitespace — so trimming never changes which lines are skipped; candidate for removal.
         const trimmed = line.trim();
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a blank line fails both the list-item and the key pattern below, so the blank-line half of this skip never changes the result; candidate for removal.
         if (trimmed === "" || trimmed.startsWith("#")) continue;
 
         // Indented `- item` continues the most recent block-list key, extending
         // that entry's source span to cover the item line.
         // The capture starts at the first non-blank char so `[ \t]+` and the
         // capture never compete for whitespace (no polynomial backtracking).
+        // Stryker disable next-line Regex: requiring item text only stops an empty `- ` line from matching, and an empty item is skipped anyway, so either way nothing is added.
         const listItem = /^[ \t]+-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
 
         if (listItem && current) {
@@ -170,6 +173,7 @@ export function parseFrontmatterListItems(fragment: string): string[] {
     const items: string[] = [];
 
     for (const line of fragment.split(/\r?\n/)) {
+        // Stryker disable next-line Regex: requiring item text only stops an empty `- ` line from matching, and an empty item is skipped anyway.
         const m = /^[ \t]*-[ \t]+((?:[^\t\n\r \u2028\u2029].*)?)$/.exec(line);
         if (!m) continue;
         const value = unquote(m[1]!.trim());
@@ -199,6 +203,7 @@ export function extractFrontmatter(src: string): {
     const body = "\n".repeat(blankLines) + src.slice(consumed.length);
     // The block runs from line 1 through its closing fence. Drop a trailing
     // newline before counting so the EOF-close and newline-close cases agree.
+    // Stryker disable next-line StringLiteral: any newline-free replacement text leaves the line count unchanged.
     const endLine = consumed.replace(/\r?\n$/, "").split(/\r?\n/).length;
 
     return {
@@ -229,6 +234,7 @@ function frontmatterToHast(
             className: ["emr-frontmatter-row"],
             // Stamp each row with its own source span so diff highlighting lands on
             // the individual key that changed (like a table row), not the whole card.
+            // Stryker disable next-line ConditionalExpression: dead code: rehype-stringify omits undefined properties, so spreading undefined line numbers for an entry without a startLine emits the same markup — the guard never changes the output; candidate for removal.
             ...(entry.startLine != null
                 ? {
                       dataSourceLine: entry.startLine,
@@ -257,6 +263,7 @@ function frontmatterToHast(
         tagName: "div",
         properties: {
             className: ["emr-frontmatter"],
+            // Stryker disable next-line StringLiteral: nothing reads this marker's value (no selector, script or style uses it), and the attribute is emitted either way.
             dataEmrFrontmatter: "true",
             // Stamp the source span so comment anchoring and diff highlighting can
             // map the card back to the frontmatter lines, exactly as every other

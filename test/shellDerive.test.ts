@@ -203,6 +203,37 @@ describe("historyModes", () => {
         });
     });
 
+    it.each(["loadDocHistory", "loadThreadsForPr", "loadFileSourceAt"] as const)(
+        "keeps completed-PR history off when the host has no %s",
+        (missing) => {
+            expect(
+                historyModes({
+                    loadDocHistory: load,
+                    loadThreadsForPr: load,
+                    loadFileSourceAt: load,
+                    [missing]: undefined,
+                    reviewIterationStops: undefined,
+                    reviewIterationBaseCommit: undefined,
+                }).completedPrHistoryEnabled,
+            ).toBe(false);
+        },
+    );
+
+    it.each([
+        { name: "a base commit", base: "", loadFileSourceAt: load },
+        { name: "a way to load past versions", base: "base", loadFileSourceAt: undefined },
+    ])("leaves native updates off for a PR without $name", ({ base, loadFileSourceAt }) => {
+        expect(
+            historyModes({
+                loadDocHistory: undefined,
+                loadThreadsForPr: undefined,
+                loadFileSourceAt,
+                reviewIterationStops: [current, past(1, "c1")],
+                reviewIterationBaseCommit: base,
+            }).nativeIterationMode,
+        ).toBe(false);
+    });
+
     it("leaves native updates off for a PR without update stops", () => {
         expect(
             historyModes({
@@ -308,6 +339,19 @@ describe("historicalContentKeys", () => {
         });
     });
 
+    it("has no snapshot to load for a past PR without a merge commit", () => {
+        expect(
+            historicalContentKeys({
+                selectedPath: "a.md",
+                viewingHistorical: true,
+                activeStop: past(1, null),
+                baselineStop: undefined,
+                reviewIterationBaseCommit: undefined,
+                comparingIterations: false,
+            }).historicalContentKey,
+        ).toBeNull();
+    });
+
     it("falls back to the merge base and skips the live head", () => {
         expect(
             historicalContentKeys({
@@ -359,7 +403,67 @@ describe("historicalStatus", () => {
         ).toMatchObject({
             historicalHtml: "<p>1</p>",
             historicalLoading: false,
+            baselineAbsent: false,
+            absentNotice: null,
         });
+    });
+
+    it("is loading while the older compared update hasn't arrived", () => {
+        expect(
+            historicalStatus({ ...base, historicalHtmlByKey: { k1: "<p>1</p>" } }),
+        ).toMatchObject({ historicalLoading: true });
+    });
+
+    const pastStop = {
+        ...base,
+        comparingIterations: false,
+        baselineContentKey: null,
+        historicalLoadTargets: [{ key: "k1" }],
+    };
+
+    it("is loading while a past version hasn't arrived", () => {
+        expect(historicalStatus(pastStop)).toMatchObject({
+            usingHistoricalContent: true,
+            historicalLoading: true,
+        });
+    });
+
+    it("shows the live content for a past PR without a merge commit", () => {
+        expect(
+            historicalStatus({
+                ...pastStop,
+                historicalContentKey: null,
+                historicalLoadTargets: [],
+            }),
+        ).toMatchObject({ usingHistoricalContent: false, historicalLoading: false });
+    });
+
+    it.each([
+        {
+            name: "a deleted file's live version outside a comparison",
+            overrides: {
+                comparingIterations: false,
+                historicalContentKey: null,
+                currentFileChangeType: "deleted" as const,
+            },
+        },
+        {
+            name: "an earlier update of a file the PR later deletes",
+            overrides: {
+                historicalHtmlByKey: { k1: "<p>1</p>" },
+                currentFileChangeType: "deleted" as const,
+            },
+        },
+        {
+            name: "the latest update of an edited file",
+            overrides: {
+                viewingHistorical: false,
+                historicalContentKey: null,
+                currentFileChangeType: "modified" as const,
+            },
+        },
+    ])("shows $name without an absent notice", ({ overrides }) => {
+        expect(historicalStatus({ ...base, ...overrides }).absentNotice).toBeNull();
     });
 
     it("reports the first load error", () => {
@@ -467,6 +571,13 @@ describe("activeArticleState", () => {
             activeStorageKey: "k1",
             articleReady: false,
         });
+    });
+
+    it("keeps a past PR without a merge commit under the document's own storage key", () => {
+        expect(
+            activeArticleState({ ...historical, historicalContentKey: null, status })
+                .activeStorageKey,
+        ).toBe("a.md");
     });
 
     it("holds the article back when the file is absent at that version", () => {
@@ -687,6 +798,18 @@ describe("commentAccess", () => {
         expect(r.activeReadOnlyMessage).toMatch(/unavailable until/);
     });
 
+    it("makes comments unavailable for a hub document no completed PR has touched", () => {
+        const r = commentAccess({
+            ...base,
+            documentsMode: true,
+            routedPrResolution: null,
+            effectiveRoutedPr: undefined,
+        });
+
+        expect(r.commentsAvailable).toBe(false);
+        expect(r.activeReadOnlyMessage).toMatch(/unavailable until/);
+    });
+
     it.each([
         { name: "the routing PR is still resolving", overrides: { routedPrResolution: undefined } },
         {
@@ -710,11 +833,12 @@ describe("buildHistoryNav", () => {
         expect(buildHistoryNav(enabled, available, 0, vi.fn())).toBeUndefined();
     });
 
-    it("offers both directions from a middle stop, naming the older one", () => {
+    it("offers both directions from a middle stop, naming the stop each one leads to", () => {
         const nav = buildHistoryNav(true, stops, 1, vi.fn())!;
         expect(nav.canNewer).toBe(true);
         expect(nav.canOlder).toBe(true);
-        expect(nav.olderLabel).toMatch(/PR 4|#4/);
+        expect(nav.olderLabel).toBe("Older version — PR #4: PR 4");
+        expect(nav.newerLabel).toBe("Newer version — current version (PR #7)");
     });
 
     it.each([
@@ -744,12 +868,14 @@ describe("reader chrome", () => {
         });
     });
 
-    it("offers no feedback link without an address", () => {
-        expect(feedbackHrefFor(undefined)).toBeUndefined();
+    it.each([undefined, ""])("offers no feedback link without an address (%j)", (address) => {
+        expect(feedbackHrefFor(address)).toBeUndefined();
     });
 
     it("builds the feedback mailto for an address", () => {
-        expect(feedbackHrefFor("a@b.test")).toMatch(/^mailto:a@b\.test\?subject=/);
+        expect(feedbackHrefFor("a@b.test")).toBe(
+            `mailto:a@b.test?subject=${encodeURIComponent("Markdown Review — bug report / feedback")}`,
+        );
     });
 
     it.each([
@@ -832,6 +958,14 @@ describe("reader chrome", () => {
         });
     });
 
+    it("keeps a single-file panel's comment rail fixed even with comments available", () => {
+        expect(paneLayout(true, prefs, true).railResizable).toBe(false);
+    });
+
+    it("keeps the full reader's rail fixed when comments are unavailable", () => {
+        expect(paneLayout(undefined, prefs, false).railResizable).toBe(false);
+    });
+
     const updates = [
         { stopIndex: 1, number: 1, title: "Update 1" },
         { stopIndex: 0, number: 2, title: "Update 2" },
@@ -860,6 +994,36 @@ describe("reader chrome", () => {
             onRefresh: handleRefresh,
             refreshing: true,
         });
+    });
+
+    const statusBarBase = {
+        documentsMode: true,
+        activeRoutedPr: done,
+        nativeIterationMode: true,
+        iterationOptions: updates,
+        reviewIterationBaseCommit: "base",
+        canRefreshComments: false,
+        handleRefresh: vi.fn(),
+        commentsRefreshing: false,
+        fileRefreshInFlight: false,
+    };
+
+    it.each([
+        { name: "still active", activeRoutedPr: { ...done, status: "active" as const } },
+        { name: "not resolved yet", activeRoutedPr: undefined },
+    ])(
+        "names no resolved PR in the status bar while the routing PR is $name",
+        ({ activeRoutedPr }) => {
+            expect(
+                statusBarExtras({ ...statusBarBase, activeRoutedPr }).resolvedPullRequest,
+            ).toBeUndefined();
+        },
+    );
+
+    it("offers no update picker for a PR with a single update", () => {
+        expect(
+            statusBarExtras({ ...statusBarBase, iterationOptions: [updates[0]!] }).iterationOptions,
+        ).toBeUndefined();
     });
 
     it("gives the status bar none of the PR controls outside documents and update modes", () => {

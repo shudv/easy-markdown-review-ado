@@ -12,6 +12,29 @@ beforeEach(() => {
 describe("blockquotes", () => {
     it.each([
         {
+            name: "an edited quote whose second line continues without a marker",
+            original: lines("> Old first line", "lazy second line"),
+            current: lines("> New first line", "lazy second line"),
+            expected: ["blockquote modified inline: [-Old-]{+New+} first line lazy second line"],
+        },
+        {
+            name: "an edited quote inside a list item",
+            original: lines("- Item:", "", "  > Old quoted words here"),
+            current: lines("- Item:", "", "  > New quoted words here"),
+            expected: ["blockquote modified inline: [-Old-]{+New+} quoted words here"],
+        },
+        {
+            name: "an edited quote written without a space after its marker",
+            original: ">Old quoted words here",
+            current: ">New quoted words here",
+            expected: ["blockquote modified inline: [-Old-]{+New+} quoted words here"],
+        },
+    ])("word-diffs $name", ({ original, current, expected }) => {
+        expect(view(original, current)).toEqual(expected);
+    });
+
+    it.each([
+        {
             name: "an edited quote is word-diffed",
             original: lines("> The quick fox.", "", "After."),
             current: lines("> The slow fox.", "", "After."),

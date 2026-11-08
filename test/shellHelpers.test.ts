@@ -175,6 +175,16 @@ describe("friendlyWriteError", () => {
         );
     });
 
+    it("trims the whitespace around a server's reason", () => {
+        const err = Object.assign(new Error("  Only project admins can delete a thread.\n"), {
+            status: 403,
+        });
+
+        expect(friendlyWriteError("Delete thread", err)).toBe(
+            "Delete thread failed: Only project admins can delete a thread.",
+        );
+    });
+
     it("hides an opaque non-400813 TF code behind a generic retry ask", () => {
         const err = Object.assign(new Error("TF401027: opaque"), {
             status: 403,
@@ -274,6 +284,30 @@ describe("countWords", () => {
         // "Intro words more text" = 4 words.
         expect(countWords(md)).toBe(4);
     });
+
+    it("ignores fenced code that itself contains inline code", () => {
+        expect(countWords("```js\nlet a = `b`;\n```\nHello world")).toBe(2);
+    });
+
+    it.each([
+        ["words split only by an HTML line break", "line one<br>line two", 4],
+        ["the cells of a compact table row", "|Name|Role|", 2],
+    ])("counts %s separately", (_case, md, words) => {
+        expect(countWords(md)).toBe(words);
+    });
+
+    // Chinese and Japanese prose has no spaces between words, so a dropped code
+    // span or image must still leave the text on either side counted apart.
+    it.each([
+        ["inline code", "使用`npm`安装"],
+        ["a triple-backtick code span", "运行```npm test```即可"],
+        ["an image", "截图![示例](a.png)如下"],
+    ])(
+        "counts the text on either side of %s in CJK prose written without spaces separately",
+        (_part, md) => {
+            expect(countWords(md)).toBe(2);
+        },
+    );
 
     it("keeps link text but drops URLs and images", () => {
         const md = "See [the docs](https://example.com/very/long) and ![alt](img.png)";
@@ -514,6 +548,20 @@ describe("sourceDiffRanges", () => {
         ]);
     });
 
+    it("points a later edit back at its original lines after an earlier removal", () => {
+        const ranges = sourceDiffRanges(
+            "keep one\nremoved two\nkeep three\nkeep four\nold five\nkeep six\n",
+            "keep one\nkeep three\nkeep four\nnew five\nkeep six\n",
+        );
+
+        expect(ranges.at(-1)).toMatchObject({
+            kind: "modified",
+            startLine: 4,
+            originalStartLine: 5,
+            originalEndLine: 5,
+        });
+    });
+
     it("places each change at its own lines when a file has several", () => {
         expect(
             sourceDiffRanges(
@@ -567,6 +615,12 @@ describe("historyChevronTooltip", () => {
             tooltip: "Older version — PR #8: Refine docs",
         },
         {
+            name: "an older PR with a blank title",
+            direction: "older" as const,
+            target: stop({ title: "" }),
+            tooltip: "Older version — PR #8",
+        },
+        {
             name: "a newer PR without a title",
             direction: "newer" as const,
             target: stop({ title: undefined }),
@@ -603,6 +657,12 @@ describe("wordCountDelta", () => {
             added: 4,
             removed: 0,
         });
+    });
+
+    it("counts every word of an added range spanning several lines", () => {
+        expect(
+            wordCountDelta("one\ntwo\nthree", [{ startLine: 1, endLine: 2, kind: "added" }]),
+        ).toEqual({ added: 2, removed: 0 });
     });
 
     it("word-diffs a modified range against its original text", () => {

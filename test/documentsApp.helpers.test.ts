@@ -231,6 +231,8 @@ describe("buildMentionLinks", () => {
     it.each([
         { name: "the org", org: undefined, project: "Proj" },
         { name: "the project", org: "https://org", project: undefined },
+        { name: "an org URL", org: "", project: "Proj" },
+        { name: "a project name", org: "https://org", project: "" },
     ])("can't link mentions without $name", ({ org, project }) => {
         expect(buildMentionLinks(org, project, "Repo")).toBeNull();
     });

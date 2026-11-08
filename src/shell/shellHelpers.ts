@@ -153,6 +153,7 @@ export function friendlyWriteError(label: string, err: unknown): string {
  * Uses an explicit null check so falsy-but-valid values (e.g. `0`) still clear.
  */
 export function clearIfSet<T>(curr: T | null): T | null {
+    // Stryker disable next-line ConditionalExpression: dead code: a null value maps to null either way; candidate for removal
     return curr != null ? null : curr;
 }
 
@@ -194,6 +195,7 @@ export function isCommentUiClickTarget(target: Element | null): boolean {
  * indicator by design — not a precise typesetting metric.
  */
 export function countWords(markdown: string): number {
+    // Stryker disable next-line ConditionalExpression: dead code: blank text yields no word matches below, i.e. 0 anyway; candidate for removal
     if (!markdown) return 0;
 
     const text = markdown
@@ -202,7 +204,12 @@ export function countWords(markdown: string): number {
         .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // images
         .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links → keep text
         .replace(/<[^>]+>/g, " ") // HTML tags
-        .replace(/[#>*_~`|=]+/g, " "); // common md punctuation (keep hyphens)
+        // common md punctuation (keep hyphens)
+        .replace(
+            // Stryker disable next-line Regex: replacing each punctuation character with a space instead of each run separates the same words
+            /[#>*_~`|=]+/g,
+            " ",
+        );
 
     const matches = text.match(/\p{L}[\p{L}\p{N}'-]*/gu);
 
@@ -237,6 +244,7 @@ export function wordCountDelta(source: string, diff: readonly DiffRange[]): Word
 
         const slice = lines.slice(range.startLine - 1, range.endLine).join("\n");
 
+        // Stryker disable next-line ConditionalExpression,StringLiteral,BlockStatement: word-diffing an added range against no original text counts all its words as added, the same total
         if (range.kind === "added") {
             added += countWords(slice);
             continue;
@@ -360,6 +368,7 @@ export function betweenReviewUpdates(
     const max = Math.max(1, updateCount);
     const first = Math.max(1, Math.min(firstUpdate, max));
     const second = Math.max(1, Math.min(secondUpdate, max));
+    // Stryker disable next-line ConditionalExpression: dead code: for equal updates the general range is also {update - 1, update}; candidate for removal
     if (first === second) return oneReviewUpdate(first, max);
 
     return {
@@ -422,6 +431,7 @@ export function buildHistoryStops(
     };
 
     const seen = new Set<number>();
+    // Stryker disable next-line ConditionalExpression: dead code: PR ids are numbers, so a null entry in `seen` never matches one; candidate for removal
     if (currentPrId != null) seen.add(currentPrId);
     const historical: HistoryStop[] = [];
 
@@ -444,10 +454,12 @@ export function buildHistoryStops(
 
 /** Build renderer-ready line ranges for an arbitrary source-to-source comparison. */
 export function sourceDiffRanges(originalSource: string, modifiedSource: string): DiffRange[] {
+    // Stryker disable next-line ConditionalExpression: dead code: diffing identical sources produces no change runs, i.e. [] anyway; candidate for removal
     if (originalSource === modifiedSource) return [];
 
     const dmp = new diff_match_patch();
     const encoded = dmp.diff_linesToChars_(originalSource, modifiedSource);
+    // Stryker disable next-line BooleanLiteral: the inputs are already line-encoded single characters, so the line-level speed-up has nothing to do
     const diffs = dmp.diff_main(encoded.chars1, encoded.chars2, false);
     dmp.diff_cleanupSemantic(diffs);
     dmp.diff_charsToLines_(diffs, encoded.lineArray);
@@ -499,6 +511,7 @@ function collectChangeRun(diffs: readonly (readonly [number, string])[], start: 
         const [change, changeText] = diffs[run.next]!;
         const count = sourceLineCount(changeText);
 
+        // Stryker disable next-line EqualityOperator: dead code: equal-text diffs never enter a change run, so `change` is only ever -1 or 1; candidate for removal
         if (change < 0) {
             run.deletedText += changeText;
             run.deletedLines += count;
@@ -571,8 +584,10 @@ function stripFinalLineBreak(text: string): string {
  */
 export function stepStopIndex(current: number, delta: number, length: number): number {
     const next = current + delta;
+    // Stryker disable next-line EqualityOperator: at the bounds the clamp returns the bound either way
     if (next < 0) return 0;
     const last = length - 1;
+    // Stryker disable next-line EqualityOperator: at the bounds the clamp returns the bound either way
     if (next > last) return last < 0 ? 0 : last;
 
     return next;

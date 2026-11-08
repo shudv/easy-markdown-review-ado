@@ -28,6 +28,7 @@ beforeEach(() => {
     document.body.innerHTML = "";
     document.documentElement.removeAttribute("data-emr-theme");
     vi.mocked(mermaid.render).mockClear();
+    vi.mocked(mermaid.initialize).mockClear();
     vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -65,6 +66,23 @@ describe("hydrateMermaid", () => {
         await hydrateMermaid(root);
 
         expect(root.innerHTML).toBe("<p>nothing to hydrate</p>");
+    });
+
+    it("does not start the diagram library for a document without diagrams", async () => {
+        const root = document.createElement("div");
+        root.innerHTML = "<p>nothing to hydrate</p>";
+
+        await hydrateMermaid(root);
+
+        expect(mermaid.initialize).not.toHaveBeenCalled();
+    });
+
+    it("draws in the system UI font when the reader sets none", async () => {
+        const root = mountDiagram("graph TD\nA-->B");
+
+        await hydrateMermaid(root);
+
+        expect(diagramOf(root).getAttribute("data-mermaid-font")).toContain('"Segoe UI"');
     });
 
     it("replaces a diagram's source with its SVG, drawn in the reader's font", async () => {
@@ -403,8 +421,11 @@ describe("isDiagramSyntaxError", () => {
             true,
         ],
         ["a runtime failure", new Error("Cannot read properties of undefined"), false],
+        ["a Safari JSON failure", new Error('JSON Parse error: Unexpected identifier "x"'), false],
+        ["a thrown object without a message", { name: "Error" }, false],
         ["a chunk failure", chunkError(), false],
         ["a non-object", "Parse error", false],
+        ["a rejection with no reason", undefined, false],
         ["null", null, false],
     ])("%s → %s", (_label, err, expected) => {
         expect(isDiagramSyntaxError(err)).toBe(expected);
@@ -443,12 +464,20 @@ describe("hydrateMermaid — telemetry dedupe", () => {
 describe("isChunkLoadError", () => {
     it.each<[string, unknown, boolean]>([
         ["a webpack ChunkLoadError", chunkError(), true],
+        [
+            "a hot-update ChunkLoadError",
+            Object.assign(new Error("Loading hot update chunk 5 failed."), {
+                name: "ChunkLoadError",
+            }),
+            true,
+        ],
         ["a CSS chunk failure by message", new Error("Loading CSS chunk 3 failed."), true],
         ["a plain chunk failure by message", new Error("Loading chunk 9 failed."), true],
         ["a syntax error", new Error("Parse error on line 10"), false],
         ["a non-string message", { message: 42 }, false],
         ["null", null, false],
         ["a string", "Loading chunk 1 failed", false],
+        ["a rejection with no reason", undefined, false],
     ])("classifies %s", (_label, err, expected) => {
         expect(isChunkLoadError(err)).toBe(expected);
     });

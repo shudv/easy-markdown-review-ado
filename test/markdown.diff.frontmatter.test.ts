@@ -123,10 +123,25 @@ describe("frontmatter value diffs", () => {
         expect(res.decorated).toBe(1);
         const maint = frontmatterValue(root, "maintainers");
         // Grace Hopper struck-through (removed), Alan Turing green (added).
-        expect(words(maint).removed).toContain("Grace Hopper");
-        expect(words(maint).added).toContain("Alan Turing");
+        expect(words(maint)).toEqual({ added: "Alan Turing", removed: "Grace Hopper" });
         // Ada Lovelace (unchanged) is neither.
         expect(maint.textContent).toContain("Ada Lovelace");
+    });
+
+    it("reconstructs a block list in which one changed item used to be two", () => {
+        const root = render(
+            lines("---", "title: Guide", "maintainers:", "  - Bob Smith", "  - Alan Turing", "---"),
+        );
+
+        decorate(root, [
+            { startLine: 4, endLine: 4, kind: "modified", originalText: "  - Ada\n  - Bea" },
+            { startLine: 5, endLine: 5, kind: "modified", originalText: "  - Grace Hopper" },
+        ]);
+
+        expect(words(frontmatterValue(root, "maintainers"))).toEqual({
+            added: "Bob Smith, Alan Turing",
+            removed: "Ada, Bea, Grace Hopper",
+        });
     });
 
     it("shows a replaced first item of a block list", () => {
@@ -338,4 +353,23 @@ describe("frontmatter rows missing a key or value element", () => {
         expect(row.dataset.diffInline).toBeUndefined();
         expect(words(row)).toEqual({ added: "", removed: "" });
     });
+
+    it.each([
+        { name: "no key", key: "" },
+        { name: "an empty key", key: '<dt class="emr-frontmatter-key"> </dt>' },
+    ])(
+        "leaves a list row with $name without word marks when one of its items changed",
+        ({ key }) => {
+            const html = `${key}<dd class="emr-frontmatter-value">Ada, Bob</dd>`;
+            const root = makeRoot([{ tag: "div", start: 2, end: 3, html }]);
+            const row = root.firstElementChild as HTMLElement;
+            row.className = "emr-frontmatter-row";
+
+            decorateDiffRanges(root, [
+                { startLine: 3, endLine: 3, kind: "modified", originalText: "  - Old" },
+            ]);
+
+            expect(words(row)).toEqual({ added: "", removed: "" });
+        },
+    );
 });

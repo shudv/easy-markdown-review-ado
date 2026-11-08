@@ -160,6 +160,26 @@ describe("diffWords", () => {
             ],
         },
         {
+            name: "spaces added after a tab mark only the added spaces",
+            original: "\treturn",
+            modified: "\t  return",
+            ops: [
+                { kind: "equal", value: "\t" },
+                { kind: "added", value: "  " },
+                { kind: "equal", value: "return" },
+            ],
+        },
+        {
+            name: "spaces removed after a tab mark only the removed spaces",
+            original: "\t  return",
+            modified: "\treturn",
+            ops: [
+                { kind: "equal", value: "\t" },
+                { kind: "removed", value: "  " },
+                { kind: "equal", value: "return" },
+            ],
+        },
+        {
             name: "added trailing whitespace leaves the line break unchanged",
             original: "a\nb",
             modified: "a  \nb",
@@ -177,6 +197,86 @@ describe("diffWords", () => {
                 { kind: "equal", value: "Sentence one.\n" },
                 { kind: "removed", value: "Sentence two.\n" },
                 { kind: "equal", value: "Sentence three." },
+            ],
+        },
+        {
+            name: "a removed line in a Windows (CRLF) document is aligned to its line boundaries",
+            original: "Sentence one.\r\nSentence two.\r\nSentence three.",
+            modified: "Sentence one.\r\nSentence three.",
+            ops: [
+                { kind: "equal", value: "Sentence one.\r\n" },
+                { kind: "removed", value: "Sentence two.\r\n" },
+                { kind: "equal", value: "Sentence three." },
+            ],
+        },
+        {
+            name: "a blank line inserted between two lines is marked after the first line's break",
+            original: "Intro\nNext",
+            modified: "Intro\n\nNext",
+            ops: [
+                { kind: "equal", value: "Intro\n" },
+                { kind: "added", value: "\n" },
+                { kind: "equal", value: "Next" },
+            ],
+        },
+        {
+            name: "a line added to the end of a paragraph leaves the paragraph break unchanged",
+            original: "Intro line.\nSecond line.\n\nNext paragraph.",
+            modified: "Intro line.\nSecond line.\nThird line.\n\nNext paragraph.",
+            ops: [
+                { kind: "equal", value: "Intro line.\nSecond line." },
+                { kind: "added", value: "\nThird line." },
+                { kind: "equal", value: "\n\nNext paragraph." },
+            ],
+        },
+        {
+            name: "a sentence inserted after two-space sentence spacing starts at its first word",
+            original: "One.  Two.",
+            modified: "One.  One and a half.  Two.",
+            ops: [
+                { kind: "equal", value: "One.  " },
+                { kind: "added", value: "One and a half.  " },
+                { kind: "equal", value: "Two." },
+            ],
+        },
+        {
+            name: "a doubled negation on an indented line is marked after the indentation",
+            original: "const ok =\n    !ready;",
+            modified: "const ok =\n    !!ready;",
+            ops: [
+                { kind: "equal", value: "const ok =\n    " },
+                { kind: "added", value: "!" },
+                { kind: "equal", value: "!ready;" },
+            ],
+        },
+        {
+            name: "a slash added to fix a URL scheme is marked after the existing one",
+            original: "See http:/example.com",
+            modified: "See http://example.com",
+            ops: [
+                { kind: "equal", value: "See http:/" },
+                { kind: "added", value: "/" },
+                { kind: "equal", value: "example.com" },
+            ],
+        },
+        {
+            name: "a lengthened diagram arrow marks the added dash inside the arrow",
+            original: "A->B",
+            modified: "A-->B",
+            ops: [
+                { kind: "equal", value: "A-" },
+                { kind: "added", value: "-" },
+                { kind: "equal", value: ">B" },
+            ],
+        },
+        {
+            name: "a phrase repeated in Japanese text is marked after the phrase it repeats",
+            original: "日本語のテスト。",
+            modified: "日本語のテストのテスト。",
+            ops: [
+                { kind: "equal", value: "日本語のテスト" },
+                { kind: "added", value: "のテスト" },
+                { kind: "equal", value: "。" },
             ],
         },
         {
@@ -228,6 +328,7 @@ describe("diffWords", () => {
         },
         { name: "a punctuation-only change", original: "Ready.", modified: "Ready?" },
         { name: "collapsed double spaces", original: "one  two", modified: "one two three" },
+        { name: "bold text made bold italic", original: "**bold**", modified: "***bold***" },
     ])("rebuilds both sides exactly for $name", ({ original, modified }) => {
         const ops = diffWords(original, modified);
         expect(join(ops, ["equal", "removed"])).toBe(original);

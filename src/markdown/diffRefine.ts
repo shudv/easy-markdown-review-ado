@@ -124,6 +124,7 @@ function flushRuns(runs: SpanRuns): void {
     const addedBlocks = added.filter((chunk) => !chunk.blank);
 
     if (
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: with no removed blocks the runs pair only when nothing was added either, and then both paths emit nothing
         removedBlocks.length > 0 &&
         removedBlocks.length === addedBlocks.length &&
         removedBlocks.every((chunk, i) => chunk.kind === addedBlocks[i]!.kind)
@@ -306,6 +307,7 @@ function clusterRanges(placed: readonly PlacedRange[], current: SourceSide): Pla
     const clusters: PlacedRange[][] = [];
 
     for (const item of placed) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: indexing an empty list already yields undefined
         const cluster = clusters.length > 0 ? clusters[clusters.length - 1] : undefined;
 
         const last = cluster?.[cluster.length - 1];
@@ -339,10 +341,13 @@ function refineCluster(
 
     // Only a region that both lost and gained lines can be re-paired.
     if (
+        // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: a region with no current lines holds only removals, which the kind check below already leaves alone, candidate for removal
         span.endLine < span.startLine ||
+        // Stryker disable next-line ConditionalExpression: dead code: a region with no original lines holds only additions, which the kind check below already leaves alone, candidate for removal
         span.originalEndLine < span.originalStartLine ||
         !(
             ranges.some((range) => range.kind === "modified") ||
+            // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: a region with removals but neither additions nor edits has no current lines, which the first check above already leaves alone, candidate for removal
             (ranges.some((range) => range.kind === "added") &&
                 ranges.some((range) => range.kind === "deleted-marker"))
         )
@@ -365,6 +370,7 @@ export function refineDiffRanges(
     if (
         originalSource == null ||
         currentSource == null ||
+        // Stryker disable next-line ConditionalExpression,StringLiteral: removals alone are never re-paired (each region of them is passed through as it is), so this early return only skips the work
         !ranges.some((range) => range.kind !== "deleted-marker")
     ) {
         return [...ranges];

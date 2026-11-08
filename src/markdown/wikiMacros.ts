@@ -69,6 +69,7 @@ function element(
     return {
         type: "element",
         tagName,
+        // Stryker disable next-line ConditionalExpression: a `[null]` class list serialises as an empty `class=""`, which matches no selector and leaves the element's classList empty, just like no class at all.
         properties: className !== null ? { ...properties, className: [className] } : properties,
         children,
     };
@@ -84,6 +85,7 @@ interface TocEntry {
     text: string;
 }
 
+// Stryker disable next-line Regex: no other HTML tag name starts or ends with "h" plus a digit 1-6, so dropping either anchor matches the same elements.
 const HEADING_RE = /^h([1-6])$/;
 
 function collectHeadings(tree: Root): TocEntry[] {
@@ -116,6 +118,7 @@ function tocList(entries: readonly TocEntry[]): Element {
         }
 
         const item = element("li", null, [link(`#${entry.id}`, entry.text)]);
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: indexing an empty frame stack at -1 already yields undefined, so the explicit guard never changes the result; candidate for removal.
         const top = frames.length > 0 ? frames[frames.length - 1] : undefined;
 
         if (top?.level === entry.level) {
@@ -158,6 +161,7 @@ export const rehypeWikiMacros: Plugin<[], Root> = () => (tree) => {
             macros.push(node);
         }
     });
+    // Stryker disable next-line ConditionalExpression: dead code: with no macros the loop below does nothing, so this early return never changes the output; candidate for removal.
     if (macros.length === 0) return;
     let headings: TocEntry[] | null = null;
 

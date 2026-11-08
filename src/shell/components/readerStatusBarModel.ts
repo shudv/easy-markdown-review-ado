@@ -47,6 +47,7 @@ function showsCommentStepper(input: StatusBarVisibilityInput): boolean {
 
 function showsIterationPicker(input: StatusBarVisibilityInput): boolean {
     return (
+        // Stryker disable next-line ConditionalExpression: `undefined > 1` is false, so a missing count already hides the picker on the next line
         input.iterationCount !== undefined &&
         input.iterationCount > 1 &&
         input.hasIterationRange &&
@@ -60,6 +61,7 @@ export function statusBarVisibility(input: StatusBarVisibilityInput): StatusBarV
     const showIterationPicker = showsIterationPicker(input);
 
     return {
+        // Stryker disable next-line ConditionalExpression: `undefined > 0` is false, so a missing count hides without the `typeof` check
         hasCount: typeof wordCount === "number" && wordCount > 0,
         deltaParts: wordDelta && changesAvailable && changesShown ? formatWordDelta(wordDelta) : [],
         showCommentStepper: showsCommentStepper(input),
@@ -75,9 +77,11 @@ export function adjacentIterationRange(
     direction: -1 | 1,
 ): ReviewIterationRange | null {
     if (resolved.isAllChanges) {
+        // Stryker disable next-line EqualityOperator: `direction` is typed -1 | 1, so it is never 0
         return direction < 0 ? oneReviewUpdate(updateCount, updateCount) : null;
     }
 
+    // Stryker disable next-line EqualityOperator: `direction` is typed -1 | 1, so it is never 0
     if (direction < 0) {
         const previousUpdate = resolved.range.fromUpdate;
 
@@ -103,6 +107,7 @@ interface IterationOptionLike {
  * can reserve the widest one.
  */
 function stableIterationLabels(options: readonly IterationOptionLike[]): string[] {
+    // Stryker disable next-line MethodExpression: options are numbered 1..N, so each update after the first yields a distinct "Update n-1 → n" label and the de-duplication never drops one
     return [
         "All updates",
         ...options
@@ -110,7 +115,10 @@ function stableIterationLabels(options: readonly IterationOptionLike[]): string[
             .map((option) =>
                 reviewRangeLabel(oneReviewUpdate(option.number, options.length), options.length),
             ),
-    ].filter((label, index, labels) => labels.indexOf(label) === index);
+    ].filter(
+        // Stryker disable next-line ConditionalExpression: options are numbered 1..N, so every label is already distinct
+        (label, index, labels) => labels.indexOf(label) === index,
+    );
 }
 
 function rangeLabelOrNull(range: ReviewIterationRange | null, updateCount: number): string | null {
@@ -121,6 +129,7 @@ function iterationTitle(
     options: readonly IterationOptionLike[],
     update: number,
 ): string | undefined {
+    // Stryker disable next-line OptionalChaining: callers only ask for resolved updates 1..N of options numbered 1..N, so the lookup always finds one
     return options.find((option) => option.number === update)?.title;
 }
 

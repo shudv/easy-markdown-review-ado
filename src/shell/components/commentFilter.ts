@@ -68,6 +68,7 @@ export function threadMatchesFilter(
 /** Match a thread by any comment body or author name, case-insensitively. */
 export function threadMatchesQuery(thread: CommentThread, query: string): boolean {
     const normalized = query.trim().toLowerCase();
+    // Stryker disable next-line ConditionalExpression: dead code: every thread has at least one comment (the ADO adapter drops empty threads) and every comment includes "", so an empty query matches either way, candidate for removal
     if (!normalized) return true;
 
     return thread.comments.some(

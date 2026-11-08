@@ -80,6 +80,24 @@ describe("mergeMarkers", () => {
         expect(merged[0]!.top).toBeCloseTo(0.1);
         expect(merged[0]!.height).toBeCloseTo(0.05); // 0.1 → 0.15
     });
+    it("merges same-kind ticks that touch exactly", () => {
+        const marks: DiffMarker[] = [
+            { top: 0.25, height: 0.25, kind: "added" },
+            { top: 0.5, height: 0.25, kind: "added" },
+        ];
+
+        expect(mergeMarkers(marks, 0)).toEqual([{ top: 0.25, height: 0.5, kind: "added" }]);
+    });
+
+    it("keeps a block's full extent when a shorter same-kind tick sits inside it", () => {
+        const marks: DiffMarker[] = [
+            { top: 0.25, height: 0.5, kind: "modified" },
+            { top: 0.375, height: 0.125, kind: "modified" },
+        ];
+
+        expect(mergeMarkers(marks, 0)).toEqual([{ top: 0.25, height: 0.5, kind: "modified" }]);
+    });
+
     it("keeps different kinds separate even when adjacent", () => {
         const marks: DiffMarker[] = [
             { top: 0.1, height: 0.02, kind: "added" },
@@ -119,6 +137,44 @@ describe("resolveOverlaps", () => {
 
         expect(out.map((m) => m.top)).toEqual([0.1, 0.4, 0.6, 0.8]);
     });
+
+    it("keeps a block whole when a deletion sits below it", () => {
+        const marks: DiffMarker[] = [
+            { top: 0.25, height: 0.125, kind: "added" },
+            { top: 0.5, height: 0.125, kind: "deleted" },
+        ];
+
+        expect(resolveOverlaps(marks)).toEqual(marks);
+    });
+
+    it.each([
+        {
+            name: "top",
+            deletion: { top: 0.25, height: 0.125 },
+            expected: [
+                { top: 0.25, height: 0.125, kind: "deleted" },
+                { top: 0.375, height: 0.375, kind: "modified" },
+            ],
+        },
+        {
+            name: "bottom",
+            deletion: { top: 0.625, height: 0.125 },
+            expected: [
+                { top: 0.25, height: 0.375, kind: "modified" },
+                { top: 0.625, height: 0.125, kind: "deleted" },
+            ],
+        },
+    ])(
+        "leaves one part of an edited block around a deletion at its very $name",
+        ({ deletion, expected }) => {
+            const out = resolveOverlaps([
+                { top: 0.25, height: 0.5, kind: "modified" },
+                { ...deletion, kind: "deleted" },
+            ]);
+
+            expect(out).toEqual(expected);
+        },
+    );
 
     it("draws nothing for a document without changes", () => {
         expect(resolveOverlaps([])).toEqual([]);
@@ -165,12 +221,13 @@ describe("resolveOverlaps", () => {
         expect(out[0]!.top).toBeCloseTo(0.2);
         expect(out[0]!.height).toBeCloseTo(0.4);
     });
-    it("lets the topmost block win when two blocks overlap", () => {
-        const marks: DiffMarker[] = [
-            { top: 0.1, height: 0.2, kind: "added" }, // 0.1..0.3
-            { top: 0.25, height: 0.2, kind: "modified" }, // 0.25..0.45 → keep 0.3..0.45
-        ];
+    const added: DiffMarker = { top: 0.1, height: 0.2, kind: "added" }; // 0.1..0.3
+    const modified: DiffMarker = { top: 0.25, height: 0.2, kind: "modified" }; // keep 0.3..0.45
 
+    it.each([
+        { name: "in document order", marks: [added, modified] },
+        { name: "listed bottom-first", marks: [modified, added] },
+    ])("lets the topmost block win when two blocks overlap, $name", ({ marks }) => {
         const out = resolveOverlaps(marks);
         const mod = out.find((m) => m.kind === "modified")!;
         expect(mod.top).toBeCloseTo(0.3);
@@ -211,6 +268,20 @@ describe("markerInViewport", () => {
     it("is false when the marker sits entirely outside", () => {
         expect(markerInViewport({ top: 0.7, height: 0.05, kind: "added" }, vp)).toBe(false);
     });
+
+    it("is true for a marker that starts above the viewport and reaches into it", () => {
+        expect(markerInViewport({ top: 0.3, height: 0.2, kind: "added" }, vp)).toBe(true);
+    });
+
+    const lowerView = { top: 0.5, height: 0.25 }; // [0.5, 0.75]
+
+    it.each([
+        { name: "entirely above it", marker: { top: 0.125, height: 0.125 } },
+        { name: "ending right where it starts", marker: { top: 0.25, height: 0.25 } },
+        { name: "starting right where it ends", marker: { top: 0.75, height: 0.125 } },
+    ])("is false for a marker $name", ({ marker }) => {
+        expect(markerInViewport({ ...marker, kind: "deleted" }, lowerView)).toBe(false);
+    });
 });
 
 /** Build the scroller/track geometry the thumb helpers take. */
@@ -232,6 +303,13 @@ describe("thumbMetrics", () => {
         expect(m.heightPx).toBe(50);
         expect(m.topPx).toBe(150); // 150 + 50 == 200
     });
+    it("sits halfway down the free track at half scroll", () => {
+        expect(thumbMetrics(150, geometry(100, 400, 200, 20))).toEqual({
+            topPx: 75,
+            heightPx: 50,
+        });
+    });
+
     it("honours the min thumb height but still bottoms out correctly", () => {
         // Proportional height would be 1px; clamped up to 20px.
         const m = thumbMetrics(990, geometry(10, 1000, 100, 20));
@@ -251,6 +329,11 @@ describe("scrollFromThumbDrag", () => {
         // thumb 50px on a 200px track → 150px of travel maps to 300px of scroll.
         expect(scrollFromThumbDrag(0, 50, geometry(100, 400, 200, 20))).toBe(100);
     });
+    it("continues a drag that starts mid-document from where the thumb is", () => {
+        // thumb at 75px of 150px travel; +30px → 105px → 210px of 300px scroll.
+        expect(scrollFromThumbDrag(150, 30, geometry(100, 400, 200, 20))).toBe(210);
+    });
+
     it("clamps a drag past the bottom (no over-scroll)", () => {
         expect(scrollFromThumbDrag(300, 100, geometry(100, 400, 200, 20))).toBe(300);
     });

@@ -125,6 +125,7 @@ export class LocalOnlyCommentApi implements CommentApi {
     private commentCounter = 0;
 
     async createThread(_input: NewThreadInput): Promise<CreatedThreadIds> {
+        // Stryker disable next-line UpdateOperator: ids only need to be unique per instance; counting down (t-local--1, t-local--2, …) yields distinct ids just as well
         const n = ++this.threadCounter;
         const threadId = `t-local-${n}`;
 
@@ -140,6 +141,7 @@ export class LocalOnlyCommentApi implements CommentApi {
         _bodyMarkdown: string,
     ): Promise<{ commentId: string; createdAt: string }> {
         return {
+            // Stryker disable next-line UpdateOperator: ids only need to be unique per instance; counting down (c-local--1, c-local--2, …) yields distinct ids just as well
             commentId: `c-local-${++this.commentCounter}`,
             createdAt: new Date().toISOString(),
         };

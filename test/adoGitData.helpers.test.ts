@@ -176,8 +176,14 @@ describe("projectMarkdownLevel", () => {
     });
 
     it("ignores items with no path", () => {
-        const items = [{ isFolder: false }, { path: "", isFolder: false }];
-        const { files, folders } = projectMarkdownLevel(items, "/");
+        const items = [
+            { isFolder: false },
+            { path: "", isFolder: false },
+            { isFolder: true },
+            { path: "", isFolder: true },
+        ];
+
+        const { files, folders } = projectMarkdownLevel(items, "/docs");
         expect(files).toEqual([]);
         expect(folders).toEqual([]);
     });
@@ -264,10 +270,15 @@ describe("editBranchName", () => {
 
 describe("editPrDescription", () => {
     it("tells reviewers which file the PR edits and to remove the placeholder line", () => {
-        const body = editPrDescription("docs/guide.md");
-        expect(body).toContain("Drafted from **Easy Markdown Review** to edit `docs/guide.md`.");
-        expect(body).toContain("A placeholder line was added to the top of the file");
-        expect(body).toContain("Remove it before completing the PR");
+        expect(editPrDescription("docs/guide.md")).toBe(
+            [
+                "Drafted from **Easy Markdown Review** to edit `docs/guide.md`.",
+                "",
+                "A placeholder line was added to the top of the file so this pull request",
+                "could be created. **Remove it before completing the PR**, then make your",
+                "edits here.",
+            ].join("\n"),
+        );
     });
 });
 
@@ -317,14 +328,23 @@ describe("identityAvatarUrl", () => {
         ).toBe(`https://contoso.visualstudio.com/_api/_common/identityImage?id=${ID}`);
     });
 
-    it("falls back to the origin when no API segment is present", () => {
+    it("derives the org base from a visualstudio.com `_apis` URL", () => {
         expect(
             identityAvatarUrl({
                 id: ID,
-                imageUrl: "https://dev.azure.com/contoso",
+                imageUrl: "https://contoso.visualstudio.com/_apis/GraphProfile/MemberAvatars/x",
             }),
-        ).toBe(`https://dev.azure.com/contoso/_api/_common/identityImage?id=${ID}`);
+        ).toBe(`https://contoso.visualstudio.com/_api/_common/identityImage?id=${ID}`);
     });
+
+    it.each(["https://dev.azure.com/contoso", "https://dev.azure.com/contoso/"])(
+        "falls back to the whole path when no API segment is present (%s)",
+        (imageUrl) => {
+            expect(identityAvatarUrl({ id: ID, imageUrl })).toBe(
+                `https://dev.azure.com/contoso/_api/_common/identityImage?id=${ID}`,
+            );
+        },
+    );
 
     it("url-encodes the identity id", () => {
         expect(

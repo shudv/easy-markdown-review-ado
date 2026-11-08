@@ -41,6 +41,7 @@ function compareComments(a: OrderableComment, b: OrderableComment): number {
     if (aAnchored !== bAnchored) return aAnchored ? -1 : 1;
 
     // Both anchored: order by document position (top of the document first).
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: past the mixed-group return both comments are anchored or both are not, so "both anchored" can be replaced by "either" or dropped — two unanchored ones have equal (null) positions anyway, candidate for removal
     if (aAnchored && bAnchored && a.anchorY !== b.anchorY) {
         return a.anchorY! - b.anchorY!;
     }

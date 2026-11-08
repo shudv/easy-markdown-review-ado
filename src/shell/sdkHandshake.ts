@@ -28,6 +28,7 @@ export function isHostHandshakeRejection(reason: unknown): boolean {
             ? (reason as { message?: unknown }).message
             : reason;
 
+    // Stryker disable next-line ConditionalExpression: `RegExp.test` stringifies a non-string message (a number, undefined, an object), and none of those reads as the host's refusal text
     return typeof message === "string" && HOST_CONTROL_MISSING.test(message);
 }
 

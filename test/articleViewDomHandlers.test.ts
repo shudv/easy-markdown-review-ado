@@ -77,6 +77,36 @@ describe("generated-source affordance", () => {
         expect(root.querySelectorAll(".emr-mermaid-source-btn")).toHaveLength(1);
     });
 
+    it("labels the Source button and keeps it from submitting forms", () => {
+        const root = fixture('<div class="emr-mermaid" data-mermaid-src="graph%20TD"></div>');
+
+        addGeneratedSourceButtons(root);
+        const button = root.querySelector<HTMLButtonElement>(".emr-mermaid-source-btn")!;
+        expect(button.type).toBe("button");
+        expect(button.textContent).toBe("</> Source");
+        expect(button.title).toBe("View diagram source");
+    });
+
+    it.each([
+        {
+            name: "offers no Source button on a diagram that failed to render",
+            error: "Parse error",
+            buttons: 0,
+        },
+        {
+            name: "offers the Source button when the recorded error is blank",
+            error: "",
+            buttons: 1,
+        },
+    ])("$name", ({ error, buttons }) => {
+        const root = fixture(
+            `<div class="emr-mermaid" data-mermaid-src="graph%20TD" data-mermaid-error="${error}"></div>`,
+        );
+
+        addGeneratedSourceButtons(root);
+        expect(root.querySelectorAll(".emr-mermaid-source-btn")).toHaveLength(buttons);
+    });
+
     it("opens nothing for a Source button whose block lost its source", () => {
         const root = fixture(
             '<div class="emr-mermaid"><button class="emr-mermaid-source-btn"></button></div>',

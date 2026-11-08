@@ -49,6 +49,7 @@ describe("isAdoPullRequestAttachmentUrl", () => {
             "http://dev.azure.com/org/project/_apis/git/repositories/repo/pullRequests/47/attachments/design.pdf",
         ],
         ["an ordinary file link", "https://example.com/design.pdf"],
+        ["a path nested below an attachment", `${ATTACHMENTS}/design.pdf/preview`],
         ["a malformed URL", "https://[invalid"],
     ])("rejects %s", (_label, url) => {
         expect(isAdoPullRequestAttachmentUrl(url)).toBe(false);
@@ -126,10 +127,14 @@ describe("decorateCommentMedia", () => {
         expect(link.target).toBe("_blank");
         expect(link.rel).toBe("noopener noreferrer");
         expect(link.getAttribute("aria-label")).toBe("notes.pdf (attachment, opens in new tab)");
+        expect(link.title).toBe("Open attachment in a new tab");
     });
 
-    it("labels an attachment link that has no text as 'Attachment'", () => {
-        const root = mountComment(`<a href="${ATTACHMENTS}/unnamed.pdf"></a>`);
+    it.each([
+        ["no text", ""],
+        ["only whitespace", "  \n "],
+    ])("labels an attachment link with %s as 'Attachment'", (_label, text) => {
+        const root = mountComment(`<a href="${ATTACHMENTS}/unnamed.pdf">${text}</a>`);
 
         decorateCommentMedia(root);
 
@@ -173,6 +178,16 @@ describe("decorateCommentMedia", () => {
         });
         image.dispatchEvent(new Event("load"));
         expect(frame.classList.contains("is-loading")).toBe(false);
+        expect(frame.getAttribute("aria-disabled")).toBeNull();
+    });
+
+    it("shows a broken ADO attachment image as unavailable when there is no authenticated loader", () => {
+        const root = mountComment(`<img src="${ATTACHMENTS}/offline.png" alt="Offline">`);
+        markImageSettled(root.querySelector("img")!, 0);
+
+        decorateCommentMedia(root);
+
+        expect(root.querySelector(".emr-comment-media")?.classList.contains("is-error")).toBe(true);
     });
 
     it("uses a completed direct image when authenticated loading is unavailable", async () => {
@@ -249,5 +264,53 @@ describe("decorateCommentMedia", () => {
         await Promise.resolve();
 
         expect(image.src).toBe(original);
+    });
+
+    it("does not mark an external image that is still loading as broken", () => {
+        const root = mountComment('<img src="https://example.com/slow.png" alt="Slow">');
+
+        decorateCommentMedia(root);
+
+        expect(root.querySelector(".emr-comment-media")?.classList.contains("is-error")).toBe(
+            false,
+        );
+    });
+
+    it("marks an external image unavailable when it fails after the comment renders", () => {
+        const root = mountComment('<img src="https://example.com/later.png" alt="Later">');
+        decorateCommentMedia(root);
+
+        root.querySelector("img")!.dispatchEvent(new Event("error"));
+
+        expect(root.querySelector(".emr-comment-media")?.classList.contains("is-error")).toBe(true);
+    });
+
+    it("loads ordinary images directly even when an authenticated loader is available", () => {
+        const root = mountComment('<img src="https://example.com/plain.png" alt="Plain">');
+        const resolveImage = vi.fn().mockResolvedValue("blob:unexpected");
+
+        decorateCommentMedia(root, resolveImage);
+
+        expect(resolveImage).not.toHaveBeenCalled();
+        expect(root.querySelector(".emr-comment-media")?.classList.contains("is-loading")).toBe(
+            false,
+        );
+    });
+
+    it.each([
+        { event: "load", settledWidth: 0 },
+        { event: "error", settledWidth: 320 },
+    ])("ignores a late $event event once the comment is torn down", ({ event, settledWidth }) => {
+        const root = mountComment('<img src="https://example.com/late.png" alt="Late">');
+        const image = root.querySelector("img")!;
+        markImageSettled(image, settledWidth);
+        const cleanup = decorateCommentMedia(root);
+        const frame = root.querySelector<HTMLElement>(".emr-comment-media")!;
+        const before = frame.className;
+
+        cleanup();
+        image.dispatchEvent(new Event(event));
+
+        expect(frame.className).toBe(before);
     });
 });

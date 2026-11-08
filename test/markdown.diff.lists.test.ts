@@ -7,7 +7,15 @@ import {
     DIFF_METADATA_CLASS,
 } from "../src/markdown/diffDecorations";
 import { WORD_ADDED_CLASS, WORD_REMOVED_CLASS } from "../src/markdown/wordDiffDom";
-import { decorate, expectPreciseAmber, lines, render, view, words } from "./markdownDiffHarness";
+import {
+    decorate,
+    diffView,
+    expectPreciseAmber,
+    lines,
+    render,
+    view,
+    words,
+} from "./markdownDiffHarness";
 
 // Rendered diff of bulleted, numbered and task lists: each changed item is
 // marked on its own (never the whole list), marker / numbering / checkbox
@@ -458,6 +466,63 @@ describe("ordered lists", () => {
 });
 
 describe("task lists", () => {
+    it.each([
+        {
+            name: "a plain item that became a task",
+            original: "- Ship it",
+            current: "- [ ] Ship it",
+        },
+        {
+            name: "a task that became a plain item",
+            original: "- [x] Ship it",
+            current: "- Ship it",
+        },
+        {
+            name: "a reworded task whose box stayed unticked",
+            original: "- [ ] Ship the build",
+            current: "- [ ] Ship the release build",
+        },
+    ])("shows $name as an edited item without a checkbox change", ({ original, current }) => {
+        const { root } = diffView(original, current);
+
+        expect(root.querySelector("li")?.dataset.diffKind).toBe("modified");
+        expect(root.querySelector(".emr-diff-task-state-change")).toBeNull();
+    });
+
+    it("offers the previous version of an image paragraph that became a list item", () => {
+        expect(view("![a](a.png)", "- ![a](a.png)")).toEqual(["li modified: Before"]);
+    });
+
+    it("gives each rewritten item its own previous-version panel", () => {
+        const { root } = diffView(
+            lines("- Alpha bravo charlie", "- Delta echo foxtrot"),
+            lines("- Zulu yankee xray", "- Whiskey victor uniform"),
+        );
+
+        const triggers = Array.from(root.querySelectorAll(".emr-diff-before-trigger"));
+
+        const panels = triggers.map((trigger) =>
+            root.querySelector(`#${trigger.getAttribute("aria-controls")}`),
+        );
+
+        expect(panels.map((panel) => panel?.textContent)).toEqual([
+            "BeforeAlpha bravo charlie",
+            "BeforeDelta echo foxtrot",
+        ]);
+    });
+
+    it("reveals a rewritten item's previous text inside the item, without a nested bullet", () => {
+        const { root } = diffView(
+            lines("- Alpha bravo charlie delta", "- Keep"),
+            lines("- Zulu yankee xray whiskey", "- Keep"),
+        );
+
+        const item = root.querySelector("li")!;
+        const panel = item.querySelector<HTMLElement>(":scope > .emr-diff-before-panel")!;
+        expect(panel.querySelector(".emr-diff-before-content")?.innerHTML).toBe(
+            "Alpha bravo charlie delta",
+        );
+    });
     it("marks a checklist item as edited without disturbing the others when its previous text is unknown", () => {
         const root = render(["- [ ] write tests", "- [ ] ship it", "- [ ] celebrate"].join("\n"));
 

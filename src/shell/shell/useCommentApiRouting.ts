@@ -127,6 +127,7 @@ function resolveApi(
         // A document whose housing PR isn't resolved yet — or has none —
         // resolves to `undefined`; don't cache the fallback.
         api = commentApiForPath(selectedPath);
+        // Stryker disable next-line ConditionalExpression: dead code: caching an undefined API is a cache miss on the next lookup too, so the document is re-resolved exactly as if nothing was cached; candidate for removal
         if (api) routing.perPath.set(selectedPath, api);
     }
 

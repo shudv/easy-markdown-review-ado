@@ -87,6 +87,30 @@ describe("chunkMarkdownLines", () => {
     it("offsets line numbers by the first line", () => {
         expect(chunkMarkdownLines(["a", "", "b"], 10).map((c) => c.start)).toEqual([10, 11, 12]);
     });
+
+    it("treats a line holding only spaces as a blank line", () => {
+        expect(chunks("First paragraph.", "   ", "Second paragraph.")).toEqual([
+            "1-1:text",
+            "2-2:text",
+            "3-3:text",
+        ]);
+        expect(chunkMarkdownLines(["a", "   ", "b"], 1)[1]!.blank).toBe(true);
+    });
+
+    it.each([
+        {
+            name: "a code block inside a list item at its indented closing fence",
+            lines: ["- Install:", "  ```sh", "  npm ci", "  ```", "Then run it."],
+            chunks: ["1-1:item", "2-4:fence", "5-5:text"],
+        },
+        {
+            name: "a code sample that mentions backticks at its own closing fence",
+            lines: ["```md", "Wrap code in ```", "```", "after"],
+            chunks: ["1-3:fence", "4-4:text"],
+        },
+    ])("ends $name", ({ lines, chunks: expected }) => {
+        expect(chunks(...lines)).toEqual(expected);
+    });
 });
 
 describe("chunkSimilarity", () => {
@@ -99,6 +123,8 @@ describe("chunkSimilarity", () => {
         { name: "chunks differing only in case", a: "A b", b: "a B", score: 1 },
         { name: "two word-less table separators", a: "| - | - |", b: "| - | - | - |", score: 0.5 },
         { name: "a word-less rule against prose", a: "---", b: "words", score: 0 },
+        { name: "two identical word-less rules", a: "---", b: "---", score: 1 },
+        { name: "an empty line against a line of spaces", a: "", b: "   ", score: 0 },
     ])("scores $name as $score", ({ a, b, score }) => {
         expect(chunkSimilarity(chunk(a), chunk(b))).toBe(score);
     });
@@ -212,6 +238,118 @@ describe("refineDiffRanges", () => {
         ]);
     });
 
+    it.each([
+        {
+            name: "a heading and paragraph rewritten as two paragraphs read as removed and added",
+            original: md("## Scope", "", "Old words entirely."),
+            current: md("Plain intro sentence.", "", "Fresh sentence here."),
+            shape: [`deleted@1 "## Scope\\n\\nOld words entirely."`, "added 1-3"],
+        },
+        {
+            name: "a numbered step rewritten as a paragraph reads as removed and added",
+            original: md("## Steps", "", "12. Old words entirely."),
+            current: md("## Steps", "", "Fresh sentence here."),
+            shape: [`deleted@3 "12. Old words entirely."`, "added 3-3"],
+        },
+        {
+            name: "a paragraph about C# rewritten under a renamed heading reads as edits",
+            original: md("## Stack", "", "C# powers the server today."),
+            current: md("## Platform", "", "Rust replaced it last year."),
+            shape: [
+                `modified 1-1 <- 1-1 "## Stack"`,
+                `modified 3-3 <- 3-3 "C# powers the server today."`,
+            ],
+        },
+        {
+            name: "a heading whose text was cleared reads as an edit",
+            original: md("## Old title", "", "Old words entirely."),
+            current: md("##", "", "Fresh sentence here."),
+            shape: [
+                `modified 1-1 <- 1-1 "## Old title"`,
+                `modified 3-3 <- 3-3 "Old words entirely."`,
+            ],
+        },
+        {
+            name: "a list item whose text was cleared reads as an edit",
+            original: md("## Steps", "", "- Old words entirely."),
+            current: md("## Steps", "", "-"),
+            shape: [`modified 3-3 <- 3-3 "- Old words entirely."`],
+        },
+    ])("$name", ({ original, current, shape: expected }) => {
+        expect(shape(refineDiffRanges([modified(1, 3, 1, 3)], original, current))).toEqual(
+            expected,
+        );
+    });
+
+    it("reports how many lines each refined change adds and removes", () => {
+        const original = md("First old text here.", "", "Shared block", "", "Old end.");
+
+        const current = md(
+            "Totally different start.",
+            "",
+            "Another one.",
+            "",
+            "Shared block",
+            "",
+            "Brand new ending.",
+        );
+
+        expect(
+            refineDiffRanges([modified(1, 7, 1, 5)], original, current).map(
+                ({ kind, linesAdded, linesDeleted }) => ({ kind, linesAdded, linesDeleted }),
+            ),
+        ).toEqual([
+            { kind: "deleted-marker", linesAdded: 0, linesDeleted: 1 },
+            { kind: "added", linesAdded: 3, linesDeleted: 0 },
+            { kind: "modified", linesAdded: 1, linesDeleted: 1 },
+        ]);
+    });
+
+    it("counts every line of a removed multi-line region", () => {
+        const original = md("## Scope", "", "Old words entirely.");
+        const current = md("Plain intro sentence.", "", "Fresh sentence here.");
+
+        expect(refineDiffRanges([modified(1, 3, 1, 3)], original, current)).toEqual([
+            expect.objectContaining({ kind: "deleted-marker", linesDeleted: 3 }),
+            expect.objectContaining({ kind: "added", linesAdded: 3 }),
+        ]);
+    });
+
+    it("shows a list item moved below its similar neighbour as removed above and added below", () => {
+        const original = md("- Run the unit tests", "- Run the e2e tests");
+        const current = md("- Run the e2e tests", "- Run the unit tests");
+
+        expect(shape(refineDiffRanges([modified(1, 2, 1, 2)], original, current))).toEqual([
+            `deleted@1 "- Run the unit tests"`,
+            "added 2-2",
+        ]);
+    });
+
+    it.each([
+        {
+            name: "a reworded line that also took in a blank line",
+            range: modified(1, 2, 1, 1),
+            original: "old line\nnext",
+            current: "new line\n\nnext",
+        },
+        {
+            name: "a hard-wrapped paragraph whose last line was reworded",
+            range: modified(1, 3, 1, 3),
+            original: md(
+                "Reviewers open the document,",
+                "read every section,",
+                "and leave comments.",
+            ),
+            current: md(
+                "Reviewers open the document,",
+                "read every section,",
+                "and approve the change.",
+            ),
+        },
+    ])("keeps $name as one edit", ({ range, original, current }) => {
+        expect(refineDiffRanges([range], original, current)).toEqual([range]);
+    });
+
     it("drops an unchanged block that a coarse hunk swallowed", () => {
         const original = md("First old text here.", "", "Shared block", "", "Old end.");
 
@@ -295,6 +433,30 @@ describe("refineDiffRanges", () => {
             const range = modified(4, 4, 4, 4);
             expect(refineDiffRanges([range], original, current)).toEqual([range]);
         });
+
+        it("splits an edited row from the row removed below it", () => {
+            const original = table("| Parser | Ana |", "| Renderer | Bo |");
+            const current = table("| Parser | Ana Lee |");
+            expect(shape(refineDiffRanges([modified(3, 3, 3, 4)], original, current))).toEqual([
+                `modified 3-3 <- 3-3 "| Parser | Ana |"`,
+                `deleted@4 "| Renderer | Bo |"`,
+            ]);
+        });
+
+        it("still aligns a table as long as the alignment limit allows row by row", () => {
+            const lines = Math.sqrt(MAX_ALIGNMENT_CELLS);
+
+            const body = (value: string) =>
+                Array.from({ length: lines - 2 }, (_, i) => `| r${i} | ${value} |`);
+
+            expect(
+                refineDiffRanges(
+                    [modified(1, lines, 1, lines)],
+                    table(...body("old")),
+                    table(...body("new")),
+                ),
+            ).toHaveLength(lines - 2);
+        });
     });
 
     describe("regions split by blank-line anchors", () => {
@@ -342,6 +504,17 @@ describe("refineDiffRanges", () => {
             disagreeing[1] = { ...disagreeing[1]!, originalStartLine: 2 };
             expect(refineDiffRanges(disagreeing, original, current)).toEqual(disagreeing);
         });
+
+        it("treats separator lines holding only spaces as blank lines", () => {
+            const spaced = (source: string) => source.replace(/^$/gm, "  ");
+
+            expect(
+                shape(refineDiffRanges(lineDiff, spaced(original), spaced(current))).slice(0, 2),
+            ).toEqual([
+                "added 1-3",
+                `modified 7-7 <- 3-3 "The first release covers design notes and runbooks."`,
+            ]);
+        });
     });
 
     it("leaves a region that only gained lines untouched", () => {
@@ -371,6 +544,59 @@ describe("refineDiffRanges", () => {
 
         expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
             `modified 3-3 <- 3-3 "The old guidance about retries."`,
+        ]);
+    });
+
+    it("re-pairs a deletion and an addition at the end of the document", () => {
+        const original = md("Context.", "", "The old guidance about retries.");
+        const current = md("Context.", "", "The new guidance about retries.");
+
+        const ranges: DiffRange[] = [
+            {
+                startLine: 3,
+                endLine: 3,
+                kind: "deleted-marker",
+                linesDeleted: 1,
+                deletedContent: "The old guidance about retries.",
+            },
+            { startLine: 3, endLine: 3, kind: "added", linesAdded: 1 },
+        ];
+
+        expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
+            `modified 3-3 <- 3-3 "The old guidance about retries."`,
+        ]);
+    });
+
+    it("keeps a deletion apart from an addition when its text isn't in the previous version", () => {
+        const original = md("Context.", "", "The old guidance about retries.", "", "End.");
+        const current = md("Context.", "", "The new guidance about retries.", "", "End.");
+
+        const ranges: DiffRange[] = [
+            {
+                startLine: 3,
+                endLine: 3,
+                kind: "deleted-marker",
+                linesDeleted: 1,
+                deletedContent: "Something else entirely.",
+            },
+            { startLine: 3, endLine: 3, kind: "added", linesAdded: 1 },
+        ];
+
+        expect(refineDiffRanges(ranges, original, current)).toEqual(ranges);
+    });
+
+    it("refines an edit together with the removal of the closing paragraph", () => {
+        const original = md("Intro old words.", "", "Closing words.");
+        const current = md("Intro new words.", "");
+
+        const ranges: DiffRange[] = [
+            modified(1, 1, 1, 1),
+            { startLine: 3, endLine: 3, kind: "deleted-marker", linesDeleted: 1 },
+        ];
+
+        expect(shape(refineDiffRanges(ranges, original, current))).toEqual([
+            `modified 1-1 <- 1-1 "Intro old words."`,
+            `deleted@3 "Closing words."`,
         ]);
     });
 
@@ -444,12 +670,35 @@ describe("refineDiffRanges", () => {
         expect(refineDiffRanges(ranges, original, current)).toEqual(ranges);
     });
 
-    it.each<[string, DiffRange]>([
-        ["a modified range without original lines", { startLine: 1, endLine: 1, kind: "modified" }],
-        ["a range past the end of the current source", modified(1, 9, 1, 1)],
-        ["a range past the end of the original source", modified(1, 1, 1, 9)],
-    ])("leaves the input alone for %s", (_, range) => {
-        expect(refineDiffRanges([range], "a\nb", "c\nd")).toEqual([range]);
+    it.each<[string, DiffRange[]]>([
+        [
+            "a modified range without original lines",
+            [{ startLine: 1, endLine: 1, kind: "modified" }],
+        ],
+        ["a range past the end of the current source", [modified(1, 9, 1, 3)]],
+        ["a range past the end of the original source", [modified(1, 3, 1, 9)]],
+        ["a range starting before the first line", [modified(0, 3, 1, 3)]],
+        ["a range ending before it starts", [modified(3, 1, 1, 3)]],
+        ["an edit whose previous lines start before the first line", [modified(1, 3, 0, 3)]],
+        ["an edit whose previous lines end before they start", [modified(1, 3, 3, 1)]],
+        [
+            "an edit missing where its previous lines end",
+            [{ ...modified(1, 3, 1, 3), originalEndLine: undefined }],
+        ],
+        [
+            "an edit missing where its previous lines start",
+            [{ ...modified(1, 3, 1, 3), originalStartLine: undefined }],
+        ],
+        [
+            "an addition past the end of the current source",
+            [{ startLine: 1, endLine: 9, kind: "added", linesAdded: 9 }],
+        ],
+        [
+            "one range past the end alongside one that fits",
+            [modified(1, 1, 1, 1), modified(3, 9, 3, 3)],
+        ],
+    ])("leaves the input alone for %s", (_, ranges) => {
+        expect(refineDiffRanges(ranges, "a\n\nb", "c\n\nd")).toEqual(ranges);
     });
 
     it("leaves a region too large to align coarse", () => {
@@ -462,6 +711,17 @@ describe("refineDiffRanges", () => {
         const lines = size * 2 - 1;
         const range = modified(1, lines, 1, lines);
         expect(refineDiffRanges([range], original, current)).toEqual([range]);
+    });
+
+    it("still aligns a list as long as the alignment limit allows item by item", () => {
+        const items = Math.sqrt(MAX_ALIGNMENT_CELLS);
+
+        const list = (value: string) =>
+            Array.from({ length: items }, (_, i) => `- ${value} step ${i}`).join("\n");
+
+        expect(
+            refineDiffRanges([modified(1, items, 1, items)], list("old"), list("new")),
+        ).toHaveLength(items);
     });
 
     it("keeps edits inside one code fence as one code edit", () => {

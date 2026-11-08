@@ -35,9 +35,11 @@ export function reconstructOriginalBlock(
 
     if (exact) return exact.originalText!;
 
+    // Stryker disable next-line ConditionalExpression,StringLiteral: a modified range never comes from an empty previous document (everything in it would be an addition), so the empty-source guard only skips the work
     if (originalSource === undefined || originalSource === "") return null;
     const sourceLines = originalLines ?? originalSource.split(/\r\n|\r|\n/);
 
+    // Stryker disable next-line ConditionalExpression: ranges never overlap each other, so when several touch the block none covers all of it and the single-edit branch below never applies
     if (overlapping.length === 1) {
         const range = overlapping[0]!;
         const currentSpan = range.end - range.start;
@@ -45,7 +47,9 @@ export function reconstructOriginalBlock(
         if (
             range.originalStart != null &&
             range.originalEnd != null &&
+            // Stryker disable next-line EqualityOperator: for an edit that kept its line count, the general path below computes the same previous lines when the edit starts on the block's first line
             range.start <= blockStart &&
+            // Stryker disable next-line ConditionalExpression: for an edit that kept its line count, the general path below computes the same previous lines when the edit stops short of the block's end
             range.end >= blockEnd &&
             currentSpan === range.originalEnd - range.originalStart
         ) {
@@ -76,6 +80,7 @@ export function reconstructOriginalBlock(
 
     const originalBlockEnd = last.originalEnd! + (blockEnd - last.end);
 
+    // Stryker disable next-line ConditionalExpression: with sorted, non-overlapping edits the previous end never falls before the previous start (and an empty slice reads as no block anyway)
     if (originalBlockStart < 1 || originalBlockEnd < originalBlockStart) {
         return null;
     }
@@ -171,10 +176,13 @@ function blockPredatesAddition(
 ): boolean {
     if (!touching.some((range) => range.kind === "added")) return false;
 
+    // Stryker disable next-line UpdateOperator: walking upward from the first line still finds a line no addition covers above the block, and a wholly new block rebuilds to nothing, which is rejected below as before
     for (let line = start; line <= end; line++) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator,StringLiteral: answering yes for a wholly new block only rebuilds an empty original, which renders no element and is rejected by the caller just like answering no
         if (changeRangeAt(touching, line)?.kind !== "added") return true;
     }
 
+    // Stryker disable next-line BooleanLiteral: answering yes for a wholly new block only rebuilds an empty original, which renders no element and is rejected by the caller just like answering no
     return false;
 }
 
@@ -231,8 +239,10 @@ function originalRangeLines(
 }
 
 function currentLineAt(currentLines: readonly string[], line: number): string[] | null {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: reading outside the lines already yields undefined
     const current = line >= 1 && line <= currentLines.length ? currentLines[line - 1] : undefined;
 
+    // Stryker disable next-line ConditionalExpression: rendered blocks always lie within the current source's lines, so the line is never missing
     return current == null ? null : [current];
 }
 
@@ -252,6 +262,7 @@ export function soleModifiedRange(
     for (const r of ranges) {
         if (r.kind !== "modified") continue;
         if (!overlaps(start, end, r.start, r.end)) continue;
+        // Stryker disable next-line ConditionalExpression: a second modified range means neither covers the whole block, so callers fall back exactly as for no range (a single-line row is never touched by two)
         if (found) return null;
         found = r;
     }

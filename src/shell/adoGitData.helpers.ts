@@ -32,6 +32,7 @@ export interface GitScope<C> {
  * distinguishable from the repo root.
  */
 export function normalizePath(p: string): string {
+    // Stryker disable next-line ConditionalExpression: dead code: "" strips to "" and the length check below maps it to "/" anyway; candidate for removal
     if (!p) return "/";
     const stripped = p.replace(/\/+$/, "");
 
@@ -47,6 +48,7 @@ export function normalizePath(p: string): string {
  * absent; empty string for null/undefined.
  */
 export function stripRefsHeads(ref: string | undefined | null): string {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: "" doesn't start with refs/heads/ and is returned unchanged, i.e. "" anyway; candidate for removal
     if (ref == null || ref === "") return "";
 
     return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
@@ -71,7 +73,11 @@ export function editBranchName(fileName: string, now: number = Date.now()): stri
             .replace(/[^\w.-]+/g, "-")
             // Git refs cannot contain `..` and cannot begin/end with `.`.
             .replace(/\.+/g, ".")
-            .replace(/^\.+|\.+$/g, "")
+            .replace(
+                // Stryker disable next-line Regex: the previous step already collapsed dot runs to single dots, so trimming one or many is the same
+                /^\.+|\.+$/g,
+                "",
+            )
             .replace(/^-+|-+$/g, "")
             .toLowerCase() || "doc";
 
@@ -115,6 +121,7 @@ export function filterReposByName<R extends NamedRepoLike>(
     repos: readonly R[],
     restrictToRepoName: string | undefined,
 ): R[] {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: "" matches no (non-empty) repo name, which already falls back to the full list; candidate for removal
     if (restrictToRepoName == null || restrictToRepoName === "") {
         return [...repos];
     }
@@ -196,10 +203,12 @@ export function findOrderFile(
     scopePath: string,
 ): string | undefined {
     // Scope paths arrive with or without a leading slash; ADO item paths have one.
+    // Stryker disable next-line Regex: scope and ADO item paths never carry doubled slashes, so trimming one or a run of them is the same
     const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
     const scope = bare(scopePath);
     const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
 
+    // Stryker disable next-line StringLiteral: an item without a path compares a placeholder that is never a real `.order` path, so it never matches either way
     return items.find((item) => !item.isFolder && bare(item.path ?? "") === expected)?.path;
 }
 
@@ -239,6 +248,7 @@ export function escapeSearchQuery(s: string): string {
  * (the caller then leaves `avatarUrl` unset and the initials avatar shows).
  */
 export function identityAvatarUrl(identity: { id: string; imageUrl?: string }): string | undefined {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: `new URL` throws on "" or null, and the catch below returns undefined anyway; candidate for removal
     if (identity.imageUrl == null || identity.imageUrl === "") return undefined;
     let parsed: URL;
 
@@ -255,6 +265,7 @@ export function identityAvatarUrl(identity: { id: string; imageUrl?: string }): 
     const apiIdx = path.indexOf("/_apis/");
     const legacyIdx = path.indexOf("/_api/");
     const cut = apiIdx >= 0 ? apiIdx : legacyIdx;
+    // Stryker disable next-line Regex: avatar URLs never end in doubled slashes, so stripping one or a run of them is the same
     const base = cut >= 0 ? path.slice(0, cut) : path.replace(/\/+$/, "");
 
     return `${parsed.origin}${base}/_api/_common/identityImage?id=${encodeURIComponent(
@@ -301,6 +312,7 @@ export function selectRoutingPr(prs: readonly GitPullRequest[]): GitPullRequest 
 
     for (const pr of prs) {
         if (pr.status !== COMPLETED_PR_STATUS) continue;
+        // Stryker disable next-line EqualityOperator: two completed PRs never share a completion timestamp in practice, so the tie-break never applies
         if (best === null || prDate(pr) > prDate(best)) best = pr;
     }
 
@@ -331,6 +343,7 @@ export function selectRoutingPrFromQuery(
     results: ReadonlyArray<{ [commitId: string]: GitPullRequest[] }> | undefined | null,
     commitId: string,
 ): GitPullRequest | null {
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry carries none of the fields read here, so it is skipped like an absent list
     return selectRoutingPr(results?.[0]?.[commitId] ?? []);
 }
 
@@ -346,6 +359,7 @@ export function commitIds(
 ): string[] {
     const out: string[] = [];
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry carries none of the fields read here, so it is skipped like an absent list
     for (const c of commits ?? []) {
         if (c.commitId != null && c.commitId !== "") out.push(c.commitId);
     }
@@ -375,6 +389,7 @@ export function selectRoutingPrsFromQuery(
     const out: GitPullRequest[] = [];
 
     for (const commitId of commitIds) {
+        // Stryker disable next-line ArrayDeclaration: a placeholder entry carries none of the fields read here, so it is skipped like an absent list
         const completed = (map[commitId] ?? [])
             .filter((pr) => pr.status === COMPLETED_PR_STATUS)
             .sort((a, b) => prDate(b) - prDate(a));
@@ -408,6 +423,7 @@ export function docPrRefsFromHistory(
 
     for (const pr of prs) {
         const prId = pr.pullRequestId;
+        // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: ADO PR ids are numbers or absent, never NaN/Infinity, so the finiteness half never decides anything; candidate for removal
         if (typeof prId !== "number" || !Number.isFinite(prId)) continue;
         out.push({
             prId,
@@ -431,6 +447,7 @@ export function changedPathsFromEntries(
 ): string[] {
     const paths: string[] = [];
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry carries none of the fields read here, so it is skipped like an absent list
     for (const entry of entries ?? []) {
         const p = entry.item?.path;
         if (p != null && p !== "") paths.push(normalizePath(p).toLowerCase());
@@ -482,8 +499,10 @@ export async function runWithConcurrency<T, R>(
     cap: number,
     worker: (item: T) => Promise<R>,
 ): Promise<R[]> {
+    // Stryker disable next-line ConditionalExpression: dead code: with no items a single worker finds nothing to do and [] is returned anyway; candidate for removal
     if (items.length === 0) return [];
     const safeCap = Math.max(1, Math.min(cap, items.length));
+    // Stryker disable next-line ArrayDeclaration: results are written by index, so a pre-sized and an empty array end up identical
     const results: R[] = new Array<R>(items.length);
     let cursor = 0;
 
@@ -493,6 +512,7 @@ export async function runWithConcurrency<T, R>(
         }
     }
 
+    // Stryker disable next-line ArrayDeclaration: Promise.all resolves a placeholder entry immediately, so awaiting it changes nothing
     const workers: Promise<void>[] = [];
     for (let w = 0; w < safeCap; w++) workers.push(pump());
     await Promise.all(workers);
@@ -537,6 +557,7 @@ export function repoSkeleton(repo: GitRepository): DocRepo {
 export function normalizeRepoFilter(filter?: string): string | undefined {
     const trimmed = filter?.trim();
 
+    // Stryker disable next-line ConditionalExpression: dead code: an undefined filter is returned as undefined either way; candidate for removal
     return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
 

@@ -93,6 +93,15 @@ describe("threadReducer ADD_THREAD", () => {
         expect(s.order).toEqual(["t2", "t1"]);
     });
 
+    it("keeps the threads already there when another is added", () => {
+        const t1 = buildThread("t1");
+        const t2 = buildThread("t2");
+
+        const s = threadReducer(initialThreadState([t1]), { type: "ADD_THREAD", thread: t2 });
+
+        expect(s.threadsById).toEqual({ t1, t2 });
+    });
+
     it("keeps the existing thread when a thread with the same id is added again", () => {
         const t1 = buildThread("t1");
         const before = initialThreadState([t1]);
@@ -283,12 +292,12 @@ describe("threadReducer TOGGLE_REACTION", () => {
                     createdAt: "2024-01-01T00:00:00.000Z",
                     reactions: [
                         {
-                            kind: "like",
-                            users: [{ id: "u1", displayName: "User One" }],
-                        },
-                        {
                             kind: "celebrate" as ReactionKind,
                             users: [{ id: "u2", displayName: "User Two" }],
+                        },
+                        {
+                            kind: "like",
+                            users: [{ id: "u1", displayName: "User One" }],
                         },
                     ],
                 },
@@ -306,17 +315,42 @@ describe("threadReducer TOGGLE_REACTION", () => {
         // The non-matching `celebrate` entry is passed through untouched.
         expect(s.threadsById.t1!.comments[0]!.reactions).toEqual([
             {
+                kind: "celebrate",
+                users: [{ id: "u2", displayName: "User Two" }],
+            },
+            {
                 kind: "like",
                 users: [
                     { id: "u1", displayName: "User One" },
                     { id: "u3", displayName: "User Three" },
                 ],
             },
-            {
-                kind: "celebrate",
-                users: [{ id: "u2", displayName: "User Two" }],
-            },
         ]);
+    });
+
+    it("keeps other reaction kinds when the last liker un-likes", () => {
+        let s = initialThreadState([
+            buildThread("t1", "docs/a.md", [
+                {
+                    id: "t1-c1",
+                    author: AUTHOR,
+                    bodyMarkdown: "first",
+                    createdAt: "2024-01-01T00:00:00.000Z",
+                    reactions: [rx("like", "u1"), rx("celebrate", "u2")],
+                },
+            ]),
+        ]);
+
+        s = threadReducer(s, {
+            type: "TOGGLE_REACTION",
+            threadId: "t1",
+            commentId: "t1-c1",
+            kind: "like",
+            userId: "u1",
+            displayName: "u1",
+        });
+
+        expect(s.threadsById.t1!.comments[0]!.reactions).toEqual([rx("celebrate", "u2")]);
     });
 });
 
@@ -387,7 +421,8 @@ describe("threadReducer actions on a thread or comment that no longer exists", (
     ])("ignores $name for a thread that no longer exists", ({ action }) => {
         const before = initialThreadState([buildThread("t1")]);
 
-        expect(threadReducer(before, action)).toEqual(before);
+        // The very same state comes back, so nothing re-renders.
+        expect(threadReducer(before, action)).toBe(before);
     });
 
     it.each<{ name: string; action: ThreadAction }>([
@@ -714,6 +749,70 @@ describe("threadReducer MERGE_REMOTE_THREADS", () => {
         expect(next.threadsById.t1!.comments[0]!.updatedAt).toBe("2024-01-01T12:00:00.000Z");
     });
 
+    it("keeps the local body when the server reports the same edit time", () => {
+        const edited = "2024-01-01T11:00:00.000Z";
+
+        const state = initialThreadState([
+            buildThread("t1", "docs/a.md", [
+                {
+                    id: "t1-c1",
+                    author: AUTHOR,
+                    bodyMarkdown: "local wording",
+                    createdAt: "2024-01-01T10:00:00.000Z",
+                    updatedAt: edited,
+                },
+            ]),
+        ]);
+
+        const next = threadReducer(state, {
+            type: "MERGE_REMOTE_THREADS",
+            threads: [
+                buildThread("t1", "docs/a.md", [
+                    {
+                        id: "t1-c1",
+                        author: AUTHOR,
+                        bodyMarkdown: "server wording",
+                        createdAt: "2024-01-01T10:00:00.000Z",
+                        updatedAt: edited,
+                    },
+                ]),
+            ],
+        });
+
+        expect(next.threadsById.t1!.comments[0]!.bodyMarkdown).toBe("local wording");
+    });
+
+    it("does not re-render when the server re-sends the same text with a newer edit time", () => {
+        const state = initialThreadState([
+            buildThread("t1", "docs/a.md", [
+                {
+                    id: "t1-c1",
+                    author: AUTHOR,
+                    bodyMarkdown: "same text",
+                    createdAt: "2024-01-01T10:00:00.000Z",
+                    updatedAt: "2024-01-01T10:00:00.000Z",
+                },
+            ]),
+        ]);
+
+        const next = threadReducer(state, {
+            type: "MERGE_REMOTE_THREADS",
+            threads: [
+                buildThread("t1", "docs/a.md", [
+                    {
+                        id: "t1-c1",
+                        author: AUTHOR,
+                        bodyMarkdown: "same text",
+                        createdAt: "2024-01-01T10:00:00.000Z",
+                        updatedAt: "2024-01-01T12:00:00.000Z",
+                    },
+                ]),
+            ],
+        });
+
+        expect(next).toBe(state);
+    });
+
     it("keeps a local comment that has no remote counterpart", () => {
         const state = initialThreadState([
             buildThread("t1", "docs/a.md", [
@@ -829,6 +928,18 @@ describe("threadReducer MERGE_REMOTE_THREADS — reaction sync", () => {
             name: "removing the last liker clears the set",
             local: [rx("like", "u1")],
             remote: undefined,
+            outcome: "adopt",
+        },
+        {
+            name: "an empty remote list after everyone un-liked clears the set",
+            local: [rx("like", "u1")],
+            remote: [],
+            outcome: "adopt",
+        },
+        {
+            name: "a liker who un-liked while others remain is dropped",
+            local: [rx("like", "u1", "u2")],
+            remote: [rx("like", "u2")],
             outcome: "adopt",
         },
     ];

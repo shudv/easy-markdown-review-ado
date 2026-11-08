@@ -62,6 +62,7 @@ function useSubmitDraft(opts: CommentPostingOptions) {
         (body: string) => {
             // Anchor against the SAME source that produced the currently rendered
             // article so the comment can be located in it.
+            // Stryker disable next-line StringLiteral: without a cached source there is nothing to locate the quote in; any placeholder text that doesn't contain the quoted selection leaves the anchor without a line just like ""
             const source = sourceByPath[selectedPath] ?? "";
             const anchor = withSourceLocation(draftAnchor!, source);
 
@@ -201,6 +202,7 @@ function createdThread(args: {
         ...c,
         id: created.firstCommentId,
     }));
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: an empty mentionedIdentities list contributes no names (useThreadStore only spreads it), same as leaving it unset
     if (mentions.length > 0) thread.mentionedIdentities = mentions;
 
     return thread;

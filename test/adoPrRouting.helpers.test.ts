@@ -99,7 +99,11 @@ describe("mostRecentRoutingPr", () => {
 
         expect(found).toBeNull();
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation: "repository-pr-routing" }),
+            expect.objectContaining({
+                source: "DocumentsHubApp.repository",
+                operation: "repository-pr-routing",
+                error: expect.objectContaining({ message: "boom" }),
+            }),
         ]);
     });
 
@@ -108,16 +112,19 @@ describe("mostRecentRoutingPr", () => {
 
         expect(found).toBeNull();
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation: "repository-pr-routing" }),
+            expect.objectContaining({
+                source: "DocumentsHubApp.repository",
+                operation: "repository-pr-routing",
+            }),
         ]);
     });
 });
 
 describe("routingPrForDoc", () => {
-    it("is null for a repo with no default branch", async () => {
-        await expect(
-            routingPrForDoc(scopeFor(fakeClient({})), noBranch, "/a.md"),
-        ).resolves.toBeNull();
+    it("is null (without a client) for a repo with no default branch", async () => {
+        const scope = scopeFor(fakeClient({}));
+        await expect(routingPrForDoc(scope, noBranch, "/a.md")).resolves.toBeNull();
+        expect(scope.git).not.toHaveBeenCalled();
     });
 
     it("routes to the PR that merged the file's last commit", async () => {
@@ -194,17 +201,17 @@ describe("routingPrForDoc", () => {
 
             await expect(routingPrForDoc(scopeFor(client), repo, "/a.md")).resolves.toEqual(latest);
             expect(telemetry.current.userFacingErrors()).toEqual([
-                expect.objectContaining({ operation }),
+                expect.objectContaining({ source: "DocumentsHubApp.comments", operation }),
             ]);
         },
     );
 });
 
 describe("docPrHistory", () => {
-    it("is empty for a repo with no default branch", async () => {
-        await expect(docPrHistory(scopeFor(fakeClient({})), noBranch, "/a.md")).resolves.toEqual(
-            [],
-        );
+    it("is empty (without a client) for a repo with no default branch", async () => {
+        const scope = scopeFor(fakeClient({}));
+        await expect(docPrHistory(scope, noBranch, "/a.md")).resolves.toEqual([]);
+        expect(scope.git).not.toHaveBeenCalled();
     });
 
     it("maps a page of the file's commits to its completed PRs", async () => {
@@ -273,7 +280,7 @@ describe("docPrHistory", () => {
     ])("shows an empty history and reports it when $name", async ({ failing, operation }) => {
         await expect(docPrHistory(scopeFor(fakeClient(failing)), repo, "/a")).resolves.toEqual([]);
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation }),
+            expect.objectContaining({ source: "Shell.history", operation }),
         ]);
     });
 });

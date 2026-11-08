@@ -96,6 +96,26 @@ describe("discoverHub", () => {
         });
         expect(readLastRepo("p1")).toBe("a");
         expect(readLastPath("p1", "a")).toBeUndefined();
+        expect(mocks.fetchRepoById).not.toHaveBeenCalled();
+    });
+
+    it("doesn't look up a blank repo remembered from an empty project", async () => {
+        writeLastRepo("p1", "");
+        mocks.fetchRepoPage.mockResolvedValue(page(["a"]));
+
+        const { discovery } = await discoverHub(vi.fn());
+
+        expect(mocks.fetchRepoById).not.toHaveBeenCalled();
+        expect(discovery.initialRepoId).toBe("a");
+    });
+
+    it("opens a deep-linked document nested in folders", async () => {
+        mocks.fetchRepoPage.mockResolvedValue(page(["a"]));
+        mocks.readRouteParams.mockResolvedValue({ path: "docs/guide/x.md" });
+
+        const { discovery } = await discoverHub(vi.fn());
+
+        expect(discovery.initialSelectedPath).toBe("/docs/guide/x.md");
     });
 
     it("tags telemetry with the current project", async () => {

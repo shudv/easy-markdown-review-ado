@@ -70,10 +70,31 @@ describe("renderMarkdown", () => {
         { name: "a plain-text quote", markdown: "> Ordinary quote.\n" },
         { name: "a quote holding only an image", markdown: "> ![Preview](./preview.png)\n" },
         { name: "a quote holding only raw HTML", markdown: "> <details></details>\n" },
+        {
+            name: "a quote whose heading carries an alert marker",
+            markdown: "> ## [!WARNING] Heads up\n> Body text.\n",
+        },
+        { name: "a quote mentioning [!NOTE] mid-sentence", markdown: "> See [!NOTE] below.\n" },
     ])("renders $name as an ordinary blockquote, not an alert", async ({ markdown }) => {
         const html = await renderMarkdown(markdown);
 
         expect(html).not.toContain("markdown-alert");
+    });
+
+    it("leaves a list item that opens with [!NOTE] as an ordinary item", async () => {
+        const html = await renderMarkdown("- [!NOTE] Remember this\n\n- Other\n");
+
+        expect(html).not.toContain("markdown-alert");
+        expect(html).toContain("[!NOTE] Remember this");
+    });
+
+    it("keeps the words of a one-line alert after removing its marker", async () => {
+        const root = document.createElement("div");
+        root.innerHTML = await renderMarkdown("> [!TIP] Mind the gap.\n");
+
+        expect(root.querySelector("blockquote > p:not(.markdown-alert-title)")!.textContent).toBe(
+            "Mind the gap.",
+        );
     });
 
     it("renders allowlisted details and Markdown inside them", async () => {
@@ -118,7 +139,7 @@ describe("renderMarkdown", () => {
         expect(html).toContain('rel="noopener noreferrer"');
     });
 
-    it.each(["&#9;", "&#10;", "&#13;", "&#127;"])(
+    it.each(["&#9;", "&#10;", "&#13;", "&#31;", "&#127;"])(
         "blocks raw HTML links with %s inside a script scheme",
         async (characterReference) => {
             const html = await renderMarkdown(
@@ -368,22 +389,44 @@ describe("renderMarkdown", () => {
         },
     );
 
-    it("keeps content after a one-line <details>…</details> outside the details", async () => {
+    it.each(["<details>Inline</details>", "<DETAILS>Inline</DETAILS>"])(
+        "keeps content after a one-line %s outside the details",
+        async (value) => {
+            const tree: Root = {
+                type: "root",
+                children: [
+                    { type: "raw", value } as unknown as RootContent,
+                    { type: "text", value: "After" },
+                ],
+            };
+
+            await unified().use(rehypeSafeHtml).run(tree);
+
+            expect(tree.children).toHaveLength(2);
+            expect(tree.children[1]).toEqual({ type: "text", value: "After" });
+        },
+    );
+
+    it("closes a raw container whose closing tag has a space before '>'", async () => {
         const tree: Root = {
             type: "root",
             children: [
-                {
-                    type: "raw",
-                    value: "<details>Inline</details>",
-                } as unknown as RootContent,
+                { type: "raw", value: "<details>" } as unknown as RootContent,
+                { type: "text", value: "Inside" },
+                { type: "raw", value: "</details >" } as unknown as RootContent,
                 { type: "text", value: "After" },
             ],
         };
 
         await unified().use(rehypeSafeHtml).run(tree);
 
-        expect(tree.children).toHaveLength(2);
-        expect(tree.children[1]).toEqual({ type: "text", value: "After" });
+        expect(tree.children).toEqual([
+            expect.objectContaining({
+                tagName: "details",
+                children: [{ type: "text", value: "Inside" }],
+            }),
+            { type: "text", value: "After" },
+        ]);
     });
 
     it("leaves a raw container without a source line when only its closing tag has one", async () => {
@@ -540,6 +583,11 @@ describe("renderMarkdown — collapsible sections & heading anchors", () => {
         expect(sectionIds(html)).toEqual(["section"]);
     });
 
+    it("drops the underscores around a heading like `__init__` from its anchor", async () => {
+        const html = await renderMarkdown("## `__init__`\n");
+        expect(sectionIds(html)).toEqual(["init"]);
+    });
+
     it("gives repeated headings distinct anchors: the first keeps the slug, the next gets -2", async () => {
         const html = await renderMarkdown("## Setup\n\n## Setup\n");
         expect(sectionIds(html)).toEqual(["setup", "setup-2"]);
@@ -580,6 +628,16 @@ describe("renderMarkdown — collapsible sections & heading anchors", () => {
         expect(titleSections).toEqual(["title"]);
     });
 
+    it("marks the title section even when the document opens with an HTML comment", async () => {
+        const root = parseHtml(
+            await renderMarkdown("<!-- markdownlint-disable -->\n# Title\n\nBody.\n"),
+        );
+
+        expect(root.querySelector(".emr-section--doc-title")?.getAttribute("data-section-id")).toBe(
+            "title",
+        );
+    });
+
     it.each([
         ["the document has multiple top-level headings", "# One\n\nA\n\n# Two\n\nB\n"],
         ["content precedes the first heading", "Intro paragraph.\n\n# Heading\n\nBody.\n"],
@@ -608,6 +666,7 @@ describe("renderMarkdown — YAML frontmatter", () => {
 
         // A styled metadata card is emitted before the article body.
         expect(html).toMatch(/<div class="emr-frontmatter"/);
+        expect(html).toContain('<dl class="emr-frontmatter-grid">');
         expect(html).toContain('<dt class="emr-frontmatter-key">title</dt>');
         expect(html).toContain('<dd class="emr-frontmatter-value">Release Notes</dd>');
         expect(html).toContain('<dt class="emr-frontmatter-key">author</dt>');
@@ -636,6 +695,14 @@ describe("renderMarkdown — YAML frontmatter", () => {
         const card = /<div class="emr-frontmatter"[^>]*>/.exec(html)?.[0] ?? "";
         expect(card).toMatch(/data-source-line="1"/);
         expect(card).toMatch(/data-source-end-line="4"/);
+    });
+
+    it("stamps the card's span when the document is only frontmatter, with no final newline", async () => {
+        const html = await renderMarkdown(["---", "title: Doc", "---"].join("\n"));
+
+        const card = /<div class="emr-frontmatter"[^>]*>/.exec(html)?.[0] ?? "";
+        expect(card).toMatch(/data-source-line="1"/);
+        expect(card).toMatch(/data-source-end-line="3"/);
     });
 
     it("stamps each key row with its own source line for granular diffing", async () => {
@@ -726,12 +793,13 @@ describe("renderMarkdown — YAML frontmatter", () => {
         expect(html).toContain("&#x3C;img");
     });
 
-    it("does not treat a mid-document '---' as frontmatter", async () => {
-        const md = ["# Heading", "", "---", "", "More text.", ""].join("\n");
+    it("does not treat thematic breaks in the body as frontmatter", async () => {
+        const md = ["# Heading", "", "---", "", "More text.", "", "---", "", "End.", ""].join("\n");
         const html = await renderMarkdown(md);
         expect(html).not.toContain("emr-frontmatter");
-        // A thematic break in the body stays a real <hr>.
-        expect(html).toContain("<hr");
+        // Thematic breaks in the body stay real <hr>s.
+        expect(html.match(/<hr/g)).toHaveLength(2);
+        expect(html).toContain("More text.");
     });
 
     it("strips an empty frontmatter block without emitting a card or an <hr>", async () => {
@@ -742,6 +810,13 @@ describe("renderMarkdown — YAML frontmatter", () => {
         expect(html).not.toContain("emr-frontmatter");
         expect(html).not.toContain("<hr");
         expect(html).toContain("Body.");
+    });
+
+    it("renders an empty frontmatter block as nothing, leaving only the body", async () => {
+        // The two fence lines become blank lines, so `Body.` keeps source line 4.
+        const html = await renderMarkdown(["---", "---", "", "Body.", ""].join("\n"));
+
+        expect(html).toBe(await renderMarkdown(["", "", "", "Body.", ""].join("\n")));
     });
 
     it("skips comments, blank lines, and malformed non key:value lines", async () => {
@@ -847,8 +922,33 @@ describe("frontmatterValuesForKey", () => {
             src: "k:\n  - a\rb",
             expected: [],
         },
+        {
+            name: "reads a key written with a space before its colon",
+            src: "k : v",
+            expected: ["v"],
+        },
+        { name: "keeps a value that is a lone quote character", src: 'k: "', expected: ['"'] },
+        {
+            name: "keeps the quotes on a value that only starts with a quoted word",
+            src: 'k: "Draft" for review',
+            expected: ['"Draft" for review'],
+        },
+        {
+            name: "keeps a scalar that only ends in a bracket",
+            src: "k: Notes [draft]",
+            expected: ["Notes [draft]"],
+        },
+        {
+            name: "ignores list items under a key that already has a value",
+            src: "k: v\n  - stray",
+            expected: ["v"],
+        },
     ])("$name", ({ src, expected }) => {
         expect(frontmatterValuesForKey(src, "k")).toEqual(expected);
+    });
+
+    it("does not lift an indented nested key to the top level", () => {
+        expect(frontmatterValuesForKey("author:\n  name: Ada", "name")).toBeNull();
     });
 
     it("skips a `key: value` line holding a lone carriage return", () => {

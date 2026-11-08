@@ -56,7 +56,14 @@ describe("renderMarkdown — security", () => {
         it("blocks an empty href and records the reason", async () => {
             const html = await renderMarkdown("[x]()");
             expect(html).not.toMatch(/href="/i);
-            expect(html).toContain("data-emr-blocked-scheme");
+            expect(html).toContain('data-emr-blocked-scheme="empty"');
+        });
+
+        it("blocks a raw-HTML javascript: link whose href is padded with whitespace", async () => {
+            const html = await renderMarkdown('<a href=" javascript:alert(1)">x</a>\n');
+
+            expect(html).not.toMatch(/href=/i);
+            expect(html).toContain('data-emr-blocked-scheme="javascript:"');
         });
 
         it("preserves protocol-relative links", async () => {
@@ -69,7 +76,7 @@ describe("renderMarkdown — security", () => {
             expect(html).not.toMatch(/href="[^"]*javascript:/i);
         });
 
-        it("preserves safe http(s):, mailto:, tel:, ftp: links", async () => {
+        it("preserves safe http(s):, mailto:, tel:, ftp:, sftp: links", async () => {
             const html = await renderMarkdown(
                 [
                     "[a](https://example.com)",
@@ -77,6 +84,7 @@ describe("renderMarkdown — security", () => {
                     "[c](mailto:nobody@example.com)",
                     "[d](tel:+15555550100)",
                     "[e](ftp://files.example.com/x)",
+                    "[f](sftp://files.example.com/y)",
                 ].join("\n\n"),
             );
 
@@ -85,6 +93,7 @@ describe("renderMarkdown — security", () => {
             expect(html).toContain('href="mailto:nobody@example.com"');
             expect(html).toContain('href="tel:+15555550100"');
             expect(html).toContain('href="ftp://files.example.com/x"');
+            expect(html).toContain('href="sftp://files.example.com/y"');
         });
 
         it("preserves relative and fragment URLs", async () => {
@@ -97,9 +106,16 @@ describe("renderMarkdown — security", () => {
             expect(html).toContain('href="/abs/path"');
         });
 
-        it("preserves a bare relative URL that has no scheme and no leading slash", async () => {
-            const html = await renderMarkdown("[doc](page.md)");
-            expect(html).toContain('href="page.md"');
+        it.each([
+            { name: "a bare relative URL", markdown: "[doc](page.md)", href: "page.md" },
+            {
+                name: "a relative URL whose query contains a colon",
+                markdown: "[open bugs](queries?q=state:active)",
+                href: "queries?q=state:active",
+            },
+        ])("preserves $name", async ({ markdown, href }) => {
+            const html = await renderMarkdown(markdown);
+            expect(html).toContain(`href="${href}"`);
             expect(html).not.toContain("data-emr-blocked-scheme");
         });
     });
@@ -130,6 +146,13 @@ describe("renderMarkdown — security", () => {
             expect(html).toContain('alt="(blocked image)"');
         });
 
+        it("labels a blocked raw-HTML image that has no alt at all", async () => {
+            const html = await renderMarkdown('<img src="javascript:alert(1)">\n');
+
+            expect(html).not.toMatch(/src=/i);
+            expect(html).toContain('alt="(blocked image)"');
+        });
+
         it("preserves the author's alt when src is blocked", async () => {
             const html = await renderMarkdown("![meaningful alt](javascript:alert(1))");
 
@@ -137,11 +160,14 @@ describe("renderMarkdown — security", () => {
             expect(html).not.toMatch(/src="javascript:/i);
         });
 
-        it("preserves safe http(s) image sources", async () => {
-            const html = await renderMarkdown("![logo](https://example.com/logo.png)");
+        it.each(["https://example.com/logo.png", "http://intranet.example/logo.png"])(
+            "preserves the safe image source %s",
+            async (src) => {
+                const html = await renderMarkdown(`![logo](${src})`);
 
-            expect(html).toContain('src="https://example.com/logo.png"');
-        });
+                expect(html).toContain(`src="${src}"`);
+            },
+        );
     });
 
     describe("raw HTML pass-through", () => {

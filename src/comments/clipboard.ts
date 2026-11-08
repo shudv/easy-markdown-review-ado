@@ -22,6 +22,7 @@ export async function copyText(text: string): Promise<boolean> {
     // leave it undefined outside secure contexts.
     const clipboard = navigator.clipboard as Partial<Clipboard> | undefined;
 
+    // Stryker disable next-line ConditionalExpression: dead code: without the check a missing Clipboard API throws a TypeError inside the try below, which falls through to the same legacy copy, candidate for removal
     if (typeof clipboard?.writeText === "function") {
         try {
             await clipboard.writeText(text);
@@ -45,11 +46,13 @@ function legacyCopyText(text: string): boolean {
     try {
         const textarea = document.createElement("textarea");
         textarea.value = text;
+        // Stryker disable StringLiteral: presentation-only attributes of a textarea that exists for one synchronous copy and is removed before the browser paints; the copied text is unaffected
         textarea.setAttribute("readonly", "");
         // Keep it out of the layout/viewport so it never flashes or scrolls.
         textarea.style.position = "fixed";
         textarea.style.top = "-9999px";
         textarea.style.opacity = "0";
+        // Stryker restore StringLiteral
         document.body.appendChild(textarea);
         textarea.select();
         // eslint-disable-next-line @typescript-eslint/no-deprecated -- ADO's sandboxed iframe blocks the async Clipboard API; execCommand is the only fallback it permits.

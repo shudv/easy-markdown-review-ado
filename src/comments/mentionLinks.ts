@@ -63,8 +63,10 @@ export function hydrateMentionLinks(
     );
 
     links.forEach((a) => {
+        // Stryker disable next-line StringLiteral: a link without an href is skipped by parseMentionUrl whatever placeholder stands in for it
         const current = a.getAttribute("href") ?? "";
 
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,MethodExpression,BlockStatement: dead code: an http(s) href is not a mention:// URL, so parseMentionUrl below rejects it anyway, candidate for removal
         if (current.startsWith("http://") || current.startsWith("https://")) {
             return;
         }
@@ -73,6 +75,7 @@ export function hydrateMentionLinks(
         if (!parsed) return;
 
         const url = buildMentionWebUrl(parsed, ctx);
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: buildMentionWebUrl never returns an empty string, so the empty-string check never fires, candidate for removal
         if (url === undefined || url === "") return;
         a.setAttribute("href", url);
         // New context so the user keeps their place; rel matches sanitize-urls.
@@ -121,6 +124,7 @@ function buildMentionWebUrl(
             return `${orgUrl}/${project}/_git/${encodeURIComponent(repo)}/pullrequest/${id}`;
         }
 
+        // Stryker disable next-line ConditionalExpression: dead code: only work-item and pull-request links are selected, so any other kind would fall out of the switch and return undefined anyway, candidate for removal
         default:
             return undefined;
     }

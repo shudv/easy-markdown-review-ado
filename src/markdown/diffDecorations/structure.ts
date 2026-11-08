@@ -40,6 +40,7 @@ export function explainLeadText(item: HTMLElement, label: string): void {
 }
 
 export function applyLeafStructureDiff(original: HTMLElement, target: HTMLElement): boolean {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: with only one side a list item, the item's parent is the only list, so no marker change is found, and a paragraph has no checkbox, so no checklist change either
     if (target.tagName !== "LI" || original.tagName !== "LI") return false;
     const markerLabel = listMarkerChangeLabel(original, target);
     const taskChange = checklistStateChange(original, target);
@@ -72,6 +73,7 @@ export function applyLeafStructureDiff(original: HTMLElement, target: HTMLElemen
 }
 
 function isListTag(tag: string | undefined): boolean {
+    // Stryker disable next-line ConditionalExpression: it is only asked about a list item's parent, which is always a UL or OL
     return tag === "UL" || tag === "OL";
 }
 
@@ -81,10 +83,13 @@ function listKindName(tag: string | undefined): string {
 
 /** Label for a bullet <-> number switch of a list item, or null. */
 function listMarkerChangeLabel(original: HTMLElement, target: HTMLElement): string | null {
+    // Stryker disable next-line OptionalChaining: a list item always sits in a list
     const originalList = original.parentElement?.tagName;
+    // Stryker disable next-line OptionalChaining: a list item always sits in a list
     const currentList = target.parentElement?.tagName;
 
     const markerChanged =
+        // Stryker disable next-line ConditionalExpression,LogicalOperator: both parents are always lists (UL or OL), so only the tag comparison decides
         isListTag(originalList) && isListTag(currentList) && originalList !== currentList;
 
     return markerChanged
@@ -127,6 +132,7 @@ export function applyBlockStructureDiff(
     if (original.tagName === target.tagName || text.length === 0) return false;
 
     const describeBlock = (tag: string): string => {
+        // Stryker disable next-line Regex: it only sees block tag names (P, LI, BLOCKQUOTE, H1-H6), none of which contain H plus a digit except the headings themselves
         const heading = /^H([1-6])$/.exec(tag);
         if (heading) return `heading level ${heading[1]}`;
 

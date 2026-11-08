@@ -16,13 +16,16 @@ interface LinkTargetChange {
 function linkHost(value: string): string {
     try {
         return new URL(value, "https://relative.invalid").host;
+        // Stryker disable next-line BlockStatement: an unparsable target falls back to undefined instead of "", which compares the same way against every target that has a host
     } catch {
+        // Stryker disable next-line StringLiteral: an unparsable target only has to differ from every target that has a host, which any placeholder does
         return "";
     }
 }
 
 export function readLinkTargets(root: Element): string[] {
     return Array.from(root.querySelectorAll<HTMLAnchorElement>("a")).map(
+        // Stryker disable next-line StringLiteral: Markdown links always carry an href, so the fallback for an anchor without one is never compared
         (link) => link.getAttribute("href") ?? "",
     );
 }
@@ -34,6 +37,7 @@ export function findLinkTargetChanges(
     if (before.length !== after.length) return [];
     const changes: LinkTargetChange[] = [];
 
+    // Stryker disable next-line EqualityOperator: one step past the end both lists read undefined, which compares equal, so no change is recorded
     for (let index = 0; index < before.length; index++) {
         if (before[index] !== after[index]) {
             changes.push({
@@ -61,6 +65,7 @@ export function applyLinkTargetIndicators(
         indicator.className = `${DIFF_METADATA_CLASS} emr-diff-metadata--link`;
         indicator.classList.toggle("is-warning", change.hostChanged);
         const trigger = document.createElement("button");
+        // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
         trigger.type = "button";
         trigger.className = "emr-diff-metadata-trigger";
         trigger.setAttribute(
@@ -72,7 +77,9 @@ export function applyLinkTargetIndicators(
         trigger.setAttribute("aria-expanded", "false");
         const panel = document.createElement("span");
         panel.className = "emr-diff-metadata-panel";
+        // Stryker disable next-line ArithmeticOperator: counting from -1 instead of +1 still gives every panel in the document its own id
         panel.id = `emr-diff-metadata-panel-${root.ownerDocument.querySelectorAll(".emr-diff-metadata-panel").length + 1}`;
+        // Stryker disable next-line StringLiteral: an empty popover attribute is the auto state in HTML, the same as "auto"
         panel.setAttribute("popover", "auto");
         panel.setAttribute("role", "dialog");
         panel.setAttribute("aria-label", "Link target change");
@@ -134,6 +141,7 @@ function appendMetadataRow(row: HTMLElement, labelText: string, valueText: strin
 }
 
 function buildLinkChangeIcon(): SVGElement {
+    // Stryker disable StringLiteral: the link icon's SVG markup is purely visual (covered by the visual regression suite); its aria-hidden flag below is asserted by a scenario
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("width", "14");
@@ -143,7 +151,9 @@ function buildLinkChangeIcon(): SVGElement {
     svg.setAttribute("stroke-width", "2");
     svg.setAttribute("stroke-linecap", "round");
     svg.setAttribute("stroke-linejoin", "round");
+    // Stryker restore StringLiteral
     svg.setAttribute("aria-hidden", "true");
+    // Stryker disable StringLiteral: the link icon's path data is purely visual (covered by the visual regression suite)
 
     const first = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
@@ -152,6 +162,7 @@ function buildLinkChangeIcon(): SVGElement {
     const second = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
     second.setAttribute("d", "M14 11a5 5 0 0 0-7.07 0L4.8 13.12a5 5 0 0 0 7.07 7.07L13 19.07");
+    // Stryker restore StringLiteral
     svg.append(first, second);
 
     return svg;
@@ -181,6 +192,7 @@ export function applySimpleMetadataIndicator(
     const indicator = document.createElement("span");
     indicator.className = `${DIFF_METADATA_CLASS} emr-diff-metadata--structure`;
     const trigger = document.createElement("button");
+    // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
     trigger.type = "button";
     trigger.className = "emr-diff-metadata-trigger";
     trigger.textContent = label;
@@ -216,18 +228,23 @@ function codeMetadata(pre: Element): RenderedCodeMetadata | null {
     const code = pre.querySelector("code");
     if (!code) return null;
 
+    // Stryker disable StringLiteral: the renderer gives a code element no class but its language class, so the first class is that one, and the prefix is stripped the same way on both sides being compared
     const languageClass = Array.from(code.classList)
         .find((name) => name.startsWith("language-"))
         ?.slice("language-".length);
+    // Stryker restore StringLiteral
 
     return {
         language:
+            // Stryker disable next-line ConditionalExpression,StringLiteral: the renderer never emits a bare `language-` class, so the language is never empty
             languageClass === undefined || languageClass === "" ? "plain text" : languageClass,
+        // Stryker disable next-line StringLiteral: the renderer stamps fence options on the code element, so reading the pre's attribute (or none) falls through to the same value
         options: pre.getAttribute("data-code-meta") ?? code.getAttribute("data-code-meta") ?? "",
     };
 }
 
 function imageDescription(image: Element): string {
+    // Stryker disable next-line StringLiteral: rendered images (Markdown or sanitized HTML) always carry a src, so the fallback is never shown
     const src = image.getAttribute("src") ?? "no source";
     const alt = image.getAttribute("alt") ?? "no alt text";
     const title = image.getAttribute("title");

@@ -11,6 +11,7 @@ describe("extractStatus", () => {
         { name: "a numeric status", error: { status: 503 }, expected: 503 },
         { name: "a statusCode", error: { statusCode: 429 }, expected: 429 },
         { name: "an httpStatusCode", error: { httpStatusCode: 404 }, expected: 404 },
+        { name: "a proxy's 599 network timeout", error: { status: 599 }, expected: 599 },
         {
             name: "a nested serverError.status",
             error: { serverError: { status: 500 } },
@@ -61,6 +62,13 @@ describe("isRetryable — reads", () => {
 
     it("retries a connection failure (no status)", () => {
         expect(isRetryable(new Error("network down"), "read")).toBe(true);
+    });
+
+    it.each([
+        { name: "no reason", error: undefined },
+        { name: "a null reason", error: null },
+    ])("retries a read that failed with $name, like a lost connection", ({ error }) => {
+        expect(isRetryable(error, "read")).toBe(true);
     });
 
     it.each([408, 425, 429, 500, 502, 503, 504])("retries transient status %i", (status) => {

@@ -67,6 +67,7 @@ export function draftTargetsOnScreen(
         // file currently on screen (a reply draft, or a draft on another file,
         // shows none).
         draftAnchor:
+            // Stryker disable next-line ConditionalExpression: a reply draft carries a null anchor, so dropping the new-comment check still yields null for it
             onScreen && activeDraft.threadId === NEW_DRAFT_THREAD_ID ? activeDraft.anchor : null,
         // The open reply composer's thread, shown only on its own file.
         activeReplyThreadId:
@@ -80,6 +81,7 @@ export function isSameDraftTarget(current: DraftTarget | null, target: DraftTarg
         current !== null &&
         current.path === target.path &&
         current.threadId === target.threadId &&
+        // Stryker disable next-line ConditionalExpression: reply drafts carry a null anchor, so comparing anchors for them always matches anyway
         (target.threadId !== NEW_DRAFT_THREAD_ID ||
             JSON.stringify(current.anchor) === JSON.stringify(target.anchor))
     );
@@ -167,6 +169,7 @@ export function resolveHistoryView(opts: {
         clampedStopIndex,
         comparingIterations,
         activeStop,
+        // Stryker disable next-line ConditionalExpression: dead code: indexing the stops with a null index yields undefined anyway; candidate for removal
         baselineStop: baselineStopIndex == null ? undefined : historyStops[baselineStopIndex],
         viewingHistorical: !activeStop.isCurrent,
         reportedRangeKey,
@@ -181,6 +184,7 @@ export function docNavRangeChangesFor(
     range: ReviewIterationRange,
     updateCount: number,
 ): { label: string; byPath: Readonly<Record<string, ChangeType>> } | undefined {
+    // Stryker disable next-line ConditionalExpression: dead code: the range-changes map is keyed by range strings, never "null", so the lookup below yields undefined anyway; candidate for removal
     if (rangeChangesKey === null) return undefined;
     const byPath = rangeChangesByKey[rangeChangesKey];
     if (byPath === undefined) return undefined;
@@ -271,12 +275,14 @@ export function historicalStatus(opts: {
     // PR deletes is absent at the latest update too, even though the live view
     // (which "All updates" uses) shows its pre-deletion content.
     const activeAbsent =
+        // Stryker disable next-line ConditionalExpression: dead code: the absent map is keyed by real cache keys, never "null", so a null key reads as not absent anyway; candidate for removal
         (historicalContentKey != null && !!opts.historicalAbsentByKey[historicalContentKey]) ||
         (opts.comparingIterations &&
             historicalContentKey == null &&
             opts.currentFileChangeType === "deleted");
 
     const baselineAbsent =
+        // Stryker disable next-line ConditionalExpression: dead code: the absent map is keyed by real cache keys, never "null", so a null key reads as not absent anyway; candidate for removal
         baselineContentKey != null && !!opts.historicalAbsentByKey[baselineContentKey];
 
     const historicalLoading =
@@ -555,6 +561,7 @@ export function buildHistoryNav(
         canNewer: clampedStopIndex > 0,
         canOlder: clampedStopIndex < historyStops.length - 1,
         olderLabel: historyChevronTooltip("older", historyStops[clampedStopIndex + 1]),
+        // Stryker disable next-line StringLiteral: the tooltip only checks for "older", so any other direction text reads as newer
         newerLabel: historyChevronTooltip("newer", historyStops[clampedStopIndex - 1]),
         onNewer: () => onStep(stepStopIndex(clampedStopIndex, -1, historyStops.length)),
         onOlder: () => onStep(stepStopIndex(clampedStopIndex, 1, historyStops.length)),

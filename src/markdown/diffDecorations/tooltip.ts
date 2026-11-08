@@ -8,10 +8,13 @@ import {
 
 export function applyDiffTooltip(target: HTMLElement, label: string): void {
     target.dataset.diffTooltipHadTitle = String(target.hasAttribute("title"));
+    // Stryker disable next-line StringLiteral: the stored title is only restored when the element had one (diffTooltipHadTitle), so the fallback for a missing title is never read
     target.dataset.diffTooltipPreviousTitle = target.getAttribute("title") ?? "";
     target.dataset.diffTooltipHadTabindex = String(target.hasAttribute("tabindex"));
+    // Stryker disable next-line StringLiteral: the stored tab stop is only restored when the element had one (diffTooltipHadTabindex), so the fallback for a missing one is never read
     target.dataset.diffTooltipPreviousTabindex = target.getAttribute("tabindex") ?? "";
     target.dataset.diffTooltipHadDescription = String(target.hasAttribute("aria-description"));
+    // Stryker disable next-line StringLiteral: the stored description is only restored when the element had one (diffTooltipHadDescription), so the fallback for a missing one is never read
     target.dataset.diffTooltipPreviousDescription = target.getAttribute("aria-description") ?? "";
     target.classList.add(DIFF_TOOLTIP_CLASS);
     target.dataset.diffTooltip = label;

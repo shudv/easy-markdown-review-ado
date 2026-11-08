@@ -89,6 +89,7 @@ function flattenTextNodes(block: HTMLElement): {
     while (n) {
         const data = (n as Text).data;
 
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: an empty text node covers no offsets, so no mark or removal ever lands in it and rewriting it yields the same empty text
         if (data.length > 0) {
             const start = acc.length;
             nodes.push({ node: n as Text, start, end: start + data.length });
@@ -165,7 +166,9 @@ function rewriteNode(
         const e = Math.min(seg.end, ne);
 
         if (s < e) {
+            // Stryker disable next-line StringLiteral: only removal events carry text; an add event's text is never read
             events.push({ pos: s - ns, kind: "add-start", text: "" });
+            // Stryker disable next-line StringLiteral: only removal events carry text, and an end event under any other name still takes the end branch below and sorts in insertion order, which already puts it before a removal at the same offset (diffWords never emits two added runs at one offset)
             events.push({ pos: e - ns, kind: "add-end", text: "" });
         }
     }
@@ -179,8 +182,10 @@ function rewriteNode(
         }
     }
 
+    // Stryker disable next-line ConditionalExpression,BlockStatement: with no events the loop below emits the node's whole text as one plain text node, the same as this copy
     if (events.length === 0) {
         const fragment = doc.createDocumentFragment();
+        // Stryker disable next-line BooleanLiteral: a text node has no children, so a shallow clone is identical
         fragment.appendChild(entry.node.cloneNode(true));
 
         return { fragment, addedCount: 0, removedCount: 0 };
@@ -189,7 +194,9 @@ function rewriteNode(
     // Stable sort: at the same position emit a removal (old) before an add-start
     // (new) so the reader sees "was → now"; add-end before add-start when
     // touching.
+    // Stryker disable next-line ObjectLiteral: without the ranks, same-offset events keep insertion order (add events before removals), and an add-start before or after a removal at one offset renders identically since it only sets a flag; diffWords never emits two added runs at one offset
     const order = { "add-end": 0, remove: 1, "add-start": 2 };
+    // Stryker disable next-line ArithmeticOperator: same-offset events only ever pair an add event with a removal, and either order renders identically (an add-start only sets a flag; text before an add-end is emitted when the offset advances)
     events.sort((a, b) => a.pos - b.pos || order[a.kind] - order[b.kind]);
 
     const fragment = doc.createDocumentFragment();
@@ -199,6 +206,7 @@ function rewriteNode(
     let removedCount = 0;
 
     const emitPlain = (from: number, to: number, wrapped: boolean) => {
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: callers never pass to < from, and an empty slice appended as text renders nothing
         if (to <= from) return;
         const text = data.slice(from, to);
 
@@ -210,6 +218,7 @@ function rewriteNode(
     };
 
     for (const ev of events) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: at the cursor's own offset there is no text to emit (emitPlain returns early) and the cursor stays put
         if (ev.pos > cursor) {
             emitPlain(cursor, ev.pos, inAdd);
             cursor = ev.pos;
@@ -256,6 +265,7 @@ export function applyInlineWordDiff(
 
     const { added, removals } = planEdits(ops);
 
+    // Stryker disable next-line BlockStatement: with no edits every node is rewritten to an identical copy and the counts stay 0
     if (added.length === 0 && removals.length === 0) {
         return { added: 0, removed: 0 };
     }
@@ -270,6 +280,7 @@ export function applyInlineWordDiff(
 
         addedCount += a;
         removedCount += r;
+        // Stryker disable next-line OptionalChaining: the text nodes were collected from inside the block, so each has a parent
         entry.node.parentNode?.replaceChild(fragment, entry.node);
     }
 

@@ -4,7 +4,7 @@
 
 - Public base: `3326f9f` (#32).
 - Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
-- New product boundary: `e8b244a` (source branch `chore/four-space-indent`; not
+- New product boundary: `77a6113` (source branch `chore/four-space-indent`; not
   yet merged, record the source merge commit here once it lands).
 - OSS release version: unchanged at `1.3.1`.
 - Strategy: replay the product tree delta without importing private history.
@@ -23,6 +23,7 @@
 | `e01ef29`     | The source removes its local multi-agent Agency review tooling (agents, contracts, `review:local` runner and `test:review` tests, which were never mirrored). Mirrored as the matching cleanup: the cspell `.agency/**` ignore path and three words only that tooling used.                                                                                                                                              |
 | `fa7994f`     | Tests are rewritten as scenarios: mutant-only tests are reworded or removed, duplicates removed, the rendered-diff suites become one suite per feature (`markdown.diff.<feature>`), tests record telemetry through `test/telemetrySink.ts` instead of mocking it, and stories use role/label/text queries. Eight test-only exports become module-private.                                                                |
 | `e8b244a`     | Mutation testing is re-scoped to match its own rule and the coverage config (comment fixtures, SDK glue and Storybook-only hooks/DOM helpers excluded; volatile Playwright output skipped when copying the sandbox); the measured score is 84.9%, so the break threshold and README rule become 84%. ESLint ignores `.stryker-tmp/`; the boot-error panel's empty-stack fallback gets a scenario test.                   |
+| `77a6113`     | Every surviving mutant is triaged: observable ones get scenario tests (including unit scenarios for the shell hooks only Storybook exercised), unobservable ones get `Stryker disable` comments with specific reasons, and dead code is marked "candidate for removal". `src/` changes are comments only. Product bugs found are listed in the PR and not fixed here.                                                    |
 
 ### Public-specific adaptations retained
 
@@ -45,7 +46,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `e8b244a` and
+Compare the next source product tree against the merged form of `77a6113` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

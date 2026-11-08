@@ -18,6 +18,7 @@ describe("splitTableRow", () => {
     it.each([
         { name: "a fully piped row", row: "| a | b | c |", cells: ["a", "b", "c"] },
         { name: "a row without outer pipes", row: "a | b", cells: ["a", "b"] },
+        { name: "a row with only a closing pipe", row: "a | b |", cells: ["a", "b"] },
         {
             name: "a row with whitespace around its outer pipes",
             row: "  | a | b |  ",

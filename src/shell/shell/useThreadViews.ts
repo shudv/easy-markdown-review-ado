@@ -50,6 +50,7 @@ export function useThreadViews(opts: ThreadViewsOptions) {
     // that PR's threads instead — read-only, loaded on demand and cached by id.
     const currentThreadsRaw = useMemo(() => {
         if (viewingHistorical && !nativeIterationMode) {
+            // Stryker disable next-line ConditionalExpression: dead code: past-PR threads are only ever cached under a real PR id (useHistoryLoaders), so a `path\u0000null` lookup finds nothing and falls back to the same empty list; candidate for removal
             return activeStopPrId != null
                 ? (historicalThreadsByKey[`${selectedPath}\u0000${activeStopPrId}`] ??
                       EMPTY_THREADS)

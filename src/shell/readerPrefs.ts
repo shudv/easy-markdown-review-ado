@@ -168,13 +168,16 @@ export async function detectAvailableReaderFonts(
 ): Promise<readonly ReaderFont[]> {
     const availability = await Promise.all(
         READER_FONTS.map(async (font) => {
+            // Stryker disable next-line ConditionalExpression,StringLiteral: every curated font either omits `localFamily` or names a family, so the empty-name check never decides anything
             if (font.localFamily === undefined || font.localFamily === "") {
                 return true;
             }
 
             try {
+                // Stryker disable BlockStatement: an emptied catch below resolves to undefined, which the availability filter treats as false just the same
                 return await loadLocal(font.localFamily, font.id);
             } catch {
+                // Stryker restore BlockStatement
                 return false;
             }
         }),
@@ -210,6 +213,7 @@ export function nudgeReaderPct(
     min = READER_PERCENT_MIN,
     max = READER_PERCENT_MAX,
 ): number {
+    // Stryker disable next-line EqualityOperator: the status bar only ever nudges by -1 or +1, never 0
     return snapReaderPct(pct + (dir < 0 ? -1 : 1) * READER_PERCENT_NUDGE, min, max);
 }
 
@@ -299,11 +303,13 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
     const v = value as Partial<Record<keyof ReaderPrefs, unknown>>;
 
     const fontId =
+        // Stryker disable next-line ConditionalExpression: no curated font id equals a non-string, so the `some` lookup alone rejects them
         typeof v.fontId === "string" && READER_FONTS.some((f) => f.id === v.fontId)
             ? v.fontId
             : DEFAULT_FONT_ID;
 
     const sizePct =
+        // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number
         typeof v.sizePct === "number" && Number.isFinite(v.sizePct)
             ? snapReaderPct(v.sizePct)
             : DEFAULT_SIZE_PCT;
@@ -315,16 +321,19 @@ export function sanitizeReaderPrefs(value: unknown): ReaderPrefs {
         >,
         fallback: number,
     ) =>
+        // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number
         typeof v[key] === "number" && Number.isFinite(v[key])
             ? snapReaderPct(v[key], READER_SPACING_UI_MIN, READER_SPACING_UI_MAX)
             : fallback;
 
     const navWidthPct =
+        // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number
         typeof v.navWidthPct === "number" && Number.isFinite(v.navWidthPct)
             ? clampNavWidthPct(v.navWidthPct)
             : DEFAULT_NAV_WIDTH_PCT;
 
     const commentWidthPct =
+        // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number
         typeof v.commentWidthPct === "number" && Number.isFinite(v.commentWidthPct)
             ? clampCommentWidthPct(v.commentWidthPct)
             : DEFAULT_COMMENT_WIDTH_PCT;
@@ -349,8 +358,11 @@ function readStored(key: string): unknown {
     try {
         const raw = localStorage.getItem(key);
 
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `JSON.parse(null)` is null and `JSON.parse("")` throws into the catch below, so both read as null without the guard
+        // Stryker disable BlockStatement: an emptied catch below returns undefined, which spreads into the prefs exactly like null
         return raw !== null && raw !== "" ? JSON.parse(raw) : null;
     } catch {
+        // Stryker restore BlockStatement
         return null;
     }
 }

@@ -88,6 +88,14 @@ describe("detectActiveTrigger", () => {
             start: 0,
             query: "Alice An.der-son_",
         },
+        {
+            name: "typing a mention in the middle of a sentence opens people",
+            text: "Thanks @al, see below",
+            caret: 10,
+            kind: "user",
+            start: 7,
+            query: "al",
+        },
     ])("$name", ({ text, caret, kind, start, query }) => {
         expect(detectActiveTrigger(text, caret)).toEqual({
             kind,
@@ -149,6 +157,8 @@ describe("buildMentionMarkdown", () => {
 
     it("emits a `mention://pullrequest/<id>?status=...&repo=...` link", () => {
         const md = buildMentionMarkdown(PR);
+        // Label embeds id + title.
+        expect(md).toMatch(/^\[!5058 Improve perf\]/);
         expect(md).toContain("mention://pullrequest/5058?");
         expect(md).toContain("status=active");
         expect(md).toContain("repo=OneTodo");
@@ -351,6 +361,12 @@ describe("encodePickedMentions", () => {
         expect(out).toBe(`cc @<${A}> please`);
     });
 
+    it("encodes a mention at the very start of the comment", () => {
+        expect(encodePickedMentions("@Ada please review", [{ label: "Ada", id: A }])).toBe(
+            `@<${A}> please review`,
+        );
+    });
+
     it("encodes at end of string (no trailing char)", () => {
         expect(encodePickedMentions("ping @Ada", [{ label: "Ada", id: A }])).toBe(`ping @<${A}>`);
     });
@@ -393,7 +409,9 @@ describe("encodePickedMentions", () => {
     });
 
     it("skips picks with an empty label", () => {
-        expect(encodePickedMentions("@Sam", [{ label: "", id: A }])).toBe("@Sam");
+        expect(encodePickedMentions("@Sam meets us @ noon", [{ label: "", id: A }])).toBe(
+            "@Sam meets us @ noon",
+        );
     });
 
     it("maps same-named-but-distinct people via disambiguated labels", () => {

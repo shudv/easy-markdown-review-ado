@@ -193,6 +193,7 @@ export function hydrateUserMentions(root: HTMLElement | null, store: IdentitySto
     const unresolved: string[] = [];
     pills.forEach((el) => {
         const id = el.getAttribute("data-mention-id");
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: an empty id is never stored (seed and ensure skip empty keys), so it stays unresolved and is never requested either way, candidate for removal
         if (id === null || id === "") return;
         const info = store.get(id);
 
@@ -209,6 +210,7 @@ export function hydrateUserMentions(root: HTMLElement | null, store: IdentitySto
             unresolved.push(id);
         }
     });
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: ensure([]) queues nothing and schedules no lookup, so calling it with no unresolved ids changes nothing, candidate for removal
     if (unresolved.length > 0) store.ensure(unresolved);
 }
 
@@ -236,9 +238,11 @@ export function useUserMentionHydration(
 export function useIdentityVersion(store: IdentityStore | null): number {
     const subscribe = useCallback(
         (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
+        // Stryker disable next-line ArrayDeclaration: the app creates its identity store once (useCommentApiRouting's useState) and never swaps it, so the callback never needs re-creating
         [store],
     );
 
+    // Stryker disable next-line ArrayDeclaration: the app creates its identity store once (useCommentApiRouting's useState) and never swaps it, so the callback never needs re-creating
     const getSnapshot = useCallback(() => (store ? store.getVersion() : 0), [store]);
 
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

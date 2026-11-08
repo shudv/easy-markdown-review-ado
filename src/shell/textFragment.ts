@@ -69,6 +69,7 @@ interface TextRun {
 
 /** True when `node` is live document text (see {@link NON_CONTENT_SELECTOR}). */
 export function isContentText(node: Text): boolean {
+    // Stryker disable next-line OptionalChaining: dead code: callers only pass text nodes found under an Element root, which always have a parent element, candidate for removal
     return !node.parentElement?.closest(NON_CONTENT_SELECTOR);
 }
 
@@ -80,6 +81,7 @@ function flatten(root: Element): { text: string; runs: TextRun[] } {
 
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const node = n as Text;
+        // Stryker disable next-line ConditionalExpression: dead code: an empty run adds no text, and every run lookup (toRange's start/end search, rangeOffsets' empty-span skip) already passes over zero-length runs, candidate for removal
         if (node.data.length === 0 || !isContentText(node)) continue;
         runs.push({
             node,
@@ -126,6 +128,7 @@ const matchKey = (text: string): string => keyIndex(text).key;
 
 /** Whether an optional fragment piece is present and non-empty. */
 function hasPiece(piece: string | undefined): piece is string {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: fragments only come from buildTextFragment / parseTextFragment, neither of which ever sets an empty piece, candidate for removal
     return piece !== undefined && piece !== "";
 }
 
@@ -145,6 +148,7 @@ function matchFragment(
     for (let i = key.indexOf(startKey); i >= 0; i = key.indexOf(startKey, i + 1)) {
         if (!hasPrefixAt(key, i, prefixKey)) continue;
         const stop = matchStop(key, i + startKey.length, endKey, suffixKey);
+        // Stryker disable next-line EqualityOperator: a match always ends after its non-empty start text, so `stop` is either -1 or positive, never 0
         if (stop < 0) continue;
 
         return { start: at[i]!, end: at[stop - 1]! + 1 };
@@ -169,15 +173,19 @@ function matchStop(key: string, stop: number, endKey: string, suffixKey: string)
 
     let j = key.indexOf(endKey, stop);
 
+    // Stryker disable next-line EqualityOperator: the end text is searched from after the start text, so `j` is either -1 or positive, never 0
     while (j >= 0 && suffixKey && !key.startsWith(suffixKey, j + endKey.length)) {
         j = key.indexOf(endKey, j + 1);
     }
 
+    // Stryker disable next-line EqualityOperator: the end text is searched from after the start text, so `j` is either -1 or positive, never 0
     return j < 0 ? -1 : j + endKey.length;
 }
 
 function toRange(doc: Document, runs: TextRun[], start: number, end: number): Range {
+    // Stryker disable next-line ConditionalExpression: dead code: runs are in document order, so the first run ending after `start` already starts at or before it, candidate for removal
     const startRun = runs.find((r) => start >= r.start && start < r.end)!;
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: runs are in document order, so the first run ending at or after `end` is chosen whether or not its start is also checked, candidate for removal
     const endRun = runs.find((r) => end > r.start && end <= r.end)!;
     const range = doc.createRange();
     range.setStart(startRun.node, start - startRun.start);
@@ -204,6 +212,7 @@ function rangeOffsets(
     range: Range,
 ): { start: number; end: number } | null {
     let start = -1;
+    // Stryker disable next-line UnaryOperator: `end` is always assigned together with `start`, and is never read while `start` is still unset
     let end = -1;
 
     for (const run of runs) {
@@ -212,11 +221,13 @@ function rangeOffsets(
 
         const to = range.endContainer === run.node ? range.endOffset : run.node.data.length;
 
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: `to < from` never happens (each slice runs forwards), so skipping only strictly backwards slices is the same as never skipping — and an empty slice at a run's edge yields the neighbouring run's edge offset anyway, candidate for removal
         if (to <= from) continue;
         if (start < 0) start = run.start + from;
         end = run.start + to;
     }
 
+    // Stryker disable next-line ConditionalExpression: dead code: with nothing selected `start` and `end` are both -1, which trimOffsets rejects as an empty span anyway, candidate for removal
     if (start < 0) return null;
 
     return trimOffsets(text, start, end);
@@ -228,8 +239,10 @@ function trimOffsets(
     start: number,
     end: number,
 ): { start: number; end: number } | null {
+    // Stryker disable ConditionalExpression,EqualityOperator: stepping past the bounds only happens for an all-whitespace span, which the `end > start` check below rejects either way
     while (start < end && /\s/.test(text[start]!)) start++;
     while (end > start && /\s/.test(text[end - 1]!)) end--;
+    // Stryker restore ConditionalExpression,EqualityOperator
 
     return end > start ? { start, end } : null;
 }
@@ -269,6 +282,7 @@ function lastWords(text: string, count: number): string {
 }
 
 function firstWords(text: string, count: number): string {
+    // Stryker disable next-line ConditionalExpression: dead code: slice(0, 0) already yields ""; a firstWords that always returns nothing is still caught via the function-body mutant, candidate for removal
     if (count === 0) return "";
 
     return collapse(text).split(" ").slice(0, count).join(" ");
@@ -290,6 +304,7 @@ export function buildTextFragment(root: Element, range: Range): TextFragment | n
         const start = leadingWords(quote, EDGE_QUOTE_CHARS);
         const end = trailingWords(quote, EDGE_QUOTE_CHARS);
         // A single huge "word" (e.g. a URL) can't be split; quote it whole.
+        // Stryker disable next-line EqualityOperator: whole-word runs can't sum to exactly the quote length — disjoint runs leave at least one separating space, overlapping ones share a word
         if (start.length + end.length < quote.length) base = { start, end };
     }
 
@@ -307,6 +322,7 @@ export function buildTextFragment(root: Element, range: Range): TextFragment | n
             ...(suffix ? { suffix } : {}),
         };
         const hit = matchFragment(index, fragment);
+        // Stryker disable next-line OptionalChaining: dead code: a fragment built from the selection's own text and context always matches somewhere, so `hit` is never null, candidate for removal
         if (hit?.start === own.start && hit.end === own.end) break;
     }
 
@@ -349,14 +365,17 @@ export function parseTextFragment(value: string): TextFragment | null {
     let prefix: string | undefined;
     let suffix: string | undefined;
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: a lone part ending in "-" is rejected either way — as a raw edge dash, or as context with no quote left, candidate for removal
     if (parts.length > 1 && parts[0]!.endsWith("-")) {
         prefix = parts.shift()!.slice(0, -1);
     }
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: a lone part starting with "-" is rejected either way — as a raw edge dash, or as context with no quote left, candidate for removal
     if (parts.length > 1 && parts[parts.length - 1]!.startsWith("-")) {
         suffix = parts.pop()!.slice(1);
     }
 
+    // Stryker disable next-line ConditionalExpression: dead code: context is only split off while another part remains, so the list of quote parts is never empty here, candidate for removal
     if (parts.length < 1 || parts.length > 2) return null;
 
     // The serializer escapes a quote's edge dashes, so a raw one is malformed.
@@ -385,6 +404,7 @@ function decodeTextFragment(
     const end = parts.length > 1 ? decode(parts[1]!) : undefined;
     if (!start || end === "") return null;
     const fragment: TextFragment = { start };
+    // Stryker disable next-line ConditionalExpression: an explicit `end: undefined` reads, serializes and matches exactly like an absent end
     if (end !== undefined) fragment.end = end;
     const p = prefix !== undefined ? decode(prefix) : "";
     const s = suffix !== undefined ? decode(suffix) : "";

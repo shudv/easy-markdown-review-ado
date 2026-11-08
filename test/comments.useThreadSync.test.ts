@@ -398,6 +398,70 @@ describe("useThreadSync — abort + generation safety", () => {
         expect(onThreads).not.toHaveBeenCalled();
     });
 
+    it("discards a slow response from before a tab switch once the fresh one has landed", async () => {
+        const slow = defer<CommentThread[]>();
+        const fresh = defer<CommentThread[]>();
+
+        const fetchThreads = vi
+            .fn<(signal: AbortSignal) => Promise<CommentThread[]>>()
+            .mockReturnValueOnce(slow.promise)
+            .mockReturnValueOnce(fresh.promise);
+
+        const onThreads = vi.fn();
+        mount({ enabled: true, fetchThreads, onThreads });
+        setVisibility("hidden");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+        setVisibility("visible");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+
+        const staleThreads = [{ id: "stale" } as unknown as CommentThread];
+        const freshThreads = [{ id: "fresh" } as unknown as CommentThread];
+        await act(async () => {
+            fresh.resolve(freshThreads);
+            // The host's fetch ignored the abort and answers late.
+            slow.resolve(staleThreads);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(onThreads).toHaveBeenCalledWith(freshThreads);
+        expect(onThreads).not.toHaveBeenCalledWith(staleThreads);
+    });
+
+    it("keeps one request at a time when focus follows a return to the tab", async () => {
+        const fetchThreads = vi.fn(
+            (signal: AbortSignal) =>
+                new Promise<CommentThread[]>((_resolve, reject) => {
+                    signal.addEventListener("abort", () =>
+                        reject(new DOMException("aborted", "AbortError")),
+                    );
+                }),
+        );
+
+        mount({ enabled: true, fetchThreads, onThreads: vi.fn() });
+        setVisibility("hidden");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+        setVisibility("visible");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+        // Let the aborted first request finish settling.
+        await flush();
+
+        act(() => {
+            window.dispatchEvent(new Event("focus"));
+        });
+
+        // The mount fetch plus the one started on reveal, which is still loading.
+        expect(fetchThreads).toHaveBeenCalledTimes(2);
+    });
+
     it("dedupes concurrent refreshNow calls into a single fetch", async () => {
         const d = defer<CommentThread[]>();
         const fetchThreads = vi.fn(async () => d.promise);
@@ -440,6 +504,67 @@ describe("useThreadSync — refreshNow + isRefreshing", () => {
             await Promise.resolve();
         });
         expect(handle.controls!.isRefreshing).toBe(false);
+    });
+
+    it("shows no refresh in progress while sync is off", () => {
+        const handle = mount({
+            enabled: false,
+            fetchThreads: vi.fn(async () => [] as CommentThread[]),
+            onThreads: vi.fn(),
+        });
+
+        expect(handle.controls!.isRefreshing).toBe(false);
+    });
+
+    it("clears the refreshing indicator when the tab is hidden mid-refresh", () => {
+        const pending = defer<CommentThread[]>();
+
+        const handle = mount({
+            enabled: true,
+            fetchThreads: () => pending.promise,
+            onThreads: vi.fn(),
+        });
+
+        setVisibility("hidden");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+
+        expect(handle.controls!.isRefreshing).toBe(false);
+    });
+
+    it("clears the refreshing indicator when sync is turned off mid-refresh", () => {
+        const pending = defer<CommentThread[]>();
+        const opts = { enabled: true, fetchThreads: () => pending.promise, onThreads: vi.fn() };
+        const handle = mount(opts);
+
+        act(() => {
+            root!.render(harnessElement({ ...opts, enabled: false }, handle));
+        });
+
+        expect(handle.controls!.isRefreshing).toBe(false);
+    });
+
+    it("hands each snapshot to the host's latest onThreads callback", async () => {
+        const snapshot = [{ id: "t1" } as unknown as CommentThread];
+        const fetchThreads = vi.fn(async () => snapshot);
+        const firstHandler = vi.fn();
+        const latestHandler = vi.fn();
+        const handle = mount({ enabled: true, fetchThreads, onThreads: firstHandler });
+        await flush();
+
+        act(() => {
+            root!.render(
+                harnessElement({ enabled: true, fetchThreads, onThreads: latestHandler }, handle),
+            );
+        });
+        await act(async () => {
+            handle.controls!.refreshNow();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(latestHandler).toHaveBeenCalledWith(snapshot);
     });
 
     it("triggers an additional fetch via refreshNow() after the first settles", async () => {
@@ -492,7 +617,10 @@ describe("useThreadSync — error handling", () => {
         const onThreads = vi.fn();
         mount({ enabled: true, fetchThreads, onThreads });
         await flush();
-        expect(warn).toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining("fetch failed"),
+            expect.any(Error),
+        );
         warn.mockRestore();
     });
 });
@@ -1123,6 +1251,75 @@ describe("useThreadSync — torn-down and stale sessions", () => {
         });
         expect(onThreads).toHaveBeenCalledWith(fresh);
         expect(handle.controls!.isRefreshing).toBe(false);
+    });
+
+    it("asks the host's latest failure claim when a poll fails", async () => {
+        const firstClaim = vi.fn(() => false);
+        const latestClaim = vi.fn(() => true);
+
+        const opts = {
+            enabled: true,
+            fetchThreads: vi.fn(async (): Promise<CommentThread[]> => {
+                throw new Error("down");
+            }),
+            onThreads: vi.fn(),
+            onError: vi.fn(),
+            claimFailure: firstClaim,
+        };
+
+        const handle = mount(opts);
+        rerender(handle, { ...opts, claimFailure: latestClaim });
+        await flush();
+
+        expect(latestClaim).toHaveBeenCalled();
+    });
+
+    it("listens to the host's latest recovery signal once polling restarts", () => {
+        const firstSignal = vi.fn(() => () => {});
+        const latestSignal = vi.fn(() => () => {});
+
+        const opts = {
+            enabled: true,
+            fetchThreads: vi.fn(async () => [] as CommentThread[]),
+            onThreads: vi.fn(),
+            subscribeRecovered: firstSignal,
+        };
+
+        const handle = mount(opts);
+        rerender(handle, { ...opts, enabled: false, subscribeRecovered: latestSignal });
+        rerender(handle, { ...opts, subscribeRecovered: latestSignal });
+
+        expect(latestSignal).toHaveBeenCalled();
+    });
+
+    it("discards a response from before sync was paused, even after a later tab switch", async () => {
+        const beforePause = defer<CommentThread[]>();
+        const afterResume = defer<CommentThread[]>();
+
+        const fetchThreads = vi
+            .fn<(signal: AbortSignal) => Promise<CommentThread[]>>()
+            .mockReturnValueOnce(beforePause.promise)
+            .mockReturnValueOnce(afterResume.promise);
+
+        const onThreads = vi.fn();
+        const opts = { enabled: true, fetchThreads, onThreads };
+        const handle = mount(opts);
+        rerender(handle, { ...opts, enabled: false });
+        rerender(handle, opts);
+        setVisibility("hidden");
+        act(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+
+        const stale = [{ id: "stale" } as unknown as CommentThread];
+        await act(async () => {
+            // The host's fetch ignored the abort and answers late.
+            beforePause.resolve(stale);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(onThreads).not.toHaveBeenCalledWith(stale);
     });
 
     it("does not report a failure from a request aborted by a tab hide", async () => {

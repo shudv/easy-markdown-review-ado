@@ -82,6 +82,21 @@ export async function settle(): Promise<void> {
     });
 }
 
+/**
+ * Runs a user action (e.g. a rail button's callback) inside `act`, then lets
+ * the writes it starts settle. Resolves to the action's own result.
+ */
+export async function userAction<T>(action: () => T | Promise<T>): Promise<T> {
+    let result!: T;
+
+    await act(async () => {
+        result = await action();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    return result;
+}
+
 export interface Deferred<T> {
     promise: Promise<T>;
     resolve: (value: T) => void;
@@ -99,6 +114,22 @@ export function deferred<T>(): Deferred<T> {
     });
 
     return { promise, resolve, reject };
+}
+
+/**
+ * A stand-in for a parent's `useState` setter: applies values and updater
+ * functions to `value`, so a test reads the state the parent would hold.
+ */
+export function parentState<T>(initial: T) {
+    const state = {
+        value: initial,
+        set: vi.fn((update: T | ((prev: T) => T)) => {
+            state.value =
+                typeof update === "function" ? (update as (prev: T) => T)(state.value) : update;
+        }),
+    };
+
+    return state;
 }
 
 /**

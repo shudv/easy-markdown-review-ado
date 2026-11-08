@@ -52,6 +52,17 @@ describe("statusBarVisibility", () => {
         expect(visibility.deltaParts).toEqual([]);
     });
 
+    it("hides the word delta when the document has no changes to show", () => {
+        const visibility = statusBarVisibility({
+            ...baseInput,
+            wordDelta: { added: 3, removed: 1 },
+            changesAvailable: false,
+            changesShown: true,
+        });
+
+        expect(visibility.deltaParts).toEqual([]);
+    });
+
     it("shows added and removed words, with the change controls, once changes are shown", () => {
         const visibility = statusBarVisibility({
             ...baseInput,
@@ -102,6 +113,10 @@ describe("statusBarVisibility", () => {
         it.each([
             { name: "the PR has a single update", input: { ...ready, iterationCount: 1 } },
             { name: "no range is selected", input: { ...ready, hasIterationRange: false } },
+            {
+                name: "nothing can act on a new selection",
+                input: { ...ready, onIterationRangeChange: undefined },
+            },
         ])("hides when $name", ({ input }) => {
             expect(statusBarVisibility(input).showIterationPicker).toBe(false);
         });
@@ -130,6 +145,12 @@ describe("adjacentIterationRange", () => {
             from: [0, 1],
             direction: 1,
             expected: { fromUpdate: 1, toUpdate: 2 },
+        },
+        {
+            name: "forward to the newest update",
+            from: [1, 2],
+            direction: 1,
+            expected: { fromUpdate: 2, toUpdate: 3 },
         },
         {
             name: "forward from the newest update to All updates",
@@ -206,6 +227,11 @@ describe("baseCommitTitle", () => {
         {
             name: "names an unknown base commit generically",
             commit: undefined,
+            expected: "Base commit",
+        },
+        {
+            name: "names a blank base commit generically",
+            commit: "",
             expected: "Base commit",
         },
     ])("$name", ({ commit, expected }) => {

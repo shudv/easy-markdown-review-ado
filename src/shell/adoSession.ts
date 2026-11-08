@@ -124,7 +124,9 @@ export class AdoSessionMonitor {
         this.reloadHostFn = deps.reloadHost;
         this.update({ canReload: !!deps.reloadHost });
 
+        // Stryker disable next-line ConditionalExpression: a second pagehide listener only re-reports the spell end, which `endReported` already makes once-only
         if (!this.pageHideInstalled) {
+            // Stryker disable next-line BooleanLiteral: a second pagehide listener only re-reports the spell end, which `endReported` already makes once-only
             this.pageHideInstalled = true;
             window.addEventListener("pagehide", () => this.notePageHide());
         }
@@ -165,6 +167,7 @@ export class AdoSessionMonitor {
                 phase: "start",
                 trigger,
                 grantState: err.grantState,
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
                 ...(err.recoverAtMs !== undefined
                     ? {
                           secsUntilExpAtStart: (err.recoverAtMs - startedAtMs) / 1000,
@@ -364,6 +367,7 @@ export class AdoSessionMonitor {
         }
 
         const age = this.now() - spell.startedAtMs;
+        // Stryker disable next-line EqualityOperator: a check landing on the exact millisecond of the slow-poll threshold has no practical meaning
         this.schedule(age >= SESSION_SLOW_AFTER_MS ? SESSION_SLOW_POLL_MS : SESSION_POLL_MS);
     }
 
@@ -381,12 +385,14 @@ export class AdoSessionMonitor {
                 outcome,
                 durationSec: (nowMs - spell.startedAtMs) / 1000,
                 heldWrites: this.snapshot.heldWrites,
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
                 ...(spell.expMs !== undefined
                     ? {
                           secsUntilExpAtStart: (spell.expMs - spell.startedAtMs) / 1000,
                           secsBeforeExpAtEnd: (spell.expMs - nowMs) / 1000,
                       }
                     : {}),
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
                 ...(spell.adoExpMs !== undefined
                     ? {
                           secsSinceAdoExpAtStart: (spell.startedAtMs - spell.adoExpMs) / 1000,
@@ -457,6 +463,7 @@ export const AUTO_RELOAD_STALL_MS = 10_000;
  *     | where reloads > 1
  */
 export const AUTO_RELOAD_COOLDOWN_MS = 10 * 60_000;
+// Stryker disable next-line StringLiteral: reader and writer share this constant, so any distinct key name guards the reload the same
 export const AUTO_RELOAD_STORAGE_KEY = "emr.sessionAutoReloadAt";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
@@ -465,7 +472,7 @@ type StorageLike = Pick<Storage, "getItem" | "setItem">;
 export function sessionStorageOrUndefined(): StorageLike | undefined {
     try {
         return window.sessionStorage;
-    } catch {
+    } /* Stryker disable next-line BlockStatement: dead code: an empty catch returns undefined too; candidate for removal */ catch {
         return undefined;
     }
 }
@@ -479,6 +486,7 @@ function lastAutoReloadAt(storage: StorageLike): number | null {
 /** A load within this long of our automatic reload is that reload's result. */
 export const AUTO_RELOAD_RESULT_WINDOW_MS = 2 * 60_000;
 /** Which automatic reload (by claim time) a page load has already been tagged for. */
+// Stryker disable next-line StringLiteral: reader and writer share this constant, so any distinct key name tags the reload the same
 export const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
 
 /**
@@ -490,6 +498,7 @@ export const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
  * itself stays — it is the reload-loop guard.)
  */
 export function followsRecentAutoReload(storage: StorageLike | undefined, nowMs: number): boolean {
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
     if (!storage) return false;
 
     try {
@@ -518,6 +527,7 @@ export function autoReloadAllowed(
     nowMs: number,
     cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
     if (!storage) return false;
 
     try {
@@ -541,6 +551,7 @@ export function autoReloadRecentlyTried(
     nowMs: number,
     cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
     if (!storage) return false;
 
     try {

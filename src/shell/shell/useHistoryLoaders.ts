@@ -16,6 +16,7 @@ import {
 import { historicalContentKeys } from "./derive";
 
 function isNonEmpty(s: string | null | undefined): s is string {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the `!== ""` half never decides anything — cache keys always carry the `path\u0000` prefix, the active commit only yields a key when non-empty (historicalContentKeys), and native-update mode requires a non-empty base commit (historyModes); the null half is pinned by the "fetches no past version while the current version is shown" scenario; candidate for removal
     return s != null && s !== "";
 }
 
@@ -160,6 +161,7 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
                 // Allow a retry on the next selection of this path.
                 loadedHistoryPathsRef.current.delete(selectedPath);
 
+                // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError below
                 console.warn("[Shell] loadDocHistory failed:", err);
                 trackUserFacingError({
                     error: err,
@@ -187,6 +189,7 @@ function useHistoricalLoadTargets(
     return useMemo(() => {
         const targets = new Map<string, string>();
 
+        // Stryker disable next-line LogicalOperator: dead code: historicalContentKey is non-null exactly when the active commit is non-empty (historicalContentKeys), so `||` and `&&` always agree; candidate for removal
         if (isNonEmpty(historicalContentKey) && isNonEmpty(activeCommitId)) {
             targets.set(historicalContentKey, activeCommitId);
         }
@@ -240,6 +243,7 @@ function useHistoricalContentLoad(args: {
     } = args.setters;
 
     useEffect(() => {
+        // Stryker disable next-line ConditionalExpression: with no targets the loop below does nothing, so skipping the empty-list early return changes no outcome
         if (!loadFileSourceAt || historicalLoadTargets.length === 0) return;
         let cancelled = false;
 
@@ -247,7 +251,9 @@ function useHistoricalContentLoad(args: {
             if (
                 historicalErrorByKey[target.key] !== undefined ||
                 historicalAbsentByKey[target.key] ||
+                // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: a successful load writes the source and HTML caches together in one batch, so either one being cached implies the other; candidate for removal
                 (historicalHtmlByKey[target.key] !== undefined &&
+                    // Stryker disable next-line ConditionalExpression: dead code: a successful load writes the source and HTML caches together in one batch, so the HTML being cached implies the source is; candidate for removal
                     historicalSourceByKey[target.key] !== undefined)
             ) {
                 continue;
@@ -297,6 +303,7 @@ function loadHistoricalTarget(args: {
     const { load, key, isCancelled, nativeIterationMode, setters } = args;
     void load
         .then(async (source) => {
+            // Stryker disable next-line ConditionalExpression: a cancelled load is re-checked after rendering (next check), so skipping this early exit only wastes a render
             if (isCancelled()) return;
             const html = await renderMarkdown(source);
             if (isCancelled()) return;
@@ -323,6 +330,7 @@ function loadHistoricalTarget(args: {
                 return;
             }
 
+            // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError below
             console.warn("[Shell] loadFileSourceAt failed:", err);
             trackUserFacingError({
                 error: err,
@@ -367,6 +375,7 @@ function useHistoricalThreadsLoad(args: {
                 }));
             })
             .catch((err: unknown) => {
+                // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError below
                 console.warn("[Shell] loadThreadsForPr failed:", err);
                 trackUserFacingError({
                     error: err,

@@ -242,6 +242,21 @@ describe("stripMermaidFence", () => {
             block: "```mermaid\nflowchart LR",
             source: "flowchart LR",
         },
+        {
+            name: "a fence followed by blank lines",
+            block: "```mermaid\nflowchart LR\n```\n\n",
+            source: "flowchart LR",
+        },
+        {
+            name: "an indented fence, as inside a list item",
+            block: "  ```mermaid\n  flowchart LR\n  ```",
+            source: "flowchart LR",
+        },
+        {
+            name: "a fence with a space before the language",
+            block: "``` mermaid\nflowchart LR\n```",
+            source: "flowchart LR",
+        },
     ])("reads the diagram source from $name", ({ block, source }) => {
         expect(stripMermaidFence(block)).toBe(source);
     });

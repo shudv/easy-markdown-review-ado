@@ -11,6 +11,7 @@ export function isChunkLoadError(err: unknown): boolean {
 
     return (
         name === "ChunkLoadError" ||
+        // Stryker disable next-line ConditionalExpression: dead code: RegExp#test stringifies a non-string message ("undefined", "42", …) and no such text contains "Loading chunk", so the typeof check never changes the result — it only narrows the type; candidate for removal (e.g. test String(message)).
         (typeof message === "string" && /\bLoading (?:CSS )?chunk\b/.test(message))
     );
 }

@@ -24,6 +24,7 @@ type KatexApi = {
 let katexPromise: Promise<KatexApi> | null = null;
 
 function getKatex(): Promise<KatexApi> {
+    // Stryker disable next-line ConditionalExpression: the module system already caches the dynamic imports, so building a fresh promise per pass resolves to the same API.
     if (katexPromise) return katexPromise;
     katexPromise = (async () => {
         // A transient chunk-load failure (flaky network, CDN blip) is retried,
@@ -66,6 +67,7 @@ export async function hydrateMath(
             element.dataset.mathError = "load-failed";
         }
 
+        // Stryker disable next-line StringLiteral: developer-console text only; the reader-facing state and telemetry don't depend on it.
         console.warn("[math] failed to load KaTeX:", error);
         trackUserFacingError({
             error,
@@ -80,6 +82,7 @@ export async function hydrateMath(
     for (const element of placeholders) {
         const encoded = element.dataset.mathSrc;
         // An empty `data-math-src` has nothing to render; keep its fallback.
+        // Stryker disable next-line ConditionalExpression: dead code: placeholders are selected with `[data-math-src]`, so the attribute is never missing (undefined) here; candidate for removal (the check only narrows the type).
         if (encoded === undefined || encoded === "") continue;
         let source: string;
 
@@ -95,6 +98,7 @@ export async function hydrateMath(
                 displayMode: element.dataset.mathDisplay === "true",
                 throwOnError: true,
                 trust: false,
+                // Stryker disable next-line StringLiteral: `strict` only decides whether KaTeX logs a console warning for non-standard LaTeX; a falsy value ("ignore") renders identical markup.
                 strict: "warn",
                 maxExpand: 1000,
                 maxSize: 20,

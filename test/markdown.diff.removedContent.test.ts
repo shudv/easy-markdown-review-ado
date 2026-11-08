@@ -44,6 +44,10 @@ describe("removed lines", () => {
         // Inserted right before the second paragraph.
         expect(marker.nextElementSibling?.getAttribute("data-source-line")).toBe("10");
         expect(marker.getAttribute("aria-label")).toBe("2 lines removed");
+        expect(marker.getAttribute("role")).toBe("note");
+        expect(marker.querySelector(".emr-diff-deleted-rail")?.getAttribute("aria-hidden")).toBe(
+            "true",
+        );
 
         const body = marker.querySelector<HTMLElement>(".emr-diff-deleted-body")!;
 
@@ -52,11 +56,39 @@ describe("removed lines", () => {
 
         const chip = marker.querySelector<HTMLButtonElement>(".emr-diff-deleted-chip")!;
 
+        expect(chip.getAttribute("aria-expanded")).toBe("false");
         chip.click();
         expect(body.hidden).toBe(false);
         expect(chip.getAttribute("aria-expanded")).toBe("true");
         chip.click();
         expect(body.hidden).toBe(true);
+        expect(chip.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("expands a removal whose text wasn't recorded to an empty body", () => {
+        const root = makeRoot([{ tag: "p", start: 5, end: 5 }]);
+
+        decorateDiffRanges(root, [
+            { startLine: 5, endLine: 5, kind: "deleted-marker", linesDeleted: 1 },
+        ]);
+
+        expect(root.querySelector(".emr-diff-deleted-body")?.textContent).toBe("");
+    });
+
+    it("shows removed lines without the blank lines that followed them", () => {
+        const root = makeRoot([{ tag: "p", start: 5, end: 5 }]);
+
+        decorateDiffRanges(root, [
+            {
+                startLine: 5,
+                endLine: 5,
+                kind: "deleted-marker",
+                linesDeleted: 3,
+                deletedContent: "Gone paragraph.\n\n\n",
+            },
+        ]);
+
+        expect(root.querySelector(".emr-diff-deleted-body")?.textContent).toBe("Gone paragraph.");
     });
 
     it("labels a single removed line in the singular", () => {
@@ -231,25 +263,87 @@ describe("changes with no rendered element", () => {
 
         const marker = root.querySelector<HTMLElement>(`.${DIFF_SOURCE_ONLY_CLASS}`)!;
 
+        expect(marker.querySelector(".emr-diff-source-only-label")?.textContent).toBe(
+            "Source changed",
+        );
         expect(marker.querySelector(".emr-diff-source-only-current code")?.textContent).toBe(
             "[ch16]: ch16-00-concurrency.html",
         );
         expect(marker.nextElementSibling?.tagName).toBe("P");
         expect(selectionTouchesDeletedDiff(marker, marker)).toBe(true);
 
-        const trigger = marker.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
+        const trigger = marker.querySelector<HTMLButtonElement>(
+            ".emr-diff-before-control--source .emr-diff-before-trigger",
+        )!;
 
+        const panel = marker.querySelector<HTMLElement>(".emr-diff-before-panel")!;
+
+        expect(trigger.textContent).toBe("Before");
         expect(trigger.getAttribute("aria-label")).toBe("Show previous source");
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        expect(panel.id).not.toBe("");
+        expect(trigger.getAttribute("aria-controls")).toBe(panel.id);
+        expect(panel.hidden).toBe(true);
         trigger.click();
-        expect(marker.querySelector(".emr-diff-before-panel code")?.textContent).toBe(
+        expect(panel.hidden).toBe(false);
+        expect(trigger.textContent).toBe("Hide");
+        expect(trigger.getAttribute("aria-label")).toBe("Hide previous source");
+        expect(trigger.getAttribute("aria-expanded")).toBe("true");
+        expect(panel.querySelector("code")?.textContent).toBe(
             "[ch16]: http://localhost:3000/ch16-00-concurrency.html",
         );
         trigger.click();
+        expect(panel.hidden).toBe(true);
         expect(trigger.textContent).toBe("Before");
         expect(trigger.getAttribute("aria-label")).toBe("Show previous source");
         expect(trigger.getAttribute("aria-expanded")).toBe("false");
         decorate(root, []);
         expect(root.querySelector(`.${DIFF_SOURCE_ONLY_CLASS}`)).toBeNull();
+    });
+
+    it("shows every line of a multi-line change that renders no element", () => {
+        const current = lines("[a]: one.html", "[b]: two.html", "", "See [A][a] and [B][b].");
+
+        const original = lines(
+            "[a]: old-one.html",
+            "[b]: old-two.html",
+            "",
+            "See [A][a] and [B][b].",
+        );
+
+        const root = render(current);
+
+        decorate(
+            root,
+            [
+                {
+                    startLine: 1,
+                    endLine: 2,
+                    kind: "modified",
+                    originalText: "[a]: old-one.html\n[b]: old-two.html",
+                },
+            ],
+            original,
+            current,
+        );
+
+        expect(root.querySelector(".emr-diff-source-only-current code")?.textContent).toBe(
+            "[a]: one.html\n[b]: two.html",
+        );
+    });
+
+    it("offers no previous source for a changed definition whose old text is unknown", () => {
+        const current = lines("[a]: one.html", "", "See [A][a].");
+        const root = render(current);
+
+        decorate(root, [{ startLine: 1, endLine: 1, kind: "modified" }], undefined, current);
+
+        const marker = root.querySelector<HTMLElement>(`.${DIFF_SOURCE_ONLY_CLASS}`)!;
+
+        expect(marker.querySelector(".emr-diff-source-only-label")?.textContent).toBe(
+            "Source changed",
+        );
+        expect(marker.querySelector(".emr-diff-before-trigger")).toBeNull();
     });
 
     it("shows an added dialect directive that renders no DOM node", () => {
@@ -261,6 +355,9 @@ describe("changes with no rendered element", () => {
         const marker = root.querySelector<HTMLElement>(`.${DIFF_SOURCE_ONLY_CLASS}`)!;
 
         expect(marker.dataset.diffKind).toBe("added");
+        expect(marker.querySelector(".emr-diff-source-only-label")?.textContent).toBe(
+            "Source added",
+        );
         expect(marker.textContent).toContain("<Feature enabled />");
         expect(marker.querySelector(".emr-diff-before-trigger")).toBeNull();
     });
@@ -279,14 +376,17 @@ describe("changes with no rendered element", () => {
         expect(root.lastElementChild?.classList.contains(DIFF_SOURCE_ONLY_CLASS)).toBe(true);
     });
 
-    it("does not invent a source strip for a changed blank line", () => {
-        const root = render("Visible prose.\n\n");
+    it.each([
+        { name: "an empty line", source: "Visible prose.\n\n" },
+        { name: "a line of spaces", source: "Visible prose.\n   \n" },
+    ])("does not invent a source strip for a changed $name", ({ source }) => {
+        const root = render(source);
 
         const result = decorate(
             root,
             [{ startLine: 2, endLine: 2, kind: "added" }],
             undefined,
-            "Visible prose.\n\n",
+            source,
         );
 
         expect(result.decorated).toBe(0);

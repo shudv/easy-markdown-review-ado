@@ -10,6 +10,7 @@
 
 /** Canonical, slash-free folder form, matching `handleExpandFolder`. */
 function canonicalFolder(path: string): string {
+    // Stryker disable next-line Regex: folder paths never carry doubled leading slashes, so stripping one or a run is the same
     return path.replace(/^\/+/, "");
 }
 
@@ -46,6 +47,7 @@ export function planRootAutoExpand(opts: {
     // A document is already visible — nothing to reveal.
     if (fileCount > 0) return { folders: [], keys: [], used };
     let remaining = max - used;
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: with no budget left the loop below breaks at once and the plan is empty anyway; candidate for removal
     if (remaining <= 0) return { folders: [], keys: [], used };
     const folders: string[] = [];
     const keys: string[] = [];

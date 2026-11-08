@@ -156,6 +156,37 @@ describe("AlmSearchRestClient", () => {
         });
     });
 
+    it("keeps a request the browser cancelled an abort, even without a caller signal", async () => {
+        const fetchImpl = vi.fn(async () => {
+            throw new DOMException("The operation was aborted.", "AbortError");
+        });
+
+        const client = new AlmSearchRestClient("org", async () => "TOK", fetchImpl, noSleep);
+
+        await expect(client.searchCode(REQ, "P")).rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    it("stops retrying a search the caller cancelled while it waited to retry", async () => {
+        const ac = new AbortController();
+        const fetchImpl = vi.fn(async () => new Response("busy", { status: 503 }));
+
+        const cancelWhileWaiting = async () => {
+            ac.abort();
+        };
+
+        const client = new AlmSearchRestClient(
+            "org",
+            async () => "TOK",
+            fetchImpl,
+            cancelWhileWaiting,
+        );
+
+        await expect(client.searchCode(REQ, "P", ac.signal)).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        expect(fetchImpl).toHaveBeenCalledOnce();
+    });
+
     it("reports a usable message even when the network failure can't be turned into text", async () => {
         const hostile = {
             [Symbol.toPrimitive]() {
@@ -348,9 +379,17 @@ describe("AlmSearchRestClient", () => {
 describe("createAlmSearchClient", () => {
     it.each([
         { name: "the organization name is missing", options: { getToken: async () => "x" } },
+        {
+            name: "the organization name is blank",
+            options: { orgName: "", getToken: async () => "x" },
+        },
         { name: "the token provider is missing", options: { orgName: "org" } },
     ])("reports no client when $name", ({ options }) => {
-        expect(createAlmSearchClient(options)).toMatchObject({ ok: false });
+        expect(createAlmSearchClient(options)).toEqual({
+            ok: false,
+            reason: "no-config",
+            message: "missing org name or token provider",
+        });
     });
 
     it("returns a REST-backed client when both inputs are present", () => {

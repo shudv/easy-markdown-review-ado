@@ -44,6 +44,7 @@ describe("wikiPageName", () => {
         ["Getting-Started", "Getting-Started"],
         ["Guides/", "Guides"],
         ["/Guides/Notes.MD", "Notes"],
+        ["/Guides/Writing-.md-files.md", "Writing-.md-files"],
         ["", ""],
         ["/", ""],
     ])("%j → %j", (input, expected) => {
@@ -133,6 +134,7 @@ describe("subpagesFolderOf", () => {
     it.each([
         ["/Guides.md", "/Guides"],
         ["/a/Page.MD", "/a/Page"],
+        ["/Writing-.md-files.md", "/Writing-.md-files"],
     ])("finds the subpages of %s in %s", (page, folder) => {
         expect(subpagesFolderOf(page)).toBe(folder);
     });
@@ -166,4 +168,18 @@ describe("subpagesFromListing", () => {
             }).map((page) => page.title),
         ).toEqual(["A", "b"]);
     });
+
+    it.each([
+        { name: "Readme before readme", listed: ["/Readme.md", "/readme.md"] },
+        { name: "readme before Readme", listed: ["/readme.md", "/Readme.md"] },
+    ])(
+        "keeps pages whose titles differ only in case in the folder's order ($name)",
+        ({ listed }) => {
+            expect(
+                subpagesFromListing({ files: listed.map(file), folders: [] }).map(
+                    (page) => page.path,
+                ),
+            ).toEqual(listed);
+        },
+    );
 });

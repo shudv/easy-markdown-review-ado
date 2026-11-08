@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 
+import { DRAFT_THREAD_ID } from "../src/shell/components/ArticleView.highlights";
 import { buildRailModel, DRAFT_ID } from "../src/shell/components/CommentRail.helpers";
 import type { CommentThread, ThreadStatus } from "../src/types";
 
@@ -70,6 +71,30 @@ describe("buildRailModel", () => {
         expect(model.orderedAnchoredIds).toEqual([DRAFT_ID, "a"]);
         expect(model.kindById.get(DRAFT_ID)).toBe("draft");
         expect(model.kindById.get("a")).toBe("thread");
+    });
+
+    // The rail renders the draft balloon with this id, and the article marks the
+    // draft's highlighted selection with the same one, so the two stay linked.
+    it("lists the in-progress draft between threads at its anchor, under the article's draft id", () => {
+        const model = buildRailModel({
+            currentThreads: [
+                thread("above", "2020-01-01T00:00:00Z"),
+                thread("below", "2020-01-01T00:00:00Z"),
+            ],
+            generalThreads: [],
+            orphanedFileThreads: [],
+            hiddenThreadIds: noneHidden,
+            orphanedThreadIds: noneOrphaned,
+            yByThreadId: new Map([
+                ["above", 100],
+                ["below", 300],
+            ]),
+            draftY: 200,
+            onlyThisFile: false,
+        });
+
+        expect(model.orderedAnchoredIds).toEqual(["above", DRAFT_THREAD_ID, "below"]);
+        expect(model.kindById.get(DRAFT_THREAD_ID)).toBe("draft");
     });
 
     it("excludes hidden threads and unresolved-anchor threads from the anchored list", () => {
@@ -207,5 +232,82 @@ describe("buildRailModel", () => {
 
         // No timestamp → epoch 0 → sorts below the dated thread.
         expect(model.visibleGeneralThreads.map((t) => t.id)).toEqual(["dated", "undated"]);
+    });
+
+    it("does not count a draft on its own as a comment to show or step through", () => {
+        const model = buildRailModel({
+            currentThreads: [],
+            generalThreads: [],
+            orphanedFileThreads: [],
+            hiddenThreadIds: noneHidden,
+            orphanedThreadIds: noneOrphaned,
+            yByThreadId: new Map(),
+            draftY: 120,
+            onlyThisFile: false,
+        });
+
+        expect(model.orderedAnchoredIds).toEqual([DRAFT_ID]);
+        expect(model.hasAnchoredThreads).toBe(false);
+        expect(model.hasVisibleComments).toBe(false);
+        expect(model.cycleThreadIds).toEqual([]);
+    });
+
+    it("reports visible comments when only PR-level comments exist", () => {
+        const model = buildRailModel({
+            currentThreads: [],
+            generalThreads: [thread("gen", "2020-01-01T00:00:00Z", { general: true })],
+            orphanedFileThreads: [],
+            hiddenThreadIds: noneHidden,
+            orphanedThreadIds: noneOrphaned,
+            yByThreadId: new Map(),
+            draftY: null,
+            onlyThisFile: false,
+        });
+
+        expect(model.hasVisibleComments).toBe(true);
+    });
+
+    it("steps through anchored comments, then orphaned-anchor ones (newest first), then the trays", () => {
+        const model = buildRailModel({
+            currentThreads: [
+                thread("anchored", "2020-01-01T00:00:00Z"),
+                thread("orphan-old", "2020-01-01T00:00:00Z"),
+                thread("orphan-new", "2020-04-01T00:00:00Z"),
+            ],
+            generalThreads: [thread("gen", "2020-01-01T00:00:00Z", { general: true })],
+            orphanedFileThreads: [thread("gone", "2020-01-01T00:00:00Z", { filePath: "/gone.md" })],
+            hiddenThreadIds: noneHidden,
+            orphanedThreadIds: new Set(["orphan-old", "orphan-new"]),
+            yByThreadId: new Map([["anchored", 40]]),
+            draftY: 10,
+            onlyThisFile: false,
+        });
+
+        expect(model.orphanedThreads.map((t) => t.id)).toEqual(["orphan-new", "orphan-old"]);
+        expect(model.cycleThreadIds).toEqual([
+            "anchored",
+            "orphan-new",
+            "orphan-old",
+            "gen",
+            "gone",
+        ]);
+    });
+
+    it("keeps hidden threads out of every tray", () => {
+        const model = buildRailModel({
+            currentThreads: [thread("orphan", "2020-01-01T00:00:00Z")],
+            generalThreads: [thread("gen", "2020-01-01T00:00:00Z", { general: true })],
+            orphanedFileThreads: [thread("gone", "2020-01-01T00:00:00Z", { filePath: "/gone.md" })],
+            hiddenThreadIds: new Set(["orphan", "gen", "gone"]),
+            orphanedThreadIds: new Set(["orphan"]),
+            yByThreadId: new Map(),
+            draftY: null,
+            onlyThisFile: false,
+        });
+
+        expect(model.orphanedThreads).toEqual([]);
+        expect(model.visibleGeneralThreads).toEqual([]);
+        expect(model.visibleOrphanedFileThreads).toEqual([]);
+        expect(model.hasVisibleComments).toBe(false);
     });
 });

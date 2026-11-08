@@ -105,6 +105,7 @@ function pointAtBundledAssets(): void {
 let exporterPromise: Promise<ExportToSvg> | null = null;
 
 function loadExporter(): Promise<ExportToSvg> {
+    // Stryker disable next-line ConditionalExpression: the module system already caches the dynamic import, so loading again per drawing resolves to the same exporter.
     if (exporterPromise) return exporterPromise;
     pointAtBundledAssets();
     exporterPromise = withChunkRetry(

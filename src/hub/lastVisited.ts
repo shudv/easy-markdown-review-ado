@@ -33,9 +33,11 @@ type NavMap = Partial<Record<string, ProjectNav>>;
 function readMap(): NavMap {
     try {
         const raw = localStorage.getItem(LAST_VISITED_KEY);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: JSON.parse(null) is null and JSON.parse("") throws, and both still read back as {} below; candidate for removal
         if (raw === null || raw === "") return {};
         const parsed: unknown = JSON.parse(raw);
 
+        // Stryker disable next-line ConditionalExpression: a primitive "map" has no project-id keys, so reads find nothing either way
         if (parsed !== null && typeof parsed === "object") {
             return parsed as NavMap;
         }

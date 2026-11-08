@@ -123,6 +123,45 @@ describe("useSelectedRepo", () => {
         expect(result.current.selectedRepo?.id).toBe("b");
     });
 
+    it("shows a repo's details once they load", () => {
+        const loaded = repo("a", { files: [file("/a.md")] });
+
+        const { result, rerender } = run([
+            [repo("a", { detailsLoaded: false })],
+            "a",
+            undefined,
+            undefined,
+        ]);
+
+        rerender([[loaded], "a", undefined, undefined]);
+        expect(result.current.selectedRepo).toBe(loaded);
+    });
+
+    it("loads the details of a not-yet-loaded repo the user switches to", () => {
+        const onLoad = vi.fn(async () => {});
+
+        const { result } = run([
+            [repo("a"), repo("b", { detailsLoaded: false })],
+            "a",
+            undefined,
+            onLoad,
+        ]);
+
+        act(() => result.current.handleSelectRepo("b"));
+        expect(onLoad).toHaveBeenCalledWith("b");
+    });
+
+    it("tells the host's latest selection handler about a switch", () => {
+        const first = vi.fn();
+        const latest = vi.fn();
+        const repos = [repo("a"), repo("b")];
+        const { result, rerender } = run([repos, "a", first, undefined]);
+        rerender([repos, "a", latest, undefined]);
+        act(() => result.current.handleSelectRepo("b"));
+        expect(latest).toHaveBeenCalledWith("b");
+        expect(first).not.toHaveBeenCalled();
+    });
+
     it("selects nothing in a project without repos", () => {
         const onLoad = vi.fn(async () => {});
         const { result } = run([[], "", undefined, onLoad]);
@@ -166,7 +205,33 @@ describe("useLazyTree", () => {
         expect(result.current.lazyTree?.files).toEqual([file("/a.md")]);
     });
 
-    it("auto-expands a folder-only repo until a document surfaces", async () => {
+    it("seeds a repo switched to from its real listing once it loads, not from its skeleton", () => {
+        const { result, rerender } = run([repo("a", { files: [file("/a.md")] }), undefined]);
+        rerender([repo("b", { detailsLoaded: false }), undefined]);
+        rerender([repo("b", { files: [file("/b.md")], detailsLoaded: true }), undefined]);
+        expect(result.current.lazyTree?.files).toEqual([file("/b.md")]);
+    });
+
+    it("shows no tree once no repo is selected", () => {
+        const { result, rerender } = run([repo("a", { files: [file("/a.md")] }), undefined]);
+        rerender([undefined, undefined]);
+        expect(result.current.lazyTree).toBeUndefined();
+    });
+
+    it("expands folders of the repo the user switched to", async () => {
+        const onExpand = vi.fn(async (): Promise<FolderListing> => ({ files: [], folders: [] }));
+        const { result, rerender } = run([repo("a", { files: [file("/a.md")] }), onExpand]);
+        rerender([repo("b", { files: [file("/b.md")] }), onExpand]);
+        await act(async () => {
+            await result.current.handleExpandFolder("/x");
+        });
+        expect(onExpand).toHaveBeenCalledWith("b", "/x");
+    });
+
+    it.each([
+        { name: "a folder-only repo", loaded: {} },
+        { name: "a folder-only repo flagged as loaded", loaded: { detailsLoaded: true } },
+    ])("auto-expands $name until a document surfaces", async ({ loaded }) => {
         const listings: Record<string, FolderListing> = {
             "/docs": { files: [], folders: ["docs/guide"], order: ["guide"] },
             "docs/guide": { files: [file("/docs/guide/a.md")], folders: [] },
@@ -174,7 +239,7 @@ describe("useLazyTree", () => {
 
         const onExpand = vi.fn(async (_repoId: string, path: string) => listings[path]!);
 
-        const { result } = run([repo("a", { topLevelFolders: ["/docs"] }), onExpand]);
+        const { result } = run([repo("a", { topLevelFolders: ["/docs"], ...loaded }), onExpand]);
 
         await flush();
         await flush();
@@ -212,7 +277,10 @@ describe("useLazyTree", () => {
             await expect(result.current.handleExpandFolder("/x")).resolves.toBeNull();
         });
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation: "folder-expand" }),
+            expect.objectContaining({
+                source: "DocumentsApp.navigation",
+                operation: "folder-expand",
+            }),
         ]);
         expect(result.current.lazyTree?.files).toEqual([file("/a.md")]);
         warn.mockRestore();
@@ -282,6 +350,13 @@ describe("useActiveDocPath", () => {
         expect(onSelect).toHaveBeenCalledWith("a", "/first.md");
     });
 
+    it("keeps the document the user navigated to when the repo's file list refreshes", () => {
+        const { result, rerender } = run(["a", pr(["/a.md"]), undefined, undefined]);
+        act(() => result.current[1]("/other.md"));
+        rerender(["a", pr(["/a.md", "/b.md"]), undefined, undefined]);
+        expect(result.current[0]).toBe("/other.md");
+    });
+
     it("clears the path on repo switch and tracks manual navigation", () => {
         const { result, rerender } = run(["a", pr(["/a.md"]), undefined, undefined]);
 
@@ -344,6 +419,82 @@ describe("useRepoBindings", () => {
         expect(props.loadFileSourceAt).toHaveBeenCalledWith("r1", "/a.md", "c1");
         await b.listSubpageFolderBound!("/docs", "c1");
         expect(props.onListSubpageFolder).toHaveBeenCalledWith("r1", "/docs", "c1");
+    });
+
+    type Bindings = ReturnType<typeof useRepoBindings>;
+
+    it.each<{
+        name: string;
+        use: (b: Bindings) => unknown;
+        host: (p: DocumentsAppProps) => unknown;
+        args: unknown[];
+    }>([
+        {
+            name: "document sources",
+            use: (b) => b.repoScopedLoader("/a.md"),
+            host: (p) => p.loadFileSource,
+            args: ["r2", "/a.md"],
+        },
+        {
+            name: "document images",
+            use: (b) => b.resolveDocumentImageBound!("/a.md", "/i.png"),
+            host: (p) => p.resolveDocumentImage,
+            args: ["r2", "/a.md", "/i.png", undefined],
+        },
+        {
+            name: "the comment API",
+            use: (b) => b.commentApi,
+            host: (p) => p.commentApiFor,
+            args: ["r2"],
+        },
+        {
+            name: "per-document comment APIs",
+            use: (b) => b.commentApiForPathBound!("/a.md"),
+            host: (p) => p.commentApiForPath,
+            args: ["r2", "/a.md"],
+        },
+        {
+            name: "per-document threads",
+            use: (b) => b.loadThreadsForPathBound!("/a.md"),
+            host: (p) => p.loadThreadsForPath,
+            args: ["r2", "/a.md"],
+        },
+        {
+            name: "routed pull requests",
+            use: (b) => b.routedPrForPathBound!("/a.md"),
+            host: (p) => p.routedPrForPath,
+            args: ["r2", "/a.md"],
+        },
+        {
+            name: "review history",
+            use: (b) => b.loadDocHistoryBound!("/a.md"),
+            host: (p) => p.loadDocHistory,
+            args: ["r2", "/a.md"],
+        },
+        {
+            name: "past pull request threads",
+            use: (b) => b.loadThreadsForPrBound!(7, "/a.md"),
+            host: (p) => p.loadThreadsForPr,
+            args: ["r2", 7, "/a.md"],
+        },
+        {
+            name: "past document versions",
+            use: (b) => b.loadFileSourceAtBound!("/a.md", "c1"),
+            host: (p) => p.loadFileSourceAt,
+            args: ["r2", "/a.md", "c1"],
+        },
+        {
+            name: "wiki subpage folders",
+            use: (b) => b.listSubpageFolderBound!("/docs"),
+            host: (p) => p.onListSubpageFolder,
+            args: ["r2", "/docs", undefined],
+        },
+    ])("reads $name from the repository the user switched to", ({ use, host, args }) => {
+        const props = fullProps();
+        const { result, rerender } = run([props, repo("r1"), true]);
+        rerender([props, repo("r2"), true]);
+        void use(result.current);
+        expect(host(props)).toHaveBeenLastCalledWith(...args);
     });
 
     it("leaves per-document loaders unbound outside per-document mode", () => {

@@ -50,12 +50,34 @@ afterEach(() => {
 });
 
 describe("listMarkdownLevel", () => {
-    it("lists nothing (without a client) for a repo with no branch or commit", async () => {
-        const scope = scopeFor(fakeClient({}));
-        await expect(
-            listMarkdownLevel(scope, { ...repo, defaultBranch: "" }, "/"),
-        ).resolves.toEqual({ files: [], folders: [] });
-        expect(scope.git).not.toHaveBeenCalled();
+    it.each([
+        { name: "no commit", options: {} },
+        { name: "a blank commit", options: { atCommitId: "" } },
+    ])(
+        "lists nothing (without a client) for a repo with no branch and $name",
+        async ({ options }) => {
+            const scope = scopeFor(fakeClient({}));
+            await expect(
+                listMarkdownLevel(scope, { ...repo, defaultBranch: "" }, "/", options),
+            ).resolves.toEqual({ files: [], folders: [] });
+            expect(scope.git).not.toHaveBeenCalled();
+        },
+    );
+
+    it("reads at the default branch tip when the commit is blank", async () => {
+        const client = fakeClient({ items: [] });
+        await listMarkdownLevel(scopeFor(client), repo, "/", { atCommitId: "" });
+        expect(client.getItems).toHaveBeenCalledWith(
+            "r1",
+            "p1",
+            "/",
+            1,
+            false,
+            false,
+            false,
+            false,
+            { version: "main", versionType: 0, versionOptions: 0 },
+        );
     });
 
     it("reads one level at the default branch tip, ordered by .order", async () => {
@@ -134,7 +156,10 @@ describe("listMarkdownLevel", () => {
 
         expect(listing).toEqual({ files: [], folders: [] });
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation: "folder-listing-load" }),
+            expect.objectContaining({
+                source: "DocumentsHubApp.repository",
+                operation: "folder-listing-load",
+            }),
         ]);
     });
 
@@ -169,7 +194,10 @@ describe("listMarkdownLevel", () => {
         expect(listing).not.toHaveProperty("order");
         expect(listing.files.map((f) => f.path)).toEqual(["/Guides/Intro.md", "/Guides/Setup.md"]);
         expect(telemetry.current.userFacingErrors()).toEqual([
-            expect.objectContaining({ operation: "wiki-order-load" }),
+            expect.objectContaining({
+                source: "DocumentsHubApp.repository",
+                operation: "wiki-order-load",
+            }),
         ]);
     });
 

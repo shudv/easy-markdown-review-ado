@@ -47,6 +47,7 @@ export function resolveRepositoryImagePath(
     if (/^[a-z][a-z0-9+.-]*:/i.test(source)) return null;
 
     try {
+        // Stryker disable next-line StringLiteral: URL resolution against the origin-only base treats "docs/x.md" like "/docs/x.md" (they'd only differ for a first folder containing ":", which repo paths here never have), so skipping the slash resolves the same folder.
         const normalizedDocument = documentPath.startsWith("/") ? documentPath : `/${documentPath}`;
 
         const documentUrl = new URL(normalizedDocument, REPOSITORY_BASE);

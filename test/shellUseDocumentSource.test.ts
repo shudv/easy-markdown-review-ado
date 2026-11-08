@@ -8,7 +8,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDocumentSource } from "../src/shell/shell/useDocumentSource";
+import { __resetBootTimingForTests, markBootStart } from "../src/telemetry/bootTiming";
 import { deferred, HELD_SOURCE, heldRender, type Deferred } from "./shellHarness";
+import { recordTelemetryEachTest } from "./telemetrySink";
 
 vi.mock("../src/markdown/render", async (importOriginal) =>
     (await import("./shellHarness")).withHeldRender(
@@ -24,16 +26,20 @@ let doc: DocumentSource;
 let container: HTMLDivElement;
 let root: Root;
 
+type MissingDocOutcome = ReturnType<DocumentSource["handleMissingDocRef"]["current"]>;
+
 function Harness(props: {
     selectedPath: string;
     loadFileSource: (path: string) => Promise<string>;
+    missingDocOutcome: MissingDocOutcome;
 }): null {
     const source = useDocumentSource(props.selectedPath, props.loadFileSource);
     const missingDocRef = source.handleMissingDocRef;
+    const { missingDocOutcome } = props;
     // Publish after commit, before the hook's passive load effect reads the ref.
     useLayoutEffect(() => {
         doc = source;
-        missingDocRef.current = () => "unexpected";
+        missingDocRef.current = () => missingDocOutcome;
     });
 
     return null;
@@ -42,9 +48,10 @@ function Harness(props: {
 async function show(
     selectedPath: string,
     loadFileSource: (path: string) => Promise<string>,
+    missingDocOutcome: MissingDocOutcome = "unexpected",
 ): Promise<void> {
     await act(async () => {
-        root.render(createElement(Harness, { selectedPath, loadFileSource }));
+        root.render(createElement(Harness, { selectedPath, loadFileSource, missingDocOutcome }));
     });
     // Let the load and the Markdown render settle.
     await act(async () => {
@@ -61,7 +68,17 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.restoreAllMocks();
 });
+
+const telemetry = recordTelemetryEachTest();
+
+const notFound = () => new Error("TF401174: The item docs/gone.md could not be found.");
+
+const loadsOnly =
+    (path: string, source: string) =>
+    (requested: string): Promise<string> =>
+        requested === path ? Promise.resolve(source) : Promise.reject(notFound());
 
 describe("useDocumentSource", () => {
     it("clears a failed load's error when switching back to a cached document", async () => {
@@ -144,5 +161,97 @@ describe("useDocumentSource", () => {
     it("ignores a failure that surfaces after the selection moved on", async () => {
         await abandonSlowLoad((slow) => slow.reject(new Error("late failure")));
         expect(doc.error).toBeNull();
+    });
+});
+
+describe("useDocumentSource: opening a document", () => {
+    it("shows the rendered document and keeps its source for anchoring comments", async () => {
+        await show("docs/a.md", loadsOnly("docs/a.md", "# Alpha"));
+        expect(doc.loading).toBe(false);
+        expect(doc.sourceByPath).toEqual({ "docs/a.md": "# Alpha" });
+        expect(doc.htmlByPath["docs/a.md"]).toContain("Alpha");
+    });
+
+    const titled = (path: string) => Promise.resolve(`# ${path}`);
+
+    it("signals a fresh render once a document finishes rendering", async () => {
+        await show("", titled);
+        const before = doc.renderVersion;
+        await show("docs/a.md", titled);
+        expect(doc.renderVersion).toBeGreaterThan(before);
+    });
+
+    it("signals a fresh render when the reader returns to an already rendered document", async () => {
+        await show("docs/a.md", titled);
+        await show("docs/b.md", titled);
+        const before = doc.renderVersion;
+        await show("docs/a.md", titled);
+        expect(doc.renderVersion).toBeGreaterThan(before);
+    });
+
+    it("stops the spinner and shows why a document failed to load", async () => {
+        await show("docs/a.md", () => Promise.reject(new Error("Server busy")));
+        expect(doc.loading).toBe(false);
+        expect(doc.error).toBe("Server busy");
+    });
+
+    it.each([
+        ["a server failure", new Error("Server busy"), "unexpected" as const],
+        ["a document nobody expected to be missing", notFound(), "unexpected" as const],
+    ])("reports %s as blocking the reader", async (_failure, error, outcome) => {
+        await show("docs/gone.md", () => Promise.reject(error), outcome);
+        expect(telemetry.current.userFacingErrors()).toEqual([
+            expect.objectContaining({
+                source: "Shell.documentLoad",
+                operation: "document-load",
+                impact: "blocking",
+            }),
+        ]);
+    });
+
+    it("shows a missing linked document's error without reporting it as a failure", async () => {
+        await show("docs/gone.md", () => Promise.reject(notFound()), "expected");
+        expect(doc.error).toContain("TF401174");
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
+    });
+
+    it("shows no error when a missing document was replaced by another one", async () => {
+        await show("docs/gone.md", () => Promise.reject(notFound()), "replaced");
+        expect(doc.error).toBeNull();
+        expect(telemetry.current.userFacingErrors()).toEqual([]);
+    });
+});
+
+describe("useDocumentSource: reporting when the app has loaded", () => {
+    beforeEach(() => {
+        __resetBootTimingForTests();
+        markBootStart();
+    });
+
+    afterEach(() => {
+        __resetBootTimingForTests();
+    });
+
+    const readyReasons = () =>
+        telemetry.current.events
+            .filter((event) => event.name === "app.loaded")
+            .map((event) => event.properties?.readyReason);
+
+    it("reports the app loaded once the first document has rendered", async () => {
+        await show("docs/a.md", loadsOnly("docs/a.md", "# Alpha"));
+        expect(readyReasons()).toEqual(["content"]);
+    });
+
+    it("reports the app loaded with an error when the first document fails to load", async () => {
+        await show("docs/a.md", () => Promise.reject(new Error("Server busy")));
+        expect(readyReasons()).toEqual(["error"]);
+    });
+
+    it.each([
+        ["no document is selected yet", "", () => Promise.resolve("# A")],
+        ["the first document is still loading", "docs/a.md", () => new Promise<string>(() => {})],
+    ])("doesn't report the app loaded while %s", async (_situation, path, loadFileSource) => {
+        await show(path, loadFileSource);
+        expect(readyReasons()).toEqual([]);
     });
 });

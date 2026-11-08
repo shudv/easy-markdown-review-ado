@@ -12,6 +12,7 @@ export function railDraftY(
     draftAnchor: TextQuoteAnchor | null,
     draftY: number | null,
 ): number | null {
+    // Stryker disable next-line ConditionalExpression: when `draftY` is null the expression yields null on either branch
     return !readOnly && draftAnchor && draftY !== null ? draftY : null;
 }
 
@@ -28,6 +29,7 @@ export function isRailTrayExpanded(opts: {
 }): boolean {
     const { collapsed, threads, activeThreadId, searchActive } = opts;
 
+    // Stryker disable next-line ConditionalExpression: thread ids are never null, so with no active thread the `some` lookup is false on its own
     const activeInTray = activeThreadId != null && threads.some((t) => t.id === activeThreadId);
 
     return !collapsed || activeInTray || (searchActive && threads.length > 0);

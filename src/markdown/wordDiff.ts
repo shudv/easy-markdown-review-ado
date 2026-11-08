@@ -101,6 +101,7 @@ function charsToText(chars: string, tokenArray: readonly string[]): string {
  * merged, and empty runs are dropped.
  */
 export function diffWords(original: string, modified: string): WordDiffOp[] {
+    // Stryker disable next-line BlockStatement: diff-match-patch returns one equal run for identical text (and nothing for empty text), so this fast path only skips the work
     if (original === modified) {
         return modified.length > 0 ? [{ kind: "equal", value: modified }] : [];
     }
@@ -191,6 +192,7 @@ function boundaryScore(
     right: string,
     afterRight: string | undefined,
 ): number {
+    // Stryker disable next-line ConditionalExpression: a missing token stringifies to "undefined", which the line-break test rejects anyway
     const newline = (token?: string) => token != null && /^[\r\n]+$/.test(token);
 
     if ((newline(left) && newline(beforeLeft)) || (newline(right) && newline(afterRight))) {
@@ -237,6 +239,7 @@ function shiftEditsToBoundaries(diffs: [number, string][], tokens: readonly stri
         let edit = diffs[i]![1];
         let after = diffs[i + 1]![1];
 
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: diff-match-patch's semantic cleanup has already slid each edit, so the equality before it never consists solely of the token the edit could absorb (24k randomized edits showed no difference)
         while (before.length > 1 && before[before.length - 1] === edit[edit.length - 1]) {
             const moved = edit[edit.length - 1]!;
             before = before.slice(0, -1);
@@ -246,6 +249,7 @@ function shiftEditsToBoundaries(diffs: [number, string][], tokens: readonly stri
 
         let best = { before, edit, after, score: score(before, edit, after) };
 
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: diff-match-patch's semantic cleanup has already slid each edit, so the equality after it never consists solely of the token the edit could absorb (24k randomized edits showed no difference)
         while (after.length > 1 && edit[0] === after[0]) {
             before += edit[0];
             edit = edit.slice(1) + after[0];
@@ -265,11 +269,13 @@ function shiftEditsToBoundaries(diffs: [number, string][], tokens: readonly stri
 
 /** Compute a character-level diff for source formats where every token matters. */
 export function diffCharacters(original: string, modified: string): WordDiffOp[] {
+    // Stryker disable next-line ConditionalExpression,BlockStatement: diff-match-patch returns one equal run for identical text (and nothing for empty text), so this fast path only skips the work
     if (original === modified) {
         return modified.length > 0 ? [{ kind: "equal", value: modified }] : [];
     }
 
     const dmp = new diff_match_patch();
+    // Stryker disable next-line BooleanLiteral: the line-mode speed-up only engages above 100 characters and re-diffs each changed line by character, so the semantic cleanup yields the same runs for source edits
     const diffs = dmp.diff_main(original, modified, false);
     dmp.diff_cleanupSemantic(diffs);
 

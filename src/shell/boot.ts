@@ -50,6 +50,7 @@ export async function orchestrateBoot(deps: BootDeps): Promise<void> {
         deps.notifySucceeded();
     } catch (err: unknown) {
         try {
+            // Stryker disable next-line OptionalChaining: calling a missing sink throws a TypeError that the catch below swallows, so the host is notified either way
             deps.onError?.(err);
         } catch {
             // An error sink must never prevent the host from being notified.

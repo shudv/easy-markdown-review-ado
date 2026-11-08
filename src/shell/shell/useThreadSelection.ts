@@ -36,6 +36,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
             // scroll.
             setActiveThreadId(tid);
         },
+        // Stryker disable next-line ArrayDeclaration: every dependency is stable for the shell's lifetime (a useState setter, useDocScroll's dependency-free callback), so the callback never needs re-creating
         [setActiveThreadId],
     );
 
@@ -44,6 +45,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
             setActiveThreadId(tid);
             scrollDocToAnchor(tid);
         },
+        // Stryker disable next-line ArrayDeclaration: every dependency is stable for the shell's lifetime (a useState setter, useDocScroll's dependency-free callback), so the callback never needs re-creating
         [scrollDocToAnchor, setActiveThreadId],
     );
 
@@ -56,6 +58,7 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
             track(events.commentNavigated());
             scrollDocToAnchor(tid);
         },
+        // Stryker disable next-line ArrayDeclaration: every dependency is stable for the shell's lifetime (a useState setter, useDocScroll's dependency-free callback), so the callback never needs re-creating
         [scrollDocToAnchor, setActiveThreadId],
     );
 
@@ -74,7 +77,8 @@ export function useThreadSelection(opts: ThreadSelectionOptions) {
                 threadId: NEW_DRAFT_THREAD_ID,
                 anchor:
                     nativeIterationMode && viewingHistorical
-                        ? (relocateAnchor(anchor, htmlByPath[path] ?? "") ?? anchor)
+                        ? // Stryker disable next-line StringLiteral: without the latest HTML there is nothing to relocate against; any placeholder that doesn't contain the quote fails to relocate and keeps the selection's own anchor just like ""
+                          (relocateAnchor(anchor, htmlByPath[path] ?? "") ?? anchor)
                         : anchor,
             });
         },

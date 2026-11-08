@@ -108,12 +108,14 @@ export async function mostRecentRoutingPr(
             completed = await withRetry(
                 () =>
                     gitClient.getPullRequests(repo.id, criteria, scope.projectId, undefined, 0, 10),
+                // Stryker disable ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
                 {
                     mode: "read",
                     label: "findMostRecentRoutingPr.getPullRequests",
                 },
             );
         } catch (err) {
+            // Stryker restore ObjectLiteral,StringLiteral
             // Retries exhausted (or terminal) — degrade to "no routing PR".
             trackUserFacingError({
                 error: err,
@@ -121,11 +123,13 @@ export async function mostRecentRoutingPr(
                 operation: "repository-pr-routing",
                 impact: "degraded",
             });
+            // Stryker disable next-line ArrayDeclaration: selectRoutingPr skips entries that aren't completed PRs, so a placeholder entry still routes to no PR
             completed = [];
         }
 
         return selectRoutingPr(completed);
     } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
         console.warn(`[documents-hub] getPullRequests failed for ${repo.name}:`, err);
         trackUserFacingError({
             error: err,
@@ -171,6 +175,7 @@ export async function routingPrForDoc(
     // 2. The PR that merged that commit (its last-merge commit). When the file
     //    landed via a direct push the commit has no PR and we drop to the
     //    fallback below.
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: ADO commit ids are never empty strings, so the `!== ""` half never decides anything; candidate for removal
     if (commitId !== null && commitId !== "") {
         const pr = await prMergingCommit(read, commitId);
         if (pr) return pr;
@@ -187,11 +192,13 @@ async function lastCommitTouching(read: DocRead): Promise<string | null> {
     try {
         const commits = await withRetry(
             () => gitClient.getCommits(repo.id, fileCommitsCriteria(read, { $top: 1 }), projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "findRoutingPrForDoc.getCommits" },
         );
 
         return firstCommitId(commits);
     } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
         console.warn(`[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`, err);
 
         // A path that's no longer on the branch can't be routed — expected, not a
@@ -216,11 +223,13 @@ async function prMergingCommit(read: DocRead, commitId: string): Promise<GitPull
         const query = await withRetry(
             () =>
                 gitClient.getPullRequestQuery(lastMergeCommitQuery([commitId]), repo.id, projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "findRoutingPrForDoc.getPullRequestQuery" },
         );
 
         return selectRoutingPrFromQuery(query.results, commitId);
     } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
         console.warn(`[documents-hub] getPullRequestQuery failed for ${repo.name}:`, err);
         trackUserFacingError({
             error: err,
@@ -274,8 +283,10 @@ async function findDocPrHistory(
     const top = opts.top ?? 30;
 
     const empty: DocPrHistoryPage = {
+        // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
         prs: [],
         nextCommitSkip: skip,
+        // Stryker disable next-line BooleanLiteral: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
         hasMore: false,
     };
 
@@ -287,8 +298,12 @@ async function findDocPrHistory(
     const ids = await fileCommitIdsPage(read, { $top: top, $skip: skip });
     if (ids === null) return empty;
     // A short page means we've reached the start of the file's history.
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
     const hasMore = ids.length === top;
+    // Stryker disable next-line ArithmeticOperator: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
     const nextCommitSkip = skip + ids.length;
+    // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
+    // Stryker disable next-line BooleanLiteral: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
     if (ids.length === 0) return { prs: [], nextCommitSkip, hasMore: false };
 
     // 2. One batched query maps every commit to the PR(s) that merged it.
@@ -309,12 +324,14 @@ async function fileCommitIdsPage(
     try {
         const commits = await withRetry(
             () => gitClient.getCommits(repo.id, fileCommitsCriteria(read, page), projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "findDocPrHistory.getCommits" },
         );
 
         return commitIds(commits);
     } catch (err) {
         console.warn(
+            // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
             `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
             err,
         );
@@ -341,11 +358,13 @@ async function prsMergingCommits(read: DocRead, ids: string[]): Promise<GitPullR
     try {
         const query = await withRetry(
             () => gitClient.getPullRequestQuery(lastMergeCommitQuery(ids), repo.id, projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "findDocPrHistory.getPullRequestQuery" },
         );
 
         return selectRoutingPrsFromQuery(query.results, ids);
     } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
         console.warn(`[documents-hub] getPullRequestQuery (history) failed for ${repo.name}:`, err);
         trackUserFacingError({
             error: err,
@@ -354,6 +373,7 @@ async function prsMergingCommits(read: DocRead, ids: string[]): Promise<GitPullR
             impact: "degraded",
         });
 
+        // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
         return [];
     }
 }

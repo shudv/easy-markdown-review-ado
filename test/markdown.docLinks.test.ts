@@ -26,11 +26,11 @@ describe("resolveDocLink", () => {
         expect(resolveDocLink(from, href)).toEqual({ kind: "external" });
     });
 
-    it("returns a pure in-page fragment as an anchor", () => {
-        expect(resolveDocLink(from, "#goals")).toEqual({
-            kind: "anchor",
-            hash: "goals",
-        });
+    it.each([
+        { name: "a heading fragment", href: "#goals", hash: "goals" },
+        { name: "a bare back-to-top `#`", href: "#", hash: "" },
+    ])("returns $name as an in-page anchor", ({ href, hash }) => {
+        expect(resolveDocLink(from, href)).toEqual({ kind: "anchor", hash });
     });
 
     it("resolves a bare sibling filename against the current folder", () => {
@@ -181,6 +181,16 @@ describe("buildReposFileUrl", () => {
                 "GBmain",
             ),
         ).toBe("https://dev.azure.com/org/Proj/_git/Repo?path=%2Fa.md&version=GBmain");
+    });
+
+    it("leaves the version out when it is blank", () => {
+        expect(
+            buildReposFileUrl(
+                { orgUrl: "https://dev.azure.com/org", project: "P", repoName: "R" },
+                "/a.md",
+                "",
+            ),
+        ).toBe("https://dev.azure.com/org/P/_git/R?path=%2Fa.md");
     });
 
     it("collapses multiple trailing slashes on the org URL", () => {

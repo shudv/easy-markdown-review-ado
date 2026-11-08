@@ -236,6 +236,7 @@ function decorateModifiedTableRow(
     // range without `originalText` (or an out-of-range index) yields a falsy
     // `originalRow` and simply falls back to the whole-row tint.
     const originalRow =
+        // Stryker disable next-line OptionalChaining: a modified table row is a single line touched by exactly one modified range, so the range is always found
         range?.originalText != null
             ? range.originalText.split(/\r\n|\r|\n/)[start - range.start]
             : undefined;
@@ -295,6 +296,7 @@ function lacksOwnComparison(el: HTMLElement): boolean {
         !el.classList.contains(FRONTMATTER_ROW_CLASS) &&
         !el.classList.contains(DIFF_IMAGE_CLASS) &&
         !el.classList.contains(DIFF_INLINE_CLASS) &&
+        // Stryker disable next-line ConditionalExpression,StringLiteral: every block flagged inline also carries the inline class (or is a frontmatter row), both checked above
         el.dataset.diffInline !== "true"
     );
 }

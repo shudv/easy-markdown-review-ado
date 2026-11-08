@@ -11,6 +11,7 @@ import {
 } from "../src/markdown/diffDecorations";
 import {
     decorate,
+    diffView,
     expectPreciseAmber,
     lines,
     render,
@@ -421,12 +422,116 @@ describe("rows that can't be diffed cell by cell", () => {
         const headRow = root.querySelector("thead tr")!;
         expect(headRow.classList.contains(DIFF_BLOCK_CLASS)).toBe(true);
     });
+
+    const wide = (indent = "") =>
+        lines(
+            `${indent}| Option | Default | Notes |`,
+            `${indent}| --- | --- | --- |`,
+            `${indent}| theme | light | ok |`,
+            `${indent}| retries | 3 | fine |`,
+        );
+
+    it.each([
+        { name: "a previous row", current: wide(), line: 3, previous: "| colour | dark |" },
+        {
+            name: "a previous row with trailing spaces",
+            current: wide(),
+            line: 3,
+            previous: "| colour | dark |  ",
+        },
+        {
+            name: "a previous row of a table inside a list item",
+            current: lines("- Settings:", "", wide("  ")),
+            line: 5,
+            previous: "  | colour | dark |",
+        },
+    ])("shows $name in Before as a table row", ({ current, line, previous }) => {
+        const root = render(current);
+        decorate(root, [
+            { startLine: line, endLine: line, kind: "modified", originalText: previous },
+        ]);
+
+        const trigger = root.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
+        const panel = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
+        expect(panel.id).not.toBe("");
+        expect(trigger.getAttribute("aria-controls")).toBe(panel.id);
+        expect(panel.querySelector("thead")).toBeNull();
+        expect(
+            Array.from(panel.querySelectorAll("tr"), (row) =>
+                Array.from(row.cells, (cell) => cell.textContent),
+            ),
+        ).toEqual([["colour", "dark"]]);
+    });
+
+    it.each([
+        { name: "a previous row with a single cell", previous: "| colour |" },
+        {
+            name: "a previous row edited together with the paragraph below it",
+            previous: "| colour | dark |\n\nOld note.",
+        },
+    ])("shows $name in Before as written", ({ previous }) => {
+        const root = render(lines(wide(), "", "New note."));
+        decorate(root, [{ startLine: 3, endLine: 3, kind: "modified", originalText: previous }]);
+
+        const panel = root.querySelector<HTMLElement>(".emr-diff-before-panel")!;
+        expect(panel.querySelector("table")).toBeNull();
+        expect(panel.textContent).toContain("| colour");
+    });
+
+    it("offers a previous version for each separately edited row of a table", () => {
+        const root = render(wide());
+        decorate(root, [
+            { startLine: 3, endLine: 3, kind: "modified", originalText: "| colour | dark |" },
+            { startLine: 4, endLine: 4, kind: "modified", originalText: "| attempts | 5 |" },
+        ]);
+
+        const panels = Array.from(root.querySelectorAll<HTMLElement>(".emr-diff-before-panel"));
+        expect(panels.map((panel) => panel.querySelector("td")?.textContent)).toEqual([
+            "colour",
+            "attempts",
+        ]);
+        expect(new Set(panels.map((panel) => panel.id)).size).toBe(2);
+    });
 });
 
 // The live DOM can differ in structure from the freshly rendered original —
 // e.g. another feature wrapped a cell's content — so the cell is explained as
 // a structure change rather than word-diffed.
 describe("cells whose rendered structure differs", () => {
+    const row = (cells: string) => lines("| A | B |", "| --- | --- |", cells);
+
+    it.each([
+        {
+            name: "bold added to one cell",
+            original: row("| a | b |"),
+            current: row("| **a** | b |"),
+            shown: ["tr modified cells: ⟨Bold formatting added⟩a b"],
+        },
+        {
+            name: "bold and italic nested the other way round",
+            original: row("| **_a_** | b |"),
+            current: row("| _**a**_ | b |"),
+            shown: [
+                "tr modified cells: ⟨Rendered structure changed from bold and italic to italic and bold⟩a b",
+            ],
+        },
+        {
+            name: "strikethrough, bold and italic nested in a new order",
+            original: row("| ~~**_a_**~~ | b |"),
+            current: row("| **_~~a~~_** | b |"),
+            shown: [
+                "tr modified cells: ⟨Rendered structure changed from strikethrough, bold and italic to bold, italic and strikethrough⟩a b",
+            ],
+        },
+    ])("explains $name inside its cell", ({ original, current, shown }) => {
+        expect(view(original, current)).toEqual(shown);
+    });
+
+    it("marks a cell whose link only changed its title", () => {
+        const { root } = diffView(row('| [x](u "t1") | b |'), row('| [x](u "t2") | b |'));
+
+        expect(root.querySelector("tbody td")?.classList.contains(DIFF_CELL_CLASS)).toBe(true);
+    });
     it("keeps the amber cell fallback for equal text in a different structure", () => {
         const root = render(table);
         const cell = root.querySelector<HTMLElement>("tbody td:nth-child(2)")!;

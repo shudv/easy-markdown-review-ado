@@ -87,11 +87,14 @@ function clearTooltipDecorations(root: HTMLElement): void {
         delete el.dataset.diffTooltip;
         delete el.dataset.diffAmberMode;
 
+        // Stryker disable BlockStatement: emptying the else branch changes nothing, since applyDiffTooltip already removed the title, so an element that had none has none to remove (the restoring branch is covered by the tooltip scenarios)
         if (el.dataset.diffTooltipHadTitle === "true") {
             el.setAttribute("title", el.dataset.diffTooltipPreviousTitle!);
         } else {
+            // Stryker disable next-line StringLiteral: applyDiffTooltip already removed the title, so an element that had none has none to remove here
             el.removeAttribute("title");
         }
+        // Stryker restore BlockStatement
 
         if (el.dataset.diffTooltipHadTabindex === "true") {
             el.setAttribute("tabindex", el.dataset.diffTooltipPreviousTabindex!);

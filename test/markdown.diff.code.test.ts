@@ -26,6 +26,39 @@ beforeEach(() => {
 describe("code blocks end to end", () => {
     it.each([
         {
+            name: "a fenced block with a blank line inside a numbered step",
+            original: lines(
+                "1.  Step:",
+                "",
+                "    ```sh",
+                "    npm ci",
+                "",
+                "    npm test",
+                "    ```",
+            ),
+            current: lines(
+                "1.  Step:",
+                "",
+                "    ```sh",
+                "    npm ci",
+                "",
+                "    npm run test",
+                "    ```",
+            ),
+            expected: ["pre modified inline: npm ci npm {+run +}test"],
+        },
+        {
+            name: "an indented block starting with a home-directory path inside a numbered step",
+            original: lines("1.  Step:", "", "        ~/bin/tool --old"),
+            current: lines("1.  Step:", "", "        ~/bin/tool --new"),
+            expected: ["pre modified inline: ~/bin/tool --[-old-]{+new+}"],
+        },
+    ])("word-diffs $name", ({ original, current, expected }) => {
+        expect(view(original, current)).toEqual(expected);
+    });
+
+    it.each([
+        {
             name: "an edited line is word-diffed inside the block",
             original: lines("```js", "const a = 1;", "const b = 2;", "```"),
             current: lines("```js", "const a = 1;", "const b = 3;", "```"),
@@ -407,6 +440,41 @@ describe("code blocks", () => {
         expect(metadata.textContent).toContain(after);
     });
 
+    it.each([
+        {
+            name: "only the language",
+            original: lines("```bash", "echo hi", "```"),
+            current: lines("```powershell", "echo hi", "```"),
+            label: "Language changed",
+            values: ["bash", "powershell"],
+        },
+        {
+            name: "only the options",
+            original: lines("```js title=a.js", "x()", "```"),
+            current: lines("```js title=b.js", "x()", "```"),
+            label: "Code options changed",
+            values: ["title=a.js", "title=b.js"],
+        },
+        {
+            name: "both the language and the options",
+            original: lines("```js title=a.js", "x()", "```"),
+            current: lines("```ts title=b.js", "x()", "```"),
+            label: "Code fence changed",
+            values: ["js; options: title=a.js", "ts; options: title=b.js"],
+        },
+    ])("names a fence change of $name", ({ original, current, label, values }) => {
+        const { root } = diffView(original, current);
+
+        const metadata = root.querySelector(`.${DIFF_METADATA_CLASS}`)!;
+        expect(metadata.querySelector(".emr-diff-metadata-trigger")?.textContent).toBe(label);
+        expect(
+            Array.from(
+                metadata.querySelectorAll(".emr-diff-metadata-value"),
+                (value) => value.textContent,
+            ),
+        ).toEqual(values);
+    });
+
     it("explains a fence de-indentation as code structure and content changes", () => {
         const original = [
             "    ```bash",
@@ -494,6 +562,17 @@ describe("preformatted blocks without a code element", () => {
 });
 
 describe("whitespace in code blocks", () => {
+    it("shows a code block whose only change is a tab replaced by spaces with just the explanation", () => {
+        expect(
+            view(
+                lines("```go", "func f() {", "\treturn", "}", "```"),
+                lines("```go", "func f() {", "    return", "}", "```"),
+            ),
+        ).toEqual([
+            "pre modified inline: func f() { ⟨Indentation changed from 1 tab to 4 spaces⟩ return }",
+        ]);
+    });
+
     function codeMarks(original: string, current: string) {
         const { root } = diffView(original, current);
 
@@ -526,6 +605,24 @@ describe("whitespace in code blocks", () => {
             original: lines("```go", "func f() {", "\treturn", "}", "```"),
             current: lines("```go", "func f() {", "    return", "}", "```"),
             marks: ['~"    " Indentation changed from 1 tab to 4 spaces'],
+        },
+        {
+            name: "explains the first line's tab replaced by spaces as an indentation change",
+            original: lines("```", "\tvalue", "```"),
+            current: lines("```", "    value", "```"),
+            marks: ['~"    " Indentation changed from 1 tab to 4 spaces'],
+        },
+        {
+            name: "names both spaces and tabs in a mixed indentation change",
+            original: lines("```", "\t\tkey = 1", "```"),
+            current: lines("```", "  \tkey = 1", "```"),
+            marks: ['~"  \\t" Indentation changed from 2 tabs to 2 spaces and 1 tab'],
+        },
+        {
+            name: "explains a whitespace swap after a word removed earlier on the line",
+            original: lines("```", "const old value = compute(input)\t// note", "```"),
+            current: lines("```", "const value = compute(input) // note", "```"),
+            marks: ['-"old "', '~" " Whitespace changed from 1 tab to 1 space'],
         },
         {
             name: "explains a mid-line whitespace swap next to a word edit",

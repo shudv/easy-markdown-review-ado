@@ -57,8 +57,10 @@ function classifyUrl(
         return { safe: false, reason: "control-character" };
     }
 
+    // Stryker disable next-line ConditionalExpression,MethodExpression: dead code: the anchored scheme pattern below can't match a URL starting with `#`, so a fragment is already classified as a safe scheme-less reference; candidate for removal.
     if (url.startsWith("#")) return { safe: true };
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,MethodExpression,BlockStatement: dead code: the anchored scheme pattern below can't match a URL starting with `/` or `.`, so these paths are already classified as safe scheme-less references; candidate for removal.
     if (url.startsWith("/") || url.startsWith("./") || url.startsWith("../")) {
         return { safe: true };
     }
@@ -82,6 +84,7 @@ type Properties = NonNullable<Element["properties"]>;
 
 function existingRelTokens(rel: unknown): string[] {
     if (Array.isArray(rel)) return (rel as unknown[]).map(String);
+    // Stryker disable next-line MethodExpression,Regex: `rel` is a space-separated attribute, so the empty tokens a leading or doubled space would leave serialise as extra whitespace the browser ignores.
     if (typeof rel === "string") return rel.split(/\s+/).filter(Boolean);
 
     return [];
@@ -137,13 +140,17 @@ function sanitizeImage(props: Properties): void {
  * BEFORE `rehype-stringify`.
  */
 export const rehypeSanitizeUrls: Plugin<[], Root> = () => (tree) => {
+    // Stryker disable next-line StringLiteral: unist-util-visit treats an empty test like no test, so every node is visited, and only <a> and <img> elements are touched.
     visit(tree, "element", (node: Element) => {
         const tag = node.tagName;
         const props = node.properties;
 
         if (tag === "a") {
             sanitizeAnchor(props);
-        } else if (tag === "img") {
+        } else if (
+            // Stryker disable next-line ConditionalExpression: only <img> carries src/srcset in this pipeline, so sanitising another element's (absent) image attributes changes nothing.
+            tag === "img"
+        ) {
             sanitizeImage(props);
         }
     });

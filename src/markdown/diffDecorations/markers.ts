@@ -36,6 +36,7 @@ export function insertSourceOnlyMarkers(
     const renderedSpans = markerAnchors.flatMap((element) => {
         const span = readSourceSpan(element);
 
+        // Stryker disable next-line ArrayDeclaration: a placeholder entry has no lines, so it overlaps no change, just like contributing nothing
         return span ? [span] : [];
     });
 
@@ -117,6 +118,7 @@ function buildSourceOnlyMarker(
         const control = doc.createElement("div");
         control.className = "emr-diff-before-control emr-diff-before-control--source";
         const trigger = doc.createElement("button");
+        // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
         trigger.type = "button";
         trigger.className = "emr-diff-before-trigger";
         trigger.textContent = "Before";
@@ -155,6 +157,7 @@ function buildSourceOnlyMarker(
 function firstBlockAtOrAfter(blocks: readonly HTMLElement[], line: number): HTMLElement | null {
     for (const el of blocks) {
         const start = numAttr(el, "data-source-line");
+        // Stryker disable next-line ConditionalExpression: an unstamped block's missing line compares as 0, which is never at or after a change line (lines start at 1)
         if (start != null && start >= line) return el;
     }
 
@@ -174,6 +177,7 @@ function buildDeletedMarker(r: DiffRange, renderInline?: (md: string) => string)
     rail.setAttribute("aria-hidden", "true");
 
     const chip = document.createElement("button");
+    // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
     chip.type = "button";
     chip.className = "emr-diff-deleted-chip";
     chip.textContent = label;
@@ -224,6 +228,7 @@ function buildDeletedTableRows(
     anchors: readonly HTMLElement[],
     renderInline: (md: string) => string,
 ): DeletedTableRows | null {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: empty removed text is a single empty line, which the table-row check below rejects anyway
     if (range.deletedContent == null || range.deletedContent === "") {
         return null;
     }
@@ -231,12 +236,14 @@ function buildDeletedTableRows(
     const markdown = range.deletedContent.replace(/\n+$/, "");
     const lines = markdown.split(/\r\n|\r|\n/);
     const columnCount = deletedTableColumnCount(lines);
+    // Stryker disable next-line ConditionalExpression: dead code: without a column count no live row can match it, so the cell-count check below already returns null, candidate for removal
     if (columnCount == null) return null;
 
     const referenceRow = deletedRowReference(range, anchor, anchors);
     if (!referenceRow) return null;
     const parent = referenceRow.parentElement;
 
+    // Stryker disable next-line OptionalChaining: a reference row always sits inside a table section
     if (parent?.tagName !== "TBODY" || referenceRow.children.length !== columnCount) {
         return null;
     }
@@ -263,6 +270,7 @@ function deletedTableColumnCount(lines: readonly string[]): number | null {
 
     if (
         lines.some((line) => !/^\s*\|.*\|\s*$/.test(line)) ||
+        // Stryker disable next-line MethodExpression,ArrowFunction,Regex: dead code: removed lines that include a delimiter row are a whole table, which never sits next to a live body row (its neighbour is another table's header row or a non-row block), so the checks below already reject it, candidate for removal
         lines.some((line) => splitTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell))) ||
         columnCount < 2 ||
         rows.some((cells) => cells.length !== columnCount)
@@ -282,18 +290,19 @@ function deletedRowReference(
     anchor: HTMLElement | null,
     anchors: readonly HTMLElement[],
 ): HTMLElement | undefined {
-    const previousRow = [...anchors]
-        .reverse()
-        .find(
-            (candidate) =>
-                candidate.tagName === "TR" &&
-                numAttr(candidate, "data-source-end-line")! < range.startLine,
-        );
+    const previousRow = [...anchors].reverse().find(
+        (candidate) =>
+            // Stryker disable next-line ConditionalExpression,LogicalOperator: a non-row block found here is never inside a table body, so the parent check below rejects it just as finding no row would
+            candidate.tagName === "TR" &&
+            // Stryker disable next-line EqualityOperator: rows are one line, so a row ending on the removal's own line starts there too and is already the anchor used first
+            numAttr(candidate, "data-source-end-line")! < range.startLine,
+    );
 
     const previousRowEnd =
         previousRow == null ? null : numAttr(previousRow, "data-source-end-line");
 
     const immediatelyAfterPreviousTable =
+        // Stryker disable next-line ConditionalExpression: dead code: the previous row was found by its end line, so that line is never missing, candidate for removal
         previousRowEnd != null && previousRowEnd + 1 === range.startLine;
 
     return anchor?.tagName === "TR"
@@ -315,11 +324,13 @@ function renderDeletedTableRows(
     scratch.innerHTML = renderInline([lines[0]!, delimiter, ...lines.slice(1)].join("\n"));
     const table = scratch.querySelector<HTMLTableElement>("table");
     const headerRow = table?.querySelector<HTMLTableRowElement>("thead tr");
+    // Stryker disable next-line LogicalOperator: a rendered GFM table always has a header row, so the two checks only fail together
     if (!table || !headerRow) return null;
 
     for (const header of Array.from(headerRow.querySelectorAll("th"))) {
         const cell = document.createElement("td");
 
+        // Stryker disable next-line BlockStatement: dead code: the delimiter row built above has no alignment, so this only copies the scratch render's meaningless source-line stamps, which nothing reads on a removed row, candidate for removal
         for (const attribute of Array.from(header.attributes)) {
             cell.setAttribute(attribute.name, attribute.value);
         }
@@ -377,6 +388,7 @@ export function selectionTouchesDeletedDiff(
         return true;
     }
 
+    // Stryker disable next-line LogicalOperator: a DOM selection's anchor and focus are both null or both set
     if (!anchorNode || !focusNode) return false;
 
     // Both endpoints sit outside every marker. The selection still covers a

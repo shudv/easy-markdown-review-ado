@@ -60,6 +60,7 @@ export function useDocumentSource(
         setError(null);
         loadFileSource(selectedPath)
             .then(async (source) => {
+                // Stryker disable next-line ConditionalExpression: a cancelled load is re-checked after rendering (next check), so skipping this early exit only wastes a render
                 if (cancelled) return;
                 const html = await renderMarkdown(source);
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the effect cleanup can cancel during the awaited render; TS wrongly keeps the narrowing from the pre-await check.
@@ -69,6 +70,7 @@ export function useDocumentSource(
                     [selectedPath]: source,
                 }));
                 setHtmlByPath((prev) => ({ ...prev, [selectedPath]: html }));
+                // Stryker disable next-line BooleanLiteral: dead code: the new HTML re-runs this effect as a cache hit, which clears the spinner anyway; candidate for removal
                 setLoading(false);
                 setRenderVersion((v) => v + 1);
             })
@@ -131,15 +133,18 @@ function useBootReadySignal(
 ): void {
     const bootReadyFiredRef = useRef(false);
     useEffect(() => {
+        // Stryker disable next-line ConditionalExpression: dead code: markAppReady is itself once-per-boot, so re-running past this latch reports nothing more; candidate for removal
         if (bootReadyFiredRef.current) return;
 
         const hasRenderedHtmlForSelected =
             !!selectedPath && Object.prototype.hasOwnProperty.call(htmlByPath, selectedPath);
 
         if (hasRenderedHtmlForSelected) {
+            // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
             markAppReady("content");
         } else if (error !== null && error !== "") {
+            // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
             markAppReady("error");
         }

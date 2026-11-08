@@ -51,10 +51,12 @@ export function diffInlineContent(
     const metadataChanged = linkChanges.length > 0 || imageChanges.length > 0;
 
     const applyMetadata = (): void => {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: applying an empty list of link changes adds nothing
         if (linkChanges.length > 0) {
             applyLinkTargetIndicators(target, linkChanges);
         }
 
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: applying an empty list of image changes adds nothing
         if (imageChanges.length > 0) {
             applyImageMetadataIndicators(target, imageChanges);
         }
@@ -76,9 +78,11 @@ export function diffInlineContent(
     const operations = diffWords(originalText, currentText);
 
     if (
+        // Stryker disable next-line ConditionalExpression: without a threshold the ratio is compared with undefined, which is never true
         options.minimumUnchangedRatio != null &&
         unchangedRatio(operations) < options.minimumUnchangedRatio
     ) {
+        // Stryker disable next-line ObjectLiteral,BooleanLiteral: a too-divergent result is only read by tryInlineWordDiff, which declines it whether it sees tooDivergent or (differing text that was not) handled
         return {
             handled: false,
             formattingChanged: false,
@@ -90,16 +94,19 @@ export function diffInlineContent(
     // In code, a whitespace swap with no shared run (a tab for spaces) reads as
     // one explained amber run rather than a struck-and-added pair.
     const swaps =
+        // Stryker disable next-line ArrayDeclaration: a placeholder range without offsets wraps nothing, and differing text always gets word marks here, so the block is handled either way
         target.tagName === "PRE" ? explainWhitespaceSwaps(operations) : { operations, ranges: [] };
 
     wrapFormattingRanges(target, swaps.ranges);
     const wordDiff = applyInlineWordDiff(target, swaps.operations);
     applyMetadata();
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: the ops were diffed against the target's own text, so they always rebuild it (never null), and a result without marks only happens when every edit became an explained whitespace swap, which counts as handled below anyway
     const inlineApplied = wordDiff != null && wordDiff.added + wordDiff.removed > 0;
 
     return {
         handled: inlineApplied || swaps.ranges.length > 0,
+        // Stryker disable next-line BooleanLiteral: formattingChanged is only read for blocks and cells whose text is unchanged, which return above
         formattingChanged: false,
         metadataChanged,
         tooDivergent: false,
@@ -152,6 +159,7 @@ export function tryInlineWordDiff(
         minimumUnchangedRatio: INLINE_MIN_UNCHANGED_RATIO,
     });
 
+    // Stryker disable next-line ConditionalExpression: dead code: a too-divergent diff is never handled, so the handled check below already declines it, candidate for removal
     if (contentDiff.tooDivergent) return false;
 
     if (originalPlain === modifiedPlain) {
@@ -164,6 +172,7 @@ export function tryInlineWordDiff(
 
     // A reworded item can also have been ticked off or re-marked; the word diff
     // alone would hide that.
+    // Stryker disable next-line ConditionalExpression,BooleanLiteral: dead code: unreachable, since differing, not-too-divergent text always yields a word mark or an explained whitespace swap (see the v8 ignore below), candidate for removal
     /* v8 ignore next -- differing, not-too-divergent text always yields a word mark or (in code) an explained whitespace swap, since diffWords ops rebuild the target's own text */
     if (!contentDiff.handled) return false;
     applyLeafStructureDiff(originalEl, block);

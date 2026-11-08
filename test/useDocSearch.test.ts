@@ -120,6 +120,47 @@ describe("useDocSearch — open/close affordance", () => {
     });
 });
 
+describe("useDocSearch — focusing the search box", () => {
+    afterEach(() => {
+        document.querySelectorAll("body > input").forEach((input) => input.remove());
+    });
+
+    function withInput(h: Handle): HTMLInputElement {
+        const input = document.body.appendChild(document.createElement("input"));
+        (h.current!.searchInputRef as { current: HTMLInputElement | null }).current = input;
+
+        return input;
+    }
+
+    it("focuses the search box when it opens", () => {
+        const h = mount({ files: [] });
+        const input = withInput(h);
+        act(() => h.current!.setSearchOpen(true));
+        expect(document.activeElement).toBe(input);
+    });
+
+    it("doesn't pull focus back to the search box when it closes", () => {
+        const h = mount({ files: [] });
+        const input = withInput(h);
+        act(() => h.current!.setSearchOpen(true));
+        input.blur();
+        act(() => h.current!.closeSearch());
+        expect(document.activeElement).not.toBe(input);
+    });
+});
+
+describe("useDocSearch — without Code Search", () => {
+    beforeEach(() => vi.useFakeTimers());
+
+    it("filters locally and never shows a remote search in progress", async () => {
+        const h = mount({ files: [file("docs/guide.md")] });
+        act(() => h.current!.setSearchQuery("guide"));
+        await flush(1000);
+        expect(h.current!.remoteLoading).toBe(false);
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["docs/guide.md"]);
+    });
+});
+
 describe("useDocSearch — remote merge", () => {
     beforeEach(() => vi.useFakeTimers());
 
@@ -379,6 +420,21 @@ describe("useDocSearch — superseded remote searches", () => {
         await settle(() => calls[1]!.resolve({ kind: "ok", files: [file("fresh.md")] }));
         expect(h.current!.searchResults.map((f) => f.path)).toEqual(["fresh.md"]);
         expect(h.current!.remoteLoading).toBe(false);
+    });
+
+    it("hides the previous query's remote hits while the new query is being searched", async () => {
+        const { calls, h } = await supersedeInFlightSearch();
+        await flush(250);
+        await settle(() => calls[1]!.resolve({ kind: "ok", files: [file("abc.md")] }));
+        act(() => h.current!.setSearchQuery("abcd"));
+        expect(h.current!.searchResults).toEqual([]);
+    });
+
+    it("ignores an unavailable result that arrives after the query changed", async () => {
+        const { calls, h } = await supersedeInFlightSearch();
+        await settle(() => calls[0]!.resolve({ kind: "unavailable", reason: "network" }));
+        expect(h.current!.searchUnavailable).toBeNull();
+        expect(telemetry.current.events).toEqual([]);
     });
 
     it("drops a failure that arrives after the query changed", async () => {

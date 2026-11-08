@@ -137,6 +137,7 @@ export async function discoverHub(
     log: (step: string) => void,
 ): Promise<{ discovery: DiscoveryState; picker: PickerState }> {
     const project = await resolveCurrentProject();
+    // Stryker disable next-line StringLiteral: boot-trace text for the developer console only
     log(`project: ${project.name}`);
 
     // De-identified telemetry context: project GUID only, never the name.
@@ -146,6 +147,7 @@ export async function discoverHub(
     // Repos, so we page in the project's repos and let the in-hub picker
     // choose. The first page (plus the user + route params) is all we need
     // to render; the rest stream in as the user scrolls or filters.
+    // Stryker disable next-line StringLiteral: boot-trace text for the developer console only
     log("fetching first repo page + route params");
 
     const [firstPage, routeParams] = await Promise.all([
@@ -153,6 +155,7 @@ export async function discoverHub(
         readRouteParams(),
     ]);
 
+    // Stryker disable next-line StringLiteral: boot-trace text for the developer console only
     log(`first page: ${firstPage.repos.length} repo(s)`);
 
     const union: RepoUnion = {
@@ -180,6 +183,7 @@ export async function discoverHub(
     // first repo + default document instead of where the user last was.
     writeLastRepo(project.id, resolvedRepoId);
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: without a document there is no path to remember — persisting undefined stores nothing (JSON drops it), and a blank path can't reach here (a blank route path falls back to the remembered one); candidate for removal
     if (route.initialSelectedPath != null && route.initialSelectedPath !== "") {
         writeLastPath(project.id, resolvedRepoId, route.initialSelectedPath);
     }

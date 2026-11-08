@@ -34,9 +34,12 @@ describe("formatError", () => {
         const e = new Error("boom");
         expect(formatError(e)).toBe(e.stack);
     });
-    it("falls back to the message when the stack is empty", () => {
+    it.each([
+        ["empty", ""],
+        ["missing", undefined],
+    ])("falls back to the message when the stack is %s", (_state, stack) => {
         const e = new Error("boom");
-        e.stack = "";
+        e.stack = stack;
         expect(formatError(e)).toBe("boom");
     });
     it("pretty-prints non-null objects", () => {
@@ -191,9 +194,12 @@ describe("routeUpdatesForPath", () => {
         });
     });
 
-    it("treats a link without ?repo= as naming the opened repo", () => {
+    it.each([
+        ["without", undefined],
+        ["with a blank", ""],
+    ])("treats a link %s ?repo= as naming the opened repo", (_form, repo) => {
         expect(
-            routeUpdatesForPath({ path: "README.md", anchor: "goals" }, "r2", "/README.md"),
+            routeUpdatesForPath({ repo, path: "README.md", anchor: "goals" }, "r2", "/README.md"),
         ).toEqual({ repo: "r2", path: "README.md" });
     });
 });
@@ -235,6 +241,17 @@ describe("buildHubDocUrl", () => {
 
     it("returns undefined when the base URL is malformed", () => {
         expect(buildHubDocUrl(hubDoc("not a url", "Proj", "r", "/x.md"), EXT)).toBeUndefined();
+    });
+
+    it("keeps every folder of a nested document path", () => {
+        expect(
+            buildHubDocUrl(
+                hubDoc("https://dev.azure.com/org", "Proj", "r", "docs/guide/x.md"),
+                EXT,
+            ),
+        ).toBe(
+            "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?repo=r&path=docs%2Fguide%2Fx.md",
+        );
     });
 
     it("omits the repo param when no repo id is given", () => {

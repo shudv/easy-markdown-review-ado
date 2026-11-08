@@ -25,6 +25,7 @@ export function wrapRangeWithHighlight(range: Range, opts: HighlightOptions): HT
         span.className = opts.className;
         span.dataset.threadId = opts.threadId;
 
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: assigning an empty or undefined background-color is ignored by the style declaration, so the guard only skips a no-op, candidate for removal
         if (opts.background !== undefined && opts.background !== "") {
             span.style.backgroundColor = opts.background;
         }
@@ -55,6 +56,7 @@ export function wrapRangeTextNodes<T extends HTMLElement>(
         // then replace.
         let node = frag.node;
 
+        // Stryker disable ConditionalExpression,EqualityOperator: splitting at a text node's very start or end only leaves an extra empty text node beside the wrapper, which renders and reads identically
         if (frag.end < node.data.length) {
             node.splitText(frag.end);
         }
@@ -63,6 +65,7 @@ export function wrapRangeTextNodes<T extends HTMLElement>(
             node = node.splitText(frag.start);
         }
 
+        // Stryker restore ConditionalExpression,EqualityOperator
         node.parentNode!.replaceChild(span, node);
         span.appendChild(node);
         spans.push(span);
@@ -87,10 +90,12 @@ function collectTextFragments(range: Range): TextFragment[] {
             const r = document.createRange();
             r.selectNodeContents(n);
 
+            // Stryker disable next-line EqualityOperator: a range starting exactly at this node's end has the node as its start container, so the fragment is empty and dropped below anyway
             if (range.compareBoundaryPoints(Range.END_TO_START, r) >= 0) {
                 return NodeFilter.FILTER_REJECT;
             }
 
+            // Stryker disable next-line EqualityOperator: a range ending exactly at this node's start has the node as its end container, so the fragment is empty and dropped below anyway
             if (range.compareBoundaryPoints(Range.START_TO_END, r) <= 0) {
                 return NodeFilter.FILTER_REJECT;
             }
@@ -107,6 +112,7 @@ function collectTextFragments(range: Range): TextFragment[] {
         const tn = root as Text;
 
         if (
+            // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: an empty slice is blank, so the whitespace check on the next line already drops it, candidate for removal
             range.endOffset > range.startOffset &&
             tn.data.slice(range.startOffset, range.endOffset).trim() !== ""
         ) {
@@ -135,6 +141,7 @@ function collectTextFragments(range: Range): TextFragment[] {
         // `<table>`, which is invalid HTML the browser reflows, visibly breaking
         // table/code layout on large multi-block selections. Highlighting pure
         // whitespace conveys nothing, so we simply don't.
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: an empty slice is blank, so the whitespace check alone already drops it, candidate for removal
         if (end > start && tn.data.slice(start, end).trim() !== "") {
             out.push({ node: tn, start, end });
         }

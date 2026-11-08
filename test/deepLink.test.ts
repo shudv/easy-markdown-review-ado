@@ -207,6 +207,18 @@ describe("withDeepLinkTarget — text", () => {
         expect(url.searchParams.has(ANCHOR_LINK_PARAM)).toBe(false);
     });
 
+    it("links text that sits before any heading, with no section fallback", () => {
+        const url = new URL(
+            withDeepLinkTarget(`${BASE}&anchor=old`, {
+                kind: "text",
+                text: "opening words",
+            })!,
+        );
+
+        expect(url.searchParams.get(TEXT_LINK_PARAM)).toBe("opening words");
+        expect(url.searchParams.has(ANCHOR_LINK_PARAM)).toBe(false);
+    });
+
     it("returns undefined for blank text", () => {
         expect(
             withDeepLinkTarget(BASE, {

@@ -85,4 +85,24 @@ describe("formatLikeTooltip", () => {
         expect(out.length).toBeLessThanOrEqual(120 + " liked this".length);
         expect(out).toMatch(/and \d+ others liked this$/);
     });
+
+    it("still names the first liker when that one name alone overflows the budget", () => {
+        // Service-account display names can be very long.
+        const veryLong =
+            "Contoso Release Automation Service Account (build pipeline identity for production deployments in the EU West and North Europe regions)";
+
+        expect(formatLikeTooltip([u("a", veryLong), u("b", "Bob"), u("c", "Cy")], "me")).toBe(
+            `${veryLong} and 2 others liked this`,
+        );
+    });
+
+    it("shows all five names when they just fit the tooltip", () => {
+        // 4 × 22 + 21 characters of names plus ", " × 3 and " and " is exactly 120.
+        const names = ["A", "B", "C", "D"].map((c) => c.repeat(22)).concat("E".repeat(21));
+        const users = names.map((name, i) => u(`id-${i}`, name));
+
+        expect(formatLikeTooltip(users, "me")).toBe(
+            `${names.slice(0, 4).join(", ")} and ${names[4]} liked this`,
+        );
+    });
 });

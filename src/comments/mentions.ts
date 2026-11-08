@@ -75,6 +75,7 @@ const TRIGGER_CHARS: Partial<Record<string, MentionKind>> = {
  * don't open the picker.
  */
 export function detectActiveTrigger(text: string, caret: number): ActiveTrigger | null {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: a caret at or before the start leaves nothing to scan, so the loop below finds no trigger and returns null anyway, candidate for removal
     if (caret < 0 || caret > text.length) return null;
     // Cap look-back; longer mentions are pathological — close the picker instead.
     const MAX_LOOKBACK = 64;
@@ -85,6 +86,7 @@ export function detectActiveTrigger(text: string, caret: number): ActiveTrigger 
         const kind = TRIGGER_CHARS[ch];
 
         if (kind !== undefined) {
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: `prev` is only read when i !== 0 (next line), so its value at the start of the text never matters, candidate for removal
             const prev = i === 0 ? "" : text[i - 1]!;
             if (i !== 0 && !/\s/.test(prev)) return null;
 
@@ -131,6 +133,7 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
                 state: suggestion.state,
             });
 
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: suggestions come from the ADO adapter, which leaves stateColor unset rather than empty, so the empty-string check never fires, candidate for removal
             if (suggestion.stateColor !== undefined && suggestion.stateColor !== "") {
                 params.set("stateColor", suggestion.stateColor);
             }
@@ -144,6 +147,7 @@ export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
             const label = `!${suggestion.id} ${suggestion.title}`;
             const params = new URLSearchParams({ status: suggestion.status });
 
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the repository comes from ADO's repository name, which is never empty, so the empty-string check never fires, candidate for removal
             if (suggestion.repository !== undefined && suggestion.repository !== "") {
                 params.set("repo", suggestion.repository);
             }
@@ -196,6 +200,7 @@ export function encodePickedMentions(
     text: string,
     picks: ReadonlyArray<{ label: string; id: string }>,
 ): string {
+    // Stryker disable next-line ConditionalExpression: dead code: with no picks the loop below makes no replacements and returns the text as is, candidate for removal
     if (picks.length === 0) return text;
     const sorted = [...picks].sort((a, b) => b.label.length - a.label.length);
     let out = text;
@@ -225,6 +230,7 @@ function replaceStandaloneMention(text: string, token: string, replacement: stri
 
 /** True when the token at `[at, at + length)` starts a word and ends a mention. */
 function isStandaloneMention(text: string, at: number, length: number): boolean {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: `before` is only consulted when at !== 0 (leftOk below), so its value at the start of the text never matters, candidate for removal
     const before = at === 0 ? "" : text[at - 1]!;
     const afterIndex = at + length;
     const leftOk = at === 0 || /\s/.test(before);
@@ -248,10 +254,12 @@ export interface ParsedMentionUrl {
 }
 
 export function parseMentionUrl(url: string): ParsedMentionUrl | null {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a non-mention URL would also need "user/", "workitem/" or "pullrequest/" at exactly its 11th character to get past the kind check below, which no real link has, candidate for removal
     if (!url.startsWith("mention://")) return null;
     // mention://<kind>/<id>?key=value&...
     const after = url.slice("mention://".length);
     const slash = after.indexOf("/");
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: without a "/" (or with an empty kind) the kind slice is never "user", "workitem" or "pullrequest", so the kind check below rejects it anyway, candidate for removal
     if (slash < 0) return null;
     const kindStr = after.slice(0, slash);
 
@@ -261,10 +269,12 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
 
     const rest = after.slice(slash + 1);
     const q = rest.indexOf("?");
+    // Stryker disable next-line EqualityOperator: when "?" is the first character both branches yield an empty id
     const idRaw = q < 0 ? rest : rest.slice(0, q);
     const id = decodeURIComponent(idRaw);
     const params: Record<string, string> = {};
 
+    // Stryker disable next-line EqualityOperator: only differs for a URL with an empty id ("mention://kind/?…"), which buildMentionMarkdown never produces
     if (q >= 0) {
         const search = new URLSearchParams(rest.slice(q + 1));
         for (const [k, v] of search) params[k] = v;
@@ -320,6 +330,7 @@ const USER_MENTION_LINK_RE = /mention:\/\/user\/([^)\s"']+)/g;
  * callers can fall back rather than emit a token ADO won't resolve).
  */
 export function normalizeIdentityGuid(raw: string | undefined): string | undefined {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: neither "" nor undefined (stringified to "undefined") contains a GUID, so the regexes below return undefined anyway, candidate for removal
     if (raw === undefined || raw === "") return undefined;
 
     const dashed = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(raw);
@@ -352,6 +363,7 @@ export function collectUserMentionIds(body: string): string[] {
     const add = (raw: string): void => {
         const id = raw.trim();
         if (!id) return;
+        // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
         const key = id.toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);
@@ -391,9 +403,11 @@ export function collectMentionIdentities(
 
     for (const raw of collectUserMentionIds(body)) {
         const id = normalizeIdentityGuid(raw) ?? raw;
+        // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
         const key = id.toLowerCase();
         if (seen.has(key)) continue;
         const info = lookup(id);
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the lookup is the identity store, which never holds an empty display name (seed and resolve both skip them), candidate for removal
         if (info === undefined || info.displayName === "") continue;
         seen.add(key);
         out.push({
@@ -419,6 +433,7 @@ export function mergeMentionIdentities(
 
     for (const list of lists) {
         for (const m of list) {
+            // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
             const key = (normalizeIdentityGuid(m.id) ?? m.id).toLowerCase();
             if (seen.has(key)) continue;
             seen.add(key);

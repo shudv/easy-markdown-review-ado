@@ -94,6 +94,7 @@ export function splitFileDiffs(
     for (const [path, info] of Object.entries(fileDiffs)) {
         if (info.ranges.length > 0) diffs[path] = info.ranges;
 
+        // Stryker disable next-line ConditionalExpression: the reader looks original sources up by path, so an entry holding undefined reads the same as a missing one
         if (info.originalSource != null) {
             originalSources[path] = info.originalSource;
         }
@@ -126,5 +127,6 @@ export function prBranchVersion(pr: Pick<GitPullRequest, "sourceRefName">): stri
     const ref = pr.sourceRefName;
     if (!ref) return undefined;
 
+    // Stryker disable next-line Regex: a PR source ref either starts with `refs/heads/` or doesn't contain it at all, so stripping its first occurrence anywhere strips the same text
     return `GB${ref.replace(/^refs\/heads\//, "")}`;
 }

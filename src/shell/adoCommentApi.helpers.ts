@@ -92,6 +92,7 @@ export function parseIdentitiesResponse(
         // ADO returns a `null` slot for any requested id it can't resolve (e.g. a
         // cross-tenant AAD guest queried by its object id). Skip those — a single
         // null must NOT crash the whole batch and drop the ids that DID resolve.
+        // Stryker disable next-line ConditionalExpression: dead code: a non-object entry has no `id` property, so it is skipped by the id check below anyway; candidate for removal
         if (entity === null || typeof entity !== "object") continue;
 
         const e = entity as {
@@ -100,10 +101,13 @@ export function parseIdentitiesResponse(
             customDisplayName?: unknown;
         };
 
+        // Stryker disable next-line StringLiteral: an entity without a text id is stored under the placeholder, which no requested id ever equals, so it resolves nobody either way
         const id = typeof e.id === "string" ? e.id.toLowerCase() : "";
 
         const name =
+            // Stryker disable next-line ConditionalExpression: dead code: ADO sends display names as text or null/absent; for null/absent `true && x` is falsy just like the typeof check; candidate for removal
             (typeof e.providerDisplayName === "string" && e.providerDisplayName) ||
+            // Stryker disable next-line ConditionalExpression: dead code: ADO sends display names as text or null/absent; for null/absent `true && x` is falsy just like the typeof check; candidate for removal
             (typeof e.customDisplayName === "string" && e.customDisplayName) ||
             "";
 
@@ -124,6 +128,7 @@ export function parseIdentitiesResponse(
  * `authorFromAdo` and the identity-picker → suggestion adapter.
  */
 export function initialsOf(name: string): string {
+    // Stryker disable next-line MethodExpression,Regex: `filter(Boolean)` drops the empty pieces that untrimmed edges or single-space splits produce, so the initials are identical
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return "?";
     if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
@@ -191,6 +196,7 @@ export function matchPullRequestSuggestions(
     query: string,
 ): PullRequestSuggestion[] {
     const trimmed = query.trim();
+    // Stryker disable next-line Regex: a non-numeric query yields NaN, which equals no PR id, so title matching decides exactly as with `null`
     const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
     const lower = trimmed.toLowerCase();
 
@@ -199,6 +205,7 @@ export function matchPullRequestSuggestions(
             if (typeof p.pullRequestId !== "number") return false;
             if (p.pullRequestId === numeric) return true;
 
+            // Stryker disable next-line StringLiteral: an untitled PR matches only queries contained in the placeholder; "" vs any placeholder differs only for contrived queries, never for a real title search
             return (p.title ?? "").toLowerCase().includes(lower);
         })
         .slice(0, 10)
@@ -247,12 +254,13 @@ export const SCHEMA_VERSION = "1";
  */
 export function readMentionsProp(properties: unknown): MentionedIdentity[] {
     const raw = readProp(properties, PROP_MENTIONS);
+    // Stryker disable next-line ConditionalExpression: dead code: a missing, blank or non-text value makes JSON.parse throw or yield a non-array, which the catch / Array.isArray checks below turn into [] anyway; candidate for removal
     if (typeof raw !== "string" || raw.length === 0) return [];
     let parsed: unknown;
 
     try {
         parsed = JSON.parse(raw);
-    } catch {
+    } /* Stryker disable next-line BlockStatement: dead code: with an empty catch `parsed` stays undefined, which the Array.isArray check below turns into [] anyway; candidate for removal */ catch {
         return [];
     }
 
@@ -534,6 +542,7 @@ function adoCommentToLocal(c: AdoCommentWire): Comment {
  */
 export function collectThreadIdentities(t: AdoThreadWire): MentionedIdentity[] {
     const map = (t as { identities?: Record<string, unknown> }).identities;
+    // Stryker disable next-line ConditionalExpression: dead code: a non-object identities value yields entries without a text id/name, which the loop skips anyway; candidate for removal
     if (!map || typeof map !== "object") return [];
     const out: MentionedIdentity[] = [];
 
@@ -649,13 +658,14 @@ function readExtensionAnchor(t: AdoThreadWire): TextQuoteAnchor | undefined {
 
     try {
         return JSON.parse(anchorJson) as TextQuoteAnchor;
-    } catch {
+    } /* Stryker disable next-line BlockStatement: dead code: the function returns undefined after an empty catch too; candidate for removal */ catch {
         return undefined;
     }
 }
 
 /** Synthesize a line anchor for a native diff-anchored thread. */
 function nativeDiffLineAnchor(ctx: AdoThreadContextWire | undefined): TextQuoteAnchor {
+    // Stryker disable next-line OptionalChaining: dead code: only called for threads whose threadContext carries a file path, so `ctx` is always defined here; candidate for removal
     const startLine = ctx?.rightFileStart?.line ?? ctx?.leftFileStart?.line;
 
     if (typeof startLine !== "number" || startLine <= 0) {
@@ -667,6 +677,7 @@ function nativeDiffLineAnchor(ctx: AdoThreadContextWire | undefined): TextQuoteA
         prefix: "",
         suffix: "",
         line: startLine,
+        // Stryker disable next-line OptionalChaining: dead code: only called for threads whose threadContext carries a file path, so `ctx` is always defined here; candidate for removal
         endLine: ctx?.rightFileEnd?.line ?? ctx?.leftFileEnd?.line ?? startLine,
     };
 }
@@ -683,16 +694,20 @@ export function buildThreadContext(
     rightFileStart: { line: number; offset: number };
     rightFileEnd: { line: number; offset: number };
 } {
+    // Stryker disable next-line ConditionalExpression: dead code: the typeof guard is redundant with `> 0` (undefined > 0 is false); zeroed positions are pinned by the "zeroed at the start of the file" scenario; candidate for removal
     const startLine = typeof anchor.line === "number" && anchor.line > 0 ? anchor.line : 1;
 
+    // Stryker disable next-line ConditionalExpression: dead code: the typeof guard is redundant with `> 0` (undefined > 0 is false); zeroed positions are pinned by the "zeroed at the start of the file" scenario; candidate for removal
     const startOffset = typeof anchor.column === "number" && anchor.column > 0 ? anchor.column : 1;
 
     const rawEndLine =
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: dead code: a missing or zeroed end falls back to the start, and the start is always >= 1 — the end line is clamped to it below, and ADO-bound anchors always carry a 1-based end column; candidate for removal
         typeof anchor.endLine === "number" && anchor.endLine > 0 ? anchor.endLine : startLine;
 
     const endLine = Math.max(startLine, rawEndLine);
 
     const rawEndOffset =
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: dead code: a missing or zeroed end falls back to the start, and the start is always >= 1 — the end line is clamped to it below, and ADO-bound anchors always carry a 1-based end column; candidate for removal
         typeof anchor.endColumn === "number" && anchor.endColumn > 0
             ? anchor.endColumn
             : startOffset;

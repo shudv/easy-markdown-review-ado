@@ -92,6 +92,7 @@ export function resolveDocLink(currentPath: string, rawHref: string): DocLinkTar
     let hash = "";
     const hashIdx = pathPart.indexOf("#");
 
+    // Stryker disable next-line EqualityOperator: a fragment at index 0 was already returned as an anchor above, so `hashIdx` is never 0 here.
     if (hashIdx >= 0) {
         hash = pathPart.slice(hashIdx + 1);
         pathPart = pathPart.slice(0, hashIdx);
@@ -150,6 +151,7 @@ export function buildReposFileUrl(
 
 /** Case-insensitive, leading-slash-insensitive repo path equality. */
 export function samePath(a: string, b: string): boolean {
+    // Stryker disable next-line MethodExpression: upper-casing both paths is as case-insensitive as lower-casing them; they only disagree on case-folding oddities such as "ß" → "SS", i.e. two distinct files whose names differ only by "ß" versus "ss".
     const norm = (p: string) => p.replace(/^\/+/, "").toLowerCase();
 
     return norm(a) === norm(b);

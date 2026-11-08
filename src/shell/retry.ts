@@ -53,6 +53,7 @@ function realSleep(ms: number): Promise<void> {
 }
 
 function abortError(): Error {
+    // Stryker disable next-line StringLiteral: callers recognise a cancelled retry by its `AbortError` name; the message is never shown or matched
     const err = new Error("Retry aborted");
     err.name = "AbortError";
 
@@ -81,7 +82,9 @@ function abortableSleep(
             reject(abortError());
         };
 
+        // Stryker disable next-line ArrowFunction,StringLiteral: a listener left behind only rejects a promise that has already settled, which is ignored
         const cleanup = () => signal.removeEventListener("abort", onAbort);
+        // Stryker disable next-line ObjectLiteral,BooleanLiteral: `onAbort` removes itself via `cleanup`, so `once` changes nothing
         signal.addEventListener("abort", onAbort, { once: true });
         sleep(ms).then(
             () => {
@@ -102,6 +105,7 @@ function abortableSleep(
  * now. Returns `undefined` when absent or unparseable. Exposed for tests.
  */
 export function parseRetryAfterMs(err: unknown, now: number = Date.now()): number | undefined {
+    // Stryker disable next-line ConditionalExpression: reading `headers` / `retryAfter` off a thrown primitive yields undefined, so primitives find no hint without the `typeof` check
     if (typeof err !== "object" || err === null) return undefined;
     const e = err as Record<string, unknown>;
     // A raw header bag on the error, or a `Response`-like `.headers`.
@@ -113,10 +117,12 @@ export function parseRetryAfterMs(err: unknown, now: number = Date.now()): numbe
         raw = headers.get("Retry-After") ?? headers.get("retry-after") ?? undefined;
     }
 
+    // Stryker disable next-line ConditionalExpression: the `typeof` check only matters for a non-string `retryAfter`, which no error the app handles carries
     if (raw === undefined && typeof e.retryAfter === "string") {
         raw = e.retryAfter;
     }
 
+    // Stryker disable next-line ConditionalExpression: an absent value parses as neither a number nor a date below, so it finds no hint either way
     if (raw === undefined) return undefined;
 
     const asNum = Number(raw);

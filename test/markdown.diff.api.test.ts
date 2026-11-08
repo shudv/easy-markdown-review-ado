@@ -13,7 +13,7 @@ import {
 import { DIFF_TOOLTIP_RIGHT_CLASS } from "../src/markdown/diffDecorations/shared";
 import { WORD_ADDED_CLASS, WORD_REMOVED_CLASS } from "../src/markdown/wordDiffDom";
 import type { DiffRange } from "../src/types";
-import { makeRoot, render, stubRender } from "./markdownDiffHarness";
+import { lines, makeRoot, render, stubRender } from "./markdownDiffHarness";
 
 // The decorateDiffRanges surface shared by every rendered feature: which
 // element a change paints, removal markers, clearing and re-decorating,
@@ -202,7 +202,28 @@ describe("re-decorating", () => {
 });
 
 describe("explained changes", () => {
-    it("opens the explanation toward the left when the change sits right of the article's centre", () => {
+    it.each([
+        { placement: "left of the article's centre", left: 330, width: 100, right: false },
+        { placement: "exactly on the article's centre", left: 350, width: 100, right: false },
+        { placement: "just right of the article's centre", left: 380, width: 60, right: true },
+        { placement: "far right in the article", left: 600, width: 100, right: true },
+    ])(
+        "opens the explanation toward the left only for a change $placement",
+        ({ left, width, right }) => {
+            const root = render("Retry policy changed.");
+            document.body.appendChild(root);
+            decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
+            const paragraph = root.querySelector<HTMLElement>(`.${DIFF_TOOLTIP_CLASS}`)!;
+            root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 100);
+            paragraph.getBoundingClientRect = () => new DOMRect(left, 0, width, 20);
+
+            paragraph.dispatchEvent(new Event("focus"));
+
+            expect(paragraph.classList.contains(DIFF_TOOLTIP_RIGHT_CLASS)).toBe(right);
+        },
+    );
+
+    it("places the explanation when the pointer moves onto the change", () => {
         const root = render("Retry policy changed.");
         document.body.appendChild(root);
         decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
@@ -210,9 +231,49 @@ describe("explained changes", () => {
         root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 100);
         paragraph.getBoundingClientRect = () => new DOMRect(600, 0, 100, 20);
 
-        paragraph.dispatchEvent(new Event("focus"));
+        paragraph.dispatchEvent(new Event("pointerenter"));
 
         expect(paragraph.classList.contains(DIFF_TOOLTIP_RIGHT_CLASS)).toBe(true);
+    });
+
+    it("stops placing the explanation once changes are hidden", () => {
+        const root = render("Retry policy changed.");
+        document.body.appendChild(root);
+        decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
+        const paragraph = root.querySelector<HTMLElement>(`.${DIFF_TOOLTIP_CLASS}`)!;
+        decorateDiffRanges(root, []);
+        root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 100);
+        paragraph.getBoundingClientRect = () => new DOMRect(600, 0, 100, 20);
+
+        paragraph.dispatchEvent(new Event("pointerenter"));
+        paragraph.dispatchEvent(new Event("focus"));
+
+        expect(paragraph.classList.contains(DIFF_TOOLTIP_RIGHT_CLASS)).toBe(false);
+    });
+
+    it.each([
+        {
+            name: "its own title, tab stop and description",
+            attributes: { title: "Owner note", tabindex: "-1", "aria-description": "Existing" },
+        },
+        { name: "no title, tab stop or description", attributes: {} },
+    ])("gives a paragraph with $name back when changes are hidden", ({ attributes }) => {
+        const root = render("Retry policy changed.");
+        const paragraph = root.querySelector<HTMLElement>("p")!;
+
+        for (const [name, value] of Object.entries(attributes)) {
+            paragraph.setAttribute(name, value);
+        }
+
+        decorateDiffRanges(root, [{ startLine: 1, endLine: 1, kind: "modified" }]);
+        expect(paragraph.classList.contains(DIFF_TOOLTIP_CLASS)).toBe(true);
+        decorateDiffRanges(root, []);
+
+        expect({
+            title: paragraph.getAttribute("title"),
+            tabindex: paragraph.getAttribute("tabindex"),
+            "aria-description": paragraph.getAttribute("aria-description"),
+        }).toEqual({ title: null, tabindex: null, "aria-description": null, ...attributes });
     });
 
     it("leaves the explanation's placement alone outside a rendered article", () => {
@@ -306,6 +367,27 @@ describe("contiguous grouping", () => {
         const [a, b] = Array.from(root.children) as HTMLElement[];
         expect(a!.dataset.diffGroup).toBeUndefined();
         expect(b!.dataset.diffGroup).toBeUndefined();
+    });
+
+    it("leaves added table rows out of the bars, tinting each in place", () => {
+        const root = render(lines("| A | B |", "| --- | --- |", "| a | 1 |", "| b | 2 |"));
+
+        decorateDiffRanges(root, [{ startLine: 3, endLine: 4, kind: "added" }]);
+
+        expect(
+            Array.from(
+                root.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+                (row) => row.dataset.diffGroup,
+            ),
+        ).toEqual([undefined, undefined]);
+    });
+
+    it("keeps an added rule's bar apart from the line-washed paragraph after it", () => {
+        const root = render(lines("---", "", "Added paragraph."));
+
+        decorateDiffRanges(root, [{ startLine: 1, endLine: 3, kind: "added" }]);
+
+        expect(root.querySelector("hr")?.dataset.diffGroup).toBe("single");
     });
 
     it("removes the bars when changes are hidden", () => {
@@ -487,6 +569,81 @@ describe("reconstructOriginalBlock", () => {
         expect(
             reconstructOriginalBlock({ start: 2, end: 2 }, [edit], "old one\nold two"),
         ).toBeNull();
+    });
+
+    const previous = ["Intro.", "", "Old one.", "Old two.", "Old three.", "", "Outro."].join("\n");
+
+    const modified = (
+        start: number,
+        end: number,
+        originalStart?: number,
+        originalEnd?: number,
+    ) => ({
+        start,
+        end,
+        kind: "modified" as const,
+        originalStart,
+        originalEnd,
+    });
+
+    it.each([
+        {
+            name: "one block out of a wider edit that kept its line count",
+            block: { start: 4, end: 4 },
+            edits: [modified(3, 5, 3, 5)],
+            original: "Old two.",
+        },
+        {
+            name: "a block whose middle line alone was edited",
+            block: { start: 3, end: 5 },
+            edits: [modified(4, 4, 4, 4)],
+            original: "Old one.\nOld two.\nOld three.",
+        },
+        {
+            name: "a block whose edit also added a line",
+            block: { start: 3, end: 6 },
+            edits: [modified(3, 4, 3, 3)],
+            original: "Old one.\nOld two.\nOld three.",
+        },
+        {
+            name: "a block covered by two edits listed in any order",
+            block: { start: 3, end: 5 },
+            edits: [modified(5, 5, 5, 5), modified(3, 3, 3, 3)],
+            original: "Old one.\nOld two.\nOld three.",
+        },
+        {
+            name: "a block while other parts of the document were edited too",
+            block: { start: 3, end: 5 },
+            edits: [
+                modified(1, 1, 1, 1),
+                { start: 2, end: 2, kind: "added" as const },
+                modified(4, 4, 4, 4),
+                modified(7, 7, 7, 7),
+            ],
+            original: "Old one.\nOld two.\nOld three.",
+        },
+    ])("rebuilds the previous lines of $name", ({ block, edits, original }) => {
+        expect(reconstructOriginalBlock(block, edits, previous)).toBe(original);
+    });
+
+    it.each([
+        {
+            name: "an edit that doesn't say where its previous lines were",
+            block: { start: 3, end: 4 },
+            edits: [{ ...modified(3, 3), originalText: "Old one." }],
+        },
+        {
+            name: "an edit that changed its line count and starts above the block",
+            block: { start: 4, end: 5 },
+            edits: [modified(3, 4, 3, 3)],
+        },
+        {
+            name: "an edit that ends below the block",
+            block: { start: 3, end: 4 },
+            edits: [modified(4, 5, 4, 5)],
+        },
+    ])("finds no previous block for $name", ({ block, edits }) => {
+        expect(reconstructOriginalBlock(block, edits, previous)).toBeNull();
     });
 });
 describe("diffLegendStats", () => {

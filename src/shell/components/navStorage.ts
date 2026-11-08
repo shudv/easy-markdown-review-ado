@@ -42,6 +42,7 @@ export function buildFolderStorageKey(files: ReadonlyArray<{ path: string }>): s
 
     for (const p of paths) {
         for (let i = 0; i < p.length; i += 1) {
+            // Stryker disable next-line ArithmeticOperator: the key is an opaque per-file-list token; any variant of the mix stays deterministic and order-independent, so the same file list still restores its folders and a different one still starts fresh
             h = ((h << 5) + h + p.charCodeAt(i)) | 0;
         }
     }
@@ -53,6 +54,7 @@ export function buildFolderStorageKey(files: ReadonlyArray<{ path: string }>): s
 export function readCollapsedDirs(key: string): Set<string> {
     try {
         const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `JSON.parse(null)` is not a list and `JSON.parse("")` throws into the catch below, so both read as an empty set without the guard
         if (raw === null || raw === "") return new Set();
         const arr: unknown = JSON.parse(raw);
 

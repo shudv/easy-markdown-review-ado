@@ -30,6 +30,7 @@ export function resolveTableColumnAlignment(
 
     const headerLine = numAttr(headerRow, "data-source-line");
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: a missing header line compares as 0, which is before every range, and a body row's range always ends after the header line
     if (headerLine == null || headerLine < range.start || headerLine > range.end) {
         return undefined;
     }
@@ -82,7 +83,9 @@ export function diffTableRowCells(
     renderInline: (md: string) => string,
     columnAlignment?: TableCellAlignment[] | null,
 ): "precise" | "unchanged" | "ambiguous" {
+    // Stryker disable next-line MethodExpression: a rendered table row only holds td/th cells
     const cells = Array.from(tr.children).filter(
+        // Stryker disable next-line ConditionalExpression: a rendered table row only holds td/th cells
         (c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH",
     );
 
@@ -96,9 +99,11 @@ export function diffTableRowCells(
             ? alignTableCells(originalCells, currentCells)
             : columnAlignment;
 
+    // Stryker disable next-line StringLiteral: the caller treats every result other than precise and unchanged as ambiguous
     if (!rawAlignment) return "ambiguous";
 
     if (alignmentOutOfRange(rawAlignment, originalCells.length, currentCells.length)) {
+        // Stryker disable next-line StringLiteral: the caller treats every result other than precise and unchanged as ambiguous
         return "ambiguous";
     }
 
@@ -110,7 +115,8 @@ export function diffTableRowCells(
             kind:
                 originalCells[item.originalIndex] === currentCells[item.currentIndex]
                     ? "equal"
-                    : "modified",
+                    : // Stryker disable next-line StringLiteral: any kind other than equal, added or removed takes the modified-cell branch
+                      "modified",
         };
     });
 
@@ -267,6 +273,7 @@ function insertRemovedCell(
  * source-position metadata and the words handled by the word diff itself.
  */
 function tableCellStructureSignature(root: Element): string {
+    // Stryker disable next-line ArrayDeclaration: both signatures being compared get the same leading entry
     const parts: string[] = [];
 
     const visit = (element: Element): void => {
@@ -274,15 +281,19 @@ function tableCellStructureSignature(root: Element): string {
             .map((name) => [name, element.getAttribute(name)] as const)
             .filter((entry): entry is readonly [string, string] => entry[1] != null)
             .map(([name, value]) => `${name}=${value}`)
+            // Stryker disable next-line StringLiteral: both signatures being compared join their attributes the same way
             .join(",");
 
+        // Stryker disable next-line MethodExpression: both signatures being compared spell tag names the same way
         parts.push(`<${element.tagName.toLowerCase()}${semanticAttributes}>`);
         for (const child of Array.from(element.children)) visit(child);
+        // Stryker disable next-line MethodExpression: both signatures being compared spell tag names the same way
         parts.push(`</${element.tagName.toLowerCase()}>`);
     };
 
     for (const child of Array.from(root.children)) visit(child);
 
+    // Stryker disable next-line StringLiteral: both signatures being compared join their parts the same way
     return parts.join("");
 }
 

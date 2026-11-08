@@ -1,4 +1,4 @@
-// React-hook tests for the two context-backed comment hooks. Mounted in a
+// React-hook tests for the context-backed comment hooks. Mounted in a
 // jsdom root so the real React render/effect lifecycle drives them — we only
 // assert observable behaviour (return value / thrown error / hydrated DOM),
 // never internal state.
@@ -11,6 +11,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { CommentApiProvider, useCommentApi } from "../src/comments/api";
 import type { CommentApi } from "../src/comments/api";
+import {
+    IdentityStore,
+    IdentityStoreContext,
+    useUserMentionHydration,
+} from "../src/comments/identityStore";
 import {
     MentionLinkContext,
     useMentionLinkHydration,
@@ -134,5 +139,66 @@ describe("useMentionLinkHydration", () => {
         mount(createElement(Host, { ctx: null }));
         const a = container!.querySelector("a")!;
         expect(a.getAttribute("href")).toBe("mention://workitem/7");
+    });
+
+    it("upgrades placeholders once the org context becomes available", () => {
+        mount(createElement(Host, { ctx: null }));
+
+        act(() => root!.render(createElement(Host, { ctx: CTX })));
+
+        expect(container!.querySelector("a")!.getAttribute("href")).toBe(
+            "https://dev.azure.com/contoso/Proj/_workitems/edit/7",
+        );
+    });
+});
+
+describe("useUserMentionHydration", () => {
+    const GUID = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
+
+    function Pill(): ReactElement {
+        const ref = useRef<HTMLDivElement>(null);
+        useUserMentionHydration(ref, []);
+
+        return createElement("div", {
+            ref,
+            dangerouslySetInnerHTML: {
+                __html: `<span class="emr-mention" data-mention-kind="user" data-mention-id="${GUID}">@${GUID}</span>`,
+            },
+        });
+    }
+
+    function Host(props: { store: IdentityStore | null }): ReactElement {
+        return createElement(
+            IdentityStoreContext.Provider,
+            { value: props.store },
+            createElement(Pill),
+        );
+    }
+
+    const pillText = (): string | null => container!.querySelector(".emr-mention")!.textContent;
+
+    it("shows the person's name when the identity is already known", () => {
+        const store = new IdentityStore();
+        store.seed([{ id: GUID, displayName: "Grace Hopper" }]);
+
+        mount(createElement(Host, { store }));
+
+        expect(pillText()).toBe("@Grace Hopper");
+    });
+
+    it("swaps the raw id for the person's name once their identity resolves", () => {
+        const store = new IdentityStore();
+        mount(createElement(Host, { store }));
+        expect(pillText()).toBe(`@${GUID}`);
+
+        act(() => store.seed([{ id: GUID, displayName: "Grace Hopper" }]));
+
+        expect(pillText()).toBe("@Grace Hopper");
+    });
+
+    it("keeps showing the raw id when no identity store is provided", () => {
+        mount(createElement(Host, { store: null }));
+
+        expect(pillText()).toBe(`@${GUID}`);
     });
 });

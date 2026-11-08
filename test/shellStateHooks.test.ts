@@ -75,6 +75,77 @@ describe("useCommentApiRouting", () => {
     });
 });
 
+describe("useCommentApiRouting: documents hub routing each document to its own pull request", () => {
+    const pr = (id: number) =>
+        ({ prId: id }) as unknown as NonNullable<
+            Parameters<typeof useCommentApiRouting>[0]["routedPr"]
+        >;
+
+    function perDocument(apis: Record<string, CommentApi | undefined>, selectedPath: string) {
+        return {
+            commentApi: undefined,
+            // Like the hub, each lookup hands out a fresh connection for the path.
+            commentApiForPath: vi.fn((path: string) =>
+                apis[path] ? { ...apis[path] } : undefined,
+            ),
+            routedPr: undefined,
+            routedPrForPath: (path: string) => (path === "docs/a.md" ? pr(1) : pr(2)),
+            selectedPath,
+        };
+    }
+
+    it("writes each document's comments to its own pull request", async () => {
+        const opts = perDocument(
+            { "docs/a.md": stubCommentApi(), "docs/b.md": stubCommentApi() },
+            "docs/a.md",
+        );
+
+        const hook = await mount(useCommentApiRouting, opts);
+        expect(opts.commentApiForPath).toHaveBeenCalledWith("docs/a.md");
+        expect(hook.current.perDocNoWriteTarget).toBe(false);
+        await hook.rerender({ ...opts, selectedPath: "docs/b.md" });
+        expect(opts.commentApiForPath).toHaveBeenLastCalledWith("docs/b.md");
+    });
+
+    it("keeps using a document's connection when the reader returns to it", async () => {
+        const opts = perDocument(
+            { "docs/a.md": stubCommentApi(), "docs/b.md": stubCommentApi() },
+            "docs/a.md",
+        );
+
+        const hook = await mount(useCommentApiRouting, opts);
+        const first = hook.current.commentApi;
+        await hook.rerender({ ...opts, selectedPath: "docs/b.md" });
+        await hook.rerender(opts);
+        expect(hook.current.commentApi).toBe(first);
+    });
+
+    it("shows a document without a pull request to write to as read-only", async () => {
+        const opts = perDocument({}, "docs/a.md");
+        const hook = await mount(useCommentApiRouting, opts);
+        expect(hook.current.perDocNoWriteTarget).toBe(true);
+        expect(hook.current.commentApi).toBeInstanceOf(LocalOnlyCommentApi);
+    });
+
+    it("shows the pull request pill of the open document", async () => {
+        const opts = perDocument({}, "docs/a.md");
+        const hook = await mount(useCommentApiRouting, opts);
+        expect(hook.current.effectiveRoutedPr).toEqual(pr(1));
+        await hook.rerender({ ...opts, selectedPath: "docs/b.md" });
+        expect(hook.current.effectiveRoutedPr).toEqual(pr(2));
+    });
+
+    it("lets reviewers comment on a pull request's documents", async () => {
+        const hook = await mount(useCommentApiRouting, {
+            ...routing(stubCommentApi(), "docs/a.md"),
+            routedPr: pr(5),
+        });
+
+        expect(hook.current.perDocNoWriteTarget).toBe(false);
+        expect(hook.current.effectiveRoutedPr).toEqual(pr(5));
+    });
+});
+
 const thread = (id: string, filePath: string): CommentThread => ({
     id,
     filePath,

@@ -147,6 +147,20 @@ describe("handleChange", () => {
         expect(handle.api.getSnapshot()).toBe("typed");
     });
 
+    it("persists a draft for a composer opened after the page loaded", () => {
+        mount({ scope: "pr", initialTarget: null });
+        act(() => handle.setTarget(REPLY_TARGET));
+
+        act(() => handle.api.handleChange("late reply"));
+
+        expect(loadDraft("pr")).toEqual({
+            path: "docs/a.md",
+            threadId: "t-7",
+            anchor: null,
+            body: "late reply",
+        });
+    });
+
     it("clears persistence when the composer is emptied", () => {
         mount({ scope: "pr", initialTarget: NEW_TARGET });
         act(() => handle.api.handleChange("typed"));

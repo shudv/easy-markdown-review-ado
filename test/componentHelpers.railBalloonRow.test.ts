@@ -303,6 +303,13 @@ describe("CommentRow helpers", () => {
         expect(formatFullTime("2026-05-11T11:41:00Z")).toContain(" at ");
     });
 
+    it("names the month and leaves out the seconds, like the rail's other timestamps", () => {
+        const out = formatFullTime(new Date(2026, 4, 11, 11, 41, 30).toISOString());
+        expect(out).toContain("2026");
+        expect(out).not.toMatch(/\d\/\d/);
+        expect(out).not.toMatch(/\d:\d\d:\d\d/);
+    });
+
     it("shows an unparseable timestamp as-is", () => {
         expect(formatFullTime("not a date")).toBe("not a date");
     });

@@ -10,6 +10,7 @@ import { WORD_REMOVED_CLASS } from "../src/markdown/wordDiffDom";
 import { renderMarkdownSync } from "../src/markdown/render";
 import {
     decorate,
+    diffView,
     expectPreciseAmber,
     lines,
     makeRoot,
@@ -27,6 +28,34 @@ beforeEach(() => {
 });
 
 describe("edited headings", () => {
+    it("offers the previous version of a heading rewritten with closing hashes", () => {
+        expect(view(lines("## Title", "", "Body."), lines("## Title ##", "", "Body."))).toEqual([
+            "h2 modified wash: Before Title",
+        ]);
+    });
+
+    it("reveals a heading's previous version just above it when Before is pressed", () => {
+        const { root } = diffView(
+            lines("## Title", "", "Body."),
+            lines("## Title ##", "", "Body."),
+        );
+
+        const heading = root.querySelector("h2[data-diff-kind]")!;
+        const trigger = heading.querySelector<HTMLButtonElement>(".emr-diff-before-trigger")!;
+        const panel = heading.previousElementSibling as HTMLElement;
+        expect(panel.classList.contains("emr-diff-before-panel")).toBe(true);
+        expect(panel.id).not.toBe("");
+        expect(trigger.getAttribute("aria-controls")).toBe(panel.id);
+        expect(panel.hidden).toBe(true);
+
+        trigger.click();
+
+        expect(panel.hidden).toBe(false);
+        expect(trigger.textContent).toBe("Hide");
+        expect(trigger.getAttribute("aria-expanded")).toBe("true");
+        expect(panel.querySelector("h2")?.textContent).toBe("Title");
+    });
+
     it.each([
         ["h1", "# Getting Started Guide", "# Getting Started", "Guide"],
         ["h2", "## Configuration Settings", "## Configuration Options", "Settings"],

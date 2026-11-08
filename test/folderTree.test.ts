@@ -135,6 +135,22 @@ describe("buildFolderTree", () => {
         expect(names).toEqual(["src", "Alpha.md", "Bravo.md", "zeta.md"]);
     });
 
+    it.each([
+        { listed: ["README.md", "readme.md"], shown: ["README.md", "readme.md"] },
+        { listed: ["readme.md", "README.md"], shown: ["readme.md", "README.md"] },
+        { listed: ["Docs/a.md", "docs/b.md"], shown: ["Docs", "docs"] },
+        { listed: ["docs/b.md", "Docs/a.md"], shown: ["docs", "Docs"] },
+    ])(
+        "shows entries whose names differ only by case in their listed order ($listed)",
+        ({ listed, shown }) => {
+            const tree = buildFolderTree<F>(listed.map((path) => ({ path })));
+
+            expect(tree.map((n) => (n.kind === "file" ? n.file.path : n.displayName))).toEqual(
+                shown,
+            );
+        },
+    );
+
     it("emits all dir paths via collectDirPaths", () => {
         const tree = buildFolderTree<F>([
             { path: "docs/api/v2/specs/auth.md" },

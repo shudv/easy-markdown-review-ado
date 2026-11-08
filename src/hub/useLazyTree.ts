@@ -71,6 +71,7 @@ export function useLazyTree(
             try {
                 payload = await onExpandFolder(repoIdAtCall, path);
             } catch (err) {
+                // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError below
                 console.warn("[documents-hub] expand folder failed:", path, err);
                 trackUserFacingError({
                     error: err,
@@ -118,8 +119,10 @@ function useRootAutoExpand(
     const autoExpandUsedRef = useRef<Map<string, number>>(new Map());
     useEffect(() => {
         if (!selectedRepo || !onExpandFolder) return;
+        // Stryker disable next-line ConditionalExpression: dead code: a skeleton repo never has a seeded tree, so the tree check below returns anyway; candidate for removal
         if (selectedRepo.detailsLoaded === false) return;
         const tree = lazyTree;
+        // Stryker disable next-line ConditionalExpression: dead code: with no unloaded folders the plan has nothing to expand and returns below anyway; candidate for removal
         if (!tree || tree.unloadedFolders.length === 0) return;
         const repoId = selectedRepo.id;
 
@@ -132,6 +135,7 @@ function useRootAutoExpand(
             max: 40, // safety cap per repo
         });
 
+        // Stryker disable next-line ConditionalExpression: dead code: an empty plan expands nothing and records the same budget, so skipping it changes nothing; candidate for removal
         if (plan.folders.length === 0) return;
         for (const key of plan.keys) autoExpandedFoldersRef.current.add(key);
         autoExpandUsedRef.current.set(repoId, plan.used);

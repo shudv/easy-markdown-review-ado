@@ -43,7 +43,9 @@ export function preprocessMermaidBlocks(src: string): string {
         let j = i + 1;
         let closed = false;
 
+        // Stryker disable next-line EqualityOperator: one extra pass reads `lines[lines.length]`, which is undefined and fails the closing-fence test, so the loop ends the same way.
         while (j < lines.length) {
+            // Stryker disable next-line Regex: no Mermaid statement starts or ends with `:::` (class shorthand is `node:::class`), so an unanchored closing-fence pattern finds the same closing line.
             if (/^[ \t]*:{3,}\s*$/.test(lines[j]!)) {
                 closed = true;
                 break;
@@ -78,10 +80,13 @@ export function preprocessMermaidBlocks(src: string): string {
  * `<pre>` fallback so the raw diagram stays readable if JS hydration fails.
  */
 export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => (tree) => {
+    // Stryker disable next-line StringLiteral: unist-util-visit treats an empty test like no test, so every node is visited, and anything but a <pre> leaves at the tag check.
     visit(tree, "element", (node: Element, index, parent) => {
+        // Stryker disable next-line ConditionalExpression: dead code: only a <pre> holds a <code class="language-mermaid"> (inline code has no class, raw <code> is dropped), so the checks below already skip everything else; candidate for removal.
         if (node.tagName !== "pre") return;
 
         const codeChild = node.children.find(
+            // Stryker disable next-line LogicalOperator,ConditionalExpression: a fenced-code <pre> holds exactly one element, its <code>, and raw-HTML <pre> is dropped by rehypeSafeHtml, so a looser predicate finds the same node.
             (c): c is Element => c.type === "element" && c.tagName === "code",
         );
 
@@ -90,6 +95,7 @@ export const rehypeMermaidPlaceholder: Plugin<[], Root> = () => (tree) => {
         // string array (e.g. ["language-mermaid"]); a bare string never reaches
         // here, so we only need the array case.
         const cls = codeChild.properties.className;
+        // Stryker disable next-line ArrayDeclaration: any fallback list without "language-mermaid" makes the node be skipped, exactly as an empty list does.
         const classList = Array.isArray(cls) ? cls.map(String) : [];
         if (!classList.includes("language-mermaid")) return;
 

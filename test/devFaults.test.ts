@@ -170,9 +170,27 @@ describe("createFaultyFetch", () => {
         const res = await createFaultyFetch(original, d)(ADO);
         expect(original).not.toHaveBeenCalled();
         expect(res.status).toBe(401);
+        expect(res.statusText).toBe("Unauthorized");
         expect(res.url).toBe(ADO);
         expect(res.headers.get("WWW-Authenticate")).toBe("Bearer");
-        expect(((await res.json()) as { message: string }).message).toContain("TF400813");
+        expect(res.headers.get("Content-Type")).toContain("application/json");
+        expect(await res.json()).toMatchObject({
+            message: expect.stringContaining("TF400813"),
+            typeKey: "UnauthorizedRequestException",
+            typeName: expect.stringContaining("UnauthorizedRequestException"),
+        });
+    });
+
+    it.each([
+        { form: "URL string", request: () => ADO },
+        { form: "URL object", request: () => new URL(ADO) },
+        { form: "Request", request: () => new Request(ADO) },
+    ])("answers a dead-window ADO request made with a $form", async ({ request }) => {
+        const d = withConfig({ deadWindow: { untilMs: NOW + 1 } });
+
+        const res = await createFaultyFetch(okFetch(), d)(request());
+
+        expect(res.status).toBe(401);
     });
 
     it("answers plain 401s the same way (only the token differs)", async () => {
@@ -389,7 +407,9 @@ describe("installDevFaults", () => {
             .__emrFaults;
 
         api.slowApi(10);
-        expect(window.sessionStorage.getItem(FAULTS_STORAGE_KEY)).toContain("10");
+        // The literal key: it survives a host reload, and the production-build
+        // check (scripts/check-no-dev-faults.mjs) scans for it.
+        expect(window.sessionStorage.getItem("emr.devFaults")).toContain("10");
 
         // The default sleep really waits before letting the request through.
         const pending = window.fetch(ADO);
@@ -397,6 +417,29 @@ describe("installDevFaults", () => {
         expect(real).not.toHaveBeenCalled();
         await vi.advanceTimersByTimeAsync(1);
         expect((await pending).status).toBe(200);
+    });
+
+    it("leaves the page visible when no hidden fault is set", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        window.fetch = vi.fn(async () => new Response("ok")) as unknown as typeof fetch;
+        const d = deps(memoryStorage(), NOW);
+        writeFaults(d.storage, { slowApiMs: 5 });
+
+        installDevFaults(d);
+
+        expect(document.visibilityState).toBe("visible");
+    });
+
+    it("opens a dead window from the console that the page's ADO requests then hit", async () => {
+        window.fetch = vi.fn(async () => new Response("ok")) as unknown as typeof fetch;
+        installDevFaults();
+
+        const api = (window as unknown as { __emrFaults: ReturnType<typeof faultsApi> })
+            .__emrFaults;
+
+        api.deadWindow({ seconds: 30 });
+
+        expect((await window.fetch(ADO)).status).toBe(401);
     });
 });
 

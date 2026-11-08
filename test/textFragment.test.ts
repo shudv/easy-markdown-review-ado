@@ -12,7 +12,12 @@ import {
     type TextFragment,
 } from "../src/shell/textFragment";
 import { renderMarkdownSync } from "../src/markdown/render";
-import { decorateDiffRanges } from "../src/markdown/diffDecorations";
+import {
+    decorateDiffRanges,
+    DIFF_CELL_REMOVED_CLASS,
+    DIFF_METADATA_CLASS,
+    DIFF_SOURCE_ONLY_CLASS,
+} from "../src/markdown/diffDecorations";
 
 function mount(html: string): HTMLElement {
     const root = document.createElement("div");
@@ -83,17 +88,64 @@ describe("buildTextFragment", () => {
         });
     });
 
-    it("quotes a long selection by its first and last words", () => {
-        const sentence =
-            "Error budgets are evaluated per region every five minutes, and a breach blocks every pending deployment until the owner signs off.";
+    // About thirty characters of whole words from each edge of the selection.
+    it.each([
+        {
+            sentence:
+                "Error budgets are evaluated per region every five minutes, and a breach blocks every pending deployment until the owner signs off.",
+            start: "Error budgets are evaluated per",
+            end: "deployment until the owner signs off.",
+        },
+        {
+            sentence:
+                "Release notes must be reviewed by two maintainers before tagging, and the on-call engineer owns them end to end.",
+            start: "Release notes must be reviewed",
+            end: "engineer owns them end to end.",
+        },
+    ])(
+        "quotes a long selection by its first and last words: $start … $end",
+        ({ sentence, start, end }) => {
+            const root = mount(`<p>Intro. ${sentence} Outro.</p>`);
 
+            expect(buildTextFragment(root, rangeOf(root, sentence))).toEqual({ start, end });
+            expect(roundTrip(root, sentence)).toBe(sentence);
+        },
+    );
+
+    it.each([
+        {
+            name: "a medium-length selection",
+            sentence: "Rollbacks are rare, but the on-call engineer owns them end to end.",
+        },
+        {
+            name: "a selection right at the 80-character limit",
+            sentence:
+                "Rollbacks are rare, but the on-call engineer still owns each of them end to end.",
+        },
+    ])("quotes $name whole", ({ sentence }) => {
         const root = mount(`<p>Intro. ${sentence} Outro.</p>`);
-        const fragment = buildTextFragment(root, rangeOf(root, sentence))!;
-        expect(fragment.end).toBeDefined();
-        expect(sentence.startsWith(fragment.start)).toBe(true);
-        expect(sentence.endsWith(fragment.end!)).toBe(true);
-        expect(fragment.start.length + fragment.end!.length).toBeLessThan(sentence.length);
-        expect(roundTrip(root, sentence)).toBe(sentence);
+
+        expect(buildTextFragment(root, rangeOf(root, sentence))).toEqual({ start: sentence });
+    });
+
+    it("links a long selection whose closing words also appear inside it", () => {
+        const advice =
+            "Before you open the pull request for review, run the full test suite locally; after every rebase, run the full test suite locally";
+
+        const root = mount(`<p>Checklist: ${advice}. Then push.</p>`);
+
+        expect(roundTrip(root, advice)).toBe(advice);
+    });
+
+    it("links a long selection whose opening words also appear earlier in the document", () => {
+        const advice =
+            "Before you open the pull request for review, run the full test suite and the linter locally";
+
+        const root = mount(
+            `<p>Before you open the pull request, read the guide.</p><p>${advice}.</p>`,
+        );
+
+        expect(roundTrip(root, advice)).toBe(advice);
     });
 
     it("quotes a long single word (e.g. a URL) whole", () => {
@@ -106,13 +158,18 @@ describe("buildTextFragment", () => {
 
     it("adds context only when the quote alone is ambiguous", () => {
         const root = mount(
-            `<p>First we deploy the service.</p><p>Later we deploy the service again.</p>`,
+            `<p>First we deploy the service.</p>\n<p>Later we deploy the service again after the review.</p>`,
         );
 
         const fragment = buildTextFragment(root, rangeOf(root, "deploy the service", 1))!;
 
-        expect(fragment.prefix ?? fragment.suffix).toBeTruthy();
-        // Resolves to the SECOND occurrence, not the first.
+        // Three words either side are enough to single out the second occurrence.
+        expect(fragment).toEqual({
+            prefix: "service. Later we",
+            start: "deploy the service",
+            suffix: "again after the",
+        });
+
         const found = findTextFragment(root, fragment)!;
         expect(found.startContainer.parentElement!.textContent).toContain("Later");
     });
@@ -120,12 +177,21 @@ describe("buildTextFragment", () => {
     it.each([
         ["inline formatting", "bold words and italics"],
         ["a block boundary", "italics.next"],
+        ["the middle of formatted words", "words and it"],
     ])("links a selection across %s", (_label, text) => {
         const root = mount(
             `<p>Keep <strong>bold words</strong> and <em>italics</em>.</p><ul><li>next item</li></ul>`,
         );
 
         expect(roundTrip(root, text)).toBe(text);
+    });
+
+    it("links a selection that starts at the very beginning of the document", () => {
+        const root = mount(`<p><strong>Rollout</strong> gates block deploys.</p>`);
+
+        expect(buildTextFragment(root, rangeOf(root, "Rollout gates"))).toEqual({
+            start: "Rollout gates",
+        });
     });
 
     it("ignores removed-diff content and injected controls", () => {
@@ -142,6 +208,41 @@ describe("buildTextFragment", () => {
         const found = findTextFragment(root, fragment!)!;
         expect(found.startContainer.parentElement!.tagName).toBe("P");
         expect(found.startContainer.parentElement!.closest(".emr-diff-deleted-marker")).toBeNull();
+    });
+
+    // Reference copies of earlier text shown by the PR diff never count as the
+    // live document, so they can't make a live quote ambiguous.
+    it.each([
+        {
+            name: "a removed table cell",
+            html: `<table><tr><td class="${DIFF_CELL_REMOVED_CLASS}">shared phrase</td></tr></table>`,
+        },
+        {
+            name: "a source-only change marker",
+            html: `<div class="${DIFF_SOURCE_ONLY_CLASS}">shared phrase</div>`,
+        },
+        {
+            name: "a link-target change note",
+            html: `<span class="${DIFF_METADATA_CLASS}">shared phrase</span>`,
+        },
+        {
+            name: "a “Before” panel",
+            html: `<div class="emr-diff-before-panel">shared phrase</div>`,
+        },
+        {
+            name: "a “Before” toggle",
+            html: `<span class="emr-diff-before-control">shared phrase</span>`,
+        },
+        {
+            name: "a metadata change panel",
+            html: `<div class="emr-diff-metadata-panel">shared phrase</div>`,
+        },
+    ])("quotes live text without context when $name repeats it", ({ html }) => {
+        const root = mount(`${html}<p>Live shared phrase here.</p>`);
+
+        expect(buildTextFragment(root, rangeOf(root, "shared phrase", 1))).toEqual({
+            start: "shared phrase",
+        });
     });
 
     it("returns null for a selection with no live text", () => {
@@ -184,6 +285,41 @@ describe("findTextFragment", () => {
         expect(findTextFragment(root, fragment)?.toString()).toBe(expected);
     });
 
+    it.each<{ name: string; html: string; fragment: TextFragment; expectedId: string }>([
+        {
+            name: "the words before it",
+            html: `<p><span id="first">Today we fix it now.</span> <span id="second">They fix it soon.</span></p>`,
+            fragment: { prefix: "They", start: "fix it" },
+            expectedId: "second",
+        },
+        {
+            name: "the document's opening words",
+            html: `<h2 id="first">Notes</h2><p id="second">Notes</p>`,
+            fragment: { prefix: "Notes", start: "Notes" },
+            expectedId: "second",
+        },
+    ])(
+        "resolves a quote to the occurrence that follows $name",
+        ({ html, fragment, expectedId }) => {
+            const root = mount(html);
+
+            expect(findTextFragment(root, fragment)?.startContainer.parentElement?.id).toBe(
+                expectedId,
+            );
+        },
+    );
+
+    it("lands a link to the start of a paragraph inside that paragraph", () => {
+        const root = mount(
+            `<p id="first">First paragraph.</p><p id="second">Second paragraph.</p>`,
+        );
+
+        const found = findTextFragment(root, { start: "Second paragraph" })!;
+
+        expect(found.startContainer.parentElement?.id).toBe("second");
+        expect(found.toString()).toBe("Second paragraph");
+    });
+
     it("builds a self-disambiguating start…end link", () => {
         const tail = "and then the deployment finally ends here";
         const long = `Start of a long sentence that keeps going ${tail}`;
@@ -199,6 +335,7 @@ describe("findTextFragment", () => {
         ["the prefix no longer precedes it", { prefix: "zzz", start: "alpha" }],
         ["the end text is gone", { start: "alpha", end: "omega" }],
         ["the suffix no longer follows it", { start: "alpha", suffix: "x" }],
+        ["the text after a start…end quote changed", { start: "alpha", end: "beta", suffix: "x" }],
         ["the quote is only whitespace", { start: "   " }],
     ])("finds nothing when %s", (_label, fragment) => {
         const root = mount(`<p>alpha beta</p>`);
@@ -207,6 +344,22 @@ describe("findTextFragment", () => {
 });
 
 describe("edge cases", () => {
+    // A link made before a heading was re-cased still finds it: matching folds
+    // case the way a reader would, including German's capital sharp s (ẞ → ß).
+    it("finds a German link after the text was changed to capitals", () => {
+        const root = mount(`<h2>HAUPTSTRAẞE 5</h2>`);
+        expect(findTextFragment(root, { start: "Hauptstraße 5" })?.toString()).toBe(
+            "HAUPTSTRAẞE 5",
+        );
+    });
+
+    it.each([
+        ["German", "Wir treffen uns in der Hauptstraße am Montag.", "Hauptstraße"],
+        ["Greek", "Η συνάντηση είναι στην οδός Αθηνάς αύριο.", "οδός Αθηνάς"],
+    ])("round-trips a link to a word in a %s document", (_language, sentence, word) => {
+        const root = mount(`<p>${sentence}</p>`);
+        expect(roundTrip(root, word)).toBe(word);
+    });
     it("keeps characters whose lower case changes length", () => {
         const root = mount(`<p>Say İstanbul twice.</p>`);
         expect(findTextFragment(root, { start: "İstanbul" })?.toString()).toBe("İstanbul");
@@ -253,12 +406,18 @@ describe("serialize / parse", () => {
         ).toBe("pre-,a%2Cb,end,-post");
     });
 
+    it("keeps hyphens inside a quote readable in the link", () => {
+        expect(serializeTextFragment({ start: "opt-in roll-out" })).toBe("opt-in roll-out");
+    });
+
     it.each([
         ["an empty value", ""],
         ["too many parts", "a,b,c"],
         ["broken percent-encoding", "%E0%A4%A"],
         ["an empty end", "a,"],
         ["context with no quote", "pre-,-post"],
+        ["an unescaped dash at the end of the quote", "start,end-"],
+        ["a quote of only spaces", "%20%20"],
     ])("rejects a link value with %s", (_label, value) => {
         expect(parseTextFragment(value)).toBeNull();
     });

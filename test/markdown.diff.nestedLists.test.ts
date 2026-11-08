@@ -233,6 +233,25 @@ describe("nested and mixed lists", () => {
 });
 
 describe("blocks nested in list items", () => {
+    it.each([
+        {
+            name: "a diagram",
+            original: lines("- Flow:", "", "  ```mermaid", "  graph TD", "  A-->B", "  ```"),
+            current: lines("- Flow:", "", "  ```mermaid", "  graph TD", "  A-->C", "  ```"),
+            shown: ["div modified: graph TD A-->C"],
+        },
+        {
+            name: "an equation",
+            original: lines("- Formula:", "", "  $$", "  a+b", "  $$"),
+            current: lines("- Formula:", "", "  $$", "  a+c", "  $$"),
+            shown: ["div modified: a+c"],
+        },
+    ])(
+        "marks only $name edited inside a list item, not the item",
+        ({ original, current, shown }) => {
+            expect(view(original, current)).toEqual(shown);
+        },
+    );
     it("diffs a four-space-indented list paragraph as prose, not code", () => {
         expect(
             view(
@@ -296,6 +315,14 @@ describe("blocks nested in list items", () => {
 });
 
 describe("list nesting changes", () => {
+    it("explains an item indented further down a list whose first item was rewritten", () => {
+        expect(view(lines("- a", "- b", "- c"), lines("- A", "- A2", "- b", "  - c"))).toEqual([
+            "li modified wash: Before A",
+            "li added wash: A2",
+            "li modified inline: ⟨List nesting changed from level 1 to level 2⟩c",
+        ]);
+    });
+
     it("explains a list item indented under its sibling", () => {
         expect(view(lines("- a", "- b", "- c"), lines("- a", "  - b", "- c"))).toEqual([
             "li modified inline: ⟨List nesting changed from level 1 to level 2⟩b",

@@ -39,6 +39,7 @@ function joinNames(names: string[], shown: number): string {
     }
 
     if (visible.length === 1) return visible[0]!;
+    // Stryker disable next-line ConditionalExpression: dead code: for two names the general "head and last" join below produces the identical "A and B", candidate for removal
     if (visible.length === 2) return `${visible[0]} and ${visible[1]}`;
     const head = visible.slice(0, -1).join(", ");
 

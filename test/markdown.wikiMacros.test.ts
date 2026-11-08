@@ -98,6 +98,23 @@ describe("[[_TOC_]]", () => {
         ]);
     });
 
+    it("keeps sibling subheadings together in one nested list", () => {
+        const root = parse(renderMarkdownSync("[[_TOC_]]\n\n# Guide\n## Install\n## Configure\n"));
+        const guide = root.querySelector("nav > ul > li")!;
+
+        expect(guide.querySelectorAll(":scope > ul")).toHaveLength(1);
+        expect(guide.querySelectorAll(":scope > ul > li")).toHaveLength(2);
+    });
+
+    it.each([
+        { name: "a heading inside a quote, which has no anchor", md: "> ## Quoted\n" },
+        { name: "a raw-HTML anchor target", md: '<a id="top"></a>\n' },
+    ])("lists only the page's anchored headings, skipping $name", ({ md }) => {
+        const root = parse(renderMarkdownSync(`[[_TOC_]]\n\n${md}\n# Main\n`));
+
+        expect(tocTree(root.querySelector("nav > ul"))).toEqual([["Main", "#main", []]]);
+    });
+
     it("starts a new top level when a later heading is shallower than the first", () => {
         const root = parse(renderMarkdownSync("[[_TOC_]]\n\n## Intro\n# Main\n"));
 
@@ -214,7 +231,7 @@ describe("[[_TOSP_]]", () => {
     });
 
     it("returns HTML without a subpages box as is", () => {
-        const html = renderMarkdownSync("# Title\n\n[[_TOC_]]\n");
+        const html = renderMarkdownSync('# Title\n\n[[_TOC_]]\n\nIf a < b & "c"\n');
         expect(fillSubpagesMacros(html, [])).toBe(html);
     });
 });

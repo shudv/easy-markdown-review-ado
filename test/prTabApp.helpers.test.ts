@@ -90,6 +90,62 @@ describe("reviewIterationStops", () => {
             },
         ]);
     });
+
+    it("skips an update ADO reports without an id", () => {
+        expect(
+            reviewIterationStops(
+                [
+                    { description: "no id", sourceRefCommit: { commitId: "c0" } },
+                    { id: 2, sourceRefCommit: { commitId: "c2" } },
+                ],
+                9,
+            ).map((stop) => stop.iterationId),
+        ).toEqual([2]);
+    });
+
+    it.each([
+        {
+            name: "its description, without surrounding whitespace",
+            description: "  Fix typos  ",
+            expected: "Fix typos",
+        },
+        {
+            name: "its newest commit's message when the description is blank",
+            description: "   ",
+            expected: "Address review feedback",
+        },
+        {
+            name: "its newest commit's message when there is no description",
+            description: undefined,
+            expected: "Address review feedback",
+        },
+    ])("titles an update by $name", ({ description, expected }) => {
+        const [stop] = reviewIterationStops(
+            [
+                {
+                    id: 3,
+                    description,
+                    sourceRefCommit: { commitId: "c3" },
+                    commits: [
+                        { commitId: "c2", comment: "First draft" },
+                        { commitId: "c3", comment: " Address review feedback " },
+                    ],
+                },
+            ],
+            9,
+        );
+
+        expect(stop!.title).toBe(expected);
+    });
+
+    it("shows no date for an update whose created date is unreadable", () => {
+        const [stop] = reviewIterationStops(
+            [{ id: 1, createdDate: "not a date", sourceRefCommit: { commitId: "c1" } }],
+            9,
+        );
+
+        expect(stop).not.toHaveProperty("dateMs");
+    });
 });
 
 describe("selectDiffCommits", () => {
@@ -252,13 +308,17 @@ describe("loadWithRepositoryHint", () => {
         });
     });
 
-    it("loads from the PR's repository once the PR arrives when there is no hint", async () => {
+    it.each([
+        { name: "there is no hint", hint: null },
+        { name: "the hint is blank", hint: "" },
+    ])("loads only from the PR's repository once the PR arrives when $name", async ({ hint }) => {
         const load = vi.fn(async (id: string) => `changes@${id}`);
 
-        await expect(loadWithRepositoryHint(Promise.resolve(pr), null, load)).resolves.toEqual({
+        await expect(loadWithRepositoryHint(Promise.resolve(pr), hint, load)).resolves.toEqual({
             pr,
             changes: "changes@repo",
         });
+        expect(load).toHaveBeenCalledExactlyOnceWith("repo");
     });
 
     it("fails with the PR's error when the PR cannot be loaded", async () => {
@@ -586,6 +646,7 @@ describe("withTimeout", () => {
         const result = withTimeout(never, 5, "loading PR");
         await expect(result).rejects.toThrow(/Timeout after 5ms while waiting for loading PR/);
         await expect(result).rejects.toBeInstanceOf(TimeoutError);
+        await expect(result).rejects.toMatchObject({ name: "TimeoutError" });
     });
 
     describe("only counts visible time", () => {
@@ -694,6 +755,36 @@ describe("withTimeout", () => {
             expect(rejected).toBe(true);
         });
 
+        it("still pauses the budget when the tab hides after a repeated visible signal", async () => {
+            const vis = fakeVisibility(true);
+
+            const result = withTimeout(new Promise<string>(() => {}), 1_000, "x", vis.clock);
+
+            let rejected = false;
+            result.catch(() => (rejected = true));
+            await vi.advanceTimersByTimeAsync(600);
+            vis.set(true);
+            vis.set(false);
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(rejected).toBe(false);
+        });
+
+        it("ignores repeated hidden signals without spending the budget", async () => {
+            const vis = fakeVisibility(false);
+
+            const result = withTimeout(new Promise<string>(() => {}), 1_000, "x", vis.clock);
+
+            let rejected = false;
+            result.catch(() => (rejected = true));
+            vis.set(false);
+            await vi.advanceTimersByTimeAsync(5_000);
+            vis.set(true);
+            await vi.advanceTimersByTimeAsync(999);
+            expect(rejected).toBe(false);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(rejected).toBe(true);
+        });
+
         it("stops listening for visibility changes once the call succeeds", async () => {
             const vis = fakeVisibility(true);
 
@@ -785,6 +876,42 @@ describe("withTimeout", () => {
                     get: () => "visible",
                 });
             }
+        });
+
+        describe("with the document's own visibility", () => {
+            function setDocumentVisibility(state: DocumentVisibilityState) {
+                Object.defineProperty(document, "visibilityState", {
+                    configurable: true,
+                    get: () => state,
+                });
+                document.dispatchEvent(new Event("visibilitychange"));
+            }
+
+            afterEach(() => setDocumentVisibility("visible"));
+
+            it("pauses the budget while the tab is in the background", async () => {
+                const result = withTimeout(new Promise<string>(() => {}), 1_000, "x");
+
+                let rejected = false;
+                result.catch(() => (rejected = true));
+                await vi.advanceTimersByTimeAsync(600);
+                setDocumentVisibility("hidden");
+                await vi.advanceTimersByTimeAsync(5_000);
+                setDocumentVisibility("visible");
+                await vi.advanceTimersByTimeAsync(399);
+                expect(rejected).toBe(false);
+                await vi.advanceTimersByTimeAsync(1);
+                expect(rejected).toBe(true);
+            });
+
+            it("stops following tab switches once the call has succeeded", async () => {
+                await withTimeout(Promise.resolve("pr"), 1_000, "x");
+
+                setDocumentVisibility("hidden");
+                setDocumentVisibility("visible");
+
+                expect(vi.getTimerCount()).toBe(0);
+            });
         });
     });
 });

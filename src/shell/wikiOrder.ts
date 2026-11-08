@@ -58,6 +58,7 @@ export function wikiPageTitle(path: string): string {
 export function orderRank(order: readonly string[] | undefined): (name: string) => number {
     const exact = new Map<string, number>();
     const folded = new Map<string, number>();
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry would only rank a page literally named "Stryker was here", which no wiki has
     (order ?? []).forEach((entry, index) => {
         const name = wikiPageName(entry);
         if (!exact.has(name)) exact.set(name, index);
@@ -72,6 +73,7 @@ export function orderRank(order: readonly string[] | undefined): (name: string) 
 export function compareRanks(a: number, b: number): number {
     if (a === b) return 0;
 
+    // Stryker disable next-line EqualityOperator: equal ranks already returned 0 above, so `<` and `<=` agree here
     return a < b ? -1 : 1;
 }
 
@@ -89,6 +91,7 @@ export function withFirstPageFirst<F extends { path: string }>(
     let best = Infinity;
 
     for (const file of files) {
+        // Stryker disable next-line Regex,StringLiteral: repository paths always start with exactly one `/`, so stripping one slash, the first slash run, or prefixing text all leave a sub-folder's `/` (and only a sub-folder's) in place
         if (file.path.replace(/^\/+/, "").includes("/")) continue;
         const fileRank = rank(wikiPageName(file.path));
 
@@ -125,6 +128,7 @@ export function subpagesFromListing(listing: FolderListing): WikiSubpage[] {
         .sort(
             (a, b) =>
                 compareRanks(a.rank, b.rank) ||
+                // Stryker disable next-line MethodExpression: upper-casing only the left title makes every case-only pair compare as "after", which the engine's stable sort reads as "keep the listing order" — exactly what the original tie does (the right-side variant is pinned by the "differ only in case" scenario)
                 a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
         )
         .map(({ path, title }) => ({ path, title }));

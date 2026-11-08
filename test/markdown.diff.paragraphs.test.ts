@@ -406,6 +406,52 @@ describe("lines added to or removed from inside a paragraph", () => {
         ).toEqual(["p modified inline: {+Sentence zero. +}Sentence one. Sentence two."]);
     });
 
+    it("shows two lines prepended to a one-line paragraph inline", () => {
+        expect(
+            view(
+                "Existing closing line.",
+                lines("New opening line.", "Another new line.", "Existing closing line."),
+            ),
+        ).toEqual([
+            "p modified inline: {+New opening line. Another new line. +}Existing closing line.",
+        ]);
+    });
+
+    it("shows a line inserted above a reworded last line inline", () => {
+        expect(
+            view(
+                lines("First line stays.", "Old last line."),
+                lines("First line stays.", "Inserted middle line.", "New last line."),
+            ),
+        ).toEqual([
+            "p modified inline: First line stays. [-Old-]{+Inserted middle line. New+} last line.",
+        ]);
+    });
+
+    it("shows two lines removed mid-paragraph inside it, as the server reports them", () => {
+        const current = lines("Line one.", "Line four.");
+        const root = render(current);
+
+        decorate(
+            root,
+            [
+                {
+                    startLine: 2,
+                    endLine: 2,
+                    kind: "deleted-marker",
+                    linesDeleted: 2,
+                    deletedContent: "Gone two.\nGone three.\n",
+                },
+            ],
+            lines("Line one.", "Gone two.", "Gone three.", "Line four."),
+            current,
+        );
+
+        expect(summarize(root)).toEqual([
+            "p modified inline: Line one. [-Gone two. Gone three. -]Line four.",
+        ]);
+    });
+
     it("shows a line inserted mid-paragraph inline", () => {
         expect(
             view(
@@ -504,6 +550,15 @@ describe("footnotes", () => {
         ).toEqual(["li modified inline: [-Old-]{+New+} source. ↩"]);
     });
 
+    it("word-diffs an edited footnote definition with a named label", () => {
+        expect(
+            view(
+                lines("Claim.[^source]", "", "[^source]: Old source."),
+                lines("Claim.[^source]", "", "[^source]: New source."),
+            ),
+        ).toEqual(["li modified inline: [-Old-]{+New+} source. ↩"]);
+    });
+
     it("shows an added footnote and its reference", () => {
         expect(view("Claim.", lines("Claim.[^1]", "", "[^1]: A source."))).toEqual([
             "p modified inline: Claim.{+1+}",
@@ -572,9 +627,43 @@ describe("identically rendered edits", () => {
             current: lines("One two", "three four five."),
         },
         { name: "added trailing spaces", original: "Line text.", current: "Line text.   " },
+        {
+            name: "a double space collapsed to one",
+            original: "Keep  this text.",
+            current: "Keep this text.",
+        },
+        {
+            name: "a numbered list switched from 1. to 1) markers",
+            original: lines("1. One", "2. Two"),
+            current: lines("1) One", "2) Two"),
+        },
+        {
+            name: "a re-indented wrapped line of a list item",
+            original: lines("- first", "  second"),
+            current: lines("- first", "   second"),
+        },
     ])("hides $name", ({ original, current }) => {
-        expect(view(original, current)).toEqual([]);
+        const { view: shown, root } = diffView(original, current);
+
+        expect(shown).toEqual([]);
+        expect(root.querySelector(".emr-diff-line-wash, .emr-diff-before-control")).toBeNull();
     });
+
+    it.each([
+        { which: "second", line: 2, originalText: "Line two there." },
+        { which: "first", line: 1, originalText: "Line one there." },
+    ])(
+        "keeps the whole highlight for a paragraph whose $which line alone changed while the previous document is unavailable",
+        ({ line, originalText }) => {
+            const root = render(lines("Line one here.", "Line two here."));
+
+            decorate(root, [{ startLine: line, endLine: line, kind: "modified", originalText }]);
+
+            expect(summarize(root)).toEqual([
+                "p modified wash ⟨Previous content unavailable; exact comparison cannot be shown⟩: Line one here. Line two here.",
+            ]);
+        },
+    );
 
     it("hides an emphasis-marker swap that renders the same", () => {
         expect(edit("Ship *today* please.", "Ship _today_ please.").decorated).toBe(0);
@@ -595,6 +684,21 @@ describe("identically rendered edits", () => {
             name: "an image whose only change is its width",
             original: 'Logo <img src="https://a.example/l.png" width="120"> here',
             current: 'Logo <img src="https://a.example/l.png" width="240"> here',
+        },
+        {
+            name: "an image whose only change is its height",
+            original: 'Logo <img src="https://a.example/l.png" height="120"> here',
+            current: 'Logo <img src="https://a.example/l.png" height="240"> here',
+        },
+        {
+            name: "two words joined into one",
+            original: "You can not stop.",
+            current: "You cannot stop.",
+        },
+        {
+            name: "bold extended over the next word",
+            original: "Make **bold** text clear.",
+            current: "Make **bold text** clear.",
         },
     ])("still shows $name", ({ original, current }) => {
         expect(edit(original, current).decorated).toBe(1);

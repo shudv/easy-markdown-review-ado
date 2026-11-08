@@ -101,6 +101,21 @@ describe("wrapRangeWithHighlight", () => {
         expect(p.textContent).toBe("bold tail");
     });
 
+    it("does not highlight the trailing space a double-click picks up after a formatted word", () => {
+        const p = document.createElement("p");
+        p.innerHTML = "Ship <strong>it</strong> now";
+        document.body.appendChild(p);
+        const word = p.querySelector("strong")!.firstChild as Text;
+
+        // Double-clicking "it" also selects the space that starts " now".
+        const spans = wrapRangeWithHighlight(makeRange(word, 0, p.lastChild as Text, 1), {
+            className: "hl",
+            threadId: "t-dbl",
+        });
+
+        expect(spans.map((s) => s.textContent)).toEqual(["it"]);
+    });
+
     it("highlights nothing for a collapsed (empty) selection", () => {
         const p = document.createElement("p");
         p.textContent = "abc";

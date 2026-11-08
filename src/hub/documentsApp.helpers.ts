@@ -55,6 +55,7 @@ export function mergeFolderListing(
     // paths arrive in two flavours across the host boundary (`/docs` vs
     // `docs`), so canonicalize every value to a "no leading slash" form
     // — otherwise the set accumulates both variants.
+    // Stryker disable next-line Regex: tree paths never carry doubled leading slashes, so stripping one or a run is the same
     const canonicalize = (p: string): string => p.replace(/^\/+/, "");
     const unloaded = new Set(entry.unloadedFolders.map(canonicalize));
     unloaded.delete(canonicalize(path));

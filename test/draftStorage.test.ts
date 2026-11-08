@@ -17,6 +17,7 @@ import {
     loadDraft,
     NEW_DRAFT_THREAD_ID,
     saveDraft,
+    type DraftTarget,
     type PersistedDraft,
 } from "../src/shell/draftStorage";
 import { failStorage } from "./readerStorageFailures";
@@ -72,6 +73,26 @@ describe("add comment draft targets", () => {
                 "docs/b.md",
             ).anchor?.implicit,
         ).toBe(true);
+    });
+
+    it.each<{ name: string; current: DraftTarget | null }>([
+        { name: "no draft is open", current: null },
+        {
+            name: "the selection draft belongs to another file",
+            current: { path: "docs/other.md", threadId: NEW_DRAFT_THREAD_ID, anchor },
+        },
+        {
+            name: "the open draft is a reply on this file",
+            current: { path: "docs/a.md", threadId: "t-42", anchor },
+        },
+        {
+            name: "the new-comment draft has no selection",
+            current: { path: "docs/a.md", threadId: NEW_DRAFT_THREAD_ID, anchor: null },
+        },
+    ])("starts a fresh file comment when plus is clicked and $name", ({ current }) => {
+        expect(addCommentDraftTarget(current, "docs/a.md")).toEqual(
+            implicitCommentDraft("docs/a.md"),
+        );
     });
 });
 
@@ -146,9 +167,14 @@ describe("loadDraft validation", () => {
         { name: "an empty body", draft: newDraft({ body: "" }) },
         { name: "a missing path", draft: { threadId: "t1", anchor: null, body: "hi" } },
         { name: "a missing threadId", draft: { path: "a.md", anchor, body: "hi" } },
+        { name: "a missing body", draft: { path: "a.md", threadId: "t1", anchor: null } },
         {
             name: "a new-comment draft without an anchor",
             draft: { path: "a.md", threadId: NEW_DRAFT_THREAD_ID, anchor: null, body: "hi" },
+        },
+        {
+            name: "a new-comment draft with no anchor field at all",
+            draft: { path: "a.md", threadId: NEW_DRAFT_THREAD_ID, body: "hi" },
         },
         {
             name: "a new-comment anchor without exact text",
@@ -164,6 +190,16 @@ describe("loadDraft validation", () => {
 
         expect(loadDraft("pr")).toBeNull();
     });
+
+    // Drafts already saved in users' browsers mark a new comment with "__new__".
+    it("still requires a selection for a stored new-comment draft", () => {
+        window.localStorage.setItem(
+            draftStorageKey("pr"),
+            '{"path":"a.md","threadId":"__new__","anchor":null,"body":"hi"}',
+        );
+
+        expect(loadDraft("pr")).toBeNull();
+    });
 });
 describe("draftSnippet", () => {
     it("collapses whitespace and trims", () => {
@@ -176,8 +212,11 @@ describe("draftSnippet", () => {
         expect(snip).toBe(`${"x".repeat(10)}…`);
     });
 
-    it("leaves short bodies intact", () => {
-        expect(draftSnippet("short", 80)).toBe("short");
+    it.each([
+        { name: "short bodies", body: "short" },
+        { name: "a body that exactly fills the snippet", body: "y".repeat(80) },
+    ])("leaves $name intact", ({ body }) => {
+        expect(draftSnippet(body, 80)).toBe(body);
     });
 });
 
@@ -245,6 +284,41 @@ describe("createThrottledDraftWriter", () => {
         expect(loadDraft("pr")).toBeNull();
     });
 
+    it("flushing after everything was saved keeps the saved draft", () => {
+        vi.useFakeTimers();
+        const w = createThrottledDraftWriter("pr", 500);
+        w.schedule(newDraft({ body: "a" }));
+        w.flush();
+        expect(loadDraft("pr")?.body).toBe("a");
+    });
+
+    it("saves a trailing change when the window that began with the last save ends", () => {
+        vi.useFakeTimers();
+        const w = createThrottledDraftWriter("pr", 500);
+        w.schedule(newDraft({ body: "a" }));
+        vi.advanceTimersByTime(200);
+        w.schedule(newDraft({ body: "ab" }));
+        vi.advanceTimersByTime(300);
+        expect(loadDraft("pr")?.body).toBe("ab");
+    });
+
+    it("never saves twice within one window, even right after a flush", () => {
+        vi.useFakeTimers();
+        const w = createThrottledDraftWriter("pr", 500);
+        w.schedule(newDraft({ body: "a" }));
+        vi.advanceTimersByTime(100);
+        w.schedule(newDraft({ body: "ab" }));
+        vi.advanceTimersByTime(100);
+        w.flush();
+        vi.advanceTimersByTime(100);
+        w.schedule(newDraft({ body: "abc" }));
+        // 500 ms after the first save, but only 300 ms after the flush.
+        vi.advanceTimersByTime(200);
+        expect(loadDraft("pr")?.body).toBe("ab");
+        vi.advanceTimersByTime(200);
+        expect(loadDraft("pr")?.body).toBe("abc");
+    });
+
     it("cancelling drops the pending change", () => {
         vi.useFakeTimers();
         const w = createThrottledDraftWriter("pr", 500);
@@ -258,5 +332,17 @@ describe("createThrottledDraftWriter", () => {
     it("cancelling with nothing typed is safe", () => {
         const w = createThrottledDraftWriter("pr", 500);
         expect(() => w.cancel()).not.toThrow();
+    });
+
+    it("saves the next change straight away once the window has passed after a cancel", () => {
+        vi.useFakeTimers();
+        const w = createThrottledDraftWriter("pr", 500);
+        w.schedule(newDraft({ body: "a" }));
+        vi.advanceTimersByTime(100);
+        w.schedule(newDraft({ body: "ab" }));
+        w.cancel();
+        vi.advanceTimersByTime(500);
+        w.schedule(newDraft({ body: "fresh" }));
+        expect(loadDraft("pr")?.body).toBe("fresh");
     });
 });

@@ -27,6 +27,7 @@ export function useSelectedRepo(
     // the visible list — the open document doesn't snap to `repos[0]`. The
     // selected repo only changes when the user actually picks a new one.
     // Re-resolved during render whenever `repos` or the selected id changes.
+    // Stryker disable next-line ObjectLiteral: an empty initial resolution is re-resolved on the first render to the same repo
     const [resolution, setResolution] = useState(() => ({
         repos,
         repoId: selectedRepoId,

@@ -61,6 +61,7 @@ export function reviewIterationStops(
 
             const rawDate = iteration.createdDate;
 
+            // Stryker disable next-line ConditionalExpression: `new Date(undefined)` is an Invalid Date whose NaN time the `Number.isFinite` check below drops, so a missing date yields no `dateMs` either way
             const dateMs = rawDate === undefined ? undefined : new Date(rawDate).getTime();
 
             return {
@@ -68,6 +69,7 @@ export function reviewIterationStops(
                 prId,
                 iterationId: iteration.id!,
                 title,
+                // Stryker disable next-line ConditionalExpression: `Number.isFinite(undefined)` is false, so the `!== undefined` check never decides whether a date is kept
                 ...(dateMs !== undefined && Number.isFinite(dateMs) ? { dateMs } : {}),
                 isCurrent,
                 readOnly: !isCurrent,
@@ -78,7 +80,9 @@ export function reviewIterationStops(
 
 /** A pull-request id from config: a number, or a numeric string. */
 function toPullRequestId(v: unknown): number | null {
+    // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number, so the `typeof` check never changes which values pass
     if (typeof v === "number" && Number.isFinite(v)) return v;
+    // Stryker disable next-line ConditionalExpression: non-string config values that reach here (undefined, null, objects, NaN, Infinity) stringify to non-digit text, so the digit-only regex rejects them without the `typeof` check
     if (typeof v === "string" && /^\d+$/.test(v)) return Number.parseInt(v, 10);
 
     return null;
@@ -149,6 +153,7 @@ export async function loadWithRepositoryHint<P extends { repository: { id: strin
     hint: string | null,
     load: (repositoryId: string) => Promise<C>,
 ): Promise<{ pr: P; changes: C }> {
+    // Stryker disable next-line ArrowFunction: a failed hinted load settles to null or undefined alike, and the `??` below reloads from the PR's repository for both
     const hinted = hint !== null && hint !== "" ? load(hint).catch(() => null) : null;
 
     const pr = await prRequest;
@@ -208,6 +213,7 @@ export function selectDiffCommits(
  * wins over add, and anything else is a plain content modification.
  */
 export function mapChangeType(t: unknown): ChangeType {
+    // Stryker disable next-line ConditionalExpression: the bitwise tests below coerce a missing value or a change-type name (ADO's "edit", "add") to 0, the same as the fallback
     const n = typeof t === "number" ? t : 0;
     if (n & 16) return "deleted";
     if (n & 8) return "renamed";
@@ -304,8 +310,10 @@ export function buildPrWebUrl(
     )}/_git/${encodeURIComponent(repositoryName)}/pullrequest/${pullRequestId}`;
 
     try {
+        // Stryker disable BlockStatement: an emptied catch below falls off the end of the function, which returns undefined just like the explicit return
         return new URL(url).toString();
     } catch {
+        // Stryker restore BlockStatement
         return undefined;
     }
 }
@@ -341,6 +349,7 @@ export function iterationParamsForRange(
     const count = stops.length;
     const resolved = resolveReviewIterationRange(range, count);
     if (resolved.isAllChanges) return undefined;
+    // Stryker disable next-line OptionalChaining: a resolved range's updates lie in 1..count (update 0, the base, is handled separately), so `stops[count - update]` always exists
     const idOf = (update: number) => stops[count - update]?.iterationId;
     const iteration = idOf(resolved.range.toUpdate);
 
@@ -361,10 +370,12 @@ export function rangeFromIterationParams(
     stops: readonly HistoryStop[],
 ): ReviewIterationRange | undefined {
     const parse = (value: string | undefined) =>
+        // Stryker disable next-line Regex,StringLiteral: text around the digits makes `Number()` NaN, which matches no update id, so the anchors only matter for hex/exponent/decimal spellings no ADO link carries; any non-digit stand-in for a missing value fails the test like ""
         /^\s*\d+\s*$/.test(value ?? "") ? Number(value) : undefined;
 
     const iteration = parse(params?.[ITERATION_LINK_PARAM]);
     if (iteration === undefined) return undefined;
+    // Stryker disable next-line OptionalChaining: missing params already returned above (no iteration), so `params` is defined here
     const base = parse(params?.[BASE_LINK_PARAM] ?? "0");
     if (base === undefined) return undefined;
 
@@ -443,6 +454,7 @@ export function buildPrTabDocUrl(
     documentPath: string,
     iterationParams?: IterationParams,
 ): string | undefined {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `new URL()` throws for an undefined or empty URL alike and the catch below returns undefined, so this early return only short-circuits the same result
     if (prWebUrl === undefined || prWebUrl === "") return undefined;
     let url: URL;
 
@@ -480,6 +492,7 @@ function pickRoutedFile(
     routedPath: string | undefined,
     files: ReadonlyArray<{ path: string }>,
 ): string | undefined {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: an empty routed path names no changed file (every PR file has a non-empty path), so the lookup below finds nothing just like the early return
     if (routedPath === undefined || routedPath === "") return undefined;
 
     return files.find((file) => samePath(file.path, routedPath))?.path;
@@ -510,6 +523,7 @@ export interface PrTabRouteSeed {
 export function resolvePrTabRouteSeed(
     params: Record<string, string | undefined> | null | undefined,
     files: ReadonlyArray<{ path: string }>,
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry carries no iteration id, so an update comparison still matches nothing, exactly as with no updates
     stops: readonly HistoryStop[] = [],
 ): PrTabRouteSeed {
     const routedPath = readPathParam(params);
@@ -578,6 +592,7 @@ export function withTimeout<T>(
         let settled = false;
 
         const pause = (): void => {
+            // Stryker disable next-line ConditionalExpression: `clearTimeout(null)` is a no-op, so clearing unconditionally behaves the same
             if (timer !== null) clearTimeout(timer);
             timer = null;
 
@@ -607,6 +622,7 @@ export function withTimeout<T>(
         });
 
         const finish = (): void => {
+            // Stryker disable next-line BooleanLiteral: a call that settles after the timeout re-runs `finish` (a no-op once paused and unsubscribed) and resolves/rejects an already-rejected promise, which is ignored
             settled = true;
             pause();
             unsubscribe();
@@ -615,11 +631,13 @@ export function withTimeout<T>(
         if (visibility.isVisible()) resume();
         promise.then(
             (v) => {
+                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and resolving an already-rejected promise is ignored
                 if (settled) return;
                 finish();
                 resolve(v);
             },
             (err) => {
+                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and rejecting an already-rejected promise is ignored
                 if (settled) return;
                 finish();
                 // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejects the wrapped promise's reason unchanged; callers inspect ADO error fields like `status`

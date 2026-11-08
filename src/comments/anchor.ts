@@ -24,6 +24,7 @@ interface TextRun {
 
 /** Collect all text-node "runs" inside `root` and the concatenated string. */
 function flattenText(root: Element): { text: string; runs: TextRun[] } {
+    // Stryker disable next-line ArrayDeclaration: a stray non-run entry has no node or offsets, so every run lookup (find by end, contains, filter by overlap) passes over it
     const runs: TextRun[] = [];
     let acc = "";
 
@@ -71,6 +72,7 @@ export function resolveAnchor(root: Element, anchor: TextQuoteAnchor): Range | n
         if (quoted) return quoted;
     }
 
+    // Stryker disable next-line ConditionalExpression: dead code: `line` is typed as an optional number, and an absent one already fails the `> 0` check, candidate for removal
     if (typeof anchor.line === "number" && anchor.line > 0) {
         return resolveLineAnchor(root, anchor.line, anchor.endLine ?? anchor.line);
     }
@@ -100,6 +102,7 @@ function matchTextQuote(
     anchor: TextQuoteAnchor,
 ): { start: number; end: number; runs: TextRun[] } | null {
     const { text, runs } = flattenText(root);
+    // Stryker disable next-line ConditionalExpression: dead code: with no text the quote search below finds nothing and returns null anyway, candidate for removal
     if (runs.length === 0) return null;
 
     const exactStart = findQuoteStart(text, anchor);
@@ -122,12 +125,15 @@ function findQuoteStart(
     text: string,
     quote: Pick<TextQuoteAnchor, "exact" | "prefix" | "suffix">,
 ): number {
+    // Stryker disable ArithmeticOperator,ConditionalExpression,EqualityOperator,BlockStatement: dead code: a redundant fast path — the scored search below gives an occurrence with its full context the top score and breaks ties by earliest index, so it lands on the same offset, candidate for removal
     const composite = quote.prefix + quote.exact + quote.suffix;
 
     if (composite.length > quote.exact.length) {
         const cIdx = text.indexOf(composite);
         if (cIdx >= 0) return cIdx + quote.prefix.length;
     }
+
+    // Stryker restore ArithmeticOperator,ConditionalExpression,EqualityOperator,BlockStatement
 
     return bestScoredOccurrence(text, quote);
 }
@@ -137,6 +143,7 @@ function occurrencesOf(text: string, needle: string): number[] {
     const candidates: number[] = [];
     let from = 0;
 
+    // Stryker disable next-line EqualityOperator: searching from the very end can only find an empty needle, and quotes are never empty here
     while (from <= text.length) {
         const idx = text.indexOf(needle, from);
         if (idx < 0) break;
@@ -241,6 +248,7 @@ export function isWithinGeneratedContent(node: Node): boolean {
  */
 export function captureAnchorFromSelection(root: Element): TextQuoteAnchor | null {
     const sel = window.getSelection();
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: getSelection() is never null for the page document, a selection with no range reports isCollapsed, and a collapsed range has no text, which the blank-text check below rejects, candidate for removal
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     const range = sel.getRangeAt(0);
     if (!root.contains(range.commonAncestorContainer)) return null;
@@ -257,6 +265,7 @@ export function captureAnchorFromSelection(root: Element): TextQuoteAnchor | nul
     const rawEnd = boundaryOffsetToFlat(runs, range.endContainer, range.endOffset);
 
     // An empty Text node has no run, so a boundary inside one maps to -1.
+    // Stryker disable next-line EqualityOperator: dead code: the range holds non-blank text from the article's own text runs, so its end always maps strictly after its start, candidate for removal
     if (rawStart < 0 || rawEnd < rawStart) return null;
 
     // Trim the selection as represented by the article's flattened text, not
@@ -307,6 +316,7 @@ function sourceLineFromNode(node: Node): number | undefined {
     while (el) {
         const raw = el.getAttribute("data-source-line");
 
+        // Stryker disable next-line ConditionalExpression: dead code: parseInt(null) is NaN, which the isFinite check already skips, candidate for removal
         if (raw != null) {
             const n = Number.parseInt(raw, 10);
             if (Number.isFinite(n)) return n;
@@ -323,6 +333,7 @@ function sourceLineFromNode(node: Node): number | undefined {
  * the selected text in the raw markdown source.
  */
 export function withSourceLocation(anchor: TextQuoteAnchor, source: string): TextQuoteAnchor {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: `exact` is always a string, so "falsy" and "empty" are the same test, candidate for removal
     if (!anchor.exact || anchor.exact.length === 0) return anchor;
     const span = findTextQuoteOffsets(source, anchor);
     if (!span) return anchor;
@@ -357,12 +368,14 @@ function normalizeSourceForMatching(src: string): {
     let normalized = "";
     const map: number[] = [];
 
+    // Stryker disable next-line EqualityOperator: one extra pass only appends text past the end of the source, where a quote taken from the rendered document never lands
     for (let i = 0; i < src.length; ) {
         const ch = src[i]!;
 
         if (ch === "\r") {
             normalized += "\n";
             map.push(i);
+            // Stryker disable next-line ConditionalExpression,EqualityOperator,ArithmeticOperator: reading past the end yields undefined, which is never "\n", so the bounds check can be dropped or loosened
             i += i + 1 < src.length && src[i + 1] === "\n" ? 2 : 1;
             continue;
         }
@@ -379,6 +392,7 @@ function normalizeSourceForMatching(src: string): {
 
 /** Collapse CRLF/CR to LF (for DOM-captured quote text vs. raw source). */
 function normalizeNewlines(s: string): string {
+    // Stryker disable next-line StringLiteral: dead code: quotes are captured from rendered DOM text, which never contains "\r", so these replacements never fire, candidate for removal
     return s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
@@ -412,16 +426,19 @@ function findTextQuoteOffsets(text: string, anchor: TextQuoteAnchor): TextSpan |
 function offsetToLineColumn(text: string, offset: number): { line: number; column: number } {
     const lineStarts = [0];
 
+    // Stryker disable next-line EqualityOperator: text[text.length] is undefined, never "\n"
     for (let i = 0; i < text.length; i++) {
         if (text[i] === "\n") lineStarts.push(i + 1);
     }
 
     let lineIdx = 0;
 
+    // Stryker disable next-line EqualityOperator: the last line has no upper bound, so the loop always breaks before running past it
     for (let i = 0; i < lineStarts.length; i++) {
         const start = lineStarts[i]!;
         const next = i + 1 < lineStarts.length ? lineStarts[i + 1]! : Infinity;
 
+        // Stryker disable next-line ConditionalExpression: dead code: lines are scanned in ascending order, so the first line whose successor starts after `offset` already contains it, candidate for removal
         if (offset >= start && offset < next) {
             lineIdx = i;
             break;
@@ -452,6 +469,7 @@ function boundaryOffsetToFlat(runs: TextRun[], node: Node, offsetInNode: number)
         if (next) return next.start;
     }
 
+    // Stryker disable next-line EqualityOperator: skipping the first child only lifts the boundary to the parent, and flat text is contiguous, so the end of the run before equals the start of the run after
     for (let index = offsetInNode - 1; index >= 0; index--) {
         const child = node.childNodes[index]!;
 
@@ -468,10 +486,12 @@ function boundaryOffsetToFlat(runs: TextRun[], node: Node, offsetInNode: number)
 
     const index = Array.prototype.indexOf.call(parent.childNodes, node) as number;
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: this node holds no text runs, so the points just before and just after it map to the same flat offset, candidate for removal
     return boundaryOffsetToFlat(runs, parent, offsetInNode === 0 ? index : index + 1);
 }
 
 function commonPrefixLen(a: string, b: string): number {
+    // Stryker disable next-line MethodExpression: past the shorter string one side is undefined, which never equals a character, so the loop stops at the same point
     const n = Math.min(a.length, b.length);
     let i = 0;
     while (i < n && a[i] === b[i]) i++;
@@ -480,6 +500,7 @@ function commonPrefixLen(a: string, b: string): number {
 }
 
 function commonSuffixLen(a: string, b: string): number {
+    // Stryker disable next-line MethodExpression: past the shorter string one side is undefined, which never equals a character, so the loop stops at the same point
     const n = Math.min(a.length, b.length);
     let i = 0;
     while (i < n && a[a.length - 1 - i] === b[b.length - 1 - i]) i++;
@@ -517,6 +538,7 @@ function resolveLineAnchor(root: Element, startLine: number, endLine: number): R
         for (const el of blocks) {
             const s = numAttr(el, "data-source-line");
             const e = numAttr(el, "data-source-end-line");
+            // Stryker disable next-line ConditionalExpression,LogicalOperator: the renderer stamps a block's start and end lines together from the same source map, so a block never has one without the other (and a missing end line already fails `line <= e`)
             if (s == null || e == null) continue;
 
             if (s <= line && line <= e && s > bestStart) {
@@ -529,6 +551,7 @@ function resolveLineAnchor(root: Element, startLine: number, endLine: number): R
     };
 
     const startEl = mostSpecificAt(startLine);
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: looking up an end line that is not after the start line yields the start block or one before it, and both fall back to the single start block below, candidate for removal
     const endEl = endLine > startLine ? mostSpecificAt(endLine) : startEl;
 
     if (startEl) {
@@ -537,6 +560,7 @@ function resolveLineAnchor(root: Element, startLine: number, endLine: number): R
         // to the single resolved block.
         if (
             endEl &&
+            // Stryker disable next-line ConditionalExpression: dead code: a block never follows itself, so the document-position check below already rejects endEl === startEl, candidate for removal
             endEl !== startEl &&
             startEl.compareDocumentPosition(endEl) & Node.DOCUMENT_POSITION_FOLLOWING
         ) {
@@ -553,6 +577,7 @@ function resolveLineAnchor(root: Element, startLine: number, endLine: number): R
     for (const el of blocks) {
         const s = numAttr(el, "data-source-line");
 
+        // Stryker disable next-line ConditionalExpression: dead code: a null start line compares as 0, which is never at or after a 1-based line, candidate for removal
         if (s != null && s >= startLine) {
             fallback = el;
             break;

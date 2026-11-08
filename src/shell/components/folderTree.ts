@@ -53,6 +53,7 @@ export type TreeNode<F extends { path: string }> = DirNode<F> | FileNode<F>;
  * slashes makes the two interchangeable as map/set keys.
  */
 export function normalizeFolderPath(path: string): string {
+    // Stryker disable next-line Regex: ADO and caller folder paths never carry doubled slashes, and empty segments are filtered out anyway, so trimming one slash or a run is the same
     return path.replace(/^\/+/, "").replace(/\/+$/, "");
 }
 
@@ -88,7 +89,9 @@ export function buildFolderTree<F extends { path: string }>(
         // Strip leading slash so `"/docs/foo.md"` and `"docs/foo.md"` give
         // identical trees. Empty segments (caused by `//` or trailing `/`)
         // are filtered out.
+        // Stryker disable next-line Regex: file paths never carry doubled slashes, and empty segments are filtered out anyway, so trimming one slash or a run is the same
         const segments = f.path.replace(/^\/+/, "").split("/").filter(Boolean);
+        // Stryker disable next-line ConditionalExpression: dead code: an empty path would attach to the never-rendered root, so skipping it changes nothing; candidate for removal
         if (segments.length === 0) continue;
         insertPath(root, segments).file = f;
     }
@@ -100,6 +103,7 @@ export function buildFolderTree<F extends { path: string }>(
     for (const folderPath of options?.extraFolders ?? []) {
         const segments = normalizeFolderPath(folderPath).split("/").filter(Boolean);
 
+        // Stryker disable next-line ConditionalExpression: dead code: an empty folder path inserts nothing, so skipping it changes nothing; candidate for removal
         if (segments.length === 0) continue;
         // No `.file = …` here — that's what makes this a lazy folder.
         insertPath(root, segments);
@@ -155,6 +159,7 @@ function insertPath<F extends { path: string }>(
 
 /** A folder's only child when it is itself a folder (so the two collapse). */
 function collapsibleChild<F extends { path: string }>(node: Building<F>): Building<F> | undefined {
+    // Stryker disable next-line ConditionalExpression: dead code: a git path can't be both a file and a folder, so a node never has a file and children at once; candidate for removal
     if (node.file !== undefined || node.children.size !== 1) return undefined;
     const onlyChild = [...node.children.values()][0]!;
 
@@ -169,6 +174,7 @@ function buildTreeNode<F extends { path: string }>(
     node: Building<F>,
     folderOrders: Readonly<Record<string, readonly string[]>> | undefined,
 ): TreeNode<F> {
+    // Stryker disable next-line ConditionalExpression: dead code: a git path can't be both a file and a folder, so a node never has a file and children at once; candidate for removal
     if (node.file && node.children.size === 0) {
         return { kind: "file", file: node.file };
     }
@@ -230,6 +236,7 @@ function sortNodes<F extends { path: string }>(
         const an = a.kind === "dir" ? a.displayName : basename(a.file.path);
         const bn = b.kind === "dir" ? b.displayName : basename(b.file.path);
 
+        // Stryker disable next-line MethodExpression: upper-casing the left name only turns a case-only tie (0) into a positive result, and V8's sort only branches on a negative result, so no order changes; this line-level disable also covers the opposite-side mutant, which the case-only scenario in folderTree.test.ts does kill
         return an.toLowerCase().localeCompare(bn.toLowerCase());
     });
 }
@@ -245,6 +252,7 @@ function orderName<F extends { path: string }>(node: TreeNode<F>): string {
 function basename(p: string): string {
     const i = p.lastIndexOf("/");
 
+    // Stryker disable next-line ConditionalExpression,EqualityOperator,UnaryOperator,MethodExpression: siblings share their folder prefix, so comparing full paths sorts them exactly like their base names
     return i === -1 ? p : p.slice(i + 1);
 }
 
@@ -284,6 +292,7 @@ export function mergeWikiPages<F extends { path: string }>(
     const pagesByName = new Map<string, F>();
 
     for (const node of nodes) {
+        // Stryker disable next-line Regex: the tree only lists Markdown files, whose paths always end in .md
         if (node.kind === "file" && /\.md$/i.test(node.file.path)) {
             pagesByName.set(wikiPageName(node.file.path), node.file);
         }
@@ -300,6 +309,7 @@ export function mergeWikiPages<F extends { path: string }>(
 
         const page = node.displayName.includes("/") ? undefined : pagesByName.get(node.displayName);
 
+        // Stryker disable next-line ConditionalExpression: dead code: recording "no page" never matches a real file below; candidate for removal
         if (page) merged.add(page);
         out.push({
             ...node,
@@ -308,5 +318,6 @@ export function mergeWikiPages<F extends { path: string }>(
         });
     }
 
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a folder node has no file, so `merged.has(undefined)` keeps it anyway; candidate for removal
     return out.filter((node) => node.kind === "dir" || !merged.has(node.file));
 }

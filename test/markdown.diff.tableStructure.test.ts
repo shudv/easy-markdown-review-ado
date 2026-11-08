@@ -128,10 +128,96 @@ describe("removed rows", () => {
 
         expect(removedRow.classList.contains("emr-diff-deleted-table-row")).toBe(true);
         expect(removedRow.hidden).toBe(false);
+        expect(removedRow.getAttribute("role")).toBe("note");
         expect(removedRow.getAttribute("aria-label")).toBe("Removed table row");
         const cells = Array.from(removedRow.querySelectorAll("td"));
         expect(cells.map((cell) => cell.textContent)).toEqual(["extra", "9"]);
         expect(removedRow.querySelector(".emr-diff-deleted-chip")).toBeNull();
+        expect(
+            Array.from(
+                root.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+                (row) => row.cells[0]!.textContent,
+            ),
+        ).toEqual(["theme", "retries", "extra", "timeout"]);
+    });
+
+    it.each([
+        {
+            name: "a table inside a list item",
+            current: lines(
+                "- Settings:",
+                "",
+                "  | Option | Default |",
+                "  | --- | --- |",
+                "  | theme | light |",
+                "  | timeout | 5000 |",
+            ),
+            removal: { startLine: 6, deletedContent: "  | retries | 3 |\n" },
+            rows: ["theme", "retries", "timeout"],
+        },
+        {
+            name: "a row written with trailing spaces",
+            current: table,
+            removal: { startLine: 5, deletedContent: "| extra | 9 |  \n" },
+            rows: ["theme", "retries", "extra", "timeout"],
+        },
+        {
+            name: "the last row of a table followed by text",
+            current: lines(table, "", "After the table."),
+            removal: { startLine: 6, deletedContent: "| legacy | off |\n" },
+            rows: ["theme", "retries", "timeout", "legacy"],
+        },
+        {
+            name: "the last row removed together with the blank line after it",
+            current: lines(table, "", "After the table."),
+            removal: { startLine: 6, deletedContent: "| legacy | off |\n\n" },
+            rows: ["theme", "retries", "timeout", "legacy"],
+        },
+        {
+            name: "the first of two tables",
+            current: lines(table, "", "Between.", "", "| A | B |", "| --- | --- |", "| x | y |"),
+            removal: { startLine: 6, deletedContent: "| legacy | off |\n" },
+            rows: ["theme", "retries", "timeout", "legacy", "x"],
+        },
+    ])("shows a removed row of $name inside the table", ({ current, removal, rows }) => {
+        const root = render(current);
+
+        decorate(root, [{ ...removal, endLine: removal.startLine, kind: "deleted-marker" }]);
+
+        expect(
+            Array.from(
+                root.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+                (row) => row.cells[0]!.textContent,
+            ),
+        ).toEqual(rows);
+        expect(root.querySelector(`div.${DIFF_DELETED_MARKER_CLASS}`)).toBeNull();
+    });
+
+    it.each([
+        {
+            name: "a row removed from a one-column table",
+            current: lines("| Step |", "| --- |", "| build |", "| ship |"),
+            deletedContent: "| test |\n",
+            removedText: "| test |",
+        },
+        {
+            name: "removed rows whose cell counts disagree",
+            current: table,
+            deletedContent: "| extra | 9 |\n| wide | 1 | 2 |\n",
+            removedText: "| wide | 1 | 2 |",
+        },
+    ])("shows $name as a removal card", ({ current, deletedContent, removedText }) => {
+        const root = render(current);
+
+        decorate(root, [
+            { startLine: 4, endLine: 4, kind: "deleted-marker", linesDeleted: 1, deletedContent },
+        ]);
+
+        expect(root.querySelector(".emr-diff-deleted-table-row")).toBeNull();
+        expect(
+            root.querySelector(`div.${DIFF_DELETED_MARKER_CLASS} .emr-diff-deleted-body`)
+                ?.textContent,
+        ).toContain(removedText);
     });
 
     it("shows a removed row with a different cell count as a removal card", () => {

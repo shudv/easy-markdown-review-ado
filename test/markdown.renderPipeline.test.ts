@@ -17,6 +17,12 @@ describe("renderMarkdown — mention pills", () => {
         expect(html).not.toMatch(/<a[^>]*mention:\/\/user/);
     });
 
+    it("gives a user mention no state dot", async () => {
+        const html = await renderMarkdown("Hi [@alice](mention://user/alice)");
+
+        expect(html).not.toContain("emr-mention-state-dot");
+    });
+
     it("converts a native ADO `@<GUID>` token into a user-mention pill", async () => {
         const guid = "6b71186c-c2e6-6813-b4e0-ffcd511163f4";
         const html = await renderMarkdown(`Please review @<${guid}> thanks`);
@@ -43,6 +49,21 @@ describe("renderMarkdown — mention pills", () => {
         );
     });
 
+    it("hides the decorative state dot from assistive technology", async () => {
+        const html = await renderMarkdown("See [#42](mention://workitem/42?stateColor=00ff00)");
+
+        expect(html).toMatch(/<span[^>]*class="emr-mention-state-dot"[^>]*aria-hidden="true"/);
+    });
+
+    it("keeps a pull-request mention as a new-tab link", async () => {
+        const html = await renderMarkdown("PR [!9](mention://pullrequest/9?status=active)");
+
+        expect(html).toMatch(
+            /<a[^>]*href="mention:\/\/pullrequest\/9\?status=active"[^>]*target="_blank"/,
+        );
+        expect(html).toMatch(/<a[^>]*class="emr-mention emr-mention-pullrequest"/);
+    });
+
     it("adds a PR-status class to the dot of a pull-request mention", async () => {
         const html = await renderMarkdown("PR [!9](mention://pullrequest/9?status=active)");
 
@@ -51,6 +72,13 @@ describe("renderMarkdown — mention pills", () => {
 
     it("renders a bare state dot for a pull-request mention with no status", async () => {
         const html = await renderMarkdown("PR [!9](mention://pullrequest/9)");
+        expect(html).toMatch(/<span[^>]*class="emr-mention-state-dot"/);
+        expect(html).not.toMatch(/emr-pr-state-/);
+    });
+
+    it("never gives a work-item mention a pull-request status colour", async () => {
+        const html = await renderMarkdown("See [#42](mention://workitem/42?status=completed)");
+
         expect(html).toMatch(/<span[^>]*class="emr-mention-state-dot"/);
         expect(html).not.toMatch(/emr-pr-state-/);
     });

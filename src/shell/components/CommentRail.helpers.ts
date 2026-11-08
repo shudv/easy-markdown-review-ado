@@ -7,6 +7,7 @@ export const DRAFT_ID = "__draft__";
 
 /** Epoch ms of a thread's creation (its root comment's timestamp). */
 export function threadCreatedAt(t: CommentThread): number {
+    // Stryker disable next-line OptionalChaining: dead code: every thread has a root comment (the ADO adapter drops threads with none), so comments[0] always exists, candidate for removal
     const iso = t.comments[0]?.createdAt;
     const ms = iso ? Date.parse(iso) : NaN;
 

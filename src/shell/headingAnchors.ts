@@ -95,6 +95,7 @@ export function revealAnchorTarget(target: HTMLElement, storageKey: string): boo
 
             const sid = section.dataset.sectionId;
 
+            // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: persisting "open" removes the section's key, and nothing ever stores a key for a section without an id, so removing one is a no-op
             if (sid !== undefined && sid !== "") {
                 persistSectionState(storageKey, sid, false);
             }
@@ -102,15 +103,18 @@ export function revealAnchorTarget(target: HTMLElement, storageKey: string): boo
             changed = true;
         }
 
+        // Stryker disable next-line OptionalChaining: a section always sits inside the article (or at least the document body), so it always has a parent element
         section = section.parentElement?.closest<HTMLElement>(".emr-section") ?? null;
     }
 
     if (changed) {
+        // Stryker disable ObjectLiteral: `bubbles` already defaults to false for a CustomEvent
         target
             .closest(".emr-article-wrap")
             ?.dispatchEvent(new CustomEvent("emr-sections-changed", { bubbles: false }));
     }
 
+    // Stryker restore ObjectLiteral
     return changed;
 }
 
@@ -151,6 +155,7 @@ function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
     // Child nodes are never Documents/Doctypes, so textContent is never null.
     if (nodes.some((node) => node.textContent!.trim().length > 0)) {
         cue = target.ownerDocument.createElement("span");
+        // Stryker disable next-line StringLiteral: the wrapper is recognised by the attribute's presence (`hasAttribute`), never its value
         cue.setAttribute(CUE_WRAPPER_ATTR, "");
         target.insertBefore(cue, nodes[0]!);
         cue.append(...nodes);
@@ -193,13 +198,16 @@ export function flashAnchorTarget(
         cue = applyCue(next, Math.round(performance.now() - startedAt));
     });
 
+    // Stryker disable next-line BooleanLiteral: re-wraps reset the article's own children (`article.innerHTML = pristineHtml`, src/shell/components/ArticleView.tsx:234), which a child-list observer of the article sees without the subtree; the only deeper mutations (Mermaid/KaTeX hydration, ArticleView.tsx:285) replace code/math fallbacks, never an element carrying an anchor id
     observer.observe(article, { childList: true, subtree: true });
     let done = false;
     // A timer, not `animationend`, so the cue always clears on schedule.
     const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
 
     function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing an absent class, unwrapping an already-detached span
         if (done) return;
+        // Stryker disable next-line BooleanLiteral: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing an absent class, unwrapping an already-detached span
         done = true;
         observer.disconnect();
         window.clearTimeout(timer);
@@ -230,6 +238,7 @@ export function flashTextTarget(
     resolveRange: () => Range | null,
 ): () => void {
     const startedAt = performance.now();
+    // Stryker disable next-line ArrayDeclaration: `apply(0)` below replaces the initial list before anything reads it
     let cues: HTMLElement[] = [];
 
     const apply = (delayMs: number): void => {
@@ -239,9 +248,11 @@ export function flashTextTarget(
                   range,
                   () => {
                       const span = article.ownerDocument.createElement("span");
+                      // Stryker disable next-line StringLiteral: cue spans are found by the attribute's presence (`[data-emr-text-cue]`), never its value
                       span.setAttribute(TEXT_CUE_ATTR, "");
                       span.className = ANCHOR_TARGET_CLASS;
 
+                      // Stryker disable next-line ConditionalExpression,EqualityOperator: a first paint's delay is 0, and a `-0ms` animation delay starts the fade exactly like none
                       if (delayMs > 0) {
                           span.style.animationDelay = `-${delayMs}ms`;
                       }
@@ -269,11 +280,14 @@ export function flashTextTarget(
     const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
 
     function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — the observer is disconnected, the timer spent, and the cue list already empty
         if (done) return;
+        // Stryker disable next-line BooleanLiteral: cancelling again repeats only no-ops — the observer is disconnected, the timer spent, and the cue list already empty
         done = true;
         observer.disconnect();
         window.clearTimeout(timer);
         for (const cue of cues) cue.replaceWith(...cue.childNodes);
+        // Stryker disable next-line ArrayDeclaration: nothing reads the list after a cancel — the observer is disconnected and a repeat cancel returns early
         cues = [];
     }
 
@@ -319,19 +333,23 @@ export function holdScrollOnTarget(
     const timer = window.setTimeout(cancel, maxMs);
 
     function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing absent listeners
         if (done) return;
         done = true;
         observer.disconnect();
         window.clearTimeout(timer);
 
+        // Stryker disable BlockStatement,BooleanLiteral: a listener left registered only calls this cancel again, which returns early once `done`
         for (const type of USER_SCROLL_EVENTS) {
             doc.removeEventListener(type, cancel, true);
         }
+        // Stryker restore BlockStatement,BooleanLiteral
     }
 
     observer.observe(observed);
 
     for (const type of USER_SCROLL_EVENTS) {
+        // Stryker disable next-line BooleanLiteral: `cancel` never calls preventDefault, so a passive listener only spares the browser from waiting on it before scrolling
         doc.addEventListener(type, cancel, { capture: true, passive: true });
     }
 

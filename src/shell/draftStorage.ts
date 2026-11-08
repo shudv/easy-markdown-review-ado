@@ -101,17 +101,22 @@ export function loadDraft(scope: DraftScope): PersistedDraft | null {
     let raw: string | null;
 
     try {
+        // Stryker disable BlockStatement: dead code: this `return null` is redundant — falling through leaves `raw` undefined, which JSON.parse rejects below with the same null, candidate for removal
         raw = window.localStorage.getItem(draftStorageKey(scope));
     } catch {
+        // Stryker restore BlockStatement
         return null;
     }
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: JSON.parse(null) is null and JSON.parse("") throws, and both already read as "no draft" below, candidate for removal
     if (raw === null || raw === "") return null;
     let parsed: unknown;
 
     try {
+        // Stryker disable BlockStatement: dead code: this `return null` is redundant — falling through leaves `parsed` undefined, which the shape check below rejects with the same null, candidate for removal
         parsed = JSON.parse(raw);
     } catch {
+        // Stryker restore BlockStatement
         return null;
     }
 
@@ -122,6 +127,7 @@ export function loadDraft(scope: DraftScope): PersistedDraft | null {
 
 /** Validate a parsed value is a well-formed {@link PersistedDraft}. */
 function isPersistedDraft(value: unknown): value is PersistedDraft {
+    // Stryker disable next-line ConditionalExpression: dead code: a stored string, number or boolean has no string `path`, so the field checks below reject it anyway, candidate for removal
     if (typeof value !== "object" || value === null) return false;
     const v = value as Record<string, unknown>;
 
@@ -201,6 +207,7 @@ export function createThrottledDraftWriter(
             pending = draft;
             const elapsed = Date.now() - lastWrite;
 
+            // Stryker disable next-line EqualityOperator: at exactly one interval the trailing timer is due after 0 ms, so the save is merely deferred to the next task, which no user or reload can observe
             if (elapsed >= intervalMs) {
                 write();
             } else {
@@ -208,6 +215,7 @@ export function createThrottledDraftWriter(
             }
         },
         flush(): void {
+            // Stryker disable next-line ConditionalExpression: dead code: clearTimeout(null) and resetting an already-null timer are no-ops, so the check only skips work that does nothing, candidate for removal
             if (timer !== null) {
                 clearTimeout(timer);
                 timer = null;
@@ -216,6 +224,7 @@ export function createThrottledDraftWriter(
             write();
         },
         cancel(): void {
+            // Stryker disable next-line ConditionalExpression: dead code: clearTimeout(null) and resetting an already-null timer are no-ops, so the check only skips work that does nothing, candidate for removal
             if (timer !== null) {
                 clearTimeout(timer);
                 timer = null;

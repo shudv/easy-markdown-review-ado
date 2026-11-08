@@ -112,6 +112,7 @@ const CHILD_BLOCK_TAGS = new Set([
 export function isChildBlock(el: Element): boolean {
     return (
         CHILD_BLOCK_TAGS.has(el.tagName) &&
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: every rendered child block carries a source line; the only unstamped divs inside list items or quotes are the Before control and panel, which the line wash skips by name and which never sit in a lead that is compared with an original
         (el.tagName !== "DIV" || el.hasAttribute("data-source-line"))
     );
 }
@@ -164,6 +165,7 @@ export function readSourceSpan(el: Element): SourceSpan | null {
  * returned unchanged.
  */
 export function inlineProseTarget(block: HTMLElement): HTMLElement {
+    // Stryker disable next-line ConditionalExpression: only list items and quotes hold paragraph children, and a list item's first paragraph is found the same way by the list-item branch below
     if (block.tagName === "BLOCKQUOTE") {
         const body = Array.from(block.children).find(
             (child) => child.tagName === "P" && !child.classList.contains("markdown-alert-title"),
@@ -172,6 +174,7 @@ export function inlineProseTarget(block: HTMLElement): HTMLElement {
         if (body) return body as HTMLElement;
     }
 
+    // Stryker disable next-line ConditionalExpression: apart from list items, only quotes hold paragraph children, and a quote without a body paragraph has none to find
     if (block.tagName === "LI") {
         const prose = Array.from(block.children).find((child) => child.tagName === "P");
 

@@ -72,6 +72,7 @@ export async function listMarkdownLevel(
     // An Azure DevOps wiki folder orders its pages with a `.order` file.
     const orderPath = findOrderFile(items, scopePath);
 
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: findOrderFile only returns a real `…/.order` item path, never ""; candidate for removal
     if (orderPath !== undefined && orderPath !== "") {
         const order = await readOrderFile(read, orderPath);
         if (order !== undefined) listing.order = order;
@@ -124,6 +125,7 @@ async function fetchLevelItems(
                     false,
                     versionDescriptor,
                 ),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "listMarkdownLevel.getItems" },
         );
     } catch (err) {
@@ -131,6 +133,7 @@ async function fetchLevelItems(
         if (outcome === "empty") return null;
         if (outcome === "throw") throw err;
         console.warn(
+            // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
             `[documents-hub] getItems(OneLevel) failed for ${repo.name} @ ${scopePath}:`,
             err,
         );
@@ -163,12 +166,14 @@ async function readOrderFile(read: LevelRead, orderPath: string): Promise<string
                     undefined,
                     versionDescriptor,
                 ),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "listMarkdownLevel.getItemText(.order)" },
         );
 
         return parseOrderFile(text);
     } catch (err) {
         // Best-effort: the folder still lists, alphabetically.
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
         console.warn(`[documents-hub] reading ${orderPath} failed for ${repo.name}:`, err);
 
         if (!isItemNotFoundError(err)) {

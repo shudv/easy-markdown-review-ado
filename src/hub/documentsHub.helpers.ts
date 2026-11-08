@@ -10,6 +10,7 @@ import { TARGET_LINK_PARAMS, withDeepLinkTarget, type DeepLinkTarget } from "../
 export function initialsOf(name: string): string {
     // `split(/\s+/)` always yields at least one element (even for ""), so we
     // never need an empty-array guard here.
+    // Stryker disable next-line Regex: the name is trimmed, so splitting on single spaces only adds empty middle pieces, and the initials read the first and last pieces either way
     const parts = name.trim().split(/\s+/);
     if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
 
@@ -22,6 +23,7 @@ export function formatError(err: unknown): string {
         return err.stack != null && err.stack !== "" ? err.stack : err.message;
     }
 
+    // Stryker disable next-line ConditionalExpression: dead code: JSON.stringify(null) and String(null) are both "null"; candidate for removal
     if (typeof err === "object" && err !== null) {
         return JSON.stringify(err, null, 2);
     }
@@ -91,6 +93,7 @@ export function assembleHubDeepLinkUrl(
     target: DeepLinkTarget,
 ): string | undefined {
     const url = buildHubDocUrl(doc, ext);
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: withDeepLinkTarget also returns undefined for a missing base URL, and buildHubDocUrl never returns ""; candidate for removal
     if (url === undefined || url === "") return undefined;
 
     return withDeepLinkTarget(url, target);
@@ -113,6 +116,7 @@ export function routeUpdatesForPath(
 ): Record<string, string> {
     const bare = path.replace(/^\/+/, "");
     const updates: Record<string, string> = { repo: repoId, path: bare };
+    // Stryker disable next-line StringLiteral: a missing current path differs from any real document path whether read as "" or a placeholder; only publishing an empty path (never done) could tell them apart
     const currentPath = (current.path ?? "").replace(/^\/+/, "");
 
     // A link without `?repo=` names the hub's default repo, so only a different
@@ -134,6 +138,7 @@ export function routeUpdatesForPath(
  */
 export function orgUrlFromReferrer(referrer: string): string {
     try {
+        // Stryker disable next-line ConditionalExpression: dead code: `new URL("")` throws, and the catch below returns "" anyway; candidate for removal
         if (referrer) {
             const u = new URL(referrer);
             const segments = u.pathname.split("/").filter(Boolean);

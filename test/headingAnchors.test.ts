@@ -31,6 +31,7 @@ afterEach(() => {
     sessionStorage.clear();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 describe("findAnchorTarget", () => {
@@ -42,6 +43,33 @@ describe("findAnchorTarget", () => {
     it("tolerates a leading # and surrounding whitespace", () => {
         const root = mount(`<h2 id="goals">Goals</h2>`);
         expect(findAnchorTarget(root, "  #goals ")?.id).toBe("goals");
+    });
+
+    it.each([
+        { name: "a leading #", anchor: "#Release-Notes" },
+        { name: "a doubled leading # (a typo'd link)", anchor: "##Release-Notes" },
+        { name: "surrounding whitespace", anchor: "  Release-Notes  " },
+    ])("finds a raw-HTML anchor through $name", ({ anchor }) => {
+        // A hand-written `<a id>` keeps its capitals, so only the literal id matches.
+        const root = mount(`<p><a id="Release-Notes"></a>Release notes</p>`);
+
+        expect(findAnchorTarget(root, anchor)?.id).toBe("Release-Notes");
+    });
+
+    it("finds a raw-HTML anchor whose id contains # from a deep link", () => {
+        const root = mount(`<p><a id="C#-notes"></a>C# notes</p>`);
+
+        expect(findAnchorTarget(root, "C#-notes")?.id).toBe("C#-notes");
+    });
+
+    it.each([
+        { name: "a bare # link", anchor: "#" },
+        { name: "a typo'd ## link", anchor: "##" },
+        { name: "a blank deep-link anchor", anchor: "  " },
+    ])("lands nowhere for $name, even beside an element with an empty id", ({ anchor }) => {
+        const root = mount(`<p><a id=""></a>Intro</p><h2 id="goals">Goals</h2>`);
+
+        expect(findAnchorTarget(root, anchor)).toBeNull();
     });
 
     it("matches a percent-encoded anchor", () => {
@@ -523,6 +551,77 @@ describe("flashTextTarget", () => {
         cancel();
         cancel();
         vi.restoreAllMocks();
+    });
+
+    // Resolves "alpha" only while it is still a bare text node of the paragraph.
+    const bareAlpha = (root: HTMLElement) => () => {
+        const node = root.querySelector("p")?.firstChild;
+
+        return node instanceof Text ? rangeOver(node, 0, 5) : null;
+    };
+
+    it("keeps the text cue through unrelated changes and still clears it afterwards", async () => {
+        const root = mount(`<p>alpha beta</p>`);
+        const cancel = flashTextTarget(root, bareAlpha(root));
+
+        root.append(document.createElement("hr"));
+        await Promise.resolve();
+        cancel();
+
+        expect(root.querySelector("p")!.innerHTML).toBe("alpha beta");
+    });
+
+    it("resumes a re-wrapped text cue's fade where it left off", async () => {
+        vi.spyOn(performance, "now").mockReturnValueOnce(1_000).mockReturnValue(1_400);
+        const root = mount(`<p>alpha beta</p>`);
+        const cancel = flashTextTarget(root, bareAlpha(root));
+
+        root.innerHTML = "<p>alpha beta</p>";
+        await Promise.resolve();
+
+        expect(currentTextCue(root)!.style.animationDelay).toBe("-400ms");
+        cancel();
+    });
+
+    it("picks the text cue up when the text appears only after a re-wrap", async () => {
+        const root = mount(`<p>Loading</p>`);
+
+        const cancel = flashTextTarget(root, () => {
+            const node = root.querySelector("p")?.firstChild;
+
+            return node instanceof Text && node.data.startsWith("alpha")
+                ? rangeOver(node, 0, 5)
+                : null;
+        });
+
+        root.innerHTML = "<p>alpha beta</p>";
+        await Promise.resolve();
+
+        expect(currentTextCue(root)?.textContent).toBe("alpha");
+        cancel();
+    });
+
+    it("keeps the text cue on a formula that renders while the cue plays", async () => {
+        // KaTeX hydrates inline math after the article paints, replacing the
+        // source fallback deep inside a paragraph (not via a re-wrap).
+        const root = mount(`<p>cost <span class="emr-math-fallback">n^2</span> grows</p>`);
+        const p = root.querySelector("p")!;
+
+        const cancel = flashTextTarget(root, () => {
+            const range = document.createRange();
+            range.selectNodeContents(p);
+
+            return range;
+        });
+
+        const rendered = document.createElement("span");
+        rendered.className = "katex";
+        rendered.textContent = "n²";
+        p.querySelector(".emr-math-fallback")!.replaceWith(rendered);
+        await Promise.resolve();
+
+        expect(rendered.querySelector("[data-emr-text-cue]")?.textContent).toBe("n²");
+        cancel();
     });
 
     it("never washes struck-out removed words inside the linked span", () => {

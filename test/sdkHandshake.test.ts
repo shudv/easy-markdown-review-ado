@@ -160,6 +160,26 @@ describe("initWithHandshakeRetry", () => {
         expect(stream.listeners.size).toBe(0);
     });
 
+    it("tells the user how often the host refused and what was missing", async () => {
+        const sdk = sdkInit(stream);
+        sdk.refuse(2);
+
+        const done = initWithHandshakeRetry({
+            init: sdk.init,
+            subscribeRejections: stream.subscribe,
+            claim,
+            delaysMs: [10],
+        });
+
+        await Promise.all([
+            expect(done).rejects.toThrow(
+                "The Azure DevOps host refused the extension handshake 2 times " +
+                    "(DevOps.HostControl is not registered).",
+            ),
+            vi.advanceTimersByTimeAsync(10),
+        ]);
+    });
+
     it("ignores unrelated rejections", async () => {
         const sdk = sdkInit(stream);
 
@@ -229,6 +249,20 @@ describe("initWithHandshakeRetry", () => {
 
         await expect(done).resolves.toBeUndefined();
         expect(init).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops watching the page for refusals once the host has accepted", async () => {
+        vi.useRealTimers();
+        const init = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+        await initWithHandshakeRetry({ init, delaysMs: [0] });
+
+        const late = new Event("unhandledrejection") as PromiseRejectionEvent;
+        Object.defineProperty(late, "reason", { value: REFUSAL });
+        window.dispatchEvent(late);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(init).toHaveBeenCalledOnce();
     });
     it("follows the production retry schedule by default", async () => {
         const sdk = sdkInit(stream);

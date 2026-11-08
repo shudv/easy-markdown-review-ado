@@ -46,6 +46,7 @@ function applySearchOutcome(
         );
     } else {
         // Clear remote hits for this query; the list shows the hint.
+        // Stryker disable next-line ObjectLiteral: the merge only shows remote hits whose query equals the current one, and an empty hits object matches no query, just like an empty list
         set.setRemoteHits({ query, files: [] });
         set.setSearchUnavailable({
             reason: outcome.reason,
@@ -73,6 +74,7 @@ function applySearchOutcome(
 
 /** Record a rejected Code Search request for `query`. */
 function applySearchFailure(err: unknown, query: string, set: RemoteSearchSetters): void {
+    // Stryker disable next-line ObjectLiteral: the merge only shows remote hits whose query equals the current one, and an empty hits object matches no query, just like an empty list
     set.setRemoteHits({ query, files: [] });
     set.setSearchUnavailable({ reason: "unknown" });
     trackUserFacingError({
@@ -115,6 +117,7 @@ function mergeSearchResults(
  * the title slot with the search input.
  */
 function useSearchBox(searchQuery: string, setSearchQuery: (query: string) => void) {
+    // Stryker disable next-line ConditionalExpression: dead code: the query is always empty when the box mounts, so it always starts closed; candidate for removal
     const [searchOpen, setSearchOpen] = useState<boolean>(() => searchQuery.length > 0);
 
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -125,20 +128,24 @@ function useSearchBox(searchQuery: string, setSearchQuery: (query: string) => vo
     // render so the collapsed state never paints with a query set).
     if (searchQuery && !searchOpen) setSearchOpen(true);
 
+    // Stryker disable ArrayDeclaration: setSearchQuery is a useState setter, stable for the hook's lifetime
     const closeSearch = useCallback(() => {
         setSearchQuery("");
         setSearchOpen(false);
     }, [setSearchQuery]);
 
+    // Stryker restore ArrayDeclaration
     return { searchOpen, setSearchOpen, closeSearch, searchInputRef };
 }
 
 /** Debounced, cancellable remote Code Search for `trimmedQuery`. */
 function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
+    // Stryker disable ObjectLiteral,StringLiteral,ArrayDeclaration: the initial hits are only merged for a query equal to theirs, which no real search has before the first result arrives
     const [remoteHits, setRemoteHits] = useState<RemoteHits>(() => ({
         query: "",
         files: [],
     }));
+    // Stryker restore ObjectLiteral,StringLiteral,ArrayDeclaration
 
     const [remoteLoading, setRemoteLoading] = useState<boolean>(false);
 
@@ -150,6 +157,7 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
         if (!onSearchFiles) return;
 
         if (trimmedQuery.length < 2) {
+            // Stryker disable next-line ObjectLiteral,StringLiteral,ArrayDeclaration: below two characters no remote hits are merged unless their query equals the typed one, which a reset placeholder never does
             // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect owns the external debounced, abortable Code Search request; its loading/result state is reset and set in the same step that cancels or starts that request.
             setRemoteHits({ query: "", files: [] });
             setRemoteLoading(false);
@@ -207,6 +215,7 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
 
     /** Local substring filter — runs synchronously every keystroke. */
     const localHits = useMemo<FileInfo[]>(() => {
+        // Stryker disable next-line ConditionalExpression,ArrayDeclaration: dead code: not searching, the results below are gated to [] anyway and these local hits are never shown; candidate for removal
         if (!isSearching) return [];
         const q = trimmedQuery.toLowerCase();
 
@@ -216,6 +225,7 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
     /** Combined search results: local hits first (instant), then unique remote
      *  hits, deduped by path. */
     const searchResults = useMemo<FileInfo[]>(() => {
+        // Stryker disable next-line ConditionalExpression: dead code: not searching, local hits are already empty and the remote hits were reset to the empty query, so the merge yields [] anyway; candidate for removal
         if (!isSearching) return [];
 
         return mergeSearchResults(localHits, remoteHits, trimmedQuery);

@@ -65,6 +65,12 @@ describe("parseJwtPayload", () => {
         expect(parseJwtPayload(token)).toEqual({ exp: 123, sub: "abc" });
     });
 
+    it("decodes a payload whose encoding uses the URL-safe alphabet", () => {
+        // "???>>>~~~" base64-encodes to both `/` and `+`, sent as `_` and `-`.
+        const token = makeJwt({ exp: 1, sub: "???>>>~~~" });
+        expect(parseJwtPayload(token)).toEqual({ exp: 1, sub: "???>>>~~~" });
+    });
+
     it("decodes multi-byte (non-ASCII) claim values", () => {
         const token = makeJwt({ name: "Шубхам डिवेदी", exp: 1 });
         expect(parseJwtPayload(token)).toMatchObject({ name: "Шубхам डिवेदी" });
@@ -105,20 +111,20 @@ describe("readAdoTokenExpiry", () => {
         expect(expiry.expMs! - expiry.adoExpMs!).toBe(10 * 60 * 1000);
     });
 
-    it("takes the earliest ado_exp across multiple host attributes", () => {
-        const token = makeJwt({
-            exp: 2000,
-            xms_attr: {
-                hostA: { ado_exp: 1500 },
-                hostB: { ado_exp: 1200 },
-            },
-        });
+    it.each([
+        { name: "listed last", xms_attr: { hostA: { ado_exp: 1500 }, hostB: { ado_exp: 1200 } } },
+        { name: "listed first", xms_attr: { hostA: { ado_exp: 1200 }, hostB: { ado_exp: 1500 } } },
+    ])("takes the earliest ado_exp across multiple host attributes, $name", ({ xms_attr }) => {
+        const token = makeJwt({ exp: 2000, xms_attr });
 
         expect(readAdoTokenExpiry(token).adoExpMs).toBe(1200 * 1000);
     });
 
-    it("omits ado_exp when xms_attr is absent", () => {
-        const expiry = readAdoTokenExpiry(makeJwt({ exp: 1000 }));
+    it.each([
+        { name: "absent", payload: { exp: 1000 } },
+        { name: "null", payload: { exp: 1000, xms_attr: null } },
+    ])("omits ado_exp when xms_attr is $name", ({ payload }) => {
+        const expiry = readAdoTokenExpiry(makeJwt(payload));
         expect(expiry.expMs).toBe(1000 * 1000);
         expect(expiry.adoExpMs).toBeUndefined();
     });
@@ -260,6 +266,12 @@ describe("SessionRefreshingError", () => {
         expect(err.name).toBe("SessionRefreshingError");
     });
 
+    it("explains the refresh in its message, which load errors show the reader", () => {
+        expect(new SessionRefreshingError("refreshing").message).toBe(
+            "Azure DevOps session is refreshing (access token grant expired); waiting for the host to issue a new token.",
+        );
+    });
+
     it.each([
         { name: "a plain Error", error: new Error("nope") },
         { name: "a string", error: "nope" },
@@ -320,6 +332,13 @@ describe("planSessionRefreshRetry", () => {
             );
         },
     );
+
+    it("still retries on the last allowed attempt", () => {
+        expect(
+            planSessionRefreshRetry({ recoverAtMs: 100, nowMs: 0, attempt: 6, maxAttempts: 6 })
+                .giveUp,
+        ).toBe(false);
+    });
 
     it("gives up after maxAttempts", () => {
         const plan = planSessionRefreshRetry({

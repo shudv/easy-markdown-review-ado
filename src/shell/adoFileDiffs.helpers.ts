@@ -22,7 +22,9 @@ import { withRetry } from "./retry";
 export function hashString(s: string): string {
     let h = 5381;
 
+    // Stryker disable next-line EqualityOperator: hashing one extra (NaN → 0) step is still deterministic; the key only needs to be stable per path set
     for (let i = 0; i < s.length; i++) {
+        // Stryker disable next-line ArithmeticOperator: any deterministic mix keys the cache equally well; the commit SHAs in the key are the identity guard
         h = ((h << 5) + h) ^ s.charCodeAt(i);
     }
 
@@ -80,6 +82,7 @@ export function lineDiffBlocksToRanges(
 ): DiffRange[] {
     const ranges: DiffRange[] = [];
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry has no changeType, so it is skipped like an absent list
     for (const b of blocks ?? []) {
         const range = lineDiffBlockToRange(b, originalLines);
         if (range) ranges.push(range);
@@ -138,6 +141,7 @@ function editBlockToRange(
     { modStart, modCount, origStart, origCount }: BlockSpans,
     originalLines: readonly string[] | undefined,
 ): DiffRange {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: differs only for an Edit block with no lines on either side, which ADO never sends
     if (modCount > 0 && origCount === 0) {
         // An "edit" block that removed no original lines is really a pure
         // insertion — surface it as an addition (green) rather than an edit.
@@ -200,6 +204,7 @@ function sliceOriginalLines(
     originalStart: number,
     originalCount: number,
 ): string | undefined {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: ADO line numbers are 1-based and an empty count slices nothing, so a zero start/count recovers no text either way
     if (!originalLines || originalCount <= 0 || originalStart <= 0) {
         return undefined;
     }
@@ -219,11 +224,13 @@ export function lineDiffBlocksToCounts(blocks: readonly LineDiffBlockLike[] | un
     let added = 0;
     let deleted = 0;
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry has no changeType, so it is skipped like an absent list
     for (const b of blocks ?? []) {
         switch (b.changeType ?? 0) {
             case 1: // Add
                 added += b.modifiedLinesCount ?? 0;
                 break;
+            // Stryker disable next-line ConditionalExpression: falling through to the Edit case adds the Delete block's modified-line count, which ADO always reports as 0
             case 2: // Delete
                 deleted += b.originalLinesCount ?? 0;
                 break;
@@ -231,6 +238,7 @@ export function lineDiffBlocksToCounts(blocks: readonly LineDiffBlockLike[] | un
                 added += b.modifiedLinesCount ?? 0;
                 deleted += b.originalLinesCount ?? 0;
                 break;
+            // Stryker disable next-line ConditionalExpression: dead code: the default case only breaks, so emptying it changes nothing; candidate for removal
             default:
                 break;
         }
@@ -305,11 +313,13 @@ export async function loadFileDiffs(
                 project,
                 repositoryId,
             ),
+        // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
         { mode: "read", label: "fetchFileDiffs.getFileDiffs" },
     );
 
     const out: Record<string, FileDiffInfo> = {};
 
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry has no path, so it is skipped like an absent response
     for (const d of diffs ?? []) {
         if (!d.path) continue;
         const blocks = d.lineDiffBlocks;
@@ -366,12 +376,14 @@ async function fetchOriginalLines(
                     },
                     true,
                 ),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
             { mode: "read", label: "fetchFileDiffs.getItemText(original)" },
         );
 
         return text.split(/\r\n|\r|\n/);
     } catch (err) {
         console.warn(
+            // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError
             "[fetchFileDiffs] original content fetch failed; deletion bodies will be empty",
             err,
         );
@@ -429,19 +441,22 @@ function buildLineCountsCacheKey(
 
 function readLineCountsCache(key: string): Record<string, FileDiffInfo> | null {
     try {
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: without sessionStorage the getItem call throws, and the catch below returns null anyway; candidate for removal
         if (typeof sessionStorage === "undefined") return null;
         const raw = sessionStorage.getItem(key);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: JSON.parse turns null into null and throws on "", so both still read as "no cache"; candidate for removal
         if (raw === null || raw === "") return null;
         const parsed = JSON.parse(raw) as Record<string, FileDiffInfo>;
 
         return parsed;
-    } catch {
+    } /* Stryker disable next-line BlockStatement: dead code: an empty catch returns undefined, which the caller treats exactly like null (no cache); candidate for removal */ catch {
         return null;
     }
 }
 
 function writeLineCountsCache(key: string, value: Record<string, FileDiffInfo>): void {
     try {
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: without sessionStorage the setItem call throws, and the catch below ignores it anyway; candidate for removal
         if (typeof sessionStorage === "undefined") return;
         sessionStorage.setItem(key, JSON.stringify(value, fileDiffCacheReplacer));
     } catch {

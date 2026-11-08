@@ -59,10 +59,28 @@ describe("readerPrefs — curated font list", () => {
     });
 
     it.each([
+        ["system", "System"],
         ["sitka", "Sitka"],
         ["atkinson", "Atkinson Hyperlegible"],
+        ["georgia", "Georgia"],
+        ["verdana", "Verdana"],
     ])("resolves the font id %s to %s", (id, name) => {
         expect(resolveReaderFont(id).name).toBe(name);
+    });
+
+    it.each([
+        { id: "system", face: "Segoe UI", generic: "sans-serif" },
+        { id: "atkinson", face: "Atkinson Hyperlegible", generic: "sans-serif" },
+        { id: "sitka", face: "Sitka Text", generic: "serif" },
+        { id: "georgia", face: "Georgia", generic: "serif" },
+        { id: "verdana", face: "Verdana", generic: "sans-serif" },
+    ])("sets $id prose in $face, falling back to a $generic face", ({ id, face, generic }) => {
+        const families = resolveReaderFont(id)
+            .stack.split(",")
+            .map((family) => family.trim().replace(/"/g, ""));
+
+        expect(families).toContain(face);
+        expect(families.at(-1)).toBe(generic);
     });
 
     it.each([
@@ -334,6 +352,12 @@ describe("readerPrefs — sanitize", () => {
             stored: { wordSpacingPct: Infinity },
             field: "wordSpacingPct",
         },
+        { name: "a NaN nav width", stored: { navWidthPct: Number.NaN }, field: "navWidthPct" },
+        {
+            name: "an infinite comment-rail width",
+            stored: { commentWidthPct: Infinity },
+            field: "commentWidthPct",
+        },
     ] as const)("replaces $name with the default", ({ stored, field }) => {
         expect(sanitizeReaderPrefs(stored)[field]).toBe(DEFAULT_READER_PREFS[field]);
     });
@@ -424,7 +448,11 @@ describe("readerPrefs — persistence + per-surface scoping", () => {
     });
 
     it("hydrates the legacy font + size schema with default spacing", () => {
-        localStorage.setItem(READER_TYPE_KEY, JSON.stringify({ fontId: "atkinson", sizePct: 115 }));
+        // The literal key an earlier release saved under, so upgrading keeps it.
+        localStorage.setItem(
+            "emr.reader.type",
+            JSON.stringify({ fontId: "atkinson", sizePct: 115 }),
+        );
 
         expect(readReaderPrefs("pr")).toEqual({
             ...DEFAULT_READER_PREFS,

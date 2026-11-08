@@ -128,7 +128,9 @@ describe("parseExcalidrawScene", () => {
         const { parseExcalidrawScene, ExcalidrawSceneError } = await freshModule();
 
         expect(() => parseExcalidrawScene(text)).toThrow(ExcalidrawSceneError);
-        expect(() => parseExcalidrawScene(text)).toThrow(message);
+        expect(() => parseExcalidrawScene(text)).toThrow(
+            expect.objectContaining({ name: "ExcalidrawSceneError", message }),
+        );
     });
 });
 

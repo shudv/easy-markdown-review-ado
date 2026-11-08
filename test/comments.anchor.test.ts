@@ -131,6 +131,58 @@ describe("resolveAnchor", () => {
         },
     );
 
+    it("follows repeated text to the occurrence whose preceding words match when only those survive", () => {
+        const root = makeArticle(
+            '<p><span id="first">We fix the bug now.</span> ' +
+                '<span id="second">They fix the bug soon.</span> ' +
+                '<span id="third">You fix the bug later.</span></p>',
+        );
+
+        const range = resolveAnchor(root, { exact: "the bug", prefix: "You fix ", suffix: "!" });
+
+        expect(range?.startContainer.parentElement?.id).toBe("third");
+    });
+
+    it("follows a quote near the top of the document when the heading before it was reworded", () => {
+        const root = makeArticle(
+            '<p><span id="first">We fix the bug now.</span> ' +
+                '<span id="second">They fix the bug soon.</span></p>',
+        );
+
+        const range = resolveAnchor(root, {
+            exact: "the bug",
+            prefix: "Old title. We fix ",
+            suffix: " now.",
+        });
+
+        expect(range?.startContainer.parentElement?.id).toBe("first");
+    });
+
+    // Score ties go to the earlier occurrence, however the matching context is split.
+    it.each([
+        {
+            name: "a later one matches all of the text after it",
+            html:
+                '<p><span id="earlier">Then we fix it soon.</span> ' +
+                '<span id="later">Also you fix it now</span></p>',
+            prefix: "so we ",
+            suffix: " now",
+        },
+        {
+            name: "a later one matches all of the text before it",
+            html:
+                '<p><span id="earlier">Then they fix it then.</span> ' +
+                '<span id="later">So we fix it.</span></p>',
+            prefix: "we ",
+            suffix: " today",
+        },
+    ])("prefers the earlier of two equally good matches when $name", ({ html, prefix, suffix }) => {
+        const root = makeArticle(html);
+
+        const range = resolveAnchor(root, { exact: "fix it", prefix, suffix });
+
+        expect(range?.startContainer.parentElement?.id).toBe("earlier");
+    });
     it("returns null when the exact text simply isn't present", () => {
         const root = makeArticle("<p>One two three</p>");
         expect(resolveAnchor(root, { exact: "four", prefix: "", suffix: "" })).toBeNull();
@@ -167,6 +219,8 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
 
         expect(range).not.toBeNull();
         expect(range!.toString()).toBe("Second line");
+        // The range covers the block's text (not the element box) so the balloon lines up with it.
+        expect(range!.startContainer.nodeType).toBe(Node.TEXT_NODE);
     });
 
     it("spans the full text of a block that holds several text nodes", () => {
@@ -206,6 +260,38 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
         // Range should start at "Second" and end at "Third line".
         expect(range!.toString()).toContain("Second line");
         expect(range!.toString()).toContain("Third line");
+        expect(range!.startContainer.nodeType).toBe(Node.TEXT_NODE);
+        expect(range!.endContainer.nodeType).toBe(Node.TEXT_NODE);
+    });
+
+    it("anchors a multi-line comment to its first block when the end line no longer exists", () => {
+        const root = makeArticle(
+            '<p data-source-line="1" data-source-end-line="1">First line</p>' +
+                '<p data-source-line="2" data-source-end-line="2">Second line</p>',
+        );
+
+        const range = resolveAnchor(root, {
+            exact: "",
+            prefix: "",
+            suffix: "",
+            line: 2,
+            endLine: 40,
+        });
+
+        expect(range?.toString()).toBe("Second line");
+    });
+
+    it("anchors a line comment on a table row to the row's first cell", () => {
+        const root = makeArticle(
+            "<table><tr>" +
+                '<td data-source-line="4" data-source-end-line="4">Region</td>' +
+                '<td data-source-line="4" data-source-end-line="4">Owner</td>' +
+                "</tr></table>",
+        );
+
+        const range = resolveAnchor(root, { exact: "", prefix: "", suffix: "", line: 4 });
+
+        expect(range?.toString()).toBe("Region");
     });
 
     it("prefers the most-specific block overlapping the line", () => {
@@ -245,24 +331,21 @@ describe("resolveAnchor (line-based, native ADO threads)", () => {
         expect(range!.toString()).toBe("Only line");
     });
 
-    it("anchors to the first block beginning at or after an unspanned line", () => {
-        // Blocks cover lines 2 and 10 only; line 5 falls in the gap, so the
-        // anchor should land on the next block that starts at/after it (line 10),
-        // not the last block in the document.
+    // The anchor should land on the next block that starts at/after the line,
+    // not the last block in the document.
+    it.each([
+        { name: "a line in the gap between blocks", line: 5 },
+        { name: "the line a block starts on when its end line is unknown", line: 10 },
+    ])("anchors $name to the first block beginning at or after it", ({ line }) => {
         const root = makeArticle(
             '<p data-source-line="2" data-source-end-line="2">Early</p>' +
-                '<p data-source-line="10" data-source-end-line="10">Later</p>',
+                '<p data-source-line="10">Later</p>' +
+                '<p data-source-line="20" data-source-end-line="20">Last</p>',
         );
 
-        const range = resolveAnchor(root, {
-            exact: "",
-            prefix: "",
-            suffix: "",
-            line: 5,
-        });
+        const range = resolveAnchor(root, { exact: "", prefix: "", suffix: "", line });
 
-        expect(range).not.toBeNull();
-        expect(range!.toString()).toBe("Later");
+        expect(range?.toString()).toBe("Later");
     });
 
     it("selects the block element itself when it has no text (image-only)", () => {
@@ -516,6 +599,49 @@ describe("captureAnchorFromSelection", () => {
         expect(captureAnchorFromSelection(r)).toBeNull();
     });
 
+    it("trims a leading space so only the words are anchored", () => {
+        const text = root.querySelector("p")!.firstChild! as Text;
+        // " quick brown" → offsets 3..15 (the space before "quick").
+        const range = document.createRange();
+        range.setStart(text, 3);
+        range.setEnd(text, 15);
+        const sel = window.getSelection()!;
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        const anchor = captureAnchorFromSelection(root)!;
+        expect(anchor.exact).toBe("quick brown");
+        expect(anchor.prefix).toBe("The ");
+    });
+
+    it("returns null for a triple-click selection outside the article", () => {
+        const outside = document.createElement("div");
+        outside.innerHTML = "<p>A reply in the comment rail</p><p>Next reply</p>";
+        document.body.appendChild(outside);
+        const [reply, next] = Array.from(outside.querySelectorAll("p"));
+        const range = document.createRange();
+        range.setStart(reply!, 0);
+        range.setEnd(next!, 0);
+        const sel = window.getSelection()!;
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        expect(captureAnchorFromSelection(root)).toBeNull();
+    });
+
+    it("captures a selection ending after a formatted link at the end of the document", () => {
+        document.body.innerHTML = "";
+        const r = makeArticle('<p>Read the <a href="#guide"><strong>full</strong> guide</a></p>');
+        const paragraph = r.querySelector("p")!;
+        const range = document.createRange();
+        range.setStart(paragraph.firstChild!, 0);
+        range.setEnd(paragraph, paragraph.childNodes.length);
+        const sel = window.getSelection()!;
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        expect(captureAnchorFromSelection(r)?.exact).toBe("Read the full guide");
+    });
     it("captures a selection that starts on an element boundary", () => {
         const p = root.querySelector("p")!;
         const text = p.firstChild! as Text;

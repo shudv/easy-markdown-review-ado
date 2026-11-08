@@ -30,13 +30,16 @@ import { rehypeSafeHtml } from "./safeHtml";
 import { rehypeWikiMacros, remarkWikiMacros } from "./wikiMacros";
 
 const remarkCodeMetadata: Plugin = () => (tree) => {
+    // Stryker disable next-line StringLiteral: unist-util-visit treats an empty test like no test, so every node is visited, and only `code` nodes carry a meta to copy.
     visit(tree, "code", (node) => {
         const code = node as unknown as {
             meta?: string | null;
             data?: { hProperties?: Record<string, unknown> };
         };
 
+        // Stryker disable next-line MethodExpression: dead code: remark-parse already trims the fence's meta string before it reaches this plugin; candidate for removal.
         const meta = code.meta?.trim();
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: remark-parse reports a missing or whitespace-only meta as null (never ""), and an undefined dataCodeMeta is omitted from the markup, so this guard never changes the output; candidate for removal.
         if (meta === undefined || meta === "") return;
         const data = (code.data ??= {});
         const properties = (data.hProperties ??= {});
@@ -95,7 +98,9 @@ function mentionStateDot(parsed: ParsedMentionUrl): ElementContent {
  * Links that don't match the scheme pass through untouched.
  */
 const rehypeMentions: Plugin<[], Root> = () => (tree) => {
+    // Stryker disable next-line StringLiteral: unist-util-visit treats an empty test like no test, so every node is visited, and non-anchors leave at the tag check.
     visit(tree, "element", (node: Element) => {
+        // Stryker disable next-line ConditionalExpression: dead code: in this pipeline only <a> elements carry an href (rehypeSafeHtml allows href on `a` alone), so the href check below already skips everything else; candidate for removal.
         if (node.tagName !== "a") return;
         const href = node.properties.href;
         // Raw-HTML anchors such as `<a id="top">` pass rehypeSafeHtml without one.
@@ -111,6 +116,7 @@ const rehypeMentions: Plugin<[], Root> = () => (tree) => {
             // Keep the anchor as a real link; href stays `mention://` (allowlisted
             // by sanitize-urls) until the runtime hydrator upgrades it.
             props.target = "_blank";
+            // Stryker disable next-line ArrayDeclaration,StringLiteral: rehypeSanitizeUrls runs later and forces `noopener noreferrer` onto every link with a target, so the rendered rel is the same.
             props.rel = ["noopener", "noreferrer"];
         } else {
             // User mentions: render as a static span with no nav target.
@@ -143,6 +149,7 @@ const rehypeMentions: Plugin<[], Root> = () => (tree) => {
 const ALERT_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/;
 
 function stripAlertMarker(node: Element): string | null {
+    // Stryker disable next-line UpdateOperator: dead code: every iteration returns, so the loop never advances past its first child; candidate for removal (it is an `if` on the first child).
     for (let index = 0; index < node.children.length; index++) {
         const child = node.children[index]!;
 
@@ -150,6 +157,7 @@ function stripAlertMarker(node: Element): string | null {
             const match = ALERT_RE.exec(child.value);
             if (!match) return null;
             child.value = child.value.slice(match[0].length);
+            // Stryker disable next-line ConditionalExpression: dead code: an empty text node serialises to nothing, so removing it never changes the rendered markup; candidate for removal.
             if (child.value.length === 0) node.children.splice(index, 1);
 
             return match[1]!.toLowerCase();
@@ -162,6 +170,7 @@ function stripAlertMarker(node: Element): string | null {
 }
 
 const rehypeAlerts: Plugin<[], Root> = () => (tree) => {
+    // Stryker disable next-line StringLiteral: unist-util-visit treats an empty test like no test, so every node is visited, and anything but a blockquote leaves at the tag check.
     visit(tree, "element", (node: Element) => {
         if (node.tagName !== "blockquote") return;
 
@@ -219,10 +228,15 @@ export function slugifyHeading(text: string): string {
             .replace(/[^\w\s-]/g, "")
             .trim()
             .replace(/[\s_-]+/g, "-")
-            .replace(/^-+|-+$/g, "") || "section"
+            .replace(
+                // Stryker disable next-line Regex: the previous step already collapses every run of dashes into one, so trimming one dash or a run of them at either end is the same.
+                /^-+|-+$/g,
+                "",
+            ) || "section"
     );
 }
 
+// Stryker disable next-line Regex: no other HTML tag name starts or ends with "h" plus a digit 1-6, so dropping either anchor matches the same elements.
 const HEADING_RE = /^h([1-6])$/;
 
 /** Heading level (1-6) of `node`, or `null` when it isn't a heading element. */
@@ -315,7 +329,9 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => (tree) => {
     }
 
     // Filter doctypes (allowed under Root but not Element) and wrap the body.
+    // Stryker disable next-line MethodExpression: dead code: Markdown never produces a doctype node, so this filter never removes anything; candidate for removal (it only narrows the type).
     const body = (tree.children as ReadonlyArray<(typeof tree.children)[number]>).filter(
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: Markdown never produces a doctype node; candidate for removal.
         (n): n is ElementContent => n.type !== "doctype",
     );
 
@@ -340,7 +356,11 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => (tree) => {
 const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(remarkMath, { singleDollarTextMath: true })
+    .use(
+        remarkMath,
+        // Stryker disable next-line ObjectLiteral: `singleDollarTextMath: true` is remark-math's default; spelling it out only documents the choice.
+        { singleDollarTextMath: true },
+    )
     .use(remarkCodeMetadata)
     .use(remarkEmoji)
     .use(remarkWikiMacros)

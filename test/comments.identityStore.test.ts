@@ -18,6 +18,12 @@ describe("IdentityStore — seed / get", () => {
         expect(s.get("ABC-123")?.displayName).toBe("Ada");
     });
 
+    it("looks up a non-GUID id regardless of surrounding spaces", () => {
+        const s = new IdentityStore();
+        s.seed([{ id: "u-alex", displayName: "Alex" }]);
+        expect(s.get(" u-alex ")?.displayName).toBe("Alex");
+    });
+
     it("keeps the first name it learnt for an identity", () => {
         const s = new IdentityStore();
         s.seed([{ id: "x", displayName: "First" }]);
@@ -25,9 +31,12 @@ describe("IdentityStore — seed / get", () => {
         expect(s.get("x")?.displayName).toBe("First");
     });
 
-    it("ignores an identity seeded without a display name", () => {
+    it.each([
+        { name: "no display name", entry: { id: "y" } },
+        { name: "an empty display name", entry: { id: "y", displayName: "" } },
+    ])("ignores an identity seeded with $name", ({ entry }) => {
         const s = new IdentityStore();
-        s.seed([{ id: "y" }]);
+        s.seed([entry]);
         expect(s.get("y")).toBeUndefined();
     });
 
@@ -99,6 +108,56 @@ describe("IdentityStore — ensure / resolve", () => {
         s.ensure(["a", "b"]);
         await Promise.resolve();
         expect(s.get("a")).toBeUndefined();
+    });
+
+    it("logs no lookup failure when there is no service to ask (dev/standalone)", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const s = new IdentityStore();
+
+        s.ensure(["a"]);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it("notifies subscribers once a looked-up name arrives", async () => {
+        const s = new IdentityStore(async () => ({ p1: { displayName: "Pat" } }));
+        const cb = vi.fn();
+        s.subscribe(cb);
+
+        s.ensure(["p1"]);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(cb).toHaveBeenCalledOnce();
+    });
+
+    it("does not notify subscribers when a lookup names nobody", async () => {
+        const s = new IdentityStore(async () => ({}));
+        const cb = vi.fn();
+        s.subscribe(cb);
+
+        s.ensure(["ghost"]);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(cb).not.toHaveBeenCalled();
+    });
+
+    it("still names the rest of a batch when the service returns an empty entry for someone", async () => {
+        const resolver = (async () => ({
+            missing: null,
+            found: { displayName: "Found" },
+        })) as unknown as IdentityResolver;
+
+        const s = new IdentityStore(resolver);
+        s.ensure(["missing", "found"]);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(s.get("found")?.displayName).toBe("Found");
     });
 
     it("canonicalizes GUID-bearing ids so the picker's `vss.ds…` form resolves", async () => {
@@ -173,6 +232,22 @@ describe("IdentityStore — ensure / resolve", () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(s.get("z")?.displayName).toBe("Zed");
+        warn.mockRestore();
+    });
+
+    it("logs a failed lookup as a warning", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const failure = new Error("identities endpoint unavailable");
+
+        const s = new IdentityStore(async () => {
+            throw failure;
+        });
+
+        s.ensure(["z"]);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining("resolve failed"), failure);
         warn.mockRestore();
     });
 });

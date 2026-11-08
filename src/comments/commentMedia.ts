@@ -28,6 +28,7 @@ export function isAdoPullRequestAttachmentUrl(raw: string): boolean {
 function ensureMediaFrame(image: HTMLImageElement): HTMLElement {
     let frame = image.parentElement;
 
+    // Stryker disable next-line OptionalChaining: dead code: images are found by querying inside a comment root, so they always have a parent element, candidate for removal
     if (!frame?.classList.contains("emr-comment-media")) {
         frame = document.createElement("span");
         frame.className = "emr-comment-media";
@@ -96,6 +97,7 @@ function decorateImage(
             if (isDisposed()) return;
             resolving = false;
             resolutionError = error;
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the authenticated loader returns a URL.createObjectURL result or undefined, never an empty string, candidate for removal
             if (objectUrl !== undefined && objectUrl !== "") {
                 image.src = objectUrl;
             } else settleIfComplete();

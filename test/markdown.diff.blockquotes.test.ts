@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { decorate, expectComparisonAmber, lines, render, view, words } from "./markdownDiffHarness";
+import { DIFF_TOOLTIP_CLASS } from "../src/markdown/diffDecorations";
+import {
+    decorate,
+    diffView,
+    expectComparisonAmber,
+    expectPreciseAmber,
+    lines,
+    render,
+    view,
+    words,
+} from "./markdownDiffHarness";
 
 // Rendered diff of blockquotes and callouts, including blocks nested inside
 // a quote.
@@ -78,6 +88,49 @@ describe("blockquotes", () => {
         },
     ])("$name", ({ original, current, expected }) => {
         expect(view(original, current)).toEqual(expected);
+    });
+
+    it.each([
+        { name: "a level 1 heading", fence: "#", tag: "h1" },
+        { name: "a level 3 heading", fence: "###", tag: "h3" },
+        { name: "a level 4 heading", fence: "####", tag: "h4" },
+        { name: "a level 5 heading", fence: "#####", tag: "h5" },
+        { name: "a level 6 heading", fence: "######", tag: "h6" },
+    ])("marks only the edited $name inside a quote, not the quote's lead", ({ fence, tag }) => {
+        expect(
+            view(lines("> Lead", ">", `> ${fence} Old`), lines("> Lead", ">", `> ${fence} New`)),
+        ).toEqual([`${tag} modified wash: Before New`]);
+    });
+
+    it.each([
+        {
+            name: "a rule added",
+            original: lines("> Lead", ">", "> after"),
+            current: lines("> Lead", ">", "> ***", ">", "> after"),
+            expected: ["hr added: "],
+        },
+        {
+            name: "a definition list edited",
+            original: lines("> Lead", ">", "> <dl><dt>a</dt><dd>b</dd></dl>"),
+            current: lines("> Lead", ">", "> <dl><dt>a</dt><dd>c</dd></dl>"),
+            expected: ["dl modified: Before ac"],
+        },
+    ])(
+        "marks only $name inside a quote, not the quote's lead",
+        ({ original, current, expected }) => {
+            expect(view(original, current)).toEqual(expected);
+        },
+    );
+
+    it("explains a paragraph turned into a quote over exactly the quoted text", () => {
+        const { root } = diffView(
+            lines("Keep this text.", "Second line."),
+            lines("> Keep this text.", "> Second line."),
+        );
+
+        const marks = Array.from(root.querySelectorAll<HTMLElement>(`.${DIFF_TOOLTIP_CLASS}`));
+        expect(marks.map((mark) => mark.textContent)).toEqual(["Keep this text.\nSecond line."]);
+        expectPreciseAmber(marks[0]!, "Block changed from paragraph to quote");
     });
 
     it("washes an added blockquote green", () => {

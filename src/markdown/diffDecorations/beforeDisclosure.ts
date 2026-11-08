@@ -3,7 +3,12 @@
 
 import { splitTableRow } from "./tableAlignment";
 import { renderOriginalStandalone } from "./rendering";
-import { type ChangeRange, DIFF_TABLE_COMPARISON_CLASS, type SourceSpan } from "./shared";
+import {
+    type ChangeRange,
+    DIFF_TABLE_COMPARISON_CLASS,
+    type SourceSpan,
+    stripSourceLines,
+} from "./shared";
 
 export function attachTableBeforeDisclosure(
     row: HTMLElement,
@@ -45,6 +50,7 @@ export function attachTableBeforeDisclosure(
     content.appendChild(
         buildBeforeTableContent(range.originalText, renderInline, row.ownerDocument),
     );
+    stripSourceLines(content);
     control.appendChild(trigger);
     parent.insertBefore(control, table);
     parent.insertBefore(panel, table);
@@ -178,6 +184,7 @@ export function attachBlockBeforeDisclosure(
         while (scratch.firstChild) content.appendChild(scratch.firstChild);
     }
 
+    stripSourceLines(content);
     control.appendChild(trigger);
 
     if (block.tagName === "LI") {

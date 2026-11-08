@@ -9,12 +9,16 @@ import {
 } from "./safeHtmlPolicy";
 
 type ParseNode = DefaultTreeAdapterMap["childNode"];
+type ParseParent = DefaultTreeAdapterMap["parentNode"];
+type Point = NonNullable<RootContent["position"]>["start"];
 
 interface RawNode {
     type: "raw";
     value: string;
     position?: RootContent["position"];
 }
+
+type RawFragment = Pick<RawNode, "value" | "position">;
 
 type Properties = NonNullable<Element["properties"]>;
 type AttributeHandler = (properties: Properties, value: string, tagName: string) => void;
@@ -97,7 +101,8 @@ function safeProperties(
     return properties;
 }
 
-function convertNode(node: ParseNode): RootContent[] {
+/** Convert a parse5 node, recording each element it creates in `created`. */
+function convertNode(node: ParseNode, created: Map<ParseNode, Element>): RootContent[] {
     if ("value" in node) {
         return [{ type: "text", value: node.value }];
     }
@@ -105,82 +110,140 @@ function convertNode(node: ParseNode): RootContent[] {
     if (!("tagName" in node)) return [];
     const tagName = node.tagName.toLowerCase();
     if (DROP_HTML_SUBTREE_TAGS.has(tagName)) return [];
-    const children = node.childNodes.flatMap(convertNode);
+    const children = node.childNodes.flatMap((child) => convertNode(child, created));
     if (!SAFE_HTML_TAGS.has(tagName)) return children;
 
-    return [
-        {
-            type: "element",
-            tagName,
-            properties: safeProperties(tagName, node.attrs),
-            children: children as ElementContent[],
-        },
-    ];
+    const element: Element = {
+        type: "element",
+        tagName,
+        properties: safeProperties(tagName, node.attrs),
+        children: children as ElementContent[],
+    };
+
+    created.set(node, element);
+
+    return [element];
 }
 
-function closingTag(value: string): string | null {
-    // Stryker disable next-line OptionalChaining: the tag-name group always takes part in a match, so `[1]` is never undefined once `exec` matched.
-    return /^\s*<\/([a-z][a-z0-9-]*)\s*>\s*$/i.exec(value)?.[1]?.toLowerCase() ?? null;
+function lastChild(parent: ParseParent): ParseNode | undefined {
+    return parent.childNodes[parent.childNodes.length - 1];
 }
 
-function openingContainer(value: string): string | null {
-    const match = /^\s*<([a-z][a-z0-9-]*)(?:\s[^>]*)?>/i.exec(value);
-    // Stryker disable next-line OptionalChaining: the tag-name group always takes part in a match, and a failed match already short-circuits at `match?.`.
-    const tagName = match?.[1]?.toLowerCase();
+/**
+ * The safe elements still open where the fragment ends, outermost first: an
+ * element without an end tag that is its parent's last child holds everything
+ * after it (parse5 gives implied elements such as `tbody` no source location,
+ * so they count as open too).
+ */
+function openAtEnd(fragment: ParseParent, created: Map<ParseNode, Element>): Element[] {
+    const open: Element[] = [];
+    let node = lastChild(fragment);
 
-    // Stryker disable next-line ConditionalExpression,LogicalOperator: a missing or non-allowlisted tag name never survives conversion as an element, so appendRawFragment finds no matching container and opens nothing either way.
-    return tagName !== undefined &&
-        SAFE_HTML_TAGS.has(tagName) &&
-        !VOID_HTML_TAGS.has(tagName) &&
-        !new RegExp(`<\\/${tagName}\\s*>`, "i").test(value)
-        ? tagName
-        : null;
+    while (
+        node !== undefined &&
+        "tagName" in node &&
+        node.sourceCodeLocation?.endTag === undefined &&
+        !VOID_HTML_TAGS.has(node.tagName)
+    ) {
+        const element = created.get(node);
+        if (element !== undefined) open.push(element);
+        node = lastChild(node);
+    }
+
+    return open;
+}
+
+/**
+ * Leading closing tag of a raw value, optionally preceded by comments.
+ * Group 1 runs through the tag's `>`, group 2 is its name; the whole match
+ * also takes the whitespace that follows.
+ */
+const LEADING_CLOSING_TAG = /^(\s*(?:<!--(?:(?!-->)[\s\S])*-->\s*)*<\/([a-z][a-z0-9-]*)\s*>)\s*/i;
+
+/**
+ * The point reached after `text`, which starts at `start`. Only the line is
+ * dependable (block containers strip prefixes such as `> ` from the value),
+ * so no offset is reported.
+ */
+function pointAfter(start: Point, text: string): Point {
+    const lines = text.split("\n");
+    const last = lines[lines.length - 1]!;
+
+    return {
+        line: start.line + lines.length - 1,
+        column: lines.length === 1 ? start.column + text.length : last.length + 1,
+    };
+}
+
+interface OpenContainer {
+    element: Element;
+    parent: RootContent[];
 }
 
 interface TransformState {
     current: RootContent[];
-    stack: Array<{ element: Element; parent: RootContent[] }>;
+    stack: OpenContainer[];
 }
 
-/** Close the innermost open container if `close` matches its tag. */
-function closeContainer(state: TransformState, close: string, raw: RawNode): void {
-    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: indexing an empty stack at -1 already yields undefined, so the explicit guard never changes the result; candidate for removal.
-    const active = state.stack.length > 0 ? state.stack[state.stack.length - 1] : undefined;
+function lastOpenIndex(stack: readonly OpenContainer[], tagName: string): number {
+    let index = stack.length - 1;
+    while (index >= 0 && stack[index]!.element.tagName !== tagName) index--;
 
-    if (active?.element.tagName !== close) return;
-
-    if (raw.position && active.element.position) {
-        active.element.position.end = raw.position.end;
-    }
-
-    state.current = active.parent;
-    state.stack.pop();
+    return index;
 }
 
 /**
- * Append the sanitized nodes of a raw HTML fragment; if it opens a container
- * left unclosed in the fragment, descend into it until its closing tag.
+ * Close the innermost open container named `close`, and every container
+ * opened inside it, as a browser would; an unmatched closing tag is ignored.
  */
-function appendRawFragment(state: TransformState, raw: RawNode): void {
-    const parsed = parseFragment(raw.value);
-    const converted = parsed.childNodes.flatMap(convertNode);
+function closeContainer(state: TransformState, close: string, end: Point | undefined): void {
+    const index = lastOpenIndex(state.stack, close);
+    if (index < 0) return;
+
+    const closed = state.stack.splice(index);
+    state.current = closed[0]!.parent;
+
+    for (const { element } of closed) {
+        if (end && element.position) element.position = { start: element.position.start, end };
+    }
+}
+
+/** Close the containers named by `raw`'s leading closing tags; return the rest. */
+function consumeClosingTags(state: TransformState, raw: RawNode): RawFragment {
+    let { value, position } = raw;
+
+    for (
+        let match = LEADING_CLOSING_TAG.exec(value);
+        match !== null;
+        match = LEADING_CLOSING_TAG.exec(value)
+    ) {
+        const [consumed, tag, name] = match as unknown as [string, string, string];
+        closeContainer(state, name.toLowerCase(), position && pointAfter(position.start, tag));
+        position &&= { start: pointAfter(position.start, consumed), end: position.end };
+        value = value.slice(consumed.length);
+    }
+
+    return { value, position };
+}
+
+/**
+ * Append the sanitized nodes of a raw HTML fragment; descend into the
+ * containers it leaves open, so later Markdown lands inside them until their
+ * closing tags arrive.
+ */
+function appendRawFragment(state: TransformState, raw: RawFragment): void {
+    const parsed = parseFragment(raw.value, { sourceCodeLocationInfo: true });
+    const created = new Map<ParseNode, Element>();
+    const converted = parsed.childNodes.flatMap((node) => convertNode(node, created));
 
     for (const node of converted) {
         node.position = raw.position;
         state.current.push(node);
     }
 
-    const open = openingContainer(raw.value);
-
-    const container = converted.find(
-        // Stryker disable next-line LogicalOperator,ConditionalExpression: the opening tag is the fragment's first tag, so its element is the first element parse5 emits (only whitespace text can precede it); any looser predicate finds the same node.
-        (node): node is Element => node.type === "element" && node.tagName === open,
-    );
-
-    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: a null `open` never finds a container and a non-null one always does (parse5 always emits the fragment's first tag), so either half alone decides the same; candidate for removal of one half.
-    if (open !== null && container !== undefined) {
-        state.stack.push({ element: container, parent: state.current });
-        state.current = container.children;
+    for (const element of openAtEnd(parsed, created)) {
+        state.stack.push({ element, parent: state.current });
+        state.current = element.children;
     }
 }
 
@@ -190,10 +253,7 @@ function transformChildren(children: RootContent[]): RootContent[] {
 
     for (const child of children) {
         if (child.type === "raw") {
-            const raw = child as RawNode;
-            const close = closingTag(raw.value);
-            if (close !== null) closeContainer(state, close, raw);
-            else appendRawFragment(state, raw);
+            appendRawFragment(state, consumeClosingTags(state, child as RawNode));
             continue;
         }
 

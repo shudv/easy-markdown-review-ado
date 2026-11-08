@@ -28,7 +28,7 @@ import {
 } from "./rendering";
 import { applySimpleMetadataIndicator, readCodeMetadataChange } from "./metadata";
 import { tryInlineWordDiff } from "./inlineDiff";
-import { decorateFrontmatterValue } from "./frontmatterValue";
+import { decorateFrontmatterValue, frontmatterRowKind } from "./frontmatterValue";
 import {
     DIFF_IMAGE_CLASS,
     DIFF_INLINE_CLASS,
@@ -54,7 +54,14 @@ export function decorateBlock(pass: DecorationPass, el: HTMLElement): void {
 
     const interiorEdit = ownEnd === end ? findInteriorEdit(pass, el, start, end) : null;
 
-    const kind = interiorEdit ? "modified" : classifyBlock(start, ownEnd, pass.changeRanges);
+    const kind = interiorEdit
+        ? "modified"
+        : frontmatterRowKind(
+              el,
+              start,
+              classifyBlock(start, ownEnd, pass.changeRanges),
+              pass.changeRanges,
+          );
 
     if (!kind) return;
     markChangedBlock(pass, el, kind);

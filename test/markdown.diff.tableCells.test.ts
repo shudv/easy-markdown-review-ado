@@ -523,6 +523,42 @@ describe("cells whose rendered structure differs", () => {
                 "tr modified cells: ⟨Rendered structure changed from strikethrough, bold and italic to bold, italic and strikethrough⟩a b",
             ],
         },
+        {
+            name: "a link whose title alone changed",
+            original: row('| [x](u "Old tip") | b |'),
+            current: row('| [x](u "New tip") | b |'),
+            shown: ["tr modified cells: ⟨Link title changed from Old tip to New tip⟩x b"],
+        },
+        {
+            name: "a link that gained a title",
+            original: row("| [x](u) | b |"),
+            current: row('| [x](u "New tip") | b |'),
+            shown: ["tr modified cells: ⟨Link title changed from none to New tip⟩x b"],
+        },
+        {
+            name: "a link that lost its title",
+            original: row('| [x](u "Old tip") | b |'),
+            current: row("| [x](u) | b |"),
+            shown: ["tr modified cells: ⟨Link title changed from Old tip to none⟩x b"],
+        },
+        {
+            name: "an image moved into the link beside it",
+            original: row("| [x](u)![i](i.png) | b |"),
+            current: row("| [x![i](i.png)](u) | b |"),
+            shown: ["tr modified cells: ⟨Rendered link and image structure changed⟩x b"],
+        },
+        {
+            name: "a second image added beside the first",
+            original: row("| ![a](a.png) x | b |"),
+            current: row("| ![a](a.png)![b](b.png) x | b |"),
+            shown: ["tr modified cells: ⟨Rendered image structure changed⟩ x b"],
+        },
+        {
+            name: "a second image dropped beside the first",
+            original: row("| ![a](a.png)![b](b.png) x | b |"),
+            current: row("| ![a](a.png) x | b |"),
+            shown: ["tr modified cells: ⟨Rendered image structure changed⟩ x b"],
+        },
     ])("explains $name inside its cell", ({ original, current, shown }) => {
         expect(view(original, current)).toEqual(shown);
     });

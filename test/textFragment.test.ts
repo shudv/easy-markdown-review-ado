@@ -353,6 +353,18 @@ describe("edge cases", () => {
         );
     });
 
+    // Greek writes a word-final sigma as ς, but its capital Σ lowers to σ.
+    it.each([
+        ["in capitals", "Μένουμε στην οδος Αθηνας.", "ΟΔΟΣ ΑΘΗΝΑΣ", "οδος Αθηνας"],
+        ["in lower case", "Μένουμε στην ΟΔΟΣ ΑΘΗΝΑΣ.", "οδος αθηνας", "ΟΔΟΣ ΑΘΗΝΑΣ"],
+    ])(
+        "finds a Greek link quoted %s, whatever the case of its final sigma",
+        (_case, sentence, quote, expected) => {
+            const root = mount(`<p>${sentence}</p>`);
+            expect(findTextFragment(root, { start: quote })?.toString()).toBe(expected);
+        },
+    );
+
     it.each([
         ["German", "Wir treffen uns in der Hauptstraße am Montag.", "Hauptstraße"],
         ["Greek", "Η συνάντηση είναι στην οδός Αθηνάς αύριο.", "οδός Αθηνάς"],

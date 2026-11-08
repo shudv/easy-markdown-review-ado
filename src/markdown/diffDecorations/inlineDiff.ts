@@ -8,7 +8,7 @@ import {
     formattingRanges,
     wrapFormattingRanges,
 } from "./formatting";
-import { applyBlockStructureDiff, applyLeafStructureDiff } from "./structure";
+import { alignChecklistSpace, applyBlockStructureDiff, applyLeafStructureDiff } from "./structure";
 import { renderOriginalStandalone } from "./rendering";
 import {
     applyImageMetadataIndicators,
@@ -16,6 +16,7 @@ import {
     findImageMetadataChanges,
     findLinkTargetChanges,
     readLinkTargets,
+    revealRemovedImages,
 } from "./metadata";
 import { inlineProseTarget } from "./shared";
 
@@ -152,6 +153,8 @@ export function tryInlineWordDiff(
     // whitespace between the `<li>` and its `<p>` never becomes stray word marks.
     const originalProse = inlineProseTarget(originalEl);
     const target = inlineProseTarget(block);
+    alignChecklistSpace(originalEl, block);
+    revealRemovedImages(originalProse, target);
     const originalPlain = originalProse.textContent;
     const modifiedPlain = target.textContent;
 

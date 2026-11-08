@@ -97,8 +97,10 @@ function flatten(root: Element): { text: string; runs: TextRun[] } {
 /** Case fold one character without changing its length. */
 function foldChar(ch: string): string {
     const lower = ch.toLowerCase();
+    if (lower.length !== ch.length) return ch;
 
-    return lower.length === ch.length ? lower : ch;
+    // Greek's word-final sigma: its capital Σ lowers to σ, never back to ς.
+    return lower === "ς" ? "σ" : lower;
 }
 
 /**

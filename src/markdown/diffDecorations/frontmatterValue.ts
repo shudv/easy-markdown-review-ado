@@ -7,7 +7,23 @@ import {
     parseFrontmatterListItems,
 } from "../frontmatter";
 import { applyInlineWordDiff } from "../wordDiffDom";
-import { type ChangeRange, overlaps, type SourceSpan } from "./shared";
+import { type ChangeRange, FRONTMATTER_ROW_CLASS, overlaps, type SourceSpan } from "./shared";
+
+/**
+ * A frontmatter row only counts as added when its `key:` line is new. A row
+ * whose existing block list gained item lines was edited: just the new items
+ * are added, which the value diff shows.
+ */
+export function frontmatterRowKind(
+    el: HTMLElement,
+    start: number,
+    kind: "added" | "modified" | null,
+    ranges: readonly ChangeRange[],
+): "added" | "modified" | null {
+    if (kind !== "added" || !el.classList.contains(FRONTMATTER_ROW_CLASS)) return kind;
+
+    return ranges.some((r) => overlaps(start, start, r.start, r.end)) ? kind : "modified";
+}
 
 /**
  * Inline word-diff for a frontmatter row's value cell. The value renders as a
@@ -73,8 +89,9 @@ export function decorateFrontmatterValue(
  *   2. Block-list items (`  - Grace Hopper`): the fragment is just the changed
  *      item line(s) with no key, so we splice those original items back into
  *      the current value list at the line position they occupy — a block-list
- *      row is `key:` on `rowStart` and items on `rowStart+1…rowEnd`.
- * Returns null when no overlapping modified range carries usable original text.
+ *      row is `key:` on `rowStart` and items on `rowStart+1…rowEnd`. Added item
+ *      lines are spliced out, since they weren't there before.
+ * Returns null when no overlapping range carries usable original text.
  */
 function resolveFrontmatterOriginalValue(
     key: string,
@@ -82,11 +99,10 @@ function resolveFrontmatterOriginalValue(
     { start: rowStart, end: rowEnd }: SourceSpan,
     ranges: readonly ChangeRange[],
 ): string | null {
+    // Added item lines carry no previous text: they simply weren't there.
     const overlapping = ranges.filter(
         (r) =>
-            // Stryker disable next-line ConditionalExpression: an added range never carries previous text, so the originalText check below drops it anyway
-            r.kind === "modified" &&
-            r.originalText != null &&
+            (r.kind === "added" || r.originalText != null) &&
             overlaps(rowStart, rowEnd, r.start, r.end),
     );
 
@@ -95,7 +111,8 @@ function resolveFrontmatterOriginalValue(
 
     // Shape 1: a fragment that carries the `key:` line resolves the value whole.
     for (const r of overlapping) {
-        const values = frontmatterValuesForKey(r.originalText!, key);
+        if (r.originalText == null) continue;
+        const values = frontmatterValuesForKey(r.originalText, key);
         if (values) return frontmatterValueText(values);
     }
 
@@ -115,7 +132,7 @@ function resolveFrontmatterOriginalValue(
         originalItems.splice(
             startIdx,
             modifiedCount,
-            ...parseFrontmatterListItems(r.originalText!),
+            ...(r.originalText == null ? [] : parseFrontmatterListItems(r.originalText)),
         );
     }
 

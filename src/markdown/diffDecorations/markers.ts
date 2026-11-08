@@ -11,6 +11,7 @@ import {
     numAttr,
     overlaps,
     readSourceSpan,
+    stripSourceLines,
 } from "./shared";
 
 function insertBeforeAnchor(
@@ -18,8 +19,12 @@ function insertBeforeAnchor(
     marker: HTMLElement,
     anchor: HTMLElement | null,
 ): void {
-    if (anchor?.parentElement) {
-        anchor.parentElement.insertBefore(marker, anchor);
+    // A marker can't sit inside a table: one bound for a table's header row
+    // goes before the table instead.
+    const before = anchor?.closest("thead")?.parentElement ?? anchor;
+
+    if (before?.parentElement) {
+        before.parentElement.insertBefore(marker, before);
     } else {
         root.appendChild(marker);
     }
@@ -329,12 +334,6 @@ function renderDeletedTableRows(
 
     for (const header of Array.from(headerRow.querySelectorAll("th"))) {
         const cell = document.createElement("td");
-
-        // Stryker disable next-line BlockStatement: dead code: the delimiter row built above has no alignment, so this only copies the scratch render's meaningless source-line stamps, which nothing reads on a removed row, candidate for removal
-        for (const attribute of Array.from(header.attributes)) {
-            cell.setAttribute(attribute.name, attribute.value);
-        }
-
         cell.append(...Array.from(header.childNodes));
         header.replaceWith(cell);
     }
@@ -347,6 +346,7 @@ function renderDeletedTableRows(
         row.className = `${DIFF_DELETED_MARKER_CLASS} emr-diff-deleted-table-row`;
         row.setAttribute("role", "note");
         row.setAttribute("aria-label", "Removed table row");
+        stripSourceLines(row);
     }
 
     return removedRows;

@@ -7,7 +7,7 @@ import {
     DIFF_METADATA_CLASS,
     DIFF_TOOLTIP_CLASS,
 } from "../src/markdown/diffDecorations";
-import { decorate, diffView, render, view, words } from "./markdownDiffHarness";
+import { decorate, diffView, lines, render, view, words } from "./markdownDiffHarness";
 
 // Rendered diff of images: an image is marked with a minimal media outline
 // (never a text wash), and changes to its source, alt text or title are shown
@@ -82,6 +82,16 @@ describe("images", () => {
         expect(paragraph.classList.contains(DIFF_IMAGE_CLASS)).toBe(false);
         expect(paragraph.classList.contains("emr-diff-block--added")).toBe(true);
         expect(paragraph.querySelector(".emr-diff-line-wash")).toBeNull();
+    });
+
+    it("washes an added paragraph holding only a non-breaking space as a block, not as media", () => {
+        const { root } = diffView(
+            lines("One.", "", "Two."),
+            lines("One.", "", "&nbsp;", "", "Two."),
+        );
+
+        const added = root.querySelector<HTMLElement>('p[data-diff-kind="added"]')!;
+        expect(added.classList.contains(DIFF_IMAGE_CLASS)).toBe(false);
     });
 
     it("outlines an edited image whose previous version is unknown without an amber explanation", () => {
@@ -172,6 +182,29 @@ describe("images", () => {
         const { root } = diffView("![a](a.png) ![b](b.png)", "![a](a.png)");
 
         expect(root.querySelector("p")?.dataset.diffKind).toBe("modified");
+    });
+
+    it.each([
+        {
+            name: "one of two images removed from a sentence",
+            original: "Look ![cat](cat.png) ![dog](dog.png) here.",
+            current: "Look ![cat](cat.png) here.",
+            expected: "p modified inline: Look [-dog -]here.",
+        },
+        {
+            name: "the only image removed from a sentence",
+            original: "Look ![cat](cat.png) here.",
+            current: "Look here.",
+            expected: "p modified inline: Look [-cat -]here.",
+        },
+        {
+            name: "an image without alt text removed from a sentence",
+            original: "Look ![](cat.png) ![](dog.png) here.",
+            current: "Look ![](cat.png) here.",
+            expected: "p modified inline: Look [-dog.png -]here.",
+        },
+    ])("strikes the description of $name", ({ original, current, expected }) => {
+        expect(view(original, current)).toEqual([expected]);
     });
 
     it("describes title-less image source and alt changes", () => {

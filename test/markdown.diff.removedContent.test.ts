@@ -8,7 +8,7 @@ import {
 } from "../src/markdown/diffDecorations";
 import { renderMarkdownSync } from "../src/markdown/render";
 import type { DiffRange } from "../src/types";
-import { decorate, lines, makeRoot, render, stubRender } from "./markdownDiffHarness";
+import { decorate, diffView, lines, makeRoot, render, stubRender } from "./markdownDiffHarness";
 
 // Content that is no longer (or never was) rendered: removal markers, changes
 // to source that renders no element, and whether a text selection touches
@@ -63,6 +63,55 @@ describe("removed lines", () => {
         chip.click();
         expect(body.hidden).toBe(true);
         expect(chip.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it.each([
+        {
+            name: "a rewritten quote",
+            current: lines("> Brand new quote", "", "After."),
+            edit: {
+                startLine: 1,
+                originalText: lines("> Old a", ">", "> old b", ">", "> old c"),
+            },
+            removedAt: 3,
+        },
+        {
+            name: "a table row that used to be prose",
+            current: lines("| a | b |", "| - | - |", "| x | y |", "", "After."),
+            edit: { startLine: 3, originalText: lines("Old one", "", "Old two", "", "Old three") },
+            removedAt: 5,
+        },
+    ])(
+        "shows lines removed after $name before the next block, not inside its Before panel",
+        ({ current, edit, removedAt }) => {
+            const root = render(current);
+
+            decorate(root, [
+                { ...edit, endLine: edit.startLine, kind: "modified" },
+                {
+                    startLine: removedAt,
+                    endLine: removedAt,
+                    kind: "deleted-marker",
+                    linesDeleted: 2,
+                    deletedContent: "Removed para.\n\n",
+                },
+            ]);
+
+            const marker = root.querySelector(`.${DIFF_DELETED_MARKER_CLASS}`)!;
+            expect(marker.closest(".emr-diff-before-panel")).toBeNull();
+            expect(marker.nextElementSibling?.textContent).toBe("After.");
+        },
+    );
+
+    it("shows text removed just before a table as a marker in the flow before the table", () => {
+        const { root } = diffView(
+            lines("Intro.", "", "Gone text.", "", "| a | b |", "| - | - |", "| 1 | 2 |"),
+            lines("Intro.", "", "| a | b |", "| - | - |", "| 1 | 2 |"),
+        );
+
+        const marker = root.querySelector(`.${DIFF_DELETED_MARKER_CLASS}`)!;
+        expect(marker.parentElement).toBe(root);
+        expect(marker.nextElementSibling?.tagName).toBe("TABLE");
     });
 
     it("expands a removal whose text wasn't recorded to an empty body", () => {

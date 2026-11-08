@@ -20,8 +20,8 @@ interface ExplainedTextRange {
 
 const INLINE_FORMAT_TAGS = new Set(["STRONG", "EM", "CODE", "DEL", "A"]);
 
+// Links are described by their target instead (see formatDescription).
 const FORMAT_NAME_BY_TAG: Record<string, string> = {
-    A: "link",
     CODE: "inline code",
     DEL: "strikethrough",
     EM: "italic",
@@ -118,6 +118,8 @@ function describeFormattingChange(
             ? `Link removed: ${compactTooltipValue(beforeLink.detail!)}`
             : `${capitalize(before)} formatting removed`;
     }
+
+    if (before === after) return `${capitalize(before)} formatting moved`;
 
     return `Formatting changed from ${before} to ${after}`;
 }

@@ -143,6 +143,8 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
     const { selectedPath, completedPrHistoryEnabled, loadDocHistory, setHistoryByPath } = opts;
 
     // Load the selected document's review history the first time it's opened.
+    // A path only counts as loaded once its history has landed, so a request
+    // abandoned by switching away (or one that failed) runs again on reopen.
     const loadedHistoryPathsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         if (!completedPrHistoryEnabled || !loadDocHistory || !selectedPath) {
@@ -150,17 +152,14 @@ function useDocHistoryLoad(opts: HistoryLoadersOptions): void {
         }
 
         if (loadedHistoryPathsRef.current.has(selectedPath)) return;
-        loadedHistoryPathsRef.current.add(selectedPath);
         let cancelled = false;
         loadDocHistory(selectedPath)
             .then((refs) => {
                 if (cancelled) return;
+                loadedHistoryPathsRef.current.add(selectedPath);
                 setHistoryByPath((prev) => ({ ...prev, [selectedPath]: refs }));
             })
             .catch((err: unknown) => {
-                // Allow a retry on the next selection of this path.
-                loadedHistoryPathsRef.current.delete(selectedPath);
-
                 // Stryker disable next-line StringLiteral: developer-console text only; the failure reaches telemetry via trackUserFacingError below
                 console.warn("[Shell] loadDocHistory failed:", err);
                 trackUserFacingError({

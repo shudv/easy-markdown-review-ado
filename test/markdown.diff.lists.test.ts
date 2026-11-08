@@ -5,6 +5,7 @@ import {
     DIFF_FORMAT_CLASS,
     DIFF_INLINE_CLASS,
     DIFF_METADATA_CLASS,
+    DIFF_TOOLTIP_CLASS,
 } from "../src/markdown/diffDecorations";
 import { WORD_ADDED_CLASS, WORD_REMOVED_CLASS } from "../src/markdown/wordDiffDom";
 import {
@@ -113,8 +114,81 @@ describe("list items end to end", () => {
                 "li modified inline: ⟨Checklist item changed from unchecked to checked⟩ write {+unit +}tests",
             ],
         },
+        {
+            name: "a plain item turned into a task item explains only its new checkbox",
+            original: lines("- one", "- two"),
+            current: lines("- one", "- [ ] two"),
+            expected: ["li modified inline: ⟨List item changed to unchecked checklist item⟩ two"],
+        },
+        {
+            name: "a loose plain item turned into a ticked task item explains only its new checkbox",
+            original: lines("- one", "", "- two"),
+            current: lines("- one", "", "- [x] two"),
+            expected: ["li modified inline: ⟨List item changed to checked checklist item⟩ two"],
+        },
+        {
+            name: "a plain item turned into a reworded task item shows its new checkbox and words",
+            original: lines("- one", "- two"),
+            current: lines("- one", "- [ ] two more"),
+            expected: [
+                "li modified inline: ⟨List item changed to unchecked checklist item⟩ two{+ more+}",
+            ],
+        },
+        {
+            name: "a numbered item turned into a bulleted task item explains both changes",
+            original: lines("1. two"),
+            current: lines("- [ ] two"),
+            expected: [
+                "li modified inline ⟨List item changed: marker numbered to bulleted; plain item to unchecked checklist item⟩: two",
+            ],
+        },
+        {
+            name: "a ticked task item turned back into a plain item explains only its removed checkbox",
+            original: lines("- one", "- [x] two"),
+            current: lines("- one", "- two"),
+            expected: [
+                "li modified inline: ⟨List item changed from checked checklist item to plain item⟩two",
+            ],
+        },
+        {
+            name: "a task item turned into a reworded plain item shows its removed checkbox and words",
+            original: lines("- one", "- [ ] two"),
+            current: lines("- one", "- two more"),
+            expected: [
+                "li modified inline: ⟨List item changed from unchecked checklist item to plain item⟩two{+ more+}",
+            ],
+        },
+        {
+            name: "a bulleted task item turned into a numbered plain item explains both changes",
+            original: lines("- [ ] two"),
+            current: lines("1. two"),
+            expected: [
+                "li modified inline ⟨List item changed: marker bulleted to numbered; unchecked checklist item to plain item⟩: two",
+            ],
+        },
     ])("$name", ({ original, current, expected }) => {
         expect(view(original, current)).toEqual(expected);
+    });
+
+    it.each([
+        {
+            name: "a paragraph turned into a task item",
+            original: "Ship it",
+            current: "- [ ] Ship it",
+            label: "Block changed from paragraph to list item",
+        },
+        {
+            name: "a task item turned into a paragraph",
+            original: "- [x] Ship it",
+            current: "Ship it",
+            label: "Block changed from list item to paragraph",
+        },
+    ])("explains $name as a block change over exactly its text", ({ original, current, label }) => {
+        const { root } = diffView(original, current);
+
+        const marks = Array.from(root.querySelectorAll<HTMLElement>(`.${DIFF_TOOLTIP_CLASS}`));
+        expect(marks.map((mark) => mark.textContent)).toEqual(["Ship it"]);
+        expectPreciseAmber(marks[0]!, label);
     });
 });
 

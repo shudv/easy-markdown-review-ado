@@ -141,6 +141,41 @@ describe("removed rows", () => {
         ).toEqual(["theme", "retries", "extra", "timeout"]);
     });
 
+    it("stamps no source lines on removed rows, which are not in the current file", () => {
+        const root = render(table);
+
+        decorate(root, [
+            {
+                startLine: 5,
+                endLine: 5,
+                kind: "deleted-marker",
+                linesDeleted: 2,
+                deletedContent: "| **extra** | 9 |\n| more | 10 |\n",
+            },
+        ]);
+
+        const removedParts = Array.from(
+            root.querySelectorAll(".emr-diff-deleted-table-row"),
+        ).flatMap((row) => [row, ...Array.from(row.querySelectorAll("*"))]);
+
+        expect(removedParts.map((part) => part.tagName)).toEqual([
+            "TR",
+            "TD",
+            "STRONG",
+            "TD",
+            "TR",
+            "TD",
+            "TD",
+        ]);
+        expect(
+            removedParts.filter(
+                (part) =>
+                    part.hasAttribute("data-source-line") ||
+                    part.hasAttribute("data-source-end-line"),
+            ),
+        ).toEqual([]);
+    });
+
     it.each([
         {
             name: "a table inside a list item",

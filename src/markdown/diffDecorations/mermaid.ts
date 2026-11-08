@@ -8,6 +8,7 @@ import {
     reconstructBlockOriginal,
 } from "./pass";
 import { DIFF_BLOCK_CLASS, DIFF_MERMAID_CLASS, readSourceSpan } from "./shared";
+import { standaloneSource } from "./rendering";
 
 export function decorateMermaidBlock(pass: DecorationPass, el: HTMLElement): void {
     const span = readSourceSpan(el);
@@ -27,12 +28,16 @@ export function decorateMermaidBlock(pass: DecorationPass, el: HTMLElement): voi
     el.dataset.diffKind = kind;
 
     // Prefer reconstructing the complete pre-edit fence from the original
-    // document so even a one-line edit gets a useful Source > Before view.
+    // document so even a one-line edit gets a useful Source > Before view. The
+    // diagram's own text is shown without the quote markers or list
+    // indentation of the containers it sits in, as its current source is.
     const originalBlock = reconstructBlockOriginal(pass, interiorEdit, start, end);
 
     const originalSource =
         // Stryker disable next-line StringLiteral: stripping an empty block yields "" too, so the empty-block guard only skips the work
-        originalBlock !== null && originalBlock !== "" ? stripMermaidFence(originalBlock) : "";
+        originalBlock !== null && originalBlock !== ""
+            ? stripMermaidFence(standaloneSource(el, originalBlock))
+            : "";
 
     if (originalSource) el.dataset.diffOriginal = originalSource;
     pass.decorated++;

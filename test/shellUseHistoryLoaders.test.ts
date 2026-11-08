@@ -214,6 +214,23 @@ describe("useHistoryLoaders: a document's review history", () => {
         expect(loadDocHistory).toHaveBeenCalledTimes(2);
     });
 
+    it("loads a document's history when it's reopened after being left before its history arrived", async () => {
+        const history = parentState<Record<string, DocPrRef[]>>({});
+        const refs: DocPrRef[] = [{ prId: 3, commitId: "m3", title: "PR 3" }];
+
+        const loadDocHistory = vi
+            .fn<(path: string) => Promise<DocPrRef[]>>()
+            .mockReturnValueOnce(never<DocPrRef[]>())
+            .mockResolvedValue(refs);
+
+        const base = options({ loadDocHistory, setHistoryByPath: history.set });
+        mounted = await mountHook(useHistoryLoaders, base);
+        await mounted.rerender({ ...base, selectedPath: "docs/b.md" });
+        await mounted.rerender(base);
+        await settle();
+        expect(history.value["docs/a.md"]).toEqual(refs);
+    });
+
     it("retries a failed history load the next time the document is opened", async () => {
         const history = parentState<Record<string, DocPrRef[]>>({});
         const refs: DocPrRef[] = [{ prId: 3, commitId: "m3", title: "PR 3" }];

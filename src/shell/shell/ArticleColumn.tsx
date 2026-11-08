@@ -36,7 +36,7 @@ export function ArticleColumn(props: Readonly<ArticleColumnProps>): ReactElement
 function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
     const { selectedPath, absentNotice } = props;
 
-    if (props.error !== null && props.error !== "") {
+    if (props.error !== null) {
         return (
             <div className="emr-article-wrap">
                 <div className="emr-error">
@@ -74,7 +74,7 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
         );
     }
 
-    if (props.historicalLoadError !== undefined && props.historicalLoadError !== "") {
+    if (props.historicalLoadError !== undefined) {
         return (
             <div className="emr-article-wrap">
                 <div className="emr-error">

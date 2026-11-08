@@ -143,7 +143,7 @@ function useBootReadySignal(
             // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
             markAppReady("content");
-        } else if (error !== null && error !== "") {
+        } else if (error !== null) {
             // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
             markAppReady("error");

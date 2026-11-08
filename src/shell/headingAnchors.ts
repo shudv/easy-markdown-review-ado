@@ -220,6 +220,11 @@ export function flashAnchorTarget(
 /** Marks the inline spans {@link flashTextTarget} wraps around linked text. */
 const TEXT_CUE_ATTR = "data-emr-text-cue";
 
+/** Unwrap text cue spans, leaving their text where it was. */
+function unwrapTextCues(cues: readonly HTMLElement[]): void {
+    for (const cue of cues) cue.replaceWith(...cue.childNodes);
+}
+
 /** The first live landing-cue span of a text link inside `article`, if any. */
 export function currentTextCue(article: HTMLElement): HTMLElement | null {
     return article.querySelector<HTMLElement>(`[${TEXT_CUE_ATTR}]`);
@@ -238,10 +243,12 @@ export function flashTextTarget(
     resolveRange: () => Range | null,
 ): () => void {
     const startedAt = performance.now();
-    // Stryker disable next-line ArrayDeclaration: `apply(0)` below replaces the initial list before anything reads it
     let cues: HTMLElement[] = [];
 
     const apply = (delayMs: number): void => {
+        // Hydration can replace only some cue spans; unwrap the survivors so
+        // the fresh spans don't nest inside them and none outlive the cue.
+        unwrapTextCues(cues);
         const range = resolveRange();
         cues = range
             ? wrapRangeTextNodes(
@@ -286,7 +293,7 @@ export function flashTextTarget(
         done = true;
         observer.disconnect();
         window.clearTimeout(timer);
-        for (const cue of cues) cue.replaceWith(...cue.childNodes);
+        unwrapTextCues(cues);
         // Stryker disable next-line ArrayDeclaration: nothing reads the list after a cancel — the observer is disconnected and a repeat cancel returns early
         cues = [];
     }

@@ -207,7 +207,7 @@ export function compareRendering(
  * an indented code block. Both are stripped so the original renders as the
  * same kind of block the current one is.
  */
-function standaloneSource(block: HTMLElement, markdown: string): string {
+export function standaloneSource(block: HTMLElement, markdown: string): string {
     let lines = markdown.split("\n");
 
     for (

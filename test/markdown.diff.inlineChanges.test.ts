@@ -385,6 +385,26 @@ describe("formatting changes", () => {
                 "p modified inline: ⟨Bold formatting added⟩Start here and ⟨Italic formatting removed⟩finish now.",
             ],
         },
+        {
+            name: "bold moved onto the touching next word",
+            original: "**ab**cd text",
+            current: "ab**cd** text",
+            shown: ["p modified inline: ⟨Bold formatting moved⟩ab⟨Bold formatting moved⟩cd text"],
+        },
+        {
+            name: "strikethrough added",
+            original: "This is old news.",
+            current: "This is ~~old~~ news.",
+            shown: ["p modified inline: This is ⟨Strikethrough formatting added⟩old news."],
+        },
+        {
+            name: "bold shifted one word along a phrase",
+            original: "A **foo bar** baz.",
+            current: "A foo **bar baz**.",
+            shown: [
+                "p modified inline: A ⟨Bold formatting moved⟩foo ⟨Bold formatting moved⟩bar baz.",
+            ],
+        },
     ])("explains $name", ({ original, current, shown }) => {
         expect(view(original, current)).toEqual(shown);
     });
@@ -780,6 +800,39 @@ describe("applyLinkTargetIndicators", () => {
 
         expect(panel.style.top).toBe("126px");
     });
+
+    it.each([
+        {
+            name: "a button near the right edge",
+            button: new DOMRect(900, 100, 20, 20),
+            detailsHeight: 0,
+            placed: { left: "576px", top: "126px" },
+        },
+        {
+            name: "a button near the bottom whose details were measured",
+            button: new DOMRect(40, 700, 20, 20),
+            detailsHeight: 100,
+            placed: { left: "40px", top: "660px" },
+        },
+        {
+            name: "a button near the bottom whose details are not measured yet",
+            button: new DOMRect(40, 700, 20, 20),
+            detailsHeight: 0,
+            placed: { left: "40px", top: "440px" },
+        },
+    ])(
+        "keeps a link change's details inside the window for $name",
+        async ({ button, detailsHeight, placed }) => {
+            const { trigger, panel } = retargetedLink();
+            trigger.getBoundingClientRect = () => button;
+            panel.getBoundingClientRect = () => new DOMRect(0, 0, 440, detailsHeight);
+
+            panel.dispatchEvent(Object.assign(new Event("toggle"), { newState: "open" }));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+
+            expect({ left: panel.style.left, top: panel.style.top }).toEqual(placed);
+        },
+    );
     it("skips a target change for a link that is no longer rendered", () => {
         const paragraph = document.createElement("p");
         paragraph.innerHTML = `<a href="https://new.example/">one</a>`;

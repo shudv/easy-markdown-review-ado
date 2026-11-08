@@ -245,10 +245,7 @@ function markEqualCell(
 
     if (row.originals.signatures[item.originalIndex] !== tableCellStructureSignature(cell)) {
         cell.classList.add(DIFF_CELL_CLASS);
-        applyDiffTooltip(
-            cell,
-            `Rendered structure changed from ${describeRenderedStructure(originalCell)} to ${describeRenderedStructure(cell)}`,
-        );
+        applyDiffTooltip(cell, describeStructureChange(originalCell, cell));
 
         return true;
     }
@@ -297,19 +294,21 @@ function tableCellStructureSignature(root: Element): string {
     return parts.join("");
 }
 
-function describeRenderedStructure(root: Element): string {
-    const nameByTag: Record<string, string> = {
-        A: "link",
-        CODE: "inline code",
-        DEL: "strikethrough",
-        EM: "italic",
-        IMG: "image",
-        SPAN: "span",
-        STRONG: "bold",
-    };
+const STRUCTURE_NAME_BY_TAG: Record<string, string> = {
+    A: "link",
+    CODE: "inline code",
+    DEL: "strikethrough",
+    EM: "italic",
+    IMG: "image",
+    SPAN: "span",
+    STRONG: "bold",
+};
 
-    const names = Array.from(root.querySelectorAll("strong, em, code, del, a, img, span")).map(
-        (element) => nameByTag[element.tagName]!,
+const STRUCTURE_SELECTOR = "strong, em, code, del, a, img, span";
+
+function describeRenderedStructure(root: Element): string {
+    const names = Array.from(root.querySelectorAll(STRUCTURE_SELECTOR)).map(
+        (element) => STRUCTURE_NAME_BY_TAG[element.tagName]!,
     );
 
     const unique = Array.from(new Set(names));
@@ -317,4 +316,32 @@ function describeRenderedStructure(root: Element): string {
     if (unique.length === 1) return unique[0]!;
 
     return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
+}
+
+/** Explain how a cell's rendered structure differs from its original's. */
+function describeStructureChange(original: Element, current: Element): string {
+    const before = describeRenderedStructure(original);
+    const after = describeRenderedStructure(current);
+
+    if (before !== after) return `Rendered structure changed from ${before} to ${after}`;
+
+    return describeTitleChange(original, current) ?? `Rendered ${before} structure changed`;
+}
+
+/** "Link title changed from A to B" for the first element whose title differs. */
+function describeTitleChange(original: Element, current: Element): string | null {
+    const originals = Array.from(original.querySelectorAll(STRUCTURE_SELECTOR));
+    const currents = Array.from(current.querySelectorAll(STRUCTURE_SELECTOR));
+    if (originals.length !== currents.length) return null;
+
+    const index = currents.findIndex(
+        (element, i) => element.getAttribute("title") !== originals[i]!.getAttribute("title"),
+    );
+
+    if (index < 0) return null;
+    const name = STRUCTURE_NAME_BY_TAG[currents[index]!.tagName]!;
+    const before = originals[index]!.getAttribute("title") ?? "none";
+    const after = currents[index]!.getAttribute("title") ?? "none";
+
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} title changed from ${before} to ${after}`;
 }

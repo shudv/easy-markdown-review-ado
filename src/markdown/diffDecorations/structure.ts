@@ -40,12 +40,14 @@ export function explainLeadText(item: HTMLElement, label: string): void {
 }
 
 export function applyLeafStructureDiff(original: HTMLElement, target: HTMLElement): boolean {
-    // Stryker disable next-line ConditionalExpression,LogicalOperator: with only one side a list item, the item's parent is the only list, so no marker change is found, and a paragraph has no checkbox, so no checklist change either
-    if (target.tagName !== "LI" || original.tagName !== "LI") return false;
+    if (target.tagName !== "LI") return false;
+    if (original.tagName !== "LI") return false;
     const markerLabel = listMarkerChangeLabel(original, target);
-    const taskChange = checklistStateChange(original, target);
+    const stateChange = checklistStateChange(original, target);
+    const taskChange = stateChange ?? checklistToggled(original, target);
     if (markerLabel !== null) target.classList.add(DIFF_LIST_MARKER_CLASS);
-    if (taskChange) taskChange.input.classList.add(DIFF_TASK_STATE_CLASS);
+    // A newly added checkbox is explained, but its (default) state didn't change.
+    if (stateChange) stateChange.input.classList.add(DIFF_TASK_STATE_CLASS);
 
     if (markerLabel !== null) {
         applyDiffTooltip(
@@ -59,17 +61,29 @@ export function applyLeafStructureDiff(original: HTMLElement, target: HTMLElemen
     }
 
     if (!taskChange) return false;
-    const currentTask = taskChange.input;
+    explainChecklistChange(target, taskChange);
+
+    return true;
+}
+
+/**
+ * Explain a checklist change on the live checkbox, or — for an item that lost
+ * its checkbox — on the item's own text.
+ */
+function explainChecklistChange(target: HTMLElement, change: ChecklistChange): void {
+    const currentTask = change.input;
+
+    if (currentTask == null) {
+        explainLeadText(target, change.callout);
+
+        return;
+    }
+
     const wrapper = currentTask.ownerDocument.createElement("span");
     wrapper.className = DIFF_TASK_TOOLTIP_CLASS;
     currentTask.before(wrapper);
     wrapper.appendChild(currentTask);
-    applyDiffTooltip(
-        wrapper,
-        `Checklist item changed from ${taskChange.label.slice("checklist item ".length)}`,
-    );
-
-    return true;
+    applyDiffTooltip(wrapper, change.callout);
 }
 
 function isListTag(tag: string | undefined): boolean {
@@ -101,11 +115,20 @@ function checkedName(task: HTMLInputElement): string {
     return task.checked ? "checked" : "unchecked";
 }
 
+interface ChecklistChange {
+    /** The live checkbox that changed; null when the item lost its checkbox. */
+    input: HTMLInputElement | null;
+    /** The change as part of a combined list-item explanation. */
+    label: string;
+    /** The change explained on its own. */
+    callout: string;
+}
+
 /** The live checkbox of a task item whose checked state flipped, or null. */
 function checklistStateChange(
     original: HTMLElement,
     target: HTMLElement,
-): { input: HTMLInputElement; label: string } | null {
+): (ChecklistChange & { input: HTMLInputElement }) | null {
     const originalTask = original.querySelector<HTMLInputElement>(':scope input[type="checkbox"]');
 
     const currentTask = target.querySelector<HTMLInputElement>(':scope input[type="checkbox"]');
@@ -118,10 +141,62 @@ function checklistStateChange(
         return null;
     }
 
+    const change = `${checkedName(originalTask)} to ${checkedName(currentTask)}`;
+
     return {
         input: currentTask,
-        label: `checklist item ${checkedName(originalTask)} to ${checkedName(currentTask)}`,
+        label: `checklist item ${change}`,
+        callout: `Checklist item changed from ${change}`,
     };
+}
+
+/** The checkbox an item shows before its own text (not a nested item's), or null. */
+function ownCheckbox(item: HTMLElement): HTMLInputElement | null {
+    return inlineProseTarget(item).querySelector<HTMLInputElement>(
+        ':scope > input[type="checkbox"]',
+    );
+}
+
+/** The checkbox a list item gained or lost by becoming or ceasing to be a task item, or null. */
+function checklistToggled(original: HTMLElement, target: HTMLElement): ChecklistChange | null {
+    const originalTask = ownCheckbox(original);
+    const currentTask = ownCheckbox(target);
+
+    if (currentTask != null && originalTask == null) {
+        const kind = `${checkedName(currentTask)} checklist item`;
+
+        return {
+            input: currentTask,
+            label: `plain item to ${kind}`,
+            callout: `List item changed to ${kind}`,
+        };
+    }
+
+    if (originalTask == null || currentTask != null) return null;
+    const kind = `${checkedName(originalTask)} checklist item`;
+
+    return {
+        input: null,
+        label: `${kind} to plain item`,
+        callout: `List item changed from ${kind} to plain item`,
+    };
+}
+
+/**
+ * A task item renders a single space between its checkbox and its text. Align
+ * the detached original of an item that gained or lost its checkbox with the
+ * current item — add or drop that space — so the word diff doesn't show the
+ * space as an added or removed word.
+ */
+export function alignChecklistSpace(original: HTMLElement, target: HTMLElement): void {
+    const change = checklistToggled(original, target);
+    if (change == null) return;
+
+    if (change.input) {
+        inlineProseTarget(original).prepend(" ");
+    } else {
+        (ownCheckbox(original)!.nextSibling as Text).deleteData(0, 1);
+    }
 }
 
 export function applyBlockStructureDiff(
@@ -143,10 +218,10 @@ export function applyBlockStructureDiff(
         }[tag]!;
     };
 
-    wrapFormattingRanges(target, [
+    wrapFormattingRanges(inlineProseTarget(target), [
         {
-            start: 0,
-            end: text.length,
+            start: text.length - text.trimStart().length,
+            end: text.trimEnd().length,
             label: `Block changed from ${describeBlock(original.tagName)} to ${describeBlock(target.tagName)}`,
         },
     ]);

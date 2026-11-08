@@ -298,6 +298,54 @@ describe("frontmatter value diffs", () => {
         expect(maintainers.added).toContain("Alan Turing");
     });
 
+    it.each([
+        {
+            name: "an item appended to a block list",
+            original: lines("---", "title: T", "maintainers:", "  - Ada", "---", "", "Body."),
+            current: lines(
+                "---",
+                "title: T",
+                "maintainers:",
+                "  - Ada",
+                "  - Bob",
+                "---",
+                "",
+                "Body.",
+            ),
+            expected: ["div modified inline: maintainersAda{+, Bob+}"],
+        },
+        {
+            name: "an item inserted at the start of a block list",
+            original: lines("---", "maintainers:", "  - Ada", "  - Cy", "---"),
+            current: lines("---", "maintainers:", "  - Bob", "  - Ada", "  - Cy", "---"),
+            expected: ["div modified inline: maintainers{+Bob, +}Ada, Cy"],
+        },
+        {
+            name: "an item appended while another key was edited",
+            original: lines("---", "title: Old", "maintainers:", "  - Ada", "---"),
+            current: lines("---", "title: New", "maintainers:", "  - Ada", "  - Bob", "---"),
+            expected: [
+                "div modified inline: title[-Old-]{+New+}",
+                "div modified inline: maintainersAda{+, Bob+}",
+            ],
+        },
+    ])("marks only the new words when $name", ({ original, current, expected }) => {
+        expect(view(original, current)).toEqual(expected);
+    });
+
+    it("marks a key added beside an edited key as added", () => {
+        const root = render(lines("---", "title: New", "status: Draft", "owner: Team", "---"));
+
+        decorate(root, [
+            { startLine: 2, endLine: 2, kind: "modified", originalText: "title: Old" },
+            { startLine: 4, endLine: 4, kind: "added" },
+        ]);
+
+        const owner = frontmatterValue(root, "owner");
+        expect(owner.closest<HTMLElement>(".emr-frontmatter-row")!.dataset.diffKind).toBe("added");
+        expect(words(owner)).toEqual({ added: "Team", removed: "" });
+    });
+
     it.each<{ name: string; range: DiffRange; current: string }>([
         {
             name: "the key line replaced what used to be a bare list item",
@@ -318,6 +366,11 @@ describe("frontmatter value diffs", () => {
             name: "the previous line is unknown",
             current: lines("---", "tags: y", "---"),
             range: { startLine: 2, endLine: 2, kind: "modified" },
+        },
+        {
+            name: "the previous line of one of its items is unknown",
+            current: lines("---", "maintainers:", "  - Ada", "  - Bob", "---"),
+            range: { startLine: 3, endLine: 3, kind: "modified" },
         },
         {
             name: "only the quoting of the value changed",

@@ -16,6 +16,7 @@ import {
     revealAnchorTarget,
 } from "../src/shell/headingAnchors";
 import { readSectionState } from "../src/shell/components/navStorage";
+import { findTextFragment } from "../src/shell/textFragment";
 
 function mount(html: string): HTMLElement {
     const wrap = document.createElement("div");
@@ -571,6 +572,19 @@ describe("flashTextTarget", () => {
         expect(root.querySelector("p")!.innerHTML).toBe("alpha beta");
     });
 
+    it("leaves a playing text cue untouched when unrelated content changes", async () => {
+        const root = mount(`<p>alpha beta</p>`);
+        const cancel = flashTextTarget(root, bareAlpha(root));
+        const cue = currentTextCue(root);
+
+        root.append(document.createElement("hr"));
+        await Promise.resolve();
+        const after = currentTextCue(root);
+        cancel();
+
+        expect(after).toBe(cue);
+    });
+
     it("resumes a re-wrapped text cue's fade where it left off", async () => {
         vi.spyOn(performance, "now").mockReturnValueOnce(1_000).mockReturnValue(1_400);
         const root = mount(`<p>alpha beta</p>`);
@@ -601,10 +615,14 @@ describe("flashTextTarget", () => {
         cancel();
     });
 
-    it("keeps the text cue on a formula that renders while the cue plays", async () => {
-        // KaTeX hydrates inline math after the article paints, replacing the
-        // source fallback deep inside a paragraph (not via a re-wrap).
-        const root = mount(`<p>cost <span class="emr-math-fallback">n^2</span> grows</p>`);
+    // KaTeX hydrates inline math after the article paints, replacing the source
+    // fallback deep inside a paragraph (not via a re-wrap) while a cue over the
+    // whole paragraph plays.
+    async function renderFormulaUnderCue(root: HTMLElement): Promise<{
+        p: HTMLParagraphElement;
+        rendered: HTMLElement;
+        cancel: () => void;
+    }> {
         const p = root.querySelector("p")!;
 
         const cancel = flashTextTarget(root, () => {
@@ -620,8 +638,45 @@ describe("flashTextTarget", () => {
         p.querySelector(".emr-math-fallback")!.replaceWith(rendered);
         await Promise.resolve();
 
+        return { p, rendered, cancel };
+    }
+
+    const formulaParagraph = `<p>cost <span class="emr-math-fallback">n^2</span> grows</p>`;
+
+    it("keeps the text cue on a formula that renders while the cue plays", async () => {
+        const root = mount(formulaParagraph);
+        const { rendered, cancel } = await renderFormulaUnderCue(root);
+
         expect(rendered.querySelector("[data-emr-text-cue]")?.textContent).toBe("n²");
         cancel();
+    });
+
+    it("leaves no cue behind once a formula rendered while the cue played", async () => {
+        const root = mount(formulaParagraph);
+        const { p, cancel } = await renderFormulaUnderCue(root);
+
+        cancel();
+
+        expect(p.innerHTML).toBe('cost <span class="katex">n²</span> grows');
+    });
+
+    it("washes each word once when a formula renders while the cue plays", async () => {
+        const root = mount(formulaParagraph);
+        const { cancel } = await renderFormulaUnderCue(root);
+
+        expect(root.querySelector("[data-emr-text-cue] [data-emr-text-cue]")).toBeNull();
+        cancel();
+    });
+
+    it("lands a later text link on its own words after a formula rendered under the first", async () => {
+        const root = mount(formulaParagraph);
+        const { cancel } = await renderFormulaUnderCue(root);
+        cancel();
+
+        const cancelLater = flashTextTarget(root, () => findTextFragment(root, { start: "grows" }));
+
+        expect(currentTextCue(root)?.textContent).toBe("grows");
+        cancelLater();
     });
 
     it("never washes struck-out removed words inside the linked span", () => {

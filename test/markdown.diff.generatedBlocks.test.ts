@@ -217,6 +217,28 @@ describe("Mermaid diagrams", () => {
         expect(diagram.dataset.diffOriginal).toBe("graph TD\nA-->B\nB-->C");
         expect(result.markers).toBe(0);
     });
+
+    it.each([
+        {
+            name: "a quote",
+            original: lines("> ```mermaid", "> graph TD", ">   A-->B", "> ```"),
+            current: lines("> ```mermaid", "> graph TD", ">   A-->C", "> ```"),
+        },
+        {
+            name: "a list item",
+            original: lines("- item", "", "  ```mermaid", "  graph TD", "    A-->B", "  ```"),
+            current: lines("- item", "", "  ```mermaid", "  graph TD", "    A-->C", "  ```"),
+        },
+    ])(
+        "keeps the bare previous diagram source of a diagram inside $name",
+        ({ original, current }) => {
+            const { root } = diffView(original, current);
+
+            expect(root.querySelector<HTMLElement>(".emr-mermaid")!.dataset.diffOriginal).toBe(
+                "graph TD\n  A-->B",
+            );
+        },
+    );
 });
 
 describe("stripMermaidFence", () => {

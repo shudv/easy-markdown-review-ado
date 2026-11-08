@@ -242,10 +242,16 @@ describe("useDocumentSource: reporting when the app has loaded", () => {
         expect(readyReasons()).toEqual(["content"]);
     });
 
-    it("reports the app loaded with an error when the first document fails to load", async () => {
-        await show("docs/a.md", () => Promise.reject(new Error("Server busy")));
-        expect(readyReasons()).toEqual(["error"]);
-    });
+    it.each([
+        ["a message", new Error("Server busy")],
+        ["a blank message", new Error("")],
+    ])(
+        "reports the app loaded with an error when the first document fails to load with %s",
+        async (_failure, error) => {
+            await show("docs/a.md", () => Promise.reject(error));
+            expect(readyReasons()).toEqual(["error"]);
+        },
+    );
 
     it.each([
         ["no document is selected yet", "", () => Promise.resolve("# A")],

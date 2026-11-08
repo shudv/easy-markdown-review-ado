@@ -3530,6 +3530,33 @@ export const CommentHistoryStepperLoadErrors: Story = {
 };
 
 /**
+ * A past version whose load fails with no message still shows the "couldn't
+ * load this version" explanation instead of quietly showing other content.
+ */
+export const CommentHistoryStepperLoadErrorWithoutMessage: Story = {
+    args: {
+        ...stepLoaders(),
+        loadFileSourceAt: async () => {
+            throw new Error("");
+        },
+    },
+    play: async ({ canvasElement }) => {
+        await waitForHighlight(canvasElement, "t-active");
+
+        const rail = within(commentsPane(canvasElement));
+
+        const older = await waitFor(() => rail.getByRole("button", { name: "Older version" }));
+
+        await userEvent.click(older);
+        await waitFor(() =>
+            expect(
+                within(canvasElement).getByRole("heading", { name: "Couldn’t load this version" }),
+            ).toBeVisible(),
+        );
+    },
+};
+
+/**
  * History-load failure: no picker appears and the document stays current.
  */
 export const CommentHistoryStepperHistoryError: Story = {
@@ -3715,6 +3742,30 @@ export const DocumentLoadErrorOnBoot: Story = {
             { timeout: 5000 },
         );
         await expect(canvas.getAllByText(BROKEN).length).toBeGreaterThan(0);
+    },
+};
+
+/**
+ * A document whose load fails with no message (e.g. a bare `new Error()` from
+ * the platform) still shows the "couldn't open" explanation rather than an
+ * empty reader.
+ */
+export const DocumentLoadErrorWithoutMessage: Story = {
+    args: {
+        ...DocumentLoadErrorOnBoot.args,
+        loadFileSource: async () => {
+            throw new Error("");
+        },
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await waitFor(
+            () =>
+                expect(
+                    canvas.getByRole("heading", { name: "Couldn’t open this document" }),
+                ).toBeVisible(),
+            { timeout: 5000 },
+        );
     },
 };
 

@@ -81,7 +81,9 @@ export const PROSE_TAGS = new Set([
     "H6",
     "LI",
     "BLOCKQUOTE",
+    // Stryker disable next-line StringLiteral: dead code: BLOCK_SELECTOR decorates a definition list as a whole (`dl`), never its terms or descriptions, candidate for removal
     "DD",
+    // Stryker disable next-line StringLiteral: dead code: BLOCK_SELECTOR decorates a definition list as a whole (`dl`), never its terms or descriptions, candidate for removal
     "DT",
 ]);
 
@@ -135,6 +137,7 @@ export interface ChangeRange {
 
 export function numAttr(el: Element, name: string): number | null {
     const raw = el.getAttribute(name);
+    // Stryker disable next-line ConditionalExpression: parsing a missing attribute yields NaN, which the finite check below already turns into null
     if (raw == null) return null;
     const n = Number.parseInt(raw, 10);
 
@@ -151,7 +154,21 @@ export function readSourceSpan(el: Element): SourceSpan | null {
     const start = numAttr(el, "data-source-line");
     const end = numAttr(el, "data-source-end-line");
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: the renderer stamps both lines or neither, and an unstamped element's missing lines compare as 0, which overlaps no change and starts before every line (lines start at 1), so it is skipped either way
     return start == null || end == null ? null : { start, end };
+}
+
+/**
+ * Drop the source-line stamps from a separately rendered copy of previous
+ * content (a removed row, a Before panel). Its stamps count lines of that
+ * fragment, not of the current file, so left in place they would pass for
+ * live blocks — and draw removal markers into a hidden panel, say.
+ */
+export function stripSourceLines(root: Element): void {
+    for (const element of [root, ...Array.from(root.querySelectorAll("*"))]) {
+        element.removeAttribute("data-source-line");
+        element.removeAttribute("data-source-end-line");
+    }
 }
 
 /**

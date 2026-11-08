@@ -173,10 +173,13 @@ function positionMetadataPanel(trigger: HTMLElement, panel: HTMLElement): void {
     const view = trigger.ownerDocument.defaultView!;
     const viewportWidth = view.innerWidth;
     const viewportHeight = view.innerHeight;
+    // Stryker disable next-line ArithmeticOperator: a width above the window less its margins already leaves the panel's left edge clamped to the 8px margin, as the margin-less width does
     const desiredWidth = Math.min(440, viewportWidth - 16);
     const measuredHeight = panel.getBoundingClientRect().height;
 
-    const panelHeight = measuredHeight > 0 ? measuredHeight : Math.min(320, viewportHeight - 16);
+    const panelHeight =
+        // Stryker disable next-line ArithmeticOperator: a height above the window less its margins already leaves the panel's top clamped to the 8px margin, as the margin-less height does
+        measuredHeight > 0 ? measuredHeight : Math.min(320, viewportHeight - 16);
 
     const maximumTop = Math.max(8, viewportHeight - panelHeight - 8);
     panel.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - desiredWidth - 8))}px`;
@@ -258,6 +261,30 @@ interface ImageMetadataChange {
     index: number;
     before: string;
     after: string;
+}
+
+/**
+ * Turn each image of the detached `original` that `current` no longer shows
+ * into its alt text (or, without one, its source), so the word diff strikes a
+ * removed image like other removed content rather than the space beside it.
+ * Left alone unless the remaining images match the current ones in order.
+ */
+export function revealRemovedImages(original: Element, current: Element): void {
+    const currentImages = Array.from(current.querySelectorAll("img")).map(imageDescription);
+    let matched = 0;
+
+    const removed = Array.from(original.querySelectorAll("img")).filter((image) => {
+        if (imageDescription(image) !== currentImages[matched]) return true;
+        matched++;
+
+        return false;
+    });
+
+    if (matched !== currentImages.length) return;
+
+    for (const image of removed) {
+        image.replaceWith(image.alt || image.getAttribute("src")!);
+    }
 }
 
 export function findImageMetadataChanges(

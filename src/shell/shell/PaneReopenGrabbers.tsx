@@ -5,14 +5,14 @@ import type { ReactElement, PointerEvent as ReactPointerEvent } from "react";
 type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface PaneReopenGrabbersProps {
-  navShown: boolean;
-  commentsShown: boolean;
-  onNavReopenStart: PointerHandler;
-  onNavReopenMove: PointerHandler;
-  onNavReopenEnd: () => void;
-  onCommentReopenStart: PointerHandler;
-  onCommentReopenMove: PointerHandler;
-  onCommentReopenEnd: () => void;
+    navShown: boolean;
+    commentsShown: boolean;
+    onNavReopenStart: PointerHandler;
+    onNavReopenMove: PointerHandler;
+    onNavReopenEnd: () => void;
+    onCommentReopenStart: PointerHandler;
+    onCommentReopenMove: PointerHandler;
+    onCommentReopenEnd: () => void;
 }
 
 /**
@@ -20,33 +20,31 @@ interface PaneReopenGrabbersProps {
  * counterpart to the status-bar toggles. Only mounted while a pane is hidden
  * (full reader), pinned to the frame's edge.
  */
-export function PaneReopenGrabbers(
-  props: Readonly<PaneReopenGrabbersProps>,
-): ReactElement {
-  return (
-    <>
-      {props.navShown ? (
-        <div
-          className="emr-nav-reopen"
-          title="Drag to reopen navigation"
-          aria-hidden="true"
-          onPointerDown={props.onNavReopenStart}
-          onPointerMove={props.onNavReopenMove}
-          onPointerUp={props.onNavReopenEnd}
-          onPointerCancel={props.onNavReopenEnd}
-        />
-      ) : null}
-      {props.commentsShown ? (
-        <div
-          className="emr-rail-reopen"
-          title="Drag to reopen comments"
-          aria-hidden="true"
-          onPointerDown={props.onCommentReopenStart}
-          onPointerMove={props.onCommentReopenMove}
-          onPointerUp={props.onCommentReopenEnd}
-          onPointerCancel={props.onCommentReopenEnd}
-        />
-      ) : null}
-    </>
-  );
+export function PaneReopenGrabbers(props: Readonly<PaneReopenGrabbersProps>): ReactElement {
+    return (
+        <>
+            {props.navShown ? (
+                <div
+                    className="emr-nav-reopen"
+                    title="Drag to reopen navigation"
+                    aria-hidden="true"
+                    onPointerDown={props.onNavReopenStart}
+                    onPointerMove={props.onNavReopenMove}
+                    onPointerUp={props.onNavReopenEnd}
+                    onPointerCancel={props.onNavReopenEnd}
+                />
+            ) : null}
+            {props.commentsShown ? (
+                <div
+                    className="emr-rail-reopen"
+                    title="Drag to reopen comments"
+                    aria-hidden="true"
+                    onPointerDown={props.onCommentReopenStart}
+                    onPointerMove={props.onCommentReopenMove}
+                    onPointerUp={props.onCommentReopenEnd}
+                    onPointerCancel={props.onCommentReopenEnd}
+                />
+            ) : null}
+        </>
+    );
 }

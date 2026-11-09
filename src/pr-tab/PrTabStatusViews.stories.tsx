@@ -3,55 +3,65 @@ import type { ComponentType } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import {
-  BootErrorView,
-  DEAD_WINDOW_ISSUE_URL,
-  NoMarkdownFilesView,
-  SessionRefreshingView,
+    BootErrorView,
+    DEAD_WINDOW_ISSUE_URL,
+    NoMarkdownFilesView,
+    SessionRefreshingView,
 } from "./PrTabStatusViews";
 
 // The PR tab's full-page states before a document renders: the ADO token dead
 // window at boot (three stages), a boot failure, and a PR with no Markdown.
 
 const frame = (Story: ComponentType) => (
-  <div className="emr-app" style={{ width: 720, minHeight: 320 }}>
-    <Story />
-  </div>
+    <div className="emr-app" style={{ width: 720, minHeight: 320 }}>
+        <Story />
+    </div>
 );
 
 const meta = {
-  title: "Components/PrTabStatusViews",
-  component: SessionRefreshingView,
-  decorators: [frame],
-  args: { onReload: fn() },
+    title: "Components/PrTabStatusViews",
+    component: SessionRefreshingView,
+    decorators: [frame],
+    args: { onReload: fn() },
 } satisfies Meta<typeof SessionRefreshingView>;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** What the reconnecting page offers the user: a reload button and/or the explainer link. */
+function reconnectOffers(canvasElement: HTMLElement) {
+    const canvas = within(canvasElement);
+
+    return {
+        reload: canvas.queryByRole("button", { name: "Reload page" }) !== null,
+        explainer:
+            canvas.queryByRole("link", { name: /Why this happens/ })?.getAttribute("href") ?? null,
+    };
+}
+
 /** Stage 1 — the window was hit at boot; the automatic host reload is about to run. */
 export const ReconnectingAutoReload: Story = {
-  args: { autoReload: true },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByText("This only takes a moment.")).toBeTruthy();
-    await expect(canvas.queryByRole("button")).toBeNull();
-  },
+    args: { autoReload: true },
+    play: async ({ canvasElement }) => {
+        await expect(within(canvasElement).getByRole("status")).toHaveTextContent(
+            "This only takes a moment.",
+        );
+        await expect(reconnectOffers(canvasElement)).toEqual({ reload: false, explainer: null });
+    },
 };
 
 /** Stage 2 — no automatic reload has happened (e.g. it was refused): offer one. */
 export const ReconnectingManualReload: Story = {
-  args: { autoReload: false },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Reload page" }));
-    await expect(args.onReload).toHaveBeenCalledOnce();
-    await expect(
-      canvas
-        .getByRole("link", { name: /Why this happens/ })
-        .getAttribute("href"),
-    ).toBe(DEAD_WINDOW_ISSUE_URL);
-  },
+    args: { autoReload: false },
+    play: async ({ args, canvasElement }) => {
+        await expect(reconnectOffers(canvasElement)).toEqual({
+            reload: true,
+            explainer: DEAD_WINDOW_ISSUE_URL,
+        });
+        await userEvent.click(within(canvasElement).getByRole("button", { name: "Reload page" }));
+        await expect(args.onReload).toHaveBeenCalledOnce();
+    },
 };
 
 /**
@@ -59,46 +69,52 @@ export const ReconnectingManualReload: Story = {
  * the same dead token across reloads: explain, give the ETA, offer no reload.
  */
 export const ReconnectingReloadWontHelp: Story = {
-  args: {
-    autoReload: false,
-    reloadTried: true,
-    recoverAtMs: Date.now() + 4 * 60_000,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("status").textContent).toContain(
-      "so reloading won't help. It will continue by itself within about 4 minutes.",
-    );
-    await expect(canvas.queryByRole("button")).toBeNull();
-    await expect(
-      canvas.getByRole("link", { name: /Why this happens/ }),
-    ).toBeTruthy();
-  },
+    args: {
+        autoReload: false,
+        reloadTried: true,
+        recoverAtMs: Date.now() + 4 * 60_000,
+    },
+    play: async ({ canvasElement }) => {
+        await expect(within(canvasElement).getByRole("status")).toHaveTextContent(
+            "so reloading won't help. It will continue by itself within about 4 minutes.",
+        );
+        await expect(reconnectOffers(canvasElement)).toEqual({
+            reload: false,
+            explainer: DEAD_WINDOW_ISSUE_URL,
+        });
+    },
 };
 
-/** A boot failure that isn't the dead window. */
+const retry = fn();
+
+/** A boot failure that isn't the dead window shows the error and lets the user retry. */
 export const BootError: StoryObj<typeof BootErrorView> = {
-  render: () => (
-    <BootErrorView
-      error="TF401019: The Git repository with name or identifier e8fad09e does not exist or you do not have permissions for the operation you are attempting."
-      onRetry={fn()}
-    />
-  ),
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByText("Something went wrong")).toBeTruthy();
-    await expect(
-      canvas.getByRole("button", { name: "Try again" }),
-    ).toBeTruthy();
-  },
+    render: () => (
+        <BootErrorView
+            error="TF401019: The Git repository with name or identifier e8fad09e does not exist or you do not have permissions for the operation you are attempting."
+            onRetry={retry}
+        />
+    ),
+    beforeEach: () => {
+        retry.mockClear();
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("heading", { name: "Something went wrong" })).toBeVisible();
+        await expect(canvas.getByText(/^TF401019: The Git repository/)).toBeVisible();
+        await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+        await expect(retry).toHaveBeenCalledOnce();
+    },
 };
 
 /** A PR whose changes include no Markdown files. */
 export const NoMarkdownFiles: StoryObj<typeof NoMarkdownFilesView> = {
-  render: () => <NoMarkdownFilesView />,
-  play: async ({ canvasElement }) => {
-    await expect(
-      within(canvasElement).getByText("No Markdown files changed in this PR"),
-    ).toBeTruthy();
-  },
+    render: () => <NoMarkdownFilesView />,
+    play: async ({ canvasElement }) => {
+        await expect(
+            within(canvasElement).getByRole("heading", {
+                name: "No Markdown files changed in this PR",
+            }),
+        ).toBeVisible();
+    },
 };

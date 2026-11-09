@@ -1,10 +1,10 @@
 /** Compact summary of the PR a Documents-hub document routes its comments to. */
 export interface RoutedPrInfo {
-  prId: number;
-  title: string;
-  status: "active" | "completed";
-  /** Optional pre-built URL the rail can link to. */
-  url?: string;
+    prId: number;
+    title: string;
+    status: "active" | "completed";
+    /** Optional pre-built URL the rail can link to. */
+    url?: string;
 }
 
 /**
@@ -13,5 +13,5 @@ export interface RoutedPrInfo {
  * view. (In-place selections and anchor scrolls never reach the host.)
  */
 export type DocLinkNavigation =
-  | { kind: "hub-doc"; path: string; hash: string }
-  | { kind: "repo-file"; path: string };
+    | { kind: "hub-doc"; path: string; hash: string }
+    | { kind: "repo-file"; path: string };

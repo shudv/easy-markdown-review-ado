@@ -23,82 +23,85 @@ import { extractHastText } from "./hast-text";
 
 /** A subpage of a wiki page: a document in the page's same-named folder. */
 export interface WikiSubpage {
-  /** Repo path of the subpage (`/Guides/Install.md`). */
-  path: string;
-  /** Display title (the wiki page title derived from the file name). */
-  title: string;
+    /** Repo path of the subpage (`/Guides/Install.md`). */
+    path: string;
+    /** Display title (the wiki page title derived from the file name). */
+    title: string;
 }
 
 type WikiMacroKind = "toc" | "tosp";
 
 const MACROS: ReadonlyMap<string, WikiMacroKind> = new Map([
-  ["[[_TOC_]]", "toc"],
-  ["[[_TOSP_]]", "tosp"],
+    ["[[_TOC_]]", "toc"],
+    ["[[_TOSP_]]", "tosp"],
 ]);
 
 const MACRO_LABELS: Readonly<Record<WikiMacroKind, string>> = {
-  toc: "Contents",
-  tosp: "Subpages",
+    toc: "Contents",
+    tosp: "Subpages",
 };
 
 export const remarkWikiMacros: Plugin<[], MdastRoot> = () => (tree, file) => {
-  const source = String(file.value);
-  visit(tree, "paragraph", (node: Paragraph) => {
-    const start = node.position!.start.offset!;
-    const end = node.position!.end.offset!;
-    const kind = MACROS.get(source.slice(start, end).trim());
-    if (!kind) return;
-    node.children = [];
-    node.data = {
-      hName: "nav",
-      hProperties: {
-        className: ["emr-wiki-macro", `emr-wiki-${kind}`],
-        ariaLabel: MACRO_LABELS[kind],
-        dataWikiMacro: kind,
-      },
-    };
-  });
+    const source = String(file.value);
+    visit(tree, "paragraph", (node: Paragraph) => {
+        const start = node.position!.start.offset!;
+        const end = node.position!.end.offset!;
+        const kind = MACROS.get(source.slice(start, end).trim());
+        if (!kind) return;
+        node.children = [];
+        node.data = {
+            hName: "nav",
+            hProperties: {
+                className: ["emr-wiki-macro", `emr-wiki-${kind}`],
+                ariaLabel: MACRO_LABELS[kind],
+                dataWikiMacro: kind,
+            },
+        };
+    });
 };
 
 function element(
-  tagName: string,
-  className: string | null,
-  children: ElementContent[],
-  properties: Element["properties"] = {},
+    tagName: string,
+    className: string | null,
+    children: ElementContent[],
+    properties: Element["properties"] = {},
 ): Element {
-  return {
-    type: "element",
-    tagName,
-    properties:
-      className !== null
-        ? { ...properties, className: [className] }
-        : properties,
-    children,
-  };
+    return {
+        type: "element",
+        tagName,
+        // Stryker disable next-line ConditionalExpression: a `[null]` class list serialises as an empty `class=""`, which matches no selector and leaves the element's classList empty, just like no class at all.
+        properties: className !== null ? { ...properties, className: [className] } : properties,
+        children,
+    };
 }
 
 function link(href: string, text: string): Element {
-  return element("a", null, [{ type: "text", value: text }], { href });
+    return element("a", null, [{ type: "text", value: text }], { href });
 }
 
 interface TocEntry {
-  level: number;
-  id: string;
-  text: string;
+    level: number;
+    id: string;
+    text: string;
 }
 
+// Stryker disable next-line Regex: no other HTML tag name starts or ends with "h" plus a digit 1-6, so dropping either anchor matches the same elements.
 const HEADING_RE = /^h([1-6])$/;
 
 function collectHeadings(tree: Root): TocEntry[] {
-  const entries: TocEntry[] = [];
-  visit(tree, "element", (node: Element) => {
-    const match = HEADING_RE.exec(node.tagName);
-    const id = node.properties.id;
-    if (!match || typeof id !== "string") return;
-    entries.push({ level: Number(match[1]), id, text: extractHastText(node) });
-  });
+    const entries: TocEntry[] = [];
+    visit(tree, "element", (node: Element) => {
+        const match = HEADING_RE.exec(node.tagName);
+        const id = node.properties.id;
+        if (!match || typeof id !== "string") return;
+        entries.push({
+            level: Number(match[1]),
+            id,
+            text: extractHastText(node),
+        });
+    });
 
-  return entries;
+    return entries;
 }
 
 /**
@@ -106,38 +109,36 @@ function collectHeadings(tree: Root): TocEntry[] {
  * previous entry; a shallower one returns to the matching enclosing list.
  */
 function tocList(entries: readonly TocEntry[]): Element {
-  const root = element("ul", null, []);
-  const frames: Array<{ level: number; list: Element; last: Element }> = [];
+    const root = element("ul", null, []);
+    const frames: Array<{ level: number; list: Element; last: Element }> = [];
 
-  for (const entry of entries) {
-    while (
-      frames.length > 0 &&
-      frames[frames.length - 1]!.level > entry.level
-    ) {
-      frames.pop();
+    for (const entry of entries) {
+        while (frames.length > 0 && frames[frames.length - 1]!.level > entry.level) {
+            frames.pop();
+        }
+
+        const item = element("li", null, [link(`#${entry.id}`, entry.text)]);
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: indexing an empty frame stack at -1 already yields undefined, so the explicit guard never changes the result; candidate for removal.
+        const top = frames.length > 0 ? frames[frames.length - 1] : undefined;
+
+        if (top?.level === entry.level) {
+            top.list.children.push(item);
+            top.last = item;
+        } else if (top) {
+            const nested = element("ul", null, [item]);
+            top.last.children.push(nested);
+            frames.push({ level: entry.level, list: nested, last: item });
+        } else {
+            root.children.push(item);
+            frames.push({ level: entry.level, list: root, last: item });
+        }
     }
 
-    const item = element("li", null, [link(`#${entry.id}`, entry.text)]);
-    const top = frames.length > 0 ? frames[frames.length - 1] : undefined;
-
-    if (top?.level === entry.level) {
-      top.list.children.push(item);
-      top.last = item;
-    } else if (top) {
-      const nested = element("ul", null, [item]);
-      top.last.children.push(nested);
-      frames.push({ level: entry.level, list: nested, last: item });
-    } else {
-      root.children.push(item);
-      frames.push({ level: entry.level, list: root, last: item });
-    }
-  }
-
-  return root;
+    return root;
 }
 
 function note(text: string): Element {
-  return element("p", "emr-wiki-macro-note", [{ type: "text", value: text }]);
+    return element("p", "emr-wiki-macro-note", [{ type: "text", value: text }]);
 }
 
 const SUBPAGES_UNAVAILABLE = "Subpages aren't available here.";
@@ -148,38 +149,39 @@ const SUBPAGES_UNAVAILABLE = "Subpages aren't available here.";
  * query.
  */
 function encodeRepoPath(path: string): string {
-  return path.split("/").map(encodeURIComponent).join("/");
+    return path.split("/").map(encodeURIComponent).join("/");
 }
 
 export const rehypeWikiMacros: Plugin<[], Root> = () => (tree) => {
-  const macros: Element[] = [];
-  visit(tree, "element", (node: Element) => {
-    // Only remarkWikiMacros sets this (to a non-empty kind); rehypeSafeHtml
-    // drops `data-wiki-macro` from raw HTML.
-    if (typeof node.properties.dataWikiMacro === "string") macros.push(node);
-  });
-  if (macros.length === 0) return;
-  let headings: TocEntry[] | null = null;
+    const macros: Element[] = [];
+    visit(tree, "element", (node: Element) => {
+        // Only remarkWikiMacros sets this (to a non-empty kind); rehypeSafeHtml
+        // drops `data-wiki-macro` from raw HTML.
+        if (typeof node.properties.dataWikiMacro === "string") {
+            macros.push(node);
+        }
+    });
+    // Stryker disable next-line ConditionalExpression: dead code: with no macros the loop below does nothing, so this early return never changes the output; candidate for removal.
+    if (macros.length === 0) return;
+    let headings: TocEntry[] | null = null;
 
-  for (const nav of macros) {
-    const kind = nav.properties.dataWikiMacro as WikiMacroKind;
+    for (const nav of macros) {
+        const kind = nav.properties.dataWikiMacro as WikiMacroKind;
 
-    const title = element("p", "emr-wiki-macro-title", [
-      { type: "text", value: MACRO_LABELS[kind] },
-    ]);
+        const title = element("p", "emr-wiki-macro-title", [
+            { type: "text", value: MACRO_LABELS[kind] },
+        ]);
 
-    if (kind === "toc") {
-      headings ??= collectHeadings(tree);
-      nav.children = [
-        title,
-        headings.length > 0
-          ? tocList(headings)
-          : note("This page has no headings."),
-      ];
-    } else {
-      nav.children = [title, note(SUBPAGES_UNAVAILABLE)];
+        if (kind === "toc") {
+            headings ??= collectHeadings(tree);
+            nav.children = [
+                title,
+                headings.length > 0 ? tocList(headings) : note("This page has no headings."),
+            ];
+        } else {
+            nav.children = [title, note(SUBPAGES_UNAVAILABLE)];
+        }
     }
-  }
 };
 
 /** What a `[[_TOSP_]]` box shows: the subpages, or why there are none yet. */
@@ -188,13 +190,13 @@ export type SubpagesState = readonly WikiSubpage[] | "loading" | "unavailable";
 const SUBPAGES_SELECTOR = 'nav[data-wiki-macro="tosp"]';
 
 const SUBPAGES_NOTES: Readonly<Record<"loading" | "unavailable", string>> = {
-  loading: "Loading subpages…",
-  unavailable: SUBPAGES_UNAVAILABLE,
+    loading: "Loading subpages…",
+    unavailable: SUBPAGES_UNAVAILABLE,
 };
 
 /** True when rendered HTML contains a `[[_TOSP_]]` subpages box. */
 export function hasSubpagesMacro(html: string): boolean {
-  return html.includes('data-wiki-macro="tosp"');
+    return html.includes('data-wiki-macro="tosp"');
 }
 
 /**
@@ -203,42 +205,40 @@ export function hasSubpagesMacro(html: string): boolean {
  * `html` unchanged when it has no subpages box.
  */
 export function fillSubpagesMacros(html: string, state: SubpagesState): string {
-  if (!hasSubpagesMacro(html)) return html;
-  const template = document.createElement("template");
-  // eslint-disable-next-line no-unsanitized/property -- html is renderMarkdown output (sanitized by rehypeSafeHtml + rehypeSanitizeUrls), parsed in an inert <template>
-  template.innerHTML = html;
-  const doc = template.content.ownerDocument;
+    if (!hasSubpagesMacro(html)) return html;
+    const template = document.createElement("template");
+    // eslint-disable-next-line no-unsanitized/property -- html is renderMarkdown output (sanitized by rehypeSafeHtml + rehypeSanitizeUrls), parsed in an inert <template>
+    template.innerHTML = html;
+    const doc = template.content.ownerDocument;
 
-  for (const nav of template.content.querySelectorAll(SUBPAGES_SELECTOR)) {
-    const title = nav.querySelector(":scope > .emr-wiki-macro-title")!;
-    nav.replaceChildren(title, subpagesContent(doc, state));
-  }
+    for (const nav of template.content.querySelectorAll(SUBPAGES_SELECTOR)) {
+        const title = nav.querySelector(":scope > .emr-wiki-macro-title")!;
+        nav.replaceChildren(title, subpagesContent(doc, state));
+    }
 
-  return template.innerHTML;
+    return template.innerHTML;
 }
 
 function subpagesContent(doc: Document, state: SubpagesState): HTMLElement {
-  if (typeof state === "string" || state.length === 0) {
-    const text = doc.createElement("p");
-    text.className = "emr-wiki-macro-note";
-    text.textContent =
-      typeof state === "string"
-        ? SUBPAGES_NOTES[state]
-        : "This page has no subpages.";
+    if (typeof state === "string" || state.length === 0) {
+        const text = doc.createElement("p");
+        text.className = "emr-wiki-macro-note";
+        text.textContent =
+            typeof state === "string" ? SUBPAGES_NOTES[state] : "This page has no subpages.";
 
-    return text;
-  }
+        return text;
+    }
 
-  const list = doc.createElement("ul");
+    const list = doc.createElement("ul");
 
-  for (const page of state) {
-    const anchor = doc.createElement("a");
-    anchor.setAttribute("href", encodeRepoPath(page.path));
-    anchor.textContent = page.title;
-    const item = doc.createElement("li");
-    item.append(anchor);
-    list.append(item);
-  }
+    for (const page of state) {
+        const anchor = doc.createElement("a");
+        anchor.setAttribute("href", encodeRepoPath(page.path));
+        anchor.textContent = page.title;
+        const item = doc.createElement("li");
+        item.append(anchor);
+        list.append(item);
+    }
 
-  return list;
+    return list;
 }

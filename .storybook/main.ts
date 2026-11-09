@@ -11,23 +11,23 @@ import type { StorybookConfig } from "@storybook/react-vite";
 // The production bundle still ships via webpack (webpack.config.cjs); Vite
 // is only used for the Storybook builder + the browser test project.
 const config: StorybookConfig = {
-  stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: ["@storybook/addon-vitest"],
-  // Excalidraw's fonts, at the path stories point EXCALIDRAW_ASSET_PATH at.
-  staticDirs: [
-    {
-      from: "../node_modules/@excalidraw/excalidraw/dist/prod/fonts",
-      to: "/excalidraw-assets/fonts",
+    stories: ["../src/**/*.stories.@(ts|tsx)"],
+    addons: ["@storybook/addon-vitest"],
+    // Excalidraw's fonts, at the path stories point EXCALIDRAW_ASSET_PATH at.
+    staticDirs: [
+        {
+            from: "../node_modules/@excalidraw/excalidraw/dist/prod/fonts",
+            to: "/excalidraw-assets/fonts",
+        },
+    ],
+    framework: {
+        name: "@storybook/react-vite",
+        options: {},
     },
-  ],
-  framework: {
-    name: "@storybook/react-vite",
-    options: {},
-  },
-  // No anonymous usage telemetry / version checks from CI or local runs.
-  core: {
-    disableTelemetry: true,
-  },
+    // No anonymous usage telemetry / version checks from CI or local runs.
+    core: {
+        disableTelemetry: true,
+    },
 };
 
 export default config;

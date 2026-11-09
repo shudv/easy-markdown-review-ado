@@ -12,148 +12,149 @@ import { RegisterEditorContext } from "./editorRegistry";
 export type ConfirmMode = null | "comment" | "thread";
 
 export function useCommentEditSession(
-  onEdit: (
+    onEdit: (threadId: string, commentId: string, newBody: string) => void | Promise<boolean>,
     threadId: string,
     commentId: string,
-    newBody: string,
-  ) => void | Promise<boolean>,
-  threadId: string,
-  commentId: string,
 ) {
-  const [editing, setEditing] = useState(false);
-  // Each open of the editor is a new session; a save that lands later (e.g.
-  // held through an Azure DevOps reconnect) may only close the session it
-  // came from, and only while that editor still shows exactly what was saved.
-  const editSessionRef = useRef(0);
-  const editTextRef = useRef("");
-  const registerEditor = useContext(RegisterEditorContext);
-  useEffect(
-    () => (editing ? registerEditor() : undefined),
-    [editing, registerEditor],
-  );
+    const [editing, setEditing] = useState(false);
+    // Each open of the editor is a new session; a save that lands later (e.g.
+    // held through an Azure DevOps reconnect) may only close the session it
+    // came from, and only while that editor still shows exactly what was saved.
+    const editSessionRef = useRef(0);
+    const editTextRef = useRef("");
+    const registerEditor = useContext(RegisterEditorContext);
+    useEffect(() => (editing ? registerEditor() : undefined), [editing, registerEditor]);
 
-  const begin = () => {
-    editSessionRef.current += 1;
-    setEditing(true);
-  };
+    const begin = () => {
+        editSessionRef.current += 1;
+        setEditing(true);
+    };
 
-  const onChange = (text: string) => {
-    editTextRef.current = text;
-  };
+    const onChange = (text: string) => {
+        editTextRef.current = text;
+    };
 
-  const onSubmit = (body: string) => {
-    // Close only once the save went through, and only the editor
-    // session that sent it, still holding exactly that text. A
-    // failed save, newer typing, or a cancel-and-reopen keeps the
-    // user's current text on screen.
-    const session = editSessionRef.current;
-    void Promise.resolve(onEdit(threadId, commentId, body)).then((saved) => {
-      if (saved === false) return;
-      if (editSessionRef.current !== session) return;
-      if (editTextRef.current.trim() !== body) return;
-      setEditing(false);
-    });
-  };
+    const onSubmit = (body: string) => {
+        // Close only once the save went through, and only the editor
+        // session that sent it, still holding exactly that text. A
+        // failed save, newer typing, or a cancel-and-reopen keeps the
+        // user's current text on screen.
+        const session = editSessionRef.current;
+        void Promise.resolve(onEdit(threadId, commentId, body)).then((saved) => {
+            if (saved === false) return;
+            if (editSessionRef.current !== session) return;
+            if (editTextRef.current.trim() !== body) return;
+            setEditing(false);
+        });
+    };
 
-  const onCancel = () => {
-    editSessionRef.current += 1;
-    setEditing(false);
-  };
+    const onCancel = () => {
+        editSessionRef.current += 1;
+        setEditing(false);
+    };
 
-  return { editing, begin, onChange, onSubmit, onCancel };
+    return { editing, begin, onChange, onSubmit, onCancel };
 }
 
 export function useCommentRowMenu() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [confirm, setConfirm] = useState<ConfirmMode>(null);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [confirm, setConfirm] = useState<ConfirmMode>(null);
 
-  const menuRef = useRef<HTMLDivElement>(null);
-  const menuBtnRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const menuBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Close menu on outside click / Escape.
-  useEffect(() => {
-    if (!menuOpen) return;
+    // Close menu on outside click / Escape.
+    useEffect(() => {
+        if (!menuOpen) return;
 
-    function onDocClick(e: MouseEvent) {
-      const target = e.target as Node | null;
+        function onDocClick(e: MouseEvent) {
+            const target = e.target as Node | null;
 
-      if (
-        menuRef.current &&
-        target &&
-        !menuRef.current.contains(target) &&
-        menuBtnRef.current &&
-        !menuBtnRef.current.contains(target)
-      ) {
+            if (
+                menuRef.current &&
+                target &&
+                !menuRef.current.contains(target) &&
+                menuBtnRef.current &&
+                !menuBtnRef.current.contains(target)
+            ) {
+                setMenuOpen(false);
+                setConfirm(null);
+            }
+        }
+
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") {
+                e.stopPropagation();
+                setMenuOpen(false);
+                setConfirm(null);
+            }
+        }
+
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [menuOpen]);
+
+    const close = () => {
         setMenuOpen(false);
         setConfirm(null);
-      }
-    }
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setMenuOpen(false);
-        setConfirm(null);
-      }
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
 
-  const close = () => {
-    setMenuOpen(false);
-    setConfirm(null);
-  };
+    const toggle = () => {
+        setMenuOpen((o) => !o);
+        setConfirm(null);
+    };
 
-  const toggle = () => {
-    setMenuOpen((o) => !o);
-    setConfirm(null);
-  };
-
-  return { menuOpen, confirm, setConfirm, menuRef, menuBtnRef, close, toggle };
+    return {
+        menuOpen,
+        confirm,
+        setConfirm,
+        menuRef,
+        menuBtnRef,
+        close,
+        toggle,
+    };
 }
 
 export function useCommentLinkCopy(threadId: string) {
-  const [linkState, setLinkState] = useState<CommentLinkState>("idle");
-  // Host-supplied builder for a shareable deep link to this thread. Absent on
-  // surfaces with no shareable URL, where the "Link to comment" item is hidden
-  // (the iframe's own URL is a CDN asset that opens a blank page).
-  const buildDeepLink = useDeepLink();
+    const [linkState, setLinkState] = useState<CommentLinkState>("idle");
+    // Host-supplied builder for a shareable deep link to this thread. Absent on
+    // surfaces with no shareable URL, where the "Link to comment" item is hidden
+    // (the iframe's own URL is a CDN asset that opens a blank page).
+    const buildDeepLink = useDeepLink();
 
-  const handleLink = () => {
-    if (!buildDeepLink) return;
-    const url = buildDeepLink({ kind: "comment", threadId });
-    // Keep the menu open so the inline label confirms the result. `copyText`
-    // resolves to a boolean (never rejects), so a host iframe blocking the
-    // async Clipboard API can't surface as an unhandled rejection — and we only
-    // claim success when a copy is actually confirmed.
-    const hasUrl = url !== undefined && url !== "";
-    const copied = hasUrl ? copyText(url) : Promise.resolve(false);
-    void copied.then((ok) => {
-      setLinkState(ok ? "copied" : "failed");
+    const handleLink = () => {
+        if (!buildDeepLink) return;
+        const url = buildDeepLink({ kind: "comment", threadId });
+        // Keep the menu open so the inline label confirms the result. `copyText`
+        // resolves to a boolean (never rejects), so a host iframe blocking the
+        // async Clipboard API can't surface as an unhandled rejection — and we only
+        // claim success when a copy is actually confirmed.
+        const hasUrl = url !== undefined && url !== "";
+        const copied = hasUrl ? copyText(url) : Promise.resolve(false);
+        void copied.then((ok) => {
+            setLinkState(ok ? "copied" : "failed");
 
-      if (ok) {
-        track(events.linkCopied({ target: "comment" }));
-      } else {
-        trackUserFacingError({
-          error: new Error(
-            hasUrl ? "Comment link copy failed" : "Comment link unavailable",
-          ),
-          source: "CommentRow.copyLink",
-          operation: "comment-link-copy",
-          impact: "action-failed",
+            if (ok) {
+                track(events.linkCopied({ target: "comment" }));
+            } else {
+                trackUserFacingError({
+                    error: new Error(
+                        hasUrl ? "Comment link copy failed" : "Comment link unavailable",
+                    ),
+                    source: "CommentRow.copyLink",
+                    operation: "comment-link-copy",
+                    impact: "action-failed",
+                });
+            }
+
+            window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
         });
-      }
+    };
 
-      window.setTimeout(() => setLinkState("idle"), ok ? 1200 : 2400);
-    });
-  };
-
-  return { canLink: buildDeepLink !== null, linkState, handleLink };
+    return { canLink: buildDeepLink !== null, linkState, handleLink };
 }

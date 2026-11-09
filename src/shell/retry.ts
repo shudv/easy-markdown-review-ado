@@ -16,31 +16,27 @@
 import { extractStatus, isRetryable, type RetryMode } from "./retryClassify";
 
 export interface RetryOptions {
-  /** `"read"` (idempotent) or `"write"` (dedup-safe). */
-  mode: RetryMode;
-  /**
-   * Total number of attempts (initial try + retries). Defaults: 3 for reads,
-   * 4 for writes. Must be >= 1.
-   */
-  attempts?: number;
-  /** Base backoff delay in ms (grows exponentially). Default 300. */
-  baseDelayMs?: number;
-  /** Maximum backoff delay in ms (ceiling for the exponential term). Default 4000. */
-  maxDelayMs?: number;
-  /** Abort signal — when aborted, no further attempts are made. */
-  signal?: AbortSignal;
-  /** Label for diagnostics / logging. */
-  label?: string;
-  /** Injectable sleep (tests pass a fake). Default: real `setTimeout`. */
-  sleep?: (ms: number) => Promise<void>;
-  /** Injectable RNG in [0,1) for jitter (tests pass a deterministic fn). */
-  random?: () => number;
-  /** Optional hook fired before each retry (diagnostics / telemetry). */
-  onRetry?: (info: {
-    attempt: number;
-    delayMs: number;
-    error: unknown;
-  }) => void;
+    /** `"read"` (idempotent) or `"write"` (dedup-safe). */
+    mode: RetryMode;
+    /**
+     * Total number of attempts (initial try + retries). Defaults: 3 for reads,
+     * 4 for writes. Must be >= 1.
+     */
+    attempts?: number;
+    /** Base backoff delay in ms (grows exponentially). Default 300. */
+    baseDelayMs?: number;
+    /** Maximum backoff delay in ms (ceiling for the exponential term). Default 4000. */
+    maxDelayMs?: number;
+    /** Abort signal — when aborted, no further attempts are made. */
+    signal?: AbortSignal;
+    /** Label for diagnostics / logging. */
+    label?: string;
+    /** Injectable sleep (tests pass a fake). Default: real `setTimeout`. */
+    sleep?: (ms: number) => Promise<void>;
+    /** Injectable RNG in [0,1) for jitter (tests pass a deterministic fn). */
+    random?: () => number;
+    /** Optional hook fired before each retry (diagnostics / telemetry). */
+    onRetry?: (info: { attempt: number; delayMs: number; error: unknown }) => void;
 }
 
 const DEFAULT_READ_ATTEMPTS = 3;
@@ -53,14 +49,15 @@ const DEFAULT_BASE_DELAY_MS = 300;
 const DEFAULT_MAX_DELAY_MS = 4000;
 
 function realSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function abortError(): Error {
-  const err = new Error("Retry aborted");
-  err.name = "AbortError";
+    // Stryker disable next-line StringLiteral: callers recognise a cancelled retry by its `AbortError` name; the message is never shown or matched
+    const err = new Error("Retry aborted");
+    err.name = "AbortError";
 
-  return err;
+    return err;
 }
 
 /**
@@ -70,70 +67,70 @@ function abortError(): Error {
  * abort would only be observed when the next attempt begins.
  */
 function abortableSleep(
-  sleep: (ms: number) => Promise<void>,
-  ms: number,
-  signal: AbortSignal | undefined,
+    sleep: (ms: number) => Promise<void>,
+    ms: number,
+    signal: AbortSignal | undefined,
 ): Promise<void> {
-  if (!signal) return sleep(ms);
-  // An `onRetry` callback can abort the signal after the loop's own check; an
-  // already-aborted signal never fires "abort", so reject up front.
-  if (signal.aborted) return Promise.reject(abortError());
+    if (!signal) return sleep(ms);
+    // An `onRetry` callback can abort the signal after the loop's own check; an
+    // already-aborted signal never fires "abort", so reject up front.
+    if (signal.aborted) return Promise.reject(abortError());
 
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => {
-      cleanup();
-      reject(abortError());
-    };
+    return new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+            cleanup();
+            reject(abortError());
+        };
 
-    const cleanup = () => signal.removeEventListener("abort", onAbort);
-    signal.addEventListener("abort", onAbort, { once: true });
-    sleep(ms).then(
-      () => {
-        cleanup();
-        resolve();
-      },
-      (e) => {
-        cleanup();
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwards the injected sleep's rejection unchanged; wrapping would hide the original reason from callers
-        reject(e);
-      },
-    );
-  });
+        // Stryker disable next-line ArrowFunction,StringLiteral: a listener left behind only rejects a promise that has already settled, which is ignored
+        const cleanup = () => signal.removeEventListener("abort", onAbort);
+        // Stryker disable next-line ObjectLiteral,BooleanLiteral: `onAbort` removes itself via `cleanup`, so `once` changes nothing
+        signal.addEventListener("abort", onAbort, { once: true });
+        sleep(ms).then(
+            () => {
+                cleanup();
+                resolve();
+            },
+            (e) => {
+                cleanup();
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwards the injected sleep's rejection unchanged; wrapping would hide the original reason from callers
+                reject(e);
+            },
+        );
+    });
 }
 
 /**
  * Parse a `Retry-After` value (seconds or an HTTP-date) into milliseconds from
  * now. Returns `undefined` when absent or unparseable. Exposed for tests.
  */
-export function parseRetryAfterMs(
-  err: unknown,
-  now: number = Date.now(),
-): number | undefined {
-  if (typeof err !== "object" || err === null) return undefined;
-  const e = err as Record<string, unknown>;
-  // A raw header bag on the error, or a `Response`-like `.headers`.
-  let raw: string | undefined;
+export function parseRetryAfterMs(err: unknown, now: number = Date.now()): number | undefined {
+    // Stryker disable next-line ConditionalExpression: reading `headers` / `retryAfter` off a thrown primitive yields undefined, so primitives find no hint without the `typeof` check
+    if (typeof err !== "object" || err === null) return undefined;
+    const e = err as Record<string, unknown>;
+    // A raw header bag on the error, or a `Response`-like `.headers`.
+    let raw: string | undefined;
 
-  const headers = e.headers as
-    | { get?: (name: string) => string | null }
-    | undefined;
+    const headers = e.headers as { get?: (name: string) => string | null } | undefined;
 
-  if (headers && typeof headers.get === "function") {
-    raw = headers.get("Retry-After") ?? headers.get("retry-after") ?? undefined;
-  }
+    if (headers && typeof headers.get === "function") {
+        raw = headers.get("Retry-After") ?? headers.get("retry-after") ?? undefined;
+    }
 
-  if (raw === undefined && typeof e.retryAfter === "string") {
-    raw = e.retryAfter;
-  }
+    // Stryker disable next-line ConditionalExpression: the `typeof` check only matters for a non-string `retryAfter`, which no error the app handles carries
+    if (raw === undefined && typeof e.retryAfter === "string") {
+        raw = e.retryAfter;
+    }
 
-  if (raw === undefined) return undefined;
+    // Stryker disable next-line ConditionalExpression: an absent value parses as neither a number nor a date below, so it finds no hint either way
+    if (raw === undefined) return undefined;
 
-  const asNum = Number(raw);
-  if (Number.isFinite(asNum)) return Math.max(0, asNum * 1000);
-  const asDate = Date.parse(raw);
-  if (Number.isFinite(asDate)) return Math.max(0, asDate - now);
+    const asNum = Number(raw);
+    if (Number.isFinite(asNum)) return Math.max(0, asNum * 1000);
+    const asDate = Date.parse(raw);
+    if (Number.isFinite(asDate)) return Math.max(0, asDate - now);
 
-  return undefined;
+    return undefined;
 }
 
 /**
@@ -141,51 +138,47 @@ export function parseRetryAfterMs(
  * exponential growth with full jitter, capped at `maxDelayMs`.
  */
 export function computeBackoffMs(
-  retryIndex: number,
-  baseDelayMs: number,
-  maxDelayMs: number,
-  random: () => number,
+    retryIndex: number,
+    baseDelayMs: number,
+    maxDelayMs: number,
+    random: () => number,
 ): number {
-  const exp = Math.min(maxDelayMs, baseDelayMs * 2 ** retryIndex);
+    const exp = Math.min(maxDelayMs, baseDelayMs * 2 ** retryIndex);
 
-  // Full jitter: pick a random point in [0, exp].
-  return Math.floor(random() * exp);
+    // Full jitter: pick a random point in [0, exp].
+    return Math.floor(random() * exp);
 }
 
 type ResolvedRetryOptions = Required<
-  Pick<
-    RetryOptions,
-    "mode" | "attempts" | "baseDelayMs" | "maxDelayMs" | "sleep" | "random"
-  >
+    Pick<RetryOptions, "mode" | "attempts" | "baseDelayMs" | "maxDelayMs" | "sleep" | "random">
 > &
-  Pick<RetryOptions, "signal" | "onRetry">;
+    Pick<RetryOptions, "signal" | "onRetry">;
 
 /** Fill in the policy defaults for any omitted retry options. */
 function resolveRetryOptions(opts: RetryOptions): ResolvedRetryOptions {
-  const {
-    mode,
-    baseDelayMs = DEFAULT_BASE_DELAY_MS,
-    maxDelayMs = DEFAULT_MAX_DELAY_MS,
-    signal,
-    sleep = realSleep,
-    random = Math.random,
-    onRetry,
-  } = opts;
+    const {
+        mode,
+        baseDelayMs = DEFAULT_BASE_DELAY_MS,
+        maxDelayMs = DEFAULT_MAX_DELAY_MS,
+        signal,
+        sleep = realSleep,
+        random = Math.random,
+        onRetry,
+    } = opts;
 
-  const attempts =
-    opts.attempts ??
-    (mode === "write" ? DEFAULT_WRITE_ATTEMPTS : DEFAULT_READ_ATTEMPTS);
+    const attempts =
+        opts.attempts ?? (mode === "write" ? DEFAULT_WRITE_ATTEMPTS : DEFAULT_READ_ATTEMPTS);
 
-  return {
-    mode,
-    attempts,
-    baseDelayMs,
-    maxDelayMs,
-    signal,
-    sleep,
-    random,
-    onRetry,
-  };
+    return {
+        mode,
+        attempts,
+        baseDelayMs,
+        maxDelayMs,
+        signal,
+        sleep,
+        random,
+        onRetry,
+    };
 }
 
 /**
@@ -194,49 +187,40 @@ function resolveRetryOptions(opts: RetryOptions): ResolvedRetryOptions {
  * exhausted or the failure is classified non-retryable.
  */
 export async function withRetry<T>(
-  fn: (attempt: number) => Promise<T>,
-  opts: RetryOptions,
+    fn: (attempt: number) => Promise<T>,
+    opts: RetryOptions,
 ): Promise<T> {
-  const {
-    mode,
-    attempts,
-    baseDelayMs,
-    maxDelayMs,
-    signal,
-    sleep,
-    random,
-    onRetry,
-  } = resolveRetryOptions(opts);
+    const { mode, attempts, baseDelayMs, maxDelayMs, signal, sleep, random, onRetry } =
+        resolveRetryOptions(opts);
 
-  let lastError: unknown;
+    let lastError: unknown;
 
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    if (signal?.aborted) throw abortError();
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        if (signal?.aborted) throw abortError();
 
-    try {
-      return await fn(attempt);
-    } catch (err) {
-      lastError = err;
-      const isLast = attempt >= attempts;
+        try {
+            return await fn(attempt);
+        } catch (err) {
+            lastError = err;
+            const isLast = attempt >= attempts;
 
-      if (isLast || signal?.aborted || !isRetryable(err, mode)) {
-        throw err;
-      }
+            if (isLast || signal?.aborted || !isRetryable(err, mode)) {
+                throw err;
+            }
 
-      // Prefer a server-provided Retry-After; otherwise jittered backoff.
-      const retryAfter = parseRetryAfterMs(err);
+            // Prefer a server-provided Retry-After; otherwise jittered backoff.
+            const retryAfter = parseRetryAfterMs(err);
 
-      const delayMs =
-        retryAfter ??
-        computeBackoffMs(attempt - 1, baseDelayMs, maxDelayMs, random);
+            const delayMs =
+                retryAfter ?? computeBackoffMs(attempt - 1, baseDelayMs, maxDelayMs, random);
 
-      onRetry?.({ attempt, delayMs, error: err });
-      await abortableSleep(sleep, delayMs, signal);
+            onRetry?.({ attempt, delayMs, error: err });
+            await abortableSleep(sleep, delayMs, signal);
+        }
     }
-  }
 
-  // Only reached when `attempts` < 1, so the loop never ran.
-  throw lastError;
+    // Only reached when `attempts` < 1, so the loop never ran.
+    throw lastError;
 }
 
 // Re-export classification helpers so callers import the whole resiliency

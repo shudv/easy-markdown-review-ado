@@ -5,18 +5,18 @@
 // streak stays quiet until the operation succeeds again.
 
 export class FailureStreaks {
-  private readonly failing = new Set<string>();
+    private readonly failing = new Set<string>();
 
-  /** Record a failure; true when it starts a new streak (report it). */
-  fail(key: string): boolean {
-    if (this.failing.has(key)) return false;
-    this.failing.add(key);
+    /** Record a failure; true when it starts a new streak (report it). */
+    fail(key: string): boolean {
+        if (this.failing.has(key)) return false;
+        this.failing.add(key);
 
-    return true;
-  }
+        return true;
+    }
 
-  /** Record a success, ending the key's streak. */
-  succeed(key: string): void {
-    this.failing.delete(key);
-  }
+    /** Record a success, ending the key's streak. */
+    succeed(key: string): void {
+        this.failing.delete(key);
+    }
 }

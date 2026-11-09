@@ -1,19 +1,19 @@
 {
-  "extends": "../tsconfig.json",
-  "compilerOptions": {
-    "rootDir": "..",
-    "outDir": "../dist-e2e",
-    "noEmit": true,
-    "types": ["node"],
-    "lib": ["ES2020", "ES2022.Error", "DOM", "DOM.Iterable"],
-    "noUnusedLocals": true,
-    "noUnusedParameters": true
-  },
-  "include": [
-    "**/*.ts",
-    "../visual/**/*.ts",
-    "../playwright.config.ts",
-    "../playwright.visual.config.ts"
-  ],
-  "exclude": ["node_modules"]
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "..",
+        "outDir": "../dist-e2e",
+        "noEmit": true,
+        "types": ["node"],
+        "lib": ["ES2020", "ES2022.Error", "DOM", "DOM.Iterable"],
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
+    },
+    "include": [
+        "**/*.ts",
+        "../visual/**/*.ts",
+        "../playwright.config.ts",
+        "../playwright.visual.config.ts"
+    ],
+    "exclude": ["node_modules"]
 }

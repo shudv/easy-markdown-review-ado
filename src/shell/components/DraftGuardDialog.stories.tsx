@@ -4,15 +4,15 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { DraftGuardDialog } from "./DraftGuardDialog";
 
 const meta = {
-  title: "Components/DraftGuardDialog",
-  component: DraftGuardDialog,
-  parameters: { layout: "fullscreen" },
-  args: {
-    fileName: "design.md",
-    snippet: "This is the in-progress comment the reviewer hasn't posted yet…",
-    onDiscard: fn(),
-    onKeepEditing: fn(),
-  },
+    title: "Components/DraftGuardDialog",
+    component: DraftGuardDialog,
+    parameters: { layout: "fullscreen" },
+    args: {
+        fileName: "design.md",
+        snippet: "This is the in-progress comment the reviewer hasn't posted yet…",
+        onDiscard: fn(),
+        onKeepEditing: fn(),
+    },
 } satisfies Meta<typeof DraftGuardDialog>;
 
 export default meta;
@@ -21,47 +21,44 @@ type Story = StoryObj<typeof meta>;
 
 /** Discard drops the existing draft and proceeds. */
 export const Discard: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: /discard draft/i }),
-    );
-    await expect(args.onDiscard).toHaveBeenCalled();
-  },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: /discard draft/i }));
+        await expect(args.onDiscard).toHaveBeenCalled();
+    },
 };
 
 /** Keep editing dismisses the dialog and preserves the draft. */
 export const KeepEditing: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: /keep editing/i }),
-    );
-    await expect(args.onKeepEditing).toHaveBeenCalled();
-  },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: /keep editing/i }));
+        await expect(args.onKeepEditing).toHaveBeenCalled();
+    },
 };
 
-/** Escape keeps the draft; clicking the backdrop keeps it too. */
+/**
+ * Escape and a click on the dimmed backdrop both keep the draft; typing other
+ * keys or clicking inside the dialog card doesn't dismiss it.
+ */
 export const DismissAffordances: Story = {
-  play: async ({ args, canvasElement }) => {
-    // A non-Escape key is ignored (the handler's early-return branch).
-    await userEvent.keyboard("a");
-    await expect(args.onKeepEditing).not.toHaveBeenCalled();
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const dialog = canvas.getByRole("dialog", { name: "Unsaved comment draft" });
 
-    await userEvent.keyboard("{Escape}");
-    await expect(args.onKeepEditing).toHaveBeenCalled();
+        await expect(within(dialog).getByText(args.snippet)).toBeVisible();
+        await userEvent.keyboard("a");
+        await expect(args.onKeepEditing).not.toHaveBeenCalled();
 
-    // Clicking the overlay (outside the card) also keeps the draft.
-    const overlay = canvasElement.querySelector<HTMLElement>(
-      ".emr-draft-guard-overlay",
-    )!;
+        await userEvent.keyboard("{Escape}");
+        await expect(args.onKeepEditing).toHaveBeenCalledTimes(1);
 
-    overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
+        // The labelled dialog element is the full-screen backdrop around the card.
+        await userEvent.click(dialog);
+        await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
 
-    // A click on the card itself (not the overlay) does not dismiss.
-    const card = canvasElement.querySelector<HTMLElement>(".emr-draft-guard")!;
-    card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
-  },
+        await userEvent.click(canvas.getByText("You already have an unsaved comment"));
+        await expect(args.onKeepEditing).toHaveBeenCalledTimes(2);
+        await expect(args.onDiscard).not.toHaveBeenCalled();
+    },
 };

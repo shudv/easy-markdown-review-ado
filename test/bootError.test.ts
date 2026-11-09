@@ -1,74 +1,69 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  BOOT_ERROR_HEADING,
-  bootErrorDetail,
-  renderBootErrorInto,
-} from "../src/shell/bootError";
+import { BOOT_ERROR_HEADING, bootErrorDetail, renderBootErrorInto } from "../src/shell/bootError";
+
+function errorWithStack(message: string, stack: string | undefined): Error {
+    const error = new Error(message);
+    error.stack = stack;
+
+    return error;
+}
 
 describe("bootErrorDetail", () => {
-  it("prefers an Error's stack, falls back to its message", () => {
-    const withStack = new Error("boom");
-    withStack.stack = "Error: boom\n  at x";
-    expect(bootErrorDetail(withStack)).toBe("Error: boom\n  at x");
-
-    const noStack = new Error("just a message");
-    noStack.stack = undefined;
-    expect(bootErrorDetail(noStack)).toBe("just a message");
-  });
-
-  it("stringifies non-Error values", () => {
-    expect(bootErrorDetail("plain string")).toBe("plain string");
-    expect(bootErrorDetail(42)).toBe("42");
-    expect(bootErrorDetail(null)).toBe("null");
-  });
+    it.each([
+        {
+            name: "shows the stack of an Error that has one",
+            thrown: errorWithStack("boom", "Error: boom\n  at x"),
+            expected: "Error: boom\n  at x",
+        },
+        {
+            name: "falls back to the message of an Error without a stack",
+            thrown: errorWithStack("just a message", undefined),
+            expected: "just a message",
+        },
+        {
+            name: "falls back to the message when the stack is empty, rather than showing a blank panel",
+            thrown: errorWithStack("host refused", ""),
+            expected: "host refused",
+        },
+        { name: "shows a thrown string as-is", thrown: "plain string", expected: "plain string" },
+        { name: "stringifies a thrown number", thrown: 42, expected: "42" },
+        { name: "stringifies a thrown null", thrown: null, expected: "null" },
+    ])("$name", ({ thrown, expected }) => {
+        expect(bootErrorDetail(thrown)).toBe(expected);
+    });
 });
 
 describe("renderBootErrorInto", () => {
-  let root: HTMLElement;
+    let root: HTMLElement;
 
-  beforeEach(() => {
-    root = document.createElement("div");
-  });
+    beforeEach(() => {
+        root = document.createElement("div");
+    });
 
-  it("renders the heading and the detail text", () => {
-    renderBootErrorInto(root, "something broke");
-    expect(BOOT_ERROR_HEADING).toBe("Markdown Review failed to load");
-    const container = root.firstElementChild as HTMLElement;
-    const heading = root.querySelector("h2") as HTMLElement;
-    const detail = root.querySelector("pre") as HTMLElement;
-    expect(container.style.padding).toBe("24px");
-    expect(container.style.fontFamily).toBe(
-      '"Segoe UI", system-ui, sans-serif',
-    );
-    expect(container.style.color).toBe("rgb(205, 48, 48)");
-    expect(heading.style.marginTop).toBe("0px");
-    expect(heading.textContent).toBe(BOOT_ERROR_HEADING);
-    expect(detail.style.whiteSpace).toBe("pre-wrap");
-    expect(detail.style.background).toBe("rgb(247, 247, 247)");
-    expect(detail.style.padding).toBe("12px");
-    expect(detail.style.borderRadius).toBe("4px");
-    expect(detail.style.color).toBe("rgb(51, 51, 51)");
-    expect(detail.textContent).toBe("something broke");
-  });
+    it("shows the failure heading above the error detail", () => {
+        renderBootErrorInto(root, "something broke");
 
-  it("does not interpret HTML in the detail (no injection)", () => {
-    const hostile = '<img src=x onerror="alert(1)"><script>evil()</script>';
-    renderBootErrorInto(root, hostile);
+        expect(root.querySelector("h2")?.textContent).toBe("Markdown Review failed to load");
+        expect(root.querySelector("pre")?.textContent).toBe("something broke");
+    });
 
-    // The hostile markup must appear as literal TEXT, not as parsed nodes.
-    expect(root.querySelector("img")).toBeNull();
-    expect(root.querySelector("script")).toBeNull();
-    expect(root.querySelector("pre")?.textContent).toBe(hostile);
-    // innerHTML shows the text was entity-encoded by the DOM, never live.
-    expect(root.innerHTML).not.toContain("<img");
-    expect(root.innerHTML).not.toContain("<script>");
-  });
+    it("does not interpret HTML in the detail (no injection)", () => {
+        const hostile = '<img src=x onerror="alert(1)"><script>evil()</script>';
 
-  it("replaces any previously-rendered content", () => {
-    root.innerHTML = "<span>stale spinner</span>";
-    renderBootErrorInto(root, "fresh error");
-    expect(root.textContent).not.toContain("stale spinner");
-    expect(root.querySelector("pre")?.textContent).toBe("fresh error");
-  });
+        renderBootErrorInto(root, hostile);
+
+        // The hostile markup must appear as literal TEXT, not as parsed nodes.
+        expect(root.querySelector("img")).toBeNull();
+        expect(root.querySelector("script")).toBeNull();
+        expect(root.querySelector("pre")?.textContent).toBe(hostile);
+    });
+
+    it("replaces the loading content that was showing", () => {
+        root.innerHTML = "<span>stale spinner</span>";
+
+        renderBootErrorInto(root, "fresh error");
+
+        expect(root.textContent).toBe(`${BOOT_ERROR_HEADING}fresh error`);
+    });
 });

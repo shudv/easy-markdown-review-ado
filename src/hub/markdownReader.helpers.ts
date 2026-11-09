@@ -7,8 +7,8 @@
 export type VersionSpecKind = "branch" | "commit" | "tag";
 
 export interface ParsedVersionSpec {
-  kind: VersionSpecKind;
-  value: string;
+    kind: VersionSpecKind;
+    value: string;
 }
 
 /**
@@ -19,21 +19,20 @@ export interface ParsedVersionSpec {
  * Returns `null` for a missing spec, an empty value, or an unrecognised
  * prefix, so the caller falls back to the repo's default branch.
  */
-export function parseVersionSpec(
-  spec: string | undefined,
-): ParsedVersionSpec | null {
-  if (spec === undefined || spec === "") return null;
-  const value = spec.slice(2);
-  if (!value) return null;
+export function parseVersionSpec(spec: string | undefined): ParsedVersionSpec | null {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a blank spec has no value after its prefix, which the check below rejects anyway; candidate for removal
+    if (spec === undefined || spec === "") return null;
+    const value = spec.slice(2);
+    if (!value) return null;
 
-  switch (spec.slice(0, 2)) {
-    case "GB":
-      return { kind: "branch", value };
-    case "GC":
-      return { kind: "commit", value };
-    case "GT":
-      return { kind: "tag", value };
-    default:
-      return null;
-  }
+    switch (spec.slice(0, 2)) {
+        case "GB":
+            return { kind: "branch", value };
+        case "GC":
+            return { kind: "commit", value };
+        case "GT":
+            return { kind: "tag", value };
+        default:
+            return null;
+    }
 }

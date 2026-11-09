@@ -6,69 +6,56 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import {
-  fillSubpagesMacros,
-  hasSubpagesMacro,
-  type SubpagesState,
-} from "../markdown/wikiMacros";
+import { fillSubpagesMacros, hasSubpagesMacro, type SubpagesState } from "../markdown/wikiMacros";
 import type { FolderLister } from "./wikiOrder";
 import { loadWikiSubpages, subpagesCommit } from "./wikiSubpages";
 
 export interface WikiSubpagesInput {
-  /** The shown document's rendered HTML. */
-  html: string;
-  /** Repo path of the shown document. */
-  documentPath: string;
-  /** True when a historical version (at `commitId`) is shown. */
-  historical: boolean;
-  /** Commit of the shown historical version. */
-  commitId?: string | null;
-  /** Lists a repository folder; undefined where folders can't be listed. */
-  listFolder: FolderLister | undefined;
+    /** The shown document's rendered HTML. */
+    html: string;
+    /** Repo path of the shown document. */
+    documentPath: string;
+    /** True when a historical version (at `commitId`) is shown. */
+    historical: boolean;
+    /** Commit of the shown historical version. */
+    commitId?: string | null;
+    /** Lists a repository folder; undefined where folders can't be listed. */
+    listFolder: FolderLister | undefined;
 }
 
 /** `html` with its `[[_TOSP_]]` tables showing the shown version's subpages. */
 export function useWikiSubpages(input: WikiSubpagesInput): string {
-  const { html, documentPath, listFolder } = input;
-  const atCommit = subpagesCommit(input.historical, input.commitId);
+    const { html, documentPath, listFolder } = input;
+    const atCommit = subpagesCommit(input.historical, input.commitId);
 
-  const [byVersion, setByVersion] = useState<
-    Partial<Record<string, SubpagesState>>
-  >({});
+    const [byVersion, setByVersion] = useState<Partial<Record<string, SubpagesState>>>({});
 
-  // Read when a listing starts, so a host passing a fresh callback doesn't
-  // re-list.
-  const listFolderRef = useRef(listFolder);
-  // Layout effect: runs before the listing effect below in the same commit.
-  useLayoutEffect(() => {
-    listFolderRef.current = listFolder;
-  });
-
-  const key = `${documentPath}\u0000${atCommit ?? ""}`;
-  const canList = listFolder !== undefined && atCommit !== null;
-
-  const needsListing =
-    canList && hasSubpagesMacro(html) && byVersion[key] === undefined;
-
-  useEffect(() => {
-    if (!needsListing) return;
-    // `canList` rules out a null commit here.
-    const atCommitId = atCommit as string | undefined;
-    void loadWikiSubpages(
-      documentPath,
-      listFolderRef.current!,
-      atCommitId,
-    ).then((subpages) => {
-      setByVersion((prev) => ({
-        ...prev,
-        [key]: subpages ?? "unavailable",
-      }));
+    // Read when a listing starts, so a host passing a fresh callback doesn't
+    // re-list.
+    const listFolderRef = useRef(listFolder);
+    // Layout effect: runs before the listing effect below in the same commit.
+    useLayoutEffect(() => {
+        listFolderRef.current = listFolder;
     });
-  }, [needsListing, documentPath, atCommit, key]);
 
-  const state: SubpagesState = canList
-    ? (byVersion[key] ?? "loading")
-    : "unavailable";
+    const key = `${documentPath}\u0000${atCommit ?? ""}`;
+    const canList = listFolder !== undefined && atCommit !== null;
 
-  return useMemo(() => fillSubpagesMacros(html, state), [html, state]);
+    const needsListing = canList && hasSubpagesMacro(html) && byVersion[key] === undefined;
+
+    useEffect(() => {
+        if (!needsListing) return;
+        // `canList` rules out a null commit here.
+        const atCommitId = atCommit as string | undefined;
+        void loadWikiSubpages(documentPath, listFolderRef.current!, atCommitId).then((subpages) => {
+            setByVersion((prev) => ({
+                ...prev,
+                [key]: subpages ?? "unavailable",
+            }));
+        });
+    }, [needsListing, documentPath, atCommit, key]);
+
+    const state: SubpagesState = canList ? (byVersion[key] ?? "loading") : "unavailable";
+
+    return useMemo(() => fillSubpagesMacros(html, state), [html, state]);
 }

@@ -4,40 +4,40 @@
 // provisioning a collector.
 
 import type {
-  TelemetryContext,
-  TelemetryEvent,
-  TelemetryExceptionInfo,
-  TelemetrySink,
+    TelemetryContext,
+    TelemetryEvent,
+    TelemetryExceptionInfo,
+    TelemetrySink,
 } from "../types";
 import { describeError } from "../errorShape";
 
 export const consoleSink: TelemetrySink = {
-  name: "console",
-  init(context: TelemetryContext) {
-    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
-    console.info("[telemetry] init", context);
-  },
-  setContext(context: TelemetryContext) {
-    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
-    console.debug("[telemetry] context", context);
-  },
-  trackEvent(event: TelemetryEvent, context: TelemetryContext) {
-    // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
-    console.info("[telemetry] event", event.name, {
-      properties: event.properties,
-      measurements: event.measurements,
-      context,
-    });
-  },
-  trackException(info: TelemetryExceptionInfo, context: TelemetryContext) {
-    console.error("[telemetry] exception", {
-      ...describeError(info.error),
-      severity: info.severity,
-      source: info.source,
-      handled: info.handled,
-      properties: info.properties,
-      context,
-    });
-  },
-  flush() {},
+    name: "console",
+    init(context: TelemetryContext) {
+        // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
+        console.info("[telemetry] init", context);
+    },
+    setContext(context: TelemetryContext) {
+        // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
+        console.debug("[telemetry] context", context);
+    },
+    trackEvent(event: TelemetryEvent, context: TelemetryContext) {
+        // eslint-disable-next-line no-console -- this sink exists to print telemetry for local debugging
+        console.info("[telemetry] event", event.name, {
+            properties: event.properties,
+            measurements: event.measurements,
+            context,
+        });
+    },
+    trackException(info: TelemetryExceptionInfo, context: TelemetryContext) {
+        console.error("[telemetry] exception", {
+            ...describeError(info.error),
+            severity: info.severity,
+            source: info.source,
+            handled: info.handled,
+            properties: info.properties,
+            context,
+        });
+    },
+    flush() {},
 };

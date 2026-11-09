@@ -11,39 +11,39 @@
 // Pure geometry lives in `./diffMinimap.helpers`.
 
 import {
-  type ReactElement,
-  type PointerEvent as ReactPointerEvent,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
+    type ReactElement,
+    type PointerEvent as ReactPointerEvent,
+    type RefObject,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
 } from "react";
 
 import {
-  classifyDiffElement,
-  markerFraction,
-  markerInViewport,
-  mergeMarkers,
-  resolveOverlaps,
-  scrollFromThumbDrag,
-  scrollTargetForFraction,
-  thumbMetrics,
-  viewportRange,
-  type DiffMarker,
+    classifyDiffElement,
+    markerFraction,
+    markerInViewport,
+    mergeMarkers,
+    resolveOverlaps,
+    scrollFromThumbDrag,
+    scrollTargetForFraction,
+    thumbMetrics,
+    viewportRange,
+    type DiffMarker,
 } from "./diffMinimap.helpers";
 
 interface DiffMinimapProps {
-  /** The reader's scroll container whose decorated diffs we chart. */
-  scrollRef: RefObject<HTMLElement | null>;
-  /** Bumped when the article HTML / diff decorations change → remeasure. */
-  version: number;
-  /**
-   * Whether to chart the diff ticks. When false the bar is a plain custom
-   * scrollbar (thumb only).
-   */
-  showDiff: boolean;
+    /** The reader's scroll container whose decorated diffs we chart. */
+    scrollRef: RefObject<HTMLElement | null>;
+    /** Bumped when the article HTML / diff decorations change → remeasure. */
+    version: number;
+    /**
+     * Whether to chart the diff ticks. When false the bar is a plain custom
+     * scrollbar (thumb only).
+     */
+    showDiff: boolean;
 }
 
 const MERGE_GAP = 0.012;
@@ -52,251 +52,248 @@ const MARKER_SELECTOR = ".emr-diff-block, .emr-diff-deleted-marker";
 const MIN_THUMB = 28;
 
 const KIND_TITLE: Record<DiffMarker["kind"], string> = {
-  added: "Added",
-  modified: "Edited",
-  deleted: "Removed",
+    added: "Added",
+    modified: "Edited",
+    deleted: "Removed",
 };
 
 interface Metrics {
-  scrollTop: number;
-  clientHeight: number;
-  scrollHeight: number;
+    scrollTop: number;
+    clientHeight: number;
+    scrollHeight: number;
 }
 
 function readMetrics(scroller: HTMLElement): Metrics {
-  return {
-    scrollTop: scroller.scrollTop,
-    clientHeight: scroller.clientHeight,
-    scrollHeight: scroller.scrollHeight,
-  };
+    return {
+        scrollTop: scroller.scrollTop,
+        clientHeight: scroller.clientHeight,
+        scrollHeight: scroller.scrollHeight,
+    };
 }
 
 // eslint-disable-next-line max-lines-per-function -- Diff minimap: change markers, thumb drag and scroll sync act on one scroll container. Geometry lives in diffMinimap.helpers.ts.
 export function DiffMinimap({
-  scrollRef,
-  version,
-  showDiff,
+    scrollRef,
+    version,
+    showDiff,
 }: Readonly<DiffMinimapProps>): ReactElement | null {
-  const [markers, setMarkers] = useState<DiffMarker[]>([]);
+    const [markers, setMarkers] = useState<DiffMarker[]>([]);
 
-  const [metrics, setMetrics] = useState<Metrics>({
-    scrollTop: 0,
-    clientHeight: 0,
-    scrollHeight: 0,
-  });
-
-  const [scrollable, setScrollable] = useState(false);
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  const measure = useCallback(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    const m = readMetrics(scroller);
-    const scRect = scroller.getBoundingClientRect();
-    const raw: DiffMarker[] = [];
-
-    if (showDiff) {
-      scroller.querySelectorAll<HTMLElement>(MARKER_SELECTOR).forEach((el) => {
-        const kind = classifyDiffElement(el);
-        if (!kind) return;
-        const r = el.getBoundingClientRect();
-        const elTop = r.top - scRect.top + scroller.scrollTop;
-        raw.push({ ...markerFraction(elTop, r.height, m.scrollHeight), kind });
-      });
-    }
-
-    setMarkers(resolveOverlaps(mergeMarkers(raw, MERGE_GAP)));
-    setMetrics(m);
-    setScrollable(m.scrollHeight > m.clientHeight + 1);
-  }, [scrollRef, showDiff]);
-
-  const syncScroll = useCallback(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    setMetrics(readMetrics(scroller));
-  }, [scrollRef]);
-
-  // Remeasure whenever the document / diff decorations / toggle change.
-  useLayoutEffect(() => {
-    measure();
-  }, [measure, version]);
-
-  // Follow ArticleView's post-decoration signal, plus scroll + resize.
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    let raf = 0;
-
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(syncScroll);
-    };
-
-    // Coalesce resize / zoom / re-decoration bursts into ONE measure on the next
-    // frame. Measuring synchronously mid-reflow (a zoom fires many resize events
-    // while layout is still settling) reads an inconsistent scrollHeight vs the
-    // element rects, so the ticks jumped around before snapping back; deferring
-    // to a frame reads a settled, self-consistent layout.
-    let measureRaf = 0;
-
-    const scheduleMeasure = () => {
-      cancelAnimationFrame(measureRaf);
-      measureRaf = requestAnimationFrame(measure);
-    };
-
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    const wrap = scroller.querySelector(".emr-article-wrap");
-    wrap?.addEventListener("emr-sections-changed", scheduleMeasure);
-    const ro = new ResizeObserver(scheduleMeasure);
-    ro.observe(scroller);
-    // Browser zoom (Ctrl +/-) reflows the article — changing scrollHeight /
-    // clientHeight — but doesn't always resize the scroller's own box, so the
-    // ResizeObserver can miss it. A window resize fires on every zoom step, so
-    // re-measure there too to keep the tick fractions correct at any zoom.
-    window.addEventListener("resize", scheduleMeasure);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(measureRaf);
-      scroller.removeEventListener("scroll", onScroll);
-      wrap?.removeEventListener("emr-sections-changed", scheduleMeasure);
-      ro.disconnect();
-      window.removeEventListener("resize", scheduleMeasure);
-    };
-  }, [scrollRef, measure, syncScroll]);
-
-  // Teardown for an in-flight thumb drag's document listeners, held in a ref so
-  // an unmount mid-drag can run it even if `pointerup`/`pointercancel` never
-  // fire (otherwise the listeners would leak and keep closing over a stale
-  // scroller).
-  const dragCleanupRef = useRef<(() => void) | null>(null);
-  useEffect(
-    () => () => {
-      dragCleanupRef.current?.();
-      dragCleanupRef.current = null;
-    },
-    [],
-  );
-
-  // The track spans the document's EXACT visible height; the card's top/bottom
-  // margins (plus the ruler's CSS top offset) already inset it to align with the
-  // reading surface, so no extra inset is subtracted here.
-  const rulerH = metrics.clientHeight;
-
-  const thumb = thumbMetrics(metrics.scrollTop, {
-    clientHeight: metrics.clientHeight,
-    scrollHeight: metrics.scrollHeight,
-    trackPx: rulerH,
-    minThumbPx: MIN_THUMB,
-  });
-
-  const viewportFrac = viewportRange(
-    metrics.scrollTop,
-    metrics.clientHeight,
-    metrics.scrollHeight,
-  );
-
-  const jumpTo = (clientY: number) => {
-    const track = trackRef.current;
-    const scroller = scrollRef.current;
-    if (!track || !scroller) return;
-    const rect = track.getBoundingClientRect();
-    const fraction = (clientY - rect.top) / rect.height;
-    scroller.scrollTo({
-      top: scrollTargetForFraction(
-        fraction,
-        scroller.scrollHeight,
-        scroller.clientHeight,
-      ),
-      behavior: "smooth",
+    const [metrics, setMetrics] = useState<Metrics>({
+        scrollTop: 0,
+        clientHeight: 0,
+        scrollHeight: 0,
     });
-  };
 
-  // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
-  const onThumbPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    // Tear down any listeners a previous drag left attached (defensive).
-    dragCleanupRef.current?.();
-    e.preventDefault();
-    e.stopPropagation(); // don't let the track's click-to-page fire
-    const startY = e.clientY;
-    const startScroll = scroller.scrollTop;
-    const ch = scroller.clientHeight;
-    const sh = scroller.scrollHeight;
+    const [scrollable, setScrollable] = useState(false);
+    const trackRef = useRef<HTMLDivElement>(null);
 
-    const onMove = (ev: PointerEvent) => {
-      scroller.scrollTop = scrollFromThumbDrag(
-        startScroll,
-        ev.clientY - startY,
-        {
-          clientHeight: ch,
-          scrollHeight: sh,
-          // The track spans the full visible height now, so trackPx === clientHeight.
-          trackPx: ch,
-          minThumbPx: MIN_THUMB,
+    const measure = useCallback(() => {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        const m = readMetrics(scroller);
+        const scRect = scroller.getBoundingClientRect();
+        const raw: DiffMarker[] = [];
+
+        if (showDiff) {
+            scroller.querySelectorAll<HTMLElement>(MARKER_SELECTOR).forEach((el) => {
+                const kind = classifyDiffElement(el);
+                if (!kind) return;
+                const r = el.getBoundingClientRect();
+                const elTop = r.top - scRect.top + scroller.scrollTop;
+                raw.push({
+                    ...markerFraction(elTop, r.height, m.scrollHeight),
+                    kind,
+                });
+            });
+        }
+
+        setMarkers(resolveOverlaps(mergeMarkers(raw, MERGE_GAP)));
+        setMetrics(m);
+        setScrollable(m.scrollHeight > m.clientHeight + 1);
+    }, [scrollRef, showDiff]);
+
+    const syncScroll = useCallback(() => {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        setMetrics(readMetrics(scroller));
+    }, [scrollRef]);
+
+    // Remeasure whenever the document / diff decorations / toggle change.
+    useLayoutEffect(() => {
+        measure();
+    }, [measure, version]);
+
+    // Follow ArticleView's post-decoration signal, plus scroll + resize.
+    useEffect(() => {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        let raf = 0;
+
+        const onScroll = () => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(syncScroll);
+        };
+
+        // Coalesce resize / zoom / re-decoration bursts into ONE measure on the next
+        // frame. Measuring synchronously mid-reflow (a zoom fires many resize events
+        // while layout is still settling) reads an inconsistent scrollHeight vs the
+        // element rects, so the ticks jumped around before snapping back; deferring
+        // to a frame reads a settled, self-consistent layout.
+        let measureRaf = 0;
+
+        const scheduleMeasure = () => {
+            cancelAnimationFrame(measureRaf);
+            measureRaf = requestAnimationFrame(measure);
+        };
+
+        scroller.addEventListener("scroll", onScroll, { passive: true });
+        const wrap = scroller.querySelector(".emr-article-wrap");
+        wrap?.addEventListener("emr-sections-changed", scheduleMeasure);
+        const ro = new ResizeObserver(scheduleMeasure);
+        ro.observe(scroller);
+        // Browser zoom (Ctrl +/-) reflows the article — changing scrollHeight /
+        // clientHeight — but doesn't always resize the scroller's own box, so the
+        // ResizeObserver can miss it. A window resize fires on every zoom step, so
+        // re-measure there too to keep the tick fractions correct at any zoom.
+        window.addEventListener("resize", scheduleMeasure);
+
+        return () => {
+            cancelAnimationFrame(raf);
+            cancelAnimationFrame(measureRaf);
+            scroller.removeEventListener("scroll", onScroll);
+            wrap?.removeEventListener("emr-sections-changed", scheduleMeasure);
+            ro.disconnect();
+            window.removeEventListener("resize", scheduleMeasure);
+        };
+    }, [scrollRef, measure, syncScroll]);
+
+    // Teardown for an in-flight thumb drag's document listeners, held in a ref so
+    // an unmount mid-drag can run it even if `pointerup`/`pointercancel` never
+    // fire (otherwise the listeners would leak and keep closing over a stale
+    // scroller).
+    const dragCleanupRef = useRef<(() => void) | null>(null);
+    useEffect(
+        () => () => {
+            dragCleanupRef.current?.();
+            dragCleanupRef.current = null;
         },
-      );
+        [],
+    );
+
+    // The track spans the document's EXACT visible height; the card's top/bottom
+    // margins (plus the ruler's CSS top offset) already inset it to align with the
+    // reading surface, so no extra inset is subtracted here.
+    const rulerH = metrics.clientHeight;
+
+    const thumb = thumbMetrics(metrics.scrollTop, {
+        clientHeight: metrics.clientHeight,
+        scrollHeight: metrics.scrollHeight,
+        trackPx: rulerH,
+        minThumbPx: MIN_THUMB,
+    });
+
+    const viewportFrac = viewportRange(
+        metrics.scrollTop,
+        metrics.clientHeight,
+        metrics.scrollHeight,
+    );
+
+    const jumpTo = (clientY: number) => {
+        const track = trackRef.current;
+        const scroller = scrollRef.current;
+        if (!track || !scroller) return;
+        const rect = track.getBoundingClientRect();
+        const fraction = (clientY - rect.top) / rect.height;
+        scroller.scrollTo({
+            top: scrollTargetForFraction(fraction, scroller.scrollHeight, scroller.clientHeight),
+            behavior: "smooth",
+        });
     };
 
-    // End the drag on pointerup OR pointercancel, and expose the teardown via a
-    // ref so an unmount mid-drag can also run it — otherwise these document
-    // listeners would leak and keep closing over a stale scroller.
-    const cleanup = () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", cleanup);
-      document.removeEventListener("pointercancel", cleanup);
-      dragCleanupRef.current = null;
+    // Drag the thumb to scroll — native 1:1 feel via document-level listeners.
+    const onThumbPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        // Tear down any listeners a previous drag left attached (defensive).
+        dragCleanupRef.current?.();
+        e.preventDefault();
+        e.stopPropagation(); // don't let the track's click-to-page fire
+        const startY = e.clientY;
+        const startScroll = scroller.scrollTop;
+        const ch = scroller.clientHeight;
+        const sh = scroller.scrollHeight;
+
+        const onMove = (ev: PointerEvent) => {
+            scroller.scrollTop = scrollFromThumbDrag(startScroll, ev.clientY - startY, {
+                clientHeight: ch,
+                scrollHeight: sh,
+                // The track spans the full visible height now, so trackPx === clientHeight.
+                trackPx: ch,
+                minThumbPx: MIN_THUMB,
+            });
+        };
+
+        // End the drag on pointerup OR pointercancel, and expose the teardown via a
+        // ref so an unmount mid-drag can also run it — otherwise these document
+        // listeners would leak and keep closing over a stale scroller.
+        const cleanup = () => {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", cleanup);
+            document.removeEventListener("pointercancel", cleanup);
+            dragCleanupRef.current = null;
+        };
+
+        dragCleanupRef.current = cleanup;
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", cleanup);
+        document.addEventListener("pointercancel", cleanup);
     };
 
-    dragCleanupRef.current = cleanup;
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", cleanup);
-    document.addEventListener("pointercancel", cleanup);
-  };
+    // The document fits — no scrollbar (native or custom) is needed.
+    if (!scrollable) return null;
 
-  // The document fits — no scrollbar (native or custom) is needed.
-  if (!scrollable) return null;
-
-  return (
-    <div
-      ref={trackRef}
-      className="emr-diff-ruler"
-      style={{ height: `${rulerH}px` }}
-      // A visual scroll aid duplicating the scrollbar; the accessible paths to
-      // content + changes are the document and the outline, so it's AT-hidden.
-      aria-hidden="true"
-      title={
-        showDiff
-          ? "Changes in this document — drag or click to scroll"
-          : "Scroll"
-      }
-      onClick={(e) => jumpTo(e.clientY)}
-    >
-      {/*
+    return (
+        <div
+            ref={trackRef}
+            className="emr-diff-ruler"
+            style={{ height: `${rulerH}px` }}
+            // A visual scroll aid duplicating the scrollbar; the accessible paths to
+            // content + changes are the document and the outline, so it's AT-hidden.
+            aria-hidden="true"
+            title={showDiff ? "Changes in this document — drag or click to scroll" : "Scroll"}
+            onClick={(e) => jumpTo(e.clientY)}
+        >
+            {/*
         The thumb is rendered FIRST so the change ticks paint on TOP of it — a
         tick that fell under the translucent thumb otherwise muddied into an odd
         two-tone blob. Ticks are pointer-events:none, so the thumb underneath
         still receives drags.
       */}
-      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only (keeps a thumb click from paging the track) inside the aria-hidden ruler, a pointer aid whose keyboard equivalent is the scroll container's native scrolling */}
-      <div
-        className="emr-diff-ruler-thumb"
-        style={{ top: `${thumb.topPx}px`, height: `${thumb.heightPx}px` }}
-        onPointerDown={onThumbPointerDown}
-        onClick={(e) => e.stopPropagation()}
-      />
-      {markers.map((m, i) => (
-        <div
-          // eslint-disable-next-line @eslint-react/no-array-index-key -- ticks are stateless, identity-free positions recomputed wholesale on every measure; index keys update nodes in place so the is-active opacity transition survives a re-measure
-          key={i}
-          className={`emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}${
-            markerInViewport(m, viewportFrac) ? " is-active" : ""
-          }`}
-          title={KIND_TITLE[m.kind]}
-          style={{ top: `${m.top * 100}%`, height: `${m.height * 100}%` }}
-        />
-      ))}
-    </div>
-  );
+            {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only (keeps a thumb click from paging the track) inside the aria-hidden ruler, a pointer aid whose keyboard equivalent is the scroll container's native scrolling */}
+            <div
+                className="emr-diff-ruler-thumb"
+                style={{
+                    top: `${thumb.topPx}px`,
+                    height: `${thumb.heightPx}px`,
+                }}
+                onPointerDown={onThumbPointerDown}
+                onClick={(e) => e.stopPropagation()}
+            />
+            {markers.map((m, i) => (
+                <div
+                    // eslint-disable-next-line @eslint-react/no-array-index-key -- ticks are stateless, identity-free positions recomputed wholesale on every measure; index keys update nodes in place so the is-active opacity transition survives a re-measure
+                    key={i}
+                    className={`emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}${
+                        markerInViewport(m, viewportFrac) ? " is-active" : ""
+                    }`}
+                    title={KIND_TITLE[m.kind]}
+                    style={{
+                        top: `${m.top * 100}%`,
+                        height: `${m.height * 100}%`,
+                    }}
+                />
+            ))}
+        </div>
+    );
 }

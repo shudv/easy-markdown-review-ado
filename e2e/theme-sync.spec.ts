@@ -14,57 +14,55 @@ import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
 import {
-  gotoDocumentsHub,
-  hubFrame,
-  isDarkEmrTheme,
-  readEmrTheme,
-  selectRepoInPicker,
-  setAdoTheme,
-  waitForFrameRoot,
+    gotoDocumentsHub,
+    hubFrame,
+    isDarkEmrTheme,
+    readEmrTheme,
+    selectRepoInPicker,
+    setAdoTheme,
+    waitForFrameRoot,
 } from "./helpers";
 
 test.describe("Host theme sync (real ADO host)", () => {
-  test("adapts data-emr-theme when the ADO theme is switched from the menu", async ({
-    page,
-  }) => {
-    await gotoDocumentsHub(page);
-    const frame = hubFrame(page);
-    await waitForFrameRoot(frame);
-    // Make sure a document is actually rendered so the theme has real chrome to
-    // apply to (and the extension has completed its first theme sync).
-    await selectRepoInPicker(page, frame, E2E.repoA);
-    await frame
-      .locator(".markdown-body")
-      .first()
-      .waitFor({ state: "visible", timeout: 45_000 });
+    test("adapts data-emr-theme when the ADO theme is switched from the menu", async ({ page }) => {
+        await gotoDocumentsHub(page);
+        const frame = hubFrame(page);
+        await waitForFrameRoot(frame);
+        // Make sure a document is actually rendered so the theme has real chrome to
+        // apply to (and the extension has completed its first theme sync).
+        await selectRepoInPicker(page, frame, E2E.repoA);
+        await frame
+            .locator(".markdown-body")
+            .first()
+            .waitFor({ state: "visible", timeout: 45_000 });
 
-    // The extension must have mirrored SOME host theme on load.
-    const initial = await readEmrTheme(frame);
-    expect(initial, "extension never wrote data-emr-theme").toBeTruthy();
-    const startedDark = isDarkEmrTheme(initial);
+        // The extension must have mirrored SOME host theme on load.
+        const initial = await readEmrTheme(frame);
+        expect(initial, "extension never wrote data-emr-theme").toBeTruthy();
+        const startedDark = isDarkEmrTheme(initial);
 
-    // Flip the ADO host to the OPPOSITE palette via its own profile menu, then
-    // assert the extension re-mirrors — the data-emr-theme attribute crosses
-    // the dark ↔ light boundary. Polling the attribute lets the SDK's
-    // `themeApplied` event propagate into our sync handler.
-    const target = startedDark ? /^light$/i : /^dark$/i;
-    await setAdoTheme(page, target);
-    await expect
-      .poll(async () => isDarkEmrTheme(await readEmrTheme(frame)), {
-        timeout: 20_000,
-        message: "extension did not adapt to the switched host theme",
-      })
-      .toBe(!startedDark);
+        // Flip the ADO host to the OPPOSITE palette via its own profile menu, then
+        // assert the extension re-mirrors — the data-emr-theme attribute crosses
+        // the dark ↔ light boundary. Polling the attribute lets the SDK's
+        // `themeApplied` event propagate into our sync handler.
+        const target = startedDark ? /^light$/i : /^dark$/i;
+        await setAdoTheme(page, target);
+        await expect
+            .poll(async () => isDarkEmrTheme(await readEmrTheme(frame)), {
+                timeout: 20_000,
+                message: "extension did not adapt to the switched host theme",
+            })
+            .toBe(!startedDark);
 
-    // Switch back to the original palette — the mirror follows again, proving
-    // the sync is live in both directions (not a one-shot on load).
-    const back = startedDark ? /^dark$/i : /^light$/i;
-    await setAdoTheme(page, back);
-    await expect
-      .poll(async () => isDarkEmrTheme(await readEmrTheme(frame)), {
-        timeout: 20_000,
-        message: "extension did not re-adapt when the host theme reverted",
-      })
-      .toBe(startedDark);
-  });
+        // Switch back to the original palette — the mirror follows again, proving
+        // the sync is live in both directions (not a one-shot on load).
+        const back = startedDark ? /^dark$/i : /^light$/i;
+        await setAdoTheme(page, back);
+        await expect
+            .poll(async () => isDarkEmrTheme(await readEmrTheme(frame)), {
+                timeout: 20_000,
+                message: "extension did not re-adapt when the host theme reverted",
+            })
+            .toBe(startedDark);
+    });
 });

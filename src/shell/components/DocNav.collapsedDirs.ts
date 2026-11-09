@@ -10,25 +10,25 @@ import { pathAncestors } from "./DocNav.model";
  * visible after a navigation; persists (and returns a new set) only on change.
  */
 function revealAncestors(
-  curr: Set<string>,
-  selectedPath: string,
-  folderStorageKey: string,
+    curr: Set<string>,
+    selectedPath: string,
+    folderStorageKey: string,
 ): Set<string> {
-  if (!selectedPath) return curr;
-  let changed = false;
-  const next = new Set(curr);
+    if (!selectedPath) return curr;
+    let changed = false;
+    const next = new Set(curr);
 
-  for (const dir of pathAncestors(selectedPath)) {
-    if (next.has(dir)) {
-      next.delete(dir);
-      changed = true;
+    for (const dir of pathAncestors(selectedPath)) {
+        if (next.has(dir)) {
+            next.delete(dir);
+            changed = true;
+        }
     }
-  }
 
-  if (!changed) return curr;
-  writeCollapsedDirs(folderStorageKey, next);
+    if (!changed) return curr;
+    writeCollapsedDirs(folderStorageKey, next);
 
-  return next;
+    return next;
 }
 
 /**
@@ -38,49 +38,42 @@ function revealAncestors(
  * either input changes.
  */
 export function useCollapsedDirs(
-  folderStorageKey: string,
-  selectedPath: string,
+    folderStorageKey: string,
+    selectedPath: string,
 ): { collapsedDirs: Set<string>; toggleDir: (dirPath: string) => void } {
-  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
-    revealAncestors(
-      readCollapsedDirs(folderStorageKey),
-      selectedPath,
-      folderStorageKey,
-    ),
-  );
+    const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
+        revealAncestors(readCollapsedDirs(folderStorageKey), selectedPath, folderStorageKey),
+    );
 
-  const [source, setSource] = useState({
-    folderStorageKey,
-    selectedPath,
-  });
+    const [source, setSource] = useState({
+        folderStorageKey,
+        selectedPath,
+    });
 
-  if (
-    source.folderStorageKey !== folderStorageKey ||
-    source.selectedPath !== selectedPath
-  ) {
-    setSource({ folderStorageKey, selectedPath });
+    if (source.folderStorageKey !== folderStorageKey || source.selectedPath !== selectedPath) {
+        setSource({ folderStorageKey, selectedPath });
 
-    const base =
-      source.folderStorageKey === folderStorageKey
-        ? collapsedDirs
-        : readCollapsedDirs(folderStorageKey);
+        const base =
+            source.folderStorageKey === folderStorageKey
+                ? collapsedDirs
+                : readCollapsedDirs(folderStorageKey);
 
-    setCollapsedDirs(revealAncestors(base, selectedPath, folderStorageKey));
-  }
+        setCollapsedDirs(revealAncestors(base, selectedPath, folderStorageKey));
+    }
 
-  const toggleDir = useCallback(
-    (dirPath: string) => {
-      setCollapsedDirs((curr) => {
-        const next = new Set(curr);
-        if (next.has(dirPath)) next.delete(dirPath);
-        else next.add(dirPath);
-        writeCollapsedDirs(folderStorageKey, next);
+    const toggleDir = useCallback(
+        (dirPath: string) => {
+            setCollapsedDirs((curr) => {
+                const next = new Set(curr);
+                if (next.has(dirPath)) next.delete(dirPath);
+                else next.add(dirPath);
+                writeCollapsedDirs(folderStorageKey, next);
 
-        return next;
-      });
-    },
-    [folderStorageKey],
-  );
+                return next;
+            });
+        },
+        [folderStorageKey],
+    );
 
-  return { collapsedDirs, toggleDir };
+    return { collapsedDirs, toggleDir };
 }

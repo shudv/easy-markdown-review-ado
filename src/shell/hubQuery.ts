@@ -6,11 +6,11 @@
 
 /** Target file parsed from the hub query params. */
 export interface HubTarget {
-  repositoryId: string;
-  repositoryName?: string;
-  project: string;
-  path: string;
-  version?: string;
+    repositoryId: string;
+    repositoryName?: string;
+    project: string;
+    path: string;
+    version?: string;
 }
 
 /**
@@ -20,11 +20,11 @@ export interface HubTarget {
  * hub on its empty state.
  */
 export const HUB_QUERY_KEYS = {
-  repositoryId: "emrRepo",
-  repositoryName: "emrRepoName",
-  project: "emrProj",
-  path: "emrPath",
-  version: "emrVer",
+    repositoryId: "emrRepo",
+    repositoryName: "emrRepoName",
+    project: "emrProj",
+    path: "emrPath",
+    version: "emrVer",
 } as const;
 
 /**
@@ -32,19 +32,17 @@ export const HUB_QUERY_KEYS = {
  * required keys are absent (the direct-navigation / empty-state case). Pure +
  * SDK-free for unit testing.
  */
-export function parseHubQuery(
-  params: Record<string, string>,
-): HubTarget | null {
-  const repositoryId = params[HUB_QUERY_KEYS.repositoryId];
-  const project = params[HUB_QUERY_KEYS.project];
-  const path = params[HUB_QUERY_KEYS.path];
-  if (!repositoryId || !project || !path) return null;
+export function parseHubQuery(params: Record<string, string>): HubTarget | null {
+    const repositoryId = params[HUB_QUERY_KEYS.repositoryId];
+    const project = params[HUB_QUERY_KEYS.project];
+    const path = params[HUB_QUERY_KEYS.path];
+    if (!repositoryId || !project || !path) return null;
 
-  return {
-    repositoryId,
-    repositoryName: params[HUB_QUERY_KEYS.repositoryName] || undefined,
-    project,
-    path,
-    version: params[HUB_QUERY_KEYS.version] || undefined,
-  };
+    return {
+        repositoryId,
+        repositoryName: params[HUB_QUERY_KEYS.repositoryName] || undefined,
+        project,
+        path,
+        version: params[HUB_QUERY_KEYS.version] || undefined,
+    };
 }

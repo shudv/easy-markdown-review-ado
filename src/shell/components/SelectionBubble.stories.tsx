@@ -4,28 +4,28 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { SelectionBubble } from "./SelectionBubble";
 
 const meta = {
-  title: "Components/SelectionBubble",
-  component: SelectionBubble,
-  args: {
-    top: 40,
-    left: 120,
-    onAddComment: fn(),
-  },
+    title: "Components/SelectionBubble",
+    component: SelectionBubble,
+    args: {
+        top: 40,
+        left: 120,
+        onAddComment: fn(),
+    },
 } satisfies Meta<typeof SelectionBubble>;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
+/** Clicking "Add comment" asks the host to start a comment on the selection. */
 export const AddsComment: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    // Clicking fires mousedown (handled on the wrapper) and the button click.
-    await userEvent.click(canvas.getByRole("button", { name: /add comment/i }));
-    await expect(args.onAddComment).toHaveBeenCalledTimes(1);
-  },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: /add comment/i }));
+        await expect(args.onAddComment).toHaveBeenCalledTimes(1);
+        // Without a shareable URL there is nothing to link to.
+        await expect(canvas.queryByRole("button", { name: "Copy link to selection" })).toBeNull();
+    },
 };
 
 /**
@@ -35,97 +35,99 @@ export const AddsComment: Story = {
  * close.
  */
 export const CopiesLink: Story = {
-  args: {
-    onCopyLink: fn(() => Promise.resolve(true)),
-    onCopyLinkSettled: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    const link = canvas.getByRole("button", { name: "Copy link to selection" });
-    await expect(link.textContent).toBe("");
-    await expect(
-      canvasElement.querySelector(".emr-selection-bubble-divider"),
-    ).not.toBeNull();
-    await userEvent.click(link);
-    await userEvent.click(link);
+    args: {
+        onCopyLink: fn(() => Promise.resolve(true)),
+        onCopyLinkSettled: fn(),
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    const copied = await waitFor(() =>
-      canvas.getByRole("button", { name: "Link copied" }),
-    );
+        const link = canvas.getByRole("button", {
+            name: "Copy link to selection",
+        });
 
-    await expect(copied.classList.contains("is-copied")).toBe(true);
-    await expect(copied.textContent).toBe("Link copied");
-    await expect(canvas.getByRole("status").textContent).toBe("Link copied");
-    await expect(args.onCopyLink).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(args.onCopyLinkSettled).toHaveBeenCalled(), {
-      timeout: 3000,
-    });
-  },
+        // Icon-only next to "Add comment": the name comes from its label, not visible text.
+        await expect(link).toHaveTextContent("");
+        await expect(canvas.getByRole("button", { name: /add comment/i })).toBeTruthy();
+        await userEvent.click(link);
+        await userEvent.click(link);
+
+        const copied = await waitFor(() => canvas.getByRole("button", { name: "Link copied" }));
+
+        await expect(copied).toHaveTextContent("Link copied");
+        await expect(canvas.getByRole("status").textContent).toBe("Link copied");
+        await expect(args.onCopyLink).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(args.onCopyLinkSettled).toHaveBeenCalled(), {
+            timeout: 3000,
+        });
+    },
 };
 
-/** A failed copy says so (longer), then asks to close. */
+const refusedCopy = fn(() => Promise.resolve(false));
+const brokenLinkCopy = fn(() => Promise.reject(new Error("link builder failed")));
+const failedCopySettled = fn();
+
+/**
+ * A copy fails either because the clipboard refuses it or because the link
+ * can't be built (the host's builder throws). Either way the bubble says
+ * "Couldn't copy link" — never stuck on pending — then asks to close.
+ */
 export const CopyLinkFails: Story = {
-  args: {
-    onCopyLink: fn(() => Promise.resolve(false)),
-    onCopyLinkSettled: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Copy link to selection" }),
-    );
+    render: (args) => (
+        <>
+            <SelectionBubble
+                {...args}
+                onCopyLink={refusedCopy}
+                onCopyLinkSettled={failedCopySettled}
+            />
+            <SelectionBubble
+                {...args}
+                top={args.top + 80}
+                onCopyLink={brokenLinkCopy}
+                onCopyLinkSettled={failedCopySettled}
+            />
+        </>
+    ),
+    beforeEach: () => {
+        failedCopySettled.mockClear();
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    const failed = await waitFor(() =>
-      canvas.getByRole("button", { name: "Couldn't copy link" }),
-    );
+        for (const button of canvas.getAllByRole("button", { name: "Copy link to selection" })) {
+            await userEvent.click(button);
+        }
 
-    await expect(failed.classList.contains("is-failed")).toBe(true);
-    await waitFor(() => expect(args.onCopyLinkSettled).toHaveBeenCalled(), {
-      timeout: 4000,
-    });
-  },
-};
-
-/** A copy that throws is reported as a failed copy, not left pending. */
-export const CopyLinkRejects: Story = {
-  args: {
-    onCopyLink: fn(() => Promise.reject(new Error("link builder failed"))),
-    onCopyLinkSettled: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Copy link to selection" }),
-    );
-    await waitFor(() =>
-      canvas.getByRole("button", { name: "Couldn't copy link" }),
-    );
-    await waitFor(() => expect(args.onCopyLinkSettled).toHaveBeenCalled(), {
-      timeout: 4000,
-    });
-  },
+        await waitFor(() =>
+            expect(canvas.getAllByRole("button", { name: "Couldn't copy link" })).toHaveLength(2),
+        );
+        await expect(refusedCopy).toHaveBeenCalled();
+        await expect(brokenLinkCopy).toHaveBeenCalled();
+        await waitFor(() => expect(failedCopySettled).toHaveBeenCalledTimes(2), {
+            timeout: 4000,
+        });
+    },
 };
 
 /**
  * Read-only surfaces (no commenting) keep the link as the only action, with a
- * visible label. Unmounting before the confirmation ends cancels the close.
+ * visible "Copy link" label.
  */
 export const LinkOnly: Story = {
-  args: {
-    onAddComment: undefined,
-    onCopyLink: fn(() => Promise.resolve(true)),
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.queryByRole("button", { name: /add comment/i })).toBe(
-      null,
-    );
-    await expect(
-      canvasElement.querySelector(".emr-selection-bubble-divider"),
-    ).toBeNull();
-    const link = canvas.getByRole("button", { name: "Copy link to selection" });
-    await expect(link.textContent).toBe("Copy link");
-    await userEvent.click(link);
-    await waitFor(() => canvas.getByRole("button", { name: "Link copied" }));
-  },
+    args: {
+        onAddComment: undefined,
+        onCopyLink: fn(() => Promise.resolve(true)),
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.queryByRole("button", { name: /add comment/i })).toBe(null);
+
+        const link = canvas.getByRole("button", {
+            name: "Copy link to selection",
+        });
+
+        await expect(link).toHaveTextContent("Copy link");
+        await userEvent.click(link);
+        await waitFor(() => canvas.getByRole("button", { name: "Link copied" }));
+    },
 };

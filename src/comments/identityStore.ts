@@ -16,26 +16,24 @@
 // swaps in when known.
 
 import {
-  createContext,
-  type DependencyList,
-  type RefObject,
-  useCallback,
-  useContext,
-  useLayoutEffect,
-  useSyncExternalStore,
+    createContext,
+    type DependencyList,
+    type RefObject,
+    useCallback,
+    useContext,
+    useLayoutEffect,
+    useSyncExternalStore,
 } from "react";
 
 import { normalizeIdentityGuid } from "./mentions";
 
 export interface IdentityInfo {
-  displayName: string;
-  avatarUrl?: string;
+    displayName: string;
+    avatarUrl?: string;
 }
 
 /** Resolve a batch of ids to identity info. Missing ids may be omitted. */
-export type IdentityResolver = (
-  ids: string[],
-) => Promise<Record<string, IdentityInfo>>;
+export type IdentityResolver = (ids: string[]) => Promise<Record<string, IdentityInfo>>;
 
 // Canonicalize an identity id for use as a store key AND as the value sent to
 // the resolver. ADO surfaces the same person under different id forms — the
@@ -45,122 +43,128 @@ export type IdentityResolver = (
 // receives dashed GUIDs (the vssps identities endpoint 500s on the storage
 // form). Non-GUID ids (dev fixtures like `u-alex`) fall back to a plain
 // lower-cased key.
-const norm = (id: string): string =>
-  normalizeIdentityGuid(id) ?? id.trim().toLowerCase();
+const norm = (id: string): string => normalizeIdentityGuid(id) ?? id.trim().toLowerCase();
 
 export class IdentityStore {
-  private readonly map = new Map<string, IdentityInfo>();
-  private readonly pending = new Set<string>();
-  private readonly queued = new Set<string>();
-  private readonly listeners = new Set<() => void>();
-  private version = 0;
-  private flushScheduled = false;
+    private readonly map = new Map<string, IdentityInfo>();
+    private readonly pending = new Set<string>();
+    private readonly queued = new Set<string>();
+    private readonly listeners = new Set<() => void>();
+    private version = 0;
+    private flushScheduled = false;
 
-  constructor(private readonly resolver?: IdentityResolver) {}
+    constructor(private readonly resolver?: IdentityResolver) {}
 
-  /** Look up an identity by id (case-insensitive), or undefined. */
-  get(id: string): IdentityInfo | undefined {
-    return this.map.get(norm(id));
-  }
+    /** Look up an identity by id (case-insensitive), or undefined. */
+    get(id: string): IdentityInfo | undefined {
+        return this.map.get(norm(id));
+    }
 
-  /** Monotonic counter that changes whenever the map changes. */
-  getVersion = (): number => this.version;
+    /** Monotonic counter that changes whenever the map changes. */
+    getVersion = (): number => this.version;
 
-  /** Subscribe to store changes (for `useSyncExternalStore`). */
-  subscribe = (cb: () => void): (() => void) => {
-    this.listeners.add(cb);
+    /** Subscribe to store changes (for `useSyncExternalStore`). */
+    subscribe = (cb: () => void): (() => void) => {
+        this.listeners.add(cb);
 
-    return () => {
-      this.listeners.delete(cb);
+        return () => {
+            this.listeners.delete(cb);
+        };
     };
-  };
 
-  /**
-   * Add identities we already know (comment authors, @-picker results). Only
-   * fills entries with a non-empty display name and never overwrites an
-   * existing entry, so a richer async result isn't clobbered by a reseed.
-   */
-  seed(
-    entries: Iterable<{ id: string; displayName?: string; avatarUrl?: string }>,
-  ): void {
-    let changed = false;
+    /**
+     * Add identities we already know (comment authors, @-picker results). Only
+     * fills entries with a non-empty display name and never overwrites an
+     * existing entry, so a richer async result isn't clobbered by a reseed.
+     */
+    seed(
+        entries: Iterable<{
+            id: string;
+            displayName?: string;
+            avatarUrl?: string;
+        }>,
+    ): void {
+        let changed = false;
 
-    for (const e of entries) {
-      if (e.displayName === undefined || e.displayName === "") continue;
-      const key = norm(e.id);
-      if (!key || this.map.has(key)) continue;
-      this.map.set(key, {
-        displayName: e.displayName,
-        avatarUrl: e.avatarUrl,
-      });
-      changed = true;
+        for (const e of entries) {
+            if (e.displayName === undefined || e.displayName === "") continue;
+            const key = norm(e.id);
+            if (!key || this.map.has(key)) continue;
+            this.map.set(key, {
+                displayName: e.displayName,
+                avatarUrl: e.avatarUrl,
+            });
+            changed = true;
+        }
+
+        if (changed) this.emit();
     }
 
-    if (changed) this.emit();
-  }
+    /**
+     * Ensure the given ids get resolved. Already-known and in-flight ids are
+     * skipped; the rest are coalesced and resolved in a single batch on the next
+     * microtask. No-op when no resolver was provided (dev/standalone).
+     */
+    ensure(ids: readonly string[]): void {
+        if (!this.resolver) return;
+        let added = false;
 
-  /**
-   * Ensure the given ids get resolved. Already-known and in-flight ids are
-   * skipped; the rest are coalesced and resolved in a single batch on the next
-   * microtask. No-op when no resolver was provided (dev/standalone).
-   */
-  ensure(ids: readonly string[]): void {
-    if (!this.resolver) return;
-    let added = false;
+        for (const raw of ids) {
+            const key = norm(raw);
+            if (!key || this.map.has(key) || this.pending.has(key)) continue;
+            this.queued.add(key);
+            added = true;
+        }
 
-    for (const raw of ids) {
-      const key = norm(raw);
-      if (!key || this.map.has(key) || this.pending.has(key)) continue;
-      this.queued.add(key);
-      added = true;
+        if (added && !this.flushScheduled) {
+            this.flushScheduled = true;
+            queueMicrotask(() => void this.flush());
+        }
     }
 
-    if (added && !this.flushScheduled) {
-      this.flushScheduled = true;
-      queueMicrotask(() => void this.flush());
+    private async flush(): Promise<void> {
+        this.flushScheduled = false;
+        const ids = [...this.queued];
+        this.queued.clear();
+        for (const k of ids) this.pending.add(k);
+
+        try {
+            const resolved = await this.resolver!(ids);
+            let changed = false;
+
+            // Resolved entries come from ADO identity REST responses, so treat them
+            // as possibly missing or partial despite the resolver's declared type.
+            const entries = Object.entries(resolved) as [
+                string,
+                Partial<IdentityInfo> | null | undefined,
+            ][];
+
+            for (const [id, info] of entries) {
+                if (info?.displayName == null || info.displayName === "") {
+                    continue;
+                }
+
+                this.map.set(norm(id), {
+                    displayName: info.displayName,
+                    avatarUrl: info.avatarUrl,
+                });
+                changed = true;
+            }
+
+            if (changed) this.emit();
+        } catch (err) {
+            // Best-effort: a failed lookup just leaves the mention showing its GUID.
+
+            console.warn("[identityStore] resolve failed", err);
+        } finally {
+            for (const k of ids) this.pending.delete(k);
+        }
     }
-  }
 
-  private async flush(): Promise<void> {
-    this.flushScheduled = false;
-    const ids = [...this.queued];
-    this.queued.clear();
-    for (const k of ids) this.pending.add(k);
-
-    try {
-      const resolved = await this.resolver!(ids);
-      let changed = false;
-
-      // Resolved entries come from ADO identity REST responses, so treat them
-      // as possibly missing or partial despite the resolver's declared type.
-      const entries = Object.entries(resolved) as [
-        string,
-        Partial<IdentityInfo> | null | undefined,
-      ][];
-
-      for (const [id, info] of entries) {
-        if (info?.displayName == null || info.displayName === "") continue;
-        this.map.set(norm(id), {
-          displayName: info.displayName,
-          avatarUrl: info.avatarUrl,
-        });
-        changed = true;
-      }
-
-      if (changed) this.emit();
-    } catch (err) {
-      // Best-effort: a failed lookup just leaves the mention showing its GUID.
-
-      console.warn("[identityStore] resolve failed", err);
-    } finally {
-      for (const k of ids) this.pending.delete(k);
+    private emit(): void {
+        this.version++;
+        for (const l of this.listeners) l();
     }
-  }
-
-  private emit(): void {
-    this.version++;
-    for (const l of this.listeners) l();
-  }
 }
 
 /**
@@ -170,7 +174,7 @@ export class IdentityStore {
 export const IdentityStoreContext = createContext<IdentityStore | null>(null);
 
 export function useIdentityStore(): IdentityStore | null {
-  return useContext(IdentityStoreContext);
+    return useContext(IdentityStoreContext);
 }
 
 /**
@@ -181,36 +185,33 @@ export function useIdentityStore(): IdentityStore | null {
  * every render. When known, sets `@Name`, a hover title, and a stable
  * `data-mention-label` marker.
  */
-export function hydrateUserMentions(
-  root: HTMLElement | null,
-  store: IdentityStore | null,
-): void {
-  if (!root || !store) return;
+export function hydrateUserMentions(root: HTMLElement | null, store: IdentityStore | null): void {
+    if (!root || !store) return;
 
-  const pills = root.querySelectorAll<HTMLElement>(
-    'span.emr-mention[data-mention-kind="user"]',
-  );
+    const pills = root.querySelectorAll<HTMLElement>('span.emr-mention[data-mention-kind="user"]');
 
-  const unresolved: string[] = [];
-  pills.forEach((el) => {
-    const id = el.getAttribute("data-mention-id");
-    if (id === null || id === "") return;
-    const info = store.get(id);
+    const unresolved: string[] = [];
+    pills.forEach((el) => {
+        const id = el.getAttribute("data-mention-id");
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: an empty id is never stored (seed and ensure skip empty keys), so it stays unresolved and is never requested either way, candidate for removal
+        if (id === null || id === "") return;
+        const info = store.get(id);
 
-    if (info) {
-      const label = `@${info.displayName}`;
+        if (info) {
+            const label = `@${info.displayName}`;
 
-      // Only touch the DOM when the label actually changed, so we don't thrash.
-      if (el.getAttribute("data-mention-label") !== label) {
-        el.textContent = label;
-        el.setAttribute("data-mention-label", label);
-        el.setAttribute("title", info.displayName);
-      }
-    } else {
-      unresolved.push(id);
-    }
-  });
-  if (unresolved.length > 0) store.ensure(unresolved);
+            // Only touch the DOM when the label actually changed, so we don't thrash.
+            if (el.getAttribute("data-mention-label") !== label) {
+                el.textContent = label;
+                el.setAttribute("data-mention-label", label);
+                el.setAttribute("title", info.displayName);
+            }
+        } else {
+            unresolved.push(id);
+        }
+    });
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: ensure([]) queues nothing and schedules no lookup, so calling it with no unresolved ids changes nothing, candidate for removal
+    if (unresolved.length > 0) store.ensure(unresolved);
 }
 
 /**
@@ -219,15 +220,15 @@ export function hydrateUserMentions(
  * given deps change. Uses `useLayoutEffect` so names are visible before paint.
  */
 export function useUserMentionHydration(
-  ref: RefObject<HTMLElement | null>,
-  deps: DependencyList,
+    ref: RefObject<HTMLElement | null>,
+    deps: DependencyList,
 ): void {
-  const store = useIdentityStore();
-  const version = useIdentityVersion(store);
-  useLayoutEffect(() => {
-    hydrateUserMentions(ref.current, store);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
-  }, [store, version, ...deps]);
+    const store = useIdentityStore();
+    const version = useIdentityVersion(store);
+    useLayoutEffect(() => {
+        hydrateUserMentions(ref.current, store);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- callers pass the deps that re-render the element, and the rule cannot check a spread deps array
+    }, [store, version, ...deps]);
 }
 
 /**
@@ -235,15 +236,14 @@ export function useUserMentionHydration(
  * resolve. Returns the current version (or 0 when there's no store).
  */
 export function useIdentityVersion(store: IdentityStore | null): number {
-  const subscribe = useCallback(
-    (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
-    [store],
-  );
+    const subscribe = useCallback(
+        (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
+        // Stryker disable next-line ArrayDeclaration: the app creates its identity store once (useCommentApiRouting's useState) and never swaps it, so the callback never needs re-creating
+        [store],
+    );
 
-  const getSnapshot = useCallback(
-    () => (store ? store.getVersion() : 0),
-    [store],
-  );
+    // Stryker disable next-line ArrayDeclaration: the app creates its identity store once (useCommentApiRouting's useState) and never swaps it, so the callback never needs re-creating
+    const getSnapshot = useCallback(() => (store ? store.getVersion() : 0), [store]);
 
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

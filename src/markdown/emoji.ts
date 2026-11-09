@@ -15,98 +15,98 @@ import type { Root, Text } from "mdast";
 
 /** Curated GitHub shortcode → emoji map (common review/reaction set). */
 export const EMOJI_SHORTCODES: Readonly<Record<string, string>> = {
-  // Reactions / voting
-  "+1": "👍",
-  thumbsup: "👍",
-  "-1": "👎",
-  thumbsdown: "👎",
-  eyes: "👀",
-  tada: "🎉",
-  rocket: "🚀",
-  fire: "🔥",
-  heart: "❤️",
-  sparkles: "✨",
-  clap: "👏",
-  pray: "🙏",
-  muscle: "💪",
-  ok_hand: "👌",
-  wave: "👋",
-  raised_hands: "🙌",
-  point_up: "☝️",
-  point_right: "👉",
-  // Faces
-  smile: "😄",
-  smiley: "😃",
-  grin: "😁",
-  laughing: "😆",
-  joy: "😂",
-  rofl: "🤣",
-  wink: "😉",
-  blush: "😊",
-  thinking: "🤔",
-  sweat_smile: "😅",
-  sunglasses: "😎",
-  neutral_face: "😐",
-  confused: "😕",
-  cry: "😢",
-  sob: "😭",
-  scream: "😱",
-  angry: "😠",
-  rage: "😡",
-  tired_face: "😫",
-  facepalm: "🤦",
-  shrug: "🤷",
-  // Status / review
-  white_check_mark: "✅",
-  heavy_check_mark: "✔️",
-  x: "❌",
-  warning: "⚠️",
-  no_entry: "⛔",
-  bangbang: "‼️",
-  question: "❓",
-  bulb: "💡",
-  memo: "📝",
-  pencil: "✏️",
-  bug: "🐛",
-  wrench: "🔧",
-  hammer: "🔨",
-  construction: "🚧",
-  lock: "🔒",
-  unlock: "🔓",
-  key: "🔑",
-  zap: "⚡",
-  boom: "💥",
-  hourglass: "⌛",
-  clock: "🕐",
-  hand: "✋",
-  raised_hand: "✋",
-  100: "💯",
-  checkered_flag: "🏁",
-  dart: "🎯",
-  star: "⭐",
-  star2: "🌟",
-  // Misc common
-  coffee: "☕",
-  beer: "🍺",
-  cat: "🐱",
-  dog: "🐶",
-  poop: "💩",
-  ghost: "👻",
-  robot: "🤖",
-  snail: "🐌",
-  turtle: "🐢",
-  snake: "🐍",
-  package: "📦",
-  books: "📚",
-  book: "📖",
-  link: "🔗",
-  mag: "🔍",
-  gear: "⚙️",
-  recycle: "♻️",
-  arrow_up: "⬆️",
-  arrow_down: "⬇️",
-  arrow_right: "➡️",
-  arrow_left: "⬅️",
+    // Reactions / voting
+    "+1": "👍",
+    thumbsup: "👍",
+    "-1": "👎",
+    thumbsdown: "👎",
+    eyes: "👀",
+    tada: "🎉",
+    rocket: "🚀",
+    fire: "🔥",
+    heart: "❤️",
+    sparkles: "✨",
+    clap: "👏",
+    pray: "🙏",
+    muscle: "💪",
+    ok_hand: "👌",
+    wave: "👋",
+    raised_hands: "🙌",
+    point_up: "☝️",
+    point_right: "👉",
+    // Faces
+    smile: "😄",
+    smiley: "😃",
+    grin: "😁",
+    laughing: "😆",
+    joy: "😂",
+    rofl: "🤣",
+    wink: "😉",
+    blush: "😊",
+    thinking: "🤔",
+    sweat_smile: "😅",
+    sunglasses: "😎",
+    neutral_face: "😐",
+    confused: "😕",
+    cry: "😢",
+    sob: "😭",
+    scream: "😱",
+    angry: "😠",
+    rage: "😡",
+    tired_face: "😫",
+    facepalm: "🤦",
+    shrug: "🤷",
+    // Status / review
+    white_check_mark: "✅",
+    heavy_check_mark: "✔️",
+    x: "❌",
+    warning: "⚠️",
+    no_entry: "⛔",
+    bangbang: "‼️",
+    question: "❓",
+    bulb: "💡",
+    memo: "📝",
+    pencil: "✏️",
+    bug: "🐛",
+    wrench: "🔧",
+    hammer: "🔨",
+    construction: "🚧",
+    lock: "🔒",
+    unlock: "🔓",
+    key: "🔑",
+    zap: "⚡",
+    boom: "💥",
+    hourglass: "⌛",
+    clock: "🕐",
+    hand: "✋",
+    raised_hand: "✋",
+    100: "💯",
+    checkered_flag: "🏁",
+    dart: "🎯",
+    star: "⭐",
+    star2: "🌟",
+    // Misc common
+    coffee: "☕",
+    beer: "🍺",
+    cat: "🐱",
+    dog: "🐶",
+    poop: "💩",
+    ghost: "👻",
+    robot: "🤖",
+    snail: "🐌",
+    turtle: "🐢",
+    snake: "🐍",
+    package: "📦",
+    books: "📚",
+    book: "📖",
+    link: "🔗",
+    mag: "🔍",
+    gear: "⚙️",
+    recycle: "♻️",
+    arrow_up: "⬆️",
+    arrow_down: "⬇️",
+    arrow_right: "➡️",
+    arrow_left: "⬅️",
 };
 
 // A shortcode is `:` + name + `:`. Names are letters, digits, `_`, `+`, `-`.
@@ -116,18 +116,16 @@ const SHORTCODE_RE = /:([\w+-]{1,40}):/g;
 
 // A Map, not the object: `:constructor:` or `:__proto__:` must not resolve to
 // an Object.prototype member.
-const SHORTCODE_LOOKUP: ReadonlyMap<string, string> = new Map(
-  Object.entries(EMOJI_SHORTCODES),
-);
+const SHORTCODE_LOOKUP: ReadonlyMap<string, string> = new Map(Object.entries(EMOJI_SHORTCODES));
 
 /** Replace known `:shortcode:` runs in a string; unknown codes pass through. */
 export function replaceEmojiShortcodes(text: string): string {
-  if (text.indexOf(":") === -1) return text;
+    if (text.indexOf(":") === -1) return text;
 
-  return text.replace(
-    SHORTCODE_RE,
-    (whole, name: string) => SHORTCODE_LOOKUP.get(name.toLowerCase()) ?? whole,
-  );
+    return text.replace(
+        SHORTCODE_RE,
+        (whole, name: string) => SHORTCODE_LOOKUP.get(name.toLowerCase()) ?? whole,
+    );
 }
 
 /**
@@ -135,8 +133,8 @@ export function replaceEmojiShortcodes(text: string): string {
  * (fenced + inline) automatically since those are not `text` nodes.
  */
 export const remarkEmoji: Plugin<[], Root> = () => (tree) => {
-  visit(tree, "text", (node: Text) => {
-    const next = replaceEmojiShortcodes(node.value);
-    if (next !== node.value) node.value = next;
-  });
+    visit(tree, "text", (node: Text) => {
+        const next = replaceEmojiShortcodes(node.value);
+        if (next !== node.value) node.value = next;
+    });
 };

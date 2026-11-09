@@ -9,31 +9,29 @@
 // bounding box across them.
 
 export interface HighlightOptions {
-  className: string;
-  /** Stable identifier the caller uses to look up these spans later. */
-  threadId: string;
-  /**
-   * Per-thread highlight color override (CSS `background-color`). When omitted
-   * we rely on the CSS rule attached to `className`.
-   */
-  background?: string;
+    className: string;
+    /** Stable identifier the caller uses to look up these spans later. */
+    threadId: string;
+    /**
+     * Per-thread highlight color override (CSS `background-color`). When omitted
+     * we rely on the CSS rule attached to `className`.
+     */
+    background?: string;
 }
 
-export function wrapRangeWithHighlight(
-  range: Range,
-  opts: HighlightOptions,
-): HTMLSpanElement[] {
-  return wrapRangeTextNodes(range, () => {
-    const span = document.createElement("span");
-    span.className = opts.className;
-    span.dataset.threadId = opts.threadId;
+export function wrapRangeWithHighlight(range: Range, opts: HighlightOptions): HTMLSpanElement[] {
+    return wrapRangeTextNodes(range, () => {
+        const span = document.createElement("span");
+        span.className = opts.className;
+        span.dataset.threadId = opts.threadId;
 
-    if (opts.background !== undefined && opts.background !== "") {
-      span.style.backgroundColor = opts.background;
-    }
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: assigning an empty or undefined background-color is ignored by the style declaration, so the guard only skips a no-op, candidate for removal
+        if (opts.background !== undefined && opts.background !== "") {
+            span.style.backgroundColor = opts.background;
+        }
 
-    return span;
-  });
+        return span;
+    });
 }
 
 /**
@@ -42,105 +40,114 @@ export function wrapRangeWithHighlight(
  * diff content) that should stay unwrapped. Returns the wrappers created.
  */
 export function wrapRangeTextNodes<T extends HTMLElement>(
-  range: Range,
-  createWrapper: () => T,
-  include: (node: Text) => boolean = () => true,
+    range: Range,
+    createWrapper: () => T,
+    include: (node: Text) => boolean = () => true,
 ): T[] {
-  // Snapshot the text nodes covered by the range BEFORE we mutate, otherwise
-  // our splits invalidate the iterator.
-  const fragments = collectTextFragments(range).filter((frag) =>
-    include(frag.node),
-  );
+    // Snapshot the text nodes covered by the range BEFORE we mutate, otherwise
+    // our splits invalidate the iterator.
+    const fragments = collectTextFragments(range).filter((frag) => include(frag.node));
 
-  const spans: T[] = [];
+    const spans: T[] = [];
 
-  for (const frag of fragments) {
-    const span = createWrapper();
-    // Wrap this fragment: split the text node so [start, end] is its own node,
-    // then replace.
-    let node = frag.node;
+    for (const frag of fragments) {
+        const span = createWrapper();
+        // Wrap this fragment: split the text node so [start, end] is its own node,
+        // then replace.
+        let node = frag.node;
 
-    if (frag.end < node.data.length) {
-      node.splitText(frag.end);
+        // Stryker disable ConditionalExpression,EqualityOperator: splitting at a text node's very start or end only leaves an extra empty text node beside the wrapper, which renders and reads identically
+        if (frag.end < node.data.length) {
+            node.splitText(frag.end);
+        }
+
+        if (frag.start > 0) {
+            node = node.splitText(frag.start);
+        }
+
+        // Stryker restore ConditionalExpression,EqualityOperator
+        node.parentNode!.replaceChild(span, node);
+        span.appendChild(node);
+        spans.push(span);
     }
 
-    if (frag.start > 0) {
-      node = node.splitText(frag.start);
-    }
-
-    node.parentNode!.replaceChild(span, node);
-    span.appendChild(node);
-    spans.push(span);
-  }
-
-  return spans;
+    return spans;
 }
 
 interface TextFragment {
-  node: Text;
-  start: number;
-  end: number;
+    node: Text;
+    start: number;
+    end: number;
 }
 
 function collectTextFragments(range: Range): TextFragment[] {
-  const out: TextFragment[] = [];
-  const root = range.commonAncestorContainer;
+    const out: TextFragment[] = [];
+    const root = range.commonAncestorContainer;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(n) {
-      // Skip text nodes outside the range.
-      const r = document.createRange();
-      r.selectNodeContents(n);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(n) {
+            // Skip text nodes outside the range.
+            const r = document.createRange();
+            r.selectNodeContents(n);
 
-      if (range.compareBoundaryPoints(Range.END_TO_START, r) >= 0) {
-        return NodeFilter.FILTER_REJECT;
-      }
+            // Stryker disable next-line EqualityOperator: a range starting exactly at this node's end has the node as its start container, so the fragment is empty and dropped below anyway
+            if (range.compareBoundaryPoints(Range.END_TO_START, r) >= 0) {
+                return NodeFilter.FILTER_REJECT;
+            }
 
-      if (range.compareBoundaryPoints(Range.START_TO_END, r) <= 0) {
-        return NodeFilter.FILTER_REJECT;
-      }
+            // Stryker disable next-line EqualityOperator: a range ending exactly at this node's start has the node as its end container, so the fragment is empty and dropped below anyway
+            if (range.compareBoundaryPoints(Range.START_TO_END, r) <= 0) {
+                return NodeFilter.FILTER_REJECT;
+            }
 
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
 
-  // For a TreeWalker rooted at the common ancestor, if the ancestor itself is
-  // a Text node we need to handle it directly (walker starts past it). A range
-  // whose common ancestor is a text node lies wholly within it, so both
-  // boundaries are offsets into this very node.
-  if (root.nodeType === Node.TEXT_NODE) {
-    const tn = root as Text;
+    // For a TreeWalker rooted at the common ancestor, if the ancestor itself is
+    // a Text node we need to handle it directly (walker starts past it). A range
+    // whose common ancestor is a text node lies wholly within it, so both
+    // boundaries are offsets into this very node.
+    if (root.nodeType === Node.TEXT_NODE) {
+        const tn = root as Text;
 
-    if (
-      range.endOffset > range.startOffset &&
-      tn.data.slice(range.startOffset, range.endOffset).trim() !== ""
-    ) {
-      out.push({ node: tn, start: range.startOffset, end: range.endOffset });
+        if (
+            // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: an empty slice is blank, so the whitespace check on the next line already drops it, candidate for removal
+            range.endOffset > range.startOffset &&
+            tn.data.slice(range.startOffset, range.endOffset).trim() !== ""
+        ) {
+            out.push({
+                node: tn,
+                start: range.startOffset,
+                end: range.endOffset,
+            });
+        }
+
+        return out;
+    }
+
+    let n: Node | null = walker.nextNode();
+
+    while (n) {
+        const tn = n as Text;
+        const start = range.startContainer === tn ? range.startOffset : 0;
+
+        const end = range.endContainer === tn ? range.endOffset : tn.data.length;
+
+        // Skip whitespace-only fragments. These are the `\n` / indentation text
+        // nodes that live BETWEEN block elements (e.g. between `<tr>`/`<td>` in a
+        // table, or between paragraphs). Wrapping them produces stray yellow
+        // slivers and — worse — injects a `<span>` as a direct child of `<tr>` /
+        // `<table>`, which is invalid HTML the browser reflows, visibly breaking
+        // table/code layout on large multi-block selections. Highlighting pure
+        // whitespace conveys nothing, so we simply don't.
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: an empty slice is blank, so the whitespace check alone already drops it, candidate for removal
+        if (end > start && tn.data.slice(start, end).trim() !== "") {
+            out.push({ node: tn, start, end });
+        }
+
+        n = walker.nextNode();
     }
 
     return out;
-  }
-
-  let n: Node | null = walker.nextNode();
-
-  while (n) {
-    const tn = n as Text;
-    const start = range.startContainer === tn ? range.startOffset : 0;
-    const end = range.endContainer === tn ? range.endOffset : tn.data.length;
-
-    // Skip whitespace-only fragments. These are the `\n` / indentation text
-    // nodes that live BETWEEN block elements (e.g. between `<tr>`/`<td>` in a
-    // table, or between paragraphs). Wrapping them produces stray yellow
-    // slivers and — worse — injects a `<span>` as a direct child of `<tr>` /
-    // `<table>`, which is invalid HTML the browser reflows, visibly breaking
-    // table/code layout on large multi-block selections. Highlighting pure
-    // whitespace conveys nothing, so we simply don't.
-    if (end > start && tn.data.slice(start, end).trim() !== "") {
-      out.push({ node: tn, start, end });
-    }
-
-    n = walker.nextNode();
-  }
-
-  return out;
 }

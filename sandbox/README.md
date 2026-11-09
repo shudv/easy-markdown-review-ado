@@ -57,9 +57,9 @@ folder alongside its `overlay`:
 
 ```jsonc
 {
-  "branch": "feature/reword-guide",
-  "overlay": "reword-guide", // pushed to the feature branch (source tip S)
-  "advanceTarget": "advance-main", // committed to main AFTER the fork (target tip T)
+    "branch": "feature/reword-guide",
+    "overlay": "reword-guide", // pushed to the feature branch (source tip S)
+    "advanceTarget": "advance-main", // committed to main AFTER the fork (target tip T)
 }
 ```
 

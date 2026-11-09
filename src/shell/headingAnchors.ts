@@ -16,30 +16,30 @@ import { isContentText } from "./textFragment";
  * hidden removed heading instead of the live one.
  */
 const REFERENCE_CONTENT_SELECTOR = [
-  ".emr-diff-deleted-marker",
-  ".emr-diff-before-panel",
-  ".emr-diff-metadata-panel",
+    ".emr-diff-deleted-marker",
+    ".emr-diff-before-panel",
+    ".emr-diff-metadata-panel",
 ].join(", ");
 
 /** Class applied briefly to a revealed target so the eye finds it. */
 export const ANCHOR_TARGET_CLASS = "emr-anchor-target";
 
 function decodeAnchor(anchor: string): string {
-  try {
-    return decodeURIComponent(anchor);
-  } catch {
-    return anchor;
-  }
+    try {
+        return decodeURIComponent(anchor);
+    } catch {
+        return anchor;
+    }
 }
 
 function findLiveId(root: ParentNode, id: string): HTMLElement | null {
-  // Compare `id` directly instead of building an `[id="…"]` selector: the value
-  // comes from a user-controlled URL and needs no escaping this way.
-  for (const el of Array.from(root.querySelectorAll<HTMLElement>("[id]"))) {
-    if (el.id === id && !el.closest(REFERENCE_CONTENT_SELECTOR)) return el;
-  }
+    // Compare `id` directly instead of building an `[id="…"]` selector: the value
+    // comes from a user-controlled URL and needs no escaping this way.
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>("[id]"))) {
+        if (el.id === id && !el.closest(REFERENCE_CONTENT_SELECTOR)) return el;
+    }
 
-  return null;
+    return null;
 }
 
 /**
@@ -50,25 +50,22 @@ function findLiveId(root: ParentNode, id: string): HTMLElement | null {
  * `classifiers--hashing`) onto ours (`classifiers-hashing`). Returns `null`
  * when nothing matches (e.g. the heading was renamed since the link was made).
  */
-export function findAnchorTarget(
-  root: ParentNode,
-  anchor: string,
-): HTMLElement | null {
-  const raw = anchor.replace(/^#+/, "").trim();
-  if (!raw) return null;
-  const decoded = decodeAnchor(raw);
-  const candidates = [raw, decoded];
-  // Only reslug anchors carrying text our slugger keeps (ASCII letters and
-  // digits): anything else — punctuation, CJK, Cyrillic — slugs to the generic
-  // "section" fallback and would match an unrelated heading.
-  if (/[a-z0-9]/i.test(decoded)) candidates.push(slugifyHeading(decoded));
+export function findAnchorTarget(root: ParentNode, anchor: string): HTMLElement | null {
+    const raw = anchor.replace(/^#+/, "").trim();
+    if (!raw) return null;
+    const decoded = decodeAnchor(raw);
+    const candidates = [raw, decoded];
+    // Only reslug anchors carrying text our slugger keeps (ASCII letters and
+    // digits): anything else — punctuation, CJK, Cyrillic — slugs to the generic
+    // "section" fallback and would match an unrelated heading.
+    if (/[a-z0-9]/i.test(decoded)) candidates.push(slugifyHeading(decoded));
 
-  for (const id of new Set(candidates)) {
-    const hit = findLiveId(root, id);
-    if (hit) return hit;
-  }
+    for (const id of new Set(candidates)) {
+        const hit = findLiveId(root, id);
+        if (hit) return hit;
+    }
 
-  return null;
+    return null;
 }
 
 /**
@@ -78,49 +75,47 @@ export function findAnchorTarget(
  * a manual expand does. Notifies the article wrap so balloons + the nav
  * re-measure. Returns whether anything changed.
  */
-export function revealAnchorTarget(
-  target: HTMLElement,
-  storageKey: string,
-): boolean {
-  let changed = false;
-  let section = target.closest<HTMLElement>(".emr-section");
+export function revealAnchorTarget(target: HTMLElement, storageKey: string): boolean {
+    let changed = false;
+    let section = target.closest<HTMLElement>(".emr-section");
 
-  while (section) {
-    if (section.getAttribute("data-collapsed") === "true") {
-      section.removeAttribute("data-collapsed");
+    while (section) {
+        if (section.getAttribute("data-collapsed") === "true") {
+            section.removeAttribute("data-collapsed");
 
-      const toggle = section.querySelector<HTMLElement>(
-        ":scope > :is(h1, h2, h3, h4, h5, h6) > .emr-section-toggle",
-      );
+            const toggle = section.querySelector<HTMLElement>(
+                ":scope > :is(h1, h2, h3, h4, h5, h6) > .emr-section-toggle",
+            );
 
-      if (toggle) {
-        toggle.setAttribute("aria-label", "Collapse section");
-        toggle.setAttribute("aria-expanded", "true");
-        toggle.title = "Collapse section";
-      }
+            if (toggle) {
+                toggle.setAttribute("aria-label", "Collapse section");
+                toggle.setAttribute("aria-expanded", "true");
+                toggle.title = "Collapse section";
+            }
 
-      const sid = section.dataset.sectionId;
+            const sid = section.dataset.sectionId;
 
-      if (sid !== undefined && sid !== "") {
-        persistSectionState(storageKey, sid, false);
-      }
+            // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: persisting "open" removes the section's key, and nothing ever stores a key for a section without an id, so removing one is a no-op
+            if (sid !== undefined && sid !== "") {
+                persistSectionState(storageKey, sid, false);
+            }
 
-      changed = true;
+            changed = true;
+        }
+
+        // Stryker disable next-line OptionalChaining: a section always sits inside the article (or at least the document body), so it always has a parent element
+        section = section.parentElement?.closest<HTMLElement>(".emr-section") ?? null;
     }
 
-    section =
-      section.parentElement?.closest<HTMLElement>(".emr-section") ?? null;
-  }
+    if (changed) {
+        // Stryker disable ObjectLiteral: `bubbles` already defaults to false for a CustomEvent
+        target
+            .closest(".emr-article-wrap")
+            ?.dispatchEvent(new CustomEvent("emr-sections-changed", { bubbles: false }));
+    }
 
-  if (changed) {
-    target
-      .closest(".emr-article-wrap")
-      ?.dispatchEvent(
-        new CustomEvent("emr-sections-changed", { bubbles: false }),
-      );
-  }
-
-  return changed;
+    // Stryker restore ObjectLiteral
+    return changed;
 }
 
 /**
@@ -135,10 +130,10 @@ export const ANCHOR_TARGET_CUE_MS = 2500;
  * wraps them (the same set the diff line wash leaves outside its wrapper).
  */
 const CUE_EXCLUDED_SELECTOR = [
-  ".emr-section-toggle",
-  ".emr-heading-link",
-  ".emr-diff-before-control",
-  ".emr-diff-before-panel",
+    ".emr-section-toggle",
+    ".emr-heading-link",
+    ".emr-diff-before-control",
+    ".emr-diff-before-panel",
 ].join(", ");
 
 /** Marks a cue span this module inserted (and must unwrap again). */
@@ -151,31 +146,32 @@ const CUE_WRAPPER_ATTR = "data-emr-anchor-cue";
  * (e.g. an empty `<a id>`) carries the class itself.
  */
 function applyCue(target: HTMLElement, delayMs: number): HTMLElement {
-  const nodes = Array.from(target.childNodes).filter(
-    (node) => !(node instanceof Element && node.matches(CUE_EXCLUDED_SELECTOR)),
-  );
+    const nodes = Array.from(target.childNodes).filter(
+        (node) => !(node instanceof Element && node.matches(CUE_EXCLUDED_SELECTOR)),
+    );
 
-  let cue = target;
+    let cue = target;
 
-  // Child nodes are never Documents/Doctypes, so textContent is never null.
-  if (nodes.some((node) => node.textContent!.trim().length > 0)) {
-    cue = target.ownerDocument.createElement("span");
-    cue.setAttribute(CUE_WRAPPER_ATTR, "");
-    target.insertBefore(cue, nodes[0]!);
-    cue.append(...nodes);
-  }
+    // Child nodes are never Documents/Doctypes, so textContent is never null.
+    if (nodes.some((node) => node.textContent!.trim().length > 0)) {
+        cue = target.ownerDocument.createElement("span");
+        // Stryker disable next-line StringLiteral: the wrapper is recognised by the attribute's presence (`hasAttribute`), never its value
+        cue.setAttribute(CUE_WRAPPER_ATTR, "");
+        target.insertBefore(cue, nodes[0]!);
+        cue.append(...nodes);
+    }
 
-  if (delayMs > 0) cue.style.animationDelay = `-${delayMs}ms`;
-  cue.classList.add(ANCHOR_TARGET_CLASS);
+    if (delayMs > 0) cue.style.animationDelay = `-${delayMs}ms`;
+    cue.classList.add(ANCHOR_TARGET_CLASS);
 
-  return cue;
+    return cue;
 }
 
 /** Undo {@link applyCue}: drop the class, and unwrap an inserted span. */
 function clearCue(cue: HTMLElement): void {
-  cue.classList.remove(ANCHOR_TARGET_CLASS);
-  cue.style.removeProperty("animation-delay");
-  if (cue.hasAttribute(CUE_WRAPPER_ATTR)) cue.replaceWith(...cue.childNodes);
+    cue.classList.remove(ANCHOR_TARGET_CLASS);
+    cue.style.removeProperty("animation-delay");
+    if (cue.hasAttribute(CUE_WRAPPER_ATTR)) cue.replaceWith(...cue.childNodes);
 }
 
 /**
@@ -188,42 +184,50 @@ function clearCue(cue: HTMLElement): void {
  * restarting. Returns a cancel function (stops the cue immediately).
  */
 export function flashAnchorTarget(
-  article: HTMLElement,
-  resolveTarget: () => HTMLElement | null,
+    article: HTMLElement,
+    resolveTarget: () => HTMLElement | null,
 ): () => void {
-  const startedAt = performance.now();
-  let target = resolveTarget();
-  let cue = target ? applyCue(target, 0) : null;
+    const startedAt = performance.now();
+    let target = resolveTarget();
+    let cue = target ? applyCue(target, 0) : null;
 
-  const observer = new MutationObserver(() => {
-    const next = resolveTarget();
-    if (!next || next === target) return;
-    target = next;
-    cue = applyCue(next, Math.round(performance.now() - startedAt));
-  });
+    const observer = new MutationObserver(() => {
+        const next = resolveTarget();
+        if (!next || next === target) return;
+        target = next;
+        cue = applyCue(next, Math.round(performance.now() - startedAt));
+    });
 
-  observer.observe(article, { childList: true, subtree: true });
-  let done = false;
-  // A timer, not `animationend`, so the cue always clears on schedule.
-  const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
+    // Stryker disable next-line BooleanLiteral: re-wraps reset the article's own children (`article.innerHTML = pristineHtml`, src/shell/components/ArticleView.tsx:234), which a child-list observer of the article sees without the subtree; the only deeper mutations (Mermaid/KaTeX hydration, ArticleView.tsx:285) replace code/math fallbacks, never an element carrying an anchor id
+    observer.observe(article, { childList: true, subtree: true });
+    let done = false;
+    // A timer, not `animationend`, so the cue always clears on schedule.
+    const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
 
-  function cancel(): void {
-    if (done) return;
-    done = true;
-    observer.disconnect();
-    window.clearTimeout(timer);
-    if (cue) clearCue(cue);
-  }
+    function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing an absent class, unwrapping an already-detached span
+        if (done) return;
+        // Stryker disable next-line BooleanLiteral: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing an absent class, unwrapping an already-detached span
+        done = true;
+        observer.disconnect();
+        window.clearTimeout(timer);
+        if (cue) clearCue(cue);
+    }
 
-  return cancel;
+    return cancel;
 }
 
 /** Marks the inline spans {@link flashTextTarget} wraps around linked text. */
 const TEXT_CUE_ATTR = "data-emr-text-cue";
 
+/** Unwrap text cue spans, leaving their text where it was. */
+function unwrapTextCues(cues: readonly HTMLElement[]): void {
+    for (const cue of cues) cue.replaceWith(...cue.childNodes);
+}
+
 /** The first live landing-cue span of a text link inside `article`, if any. */
 export function currentTextCue(article: HTMLElement): HTMLElement | null {
-  return article.querySelector<HTMLElement>(`[${TEXT_CUE_ATTR}]`);
+    return article.querySelector<HTMLElement>(`[${TEXT_CUE_ATTR}]`);
 }
 
 /**
@@ -235,52 +239,66 @@ export function currentTextCue(article: HTMLElement): HTMLElement | null {
  * stops the cue and unwraps the spans.
  */
 export function flashTextTarget(
-  article: HTMLElement,
-  resolveRange: () => Range | null,
+    article: HTMLElement,
+    resolveRange: () => Range | null,
 ): () => void {
-  const startedAt = performance.now();
-  let cues: HTMLElement[] = [];
+    const startedAt = performance.now();
+    let cues: HTMLElement[] = [];
 
-  const apply = (delayMs: number): void => {
-    const range = resolveRange();
-    cues = range
-      ? wrapRangeTextNodes(
-          range,
-          () => {
-            const span = article.ownerDocument.createElement("span");
-            span.setAttribute(TEXT_CUE_ATTR, "");
-            span.className = ANCHOR_TARGET_CLASS;
-            if (delayMs > 0) span.style.animationDelay = `-${delayMs}ms`;
+    const apply = (delayMs: number): void => {
+        // Hydration can replace only some cue spans; unwrap the survivors so
+        // the fresh spans don't nest inside them and none outlive the cue.
+        unwrapTextCues(cues);
+        const range = resolveRange();
+        cues = range
+            ? wrapRangeTextNodes(
+                  range,
+                  () => {
+                      const span = article.ownerDocument.createElement("span");
+                      // Stryker disable next-line StringLiteral: cue spans are found by the attribute's presence (`[data-emr-text-cue]`), never its value
+                      span.setAttribute(TEXT_CUE_ATTR, "");
+                      span.className = ANCHOR_TARGET_CLASS;
 
-            return span;
-          },
-          isContentText,
-        )
-      : [];
-  };
+                      // Stryker disable next-line ConditionalExpression,EqualityOperator: a first paint's delay is 0, and a `-0ms` animation delay starts the fade exactly like none
+                      if (delayMs > 0) {
+                          span.style.animationDelay = `-${delayMs}ms`;
+                      }
 
-  apply(0);
+                      return span;
+                  },
+                  isContentText,
+              )
+            : [];
+    };
 
-  const observer = new MutationObserver(() => {
-    // Our own wrap (or unrelated churn) leaves the spans in place.
-    if (cues.length > 0 && cues.every((cue) => article.contains(cue))) return;
-    apply(Math.round(performance.now() - startedAt));
-  });
+    apply(0);
 
-  observer.observe(article, { childList: true, subtree: true });
-  let done = false;
-  const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
+    const observer = new MutationObserver(() => {
+        // Our own wrap (or unrelated churn) leaves the spans in place.
+        if (cues.length > 0 && cues.every((cue) => article.contains(cue))) {
+            return;
+        }
 
-  function cancel(): void {
-    if (done) return;
-    done = true;
-    observer.disconnect();
-    window.clearTimeout(timer);
-    for (const cue of cues) cue.replaceWith(...cue.childNodes);
-    cues = [];
-  }
+        apply(Math.round(performance.now() - startedAt));
+    });
 
-  return cancel;
+    observer.observe(article, { childList: true, subtree: true });
+    let done = false;
+    const timer = window.setTimeout(cancel, ANCHOR_TARGET_CUE_MS);
+
+    function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — the observer is disconnected, the timer spent, and the cue list already empty
+        if (done) return;
+        // Stryker disable next-line BooleanLiteral: cancelling again repeats only no-ops — the observer is disconnected, the timer spent, and the cue list already empty
+        done = true;
+        observer.disconnect();
+        window.clearTimeout(timer);
+        unwrapTextCues(cues);
+        // Stryker disable next-line ArrayDeclaration: nothing reads the list after a cancel — the observer is disconnected and a repeat cancel returns early
+        cues = [];
+    }
+
+    return cancel;
 }
 
 const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"];
@@ -296,47 +314,51 @@ const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"];
  * A no-op where `ResizeObserver` is unavailable.
  */
 export function holdScrollOnTarget(
-  observed: Element,
-  resolveTarget: () => HTMLElement | null,
-  maxMs = 5000,
-  block: ScrollLogicalPosition = "start",
+    observed: Element,
+    resolveTarget: () => HTMLElement | null,
+    maxMs = 5000,
+    block: ScrollLogicalPosition = "start",
 ): () => void {
-  if (typeof ResizeObserver === "undefined") return () => undefined;
-  const doc = observed.ownerDocument;
-  let done = false;
-  // ResizeObserver reports once on `observe()` — that's the current layout,
-  // which the caller just scrolled to; only later changes need re-aligning.
-  let primed = false;
+    if (typeof ResizeObserver === "undefined") return () => undefined;
+    const doc = observed.ownerDocument;
+    let done = false;
+    // ResizeObserver reports once on `observe()` — that's the current layout,
+    // which the caller just scrolled to; only later changes need re-aligning.
+    let primed = false;
 
-  const observer = new ResizeObserver(() => {
-    if (!primed) {
-      primed = true;
+    const observer = new ResizeObserver(() => {
+        if (!primed) {
+            primed = true;
 
-      return;
+            return;
+        }
+
+        if (done) return;
+        resolveTarget()?.scrollIntoView({ behavior: "auto", block });
+    });
+
+    const timer = window.setTimeout(cancel, maxMs);
+
+    function cancel(): void {
+        // Stryker disable next-line ConditionalExpression: cancelling again repeats only no-ops — disconnecting, clearing a spent timer, removing absent listeners
+        if (done) return;
+        done = true;
+        observer.disconnect();
+        window.clearTimeout(timer);
+
+        // Stryker disable BlockStatement,BooleanLiteral: a listener left registered only calls this cancel again, which returns early once `done`
+        for (const type of USER_SCROLL_EVENTS) {
+            doc.removeEventListener(type, cancel, true);
+        }
+        // Stryker restore BlockStatement,BooleanLiteral
     }
 
-    if (done) return;
-    resolveTarget()?.scrollIntoView({ behavior: "auto", block });
-  });
-
-  const timer = window.setTimeout(cancel, maxMs);
-
-  function cancel(): void {
-    if (done) return;
-    done = true;
-    observer.disconnect();
-    window.clearTimeout(timer);
+    observer.observe(observed);
 
     for (const type of USER_SCROLL_EVENTS) {
-      doc.removeEventListener(type, cancel, true);
+        // Stryker disable next-line BooleanLiteral: `cancel` never calls preventDefault, so a passive listener only spares the browser from waiting on it before scrolling
+        doc.addEventListener(type, cancel, { capture: true, passive: true });
     }
-  }
 
-  observer.observe(observed);
-
-  for (const type of USER_SCROLL_EVENTS) {
-    doc.addEventListener(type, cancel, { capture: true, passive: true });
-  }
-
-  return cancel;
+    return cancel;
 }

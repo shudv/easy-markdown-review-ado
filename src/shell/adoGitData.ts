@@ -9,12 +9,12 @@
 
 import * as SDK from "azure-devops-extension-sdk";
 import {
-  GitVersionOptions,
-  GitVersionType,
-  PullRequestStatus,
-  type GitPullRequest,
-  type GitRepository,
-  type GitRestClient,
+    GitVersionOptions,
+    GitVersionType,
+    PullRequestStatus,
+    type GitPullRequest,
+    type GitRepository,
+    type GitRestClient,
 } from "azure-devops-extension-api/Git";
 
 import type { CommentThread, FileInfo } from "../types";
@@ -24,26 +24,22 @@ import { withRetry } from "./retry";
 import type { DocPrRef } from "./shellHelpers";
 import type { DocRepo, FolderListing } from "./types";
 import {
-  createAlmSearchClient,
-  outcomeFromError,
-  type AlmSearchClient,
-  type CodeSearchResponse,
-  type FileSearchOutcome,
+    createAlmSearchClient,
+    outcomeFromError,
+    type AlmSearchClient,
+    type CodeSearchResponse,
+    type FileSearchOutcome,
 } from "./almSearch";
 import {
-  buildPrUrl,
-  escapeSearchQuery,
-  normalizePath,
-  normalizeRepoFilter,
-  repoSkeleton,
-  type GitScope,
+    buildPrUrl,
+    escapeSearchQuery,
+    normalizePath,
+    normalizeRepoFilter,
+    repoSkeleton,
+    type GitScope,
 } from "./adoGitData.helpers";
 import { listMarkdownLevel, type ListedRepo } from "./adoFolderListing.helpers";
-import {
-  docPrHistory,
-  mostRecentRoutingPr,
-  routingPrForDoc,
-} from "./adoPrRouting.helpers";
+import { docPrHistory, mostRecentRoutingPr, routingPrForDoc } from "./adoPrRouting.helpers";
 import { sharedGitClient } from "./adoClients";
 
 // Re-export `buildPrUrl` (the one helper external callers reach for through
@@ -52,7 +48,7 @@ export { buildPrUrl };
 
 /** Injected-client reads in `project`, through the page's shared Git client. */
 function gitScope(projectId: string): GitScope<GitRestClient> {
-  return { git: sharedGitClient, projectId };
+    return { git: sharedGitClient, projectId };
 }
 
 // ---------------------------------------------------------------------------
@@ -63,10 +59,10 @@ function gitScope(projectId: string): GitScope<GitRestClient> {
  * Enumerate EVERY repository in a project. The non-paged `getRepositories`
 /** One page of the project's repos, plus the token to fetch the next page. */
 export interface RepoPage {
-  repos: DocRepo[];
-  rawRepoById: Map<string, GitRepository>;
-  /** Pass to the next `fetchRepoPage` call; `null` when this is the last page. */
-  continuationToken: string | null;
+    repos: DocRepo[];
+    rawRepoById: Map<string, GitRepository>;
+    /** Pass to the next `fetchRepoPage` call; `null` when this is the last page. */
+    continuationToken: string | null;
 }
 
 /**
@@ -79,50 +75,50 @@ export interface RepoPage {
  * keyword.
  */
 export async function fetchRepoPage(
-  projectId: string,
-  opts: {
-    /** Case-insensitive substring match on the repo name (ADO `filterContains`). */
-    filter?: string;
-    /** Continuation token from a prior page; omit for the first page. */
-    continuationToken?: string;
-    /** Page size (ADO caps at 500). Defaults to 50 for snappy scroll loads. */
-    top?: number;
-  } = {},
+    projectId: string,
+    opts: {
+        /** Case-insensitive substring match on the repo name (ADO `filterContains`). */
+        filter?: string;
+        /** Continuation token from a prior page; omit for the first page. */
+        continuationToken?: string;
+        /** Page size (ADO caps at 500). Defaults to 50 for snappy scroll loads. */
+        top?: number;
+    } = {},
 ): Promise<RepoPage> {
-  const gitClient = sharedGitClient();
-  const filter = normalizeRepoFilter(opts.filter);
+    const gitClient = sharedGitClient();
+    const filter = normalizeRepoFilter(opts.filter);
 
-  const batch = await withRetry(
-    () =>
-      gitClient.getRepositoriesPaged(
-        projectId,
-        /* includeLinks */ false,
-        /* includeAllUrls */ false,
-        /* includeHidden */ false,
-        /* filterContains */ filter,
-        /* top */ opts.top ?? 50,
-        opts.continuationToken,
-      ),
-    { mode: "read", label: "fetchRepoPage.getRepositoriesPaged" },
-  );
+    const batch = await withRetry(
+        () =>
+            gitClient.getRepositoriesPaged(
+                projectId,
+                /* includeLinks */ false,
+                /* includeAllUrls */ false,
+                /* includeHidden */ false,
+                /* filterContains */ filter,
+                /* top */ opts.top ?? 50,
+                opts.continuationToken,
+            ),
+        { mode: "read", label: "fetchRepoPage.getRepositoriesPaged" },
+    );
 
-  const active = batch.filter((r) => !r.isDisabled);
-  const rawRepoById = new Map<string, GitRepository>();
-  const repos: DocRepo[] = [];
+    const active = batch.filter((r) => !r.isDisabled);
+    const rawRepoById = new Map<string, GitRepository>();
+    const repos: DocRepo[] = [];
 
-  for (const r of active) {
-    rawRepoById.set(r.id, r);
-    repos.push(repoSkeleton(r));
-  }
+    for (const r of active) {
+        rawRepoById.set(r.id, r);
+        repos.push(repoSkeleton(r));
+    }
 
-  // Normalize an absent token to `null`: `RepoPage.continuationToken` and the
-  // picker callers use `null` as the "last page" sentinel (`token !== null`),
-  // so leaking `undefined` would keep `hasMore` enabled and reload page one.
-  return {
-    repos,
-    rawRepoById,
-    continuationToken: batch.continuationToken ?? null,
-  };
+    // Normalize an absent token to `null`: `RepoPage.continuationToken` and the
+    // picker callers use `null` as the "last page" sentinel (`token !== null`),
+    // so leaking `undefined` would keep `hasMore` enabled and reload page one.
+    return {
+        repos,
+        rawRepoById,
+        continuationToken: batch.continuationToken ?? null,
+    };
 }
 
 /**
@@ -132,32 +128,32 @@ export async function fetchRepoPage(
  * paging through the whole list. Returns `null` if the repo can't be loaded.
  */
 export async function fetchRepoById(
-  projectId: string,
-  repoId: string,
+    projectId: string,
+    repoId: string,
 ): Promise<{ repo: DocRepo; raw: GitRepository } | null> {
-  const gitClient = sharedGitClient();
+    const gitClient = sharedGitClient();
 
-  try {
-    // The REST client hands back the parsed body as-is, which can be empty.
-    const raw = await withRetry<GitRepository | null | undefined>(
-      () => gitClient.getRepository(repoId, projectId),
-      { mode: "read", label: "fetchRepoById.getRepository" },
-    );
+    try {
+        // The REST client hands back the parsed body as-is, which can be empty.
+        const raw = await withRetry<GitRepository | null | undefined>(
+            () => gitClient.getRepository(repoId, projectId),
+            { mode: "read", label: "fetchRepoById.getRepository" },
+        );
 
-    if (!raw || raw.isDisabled) return null;
+        if (!raw || raw.isDisabled) return null;
 
-    return { repo: repoSkeleton(raw), raw };
-  } catch (err) {
-    console.warn(`[documents-hub] fetchRepoById failed for ${repoId}:`, err);
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.discovery",
-      operation: "linked-repository-load",
-      impact: "degraded",
-    });
+        return { repo: repoSkeleton(raw), raw };
+    } catch (err) {
+        console.warn(`[documents-hub] fetchRepoById failed for ${repoId}:`, err);
+        trackUserFacingError({
+            error: err,
+            source: "DocumentsHubApp.discovery",
+            operation: "linked-repository-load",
+            impact: "degraded",
+        });
 
-    return null;
-  }
+        return null;
+    }
 }
 
 /**
@@ -167,12 +163,12 @@ export async function fetchRepoById(
  * `DocRepo.recentPr` shape plus the raw PR (for the `prByRepo` map).
  */
 export async function loadRepoPrRouting(
-  rawRepo: GitRepository,
-  projectId: string,
+    rawRepo: GitRepository,
+    projectId: string,
 ): Promise<{ recentPr: DocRepo["recentPr"]; pr: GitPullRequest | null }> {
-  const pr = await mostRecentRoutingPr(gitScope(projectId), rawRepo);
+    const pr = await mostRecentRoutingPr(gitScope(projectId), rawRepo);
 
-  return { recentPr: prMetaFromGitPr(rawRepo, pr), pr };
+    return { recentPr: prMetaFromGitPr(rawRepo, pr), pr };
 }
 
 /**
@@ -181,52 +177,48 @@ export async function loadRepoPrRouting(
  * return a best-effort partial result so the UI doesn't stick on loading.
  */
 export async function refreshRepoDiscovery(
-  rawRepo: GitRepository,
-  projectId: string,
+    rawRepo: GitRepository,
+    projectId: string,
 ): Promise<{
-  files: FileInfo[];
-  topLevelFolders: string[];
-  /** The root folder's wiki `.order` page names, when it has one. */
-  rootOrder?: string[];
-  recentPr: DocRepo["recentPr"];
-  pr: GitPullRequest | null;
+    files: FileInfo[];
+    topLevelFolders: string[];
+    /** The root folder's wiki `.order` page names, when it has one. */
+    rootOrder?: string[];
+    recentPr: DocRepo["recentPr"];
+    pr: GitPullRequest | null;
 }> {
-  const [rootResult, routingResult] = await Promise.allSettled([
-    listMarkdownRoot(rawRepo, projectId),
-    loadRepoPrRouting(rawRepo, projectId),
-  ]);
+    const [rootResult, routingResult] = await Promise.allSettled([
+        listMarkdownRoot(rawRepo, projectId),
+        loadRepoPrRouting(rawRepo, projectId),
+    ]);
 
-  const root: FolderListing =
-    rootResult.status === "fulfilled"
-      ? rootResult.value
-      : { files: [], folders: [] };
+    const root: FolderListing =
+        rootResult.status === "fulfilled" ? rootResult.value : { files: [], folders: [] };
 
-  const routing =
-    routingResult.status === "fulfilled"
-      ? routingResult.value
-      : { recentPr: null, pr: null };
+    const routing =
+        routingResult.status === "fulfilled" ? routingResult.value : { recentPr: null, pr: null };
 
-  if (rootResult.status === "rejected") {
-    console.warn(
-      `[documents-hub] refresh root listing failed for ${rawRepo.name}:`,
-      rootResult.reason,
-    );
-  }
+    if (rootResult.status === "rejected") {
+        console.warn(
+            `[documents-hub] refresh root listing failed for ${rawRepo.name}:`,
+            rootResult.reason,
+        );
+    }
 
-  if (routingResult.status === "rejected") {
-    console.warn(
-      `[documents-hub] refresh PR routing failed for ${rawRepo.name}:`,
-      routingResult.reason,
-    );
-  }
+    if (routingResult.status === "rejected") {
+        console.warn(
+            `[documents-hub] refresh PR routing failed for ${rawRepo.name}:`,
+            routingResult.reason,
+        );
+    }
 
-  return {
-    files: root.files,
-    topLevelFolders: root.folders,
-    rootOrder: root.order,
-    recentPr: routing.recentPr,
-    pr: routing.pr,
-  };
+    return {
+        files: root.files,
+        topLevelFolders: root.folders,
+        rootOrder: root.order,
+        recentPr: routing.recentPr,
+        pr: routing.pr,
+    };
 }
 
 /**
@@ -236,32 +228,26 @@ export async function refreshRepoDiscovery(
  */
 /** A REST `GitPullRequest`: ADO omits `title` / `createdBy` on some payloads. */
 type GitPullRequestWire = Omit<GitPullRequest, "title" | "createdBy"> &
-  Partial<Pick<GitPullRequest, "title" | "createdBy">>;
+    Partial<Pick<GitPullRequest, "title" | "createdBy">>;
 
-function prMetaFromGitPr(
-  repo: GitRepository,
-  pr: GitPullRequestWire | null,
-): DocRepo["recentPr"] {
-  if (!pr) return null;
+function prMetaFromGitPr(repo: GitRepository, pr: GitPullRequestWire | null): DocRepo["recentPr"] {
+    if (!pr) return null;
 
-  return {
-    id: pr.pullRequestId,
-    title: pr.title ?? "(untitled PR)",
-    author: pr.createdBy?.displayName ?? "unknown",
-    status: pr.status === PullRequestStatus.Completed ? "completed" : "active",
-    url: buildPrUrl(repo, pr.pullRequestId),
-  };
+    return {
+        id: pr.pullRequestId,
+        title: pr.title ?? "(untitled PR)",
+        author: pr.createdBy?.displayName ?? "unknown",
+        status: pr.status === PullRequestStatus.Completed ? "completed" : "active",
+        url: buildPrUrl(repo, pr.pullRequestId),
+    };
 }
 
 /**
  * OneLevel listing of the repo's root folder: immediate `.md` files +
  * immediate subfolder paths. The DocNav renders subfolders as expandable rows.
  */
-async function listMarkdownRoot(
-  repo: GitRepository,
-  projectId: string,
-): Promise<FolderListing> {
-  return listMarkdownLevel(gitScope(projectId), repo, "/");
+async function listMarkdownRoot(repo: GitRepository, projectId: string): Promise<FolderListing> {
+    return listMarkdownLevel(gitScope(projectId), repo, "/");
 }
 
 /**
@@ -270,13 +256,13 @@ async function listMarkdownRoot(
  * `path` so the DocNav can render a fresh layer of expandable rows.
  */
 export async function listFolderMarkdown(
-  repo: DocRepo,
-  projectId: string,
-  path: string,
+    repo: DocRepo,
+    projectId: string,
+    path: string,
 ): Promise<FolderListing> {
-  if (!repo.defaultBranch) return { files: [], folders: [] };
+    if (!repo.defaultBranch) return { files: [], folders: [] };
 
-  return listMarkdownLevel(gitScope(projectId), repoStub(repo), path);
+    return listMarkdownLevel(gitScope(projectId), repoStub(repo), path);
 }
 
 /**
@@ -287,27 +273,25 @@ export async function listFolderMarkdown(
  * says subpages are unavailable rather than claiming there are none.
  */
 export async function listSubpageFolder(
-  repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
-  projectId: string,
-  path: string,
-  atCommitId?: string,
+    repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
+    projectId: string,
+    path: string,
+    atCommitId?: string,
 ): Promise<FolderListing> {
-  return listMarkdownLevel(gitScope(projectId), repoStub(repo), path, {
-    atCommitId,
-    missingOk: true,
-    propagate: true,
-  });
+    return listMarkdownLevel(gitScope(projectId), repoStub(repo), path, {
+        atCommitId,
+        missingOk: true,
+        propagate: true,
+    });
 }
 
 /** The minimum repository shape `listMarkdownLevel` needs, from a DocRepo. */
-function repoStub(
-  repo: Pick<DocRepo, "id" | "name" | "defaultBranch">,
-): ListedRepo {
-  return {
-    id: repo.id,
-    name: repo.name,
-    defaultBranch: `refs/heads/${repo.defaultBranch}`,
-  };
+function repoStub(repo: Pick<DocRepo, "id" | "name" | "defaultBranch">): ListedRepo {
+    return {
+        id: repo.id,
+        name: repo.name,
+        defaultBranch: `refs/heads/${repo.defaultBranch}`,
+    };
 }
 
 /**
@@ -316,11 +300,11 @@ function repoStub(
  * repo's most recent completed PR. See {@link routingPrForDoc}.
  */
 export function findRoutingPrForDoc(
-  repo: GitRepository,
-  projectId: string,
-  docPath: string,
+    repo: GitRepository,
+    projectId: string,
+    docPath: string,
 ): Promise<GitPullRequest | null> {
-  return routingPrForDoc(gitScope(projectId), repo, docPath);
+    return routingPrForDoc(gitScope(projectId), repo, docPath);
 }
 
 /**
@@ -329,12 +313,12 @@ export function findRoutingPrForDoc(
  * {@link docPrHistory}.
  */
 export function loadDocPrHistory(
-  repo: GitRepository,
-  projectId: string,
-  docPath: string,
-  opts: { top?: number; skip?: number } = {},
+    repo: GitRepository,
+    projectId: string,
+    docPath: string,
+    opts: { top?: number; skip?: number } = {},
 ): Promise<DocPrRef[]> {
-  return docPrHistory(gitScope(projectId), repo, docPath, opts);
+    return docPrHistory(gitScope(projectId), repo, docPath, opts);
 }
 
 /**
@@ -349,31 +333,31 @@ export function loadDocPrHistory(
  * success-then-failure, so one token dead window reported 45 times.
  */
 export async function loadThreadsForRoutedPr(
-  repoId: string,
-  projectId: string,
-  pullRequestId: number,
-  docPath: string,
+    repoId: string,
+    projectId: string,
+    pullRequestId: number,
+    docPath: string,
 ): Promise<CommentThread[]> {
-  const wanted = normalizePath(docPath).toLowerCase();
+    const wanted = normalizePath(docPath).toLowerCase();
 
-  const raw = await readPrThreads(
-    repoId,
-    pullRequestId,
-    projectId,
-    "loadThreadsForRoutedPr.getThreads",
-  );
+    const raw = await readPrThreads(
+        repoId,
+        pullRequestId,
+        projectId,
+        "loadThreadsForRoutedPr.getThreads",
+    );
 
-  const out: CommentThread[] = [];
+    const out: CommentThread[] = [];
 
-  for (const t of raw) {
-    const local = adoThreadToLocal(t);
+    for (const t of raw) {
+        const local = adoThreadToLocal(t);
 
-    if (local && normalizePath(local.filePath).toLowerCase() === wanted) {
-      out.push(local);
+        if (local && normalizePath(local.filePath).toLowerCase() === wanted) {
+            out.push(local);
+        }
     }
-  }
 
-  return out;
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,47 +369,47 @@ export async function loadThreadsForRoutedPr(
  * Used when the user navigates to a doc in the in-context reader.
  */
 export async function fetchRepoFileContent(
-  repo: DocRepo,
-  projectId: string,
-  path: string,
-  atCommitId?: string,
+    repo: DocRepo,
+    projectId: string,
+    path: string,
+    atCommitId?: string,
 ): Promise<string> {
-  const gitClient = sharedGitClient();
+    const gitClient = sharedGitClient();
 
-  // Default: the live tip of the default branch (today's document). When a
-  // commit id is supplied (the comment-history stepper viewing the document as
-  // it was at a PR's merge commit), pin the read to that immutable commit.
-  const versionDescriptor =
-    atCommitId !== undefined && atCommitId !== ""
-      ? {
-          version: atCommitId,
-          versionType: GitVersionType.Commit,
-          versionOptions: GitVersionOptions.None,
-        }
-      : {
-          version: repo.defaultBranch,
-          versionType: GitVersionType.Branch,
-          versionOptions: GitVersionOptions.None,
-        };
+    // Default: the live tip of the default branch (today's document). When a
+    // commit id is supplied (the comment-history stepper viewing the document as
+    // it was at a PR's merge commit), pin the read to that immutable commit.
+    const versionDescriptor =
+        atCommitId !== undefined && atCommitId !== ""
+            ? {
+                  version: atCommitId,
+                  versionType: GitVersionType.Commit,
+                  versionOptions: GitVersionOptions.None,
+              }
+            : {
+                  version: repo.defaultBranch,
+                  versionType: GitVersionType.Branch,
+                  versionOptions: GitVersionOptions.None,
+              };
 
-  const ab = await withRetry(
-    () =>
-      gitClient.getItemContent(
-        repo.id,
-        path,
-        projectId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        versionDescriptor,
-        true,
-      ),
-    { mode: "read", label: "fetchRepoFileContent.getItemContent" },
-  );
+    const ab = await withRetry(
+        () =>
+            gitClient.getItemContent(
+                repo.id,
+                path,
+                projectId,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                versionDescriptor,
+                true,
+            ),
+        { mode: "read", label: "fetchRepoFileContent.getItemContent" },
+    );
 
-  return new TextDecoder("utf-8").decode(new Uint8Array(ab));
+    return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
 // ---------------------------------------------------------------------------
@@ -440,10 +424,10 @@ export async function fetchRepoFileContent(
 // ---------------------------------------------------------------------------
 
 interface CodeSearchHit {
-  path?: string;
-  fileName?: string;
-  repository?: { name?: string };
-  project?: { name?: string };
+    path?: string;
+    fileName?: string;
+    repository?: { name?: string };
+    project?: { name?: string };
 }
 
 // Module-scoped client cache. Holding one keeps the `source` / availability
@@ -452,30 +436,30 @@ let _almClient: AlmSearchClient | null = null;
 let _almUnavailable: { reason: string; message?: string } | null = null;
 
 function getOrCreateAlmClient(): AlmSearchClient | null {
-  if (_almClient) return _almClient;
-  if (_almUnavailable) return null;
-  const orgName = getOrgName();
+    if (_almClient) return _almClient;
+    if (_almUnavailable) return null;
+    const orgName = getOrgName();
 
-  if (orgName === undefined) {
-    _almUnavailable = { reason: "no-config", message: "no host name" };
+    if (orgName === undefined) {
+        _almUnavailable = { reason: "no-config", message: "no host name" };
 
-    return null;
-  }
+        return null;
+    }
 
-  const result = createAlmSearchClient({
-    orgName,
-    getToken: () => SDK.getAccessToken(),
-  });
+    const result = createAlmSearchClient({
+        orgName,
+        getToken: () => SDK.getAccessToken(),
+    });
 
-  if (!result.ok) {
-    _almUnavailable = { reason: result.reason, message: result.message };
+    if (!result.ok) {
+        _almUnavailable = { reason: result.reason, message: result.message };
 
-    return null;
-  }
+        return null;
+    }
 
-  _almClient = result.client;
+    _almClient = result.client;
 
-  return _almClient;
+    return _almClient;
 }
 
 /**
@@ -485,74 +469,74 @@ function getOrCreateAlmClient(): AlmSearchClient | null {
  * `{ kind: "unavailable", reason, message? }` so the DocNav can hint inline.
  */
 export async function searchRepoFiles(
-  repo: DocRepo,
-  projectName: string,
-  query: string,
-  signal?: AbortSignal,
+    repo: DocRepo,
+    projectName: string,
+    query: string,
+    signal?: AbortSignal,
 ): Promise<FileSearchOutcome> {
-  const trimmed = query.trim();
-  // Below two chars the local filter is faster, and ALM Search 400s on very
-  // short queries.
-  if (trimmed.length < 2) return { kind: "ok", files: [] };
+    const trimmed = query.trim();
+    // Below two chars the local filter is faster, and ALM Search 400s on very
+    // short queries.
+    if (trimmed.length < 2) return { kind: "ok", files: [] };
 
-  const client = getOrCreateAlmClient();
+    const client = getOrCreateAlmClient();
 
-  if (!client) {
-    return {
-      kind: "unavailable",
-      reason: "no-config",
-      message: _almUnavailable?.message ?? "unavailable",
-    };
-  }
+    if (!client) {
+        return {
+            kind: "unavailable",
+            reason: "no-config",
+            message: _almUnavailable?.message ?? "unavailable",
+        };
+    }
 
-  // `file:` + wildcards so "deploy" matches "deployment.md",
-  // "auto-deploy.md", "runbooks/deploy.md". `ext:md` cuts the result set to
-  // markdown server-side.
-  const searchText = `file:*${escapeSearchQuery(trimmed)}* ext:md`;
+    // `file:` + wildcards so "deploy" matches "deployment.md",
+    // "auto-deploy.md", "runbooks/deploy.md". `ext:md` cuts the result set to
+    // markdown server-side.
+    const searchText = `file:*${escapeSearchQuery(trimmed)}* ext:md`;
 
-  let json: CodeSearchResponse;
+    let json: CodeSearchResponse;
 
-  try {
-    json = await client.searchCode(
-      {
-        searchText,
-        $top: 25,
-        $skip: 0,
-        filters: {
-          Project: [projectName],
-          Repository: [repo.name],
-          Branch: [repo.defaultBranch],
-        },
-        $orderBy: [{ field: "filename", sortOrder: "ASC" }],
-        includeFacets: false,
-      },
-      projectName,
-      signal,
-    );
-  } catch (err) {
-    console.warn("[documents-hub] code search failed:", err);
+    try {
+        json = await client.searchCode(
+            {
+                searchText,
+                $top: 25,
+                $skip: 0,
+                filters: {
+                    Project: [projectName],
+                    Repository: [repo.name],
+                    Branch: [repo.defaultBranch],
+                },
+                $orderBy: [{ field: "filename", sortOrder: "ASC" }],
+                includeFacets: false,
+            },
+            projectName,
+            signal,
+        );
+    } catch (err) {
+        console.warn("[documents-hub] code search failed:", err);
 
-    return outcomeFromError(err);
-  }
+        return outcomeFromError(err);
+    }
 
-  const out: FileInfo[] = [];
-  const seen = new Set<string>();
+    const out: FileInfo[] = [];
+    const seen = new Set<string>();
 
-  for (const hit of (json.results ?? []) as CodeSearchHit[]) {
-    const path = hit.path ?? "";
-    if (!path) continue;
-    if (!path.toLowerCase().endsWith(".md")) continue;
-    if (seen.has(path)) continue;
-    seen.add(path);
-    out.push({
-      path,
-      changeType: "modified",
-      linesAdded: 0,
-      linesDeleted: 0,
-    });
-  }
+    for (const hit of (json.results ?? []) as CodeSearchHit[]) {
+        const path = hit.path ?? "";
+        if (!path) continue;
+        if (!path.toLowerCase().endsWith(".md")) continue;
+        if (seen.has(path)) continue;
+        seen.add(path);
+        out.push({
+            path,
+            changeType: "modified",
+            linesAdded: 0,
+            linesDeleted: 0,
+        });
+    }
 
-  return { kind: "ok", files: out };
+    return { kind: "ok", files: out };
 }
 
 /**
@@ -560,15 +544,15 @@ export async function searchRepoFiles(
  * the ADO iframe (tests, dev preview), short-circuiting search to `no-config`.
  */
 function getOrgName(): string | undefined {
-  try {
-    // `getHost` throws (caught below) before `init`; once ready it returns the
-    // handshake's host context. A blank name counts as "no org".
-    const name = SDK.getHost().name;
+    try {
+        // `getHost` throws (caught below) before `init`; once ready it returns the
+        // handshake's host context. A blank name counts as "no org".
+        const name = SDK.getHost().name;
 
-    return name === "" ? undefined : name;
-  } catch {
-    return undefined;
-  }
+        return name === "" ? undefined : name;
+    } catch {
+        return undefined;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -589,50 +573,55 @@ const _avatarObjectUrls = new Map<string, Promise<string | undefined>>();
  * wrap the bytes in an object URL the `<img>` can render. Returns `undefined`
  * on any failure so `Avatar` falls back to initials.
  */
-export function resolveAdoAvatarObjectUrl(
-  url: string,
-): Promise<string | undefined> {
-  const cached = _avatarObjectUrls.get(url);
-  if (cached) return cached;
+export function resolveAdoAvatarObjectUrl(url: string): Promise<string | undefined> {
+    const cached = _avatarObjectUrls.get(url);
+    if (cached) return cached;
 
-  const pending = (async () => {
-    try {
-      const res = await withRetry(
-        async () => {
-          // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
-          // host round-trip, but the host caches the minted token, so a retry
-          // heals only a true transient auth race — not the `ado_exp` dead window.
-          // Avatars just degrade when auth can't complete.
-          const token = await SDK.getAccessToken();
+    const pending = (async () => {
+        try {
+            const res = await withRetry(
+                async () => {
+                    // Re-acquire the token per attempt. `SDK.getAccessToken()` is a fresh
+                    // host round-trip, but the host caches the minted token, so a retry
+                    // heals only a true transient auth race — not the `ado_exp` dead window.
+                    // Avatars just degrade when auth can't complete.
+                    const token = await SDK.getAccessToken();
 
-          const r = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}`, Accept: "image/*" },
-          });
+                    const r = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            Accept: "image/*",
+                        },
+                    });
 
-          if (!r.ok) {
-            throw Object.assign(new Error(`avatar HTTP ${r.status}`), {
-              status: r.status,
-              headers: r.headers,
-            });
-          }
+                    if (!r.ok) {
+                        throw Object.assign(new Error(`avatar HTTP ${r.status}`), {
+                            status: r.status,
+                            headers: r.headers,
+                        });
+                    }
 
-          return r;
-        },
-        { mode: "read", attempts: 2, label: "resolveAdoAvatarObjectUrl.fetch" },
-      );
+                    return r;
+                },
+                {
+                    mode: "read",
+                    attempts: 2,
+                    label: "resolveAdoAvatarObjectUrl.fetch",
+                },
+            );
 
-      if (!res.ok) return undefined;
-      const blob = await res.blob();
+            if (!res.ok) return undefined;
+            const blob = await res.blob();
 
-      return URL.createObjectURL(blob);
-    } catch {
-      return undefined;
-    }
-  })();
+            return URL.createObjectURL(blob);
+        } catch {
+            return undefined;
+        }
+    })();
 
-  _avatarObjectUrls.set(url, pending);
+    _avatarObjectUrls.set(url, pending);
 
-  return pending;
+    return pending;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,40 +634,40 @@ export function resolveAdoAvatarObjectUrl(
  * "no active PR" banner in that case).
  */
 export async function loadThreadsForRepo(
-  repoId: string,
-  projectId: string,
-  prByRepo: Record<string, GitPullRequest | undefined>,
+    repoId: string,
+    projectId: string,
+    prByRepo: Record<string, GitPullRequest | undefined>,
 ): Promise<CommentThread[]> {
-  const pr = prByRepo[repoId];
-  if (!pr || typeof pr.pullRequestId !== "number") return [];
-  const gitClient = sharedGitClient();
+    const pr = prByRepo[repoId];
+    if (!pr || typeof pr.pullRequestId !== "number") return [];
+    const gitClient = sharedGitClient();
 
-  try {
-    const raw = await withRetry(
-      () => gitClient.getThreads(repoId, pr.pullRequestId, projectId),
-      { mode: "read", label: "loadThreadsForRepo.getThreads" },
-    );
+    try {
+        const raw = await withRetry(
+            () => gitClient.getThreads(repoId, pr.pullRequestId, projectId),
+            { mode: "read", label: "loadThreadsForRepo.getThreads" },
+        );
 
-    const out: CommentThread[] = [];
+        const out: CommentThread[] = [];
 
-    for (const t of raw) {
-      const local = adoThreadToLocal(t);
-      if (local) out.push(local);
+        for (const t of raw) {
+            const local = adoThreadToLocal(t);
+            if (local) out.push(local);
+        }
+
+        return out;
+    } catch (err) {
+        console.warn(
+            `[documents-hub] getThreads failed for repo ${repoId}, PR ${pr.pullRequestId}:`,
+            err,
+        );
+        trackUserFacingError({
+            error: err,
+            source: "Shell.comments",
+            operation: "repository-comments-load",
+            impact: "degraded",
+        });
+
+        return [];
     }
-
-    return out;
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getThreads failed for repo ${repoId}, PR ${pr.pullRequestId}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "Shell.comments",
-      operation: "repository-comments-load",
-      impact: "degraded",
-    });
-
-    return [];
-  }
 }

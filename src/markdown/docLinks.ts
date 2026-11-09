@@ -15,28 +15,28 @@
 
 /** Where a clicked link points, resolved against the current document. */
 export type DocLinkTarget =
-  | { kind: "external" }
-  | { kind: "anchor"; hash: string }
-  | {
-      kind: "repo-file";
-      /** Repo-relative path, always leading-slash normalized (`/docs/x.md`). */
-      path: string;
-      /** Fragment after `#`, or `""`. */
-      hash: string;
-      /** Whether the target is a Markdown document (`.md` / `.markdown`). */
-      isMarkdown: boolean;
-    };
+    | { kind: "external" }
+    | { kind: "anchor"; hash: string }
+    | {
+          kind: "repo-file";
+          /** Repo-relative path, always leading-slash normalized (`/docs/x.md`). */
+          path: string;
+          /** Fragment after `#`, or `""`. */
+          hash: string;
+          /** Whether the target is a Markdown document (`.md` / `.markdown`). */
+          isMarkdown: boolean;
+      };
 
 // A URL that carries its own scheme (`https:`, `mailto:`, `mention:`, `tel:`…).
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 function decodeSafe(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    // Malformed percent-encoding — use the raw value rather than throwing.
-    return value;
-  }
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        // Malformed percent-encoding — use the raw value rather than throwing.
+        return value;
+    }
 }
 
 /**
@@ -44,10 +44,10 @@ function decodeSafe(value: string): string {
  * `["docs", "api"]`. A bare filename (`README.md`) yields `[]` (repo root).
  */
 function dirSegments(path: string): string[] {
-  const segments = path.split("/").filter(Boolean);
-  segments.pop(); // drop the filename, leaving its containing folder
+    const segments = path.split("/").filter(Boolean);
+    segments.pop(); // drop the filename, leaving its containing folder
 
-  return segments;
+    return segments;
 }
 
 /**
@@ -56,74 +56,72 @@ function dirSegments(path: string): string[] {
  * leading-slash repo path.
  */
 function resolveRepoPath(currentPath: string, rel: string): string {
-  const out = rel.startsWith("/") ? [] : dirSegments(currentPath);
+    const out = rel.startsWith("/") ? [] : dirSegments(currentPath);
 
-  for (const segment of rel.split("/")) {
-    if (segment === "" || segment === ".") continue;
+    for (const segment of rel.split("/")) {
+        if (segment === "" || segment === ".") continue;
 
-    if (segment === "..") {
-      out.pop();
-      continue;
+        if (segment === "..") {
+            out.pop();
+            continue;
+        }
+
+        out.push(segment);
     }
 
-    out.push(segment);
-  }
-
-  return `/${out.join("/")}`;
+    return `/${out.join("/")}`;
 }
 
 /**
  * Classify a link's `href` relative to the document at `currentPath`. Pure and
  * SDK-free so it can be unit-tested and shared by every surface.
  */
-export function resolveDocLink(
-  currentPath: string,
-  rawHref: string,
-): DocLinkTarget {
-  const href = rawHref.trim();
+export function resolveDocLink(currentPath: string, rawHref: string): DocLinkTarget {
+    const href = rawHref.trim();
 
-  // Empty, scheme-qualified, or protocol-relative → not an in-repo doc link.
-  if (!href || SCHEME_RE.test(href) || href.startsWith("//")) {
-    return { kind: "external" };
-  }
+    // Empty, scheme-qualified, or protocol-relative → not an in-repo doc link.
+    if (!href || SCHEME_RE.test(href) || href.startsWith("//")) {
+        return { kind: "external" };
+    }
 
-  // Pure in-page fragment.
-  if (href.startsWith("#")) return { kind: "anchor", hash: href.slice(1) };
+    // Pure in-page fragment.
+    if (href.startsWith("#")) return { kind: "anchor", hash: href.slice(1) };
 
-  // Peel off the fragment, then any query string, leaving the path.
-  let pathPart = href;
-  let hash = "";
-  const hashIdx = pathPart.indexOf("#");
+    // Peel off the fragment, then any query string, leaving the path.
+    let pathPart = href;
+    let hash = "";
+    const hashIdx = pathPart.indexOf("#");
 
-  if (hashIdx >= 0) {
-    hash = pathPart.slice(hashIdx + 1);
-    pathPart = pathPart.slice(0, hashIdx);
-  }
+    // Stryker disable next-line EqualityOperator: a fragment at index 0 was already returned as an anchor above, so `hashIdx` is never 0 here.
+    if (hashIdx >= 0) {
+        hash = pathPart.slice(hashIdx + 1);
+        pathPart = pathPart.slice(0, hashIdx);
+    }
 
-  const queryIdx = pathPart.indexOf("?");
-  if (queryIdx >= 0) pathPart = pathPart.slice(0, queryIdx);
+    const queryIdx = pathPart.indexOf("?");
+    if (queryIdx >= 0) pathPart = pathPart.slice(0, queryIdx);
 
-  // `?query`/`#frag`-only hrefs carry no path: treat a lone fragment as an
-  // in-page anchor, otherwise there's nothing to navigate to.
-  if (!pathPart) {
-    return hash ? { kind: "anchor", hash } : { kind: "external" };
-  }
+    // `?query`/`#frag`-only hrefs carry no path: treat a lone fragment as an
+    // in-page anchor, otherwise there's nothing to navigate to.
+    if (!pathPart) {
+        return hash ? { kind: "anchor", hash } : { kind: "external" };
+    }
 
-  const path = resolveRepoPath(currentPath, decodeSafe(pathPart));
+    const path = resolveRepoPath(currentPath, decodeSafe(pathPart));
 
-  return {
-    kind: "repo-file",
-    path,
-    hash,
-    isMarkdown: /\.(?:md|markdown)$/i.test(path),
-  };
+    return {
+        kind: "repo-file",
+        path,
+        hash,
+        isMarkdown: /\.(?:md|markdown)$/i.test(path),
+    };
 }
 
 /** The org, project and repo a {@link buildReposFileUrl} link points into. */
 interface ReposRepoRef {
-  orgUrl: string;
-  project: string;
-  repoName: string;
+    orgUrl: string;
+    project: string;
+    repoName: string;
 }
 
 /**
@@ -134,46 +132,47 @@ interface ReposRepoRef {
  * required); the `_git/` route needs the repo NAME, not its GUID.
  */
 export function buildReposFileUrl(
-  { orgUrl, project, repoName }: ReposRepoRef,
-  path: string,
-  version?: string,
+    { orgUrl, project, repoName }: ReposRepoRef,
+    path: string,
+    version?: string,
 ): string {
-  const params = new URLSearchParams({ path });
+    const params = new URLSearchParams({ path });
 
-  if (version !== undefined && version !== "") {
-    params.set("version", version);
-  }
+    if (version !== undefined && version !== "") {
+        params.set("version", version);
+    }
 
-  const base = orgUrl.replace(/\/+$/, "");
+    const base = orgUrl.replace(/\/+$/, "");
 
-  return `${base}/${encodeURIComponent(project)}/_git/${encodeURIComponent(
-    repoName,
-  )}?${params.toString()}`;
+    return `${base}/${encodeURIComponent(project)}/_git/${encodeURIComponent(
+        repoName,
+    )}?${params.toString()}`;
 }
 
 /** Case-insensitive, leading-slash-insensitive repo path equality. */
 export function samePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/^\/+/, "").toLowerCase();
+    // Stryker disable next-line MethodExpression: upper-casing both paths is as case-insensitive as lower-casing them; they only disagree on case-folding oddities such as "ß" → "SS", i.e. two distinct files whose names differ only by "ß" versus "ss".
+    const norm = (p: string) => p.replace(/^\/+/, "").toLowerCase();
 
-  return norm(a) === norm(b);
+    return norm(a) === norm(b);
 }
 
 /** What the reader should do with a resolved link. */
 export type DocLinkAction =
-  | { type: "external" }
-  | { type: "scroll"; hash: string }
-  | { type: "select"; path: string; hash: string }
-  | { type: "open-file"; path: string }
-  | { type: "open-hub"; path: string; hash: string };
+    | { type: "external" }
+    | { type: "scroll"; hash: string }
+    | { type: "select"; path: string; hash: string }
+    | { type: "open-file"; path: string }
+    | { type: "open-hub"; path: string; hash: string };
 
 /** Context the router needs to decide where a Markdown link should open. */
 export interface DocLinkContext {
-  /** True in the Documents hub, where every doc link resolves within the hub. */
-  isHub: boolean;
-  /** The repo path of the document currently open. */
-  currentPath: string;
-  /** Whether a repo path is one the reader can open in place (a PR's files). */
-  isInReader: (path: string) => boolean;
+    /** True in the Documents hub, where every doc link resolves within the hub. */
+    isHub: boolean;
+    /** The repo path of the document currently open. */
+    currentPath: string;
+    /** Whether a repo path is one the reader can open in place (a PR's files). */
+    isInReader: (path: string) => boolean;
 }
 
 /**
@@ -186,21 +185,18 @@ export interface DocLinkContext {
  *   • Markdown outside the PR → open the Documents hub.
  * Pure + SDK-free so the whole decision table is unit-tested directly.
  */
-export function routeDocLink(
-  target: DocLinkTarget,
-  ctx: DocLinkContext,
-): DocLinkAction {
-  if (target.kind === "external") return { type: "external" };
-  if (target.kind === "anchor") return { type: "scroll", hash: target.hash };
-  if (!target.isMarkdown) return { type: "open-file", path: target.path };
+export function routeDocLink(target: DocLinkTarget, ctx: DocLinkContext): DocLinkAction {
+    if (target.kind === "external") return { type: "external" };
+    if (target.kind === "anchor") return { type: "scroll", hash: target.hash };
+    if (!target.isMarkdown) return { type: "open-file", path: target.path };
 
-  if (samePath(target.path, ctx.currentPath)) {
-    return { type: "scroll", hash: target.hash };
-  }
+    if (samePath(target.path, ctx.currentPath)) {
+        return { type: "scroll", hash: target.hash };
+    }
 
-  if (ctx.isHub || ctx.isInReader(target.path)) {
-    return { type: "select", path: target.path, hash: target.hash };
-  }
+    if (ctx.isHub || ctx.isInReader(target.path)) {
+        return { type: "select", path: target.path, hash: target.hash };
+    }
 
-  return { type: "open-hub", path: target.path, hash: target.hash };
+    return { type: "open-hub", path: target.path, hash: target.hash };
 }

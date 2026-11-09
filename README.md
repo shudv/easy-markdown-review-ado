@@ -33,7 +33,7 @@ I built this because I needed it—and because I wanted to see how far I could p
 To offset that, I have tried to enforce strict deterministic guardrails:
 
 1. 100% statement and branch coverage.
-2. Mutation testing must stay at or above 85%.
+2. Mutation testing must stay at or above 98% on the logic the unit tests own. Tests describe user scenarios, not mutants; a mutant no scenario can observe is disabled in place with a written reason.
 3. [Strict type-aware lint](eslint.config.mjs) with no warnings: complexity and size caps, strict boolean and null checks, React Compiler rules, accessibility, HTML-sink and regex safety, and test-validity rules, with any exception documented next to the code.
 4. Code duplication is [capped](.jscpd.json) by a blocking copy/paste check.
 5. End-to-end tests covering the Azure DevOps integration boundary.
@@ -67,12 +67,25 @@ Dependencies restore from public npm. The repository disables install scripts in
 Before opening a PR, run:
 
 ```pwsh
-npm run typecheck; npm run typecheck:e2e; npm run lint; npm run format:check
-npm run depcruise; npm run duplication:check; npm run spell:check
+npm run typecheck; npm run typecheck:e2e; npm run typecheck:test; npm run lint
+npm run format:check; npm run depcruise; npm run duplication:check; npm run spell:check
 npm run test:coverage
 npm run build
 npm run test:visual:docker
 ```
+
+Mutation testing isn't part of CI (a full run takes hours). Before a PR that
+changes logic, run it on what you changed:
+
+```pwsh
+npm run test:mutation:changed   # src files changed vs origin/main (pass --base <ref> to compare elsewhere)
+npm run test:mutation           # whole codebase, reusing results for unchanged code and tests
+npm run test:mutation:full      # whole codebase from scratch
+```
+
+The 98% threshold applies to whatever was mutated. A surviving mutant needs a
+scenario test, or a `// Stryker disable next-line <Mutator>: <reason>` comment
+when no scenario can observe it.
 
 `npm run lint` also enforces complexity and size limits on production source,
 set in [`eslint.config.mjs`](eslint.config.mjs): cyclomatic and cognitive

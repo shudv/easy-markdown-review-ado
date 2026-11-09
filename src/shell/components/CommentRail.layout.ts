@@ -8,11 +8,12 @@ import type { CommentFilterMode } from "./commentFilter";
 
 /** The draft's anchor Y while a live draft can be placed, else null. */
 export function railDraftY(
-  readOnly: boolean,
-  draftAnchor: TextQuoteAnchor | null,
-  draftY: number | null,
+    readOnly: boolean,
+    draftAnchor: TextQuoteAnchor | null,
+    draftY: number | null,
 ): number | null {
-  return !readOnly && draftAnchor && draftY !== null ? draftY : null;
+    // Stryker disable next-line ConditionalExpression: when `draftY` is null the expression yields null on either branch
+    return !readOnly && draftAnchor && draftY !== null ? draftY : null;
 }
 
 /**
@@ -21,17 +22,17 @@ export function railDraftY(
  * selected balloon must be on screen), or a search matched something in it.
  */
 export function isRailTrayExpanded(opts: {
-  collapsed: boolean;
-  threads: CommentThread[];
-  activeThreadId: string | null;
-  searchActive: boolean;
+    collapsed: boolean;
+    threads: CommentThread[];
+    activeThreadId: string | null;
+    searchActive: boolean;
 }): boolean {
-  const { collapsed, threads, activeThreadId, searchActive } = opts;
+    const { collapsed, threads, activeThreadId, searchActive } = opts;
 
-  const activeInTray =
-    activeThreadId != null && threads.some((t) => t.id === activeThreadId);
+    // Stryker disable next-line ConditionalExpression: thread ids are never null, so with no active thread the `some` lookup is false on its own
+    const activeInTray = activeThreadId != null && threads.some((t) => t.id === activeThreadId);
 
-  return !collapsed || activeInTray || (searchActive && threads.length > 0);
+    return !collapsed || activeInTray || (searchActive && threads.length > 0);
 }
 
 /**
@@ -40,47 +41,47 @@ export function isRailTrayExpanded(opts: {
  * a header — comments do.
  */
 export function shouldShowRailHeader(opts: {
-  readOnly: boolean;
-  totalCommentCount: number;
-  orphanedFileThreadCount: number;
-  hasRoutedPr: boolean;
-  hidePrPill: boolean | undefined;
+    readOnly: boolean;
+    totalCommentCount: number;
+    orphanedFileThreadCount: number;
+    hasRoutedPr: boolean;
+    hidePrPill: boolean | undefined;
 }): boolean {
-  return (
-    !opts.readOnly ||
-    opts.totalCommentCount > 0 ||
-    opts.orphanedFileThreadCount > 0 ||
-    (opts.hasRoutedPr && !opts.hidePrPill)
-  );
+    return (
+        !opts.readOnly ||
+        opts.totalCommentCount > 0 ||
+        opts.orphanedFileThreadCount > 0 ||
+        (opts.hasRoutedPr && !opts.hidePrPill)
+    );
 }
 
 /** Empty-state copy when nothing is anchored on this file (and no draft). */
 export function railEmptyMessageFor(
-  model: Pick<
-    RailModel,
-    | "orderedAnchoredIds"
-    | "orphanedThreads"
-    | "visibleGeneralThreads"
-    | "visibleOrphanedFileThreads"
-  >,
-  opts: {
-    hasDraft: boolean;
-    commentQuery: string;
-    filterMode: CommentFilterMode;
-    fileThreadCount: number;
-    readOnly: boolean;
-  },
+    model: Pick<
+        RailModel,
+        | "orderedAnchoredIds"
+        | "orphanedThreads"
+        | "visibleGeneralThreads"
+        | "visibleOrphanedFileThreads"
+    >,
+    opts: {
+        hasDraft: boolean;
+        commentQuery: string;
+        filterMode: CommentFilterMode;
+        fileThreadCount: number;
+        readOnly: boolean;
+    },
 ): string | null {
-  if (model.orderedAnchoredIds.length > 0 || opts.hasDraft) return null;
+    if (model.orderedAnchoredIds.length > 0 || opts.hasDraft) return null;
 
-  return chooseRailEmptyMessage({
-    commentQuery: opts.commentQuery,
-    filterMode: opts.filterMode,
-    fileThreadCount: opts.fileThreadCount,
-    hasOtherSections:
-      model.orphanedThreads.length > 0 ||
-      model.visibleGeneralThreads.length > 0 ||
-      model.visibleOrphanedFileThreads.length > 0,
-    readOnly: opts.readOnly,
-  });
+    return chooseRailEmptyMessage({
+        commentQuery: opts.commentQuery,
+        filterMode: opts.filterMode,
+        fileThreadCount: opts.fileThreadCount,
+        hasOtherSections:
+            model.orphanedThreads.length > 0 ||
+            model.visibleGeneralThreads.length > 0 ||
+            model.visibleOrphanedFileThreads.length > 0,
+        readOnly: opts.readOnly,
+    });
 }

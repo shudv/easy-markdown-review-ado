@@ -16,7 +16,9 @@
 //   node scripts/visual-docker.mjs            # compare against committed baselines
 //   node scripts/visual-docker.mjs --update   # (re)write the single baseline set
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 // Keep this tag in lockstep with the @playwright/test dependency AND the
 // `resources.containers` image in .azure-pipelines/pr-validation.yml.
@@ -24,25 +26,52 @@ const IMAGE = "mcr.microsoft.com/playwright:v1.61.1-jammy";
 const update = process.argv.includes("--update");
 const cwd = process.cwd();
 
-function run(cmd) {
-  console.log(`\n$ ${cmd}\n`);
-  execSync(cmd, { stdio: "inherit" });
+// Arguments are passed as a list, never through a shell, so a working
+// directory with spaces or shell characters can't change the command.
+function run(command, args) {
+    console.log(`\n$ ${[command, ...args].join(" ")}\n`);
+    execFileSync(command, args, { stdio: "inherit" });
 }
 
-// 1) Build the static Storybook on the host (native toolchain). The container
-//    serves this mounted copy via the config's webServer and never rebuilds.
-run("npm run build-storybook -- -o storybook-static --quiet");
+// 1) Build the static Storybook on the host (native toolchain) — the same
+//    `storybook build` as `npm run build-storybook`, started through Node so no
+//    shell is involved. The container serves this mounted copy via the
+//    config's webServer and never rebuilds.
+const require = createRequire(import.meta.url);
+const storybookPackage = require.resolve("storybook/package.json");
+const storybookBin = require(storybookPackage).bin;
+
+run(process.execPath, [
+    join(dirname(storybookPackage), storybookBin),
+    "build",
+    "-o",
+    "storybook-static",
+    "--quiet",
+]);
 
 // 2) Screenshot / compare inside the container — the CI-identical environment.
-const snapshots = update ? " --update-snapshots=all" : "";
-run(
-  `docker run --rm -e CI=1 -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright ` +
-    `-v "${cwd}:/work" -w /work ${IMAGE} ` +
-    `npx playwright test --config playwright.visual.config.ts${snapshots}`,
-);
+run("docker", [
+    "run",
+    "--rm",
+    "-e",
+    "CI=1",
+    "-e",
+    "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+    "-v",
+    `${cwd}:/work`,
+    "-w",
+    "/work",
+    IMAGE,
+    "npx",
+    "playwright",
+    "test",
+    "--config",
+    "playwright.visual.config.ts",
+    ...(update ? ["--update-snapshots=all"] : []),
+]);
 
 console.log(
-  update
-    ? "\nBaselines regenerated in the pinned container. Review + commit the *-chromium.png files."
-    : "\nVisual comparison ran in the pinned container.",
+    update
+        ? "\nBaselines regenerated in the pinned container. Review + commit the *-chromium.png files."
+        : "\nVisual comparison ran in the pinned container.",
 );

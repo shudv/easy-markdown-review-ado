@@ -1,64 +1,61 @@
 import { describe, it, expect } from "vitest";
 
-import { renderMarkdown } from "../src/markdown/render";
-import { sanitizeCssColor } from "../src/markdown/render";
+import { renderMarkdown, sanitizeCssColor } from "../src/markdown/render";
 
+// Work-item state colours come from ADO and end up in a `style` attribute on the
+// mention's state dot, so only plain hex colours may pass.
 describe("sanitizeCssColor", () => {
-  it("accepts the hex shapes ADO returns, normalizing to #lowercase", () => {
-    expect(sanitizeCssColor("#CC6D00")).toBe("#cc6d00");
-    // Leading # is optional (added back).
-    expect(sanitizeCssColor("339933")).toBe("#339933");
-    expect(sanitizeCssColor("  #Abc  ")).toBe("#abc");
-    expect(sanitizeCssColor("#12ab")).toBe("#12ab"); // #rgba
-    expect(sanitizeCssColor("#11223344")).toBe("#11223344"); // #rrggbbaa
-  });
+    it.each([
+        { name: "an upper-case #rrggbb from ADO", input: "#CC6D00", expected: "#cc6d00" },
+        { name: "an rrggbb without the leading #", input: "339933", expected: "#339933" },
+        { name: "a #rgb padded with whitespace", input: "  #Abc  ", expected: "#abc" },
+        { name: "an #rgba", input: "#12ab", expected: "#12ab" },
+        { name: "an #rrggbbaa", input: "#11223344", expected: "#11223344" },
+    ])("accepts $name as lower-case hex", ({ input, expected }) => {
+        expect(sanitizeCssColor(input)).toBe(expected);
+    });
 
-  it("rejects non-hex lengths so partial values can't leak through", () => {
-    expect(sanitizeCssColor("#12")).toBeNull();
-    expect(sanitizeCssColor("#12345")).toBeNull();
-    expect(sanitizeCssColor("#123456789")).toBeNull();
-    expect(sanitizeCssColor("")).toBeNull();
-  });
-
-  it("rejects any style-attribute breakout attempt (allow-list, not deny-list)", () => {
-    // The old escaper deleted `[<>\"';\\]`; an allow-list fails closed instead,
-    // so none of these produce a usable color.
-    expect(
-      sanitizeCssColor("red;background:url(javascript:alert(1))"),
-    ).toBeNull();
-    expect(sanitizeCssColor("#fff;} body{display:none")).toBeNull();
-    expect(sanitizeCssColor('red" onload="x')).toBeNull();
-    expect(sanitizeCssColor("expression(alert(1))")).toBeNull();
-    expect(sanitizeCssColor("url(data:text/html,evil)")).toBeNull();
-    expect(sanitizeCssColor("rgb(0,0,0)")).toBeNull(); // not a hex shape
-  });
+    it.each([
+        { name: "an empty value", input: "" },
+        { name: "a named colour", input: "red" },
+        { name: "an rgb() function", input: "rgb(0,0,0)" },
+        { name: "a non-hex digit", input: "#gggggg" },
+        { name: "a 2-digit hex", input: "#12" },
+        { name: "a 5-digit hex", input: "#12345" },
+        { name: "a 7-digit hex", input: "#1234567" },
+        { name: "a 9-digit hex", input: "#123456789" },
+        { name: "a # after the digits", input: "fff#" },
+        { name: "a short hex followed by another declaration", input: "#fff;x:10" },
+        { name: "a declaration breakout", input: "red;background:url(javascript:alert(1))" },
+        { name: "a rule breakout", input: "#fff;} body{display:none" },
+        { name: "an attribute breakout", input: 'red" onload="x' },
+        { name: "a CSS expression", input: "expression(alert(1))" },
+        { name: "a data URL", input: "url(data:text/html,evil)" },
+    ])("rejects $name", ({ input }) => {
+        expect(sanitizeCssColor(input)).toBeNull();
+    });
 });
 
-describe("renderMarkdown — state-color sanitization end to end", () => {
-  it("emits a background style only for a valid hex state color", async () => {
-    const md =
-      "See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=%23cc293d)";
+describe("renderMarkdown — work-item state colour", () => {
+    it("colours the state dot with a valid hex state colour", async () => {
+        const md =
+            "See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=%23cc293d)";
 
-    const html = await renderMarkdown(md);
-    expect(html).toContain("background:#cc293d");
-  });
+        const html = await renderMarkdown(md);
+        expect(html).toContain("background:#cc293d");
+    });
 
-  it("drops the style entirely for a hostile state color (no breakout)", async () => {
-    const hostile = encodeURIComponent('red;} body{display:none}"');
-    const md = `See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=${hostile})`;
-    const html = await renderMarkdown(md);
+    it("renders the state dot without any inline style for a hostile state colour", async () => {
+        const hostile = encodeURIComponent('red;} body{display:none}"');
+        const md = `See [#42 Bug](mention://workitem/42?type=Bug&state=Active&stateColor=${hostile})`;
+        const html = await renderMarkdown(md);
 
-    // The state-dot span must carry NO inline style at all, so nothing hostile
-    // reaches a `style` attribute. (The raw param may still appear elsewhere as
-    // a safely HTML-encoded data-* attribute — that's not a CSS breakout.)
-    const dotSpan = /<span class="emr-mention-state-dot"[^>]*><\/span>/.exec(
-      html,
-    );
+        // The raw param may still appear as a safely HTML-encoded data-* attribute;
+        // what matters is that nothing reaches a `style` attribute.
+        const dotSpan = /<span class="emr-mention-state-dot"[^>]*><\/span>/.exec(html);
 
-    expect(dotSpan).not.toBeNull();
-    expect(dotSpan![0]).not.toContain("style=");
-    // And there is no inline style carrying the injected declaration anywhere.
-    expect(html).not.toMatch(/style="[^"]*display:none/);
-    expect(html).not.toMatch(/style="[^"]*background:red/);
-  });
+        expect(dotSpan?.[0]).toBeDefined();
+        expect(dotSpan?.[0]).not.toContain("style=");
+        expect(html).not.toMatch(/style="[^"]*display:none/);
+    });
 });

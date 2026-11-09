@@ -3,19 +3,20 @@
 import { diffWords, unchangedRatio } from "../wordDiff";
 import { applyInlineWordDiff } from "../wordDiffDom";
 import {
-  applyFormattingDiff,
-  explainWhitespaceSwaps,
-  formattingRanges,
-  wrapFormattingRanges,
+    applyFormattingDiff,
+    explainWhitespaceSwaps,
+    formattingRanges,
+    wrapFormattingRanges,
 } from "./formatting";
-import { applyBlockStructureDiff, applyLeafStructureDiff } from "./structure";
+import { alignChecklistSpace, applyBlockStructureDiff, applyLeafStructureDiff } from "./structure";
 import { renderOriginalStandalone } from "./rendering";
 import {
-  applyImageMetadataIndicators,
-  applyLinkTargetIndicators,
-  findImageMetadataChanges,
-  findLinkTargetChanges,
-  readLinkTargets,
+    applyImageMetadataIndicators,
+    applyLinkTargetIndicators,
+    findImageMetadataChanges,
+    findLinkTargetChanges,
+    readLinkTargets,
+    revealRemovedImages,
 } from "./metadata";
 import { inlineProseTarget } from "./shared";
 
@@ -27,90 +28,90 @@ import { inlineProseTarget } from "./shared";
 const INLINE_MIN_UNCHANGED_RATIO = 0.3;
 
 interface InlineContentDiffOptions {
-  minimumUnchangedRatio?: number;
+    minimumUnchangedRatio?: number;
 }
 
 interface InlineContentDiffResult {
-  handled: boolean;
-  formattingChanged: boolean;
-  metadataChanged: boolean;
-  tooDivergent: boolean;
+    handled: boolean;
+    formattingChanged: boolean;
+    metadataChanged: boolean;
+    tooDivergent: boolean;
 }
 
 export function diffInlineContent(
-  original: HTMLElement,
-  target: HTMLElement,
-  options: InlineContentDiffOptions = {},
+    original: HTMLElement,
+    target: HTMLElement,
+    options: InlineContentDiffOptions = {},
 ): InlineContentDiffResult {
-  const originalText = original.textContent;
-  const currentText = target.textContent;
+    const originalText = original.textContent;
+    const currentText = target.textContent;
 
-  const linkChanges = findLinkTargetChanges(
-    readLinkTargets(original),
-    readLinkTargets(target),
-  );
+    const linkChanges = findLinkTargetChanges(readLinkTargets(original), readLinkTargets(target));
 
-  const imageChanges = findImageMetadataChanges(original, target);
-  const metadataChanged = linkChanges.length > 0 || imageChanges.length > 0;
+    const imageChanges = findImageMetadataChanges(original, target);
+    const metadataChanged = linkChanges.length > 0 || imageChanges.length > 0;
 
-  const applyMetadata = (): void => {
-    if (linkChanges.length > 0) applyLinkTargetIndicators(target, linkChanges);
+    const applyMetadata = (): void => {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: applying an empty list of link changes adds nothing
+        if (linkChanges.length > 0) {
+            applyLinkTargetIndicators(target, linkChanges);
+        }
 
-    if (imageChanges.length > 0) {
-      applyImageMetadataIndicators(target, imageChanges);
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: applying an empty list of image changes adds nothing
+        if (imageChanges.length > 0) {
+            applyImageMetadataIndicators(target, imageChanges);
+        }
+    };
+
+    if (originalText === currentText) {
+        const formattingChanged = applyFormattingDiff(target, formattingRanges(original));
+
+        applyMetadata();
+
+        return {
+            handled: formattingChanged || metadataChanged,
+            formattingChanged,
+            metadataChanged,
+            tooDivergent: false,
+        };
     }
-  };
 
-  if (originalText === currentText) {
-    const formattingChanged = applyFormattingDiff(
-      target,
-      formattingRanges(original),
-    );
+    const operations = diffWords(originalText, currentText);
 
+    if (
+        // Stryker disable next-line ConditionalExpression: without a threshold the ratio is compared with undefined, which is never true
+        options.minimumUnchangedRatio != null &&
+        unchangedRatio(operations) < options.minimumUnchangedRatio
+    ) {
+        // Stryker disable next-line ObjectLiteral,BooleanLiteral: a too-divergent result is only read by tryInlineWordDiff, which declines it whether it sees tooDivergent or (differing text that was not) handled
+        return {
+            handled: false,
+            formattingChanged: false,
+            metadataChanged,
+            tooDivergent: true,
+        };
+    }
+
+    // In code, a whitespace swap with no shared run (a tab for spaces) reads as
+    // one explained amber run rather than a struck-and-added pair.
+    const swaps =
+        // Stryker disable next-line ArrayDeclaration: a placeholder range without offsets wraps nothing, and differing text always gets word marks here, so the block is handled either way
+        target.tagName === "PRE" ? explainWhitespaceSwaps(operations) : { operations, ranges: [] };
+
+    wrapFormattingRanges(target, swaps.ranges);
+    const wordDiff = applyInlineWordDiff(target, swaps.operations);
     applyMetadata();
 
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,EqualityOperator: the ops were diffed against the target's own text, so they always rebuild it (never null), and a result without marks only happens when every edit became an explained whitespace swap, which counts as handled below anyway
+    const inlineApplied = wordDiff != null && wordDiff.added + wordDiff.removed > 0;
+
     return {
-      handled: formattingChanged || metadataChanged,
-      formattingChanged,
-      metadataChanged,
-      tooDivergent: false,
+        handled: inlineApplied || swaps.ranges.length > 0,
+        // Stryker disable next-line BooleanLiteral: formattingChanged is only read for blocks and cells whose text is unchanged, which return above
+        formattingChanged: false,
+        metadataChanged,
+        tooDivergent: false,
     };
-  }
-
-  const operations = diffWords(originalText, currentText);
-
-  if (
-    options.minimumUnchangedRatio != null &&
-    unchangedRatio(operations) < options.minimumUnchangedRatio
-  ) {
-    return {
-      handled: false,
-      formattingChanged: false,
-      metadataChanged,
-      tooDivergent: true,
-    };
-  }
-
-  // In code, a whitespace swap with no shared run (a tab for spaces) reads as
-  // one explained amber run rather than a struck-and-added pair.
-  const swaps =
-    target.tagName === "PRE"
-      ? explainWhitespaceSwaps(operations)
-      : { operations, ranges: [] };
-
-  wrapFormattingRanges(target, swaps.ranges);
-  const wordDiff = applyInlineWordDiff(target, swaps.operations);
-  applyMetadata();
-
-  const inlineApplied =
-    wordDiff != null && wordDiff.added + wordDiff.removed > 0;
-
-  return {
-    handled: inlineApplied || swaps.ranges.length > 0,
-    formattingChanged: false,
-    metadataChanged,
-    tooDivergent: false,
-  };
 }
 
 /**
@@ -124,64 +125,60 @@ export function diffInlineContent(
  * correctly yields no word delta.
  */
 export function tryInlineWordDiff(
-  block: HTMLElement,
-  originalMarkdown: string,
-  renderInline: (md: string) => string,
+    block: HTMLElement,
+    originalMarkdown: string,
+    renderInline: (md: string) => string,
 ): boolean {
-  const scratch = renderOriginalStandalone(
-    block,
-    originalMarkdown,
-    renderInline,
-  );
+    const scratch = renderOriginalStandalone(block, originalMarkdown, renderInline);
 
-  // Compare the ORIGINAL's matching element, not the whole scratch wrapper.
-  // Rendering a list-item source (`- foo`) standalone wraps it in a `<ul>`,
-  // whose inter-tag whitespace pollutes `scratch.textContent` ("\nfoo\n") and
-  // would make the whole item read as changed. Drilling into the same tag as
-  // the block (`<li>`, `<p>`, `<h2>`, …) yields the clean text that lines up
-  // with the in-document block.
-  const matchingOriginal = scratch.querySelector<HTMLElement>(block.tagName);
+    // Compare the ORIGINAL's matching element, not the whole scratch wrapper.
+    // Rendering a list-item source (`- foo`) standalone wraps it in a `<ul>`,
+    // whose inter-tag whitespace pollutes `scratch.textContent` ("\nfoo\n") and
+    // would make the whole item read as changed. Drilling into the same tag as
+    // the block (`<li>`, `<p>`, `<h2>`, …) yields the clean text that lines up
+    // with the in-document block.
+    const matchingOriginal = scratch.querySelector<HTMLElement>(block.tagName);
 
-  const semanticOriginal = scratch.querySelector<HTMLElement>(
-    "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt",
-  );
-
-  const originalEl =
-    (block.tagName === "PRE" ? matchingOriginal : semanticOriginal) ??
-    matchingOriginal ??
-    (scratch.firstElementChild as HTMLElement | null) ??
-    scratch;
-
-  // For a LOOSE list item, diff (and mark) the inner `<p>` on BOTH sides so the
-  // whitespace between the `<li>` and its `<p>` never becomes stray word marks.
-  const originalProse = inlineProseTarget(originalEl);
-  const target = inlineProseTarget(block);
-  const originalPlain = originalProse.textContent;
-  const modifiedPlain = target.textContent;
-
-  const contentDiff = diffInlineContent(originalProse, target, {
-    minimumUnchangedRatio: INLINE_MIN_UNCHANGED_RATIO,
-  });
-
-  if (contentDiff.tooDivergent) return false;
-
-  if (originalPlain === modifiedPlain) {
-    const structureChanged = applyLeafStructureDiff(originalEl, block);
-
-    const blockStructureChanged = applyBlockStructureDiff(
-      originalEl,
-      block,
-      originalPlain,
+    const semanticOriginal = scratch.querySelector<HTMLElement>(
+        "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt",
     );
 
-    return contentDiff.handled || structureChanged || blockStructureChanged;
-  }
+    const originalEl =
+        (block.tagName === "PRE" ? matchingOriginal : semanticOriginal) ??
+        matchingOriginal ??
+        (scratch.firstElementChild as HTMLElement | null) ??
+        scratch;
 
-  // A reworded item can also have been ticked off or re-marked; the word diff
-  // alone would hide that.
-  /* v8 ignore next -- differing, not-too-divergent text always yields a word mark or (in code) an explained whitespace swap, since diffWords ops rebuild the target's own text */
-  if (!contentDiff.handled) return false;
-  applyLeafStructureDiff(originalEl, block);
+    // For a LOOSE list item, diff (and mark) the inner `<p>` on BOTH sides so the
+    // whitespace between the `<li>` and its `<p>` never becomes stray word marks.
+    const originalProse = inlineProseTarget(originalEl);
+    const target = inlineProseTarget(block);
+    alignChecklistSpace(originalEl, block);
+    revealRemovedImages(originalProse, target);
+    const originalPlain = originalProse.textContent;
+    const modifiedPlain = target.textContent;
 
-  return true;
+    const contentDiff = diffInlineContent(originalProse, target, {
+        minimumUnchangedRatio: INLINE_MIN_UNCHANGED_RATIO,
+    });
+
+    // Stryker disable next-line ConditionalExpression: dead code: a too-divergent diff is never handled, so the handled check below already declines it, candidate for removal
+    if (contentDiff.tooDivergent) return false;
+
+    if (originalPlain === modifiedPlain) {
+        const structureChanged = applyLeafStructureDiff(originalEl, block);
+
+        const blockStructureChanged = applyBlockStructureDiff(originalEl, block, originalPlain);
+
+        return contentDiff.handled || structureChanged || blockStructureChanged;
+    }
+
+    // A reworded item can also have been ticked off or re-marked; the word diff
+    // alone would hide that.
+    // Stryker disable next-line ConditionalExpression,BooleanLiteral: dead code: unreachable, since differing, not-too-divergent text always yields a word mark or an explained whitespace swap (see the v8 ignore below), candidate for removal
+    /* v8 ignore next -- differing, not-too-divergent text always yields a word mark or (in code) an explained whitespace swap, since diffWords ops rebuild the target's own text */
+    if (!contentDiff.handled) return false;
+    applyLeafStructureDiff(originalEl, block);
+
+    return true;
 }

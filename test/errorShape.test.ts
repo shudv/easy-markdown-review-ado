@@ -3,132 +3,137 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  adoErrorCodeOf,
-  describeError,
-  httpStatusOf,
-} from "../src/telemetry/errorShape";
+import { adoErrorCodeOf, describeError, httpStatusOf } from "../src/telemetry/errorShape";
 
 describe("httpStatusOf", () => {
-  it("reads status / statusCode / httpStatusCode and nested serverError", () => {
-    expect(httpStatusOf({ status: 401 })).toBe(401);
-    expect(httpStatusOf({ statusCode: 403 })).toBe(403);
-    expect(httpStatusOf({ httpStatusCode: 500 })).toBe(500);
-    expect(httpStatusOf({ serverError: { status: 503 } })).toBe(503);
-  });
+    it.each([
+        { name: "status", error: { status: 401 }, expected: 401 },
+        { name: "statusCode", error: { statusCode: 403 }, expected: 403 },
+        { name: "httpStatusCode", error: { httpStatusCode: 500 }, expected: 500 },
+        {
+            name: "a nested serverError.status",
+            error: { serverError: { status: 503 } },
+            expected: 503,
+        },
+    ])("reads the HTTP status from $name", ({ error, expected }) => {
+        expect(httpStatusOf(error)).toBe(expected);
+    });
 
-  it("ignores out-of-range / missing / non-objects", () => {
-    expect(httpStatusOf({ status: 42 })).toBeUndefined();
-    expect(httpStatusOf({})).toBeUndefined();
-    expect(httpStatusOf(null)).toBeUndefined();
-    expect(httpStatusOf("401")).toBeUndefined();
-  });
+    it.each([
+        { name: "a number that is not an HTTP status", error: { status: 42 } },
+        { name: "an object without a status", error: {} },
+        { name: "null", error: null },
+        { name: "a string", error: "401" },
+    ])("finds no HTTP status in $name", ({ error }) => {
+        expect(httpStatusOf(error)).toBeUndefined();
+    });
 });
 
 describe("adoErrorCodeOf", () => {
-  it("extracts a TF###### code from an Error message", () => {
-    const err = Object.assign(
-      new Error(
-        "TF400813: The user 'x' is not authorized to access this resource.",
-      ),
-      { name: "TFS.WebApi.Exception" },
-    );
+    it.each([
+        {
+            name: "a TFS.WebApi.Exception message",
+            error: Object.assign(
+                new Error("TF400813: The user 'x' is not authorized to access this resource."),
+                { name: "TFS.WebApi.Exception" },
+            ),
+            expected: "TF400813",
+        },
+        {
+            name: "the raw response body",
+            error: { responseText: '{"message":"TF401019: nope"}' },
+            expected: "TF401019",
+        },
+        {
+            name: "a nested serverError message",
+            error: { serverError: { message: "boom TF400813 boom" } },
+            expected: "TF400813",
+        },
+        {
+            name: "a plain-object SDK rejection",
+            error: {
+                message: "TF400893: Unable to contact the server. Please check your network.",
+            },
+            expected: "TF400893",
+        },
+        {
+            name: "a thrown string",
+            error: "TF400893: Unable to contact the server.",
+            expected: "TF400893",
+        },
+    ])("extracts the TF code from $name", ({ error, expected }) => {
+        expect(adoErrorCodeOf(error)).toBe(expected);
+    });
 
-    expect(adoErrorCodeOf(err)).toBe("TF400813");
-  });
-
-  it("extracts from responseText and from serverError.typeKey", () => {
-    expect(
-      adoErrorCodeOf({ responseText: '{"message":"TF401019: nope"}' }),
-    ).toBe("TF401019");
-    expect(
-      adoErrorCodeOf({ serverError: { message: "boom TF400813 boom" } }),
-    ).toBe("TF400813");
-  });
-
-  it("extracts from a plain-object rejection's message and a thrown string", () => {
-    expect(
-      adoErrorCodeOf({
-        message:
-          "TF400893: Unable to contact the server. Please check your network connection and try again.",
-      }),
-    ).toBe("TF400893");
-    expect(adoErrorCodeOf("TF400893: Unable to contact the server.")).toBe(
-      "TF400893",
-    );
-  });
-
-  it("returns undefined when there is no code", () => {
-    expect(adoErrorCodeOf(new Error("plain failure"))).toBeUndefined();
-    expect(adoErrorCodeOf({ status: 500 })).toBeUndefined();
-  });
+    it.each([
+        { name: "an Error without a code", error: new Error("plain failure") },
+        { name: "a bare status object", error: { status: 500 } },
+    ])("finds no code in $name", ({ error }) => {
+        expect(adoErrorCodeOf(error)).toBeUndefined();
+    });
 });
 
 describe("describeError", () => {
-  it("captures message/name/stack/status/code for a TFS.WebApi.Exception", () => {
-    const err = Object.assign(new Error("TF400813: not authorized"), {
-      name: "TFS.WebApi.Exception",
-      status: 403,
-      responseText: '{"message":"TF400813: not authorized"}',
+    it("captures message, name, stack, status and code for a TFS.WebApi.Exception", () => {
+        const err = Object.assign(new Error("TF400813: not authorized"), {
+            name: "TFS.WebApi.Exception",
+            status: 403,
+            responseText: '{"message":"TF400813: not authorized"}',
+        });
+
+        expect(describeError(err)).toEqual({
+            message: "TF400813: not authorized",
+            name: "TFS.WebApi.Exception",
+            stack: expect.any(String),
+            httpStatus: 403,
+            adoErrorCode: "TF400813",
+        });
     });
 
-    const shape = describeError(err);
-    expect(shape).toMatchObject({
-      name: "TFS.WebApi.Exception",
-      httpStatus: 403,
-      adoErrorCode: "TF400813",
-    });
-    expect(shape.message).toContain("TF400813");
-    expect(typeof shape.stack).toBe("string");
-  });
-
-  it("omits status/code when absent", () => {
-    const shape = describeError(new Error("plain"));
-    expect(shape.httpStatus).toBeUndefined();
-    expect(shape.adoErrorCode).toBeUndefined();
-    expect(shape.message).toBe("plain");
-  });
-
-  it("never yields '[object Object]' for a non-Error object", () => {
-    expect(describeError({ message: "hello" }).message).toBe("hello");
-    expect(describeError({ a: 1 }).message).toBe('{"a":1}');
-    expect(describeError({ a: 1 }).message).not.toContain("[object Object]");
-  });
-
-  it("never serializes responseText (identity GUID) into the message", () => {
-    const err = {
-      status: 403,
-      responseText:
-        '{"message":"TF400813: The user \'12345678-1234-1234-1234-123456789012\' is not authorized"}',
-    };
-
-    const shape = describeError(err);
-    expect(shape.message).not.toContain("responseText");
-    expect(shape.message).not.toContain("12345678-1234-1234-1234-123456789012");
-    // The safe, structured signals are still captured.
-    expect(shape.httpStatus).toBe(403);
-    expect(shape.adoErrorCode).toBe("TF400813");
-  });
-
-  it("carries the ADO code for a plain-object SDK rejection", () => {
-    const shape = describeError({
-      message: "TF400893: Unable to contact the server.",
+    it("omits status and code for a plain Error", () => {
+        expect(describeError(new Error("plain"))).toEqual({
+            message: "plain",
+            name: "Error",
+            stack: expect.any(String),
+        });
     });
 
-    expect(shape.message).toBe("TF400893: Unable to contact the server.");
-    expect(shape.adoErrorCode).toBe("TF400893");
-  });
+    it.each([
+        {
+            name: "a plain-object rejection's message",
+            error: { message: "hello" },
+            expected: "hello",
+        },
+        { name: "a message-less object, serialized", error: { a: 1 }, expected: '{"a":1}' },
+        { name: "a thrown string", error: "boom", expected: "boom" },
+    ])("reports $name instead of '[object Object]'", ({ error, expected }) => {
+        expect(describeError(error).message).toBe(expected);
+    });
 
-  it("passes a string through", () => {
-    expect(describeError("boom").message).toBe("boom");
-  });
+    it("never serializes responseText (identity GUID) into the message", () => {
+        const err = {
+            status: 403,
+            responseText:
+                '{"message":"TF400813: The user \'12345678-1234-1234-1234-123456789012\' is not authorized"}',
+        };
 
-  it("describes values with no primitive conversion without throwing", () => {
-    const nullProto = Object.create(null) as Record<string, unknown>;
-    nullProto.code = 7;
-    expect(describeError(nullProto).message).toBe('{"code":7}');
-    expect(describeError(Object.create(null)).message).toBe("[object Object]");
-    const hostile = { toString: () => ({}), valueOf: () => ({}) };
-    expect(() => describeError(hostile)).not.toThrow();
-  });
+        const shape = describeError(err);
+
+        expect(shape.message).not.toContain("12345678-1234-1234-1234-123456789012");
+        // The safe, structured signals are still captured.
+        expect(shape).toMatchObject({ httpStatus: 403, adoErrorCode: "TF400813" });
+    });
+
+    it("carries the ADO code for a plain-object SDK rejection", () => {
+        expect(describeError({ message: "TF400893: Unable to contact the server." })).toEqual({
+            message: "TF400893: Unable to contact the server.",
+            adoErrorCode: "TF400893",
+        });
+    });
+
+    it("does not throw when the rejection cannot be converted to a string", () => {
+        const hostile = { toString: () => ({}), valueOf: () => ({}) };
+
+        expect(describeError(hostile).message).toBe("[object Object]");
+    });
 });

@@ -11,41 +11,38 @@ import type { CommentAuthor, MentionedIdentity } from "../types";
 export type MentionKind = "user" | "workitem" | "pullrequest";
 
 export interface UserSuggestion {
-  kind: "user";
-  id: string;
-  displayName: string;
-  initials: string;
-  /** Optional secondary line; ADO surfaces email here. */
-  secondary?: string;
-  avatarUrl?: string;
+    kind: "user";
+    id: string;
+    displayName: string;
+    initials: string;
+    /** Optional secondary line; ADO surfaces email here. */
+    secondary?: string;
+    avatarUrl?: string;
 }
 
 export interface WorkItemSuggestion {
-  kind: "workitem";
-  id: string;
-  /** WI type ("Bug", "Task", "User Story", "Epic", "Feature", …). */
-  workItemType: string;
-  title: string;
-  /** Current workflow state ("Active", "Resolved", "In Progress", …). */
-  state: string;
-  /** Optional state color override (#rrggbb) returned by ADO. */
-  stateColor?: string;
+    kind: "workitem";
+    id: string;
+    /** WI type ("Bug", "Task", "User Story", "Epic", "Feature", …). */
+    workItemType: string;
+    title: string;
+    /** Current workflow state ("Active", "Resolved", "In Progress", …). */
+    state: string;
+    /** Optional state color override (#rrggbb) returned by ADO. */
+    stateColor?: string;
 }
 
 export interface PullRequestSuggestion {
-  kind: "pullrequest";
-  id: string;
-  title: string;
-  /** "active" | "completed" | "abandoned". */
-  status: "active" | "completed" | "abandoned";
-  /** Optional repo for disambiguation; ADO surfaces this in the picker. */
-  repository?: string;
+    kind: "pullrequest";
+    id: string;
+    title: string;
+    /** "active" | "completed" | "abandoned". */
+    status: "active" | "completed" | "abandoned";
+    /** Optional repo for disambiguation; ADO surfaces this in the picker. */
+    repository?: string;
 }
 
-export type MentionSuggestion =
-  | UserSuggestion
-  | WorkItemSuggestion
-  | PullRequestSuggestion;
+export type MentionSuggestion = UserSuggestion | WorkItemSuggestion | PullRequestSuggestion;
 
 // ---------------------------------------------------------------------------
 // Trigger detection
@@ -53,21 +50,21 @@ export type MentionSuggestion =
 
 /** Active mention trigger detected in the textarea. */
 export interface ActiveTrigger {
-  kind: MentionKind;
-  /** Trigger character itself (`@` / `#` / `!`). */
-  char: string;
-  /** Caret-relative position of the trigger character in the source. */
-  start: number;
-  /** Caret-relative end (== current caret) of the in-progress mention. */
-  end: number;
-  /** Text after the trigger char up to the caret (the typeahead query). */
-  query: string;
+    kind: MentionKind;
+    /** Trigger character itself (`@` / `#` / `!`). */
+    char: string;
+    /** Caret-relative position of the trigger character in the source. */
+    start: number;
+    /** Caret-relative end (== current caret) of the in-progress mention. */
+    end: number;
+    /** Text after the trigger char up to the caret (the typeahead query). */
+    query: string;
 }
 
 const TRIGGER_CHARS: Partial<Record<string, MentionKind>> = {
-  "@": "user",
-  "#": "workitem",
-  "!": "pullrequest",
+    "@": "user",
+    "#": "workitem",
+    "!": "pullrequest",
 };
 
 /**
@@ -77,37 +74,36 @@ const TRIGGER_CHARS: Partial<Record<string, MentionKind>> = {
  * be at start-of-text or preceded by whitespace so `foo@bar` and `pre#tag`
  * don't open the picker.
  */
-export function detectActiveTrigger(
-  text: string,
-  caret: number,
-): ActiveTrigger | null {
-  if (caret < 0 || caret > text.length) return null;
-  // Cap look-back; longer mentions are pathological — close the picker instead.
-  const MAX_LOOKBACK = 64;
-  const start = Math.max(0, caret - MAX_LOOKBACK);
+export function detectActiveTrigger(text: string, caret: number): ActiveTrigger | null {
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: a caret at or before the start leaves nothing to scan, so the loop below finds no trigger and returns null anyway, candidate for removal
+    if (caret < 0 || caret > text.length) return null;
+    // Cap look-back; longer mentions are pathological — close the picker instead.
+    const MAX_LOOKBACK = 64;
+    const start = Math.max(0, caret - MAX_LOOKBACK);
 
-  for (let i = caret - 1; i >= start; i--) {
-    const ch = text[i]!;
-    const kind = TRIGGER_CHARS[ch];
+    for (let i = caret - 1; i >= start; i--) {
+        const ch = text[i]!;
+        const kind = TRIGGER_CHARS[ch];
 
-    if (kind !== undefined) {
-      const prev = i === 0 ? "" : text[i - 1]!;
-      if (i !== 0 && !/\s/.test(prev)) return null;
+        if (kind !== undefined) {
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: `prev` is only read when i !== 0 (next line), so its value at the start of the text never matters, candidate for removal
+            const prev = i === 0 ? "" : text[i - 1]!;
+            if (i !== 0 && !/\s/.test(prev)) return null;
 
-      return {
-        kind,
-        char: ch,
-        start: i,
-        end: caret,
-        query: text.slice(i + 1, caret),
-      };
+            return {
+                kind,
+                char: ch,
+                start: i,
+                end: caret,
+                query: text.slice(i + 1, caret),
+            };
+        }
+
+        // Allow the in-progress query to contain a small set of safe chars.
+        if (!/[\w.\- ]/.test(ch)) return null;
     }
 
-    // Allow the in-progress query to contain a small set of safe chars.
-    if (!/[\w.\- ]/.test(ch)) return null;
-  }
-
-  return null;
+    return null;
 }
 
 /**
@@ -116,54 +112,56 @@ export function detectActiveTrigger(
  * mention after insertion.
  */
 export function buildMentionMarkdown(suggestion: MentionSuggestion): string {
-  switch (suggestion.kind) {
-    case "user": {
-      // Persist the ADO-native mention token `@<GUID>` so Azure DevOps actually
-      // recognises it as a mention — rendering the person's name AND sending the
-      // notification — in every native view (Overview, Files, email). Our own
-      // renderer converts this token to a rich pill via `preprocessUserMentions`
-      // + the identity store; ADO understands it directly. The trailing space
-      // leaves the caret outside the mention after insertion.
-      return `@<${suggestion.id}> `;
+    switch (suggestion.kind) {
+        case "user": {
+            // Persist the ADO-native mention token `@<GUID>` so Azure DevOps actually
+            // recognises it as a mention — rendering the person's name AND sending the
+            // notification — in every native view (Overview, Files, email). Our own
+            // renderer converts this token to a rich pill via `preprocessUserMentions`
+            // + the identity store; ADO understands it directly. The trailing space
+            // leaves the caret outside the mention after insertion.
+            return `@<${suggestion.id}> `;
+        }
+
+        case "workitem": {
+            // Embed the title in the label so historical comments stay legible
+            // without re-fetching; the renderer ignores it when richer data exists.
+            const label = `#${suggestion.id} ${suggestion.title}`;
+
+            const params = new URLSearchParams({
+                type: suggestion.workItemType,
+                state: suggestion.state,
+            });
+
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: suggestions come from the ADO adapter, which leaves stateColor unset rather than empty, so the empty-string check never fires, candidate for removal
+            if (suggestion.stateColor !== undefined && suggestion.stateColor !== "") {
+                params.set("stateColor", suggestion.stateColor);
+            }
+
+            return `[${escapeLabel(label)}](mention://workitem/${encodeURIComponent(
+                suggestion.id,
+            )}?${params.toString()}) `;
+        }
+
+        case "pullrequest": {
+            const label = `!${suggestion.id} ${suggestion.title}`;
+            const params = new URLSearchParams({ status: suggestion.status });
+
+            // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the repository comes from ADO's repository name, which is never empty, so the empty-string check never fires, candidate for removal
+            if (suggestion.repository !== undefined && suggestion.repository !== "") {
+                params.set("repo", suggestion.repository);
+            }
+
+            return `[${escapeLabel(label)}](mention://pullrequest/${encodeURIComponent(
+                suggestion.id,
+            )}?${params.toString()}) `;
+        }
     }
-
-    case "workitem": {
-      // Embed the title in the label so historical comments stay legible
-      // without re-fetching; the renderer ignores it when richer data exists.
-      const label = `#${suggestion.id} ${suggestion.title}`;
-
-      const params = new URLSearchParams({
-        type: suggestion.workItemType,
-        state: suggestion.state,
-      });
-
-      if (suggestion.stateColor !== undefined && suggestion.stateColor !== "") {
-        params.set("stateColor", suggestion.stateColor);
-      }
-
-      return `[${escapeLabel(label)}](mention://workitem/${encodeURIComponent(
-        suggestion.id,
-      )}?${params.toString()}) `;
-    }
-
-    case "pullrequest": {
-      const label = `!${suggestion.id} ${suggestion.title}`;
-      const params = new URLSearchParams({ status: suggestion.status });
-
-      if (suggestion.repository !== undefined && suggestion.repository !== "") {
-        params.set("repo", suggestion.repository);
-      }
-
-      return `[${escapeLabel(label)}](mention://pullrequest/${encodeURIComponent(
-        suggestion.id,
-      )}?${params.toString()}) `;
-    }
-  }
 }
 
 /** Escape markdown-special chars in the label so they survive parsing. */
 function escapeLabel(s: string): string {
-  return s.replace(/([[\]\\])/g, "\\$1");
+    return s.replace(/([[\]\\])/g, "\\$1");
 }
 
 /**
@@ -177,16 +175,13 @@ function escapeLabel(s: string): string {
  * keeps each occurrence mapped to the right id. The numeric suffix is transient:
  * the token is re-encoded and rendered as a pill, so the reader never sees "2".
  */
-export function uniqueMentionLabel(
-  base: string,
-  taken: readonly string[],
-): string {
-  if (!taken.includes(base)) return base;
+export function uniqueMentionLabel(base: string, taken: readonly string[]): string {
+    if (!taken.includes(base)) return base;
 
-  for (let n = 2; ; n++) {
-    const candidate = `${base} ${n}`;
-    if (!taken.includes(candidate)) return candidate;
-  }
+    for (let n = 2; ; n++) {
+        const candidate = `${base} ${n}`;
+        if (!taken.includes(candidate)) return candidate;
+    }
 }
 
 /**
@@ -202,57 +197,50 @@ export function uniqueMentionLabel(
  * `@Sam-Lee`. Labels edited after picking simply don't match and pass through.
  */
 export function encodePickedMentions(
-  text: string,
-  picks: ReadonlyArray<{ label: string; id: string }>,
+    text: string,
+    picks: ReadonlyArray<{ label: string; id: string }>,
 ): string {
-  if (picks.length === 0) return text;
-  const sorted = [...picks].sort((a, b) => b.label.length - a.label.length);
-  let out = text;
+    // Stryker disable next-line ConditionalExpression: dead code: with no picks the loop below makes no replacements and returns the text as is, candidate for removal
+    if (picks.length === 0) return text;
+    const sorted = [...picks].sort((a, b) => b.label.length - a.label.length);
+    let out = text;
 
-  for (const { label, id } of sorted) {
-    if (!label) continue;
-    out = replaceStandaloneMention(out, `@${label}`, `@<${id}>`);
-  }
+    for (const { label, id } of sorted) {
+        if (!label) continue;
+        out = replaceStandaloneMention(out, `@${label}`, `@<${id}>`);
+    }
 
-  return out;
+    return out;
 }
 
 /** Replace every occurrence of `token` in `text` that stands alone as a mention. */
-function replaceStandaloneMention(
-  text: string,
-  token: string,
-  replacement: string,
-): string {
-  let result = "";
-  let i = 0;
+function replaceStandaloneMention(text: string, token: string, replacement: string): string {
+    let result = "";
+    let i = 0;
 
-  for (;;) {
-    const at = text.indexOf(token, i);
-    if (at === -1) return result + text.slice(i);
-    result += isStandaloneMention(text, at, token.length)
-      ? text.slice(i, at) + replacement
-      : text.slice(i, at + token.length);
-    i = at + token.length;
-  }
+    for (;;) {
+        const at = text.indexOf(token, i);
+        if (at === -1) return result + text.slice(i);
+        result += isStandaloneMention(text, at, token.length)
+            ? text.slice(i, at) + replacement
+            : text.slice(i, at + token.length);
+        i = at + token.length;
+    }
 }
 
 /** True when the token at `[at, at + length)` starts a word and ends a mention. */
-function isStandaloneMention(
-  text: string,
-  at: number,
-  length: number,
-): boolean {
-  const before = at === 0 ? "" : text[at - 1]!;
-  const afterIndex = at + length;
-  const leftOk = at === 0 || /\s/.test(before);
+function isStandaloneMention(text: string, at: number, length: number): boolean {
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: `before` is only consulted when at !== 0 (leftOk below), so its value at the start of the text never matters, candidate for removal
+    const before = at === 0 ? "" : text[at - 1]!;
+    const afterIndex = at + length;
+    const leftOk = at === 0 || /\s/.test(before);
 
-  // Boundary rules consistent with `detectActiveTrigger`, which allows
-  // `[\w.-]` inside mention text: don't encode when the token is followed
-  // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
-  const rightOk =
-    afterIndex >= text.length || !/[\w.-]/.test(text[afterIndex]!);
+    // Boundary rules consistent with `detectActiveTrigger`, which allows
+    // `[\w.-]` inside mention text: don't encode when the token is followed
+    // by a word char, `.` or `-` (so `@Sam` isn't encoded inside `@Sam_Lee`).
+    const rightOk = afterIndex >= text.length || !/[\w.-]/.test(text[afterIndex]!);
 
-  return leftOk && rightOk;
+    return leftOk && rightOk;
 }
 
 /**
@@ -260,39 +248,39 @@ function isStandaloneMention(
  * doesn't match our scheme.
  */
 export interface ParsedMentionUrl {
-  kind: MentionKind;
-  id: string;
-  params: Record<string, string>;
+    kind: MentionKind;
+    id: string;
+    params: Record<string, string>;
 }
 
 export function parseMentionUrl(url: string): ParsedMentionUrl | null {
-  if (!url.startsWith("mention://")) return null;
-  // mention://<kind>/<id>?key=value&...
-  const after = url.slice("mention://".length);
-  const slash = after.indexOf("/");
-  if (slash < 0) return null;
-  const kindStr = after.slice(0, slash);
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a non-mention URL would also need "user/", "workitem/" or "pullrequest/" at exactly its 11th character to get past the kind check below, which no real link has, candidate for removal
+    if (!url.startsWith("mention://")) return null;
+    // mention://<kind>/<id>?key=value&...
+    const after = url.slice("mention://".length);
+    const slash = after.indexOf("/");
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: without a "/" (or with an empty kind) the kind slice is never "user", "workitem" or "pullrequest", so the kind check below rejects it anyway, candidate for removal
+    if (slash < 0) return null;
+    const kindStr = after.slice(0, slash);
 
-  if (
-    kindStr !== "user" &&
-    kindStr !== "workitem" &&
-    kindStr !== "pullrequest"
-  ) {
-    return null;
-  }
+    if (kindStr !== "user" && kindStr !== "workitem" && kindStr !== "pullrequest") {
+        return null;
+    }
 
-  const rest = after.slice(slash + 1);
-  const q = rest.indexOf("?");
-  const idRaw = q < 0 ? rest : rest.slice(0, q);
-  const id = decodeURIComponent(idRaw);
-  const params: Record<string, string> = {};
+    const rest = after.slice(slash + 1);
+    const q = rest.indexOf("?");
+    // Stryker disable next-line EqualityOperator: when "?" is the first character both branches yield an empty id
+    const idRaw = q < 0 ? rest : rest.slice(0, q);
+    const id = decodeURIComponent(idRaw);
+    const params: Record<string, string> = {};
 
-  if (q >= 0) {
-    const search = new URLSearchParams(rest.slice(q + 1));
-    for (const [k, v] of search) params[k] = v;
-  }
+    // Stryker disable next-line EqualityOperator: only differs for a URL with an empty id ("mention://kind/?…"), which buildMentionMarkdown never produces
+    if (q >= 0) {
+        const search = new URLSearchParams(rest.slice(q + 1));
+        for (const [k, v] of search) params[k] = v;
+    }
 
-  return { kind: kindStr, id, params };
+    return { kind: kindStr, id, params };
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +295,7 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
  * would otherwise be treated as raw HTML and dropped by our sanitizer).
  */
 export const USER_MENTION_RE =
-  /@<([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/gi;
+    /@<([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/gi;
 
 /**
  * Rewrite native `@<GUID>` user mentions in raw Markdown into our existing
@@ -317,10 +305,10 @@ export const USER_MENTION_RE =
  * every comment body (ours and ADO-native) so both render identically.
  */
 export function preprocessUserMentions(md: string): string {
-  return md.replace(
-    USER_MENTION_RE,
-    (_m, id: string) => `[@${id}](mention://user/${encodeURIComponent(id)})`,
-  );
+    return md.replace(
+        USER_MENTION_RE,
+        (_m, id: string) => `[@${id}](mention://user/${encodeURIComponent(id)})`,
+    );
 }
 
 /** Matches the `mention://user/<id>` link form our renderer/composer persist. */
@@ -341,27 +329,25 @@ const USER_MENTION_LINK_RE = /mention:\/\/user\/([^)\s"']+)/g;
  * returns the dashed GUID. Returns `undefined` when no GUID can be found (so
  * callers can fall back rather than emit a token ADO won't resolve).
  */
-export function normalizeIdentityGuid(
-  raw: string | undefined,
-): string | undefined {
-  if (raw === undefined || raw === "") return undefined;
+export function normalizeIdentityGuid(raw: string | undefined): string | undefined {
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: neither "" nor undefined (stringified to "undefined") contains a GUID, so the regexes below return undefined anyway, candidate for removal
+    if (raw === undefined || raw === "") return undefined;
 
-  const dashed =
-    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(raw);
+    const dashed = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(raw);
 
-  if (dashed) return dashed[0].toLowerCase();
-  const bare = /[0-9a-f]{32}/i.exec(raw);
+    if (dashed) return dashed[0].toLowerCase();
+    const bare = /[0-9a-f]{32}/i.exec(raw);
 
-  if (bare) {
-    const h = bare[0].toLowerCase();
+    if (bare) {
+        const h = bare[0].toLowerCase();
 
-    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(
-      16,
-      20,
-    )}-${h.slice(20)}`;
-  }
+        return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(
+            16,
+            20,
+        )}-${h.slice(20)}`;
+    }
 
-  return undefined;
+    return undefined;
 }
 
 /**
@@ -371,30 +357,31 @@ export function normalizeIdentityGuid(
  * names for a whole set of comments in one pass. Link-form ids are URL-decoded.
  */
 export function collectUserMentionIds(body: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
+    const seen = new Set<string>();
+    const out: string[] = [];
 
-  const add = (raw: string): void => {
-    const id = raw.trim();
-    if (!id) return;
-    const key = id.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(id);
-  };
+    const add = (raw: string): void => {
+        const id = raw.trim();
+        if (!id) return;
+        // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
+        const key = id.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(id);
+    };
 
-  for (const m of body.matchAll(USER_MENTION_RE)) add(m[1]!);
+    for (const m of body.matchAll(USER_MENTION_RE)) add(m[1]!);
 
-  for (const m of body.matchAll(USER_MENTION_LINK_RE)) {
-    try {
-      add(decodeURIComponent(m[1]!));
-    } catch {
-      // Malformed percent-encoding: fall back to the raw id.
-      add(m[1]!);
+    for (const m of body.matchAll(USER_MENTION_LINK_RE)) {
+        try {
+            add(decodeURIComponent(m[1]!));
+        } catch {
+            // Malformed percent-encoding: fall back to the raw id.
+            add(m[1]!);
+        }
     }
-  }
 
-  return out;
+    return out;
 }
 
 /**
@@ -408,25 +395,29 @@ export function collectUserMentionIds(body: string): string[] {
  * the dashed GUID so they key the same as the rendered pills.
  */
 export function collectMentionIdentities(
-  body: string,
-  lookup: (
-    id: string,
-  ) => { displayName: string; avatarUrl?: string } | undefined,
+    body: string,
+    lookup: (id: string) => { displayName: string; avatarUrl?: string } | undefined,
 ): MentionedIdentity[] {
-  const out: MentionedIdentity[] = [];
-  const seen = new Set<string>();
+    const out: MentionedIdentity[] = [];
+    const seen = new Set<string>();
 
-  for (const raw of collectUserMentionIds(body)) {
-    const id = normalizeIdentityGuid(raw) ?? raw;
-    const key = id.toLowerCase();
-    if (seen.has(key)) continue;
-    const info = lookup(id);
-    if (info === undefined || info.displayName === "") continue;
-    seen.add(key);
-    out.push({ id, displayName: info.displayName, avatarUrl: info.avatarUrl });
-  }
+    for (const raw of collectUserMentionIds(body)) {
+        const id = normalizeIdentityGuid(raw) ?? raw;
+        // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
+        const key = id.toLowerCase();
+        if (seen.has(key)) continue;
+        const info = lookup(id);
+        // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: the lookup is the identity store, which never holds an empty display name (seed and resolve both skip them), candidate for removal
+        if (info === undefined || info.displayName === "") continue;
+        seen.add(key);
+        out.push({
+            id,
+            displayName: info.displayName,
+            avatarUrl: info.avatarUrl,
+        });
+    }
 
-  return out;
+    return out;
 }
 
 /**
@@ -435,21 +426,22 @@ export function collectMentionIdentities(
  * ones a new reply adds before persisting the full set.
  */
 export function mergeMentionIdentities(
-  ...lists: ReadonlyArray<readonly MentionedIdentity[]>
+    ...lists: ReadonlyArray<readonly MentionedIdentity[]>
 ): MentionedIdentity[] {
-  const out: MentionedIdentity[] = [];
-  const seen = new Set<string>();
+    const out: MentionedIdentity[] = [];
+    const seen = new Set<string>();
 
-  for (const list of lists) {
-    for (const m of list) {
-      const key = (normalizeIdentityGuid(m.id) ?? m.id).toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(m);
+    for (const list of lists) {
+        for (const m of list) {
+            // Stryker disable next-line MethodExpression: de-duplication only needs one consistent case fold; upper-casing every id groups the same ids
+            const key = (normalizeIdentityGuid(m.id) ?? m.id).toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(m);
+        }
     }
-  }
 
-  return out;
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -458,11 +450,11 @@ export function mergeMentionIdentities(
 // ---------------------------------------------------------------------------
 
 export function authorToUserSuggestion(a: CommentAuthor): UserSuggestion {
-  return {
-    kind: "user",
-    id: a.id,
-    displayName: a.displayName,
-    initials: a.initials,
-    avatarUrl: a.avatarUrl,
-  };
+    return {
+        kind: "user",
+        id: a.id,
+        displayName: a.displayName,
+        initials: a.initials,
+        avatarUrl: a.avatarUrl,
+    };
 }

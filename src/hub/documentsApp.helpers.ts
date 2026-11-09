@@ -17,65 +17,66 @@ import { COMMENT_PERMISSION_DENIED_MESSAGE } from "../shell/commentPermission.he
  * `unloadedFolders` empty.
  */
 export interface LazyTreeState {
-  repoId: string;
-  files: FileInfo[];
-  unloadedFolders: string[];
-  /** Wiki `.order` page names per listed folder (slash-free path, root `""`). */
-  folderOrders: Record<string, string[]>;
+    repoId: string;
+    files: FileInfo[];
+    unloadedFolders: string[];
+    /** Wiki `.order` page names per listed folder (slash-free path, root `""`). */
+    folderOrders: Record<string, string[]>;
 }
 
 /** Seed a repo's lazy tree from its root listing. */
 export function seedLazyTree(repo: DocRepo): LazyTreeState {
-  return {
-    repoId: repo.id,
-    files: repo.files,
-    unloadedFolders: [...(repo.topLevelFolders ?? [])],
-    folderOrders: repo.rootOrder ? { "": repo.rootOrder } : {},
-  };
+    return {
+        repoId: repo.id,
+        files: repo.files,
+        unloadedFolders: [...(repo.topLevelFolders ?? [])],
+        folderOrders: repo.rootOrder ? { "": repo.rootOrder } : {},
+    };
 }
 
 /** Merge a just-expanded folder's listing into a repo's lazy-tree entry. */
 export function mergeFolderListing(
-  entry: LazyTreeState,
-  repoId: string,
-  path: string,
-  payload: FolderListing,
+    entry: LazyTreeState,
+    repoId: string,
+    path: string,
+    payload: FolderListing,
 ): LazyTreeState {
-  const seenFiles = new Set(entry.files.map((f) => f.path));
-  const mergedFiles = entry.files.slice();
+    const seenFiles = new Set(entry.files.map((f) => f.path));
+    const mergedFiles = entry.files.slice();
 
-  for (const f of payload.files) {
-    if (!seenFiles.has(f.path)) {
-      seenFiles.add(f.path);
-      mergedFiles.push(f);
-    }
-  }
-
-  // Drop the just-expanded folder; add new unloaded subfolders. Folder
-  // paths arrive in two flavours across the host boundary (`/docs` vs
-  // `docs`), so canonicalize every value to a "no leading slash" form
-  // — otherwise the set accumulates both variants.
-  const canonicalize = (p: string): string => p.replace(/^\/+/, "");
-  const unloaded = new Set(entry.unloadedFolders.map(canonicalize));
-  unloaded.delete(canonicalize(path));
-
-  for (const sub of payload.folders) {
-    unloaded.add(canonicalize(sub));
-  }
-
-  mergedFiles.sort((a, b) => a.path.localeCompare(b.path));
-
-  return {
-    repoId,
-    files: mergedFiles,
-    unloadedFolders: Array.from(unloaded).sort((a, b) => a.localeCompare(b)),
-    folderOrders: payload.order
-      ? {
-          ...entry.folderOrders,
-          [normalizeFolderPath(path)]: payload.order,
+    for (const f of payload.files) {
+        if (!seenFiles.has(f.path)) {
+            seenFiles.add(f.path);
+            mergedFiles.push(f);
         }
-      : entry.folderOrders,
-  };
+    }
+
+    // Drop the just-expanded folder; add new unloaded subfolders. Folder
+    // paths arrive in two flavours across the host boundary (`/docs` vs
+    // `docs`), so canonicalize every value to a "no leading slash" form
+    // — otherwise the set accumulates both variants.
+    // Stryker disable next-line Regex: tree paths never carry doubled leading slashes, so stripping one or a run is the same
+    const canonicalize = (p: string): string => p.replace(/^\/+/, "");
+    const unloaded = new Set(entry.unloadedFolders.map(canonicalize));
+    unloaded.delete(canonicalize(path));
+
+    for (const sub of payload.folders) {
+        unloaded.add(canonicalize(sub));
+    }
+
+    mergedFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+    return {
+        repoId,
+        files: mergedFiles,
+        unloadedFolders: Array.from(unloaded).sort((a, b) => a.localeCompare(b)),
+        folderOrders: payload.order
+            ? {
+                  ...entry.folderOrders,
+                  [normalizeFolderPath(path)]: payload.order,
+              }
+            : entry.folderOrders,
+    };
 }
 
 /**
@@ -84,15 +85,15 @@ export function mergeFolderListing(
  * the list, and finally to the first repo.
  */
 export function pickSelectedRepo(
-  repos: DocRepo[],
-  selectedRepoId: string,
-  cached: DocRepo | undefined,
+    repos: DocRepo[],
+    selectedRepoId: string,
+    cached: DocRepo | undefined,
 ): DocRepo | undefined {
-  const found = repos.find((r) => r.id === selectedRepoId);
-  if (found) return found;
-  if (cached?.id === selectedRepoId) return cached;
+    const found = repos.find((r) => r.id === selectedRepoId);
+    if (found) return found;
+    if (cached?.id === selectedRepoId) return cached;
 
-  return repos[0];
+    return repos[0];
 }
 
 /**
@@ -100,19 +101,16 @@ export function pickSelectedRepo(
  * fields are set for a readable DevTools breadcrumb). `files` comes from
  * the cached `lazyTree.files` so expansion + search visibly grow the tree.
  */
-export function buildSyntheticPr(
-  repo: DocRepo,
-  lazyTree: LazyTreeState | undefined,
-): PrInfo {
-  const treeFiles = lazyTree ? lazyTree.files : repo.files;
+export function buildSyntheticPr(repo: DocRepo, lazyTree: LazyTreeState | undefined): PrInfo {
+    const treeFiles = lazyTree ? lazyTree.files : repo.files;
 
-  return {
-    prId: repo.recentPr?.id ?? 0,
-    title: `Documents in ${repo.name}`,
-    authorName: repo.recentPr?.author ?? "\u2014",
-    // The default document is the first file: a wiki opens its first page.
-    files: withFirstPageFirst(treeFiles, repo.rootOrder),
-  };
+    return {
+        prId: repo.recentPr?.id ?? 0,
+        title: `Documents in ${repo.name}`,
+        authorName: repo.recentPr?.author ?? "\u2014",
+        // The default document is the first file: a wiki opens its first page.
+        files: withFirstPageFirst(treeFiles, repo.rootOrder),
+    };
 }
 
 /**
@@ -120,58 +118,56 @@ export function buildSyntheticPr(
  * completed PR; the rail hides when null).
  */
 export function buildRoutedPr(repo: DocRepo | undefined): RoutedPrInfo | null {
-  const rp = repo?.recentPr;
-  if (!rp) return null;
+    const rp = repo?.recentPr;
+    if (!rp) return null;
 
-  return {
-    prId: rp.id,
-    title: rp.title,
-    status: rp.status,
-    url: rp.url,
-  };
+    return {
+        prId: rp.id,
+        title: rp.title,
+        status: rp.status,
+        url: rp.url,
+    };
 }
 
 /** Commenting gates for the active repo. */
 interface CommentGating {
-  /** No routing PR to route repo-level comments through. */
-  readOnly: boolean;
-  /** Effective read-only flag handed to Shell. */
-  shellReadOnly: boolean;
-  /** Effective read-only banner message handed to Shell. */
-  shellReadOnlyMessage: string | undefined;
+    /** No routing PR to route repo-level comments through. */
+    readOnly: boolean;
+    /** Effective read-only flag handed to Shell. */
+    shellReadOnly: boolean;
+    /** Effective read-only banner message handed to Shell. */
+    shellReadOnlyMessage: string | undefined;
 }
 
 export function resolveCommentGating(
-  perDocumentMode: boolean,
-  repo: DocRepo | undefined,
+    perDocumentMode: boolean,
+    repo: DocRepo | undefined,
 ): CommentGating {
-  // Disable commenting when there's no PR to route through. The rail then
-  // renders a read-only banner and the article suppresses its selection bubble.
-  const readOnly = !repo?.recentPr;
+    // Disable commenting when there's no PR to route through. The rail then
+    // renders a read-only banner and the article suppresses its selection bubble.
+    const readOnly = !repo?.recentPr;
 
-  if (!perDocumentMode) {
+    if (!perDocumentMode) {
+        return {
+            readOnly,
+            shellReadOnly: readOnly,
+            shellReadOnlyMessage:
+                readOnly && repo
+                    ? `${repo.name} has no completed pull request — commenting is disabled until one is completed.`
+                    : undefined,
+        };
+    }
+
+    // Per-document mode has no routing PR to gate on; instead commenting is
+    // disabled only when ADO explicitly denied Contribute on the repo. The rail
+    // surfaces the reason in its read-only banner (right panel).
+    const denied = repo?.canComment === false;
+
     return {
-      readOnly,
-      shellReadOnly: readOnly,
-      shellReadOnlyMessage:
-        readOnly && repo
-          ? `${repo.name} has no completed pull request — commenting is disabled until one is completed.`
-          : undefined,
+        readOnly,
+        shellReadOnly: denied,
+        shellReadOnlyMessage: denied ? COMMENT_PERMISSION_DENIED_MESSAGE : undefined,
     };
-  }
-
-  // Per-document mode has no routing PR to gate on; instead commenting is
-  // disabled only when ADO explicitly denied Contribute on the repo. The rail
-  // surfaces the reason in its read-only banner (right panel).
-  const denied = repo?.canComment === false;
-
-  return {
-    readOnly,
-    shellReadOnly: denied,
-    shellReadOnlyMessage: denied
-      ? COMMENT_PERMISSION_DENIED_MESSAGE
-      : undefined,
-  };
 }
 
 /**
@@ -180,73 +176,66 @@ export function resolveCommentGating(
  * org/project aren't supplied (standalone) — the hydrator no-ops on null.
  */
 export function buildMentionLinks(
-  orgUrl: string | undefined,
-  projectName: string | undefined,
-  defaultRepoName: string | undefined,
+    orgUrl: string | undefined,
+    projectName: string | undefined,
+    defaultRepoName: string | undefined,
 ): MentionLinkResolution | null {
-  return orgUrl !== undefined &&
-    orgUrl !== "" &&
-    projectName !== undefined &&
-    projectName !== ""
-    ? { orgUrl, projectName, defaultRepoName }
-    : null;
+    return orgUrl !== undefined && orgUrl !== "" && projectName !== undefined && projectName !== ""
+        ? { orgUrl, projectName, defaultRepoName }
+        : null;
 }
 
 interface ShellTreeState {
-  unloadedFolders: string[];
-  /**
-   * A repo whose content has loaded but holds no markdown at all (no root
-   * files and no subfolders to expand). Drives the friendly "No documents"
-   * empty state instead of mounting Shell on an empty file list.
-   */
-  isEmptyRepo: boolean;
-  /**
-   * True on renders where Shell is actually shown (the repo's routing has
-   * resolved and the repo isn't empty).
-   */
-  shellMounting: boolean;
+    unloadedFolders: string[];
+    /**
+     * A repo whose content has loaded but holds no markdown at all (no root
+     * files and no subfolders to expand). Drives the friendly "No documents"
+     * empty state instead of mounting Shell on an empty file list.
+     */
+    isEmptyRepo: boolean;
+    /**
+     * True on renders where Shell is actually shown (the repo's routing has
+     * resolved and the repo isn't empty).
+     */
+    shellMounting: boolean;
 }
 
 export function resolveShellTree(
-  repo: DocRepo,
-  lazyTree: LazyTreeState | undefined,
-  fileCount: number,
+    repo: DocRepo,
+    lazyTree: LazyTreeState | undefined,
+    fileCount: number,
 ): ShellTreeState {
-  const unloadedFolders = lazyTree
-    ? lazyTree.unloadedFolders
-    : (repo.topLevelFolders ?? []);
+    const unloadedFolders = lazyTree ? lazyTree.unloadedFolders : (repo.topLevelFolders ?? []);
 
-  const loaded = repo.detailsLoaded !== false;
-  const isEmptyRepo = loaded && fileCount === 0 && unloadedFolders.length === 0;
+    const loaded = repo.detailsLoaded !== false;
 
-  return {
-    unloadedFolders,
-    isEmptyRepo,
-    shellMounting: loaded && !isEmptyRepo,
-  };
+    const isEmptyRepo = loaded && fileCount === 0 && unloadedFolders.length === 0;
+
+    return {
+        unloadedFolders,
+        isEmptyRepo,
+        shellMounting: loaded && !isEmptyRepo,
+    };
 }
 
 /** Deep-link seeds forwarded to Shell on the initial repo's first mount. */
 export interface DeepLinkSeeds {
-  initialSelectedPath?: string;
-  initialActiveThreadId?: string;
-  initialAnchor?: string;
-  initialTextFragment?: string;
+    initialSelectedPath?: string;
+    initialActiveThreadId?: string;
+    initialAnchor?: string;
+    initialTextFragment?: string;
 }
 
 /** Forward the deep-link seeds only while they are still `active`. */
-export function pickDeepLinkSeeds(
-  active: boolean,
-  seeds: DeepLinkSeeds,
-): DeepLinkSeeds {
-  if (!active) return {};
+export function pickDeepLinkSeeds(active: boolean, seeds: DeepLinkSeeds): DeepLinkSeeds {
+    if (!active) return {};
 
-  return {
-    initialSelectedPath: seeds.initialSelectedPath,
-    initialActiveThreadId: seeds.initialActiveThreadId,
-    initialAnchor: seeds.initialAnchor,
-    initialTextFragment: seeds.initialTextFragment,
-  };
+    return {
+        initialSelectedPath: seeds.initialSelectedPath,
+        initialActiveThreadId: seeds.initialActiveThreadId,
+        initialAnchor: seeds.initialAnchor,
+        initialTextFragment: seeds.initialTextFragment,
+    };
 }
 
 /**
@@ -254,21 +243,17 @@ export function pickDeepLinkSeeds(
  * `undefined` when the key isn't a navigation key. `current` is the focused
  * option's index (`-1` when focus is elsewhere, e.g. the filter box).
  */
-export function menuFocusTarget(
-  key: string,
-  current: number,
-  count: number,
-): number | undefined {
-  if (key === "ArrowDown" || key === "ArrowUp") {
-    const dir = key === "ArrowDown" ? 1 : -1;
-    // Coming from the filter box (or nothing focused): enter the list.
-    if (current === -1) return dir === 1 ? 0 : count - 1;
+export function menuFocusTarget(key: string, current: number, count: number): number | undefined {
+    if (key === "ArrowDown" || key === "ArrowUp") {
+        const dir = key === "ArrowDown" ? 1 : -1;
+        // Coming from the filter box (or nothing focused): enter the list.
+        if (current === -1) return dir === 1 ? 0 : count - 1;
 
-    return (current + dir + count) % count;
-  }
+        return (current + dir + count) % count;
+    }
 
-  if (key === "Home") return 0;
-  if (key === "End") return count - 1;
+    if (key === "Home") return 0;
+    if (key === "End") return count - 1;
 
-  return undefined;
+    return undefined;
 }

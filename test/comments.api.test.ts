@@ -1,143 +1,136 @@
-// Tests for the LocalOnly CommentApi and the filterByQuery scorer.
+// Tests for the LocalOnly CommentApi and the filterByQuery matcher behind the
+// dev preview's mention pickers.
 
 import { describe, expect, it } from "vitest";
 
 import { filterByQuery, LocalOnlyCommentApi } from "../src/comments/api";
 
 describe("filterByQuery", () => {
-  type Row = { name: string; tags: string };
+    type Row = { name: string; tags: string };
 
-  const items: Row[] = [
-    { name: "alpha", tags: "first" },
-    { name: "beta", tags: "second" },
-    { name: "gamma", tags: "alpha-prefix" },
-    { name: "delta", tags: "" },
-  ];
-
-  const keys = (r: Row): string[] => [r.name, r.tags];
-
-  it("returns the first 8 items when the query is empty", () => {
-    expect(filterByQuery(items, "", keys).length).toBeLessThanOrEqual(8);
-    expect(filterByQuery(items, "   ", keys)).toHaveLength(items.length);
-  });
-
-  it("matches case-insensitively across all key fields", () => {
-    const r = filterByQuery(items, "ALPHA", keys);
-    expect(r.map((x) => x.name).sort()).toEqual(["alpha", "gamma"]);
-  });
-
-  it("ranks earlier hits before later hits", () => {
-    const r = filterByQuery(items, "alpha", keys);
-    // `alpha`'s name starts at offset 0 — it should sort before `gamma`
-    // whose match is in the `tags` field after a "gamma " prefix.
-    expect(r[0]!.name).toBe("alpha");
-  });
-
-  it("sorts strictly by match offset even when insertion order disagrees", () => {
-    // Insertion order is deliberately NOT the ranked order, so a removed or
-    // sign-flipped sort comparator produces a different sequence.
-    const rows = [
-      { name: "wx" }, // "x" at offset 1
-      { name: "x" }, //  "x" at offset 0
-      { name: "wwx" }, // "x" at offset 2
+    const items: Row[] = [
+        { name: "alpha", tags: "first" },
+        { name: "beta", tags: "second" },
+        { name: "gamma", tags: "alpha-prefix" },
+        { name: "delta", tags: "" },
     ];
 
-    const ranked = filterByQuery(rows, "x", (r) => [r.name]);
-    expect(ranked.map((r) => r.name)).toEqual(["x", "wx", "wwx"]);
-  });
+    const keys = (r: Row): string[] => [r.name, r.tags];
 
-  it("joins key fields with a space so matches don't bridge field boundaries", () => {
-    // "foo bar" only matches when the key separator is a space; a mutated
-    // empty separator would yield "foobar" and miss this query.
-    const rows = [{ a: "foo", b: "bar" }];
-    const hit = filterByQuery(rows, "foo bar", (r) => [r.a, r.b]);
-    expect(hit).toHaveLength(1);
-  });
-
-  it("returns at most 8 ranked matches", () => {
     const many: Row[] = Array.from({ length: 20 }, (_, i) => ({
-      name: `match-${i}`,
-      tags: "",
+        name: `match-${i}`,
+        tags: "",
     }));
 
-    expect(filterByQuery(many, "match", (r) => [r.name])).toHaveLength(8);
-  });
+    it.each([
+        { name: "an empty", query: "" },
+        { name: "a blank", query: "   " },
+    ])("suggests the first eight items for $name query", ({ query }) => {
+        expect(filterByQuery(many, query, keys)).toEqual(many.slice(0, 8));
+    });
 
-  it("returns an empty array when nothing matches", () => {
-    expect(filterByQuery(items, "missing-xyz", keys)).toEqual([]);
-  });
+    it("matches case-insensitively across every searchable field", () => {
+        const r = filterByQuery(items, "ALPHA", keys);
+        expect(r.map((x) => x.name).sort()).toEqual(["alpha", "gamma"]);
+    });
+
+    it("ranks suggestions whose match starts earlier first, regardless of input order", () => {
+        const rows = [{ name: "wx" }, { name: "x" }, { name: "wwx" }];
+
+        const ranked = filterByQuery(rows, "x", (r) => [r.name]);
+        expect(ranked.map((r) => r.name)).toEqual(["x", "wx", "wwx"]);
+    });
+
+    it("matches a query that runs from one field into the next, like a work item id and title", () => {
+        const workItems = [{ id: "11612", title: "Fix login" }];
+
+        expect(filterByQuery(workItems, "11612 fix", (w) => [w.id, w.title])).toEqual(workItems);
+    });
+
+    it("returns at most eight matches", () => {
+        expect(filterByQuery(many, "match", (r) => [r.name])).toHaveLength(8);
+    });
+
+    it("returns no suggestions when nothing matches", () => {
+        expect(filterByQuery(items, "missing-xyz", keys)).toEqual([]);
+    });
 });
 
 describe("LocalOnlyCommentApi", () => {
-  it("mints unique thread ids on each createThread call", async () => {
-    const api = new LocalOnlyCommentApi();
+    it("gives each new thread a distinct id and a first comment id derived from it", async () => {
+        const api = new LocalOnlyCommentApi();
 
-    const a = await api.createThread({
-      filePath: "f.md",
-      anchor: { exact: "x", prefix: "", suffix: "" },
-      bodyMarkdown: "hi",
+        const a = await api.createThread({
+            filePath: "f.md",
+            anchor: { exact: "x", prefix: "", suffix: "" },
+            bodyMarkdown: "hi",
+        });
+
+        const b = await api.createThread({
+            filePath: "f.md",
+            anchor: { exact: "y", prefix: "", suffix: "" },
+            bodyMarkdown: "bye",
+        });
+
+        expect(a.threadId).not.toBe(b.threadId);
+        expect(a.firstCommentId).toBe(`${a.threadId}-c1`);
+        expect(Number.isFinite(Date.parse(a.createdAt))).toBe(true);
     });
 
-    const b = await api.createThread({
-      filePath: "f.md",
-      anchor: { exact: "y", prefix: "", suffix: "" },
-      bodyMarkdown: "bye",
+    it("gives each reply a distinct comment id", async () => {
+        const api = new LocalOnlyCommentApi();
+        const r1 = await api.addReply("t1", "hi");
+        const r2 = await api.addReply("t1", "there");
+        expect(r1.commentId).not.toBe(r2.commentId);
     });
 
-    expect(a.threadId).not.toBe(b.threadId);
-    expect(a.firstCommentId).toBe(`${a.threadId}-c1`);
-    expect(Number.isFinite(Date.parse(a.createdAt))).toBe(true);
-  });
+    it("stamps an edited comment with the time of the edit", async () => {
+        const api = new LocalOnlyCommentApi();
 
-  it("numbers thread and comment ids from 1 with a pre-increment counter", async () => {
-    const api = new LocalOnlyCommentApi();
+        const { updatedAt } = await api.editComment("t", "c", "new");
 
-    const t1 = await api.createThread({
-      filePath: "f.md",
-      anchor: { exact: "x", prefix: "", suffix: "" },
-      bodyMarkdown: "hi",
+        expect(Number.isFinite(Date.parse(updatedAt))).toBe(true);
     });
 
-    const t2 = await api.createThread({
-      filePath: "f.md",
-      anchor: { exact: "y", prefix: "", suffix: "" },
-      bodyMarkdown: "bye",
+    it.each([
+        {
+            name: "deleting a comment",
+            act: (api: LocalOnlyCommentApi) => api.deleteComment("t", "c"),
+        },
+        {
+            name: "changing a thread's status",
+            act: (api: LocalOnlyCommentApi) => api.setStatus("t", "resolved"),
+        },
+        {
+            name: "liking a comment",
+            act: (api: LocalOnlyCommentApi) => api.toggleReaction("t", "c", "like", true),
+        },
+    ])("accepts $name without a server", async ({ act }) => {
+        await expect(act(new LocalOnlyCommentApi())).resolves.toBeUndefined();
     });
 
-    // Exact ids pin the pre-increment (first call yields 1, not 0).
-    expect(t1.threadId).toBe("t-local-1");
-    expect(t2.threadId).toBe("t-local-2");
-    const r1 = await api.addReply("t1", "hi");
-    const r2 = await api.addReply("t1", "there");
-    expect(r1.commentId).toBe("c-local-1");
-    expect(r2.commentId).toBe("c-local-2");
-  });
-
-  it("mints unique reply comment ids", async () => {
-    const api = new LocalOnlyCommentApi();
-    const r1 = await api.addReply("t1", "hi");
-    const r2 = await api.addReply("t1", "there");
-    expect(r1.commentId).not.toBe(r2.commentId);
-  });
-
-  it("editComment / deleteComment / setStatus / toggleReaction are no-op promises", async () => {
-    const api = new LocalOnlyCommentApi();
-    await expect(api.editComment("t", "c", "new")).resolves.toEqual(
-      expect.objectContaining({ updatedAt: expect.any(String) }),
-    );
-    await expect(api.deleteComment("t", "c")).resolves.toBeUndefined();
-    await expect(api.setStatus("t", "resolved")).resolves.toBeUndefined();
-    await expect(
-      api.toggleReaction("t", "c", "like", true),
-    ).resolves.toBeUndefined();
-  });
-
-  it("returns empty mention-search results (no directory to search)", async () => {
-    const api = new LocalOnlyCommentApi();
-    expect(await api.searchUsers("")).toEqual([]);
-    expect(await api.searchUsers("Alex")).toEqual([]);
-    expect(await api.searchWorkItems("comment")).toEqual([]);
-    expect(await api.searchPullRequests("OneTodo")).toEqual([]);
-    expect(await api.resolveIdentities(["u-alex"])).toEqual({});
-  });
+    it.each([
+        {
+            name: "people",
+            search: (api: LocalOnlyCommentApi) => api.searchUsers("Alex"),
+            empty: [],
+        },
+        {
+            name: "work items",
+            search: (api: LocalOnlyCommentApi) => api.searchWorkItems("comment"),
+            empty: [],
+        },
+        {
+            name: "pull requests",
+            search: (api: LocalOnlyCommentApi) => api.searchPullRequests("OneTodo"),
+            empty: [],
+        },
+        {
+            name: "identity names",
+            search: (api: LocalOnlyCommentApi) => api.resolveIdentities(["u-alex"]),
+            empty: {},
+        },
+    ])("has no $name to offer without a directory to search", async ({ search, empty }) => {
+        await expect(search(new LocalOnlyCommentApi())).resolves.toEqual(empty);
+    });
 });

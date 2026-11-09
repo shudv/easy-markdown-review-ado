@@ -14,15 +14,15 @@
 
 /** The minimum a thread needs to be placed in the rail's ordered list. */
 export interface OrderableComment {
-  id: string;
-  /**
-   * The anchor's resolved vertical position in the document, or `null` when
-   * the comment isn't anchored to the current document (PR-level "general"
-   * comments, or comments whose quoted anchor text was edited away).
-   */
-  anchorY: number | null;
-  /** Thread creation time as epoch milliseconds (the root comment's timestamp). */
-  createdAt: number;
+    id: string;
+    /**
+     * The anchor's resolved vertical position in the document, or `null` when
+     * the comment isn't anchored to the current document (PR-level "general"
+     * comments, or comments whose quoted anchor text was edited away).
+     */
+    anchorY: number | null;
+    /** Thread creation time as epoch milliseconds (the root comment's timestamp). */
+    createdAt: number;
 }
 
 /**
@@ -30,29 +30,27 @@ export interface OrderableComment {
  * module comment for the ordering rules. The input is not mutated.
  */
 export function orderComments(items: readonly OrderableComment[]): string[] {
-  return [...items].sort(compareComments).map((i) => i.id);
+    return [...items].sort(compareComments).map((i) => i.id);
 }
 
 /** Comparator implementing the anchored-then-unanchored, newest-first order. */
-export function compareComments(
-  a: OrderableComment,
-  b: OrderableComment,
-): number {
-  const aAnchored = a.anchorY !== null;
-  const bAnchored = b.anchorY !== null;
-  // Anchored comments always precede unanchored ones.
-  if (aAnchored !== bAnchored) return aAnchored ? -1 : 1;
+function compareComments(a: OrderableComment, b: OrderableComment): number {
+    const aAnchored = a.anchorY !== null;
+    const bAnchored = b.anchorY !== null;
+    // Anchored comments always precede unanchored ones.
+    if (aAnchored !== bAnchored) return aAnchored ? -1 : 1;
 
-  // Both anchored: order by document position (top of the document first).
-  if (aAnchored && bAnchored && a.anchorY !== b.anchorY) {
-    return a.anchorY! - b.anchorY!;
-  }
+    // Both anchored: order by document position (top of the document first).
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: past the mixed-group return both comments are anchored or both are not, so "both anchored" can be replaced by "either" or dropped — two unanchored ones have equal (null) positions anyway, candidate for removal
+    if (aAnchored && bAnchored && a.anchorY !== b.anchorY) {
+        return a.anchorY! - b.anchorY!;
+    }
 
-  // Same anchor position, or both unanchored: newest thread first.
-  return b.createdAt - a.createdAt;
+    // Same anchor position, or both unanchored: newest thread first.
+    return b.createdAt - a.createdAt;
 }
 
 /** Whether a thread's root comment sorts it into the anchored group. */
 export function isAnchored(anchorY: number | null): boolean {
-  return anchorY !== null;
+    return anchorY !== null;
 }

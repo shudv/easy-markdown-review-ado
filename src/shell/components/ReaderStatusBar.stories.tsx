@@ -1,18 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import {
-  type ComponentProps,
-  type ReactElement,
-  useLayoutEffect,
-  useState,
-} from "react";
-import {
-  expect,
-  fireEvent,
-  fn,
-  userEvent,
-  waitFor,
-  within,
-} from "storybook/test";
+import { type ComponentProps, type ReactElement, useLayoutEffect, useState } from "react";
+import { expect, fireEvent, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { ReaderStatusBar } from "./ReaderStatusBar";
 import { READER_FONTS } from "../readerPrefs";
@@ -20,1076 +8,769 @@ import { READER_FONTS } from "../readerPrefs";
 // Dock the bar at the viewport bottom (as in the app) so its upward-opening
 // font popover lands on-screen and its controls are hit-testable.
 const meta = {
-  title: "Components/ReaderStatusBar",
-  component: ReaderStatusBar,
-  parameters: { layout: "fullscreen" },
-  decorators: [
-    (Story) => (
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-end",
-        }}
-      >
-        <Story />
-      </div>
-    ),
-  ],
-  args: {
-    wordCount: 1240,
-    wordDelta: { added: 38, removed: 12 },
-    fontId: "system",
-    sizePct: 100,
-    spacingPct: 100,
-    onFontChange: fn(),
-    onSizeChange: fn(),
-    onSpacingChange: fn(),
-    availableFontIds: READER_FONTS.map((font) => font.id),
-    showNav: true,
-    onToggleNav: fn(),
-    navToggleable: true,
-    showComments: true,
-    onToggleComments: fn(),
-    changesAvailable: true,
-    changesShown: true,
-    onToggleChanges: fn(),
-    iterationOptions: [
-      {
-        stopIndex: 2,
-        number: 1,
-        title: "Initial draft",
-        dateMs: Date.parse("2026-08-11T17:06:00Z"),
-      },
-      {
-        stopIndex: 1,
-        number: 2,
-        title: "Refine review workflow",
-        dateMs: Date.parse("2026-08-18T11:07:00Z"),
-      },
-      {
-        stopIndex: 0,
-        number: 3,
-        title: "Improve review workflow",
-        dateMs: Date.parse("2026-08-23T10:14:00Z"),
-      },
+    title: "Components/ReaderStatusBar",
+    component: ReaderStatusBar,
+    parameters: { layout: "fullscreen" },
+    decorators: [
+        (Story) => (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "flex-end",
+                }}
+            >
+                <Story />
+            </div>
+        ),
     ],
-    iterationBaseCommit: "abcdef1234567890",
-    iterationRange: { fromUpdate: 0, toUpdate: 3 },
-    onIterationRangeChange: fn(),
-    feedbackHref: "mailto:x@microsoft.com",
-    onRefresh: fn(),
-    // `refreshLabel` intentionally omitted — exercises the "Refresh" fallback.
-  },
+    args: {
+        wordCount: 1240,
+        wordDelta: { added: 38, removed: 12 },
+        fontId: "system",
+        sizePct: 100,
+        spacingPct: 100,
+        onFontChange: fn(),
+        onSizeChange: fn(),
+        onSpacingChange: fn(),
+        availableFontIds: READER_FONTS.map((font) => font.id),
+        showNav: true,
+        onToggleNav: fn(),
+        navToggleable: true,
+        showComments: true,
+        onToggleComments: fn(),
+        changesAvailable: true,
+        changesShown: true,
+        onToggleChanges: fn(),
+        iterationOptions: [
+            {
+                stopIndex: 2,
+                number: 1,
+                title: "Initial draft",
+                dateMs: Date.parse("2026-08-11T17:06:00Z"),
+            },
+            {
+                stopIndex: 1,
+                number: 2,
+                title: "Refine review workflow",
+                dateMs: Date.parse("2026-08-18T11:07:00Z"),
+            },
+            {
+                stopIndex: 0,
+                number: 3,
+                title: "Improve review workflow",
+                dateMs: Date.parse("2026-08-23T10:14:00Z"),
+            },
+        ],
+        iterationBaseCommit: "abcdef1234567890",
+        iterationRange: { fromUpdate: 0, toUpdate: 3 },
+        onIterationRangeChange: fn(),
+        feedbackHref: "mailto:x@microsoft.com",
+        onRefresh: fn(),
+        // `refreshLabel` intentionally omitted — exercises the "Refresh" fallback.
+    },
 } satisfies Meta<typeof ReaderStatusBar>;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-function ControlledReaderStatusBar(
-  props: ComponentProps<typeof ReaderStatusBar>,
-): ReactElement {
-  const [iterationRange, setIterationRange] = useState(props.iterationRange);
+function ControlledReaderStatusBar(props: ComponentProps<typeof ReaderStatusBar>): ReactElement {
+    const [iterationRange, setIterationRange] = useState(props.iterationRange);
 
-  return (
-    <ReaderStatusBar
-      {...props}
-      iterationRange={iterationRange}
-      onIterationRangeChange={(nextRange) => {
-        setIterationRange(nextRange);
-        props.onIterationRangeChange?.(nextRange);
-      }}
-    />
-  );
+    return (
+        <ReaderStatusBar
+            {...props}
+            iterationRange={iterationRange}
+            onIterationRangeChange={(nextRange) => {
+                setIterationRange(nextRange);
+                props.onIterationRangeChange?.(nextRange);
+            }}
+        />
+    );
 }
 
-function ControlledCommentStatusBar(
-  props: ComponentProps<typeof ReaderStatusBar>,
-): ReactElement {
-  const [showComments, setShowComments] = useState(props.showComments);
+function ControlledCommentStatusBar(props: ComponentProps<typeof ReaderStatusBar>): ReactElement {
+    const [showComments, setShowComments] = useState(props.showComments);
 
-  const [activeCommentThreadId, setActiveCommentThreadId] = useState(
-    props.activeCommentThreadId ?? null,
-  );
+    const [activeCommentThreadId, setActiveCommentThreadId] = useState(
+        props.activeCommentThreadId ?? null,
+    );
 
-  return (
-    <ReaderStatusBar
-      {...props}
-      showComments={showComments}
-      onToggleComments={() => {
-        setShowComments((shown) => !shown);
-        props.onToggleComments();
-      }}
-      activeCommentThreadId={activeCommentThreadId}
-      onCycleComment={(threadId) => {
-        setActiveCommentThreadId(threadId);
-        props.onCycleComment?.(threadId);
-      }}
-    />
-  );
+    return (
+        <ReaderStatusBar
+            {...props}
+            showComments={showComments}
+            onToggleComments={() => {
+                setShowComments((shown) => !shown);
+                props.onToggleComments();
+            }}
+            activeCommentThreadId={activeCommentThreadId}
+            onCycleComment={(threadId) => {
+                setActiveCommentThreadId(threadId);
+                props.onCycleComment?.(threadId);
+            }}
+        />
+    );
 }
 
-/** The settled bar: word count + delta on the left, colour-only toggles right. */
+/**
+ * The settled bar: pressed view toggles, the word count with the PR's word
+ * delta, closed popovers, and an update picker that lists All updates first,
+ * then the newest update down to the first.
+ */
 export const Default: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    expect(
-      canvas.getByRole("toolbar", { name: "Reader status and controls" }),
-    ).toBeTruthy();
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        expect(canvas.getByRole("toolbar", { name: "Reader status and controls" })).toBeTruthy();
 
-    const iterationPopover = canvasElement.querySelector<HTMLElement>(
-      ".emr-statusbar-iteration-pop",
-    )!;
+        // The view toggles read as pressed while their panes are shown.
+        for (const name of ["Navigation", "Changes", "Comments"]) {
+            expect(canvas.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+        }
 
-    const typePopover =
-      canvasElement.querySelector<HTMLElement>(".emr-statusbar-pop")!;
+        expect(canvas.getByRole("button", { name: "Aa" })).toHaveAttribute(
+            "aria-expanded",
+            "false",
+        );
 
-    expect(iterationPopover.inert).toBe(true);
-    expect(iterationPopover).toHaveAttribute("aria-hidden", "true");
-    expect(typePopover.inert).toBe(true);
-    expect(typePopover).toHaveAttribute("aria-hidden", "true");
+        // Word count and the PR's word delta, each part announced in words.
+        expect(canvas.getByText("words")).toHaveTextContent("1,240 words");
+        expect(canvas.getByLabelText("38 words added")).toHaveTextContent("+38");
+        expect(canvas.getByLabelText("12 words removed")).toHaveTextContent("−12");
 
-    const visibleToolbarButtons = [
-      ...canvasElement.querySelectorAll<HTMLButtonElement>(
-        ".emr-statusbar-left > button, .emr-statusbar-context-controls > button, .emr-statusbar-controls button",
-      ),
-    ].filter((button) => button.offsetParent !== null);
+        // Popovers start closed: their contents are hidden from assistive tech.
+        expect(canvas.queryByRole("listbox", { name: "Review iterations" })).toBeNull();
+        expect(canvas.queryByRole("group", { name: "Reading preferences" })).toBeNull();
+        expect(canvas.queryByRole("slider", { name: "Text spacing" })).toBeNull();
 
-    expect(
-      visibleToolbarButtons.map(
-        (button) =>
-          button.getAttribute("aria-label") ??
-          button.textContent?.trim() ??
-          button.title,
-      ),
-    ).toEqual(
-      expect.arrayContaining(["Navigation", "Changes", "Comments", "Aa"]),
-    );
-    const changesButton = canvas.getByRole("button", { name: "Changes" });
-    expect(changesButton.getBoundingClientRect().width).toBeCloseTo(24, 1);
-    expect(changesButton.querySelector(".emr-statusbar-btn-label")).toBeNull();
-    expect(visibleToolbarButtons[0]?.textContent).toContain("Navigation");
-    expect(
-      visibleToolbarButtons.findIndex((button) =>
-        button.textContent?.includes("Changes"),
-      ),
-    ).toBeLessThan(
-      visibleToolbarButtons.findIndex((button) =>
-        button.textContent?.includes("Comments"),
-      ),
-    );
+        const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
+        expect(sizeSlider).toHaveAttribute("min", "50");
+        expect(sizeSlider).toHaveAttribute("max", "150");
+        expect(sizeSlider).toHaveAttribute("aria-valuetext", "100%");
 
-    const delta = canvasElement.querySelector<HTMLElement>(
-      ".emr-statusbar-delta",
-    )!;
+        await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
 
-    expect(delta.textContent).toBe("+38−12");
-    expect(
-      delta
-        .querySelector(".emr-statusbar-delta-add")
-        ?.getAttribute("aria-label"),
-    ).toBe("38 words added");
-    const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
-    expect(canvas.queryByRole("slider", { name: "Text spacing" })).toBeNull();
+        // Newest first, like ADO's own update list: All updates, then 3 → 1.
+        const options = within(
+            canvas.getByRole("listbox", { name: "Review iterations" }),
+        ).getAllByRole("option");
 
-    const spacingSlider = typePopover.querySelector<HTMLInputElement>(
-      'input[aria-label="Text spacing"]',
-    )!;
+        expect(options.map((option) => option.textContent)).toEqual([
+            expect.stringContaining("All updates"),
+            expect.stringContaining("3Improve review workflow"),
+            expect.stringContaining("2Refine review workflow"),
+            expect.stringContaining("1Initial draft"),
+        ]);
 
-    expect(sizeSlider.getAttribute("min")).toBe("50");
-    expect(sizeSlider.getAttribute("max")).toBe("150");
-    expect(spacingSlider.getAttribute("min")).toBe("100");
-    expect(spacingSlider.getAttribute("max")).toBe("200");
-    expect(
-      typePopover.querySelector<HTMLButtonElement>(
-        ".emr-percent-adjust.is-minus",
-      ),
-    ).toBeDisabled();
+        const selectedOptions = canvas.getAllByRole("option", {
+            selected: true,
+        });
 
-    for (const selector of [
-      ".emr-statusbar-iteration-trigger .emr-statusbar-iteration-text",
-      ".emr-statusbar-words",
-      ".emr-statusbar-delta-add",
-      ".emr-statusbar-btn-label",
-      ".emr-statusbar-aa",
-      ".emr-percent-output",
-    ]) {
-      const style = getComputedStyle(
-        canvasElement.querySelector<HTMLElement>(selector)!,
-      );
+        expect(selectedOptions).toHaveLength(1);
+        expect(selectedOptions[0]).toHaveTextContent("All updates");
 
-      expect(style.transform).toBe("none");
-      expect(style.getPropertyValue("text-box-trim")).toBe("none");
-    }
+        // The selected row must actually be painted. `aria-selected` alone passes
+        // even when the stylesheet drifts to a different attribute and the
+        // highlight silently disappears.
+        const unselected = canvas.getByRole("option", {
+            name: /3 Improve review workflow/,
+            selected: false,
+        });
 
-    const barCenter = (() => {
-      const rect = canvasElement
-        .querySelector<HTMLElement>(".emr-statusbar")!
-        .getBoundingClientRect();
+        const selectedBg = getComputedStyle(selectedOptions[0]!).backgroundColor;
 
-      return rect.top + rect.height / 2;
-    })();
-
-    for (const selector of [
-      ".emr-statusbar-iteration-trigger .emr-statusbar-iteration-text",
-      ".emr-statusbar-words",
-      ".emr-statusbar-delta-add",
-      ".emr-statusbar-btn-label",
-      ".emr-statusbar-aa",
-    ]) {
-      const rect = canvasElement
-        .querySelector<HTMLElement>(selector)!
-        .getBoundingClientRect();
-
-      expect(
-        Math.abs(rect.top + rect.height / 2 - barCenter),
-      ).toBeLessThanOrEqual(0.75);
-    }
-
-    expect(
-      getComputedStyle(
-        canvasElement.querySelector<SVGElement>(
-          ".emr-statusbar-iteration-chevron",
-        )!,
-      ).transform,
-    ).toBe("none");
-
-    const separators = [
-      ...canvasElement.querySelectorAll<HTMLElement>(".emr-statusbar-sep"),
-    ];
-
-    expect(separators).toHaveLength(4);
-
-    const separatorMetrics = separators.map((separator) => {
-      const rect = separator.getBoundingClientRect();
-
-      const previousRect =
-        separator.previousElementSibling!.getBoundingClientRect();
-
-      const nextRect = separator.nextElementSibling!.getBoundingClientRect();
-
-      return {
-        width: rect.width,
-        height: rect.height,
-        gapBefore: rect.left - previousRect.right,
-        gapAfter: nextRect.left - rect.right,
-      };
-    });
-
-    for (const metric of separatorMetrics) {
-      expect(metric.width).toBeCloseTo(separatorMetrics[0]!.width, 1);
-      expect(metric.height).toBeCloseTo(separatorMetrics[0]!.height, 1);
-      expect(metric.gapBefore).toBeCloseTo(6, 1);
-      expect(metric.gapAfter).toBeCloseTo(6, 1);
-    }
-
-    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
-    // Newest first, like ADO's own update list: All updates, then 3 → 1.
-    const options = canvas.getAllByRole("option");
-    expect(options.map((option) => option.textContent)).toEqual([
-      expect.stringContaining("All updates"),
-      expect.stringContaining("3Improve review workflow"),
-      expect.stringContaining("2Refine review workflow"),
-      expect.stringContaining("1Initial draft"),
-    ]);
-    const selectedOptions = canvas.getAllByRole("option", { selected: true });
-    expect(selectedOptions).toHaveLength(1);
-    expect(selectedOptions[0]?.textContent).toContain("All updates");
-    expect(
-      canvas
-        .getByRole("listbox", { name: "Review iterations" })
-        .querySelector(".emr-statusbar-font-check"),
-    ).toBeNull();
-    expect(
-      canvas.getByRole("option", { name: /3 Improve review workflow/ }),
-    ).toHaveAttribute("aria-selected", "false");
-
-    // The selected row must actually be painted. `aria-selected` alone passes
-    // even when the stylesheet drifts to a different attribute and the
-    // highlight silently disappears.
-    const unselected = canvas.getByRole("option", {
-      name: /3 Improve review workflow/,
-    });
-
-    const selectedBg = getComputedStyle(selectedOptions[0]!).backgroundColor;
-    expect(selectedBg).not.toBe(getComputedStyle(unselected).backgroundColor);
-    expect(selectedBg).not.toBe("rgba(0, 0, 0, 0)");
-  },
+        expect(selectedBg).not.toBe(getComputedStyle(unselected).backgroundColor);
+        expect(selectedBg).not.toBe("rgba(0, 0, 0, 0)");
+    },
 };
 
 /** Highest-priority overlapping work owns the centered status message. */
 export const LoadingActivity: Story = {
-  args: {
-    activities: [
-      { id: "sync", label: "Syncing comments…", priority: 10 },
-      { id: "document", label: "Loading document…", priority: 100 },
-    ],
-    activityDelayMs: 0,
-  },
-  play: async ({ canvasElement }) => {
-    const status = await waitFor(() =>
-      canvasElement.querySelector<HTMLElement>(".emr-statusbar-activity"),
-    );
+    args: {
+        activities: [
+            { id: "sync", label: "Syncing comments…", priority: 10 },
+            { id: "document", label: "Loading document…", priority: 100 },
+        ],
+        activityDelayMs: 0,
+    },
+    play: async ({ canvasElement }) => {
+        const message = await within(canvasElement).findByText("Loading document…");
+        const status = message.closest<HTMLElement>('[role="status"]')!;
 
-    await expect(status).toBeTruthy();
-    await expect(status).toHaveTextContent("Loading document…");
-    await expect(status).toHaveAttribute(
-      "title",
-      "Loading document… (2 operations running)",
-    );
+        await expect(status).toHaveTextContent("Loading document…");
+        await expect(status).not.toHaveTextContent("Syncing comments…");
+        await expect(status).toHaveAttribute("title", "Loading document… (2 operations running)");
 
-    const spinner = canvasElement.querySelector<HTMLElement>(
-      ".emr-statusbar-spinner",
-    )!;
+        // The spinner beside the message is actually turning.
+        const spinner = status.querySelector<HTMLElement>(".emr-statusbar-spinner")!;
 
-    await expect(getComputedStyle(spinner).animationName).toBe(
-      "emr-statusbar-spin",
-    );
-    await expect(spinner.getAnimations()).toHaveLength(1);
-    await expect(spinner.getAnimations()[0]?.playState).toBe("running");
-    await expect(
-      canvasElement.querySelector(".emr-statusbar-center"),
-    ).toBeTruthy();
-  },
+        await expect(spinner.getAnimations()).toHaveLength(1);
+        await expect(spinner.getAnimations()[0]?.playState).toBe("running");
+    },
 };
 
 /** Documents Hub surfaces the active document's latest resolved PR. */
 export const ResolvedPullRequest: Story = {
-  args: {
-    resolvedPullRequest: {
-      prId: 128,
-      title: "Clarify the review checklist",
-      url: "https://example.test/pullrequest/128",
+    args: {
+        resolvedPullRequest: {
+            prId: 128,
+            title: "Clarify the review checklist",
+            url: "https://example.test/pullrequest/128",
+        },
     },
-  },
-  play: async ({ canvasElement }) => {
-    const link = within(canvasElement).getByRole("link", {
-      name: "Latest completed PR for this file: #128 Clarify the review checklist",
-    });
+    play: async ({ canvasElement }) => {
+        const link = within(canvasElement).getByRole("link", {
+            name: "Latest completed PR for this file: #128 Clarify the review checklist",
+        });
 
-    await expect(link).toHaveTextContent("PR #128");
-    await expect(link).toHaveAttribute(
-      "href",
-      "https://example.test/pullrequest/128",
-    );
-
-    const comments = within(canvasElement).getByRole("button", {
-      name: "Comments",
-    });
-
-    await expect(link.getBoundingClientRect().left).toBeGreaterThan(
-      comments.getBoundingClientRect().left,
-    );
-    await expect(link.closest(".emr-statusbar-comment-controls")).toBeTruthy();
-  },
+        await expect(link).toHaveTextContent("PR #128");
+        await expect(link).toHaveAttribute("href", "https://example.test/pullrequest/128");
+        await expect(link).toHaveAttribute("target", "_blank");
+    },
 };
 
 /** Resolved PR metadata remains useful when the host cannot provide a URL. */
 export const ResolvedPullRequestWithoutLink: Story = {
-  args: {
-    resolvedPullRequest: {
-      prId: 128,
-      title: "Clarify the review checklist",
+    args: {
+        resolvedPullRequest: {
+            prId: 128,
+            title: "Clarify the review checklist",
+        },
     },
-  },
-  play: async ({ canvasElement }) => {
-    const status = within(canvasElement).getByLabelText(
-      "Latest completed PR for this file: #128 Clarify the review checklist",
-    );
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    await expect(status.tagName).toBe("SPAN");
-    await expect(status).toHaveTextContent("PR #128");
-  },
+        const badge = canvas.getByLabelText(
+            "Latest completed PR for this file: #128 Clarify the review checklist",
+        );
+
+        await expect(badge).toHaveTextContent("PR #128");
+        await expect(canvas.queryByRole("link", { name: /Latest completed PR/ })).toBeNull();
+    },
 };
 
-/** Bounded stepping keeps both chevrons fixed and selection inspectable. */
+/** Left edges of the comparison stepper's three buttons. */
+function stepperPositions(...buttons: HTMLElement[]): number[] {
+    return buttons.map((button) => Math.round(button.getBoundingClientRect().left * 10) / 10);
+}
+
+/**
+ * Stepping back through the updates one comparison at a time, then forward
+ * again: the label follows each step, the chevrons stay put under the
+ * pointer, each end disables its chevron, and the picker shows the selection.
+ */
 export const IterationStepping: Story = {
-  render: (args) => <ControlledReaderStatusBar {...args} />,
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole("button", { name: "All updates" });
+    render: (args) => <ControlledReaderStatusBar {...args} />,
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const trigger = canvas.getByRole("button", { name: "All updates" });
 
-    const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
-      ".emr-statusbar-iteration-step",
-    );
+        const previous = canvas.getByRole("button", {
+            name: "Previous comparison: Update 2 → 3",
+        });
 
-    const initialPositions = {
-      previous: previous!.getBoundingClientRect().left,
-      trigger: trigger.getBoundingClientRect().left,
-      next: next!.getBoundingClientRect().left,
-    };
+        const next = canvas.getByRole("button", { name: "No next comparison" });
+        const initialPositions = stepperPositions(previous, trigger, next);
 
-    expect(previous!.getBoundingClientRect().right).toBeCloseTo(
-      trigger.getBoundingClientRect().left,
-      1,
-    );
-    expect(trigger.getBoundingClientRect().right).toBeCloseTo(
-      next!.getBoundingClientRect().left,
-      1,
-    );
+        expect(next).toBeDisabled();
 
-    expect(trigger.querySelector(".emr-statusbar-caret")).toBeNull();
+        for (const label of ["Update 2 → 3", "Update 1 → 2", "Base → Update 1"]) {
+            await userEvent.click(previous);
+            expect(canvas.getByRole("button", { name: label })).toBe(trigger);
+            expect(stepperPositions(previous, trigger, next)).toEqual(initialPositions);
+        }
 
-    const expectCenteredLabel = () => {
-      const triggerRect = trigger.getBoundingClientRect();
+        expect(previous).toHaveAccessibleName("No previous comparison");
+        expect(previous).toBeDisabled();
+        expect(canvas.getByTitle("Base commit abcdef1")).toBeTruthy();
 
-      const labelRect = trigger
-        .querySelector<HTMLElement>(".emr-statusbar-iteration-value")!
-        .getBoundingClientRect();
+        for (const label of ["Update 1 → 2", "Update 2 → 3", "All updates"]) {
+            await userEvent.click(next);
+            expect(canvas.getByRole("button", { name: label })).toBe(trigger);
+            expect(stepperPositions(previous, trigger, next)).toEqual(initialPositions);
+        }
 
-      expect(labelRect.left + labelRect.width / 2).toBeCloseTo(
-        triggerRect.left + triggerRect.width / 2,
-        1,
-      );
-    };
+        expect(next).toBeDisabled();
+        expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+            fromUpdate: 0,
+            toUpdate: 3,
+        });
 
-    expectCenteredLabel();
-
-    expect(previous).toHaveAttribute(
-      "aria-label",
-      "Previous comparison: Update 2 → 3",
-    );
-    expect(next).toBeDisabled();
-
-    for (const label of ["Update 2 → 3", "Update 1 → 2", "Base → Update 1"]) {
-      await userEvent.click(previous!);
-      expect(canvas.getByRole("button", { name: label })).toBeTruthy();
-      expectCenteredLabel();
-      expect(previous!.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.previous,
-        1,
-      );
-      expect(trigger.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.trigger,
-        1,
-      );
-      expect(next.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.next,
-        1,
-      );
-    }
-
-    expect(previous).toBeDisabled();
-    expect(
-      trigger.querySelector(".emr-statusbar-iteration-base"),
-    ).toHaveAttribute("title", "Base commit abcdef1");
-
-    const baseGlyph = trigger
-      .querySelector<HTMLElement>(".emr-statusbar-iteration-base")!
-      .getBoundingClientRect();
-
-    const arrow = [...trigger.querySelectorAll<HTMLElement>("span")]
-      .find((element) => element.textContent === "→")!
-      .getBoundingClientRect();
-
-    expect(baseGlyph.top + baseGlyph.height / 2).toBeCloseTo(
-      arrow.top + arrow.height / 2,
-      1,
-    );
-    expect(
-      trigger.querySelector(".emr-statusbar-iteration-base-dot"),
-    ).not.toBeNull();
-    expect(
-      getComputedStyle(
-        trigger.querySelector<HTMLElement>(
-          ".emr-statusbar-iteration-base-dot",
-        )!,
-      ).transform,
-    ).toBe("matrix(1, 0, 0, 1, 0, 1)");
-
-    for (const label of ["Update 1 → 2", "Update 2 → 3", "All updates"]) {
-      await userEvent.click(next!);
-      expect(canvas.getByRole("button", { name: label })).toBeTruthy();
-      expectCenteredLabel();
-      expect(previous!.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.previous,
-        1,
-      );
-      expect(trigger.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.trigger,
-        1,
-      );
-      expect(next!.getBoundingClientRect().left).toBeCloseTo(
-        initialPositions.next,
-        1,
-      );
-    }
-
-    expect(next).toBeDisabled();
-    expect(args.onIterationRangeChange).toHaveBeenCalledWith({
-      fromUpdate: 0,
-      toUpdate: 3,
-    });
-
-    await userEvent.click(previous!);
-    expect(canvas.getByRole("button", { name: "Update 2 → 3" })).toBeTruthy();
-
-    await userEvent.click(canvas.getByRole("button", { name: "Update 2 → 3" }));
-    await userEvent.click(
-      canvas.getByRole("option", { name: /2 Refine review workflow/ }),
-    );
-    expect(
-      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-    ).not.toBeNull();
-    expect(
-      canvas.getByRole("option", {
-        name: /2 Refine review workflow/,
-        selected: true,
-      }),
-    ).toBeTruthy();
-    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
-    expect(
-      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-    ).not.toBeNull();
-    expect(
-      canvas.getByRole("option", { name: "All updates", selected: true }),
-    ).toBeTruthy();
-  },
+        await userEvent.click(previous);
+        await userEvent.click(canvas.getByRole("button", { name: "Update 2 → 3" }));
+        // Picking rows keeps the picker open so the resulting selection stays visible.
+        await userEvent.click(canvas.getByRole("option", { name: /2 Refine review workflow/ }));
+        expect(
+            canvas.getByRole("option", {
+                name: /2 Refine review workflow/,
+                selected: true,
+            }),
+        ).toBeTruthy();
+        await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+        expect(canvas.getByRole("option", { name: "All updates", selected: true })).toBeTruthy();
+    },
 };
 
-/** Multi-digit update labels keep both chevrons fixed and stay below the cap. */
+/**
+ * In a long PR (128 updates) stepping between multi-digit labels doesn't move
+ * the chevrons or resize the picker, and opening the list scrolls the current
+ * comparison into view instead of leaving the reviewer at the newest update.
+ */
 export const IterationMultiDigitStepping: Story = {
-  args: {
-    iterationOptions: Array.from({ length: 128 }, (_, index) => ({
-      stopIndex: 127 - index,
-      number: index + 1,
-      title: `Update ${index + 1}`,
-    })),
-    iterationRange: { fromUpdate: 98, toUpdate: 99 },
-  },
-  render: (args) => <ControlledReaderStatusBar {...args} />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole("button", { name: "Update 98 → 99" });
+    args: {
+        iterationOptions: Array.from({ length: 128 }, (_, index) => ({
+            stopIndex: 127 - index,
+            number: index + 1,
+            title: `Update ${index + 1}`,
+        })),
+        iterationRange: { fromUpdate: 98, toUpdate: 99 },
+    },
+    render: (args) => <ControlledReaderStatusBar {...args} />,
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const trigger = canvas.getByRole("button", { name: "Update 98 → 99" });
 
-    const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
-      ".emr-statusbar-iteration-step",
-    );
+        const previous = canvas.getByRole("button", {
+            name: "Previous comparison: Update 97 → 98",
+        });
 
-    const initialGeometry = {
-      previousLeft: previous!.getBoundingClientRect().left,
-      triggerLeft: trigger.getBoundingClientRect().left,
-      triggerWidth: trigger.getBoundingClientRect().width,
-      nextLeft: next!.getBoundingClientRect().left,
-    };
+        const next = canvas.getByRole("button", {
+            name: "Next comparison: Update 99 → 100",
+        });
 
-    expect(initialGeometry.triggerWidth).toBeLessThanOrEqual(310);
+        const initialPositions = stepperPositions(previous, trigger, next);
+        const width = () => Math.round(trigger.getBoundingClientRect().width * 10) / 10;
+        const initialWidth = width();
 
-    await userEvent.click(next!);
-    expect(
-      canvas.getByRole("button", { name: "Update 99 → 100" }),
-    ).toBeTruthy();
-    expect(previous!.getBoundingClientRect().left).toBeCloseTo(
-      initialGeometry.previousLeft,
-      1,
-    );
-    expect(trigger.getBoundingClientRect().left).toBeCloseTo(
-      initialGeometry.triggerLeft,
-      1,
-    );
-    expect(trigger.getBoundingClientRect().width).toBeCloseTo(
-      initialGeometry.triggerWidth,
-      1,
-    );
-    expect(next!.getBoundingClientRect().left).toBeCloseTo(
-      initialGeometry.nextLeft,
-      1,
-    );
+        await userEvent.click(next);
+        expect(canvas.getByRole("button", { name: "Update 99 → 100" })).toBe(trigger);
+        expect(stepperPositions(previous, trigger, next)).toEqual(initialPositions);
+        expect(width()).toBe(initialWidth);
 
-    // Opening a long list scrolls the current selection into view instead of
-    // leaving the reviewer at the top (the newest update).
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Update 99 → 100" }),
-    );
-    const list = canvas.getByRole("listbox", { name: "Review iterations" });
-    await expect(list.scrollTop).toBeGreaterThan(0);
+        await userEvent.click(trigger);
+        const list = canvas.getByRole("listbox", { name: "Review iterations" });
+        await expect(list.scrollTop).toBeGreaterThan(0);
 
-    const selected = canvas.getByRole("option", {
-      name: /^100 Update 100/,
-      selected: true,
-    });
+        const selected = canvas.getByRole("option", {
+            name: /^100 Update 100/,
+            selected: true,
+        });
 
-    const listRect = list.getBoundingClientRect();
-    const rowRect = selected.getBoundingClientRect();
-    await expect(rowRect.top).toBeGreaterThanOrEqual(listRect.top);
-    await expect(rowRect.bottom).toBeLessThanOrEqual(listRect.bottom);
-  },
+        const listRect = list.getBoundingClientRect();
+        const rowRect = selected.getBoundingClientRect();
+        await expect(rowRect.top).toBeGreaterThanOrEqual(listRect.top);
+        await expect(rowRect.bottom).toBeLessThanOrEqual(listRect.bottom);
+    },
 };
 
 /** A range steps to the first single-update comparison outside each edge. */
 export const IterationRangeStepping: Story = {
-  args: {
-    iterationOptions: Array.from({ length: 6 }, (_, index) => ({
-      stopIndex: 5 - index,
-      number: index + 1,
-      title: `Update ${index + 1}`,
-    })),
-    iterationRange: { fromUpdate: 2, toUpdate: 5 },
-  },
-  render: (args) => <ControlledReaderStatusBar {...args} />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    args: {
+        iterationOptions: Array.from({ length: 6 }, (_, index) => ({
+            stopIndex: 5 - index,
+            number: index + 1,
+            title: `Update ${index + 1}`,
+        })),
+        iterationRange: { fromUpdate: 2, toUpdate: 5 },
+    },
+    render: (args) => <ControlledReaderStatusBar {...args} />,
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
-      ".emr-statusbar-iteration-step",
-    );
+        expect(canvas.getByRole("button", { name: "Update 2 → 5" })).toBeTruthy();
+        expect(
+            canvas.getByRole("button", { name: "Previous comparison: Update 1 → 2" }),
+        ).toBeEnabled();
 
-    expect(canvas.getByRole("button", { name: "Update 2 → 5" })).toBeTruthy();
-    expect(previous).toHaveAttribute(
-      "aria-label",
-      "Previous comparison: Update 1 → 2",
-    );
-    expect(next).toHaveAttribute("aria-label", "Next comparison: Update 5 → 6");
-
-    await userEvent.click(next!);
-    expect(canvas.getByRole("button", { name: "Update 5 → 6" })).toBeTruthy();
-    expect(next).toHaveAttribute("aria-label", "Next comparison: All updates");
-  },
+        await userEvent.click(
+            canvas.getByRole("button", { name: "Next comparison: Update 5 → 6" }),
+        );
+        expect(canvas.getByRole("button", { name: "Update 5 → 6" })).toBeTruthy();
+        expect(canvas.getByRole("button", { name: "Next comparison: All updates" })).toBeEnabled();
+    },
 };
 
 /** Comment navigation wraps while Comments and Navigation stay right-anchored. */
 export const CommentStepping: Story = {
-  args: {
-    commentThreadIds: ["t1", "t2", "t3"],
-    activeCommentThreadId: "t2",
-    onCycleComment: fn(),
-  },
-  render: (args) => <ControlledCommentStatusBar {...args} />,
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    const comments = canvas.getByRole("button", { name: "Comments" });
-    const navigation = canvas.getByRole("button", { name: "Navigation" });
+    args: {
+        commentThreadIds: ["t1", "t2", "t3"],
+        activeCommentThreadId: "t2",
+        onCycleComment: fn(),
+    },
+    render: (args) => <ControlledCommentStatusBar {...args} />,
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const comments = canvas.getByRole("button", { name: "Comments" });
+        const navigation = canvas.getByRole("button", { name: "Navigation" });
 
-    const persistentPositions = {
-      comments: comments.getBoundingClientRect().left,
-      navigation: navigation.getBoundingClientRect().left,
-    };
+        const persistentPositions = {
+            comments: comments.getBoundingClientRect().left,
+            navigation: navigation.getBoundingClientRect().left,
+        };
 
-    expect(canvas.getByLabelText("Comment 2 of 3")).toBeTruthy();
+        expect(canvas.getByLabelText("Comment 2 of 3")).toBeTruthy();
 
-    const previous = canvas.getByRole("button", { name: "Previous comment" });
-    const next = canvas.getByRole("button", { name: "Next comment" });
-    await userEvent.click(next);
-    expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
-    expect(canvas.getByLabelText("Comment 3 of 3")).toBeTruthy();
-    await userEvent.click(next);
-    expect(args.onCycleComment).toHaveBeenLastCalledWith("t1");
-    expect(canvas.getByLabelText("Comment 1 of 3")).toBeTruthy();
-    await userEvent.click(previous);
-    expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
+        const previous = canvas.getByRole("button", {
+            name: "Previous comment",
+        });
 
-    await userEvent.click(comments);
-    expect(
-      canvas.queryByRole("button", { name: "Previous comment" }),
-    ).toBeNull();
-    expect(comments.getBoundingClientRect().left).toBeCloseTo(
-      persistentPositions.comments,
-      1,
-    );
-    expect(navigation.getBoundingClientRect().left).toBeCloseTo(
-      persistentPositions.navigation,
-      1,
-    );
-    await userEvent.click(comments);
-    expect(
-      canvas.getByRole("button", { name: "Previous comment" }),
-    ).toBeTruthy();
-    expect(comments.getBoundingClientRect().left).toBeCloseTo(
-      persistentPositions.comments,
-      1,
-    );
-  },
+        const next = canvas.getByRole("button", { name: "Next comment" });
+        await userEvent.click(next);
+        expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
+        expect(canvas.getByLabelText("Comment 3 of 3")).toBeTruthy();
+        await userEvent.click(next);
+        expect(args.onCycleComment).toHaveBeenLastCalledWith("t1");
+        expect(canvas.getByLabelText("Comment 1 of 3")).toBeTruthy();
+        await userEvent.click(previous);
+        expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
+
+        await userEvent.click(comments);
+        expect(canvas.queryByRole("button", { name: "Previous comment" })).toBeNull();
+        expect(comments.getBoundingClientRect().left).toBeCloseTo(persistentPositions.comments, 1);
+        expect(navigation.getBoundingClientRect().left).toBeCloseTo(
+            persistentPositions.navigation,
+            1,
+        );
+        await userEvent.click(comments);
+        expect(canvas.getByRole("button", { name: "Previous comment" })).toBeTruthy();
+        expect(comments.getBoundingClientRect().left).toBeCloseTo(persistentPositions.comments, 1);
+    },
 };
 
 /** With no selection, Previous starts at the last visible comment. */
 export const CommentSteppingNoSelection: Story = {
-  args: {
-    commentThreadIds: ["t1", "t2", "t3"],
-    activeCommentThreadId: null,
-    onCycleComment: fn(),
-  },
-  render: (args) => <ControlledCommentStatusBar {...args} />,
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    expect(canvas.getByLabelText("3 comments")).toBeTruthy();
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Previous comment" }),
-    );
-    expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
-    expect(canvas.getByLabelText("Comment 3 of 3")).toBeTruthy();
-  },
+    args: {
+        commentThreadIds: ["t1", "t2", "t3"],
+        activeCommentThreadId: null,
+        onCycleComment: fn(),
+    },
+    render: (args) => <ControlledCommentStatusBar {...args} />,
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        expect(canvas.getByLabelText("3 comments")).toBeTruthy();
+        await userEvent.click(canvas.getByRole("button", { name: "Previous comment" }));
+        expect(args.onCycleComment).toHaveBeenLastCalledWith("t3");
+        expect(canvas.getByLabelText("Comment 3 of 3")).toBeTruthy();
+    },
 };
 
 /** A single visible comment needs no previous/next navigation. */
 export const SingleCommentWithoutStepper: Story = {
-  args: {
-    commentThreadIds: ["t1"],
-    activeCommentThreadId: "t1",
-    onCycleComment: fn(),
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: "Comments" })).toBeTruthy();
-    await expect(
-      canvas.queryByRole("button", { name: "Previous comment" }),
-    ).toBeNull();
-    await expect(
-      canvas.queryByRole("button", { name: "Next comment" }),
-    ).toBeNull();
-  },
+    args: {
+        commentThreadIds: ["t1"],
+        activeCommentThreadId: "t1",
+        onCycleComment: fn(),
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("button", { name: "Comments" })).toBeTruthy();
+        await expect(canvas.queryByRole("button", { name: "Previous comment" })).toBeNull();
+        await expect(canvas.queryByRole("button", { name: "Next comment" })).toBeNull();
+    },
 };
 
 /** No completed PR means no comments pane control or navigation. */
 export const CommentsUnavailable: Story = {
-  args: {
-    commentsAvailable: false,
-    commentThreadIds: ["t1", "t2"],
-    activeCommentThreadId: "t1",
-    onCycleComment: fn(),
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
-    await expect(canvas.queryByLabelText("Comment navigation")).toBeNull();
-  },
+    args: {
+        commentsAvailable: false,
+        commentThreadIds: ["t1", "t2"],
+        activeCommentThreadId: "t1",
+        onCycleComment: fn(),
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.queryByRole("button", { name: "Comments" })).toBeNull();
+        await expect(canvas.queryByLabelText("Comment navigation")).toBeNull();
+    },
 };
 
-/** Settled update range for theme and visual regression coverage. */
+/**
+ * Comparing a range of updates (Update 1 → 3): both rows read as selected in
+ * the list, shift-clicking extends the range from its anchor, and Next jumps
+ * straight to All updates.
+ */
 export const IterationRange: Story = {
-  args: {
-    iterationRange: {
-      fromUpdate: 1,
-      toUpdate: 3,
+    args: {
+        iterationRange: {
+            fromUpdate: 1,
+            toUpdate: 3,
+        },
     },
-  },
-  render: (args) => <ControlledReaderStatusBar {...args} />,
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
+    render: (args) => <ControlledReaderStatusBar {...args} />,
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
 
-    const [previous, next] = canvasElement.querySelectorAll<HTMLButtonElement>(
-      ".emr-statusbar-iteration-step",
-    );
+        expect(
+            canvas.getByRole("button", { name: "Previous comparison: Base → Update 1" }),
+        ).toBeEnabled();
 
-    expect(previous).toHaveAttribute(
-      "aria-label",
-      "Previous comparison: Base → Update 1",
-    );
-    expect(next).toHaveAttribute("aria-label", "Next comparison: All updates");
-    expect(next).toBeEnabled();
-    await userEvent.click(canvas.getByRole("button", { name: "Update 1 → 3" }));
-    const selectedOptions = canvas.getAllByRole("option", { selected: true });
-    expect(selectedOptions).toHaveLength(2);
-    expect(selectedOptions.map((option) => option.textContent)).toEqual([
-      expect.stringContaining("3Improve review workflow"),
-      expect.stringContaining("2Refine review workflow"),
-    ]);
-    fireEvent.click(
-      canvas.getByRole("option", { name: /2 Refine review workflow/ }),
-      { shiftKey: true },
-    );
-    expect(args.onIterationRangeChange).toHaveBeenCalledWith({
-      fromUpdate: 1,
-      toUpdate: 3,
-    });
-    await userEvent.click(next!);
-    expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy();
-    expect(next).toBeDisabled();
-  },
+        const next = canvas.getByRole("button", { name: "Next comparison: All updates" });
+
+        expect(next).toBeEnabled();
+        await userEvent.click(canvas.getByRole("button", { name: "Update 1 → 3" }));
+
+        const selectedOptions = canvas.getAllByRole("option", {
+            selected: true,
+        });
+
+        expect(selectedOptions.map((option) => option.textContent)).toEqual([
+            expect.stringContaining("3Improve review workflow"),
+            expect.stringContaining("2Refine review workflow"),
+        ]);
+        fireEvent.click(canvas.getByRole("option", { name: /2 Refine review workflow/ }), {
+            shiftKey: true,
+        });
+        expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+            fromUpdate: 1,
+            toUpdate: 3,
+        });
+        await userEvent.click(next);
+        expect(canvas.getByRole("button", { name: "All updates" })).toBeTruthy();
+        expect(next).toBeDisabled();
+    },
 };
 
 /** High contrast uses one continuous outline because its soft fill matches the page. */
 export const IterationRangeHighContrast: Story = {
-  args: IterationRange.args,
-  decorators: [
-    (Story) => {
-      useLayoutEffect(() => {
-        const root = document.documentElement;
-        const previousTheme = root.getAttribute("data-emr-theme");
-        root.setAttribute("data-emr-theme", "hc-light");
+    args: IterationRange.args,
+    decorators: [
+        (Story) => {
+            useLayoutEffect(() => {
+                const root = document.documentElement;
+                const previousTheme = root.getAttribute("data-emr-theme");
+                root.setAttribute("data-emr-theme", "hc-light");
 
-        return () => {
-          if (previousTheme) root.setAttribute("data-emr-theme", previousTheme);
-          else root.removeAttribute("data-emr-theme");
-        };
-      }, []);
+                return () => {
+                    if (previousTheme) root.setAttribute("data-emr-theme", previousTheme);
+                    else root.removeAttribute("data-emr-theme");
+                };
+            }, []);
 
-      return <Story />;
-    },
-  ],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Update 1 → 3" }));
-    const selectedOptions = canvas.getAllByRole("option", { selected: true });
-    expect(selectedOptions).toHaveLength(2);
-
-    // Newest first: the band's top row is the range's newest update (3) and
-    // its bottom row the oldest (2), so the caps follow that order.
-    const bandTop = getComputedStyle(selectedOptions[0]!, "::after");
-    const bandBottom = getComputedStyle(selectedOptions[1]!, "::after");
-    expect(bandTop.borderLeftColor).toBe("rgb(0, 51, 204)");
-    expect(parseFloat(bandTop.borderTopWidth)).toBeGreaterThan(0);
-    expect(bandTop.borderBottomWidth).toBe("0px");
-    expect(bandBottom.borderTopWidth).toBe("0px");
-    expect(parseFloat(bandBottom.borderBottomWidth)).toBeGreaterThan(0);
-    expect(
-      canvas
-        .getByRole("listbox", { name: "Review iterations" })
-        .querySelector(".emr-statusbar-font-check"),
-    ).toBeNull();
-  },
-};
-
-/** Compact relative ages cover minute/hour/day and absent-date rendering. */
-export const IterationRelativeAges: Story = {
-  args: {
-    iterationBaseCommit: undefined,
-    iterationOptions: [
-      { stopIndex: 3, number: 1, title: "No recorded timestamp" },
-      {
-        stopIndex: 2,
-        number: 2,
-        title: "Two days ago",
-        dateMs: Date.now() - 2 * 24 * 60 * 60_000,
-      },
-      {
-        stopIndex: 1,
-        number: 3,
-        title: "Two hours ago",
-        dateMs: Date.now() - 2 * 60 * 60_000,
-      },
-      {
-        stopIndex: 0,
-        number: 4,
-        title: "Fifteen minutes ago",
-        dateMs: Date.now() - 15 * 60_000,
-      },
+            return <Story />;
+        },
     ],
-    iterationRange: { fromUpdate: 0, toUpdate: 1 },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Base → Update 1" }),
-    );
-    expect(
-      canvas
-        .getByRole("button", { name: "Base → Update 1" })
-        .querySelector(".emr-statusbar-iteration-base"),
-    ).toHaveAttribute("title", "Base commit");
-    expect(canvas.getByText(/15m ago/)).toBeTruthy();
-    expect(canvas.getByText(/2h ago/)).toBeTruthy();
-    expect(canvas.getByText(/2d ago/)).toBeTruthy();
-    expect(
-      canvas
-        .getByRole("option", { name: /No recorded timestamp/ })
-        .querySelector("time"),
-    ).toBeNull();
-  },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Update 1 → 3" }));
+
+        const selectedOptions = canvas.getAllByRole("option", {
+            selected: true,
+        });
+
+        expect(selectedOptions).toHaveLength(2);
+
+        // Newest first: the band's top row is the range's newest update (3) and
+        // its bottom row the oldest (2), so the caps follow that order.
+        const bandTop = getComputedStyle(selectedOptions[0]!, "::after");
+        const bandBottom = getComputedStyle(selectedOptions[1]!, "::after");
+        expect(bandTop.borderLeftColor).toBe("rgb(0, 51, 204)");
+        expect(parseFloat(bandTop.borderTopWidth)).toBeGreaterThan(0);
+        expect(bandTop.borderBottomWidth).toBe("0px");
+        expect(bandBottom.borderTopWidth).toBe("0px");
+        expect(parseFloat(bandBottom.borderBottomWidth)).toBeGreaterThan(0);
+    },
 };
 
 /**
- * Every control flows through its callback: the view toggles, the font popover
- * (open → pick + change spacing → close on Escape) and text-size slider.
+ * The update list shows compact relative ages (15m / 2h / 2d ago) and no age
+ * for an update without a timestamp; with no recorded base commit the base
+ * marker's tooltip just says "Base commit".
+ */
+export const IterationRelativeAges: Story = {
+    args: {
+        iterationBaseCommit: undefined,
+        iterationOptions: [
+            { stopIndex: 3, number: 1, title: "No recorded timestamp" },
+            {
+                stopIndex: 2,
+                number: 2,
+                title: "Two days ago",
+                dateMs: Date.now() - 2 * 24 * 60 * 60_000,
+            },
+            {
+                stopIndex: 1,
+                number: 3,
+                title: "Two hours ago",
+                dateMs: Date.now() - 2 * 60 * 60_000,
+            },
+            {
+                stopIndex: 0,
+                number: 4,
+                title: "Fifteen minutes ago",
+                dateMs: Date.now() - 15 * 60_000,
+            },
+        ],
+        iterationRange: { fromUpdate: 0, toUpdate: 1 },
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Base → Update 1" }));
+        expect(canvas.getByTitle("Base commit")).toBeTruthy();
+        expect(canvas.getByRole("option", { name: /Fifteen minutes ago/ })).toHaveTextContent(
+            "15m ago",
+        );
+        expect(canvas.getByRole("option", { name: /Two hours ago/ })).toHaveTextContent("2h ago");
+        expect(canvas.getByRole("option", { name: /Two days ago/ })).toHaveTextContent("2d ago");
+        expect(canvas.getByRole("option", { name: /No recorded timestamp/ })).not.toHaveTextContent(
+            "ago",
+        );
+    },
+};
+
+/**
+ * Every control flows through its callback: the view toggles, the update
+ * picker (Escape / outside click restore focus, single and shift-click picks),
+ * the font popover (open → pick + change spacing → close on Escape) and the
+ * text-size slider.
  */
 export const Interactions: Story = {
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const updatesList = () => canvas.queryByRole("listbox", { name: "Review iterations" });
+        const preferences = () => canvas.queryByRole("group", { name: "Reading preferences" });
 
-    // View toggles fire their callbacks.
-    await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Comments" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Changes" }));
-    expect(args.onToggleNav).toHaveBeenCalled();
-    expect(args.onToggleComments).toHaveBeenCalled();
-    expect(args.onToggleChanges).toHaveBeenCalled();
+        // View toggles fire their callbacks.
+        await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
+        await userEvent.click(canvas.getByRole("button", { name: "Comments" }));
+        await userEvent.click(canvas.getByRole("button", { name: "Changes" }));
+        expect(args.onToggleNav).toHaveBeenCalled();
+        expect(args.onToggleComments).toHaveBeenCalled();
+        expect(args.onToggleChanges).toHaveBeenCalled();
 
-    // Iteration picker restores trigger focus on Escape and closes without
-    // stealing focus on an outside pointer-down.
-    const iterationTrigger = canvas.getByRole("button", {
-      name: "All updates",
-    });
+        // Iteration picker restores trigger focus on Escape and closes without
+        // stealing focus on an outside pointer-down.
+        const iterationTrigger = canvas.getByRole("button", {
+            name: "All updates",
+        });
 
-    const iterationPopover = canvasElement.querySelector<HTMLElement>(
-      ".emr-statusbar-iteration-pop",
-    )!;
+        await userEvent.click(iterationTrigger);
+        expect(updatesList()).toBeTruthy();
+        await userEvent.keyboard("{ArrowDown}");
+        await userEvent.keyboard("{Escape}");
+        await waitFor(() => expect(updatesList()).toBeNull());
+        expect(iterationTrigger).toHaveFocus();
+        await userEvent.click(iterationTrigger);
+        await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
+        await waitFor(() => expect(updatesList()).toBeNull());
+        expect(canvas.getByRole("button", { name: "Navigation" })).toHaveFocus();
 
-    await userEvent.click(iterationTrigger);
-    expect(iterationPopover.inert).toBe(false);
-    expect(iterationPopover).toHaveAttribute("aria-hidden", "false");
-    await userEvent.keyboard("{ArrowDown}");
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-      ).toBeNull(),
-    );
-    expect(iterationTrigger).toHaveFocus();
-    expect(iterationPopover.inert).toBe(true);
-    expect(iterationPopover).toHaveAttribute("aria-hidden", "true");
-    await userEvent.click(iterationTrigger);
-    await userEvent.click(canvas.getByRole("button", { name: "Navigation" }));
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-      ).toBeNull(),
-    );
-    expect(canvas.getByRole("button", { name: "Navigation" })).toHaveFocus();
-    expect(iterationPopover.inert).toBe(true);
+        // All updates and numbered updates remain mutually exclusive and the
+        // picker stays open so the resulting selection remains visible.
+        await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
+        await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
+        expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+            fromUpdate: 0,
+            toUpdate: 3,
+        });
+        expect(updatesList()).toBeTruthy();
 
-    // All updates and numbered updates remain mutually exclusive and the
-    // picker stays open so the resulting selection remains visible.
-    await userEvent.click(canvas.getByRole("button", { name: "All updates" }));
-    await userEvent.click(canvas.getByRole("option", { name: "All updates" }));
-    expect(args.onIterationRangeChange).toHaveBeenCalledWith({
-      fromUpdate: 0,
-      toUpdate: 3,
-    });
-    expect(
-      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-    ).not.toBeNull();
+        const iterationOne = canvas.getByRole("option", {
+            name: /1 Initial draft/,
+        });
 
-    const iterationOne = canvas.getByRole("option", {
-      name: /1 Initial draft/,
-    });
+        fireEvent.click(iterationOne, { shiftKey: true });
+        expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+            fromUpdate: 0,
+            toUpdate: 1,
+        });
+        expect(updatesList()).toBeTruthy();
+        await userEvent.click(iterationOne);
+        expect(args.onIterationRangeChange).toHaveBeenCalledWith({
+            fromUpdate: 0,
+            toUpdate: 1,
+        });
+        expect(updatesList()).toBeTruthy();
+        await userEvent.keyboard("{Escape}");
+        await waitFor(() => expect(updatesList()).toBeNull());
+        expect(iterationTrigger).toHaveFocus();
 
-    fireEvent.click(iterationOne, { shiftKey: true });
-    expect(args.onIterationRangeChange).toHaveBeenCalledWith({
-      fromUpdate: 0,
-      toUpdate: 1,
-    });
-    expect(
-      canvas.getByRole("listbox", { name: "Review iterations" }),
-    ).toBeTruthy();
-    fireEvent.click(iterationOne);
-    expect(args.onIterationRangeChange).toHaveBeenCalledWith({
-      fromUpdate: 0,
-      toUpdate: 1,
-    });
-    expect(
-      canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-    ).not.toBeNull();
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-iteration.is-open"),
-      ).toBeNull(),
-    );
-    expect(iterationTrigger).toHaveFocus();
+        // Font popover: open, pick the reading serif, then close with Escape.
+        const typeTrigger = canvas.getByRole("button", { name: "Aa" });
 
-    // Font popover: open, pick the reading serif, then close with Escape.
-    const typeTrigger = canvas.getByRole("button", { name: "Aa" });
+        await userEvent.click(typeTrigger);
+        await waitFor(() => expect(preferences()).toBeTruthy());
+        expect(typeTrigger).toHaveAttribute("aria-expanded", "true");
+        // Spacing ranges 100–200% and starts at its minimum, so it can't go lower.
+        expect(canvas.getByRole("slider", { name: "Text spacing" })).toHaveAttribute("min", "100");
+        expect(canvas.getByRole("slider", { name: "Text spacing" })).toHaveAttribute("max", "200");
+        expect(canvas.getByRole("button", { name: "Decrease text spacing" })).toBeDisabled();
+        // A non-Escape key while the popover is open is ignored (keydown guard).
+        await userEvent.keyboard("{ArrowDown}");
+        // A pointer-down INSIDE the popover (picking a font) doesn't close it.
+        await userEvent.click(canvas.getByRole("button", { name: /Sitka/ }));
+        expect(args.onFontChange).toHaveBeenCalledWith("sitka");
+        fireEvent.change(canvas.getByRole("slider", { name: "Text spacing" }), {
+            target: { value: "125" },
+        });
+        expect(args.onSpacingChange).toHaveBeenCalledWith(125);
+        await userEvent.keyboard("{Escape}");
+        await waitFor(() => expect(preferences()).toBeNull());
+        expect(typeTrigger).toHaveFocus();
+        expect(canvas.queryByRole("slider", { name: "Text spacing" })).toBeNull();
 
-    const typePopover =
-      canvasElement.querySelector<HTMLElement>(".emr-statusbar-pop")!;
+        // Re-open, then a pointer-down OUTSIDE the popover closes it — and the
+        // click still nudges the text size (smaller).
+        await userEvent.click(typeTrigger);
+        await waitFor(() => expect(preferences()).toBeTruthy());
+        await userEvent.click(canvas.getByRole("button", { name: "Decrease text size" }));
+        await waitFor(() => expect(preferences()).toBeNull());
+        await userEvent.click(canvas.getByRole("button", { name: "Increase text size" }));
 
-    await userEvent.click(typeTrigger);
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-type.is-open"),
-      ).not.toBeNull(),
-    );
-    expect(typePopover.inert).toBe(false);
-    expect(typePopover).toHaveAttribute("aria-hidden", "false");
-    // A non-Escape key while the popover is open is ignored (keydown guard).
-    await userEvent.keyboard("{ArrowDown}");
-    // A pointer-down INSIDE the popover (picking a font) doesn't close it.
-    await userEvent.click(canvas.getByRole("button", { name: /Sitka/ }));
-    expect(args.onFontChange).toHaveBeenCalledWith("sitka");
-    fireEvent.change(canvas.getByRole("slider", { name: "Text spacing" }), {
-      target: { value: "125" },
-    });
-    expect(args.onSpacingChange).toHaveBeenCalledWith(125);
-    fireEvent.keyDown(canvasElement.ownerDocument, { key: "Escape" });
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-type.is-open"),
-      ).toBeNull(),
-    );
-    expect(typeTrigger).toHaveFocus();
-    expect(typePopover.inert).toBe(true);
-    expect(typePopover).toHaveAttribute("aria-hidden", "true");
+        fireEvent.change(canvas.getByRole("slider", { name: "Text size" }), {
+            target: { value: "125" },
+        });
+        const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
 
-    // Re-open, then a pointer-down OUTSIDE the popover closes it — and the
-    // click still nudges the text size (smaller).
-    await userEvent.click(typeTrigger);
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-type.is-open"),
-      ).not.toBeNull(),
-    );
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Decrease text size" }),
-    );
-    await waitFor(() =>
-      expect(
-        canvasElement.querySelector(".emr-statusbar-type.is-open"),
-      ).toBeNull(),
-    );
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Increase text size" }),
-    );
+        for (const key of ["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp", "Home"]) {
+            fireEvent.keyDown(sizeSlider, { key });
+        }
 
-    fireEvent.change(canvas.getByRole("slider", { name: "Text size" }), {
-      target: { value: "125" },
-    });
-    const sizeSlider = canvas.getByRole("slider", { name: "Text size" });
-
-    for (const key of [
-      "ArrowLeft",
-      "ArrowDown",
-      "ArrowRight",
-      "ArrowUp",
-      "Home",
-    ]) {
-      fireEvent.keyDown(sizeSlider, { key });
-    }
-
-    expect(args.onSizeChange).toHaveBeenCalledWith(95);
-    expect(args.onSizeChange).toHaveBeenCalledWith(105);
-    expect(args.onSizeChange).toHaveBeenCalledWith(125);
-    expect(args.onSizeChange).toHaveBeenCalledWith(99);
-    expect(args.onSizeChange).toHaveBeenCalledWith(101);
-  },
+        expect(args.onSizeChange).toHaveBeenCalledWith(95);
+        expect(args.onSizeChange).toHaveBeenCalledWith(105);
+        expect(args.onSizeChange).toHaveBeenCalledWith(125);
+        expect(args.onSizeChange).toHaveBeenCalledWith(99);
+        expect(args.onSizeChange).toHaveBeenCalledWith(101);
+    },
 };
 
 /** A machine with no curated local fonts keeps spacing but hides System-only UI. */
 export const SystemOnly: Story = {
-  args: {
-    fontId: "atkinson",
-    availableFontIds: ["system"],
-    onFontChange: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Aa" }));
-    expect(canvas.queryByText("Reading font")).toBeNull();
-    expect(canvas.getByRole("slider", { name: "Text spacing" })).toBeTruthy();
-    expect(args.onFontChange).not.toHaveBeenCalled();
-  },
+    args: {
+        fontId: "atkinson",
+        availableFontIds: ["system"],
+        onFontChange: fn(),
+    },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Aa" }));
+        expect(canvas.queryByText("Reading font")).toBeNull();
+        expect(canvas.getByRole("slider", { name: "Text spacing" })).toBeTruthy();
+        expect(args.onFontChange).not.toHaveBeenCalled();
+    },
 };
 
 /** Browsers without the FontFace API degrade to System without hiding spacing. */
 export const FontDetectionUnavailable: Story = {
-  args: {
-    availableFontIds: undefined,
-  },
-  beforeEach: () => {
-    const NativeFontFace = window.FontFace;
-    window.FontFace = undefined as unknown as typeof FontFace;
+    args: {
+        availableFontIds: undefined,
+    },
+    beforeEach: () => {
+        const NativeFontFace = window.FontFace;
+        window.FontFace = undefined as unknown as typeof FontFace;
 
-    return () => {
-      window.FontFace = NativeFontFace;
-    };
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Aa" }));
-    await waitFor(() => expect(canvas.queryByText("Reading font")).toBeNull());
-    expect(canvas.getByRole("slider", { name: "Text spacing" })).toBeTruthy();
-  },
+        return () => {
+            window.FontFace = NativeFontFace;
+        };
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Aa" }));
+        await waitFor(() => expect(canvas.queryByText("Reading font")).toBeNull());
+        expect(canvas.getByRole("slider", { name: "Text spacing" })).toBeTruthy();
+    },
 };
 
 /**
@@ -1097,50 +778,42 @@ export const FontDetectionUnavailable: Story = {
  * next to Navigation and is only offered while the navigation is shown.
  */
 export const OutlineToggle: Story = {
-  args: { showOutline: true, onToggleOutline: fn() },
-  play: async ({ args, canvasElement }) => {
-    const canvas = within(canvasElement);
-    const toggle = canvas.getByRole("button", { name: "Outline" });
-    await expect(toggle.getAttribute("aria-pressed")).toBe("true");
-    await expect(toggle.title).toBe(
-      "Hide the document outline in the navigation",
-    );
-    await userEvent.click(toggle);
-    await expect(args.onToggleOutline).toHaveBeenCalledTimes(1);
-  },
+    args: { showOutline: true, onToggleOutline: fn() },
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const toggle = canvas.getByRole("button", { name: "Outline" });
+        await expect(toggle.getAttribute("aria-pressed")).toBe("true");
+        await expect(toggle.title).toBe("Hide the document outline in the navigation");
+        await userEvent.click(toggle);
+        await expect(args.onToggleOutline).toHaveBeenCalledTimes(1);
+    },
 };
 
 /** With the outline off the toggle reads as not pressed. */
 export const OutlineToggleOff: Story = {
-  args: { showOutline: false, onToggleOutline: fn() },
-  play: async ({ canvasElement }) => {
-    const toggle = within(canvasElement).getByRole("button", {
-      name: "Outline",
-    });
+    args: { showOutline: false, onToggleOutline: fn() },
+    play: async ({ canvasElement }) => {
+        const toggle = within(canvasElement).getByRole("button", {
+            name: "Outline",
+        });
 
-    await expect(toggle.getAttribute("aria-pressed")).toBe("false");
-    await expect(toggle.title).toBe(
-      "Show the document outline in the navigation",
-    );
-  },
+        await expect(toggle.getAttribute("aria-pressed")).toBe("false");
+        await expect(toggle.title).toBe("Show the document outline in the navigation");
+    },
 };
 
 /** Hidden navigation (or no toggle handler) drops the Outline control. */
 export const OutlineToggleHidden: Story = {
-  args: { showNav: false, onToggleOutline: fn() },
-  play: async ({ canvasElement }) => {
-    await expect(
-      within(canvasElement).queryByRole("button", { name: "Outline" }),
-    ).toBeNull();
-  },
+    args: { showNav: false, onToggleOutline: fn() },
+    play: async ({ canvasElement }) => {
+        await expect(within(canvasElement).queryByRole("button", { name: "Outline" })).toBeNull();
+    },
 };
 
 /** Single-file mode has no navigation, so no Outline control either. */
 export const OutlineToggleSingleFile: Story = {
-  args: { navToggleable: false, onToggleOutline: fn() },
-  play: async ({ canvasElement }) => {
-    await expect(
-      within(canvasElement).queryByRole("button", { name: "Outline" }),
-    ).toBeNull();
-  },
+    args: { navToggleable: false, onToggleOutline: fn() },
+    play: async ({ canvasElement }) => {
+        await expect(within(canvasElement).queryByRole("button", { name: "Outline" })).toBeNull();
+    },
 };

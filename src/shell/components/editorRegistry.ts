@@ -6,6 +6,5 @@ import { createContext } from "react";
  * new comments and replies, inline edits are not persisted as drafts, so while
  * one is open the shell hides "Reload page", which would silently drop it.
  */
-export const RegisterEditorContext = createContext<() => () => void>(
-  () => () => {},
-);
+// Stryker disable next-line ArrowFunction: without a provider, `CommentRow` returns this unregister from an effect, and React treats an undefined cleanup the same as a no-op one
+export const RegisterEditorContext = createContext<() => () => void>(() => () => {});

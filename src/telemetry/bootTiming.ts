@@ -27,21 +27,20 @@ import { events, type AppReadyReason } from "./events";
 export type BootPhase = "sdk-ready" | "context-ready";
 
 export interface BootTimingEnvironment {
-  now(): number;
-  isVisible(): boolean;
-  subscribeVisibilityChange(listener: () => void): () => void;
+    now(): number;
+    isVisible(): boolean;
+    subscribeVisibilityChange(listener: () => void): () => void;
 }
 
 const BROWSER_ENVIRONMENT: BootTimingEnvironment = {
-  now: () => performance.now(),
-  isVisible: () =>
-    typeof document === "undefined" || document.visibilityState === "visible",
-  subscribeVisibilityChange(listener) {
-    if (typeof document === "undefined") return () => {};
-    document.addEventListener("visibilitychange", listener);
+    now: () => performance.now(),
+    isVisible: () => typeof document === "undefined" || document.visibilityState === "visible",
+    subscribeVisibilityChange(listener) {
+        if (typeof document === "undefined") return () => {};
+        document.addEventListener("visibilitychange", listener);
 
-    return () => document.removeEventListener("visibilitychange", listener);
-  },
+        return () => document.removeEventListener("visibilitychange", listener);
+    },
 };
 
 let startMs: number | null = null;
@@ -60,35 +59,35 @@ let afterAutoReload = false;
 let unsubscribeVisibility: (() => void) | null = null;
 
 function elapsed(from: number, to: number): number {
-  return Math.max(0, to - from);
+    return Math.max(0, to - from);
 }
 
 function clearVisibilitySubscription(): void {
-  unsubscribeVisibility?.();
-  unsubscribeVisibility = null;
+    unsubscribeVisibility?.();
+    unsubscribeVisibility = null;
 }
 
 function captureVisibilityTransition(): void {
-  if (startMs === null || fired) return;
-  const now = environment.now();
+    if (startMs === null || fired) return;
+    const now = environment.now();
 
-  if (environment.isVisible()) {
-    if (hiddenStartMs !== null) {
-      hiddenElapsedMs += elapsed(hiddenStartMs, now);
-      hiddenStartMs = null;
+    if (environment.isVisible()) {
+        if (hiddenStartMs !== null) {
+            hiddenElapsedMs += elapsed(hiddenStartMs, now);
+            hiddenStartMs = null;
+        }
+
+        activeStartMs ??= now;
+    } else {
+        wasHiddenDuringBoot = true;
+
+        if (activeStartMs !== null) {
+            activeElapsedMs += elapsed(activeStartMs, now);
+            activeStartMs = null;
+        }
+
+        hiddenStartMs ??= now;
     }
-
-    activeStartMs ??= now;
-  } else {
-    wasHiddenDuringBoot = true;
-
-    if (activeStartMs !== null) {
-      activeElapsedMs += elapsed(activeStartMs, now);
-      activeStartMs = null;
-    }
-
-    hiddenStartMs ??= now;
-  }
 }
 
 /**
@@ -96,46 +95,44 @@ function captureVisibilityTransition(): void {
  * the SDK handshake, so the measurement spans the whole path to first content.
  */
 export function markBootStart(
-  timingEnvironment: BootTimingEnvironment = BROWSER_ENVIRONMENT,
+    timingEnvironment: BootTimingEnvironment = BROWSER_ENVIRONMENT,
 ): void {
-  clearVisibilitySubscription();
-  environment = timingEnvironment;
-  startMs = environment.now();
-  fired = false;
-  activeElapsedMs = 0;
-  hiddenElapsedMs = 0;
-  authRefreshWaitMs = 0;
-  authWaitStartMs = null;
-  sdkReadyAtMs = null;
-  contextReadyAtMs = null;
-  afterAutoReload = false;
-  wasHiddenDuringBoot = !environment.isVisible();
-  activeStartMs = wasHiddenDuringBoot ? null : startMs;
-  hiddenStartMs = wasHiddenDuringBoot ? startMs : null;
-  unsubscribeVisibility = environment.subscribeVisibilityChange(
-    captureVisibilityTransition,
-  );
+    clearVisibilitySubscription();
+    environment = timingEnvironment;
+    startMs = environment.now();
+    fired = false;
+    activeElapsedMs = 0;
+    hiddenElapsedMs = 0;
+    authRefreshWaitMs = 0;
+    authWaitStartMs = null;
+    sdkReadyAtMs = null;
+    contextReadyAtMs = null;
+    afterAutoReload = false;
+    wasHiddenDuringBoot = !environment.isVisible();
+    activeStartMs = wasHiddenDuringBoot ? null : startMs;
+    hiddenStartMs = wasHiddenDuringBoot ? startMs : null;
+    unsubscribeVisibility = environment.subscribeVisibilityChange(captureVisibilityTransition);
 }
 
 /** Record the first completion of a boot phase. Duplicate marks are ignored. */
 export function markBootPhase(phase: BootPhase): void {
-  if (fired || startMs === null) return;
-  const now = environment.now();
-  if (phase === "sdk-ready") sdkReadyAtMs ??= now;
-  else contextReadyAtMs ??= now;
+    if (fired || startMs === null) return;
+    const now = environment.now();
+    if (phase === "sdk-ready") sdkReadyAtMs ??= now;
+    else contextReadyAtMs ??= now;
 }
 
 /** Begin an interval spent waiting for the host to refresh its ADO grant. */
 export function markBootAuthWaitStart(): void {
-  if (fired || startMs === null || authWaitStartMs !== null) return;
-  authWaitStartMs = environment.now();
+    if (fired || startMs === null || authWaitStartMs !== null) return;
+    authWaitStartMs = environment.now();
 }
 
 /** End the current ADO-grant wait, if one is active. */
 export function markBootAuthWaitEnd(): void {
-  if (authWaitStartMs === null) return;
-  authRefreshWaitMs += elapsed(authWaitStartMs, environment.now());
-  authWaitStartMs = null;
+    if (authWaitStartMs === null) return;
+    authRefreshWaitMs += elapsed(authWaitStartMs, environment.now());
+    authWaitStartMs = null;
 }
 
 /**
@@ -144,8 +141,8 @@ export function markBootAuthWaitEnd(): void {
  * (`authRefreshWaitMs == 0`) or landed back in the window.
  */
 export function markBootAfterAutoReload(): void {
-  if (fired || startMs === null) return;
-  afterAutoReload = true;
+    if (fired || startMs === null) return;
+    afterAutoReload = true;
 }
 
 /**
@@ -154,64 +151,62 @@ export function markBootAfterAutoReload(): void {
  * if it already fired. `reason` records what completed boot.
  */
 export function markAppReady(reason: AppReadyReason = "content"): void {
-  if (fired || startMs === null) return;
-  const now = environment.now();
+    if (fired || startMs === null) return;
+    const now = environment.now();
 
-  if (activeStartMs !== null) {
-    activeElapsedMs += elapsed(activeStartMs, now);
-    activeStartMs = null;
-  }
+    if (activeStartMs !== null) {
+        activeElapsedMs += elapsed(activeStartMs, now);
+        activeStartMs = null;
+    }
 
-  if (hiddenStartMs !== null) {
-    hiddenElapsedMs += elapsed(hiddenStartMs, now);
-    hiddenStartMs = null;
-  }
+    if (hiddenStartMs !== null) {
+        hiddenElapsedMs += elapsed(hiddenStartMs, now);
+        hiddenStartMs = null;
+    }
 
-  if (authWaitStartMs !== null) {
-    authRefreshWaitMs += elapsed(authWaitStartMs, now);
-    authWaitStartMs = null;
-  }
+    if (authWaitStartMs !== null) {
+        authRefreshWaitMs += elapsed(authWaitStartMs, now);
+        authWaitStartMs = null;
+    }
 
-  fired = true;
-  clearVisibilitySubscription();
+    fired = true;
+    clearVisibilitySubscription();
 
-  const lastPhaseAtMs = contextReadyAtMs ?? sdkReadyAtMs ?? startMs;
-  track(
-    events.appLoaded({
-      bootTimeMs: Math.round(elapsed(startMs, now)),
-      activeBootTimeMs: Math.round(activeElapsedMs),
-      hiddenTimeMs: Math.round(hiddenElapsedMs),
-      authRefreshWaitMs: Math.round(authRefreshWaitMs),
-      sdkReadyMs:
-        sdkReadyAtMs === null
-          ? undefined
-          : Math.round(elapsed(startMs, sdkReadyAtMs)),
-      contextReadyMs:
-        contextReadyAtMs === null
-          ? undefined
-          : Math.round(elapsed(sdkReadyAtMs ?? startMs, contextReadyAtMs)),
-      renderReadyMs: Math.round(elapsed(lastPhaseAtMs, now)),
-      readyReason: reason,
-      bootHadHiddenInterval: wasHiddenDuringBoot,
-      afterAutoReload,
-    }),
-  );
+    const lastPhaseAtMs = contextReadyAtMs ?? sdkReadyAtMs ?? startMs;
+    track(
+        events.appLoaded({
+            bootTimeMs: Math.round(elapsed(startMs, now)),
+            activeBootTimeMs: Math.round(activeElapsedMs),
+            hiddenTimeMs: Math.round(hiddenElapsedMs),
+            authRefreshWaitMs: Math.round(authRefreshWaitMs),
+            sdkReadyMs:
+                sdkReadyAtMs === null ? undefined : Math.round(elapsed(startMs, sdkReadyAtMs)),
+            contextReadyMs:
+                contextReadyAtMs === null
+                    ? undefined
+                    : Math.round(elapsed(sdkReadyAtMs ?? startMs, contextReadyAtMs)),
+            renderReadyMs: Math.round(elapsed(lastPhaseAtMs, now)),
+            readyReason: reason,
+            bootHadHiddenInterval: wasHiddenDuringBoot,
+            afterAutoReload,
+        }),
+    );
 }
 
 /** Test-only: reset module state between cases. */
 export function __resetBootTimingForTests(): void {
-  clearVisibilitySubscription();
-  startMs = null;
-  fired = false;
-  environment = BROWSER_ENVIRONMENT;
-  activeStartMs = null;
-  hiddenStartMs = null;
-  activeElapsedMs = 0;
-  hiddenElapsedMs = 0;
-  wasHiddenDuringBoot = false;
-  authWaitStartMs = null;
-  authRefreshWaitMs = 0;
-  sdkReadyAtMs = null;
-  contextReadyAtMs = null;
-  afterAutoReload = false;
+    clearVisibilitySubscription();
+    startMs = null;
+    fired = false;
+    environment = BROWSER_ENVIRONMENT;
+    activeStartMs = null;
+    hiddenStartMs = null;
+    activeElapsedMs = 0;
+    hiddenElapsedMs = 0;
+    wasHiddenDuringBoot = false;
+    authWaitStartMs = null;
+    authRefreshWaitMs = 0;
+    sdkReadyAtMs = null;
+    contextReadyAtMs = null;
+    afterAutoReload = false;
 }

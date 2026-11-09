@@ -12,23 +12,23 @@
 
 import { setMarkdownDark } from "./markdownStyles";
 import {
-  isDarkLuminance,
-  isDarkTheme,
-  isHighContrastPrimary,
-  parseLuminance,
-  pickTheme,
-  type EmrTheme,
+    isDarkLuminance,
+    isDarkTheme,
+    isHighContrastPrimary,
+    parseLuminance,
+    pickTheme,
+    type EmrTheme,
 } from "./theme.helpers";
 
 // Re-export the pure logic so existing importers (and tests) keep a single
 // `./theme` entry point. The pure implementations live in `theme.helpers.ts`
 // (no `?raw` CSS deps) so they can be unit- and mutation-tested cleanly.
 export {
-  ALL_THEMES,
-  isEmrTheme,
-  parseLuminance,
-  type EmrTheme,
-  type EmrThemeInfo,
+    ALL_THEMES,
+    isEmrTheme,
+    parseLuminance,
+    type EmrTheme,
+    type EmrThemeInfo,
 } from "./theme.helpers";
 
 /**
@@ -36,11 +36,11 @@ export {
  * overrides) and swaps the markdown stylesheet. Used by the standalone picker.
  */
 export function applyTheme(theme: EmrTheme): void {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  root.setAttribute("data-emr-theme", theme);
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.setAttribute("data-emr-theme", theme);
 
-  setMarkdownDark(isDarkTheme(theme));
+    setMarkdownDark(isDarkTheme(theme));
 }
 
 /**
@@ -57,21 +57,18 @@ export function applyTheme(theme: EmrTheme): void {
  * the reliable dark/light signal in that mode.
  */
 function readHostColorSignals(): { forced: boolean; prefersDark: boolean } {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
-    return { forced: false, prefersDark: false };
-  }
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        return { forced: false, prefersDark: false };
+    }
 
-  try {
-    return {
-      forced: window.matchMedia("(forced-colors: active)").matches,
-      prefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
-    };
-  } catch {
-    return { forced: false, prefersDark: false };
-  }
+    try {
+        return {
+            forced: window.matchMedia("(forced-colors: active)").matches,
+            prefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
+        };
+    } catch {
+        return { forced: false, prefersDark: false };
+    }
 }
 
 /**
@@ -83,12 +80,12 @@ function readHostColorSignals(): { forced: boolean; prefersDark: boolean } {
  * forced-colors). Exported for tests and the refresh-button hook.
  */
 export function resolveHostTheme(): EmrTheme {
-  const { forced, prefersDark } = readHostColorSignals();
-  // ADO's picker HC injects a real HC background, so luminance still tells
-  // hc-dark from hc-light there; only OS forced-colors freezes the background.
-  const dark = forced ? prefersDark : isHostDark();
+    const { forced, prefersDark } = readHostColorSignals();
+    // ADO's picker HC injects a real HC background, so luminance still tells
+    // hc-dark from hc-light there; only OS forced-colors freezes the background.
+    const dark = forced ? prefersDark : isHostDark();
 
-  return pickTheme(dark, forced || isAdoHighContrast());
+    return pickTheme(dark, forced || isAdoHighContrast());
 }
 
 /**
@@ -97,11 +94,11 @@ export function resolveHostTheme(): EmrTheme {
  * flip. Idempotent and safe before the DOM is ready.
  */
 function applyHostTheme(): void {
-  const theme = resolveHostTheme();
-  setMarkdownDark(isDarkTheme(theme));
-  // `data-emr-theme` rather than a class so we don't fight ADO's own
-  // classes on `<html>`; styles.scss keys its selector on this attribute.
-  document.documentElement.setAttribute("data-emr-theme", theme);
+    const theme = resolveHostTheme();
+    setMarkdownDark(isDarkTheme(theme));
+    // `data-emr-theme` rather than a class so we don't fight ADO's own
+    // classes on `<html>`; styles.scss keys its selector on this attribute.
+    document.documentElement.setAttribute("data-emr-theme", theme);
 }
 
 /**
@@ -109,8 +106,8 @@ function applyHostTheme(): void {
  * outside a DOM context.
  */
 export function refreshHostTheme(): void {
-  if (typeof document === "undefined") return;
-  applyHostTheme();
+    if (typeof document === "undefined") return;
+    applyHostTheme();
 }
 
 /**
@@ -124,72 +121,63 @@ export function refreshHostTheme(): void {
  * Returns an unsubscribe function; safe to call before the DOM is ready.
  */
 export function syncHostTheme(): () => void {
-  if (typeof document === "undefined") return () => {};
+    if (typeof document === "undefined") return () => {};
 
-  const evaluate = () => applyHostTheme();
-  evaluate();
+    const evaluate = () => applyHostTheme();
+    evaluate();
 
-  const cleanups: Array<() => void> = [];
+    const cleanups: Array<() => void> = [];
 
-  // Primary trigger: the SDK dispatches `themeApplied` after applying theme
-  // vars (initial handshake and live toggles). Also listen for the raw
-  // `themeChanged` in case a host emits it before the SDK relays.
-  if (
-    typeof window !== "undefined" &&
-    typeof window.addEventListener === "function"
-  ) {
-    const onThemeEvent = () => evaluate();
-    window.addEventListener("themeApplied", onThemeEvent);
-    window.addEventListener("themeChanged", onThemeEvent);
-    cleanups.push(() => {
-      window.removeEventListener("themeApplied", onThemeEvent);
-      window.removeEventListener("themeChanged", onThemeEvent);
-    });
-  }
-
-  // `prefers-color-scheme` / `forced-colors` can flip before the host updates
-  // the injected CSS vars, giving a faster reaction than the theme event.
-  if (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function"
-  ) {
-    for (const query of [
-      "(prefers-color-scheme: dark)",
-      "(forced-colors: active)",
-    ]) {
-      try {
-        const mql = window.matchMedia(query);
-        const handler = () => evaluate();
-        mql.addEventListener("change", handler);
-        cleanups.push(() => mql.removeEventListener("change", handler));
-      } catch {
-        // matchMedia can throw on unsupported queries; skip this one.
-      }
-    }
-  }
-
-  if (typeof MutationObserver !== "undefined") {
-    const observer = new MutationObserver(evaluate);
-    const body = documentBody();
-
-    if (body !== null) {
-      observer.observe(body, {
-        attributes: true,
-        attributeFilter: ["class", "style"],
-      });
+    // Primary trigger: the SDK dispatches `themeApplied` after applying theme
+    // vars (initial handshake and live toggles). Also listen for the raw
+    // `themeChanged` in case a host emits it before the SDK relays.
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        const onThemeEvent = () => evaluate();
+        window.addEventListener("themeApplied", onThemeEvent);
+        window.addEventListener("themeChanged", onThemeEvent);
+        cleanups.push(() => {
+            window.removeEventListener("themeApplied", onThemeEvent);
+            window.removeEventListener("themeChanged", onThemeEvent);
+        });
     }
 
-    // `evaluate()` above already wrote to documentElement, so it exists.
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class", "style"],
-    });
-    cleanups.push(() => observer.disconnect());
-  }
+    // `prefers-color-scheme` / `forced-colors` can flip before the host updates
+    // the injected CSS vars, giving a faster reaction than the theme event.
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        for (const query of ["(prefers-color-scheme: dark)", "(forced-colors: active)"]) {
+            try {
+                const mql = window.matchMedia(query);
+                const handler = () => evaluate();
+                mql.addEventListener("change", handler);
+                cleanups.push(() => mql.removeEventListener("change", handler));
+            } catch {
+                // matchMedia can throw on unsupported queries; skip this one.
+            }
+        }
+    }
 
-  return () => {
-    for (const stop of cleanups) stop();
-  };
+    if (typeof MutationObserver !== "undefined") {
+        const observer = new MutationObserver(evaluate);
+        const body = documentBody();
+
+        if (body !== null) {
+            observer.observe(body, {
+                attributes: true,
+                attributeFilter: ["class", "style"],
+            });
+        }
+
+        // `evaluate()` above already wrote to documentElement, so it exists.
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class", "style"],
+        });
+        cleanups.push(() => observer.disconnect());
+    }
+
+    return () => {
+        for (const stop of cleanups) stop();
+    };
 }
 
 /**
@@ -197,7 +185,7 @@ export function syncHostTheme(): () => void {
  * is `null` until the parser reaches `<body>` (and in detached documents).
  */
 function documentBody(): HTMLElement | null {
-  return document.body as HTMLElement | null;
+    return document.body as HTMLElement | null;
 }
 
 /**
@@ -205,22 +193,22 @@ function documentBody(): HTMLElement | null {
  * back to light outside a DOM context or when no background is resolvable.
  */
 function isHostDark(): boolean {
-  if (typeof document === "undefined" || documentBody() === null) return false;
-  if (typeof getComputedStyle !== "function") return false;
+    if (typeof document === "undefined" || documentBody() === null) {
+        return false;
+    }
 
-  try {
-    const cs = getComputedStyle(document.body);
+    if (typeof getComputedStyle !== "function") return false;
 
-    const raw =
-      cs.getPropertyValue("--background-color").trim() ||
-      cs.backgroundColor ||
-      "";
+    try {
+        const cs = getComputedStyle(document.body);
 
-    return isDarkLuminance(parseLuminance(raw));
-  } catch {
-    // getComputedStyle can throw in detached frames; treat as light.
-    return false;
-  }
+        const raw = cs.getPropertyValue("--background-color").trim() || cs.backgroundColor || "";
+
+        return isDarkLuminance(parseLuminance(raw));
+    } catch {
+        // getComputedStyle can throw in detached frames; treat as light.
+        return false;
+    }
 }
 
 /**
@@ -229,16 +217,17 @@ function isHostDark(): boolean {
  * back to false outside a DOM context or when the value can't be read.
  */
 function isAdoHighContrast(): boolean {
-  if (typeof document === "undefined" || documentBody() === null) return false;
-  if (typeof getComputedStyle !== "function") return false;
+    if (typeof document === "undefined" || documentBody() === null) {
+        return false;
+    }
 
-  try {
-    const primary = getComputedStyle(document.body).getPropertyValue(
-      "--palette-primary",
-    );
+    if (typeof getComputedStyle !== "function") return false;
 
-    return isHighContrastPrimary(primary);
-  } catch {
-    return false;
-  }
+    try {
+        const primary = getComputedStyle(document.body).getPropertyValue("--palette-primary");
+
+        return isHighContrastPrimary(primary);
+    } catch {
+        return false;
+    }
 }

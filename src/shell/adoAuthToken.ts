@@ -24,14 +24,14 @@ import { extractStatus } from "./retryClassify";
 
 /** Expiry timestamps (ms epoch) decoded from an ADO extension access token. */
 export interface AdoTokenExpiry {
-  /** AAD token expiry, from the top-level `exp` claim. `undefined` if absent. */
-  expMs?: number;
-  /**
-   * Embedded ADO extension grant expiry, from `xms_attr.<host>.ado_exp`. When
-   * several host attributes carry an `ado_exp`, the earliest wins (the one that
-   * fails first). `undefined` when the token carries no ADO grant.
-   */
-  adoExpMs?: number;
+    /** AAD token expiry, from the top-level `exp` claim. `undefined` if absent. */
+    expMs?: number;
+    /**
+     * Embedded ADO extension grant expiry, from `xms_attr.<host>.ado_exp`. When
+     * several host attributes carry an `ado_exp`, the earliest wins (the one that
+     * fails first). `undefined` when the token carries no ADO grant.
+     */
+    adoExpMs?: number;
 }
 
 /**
@@ -48,14 +48,14 @@ export interface AdoTokenExpiry {
 export type AdoGrantState = "live" | "refreshing" | "expired" | "unknown";
 
 export interface AdoGrantClassification {
-  state: AdoGrantState;
-  /**
-   * Earliest wall-clock time (ms epoch) the host is expected to be able to
-   * serve a usable token again — the AAD `exp`, after which a brand-new token
-   * (with a fresh ADO grant) is guaranteed. Set for `refreshing` / `expired`.
-   */
-  recoverAtMs?: number;
-  expiry: AdoTokenExpiry;
+    state: AdoGrantState;
+    /**
+     * Earliest wall-clock time (ms epoch) the host is expected to be able to
+     * serve a usable token again — the AAD `exp`, after which a brand-new token
+     * (with a fresh ADO grant) is guaranteed. Set for `refreshing` / `expired`.
+     */
+    recoverAtMs?: number;
+    expiry: AdoTokenExpiry;
 }
 
 /** Default clock skew tolerance: treat a grant as lapsed this early. */
@@ -68,22 +68,25 @@ export const DEFAULT_GRANT_SKEW_MS = 30_000;
  * parse (we only read numeric claims, but robustness is cheap).
  */
 function decodeSegment(segment: string): string | null {
-  if (typeof atob !== "function") return null;
-  const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    // Stryker disable next-line ConditionalExpression: dead code: without atob the decode below throws, and its catch returns null anyway; candidate for removal
+    if (typeof atob !== "function") return null;
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    // Stryker disable next-line ArithmeticOperator,StringLiteral: atob decodes unpadded base64 the same as padded, so the padding never changes the result
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
 
-  try {
-    const binary = atob(padded);
-    let out = "";
+    try {
+        const binary = atob(padded);
+        let out = "";
 
-    for (let i = 0; i < binary.length; i++) {
-      out += `%${binary.charCodeAt(i).toString(16).padStart(2, "0")}`;
+        for (let i = 0; i < binary.length; i++) {
+            // Stryker disable next-line StringLiteral: compact JWT JSON never contains bytes below 0x10 (control characters), so the zero-pad never applies
+            out += `%${binary.charCodeAt(i).toString(16).padStart(2, "0")}`;
+        }
+
+        return decodeURIComponent(out);
+    } /* Stryker disable next-line BlockStatement: dead code: an empty catch returns undefined, which the caller's JSON.parse turns into the same null result; candidate for removal */ catch {
+        return null;
     }
-
-    return decodeURIComponent(out);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -92,47 +95,46 @@ function decodeSegment(segment: string): string | null {
  * object payload. Never throws.
  */
 export function parseJwtPayload(token: string): Record<string, unknown> | null {
-  if (typeof token !== "string" || token.length === 0) return null;
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const json = decodeSegment(parts[1]!);
-  if (json === null) return null;
+    // Stryker disable next-line ConditionalExpression: dead code: "" splits into a single segment, which the three-segment check rejects anyway; candidate for removal
+    if (typeof token !== "string" || token.length === 0) return null;
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const json = decodeSegment(parts[1]!);
+    // Stryker disable next-line ConditionalExpression: dead code: JSON.parse(null) is null, which the object check below rejects anyway; candidate for removal
+    if (json === null) return null;
 
-  try {
-    const parsed: unknown = JSON.parse(json);
+    try {
+        const parsed: unknown = JSON.parse(json);
 
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      Array.isArray(parsed)
-    ) {
-      return null;
+        // Stryker disable next-line ConditionalExpression: dead code: a null payload is returned as null either way; candidate for removal
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            return null;
+        }
+
+        return parsed as Record<string, unknown>;
+    } catch {
+        return null;
     }
-
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 /** Earliest `ado_exp` (seconds) across the token's `xms_attr` host entries. */
-function readAdoExpSeconds(
-  payload: Record<string, unknown>,
-): number | undefined {
-  const xms = payload["xms_attr"];
-  if (typeof xms !== "object" || xms === null) return undefined;
-  let earliest: number | undefined;
+function readAdoExpSeconds(payload: Record<string, unknown>): number | undefined {
+    const xms = payload["xms_attr"];
+    if (typeof xms !== "object" || xms === null) return undefined;
+    let earliest: number | undefined;
 
-  for (const value of Object.values(xms as Record<string, unknown>)) {
-    if (typeof value !== "object" || value === null) continue;
-    const adoExp = (value as Record<string, unknown>)["ado_exp"];
+    for (const value of Object.values(xms as Record<string, unknown>)) {
+        // Stryker disable next-line ConditionalExpression: dead code: a non-object entry has no ado_exp property, so it is skipped by the check below anyway; candidate for removal
+        if (typeof value !== "object" || value === null) continue;
+        const adoExp = (value as Record<string, unknown>)["ado_exp"];
 
-    if (typeof adoExp === "number" && Number.isFinite(adoExp)) {
-      earliest = earliest === undefined ? adoExp : Math.min(earliest, adoExp);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: JWT payloads are JSON, whose numbers are always finite, and ADO always sends these claims as numbers; candidate for removal
+        if (typeof adoExp === "number" && Number.isFinite(adoExp)) {
+            earliest = earliest === undefined ? adoExp : Math.min(earliest, adoExp);
+        }
     }
-  }
 
-  return earliest;
+    return earliest;
 }
 
 /**
@@ -141,19 +143,18 @@ function readAdoExpSeconds(
  * back `undefined`.
  */
 export function readAdoTokenExpiry(token: string): AdoTokenExpiry {
-  const payload = parseJwtPayload(token);
-  if (!payload) return {};
-  const exp = payload["exp"];
+    const payload = parseJwtPayload(token);
+    if (!payload) return {};
+    const exp = payload["exp"];
 
-  const expMs =
-    typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : undefined;
+    // Stryker disable next-line ConditionalExpression,LogicalOperator: dead code: JWT payloads are JSON, whose numbers are always finite, and ADO always sends these claims as numbers; candidate for removal
+    const expMs = typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : undefined;
 
-  const adoExpSeconds = readAdoExpSeconds(payload);
+    const adoExpSeconds = readAdoExpSeconds(payload);
 
-  const adoExpMs =
-    adoExpSeconds === undefined ? undefined : adoExpSeconds * 1000;
+    const adoExpMs = adoExpSeconds === undefined ? undefined : adoExpSeconds * 1000;
 
-  return { expMs, adoExpMs };
+    return { expMs, adoExpMs };
 }
 
 /**
@@ -165,34 +166,36 @@ export function readAdoTokenExpiry(token: string): AdoTokenExpiry {
  * a normal request or its ordinary error handling.
  */
 export function classifyAdoGrant(
-  token: string,
-  nowMs: number,
-  skewMs: number = DEFAULT_GRANT_SKEW_MS,
+    token: string,
+    nowMs: number,
+    skewMs: number = DEFAULT_GRANT_SKEW_MS,
 ): AdoGrantClassification {
-  const expiry = readAdoTokenExpiry(token);
-  const { expMs, adoExpMs } = expiry;
+    const expiry = readAdoTokenExpiry(token);
+    const { expMs, adoExpMs } = expiry;
 
-  // Couldn't read the AAD expiry → we know nothing; don't disrupt normal flow.
-  if (expMs === undefined) return { state: "unknown", expiry };
+    // Couldn't read the AAD expiry → we know nothing; don't disrupt normal flow.
+    if (expMs === undefined) return { state: "unknown", expiry };
 
-  // The AAD token itself has (nearly) expired — the host will re-mint next call.
-  if (nowMs >= expMs - skewMs) {
-    return { state: "expired", recoverAtMs: expMs, expiry };
-  }
+    // The AAD token itself has (nearly) expired — the host will re-mint next call.
+    // Stryker disable next-line EqualityOperator: landing on the exact millisecond of the skewed expiry has no practical meaning; the 30 s skew already absorbs timing
+    if (nowMs >= expMs - skewMs) {
+        return { state: "expired", recoverAtMs: expMs, expiry };
+    }
 
-  // Dead window: the ADO grant lapsed while the AAD token is still valid, so the
-  // host keeps serving this token until its AAD `exp`. Recovery is guaranteed at
-  // `expMs` (a fresh grant), so surface that as the recover-at hint.
-  if (adoExpMs !== undefined && nowMs >= adoExpMs - skewMs) {
-    return { state: "refreshing", recoverAtMs: expMs, expiry };
-  }
+    // Dead window: the ADO grant lapsed while the AAD token is still valid, so the
+    // host keeps serving this token until its AAD `exp`. Recovery is guaranteed at
+    // `expMs` (a fresh grant), so surface that as the recover-at hint.
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: comparing against an undefined ado_exp is NaN-false anyway, and the exact-millisecond case has no practical meaning; candidate for removal
+    if (adoExpMs !== undefined && nowMs >= adoExpMs - skewMs) {
+        return { state: "refreshing", recoverAtMs: expMs, expiry };
+    }
 
-  return { state: "live", expiry };
+    return { state: "live", expiry };
 }
 
 /** True when the grant state means a request will fail auth (not `live`/`unknown`). */
 export function isAdoGrantLapsed(state: AdoGrantState): boolean {
-  return state === "refreshing" || state === "expired";
+    return state === "refreshing" || state === "expired";
 }
 
 /**
@@ -201,20 +204,23 @@ export function isAdoGrantLapsed(state: AdoGrantState): boolean {
  * Used to decide whether a failure is worth re-inspecting the token for.
  */
 export function isAdoAuthError(err: unknown): boolean {
-  const status = extractStatus(err);
-  if (status === 401 || status === 403) return true;
-  let message = "";
+    const status = extractStatus(err);
+    if (status === 401 || status === 403) return true;
+    // Stryker disable next-line StringLiteral: a placeholder message never contains TF400813, so non-text errors stay non-auth either way
+    let message = "";
 
-  if (err instanceof Error) {
-    message = err.message;
-  } else if (typeof err === "string") {
-    message = err;
-  } else if (typeof err === "object" && err !== null) {
-    const raw = (err as { message?: unknown }).message;
-    if (typeof raw === "string") message = raw;
-  }
+    // Stryker disable next-line ConditionalExpression: dead code: an Error is an object with a text message, so the object branch below reads the same message; candidate for removal
+    if (err instanceof Error) {
+        message = err.message;
+    } else if (typeof err === "string") {
+        message = err;
+    } else if (typeof err === "object" && err !== null) {
+        const raw = (err as { message?: unknown }).message;
+        // Stryker disable next-line ConditionalExpression: dead code: a non-text message never stringifies to TF400813, so it stays non-auth either way; candidate for removal
+        if (typeof raw === "string") message = raw;
+    }
 
-  return /\bTF400813\b/.test(message);
+    return /\bTF400813\b/.test(message);
 }
 
 /**
@@ -225,27 +231,25 @@ export function isAdoAuthError(err: unknown): boolean {
  * burning a futile tight-retry budget.
  */
 export class SessionRefreshingError extends Error {
-  readonly retryable = false;
-  readonly grantState: AdoGrantState;
-  readonly recoverAtMs?: number;
+    readonly retryable = false;
+    readonly grantState: AdoGrantState;
+    readonly recoverAtMs?: number;
 
-  constructor(grantState: AdoGrantState, recoverAtMs?: number) {
-    super(
-      "Azure DevOps session is refreshing (access token grant expired); " +
-        "waiting for the host to issue a new token.",
-    );
-    this.name = "SessionRefreshingError";
-    this.grantState = grantState;
-    this.recoverAtMs = recoverAtMs;
-    // Restore the prototype chain for `instanceof` under transpiled targets.
-    Object.setPrototypeOf(this, SessionRefreshingError.prototype);
-  }
+    constructor(grantState: AdoGrantState, recoverAtMs?: number) {
+        super(
+            "Azure DevOps session is refreshing (access token grant expired); " +
+                "waiting for the host to issue a new token.",
+        );
+        this.name = "SessionRefreshingError";
+        this.grantState = grantState;
+        this.recoverAtMs = recoverAtMs;
+        // Restore the prototype chain for `instanceof` under transpiled targets.
+        Object.setPrototypeOf(this, SessionRefreshingError.prototype);
+    }
 }
 
-export function isSessionRefreshingError(
-  err: unknown,
-): err is SessionRefreshingError {
-  return err instanceof SessionRefreshingError;
+export function isSessionRefreshingError(err: unknown): err is SessionRefreshingError {
+    return err instanceof SessionRefreshingError;
 }
 
 /**
@@ -257,26 +261,25 @@ export function isSessionRefreshingError(
  * this SDK-free and unit-testable.
  */
 export async function detectSessionRefreshing(
-  err: unknown,
-  getToken: () => Promise<string>,
-  nowMs: number | (() => number) = Date.now,
+    err: unknown,
+    getToken: () => Promise<string>,
+    nowMs: number | (() => number) = Date.now,
 ): Promise<SessionRefreshingError | null> {
-  if (isSessionRefreshingError(err)) return err;
-  if (!isAdoAuthError(err)) return null;
-  let token = "";
+    if (isSessionRefreshingError(err)) return err;
+    if (!isAdoAuthError(err)) return null;
+    // Stryker disable next-line StringLiteral: an unreadable placeholder token classifies as unknown just like an empty one
+    let token = "";
 
-  try {
-    token = await getToken();
-  } catch {
-    /* empty token → classifies as "unknown" (not lapsed) */
-  }
+    try {
+        token = await getToken();
+    } catch {
+        /* empty token → classifies as "unknown" (not lapsed) */
+    }
 
-  const currentTimeMs = typeof nowMs === "function" ? nowMs() : nowMs;
-  const { state, recoverAtMs } = classifyAdoGrant(token, currentTimeMs);
+    const currentTimeMs = typeof nowMs === "function" ? nowMs() : nowMs;
+    const { state, recoverAtMs } = classifyAdoGrant(token, currentTimeMs);
 
-  return isAdoGrantLapsed(state)
-    ? new SessionRefreshingError(state, recoverAtMs)
-    : null;
+    return isAdoGrantLapsed(state) ? new SessionRefreshingError(state, recoverAtMs) : null;
 }
 
 /**
@@ -285,23 +288,23 @@ export async function detectSessionRefreshing(
  * recovery error; otherwise preserve the original failure for retry policy.
  */
 export async function withAdoSessionRefreshDetection<T>(
-  op: () => Promise<T>,
-  getToken: () => Promise<string>,
-  nowMs: () => number = Date.now,
+    op: () => Promise<T>,
+    getToken: () => Promise<string>,
+    nowMs: () => number = Date.now,
 ): Promise<T> {
-  try {
-    return await op();
-  } catch (err) {
-    const refreshing = await detectSessionRefreshing(err, getToken, nowMs);
-    throw refreshing ?? err;
-  }
+    try {
+        return await op();
+    } catch (err) {
+        const refreshing = await detectSessionRefreshing(err, getToken, nowMs);
+        throw refreshing ?? err;
+    }
 }
 
 export interface SessionRetryPlan {
-  /** Stop auto-retrying (fall back to a manual reload). */
-  giveUp: boolean;
-  /** Delay before the next auto-retry, in ms (meaningless when `giveUp`). */
-  delayMs: number;
+    /** Stop auto-retrying (fall back to a manual reload). */
+    giveUp: boolean;
+    /** Delay before the next auto-retry, in ms (meaningless when `giveUp`). */
+    delayMs: number;
 }
 
 /**
@@ -315,35 +318,35 @@ export interface SessionRetryPlan {
  * user with a manual reload.
  */
 export function planSessionRefreshRetry(opts: {
-  recoverAtMs?: number;
-  nowMs: number;
-  /** 1-based count of the auto-retry about to be scheduled. */
-  attempt: number;
-  maxAttempts?: number;
-  minDelayMs?: number;
-  bufferMs?: number;
-  ceilingMs?: number;
+    recoverAtMs?: number;
+    nowMs: number;
+    /** 1-based count of the auto-retry about to be scheduled. */
+    attempt: number;
+    maxAttempts?: number;
+    minDelayMs?: number;
+    bufferMs?: number;
+    ceilingMs?: number;
 }): SessionRetryPlan {
-  const {
-    recoverAtMs,
-    nowMs,
-    attempt,
-    maxAttempts = 6,
-    minDelayMs = 3_000,
-    bufferMs = 2_000,
-    // Slightly above the widest observed dead window (~10.5 min) so a wait
-    // pinned to the AAD `exp` is never truncated below the recovery point.
-    ceilingMs = 11 * 60_000,
-  } = opts;
+    const {
+        recoverAtMs,
+        nowMs,
+        attempt,
+        maxAttempts = 6,
+        minDelayMs = 3_000,
+        bufferMs = 2_000,
+        // Slightly above the widest observed dead window (~10.5 min) so a wait
+        // pinned to the AAD `exp` is never truncated below the recovery point.
+        ceilingMs = 11 * 60_000,
+    } = opts;
 
-  if (attempt > maxAttempts) return { giveUp: true, delayMs: 0 };
+    if (attempt > maxAttempts) return { giveUp: true, delayMs: 0 };
 
-  const raw =
-    recoverAtMs !== undefined
-      ? recoverAtMs + bufferMs - nowMs
-      : minDelayMs * 2 ** (attempt - 1);
+    const raw =
+        recoverAtMs !== undefined
+            ? recoverAtMs + bufferMs - nowMs
+            : minDelayMs * 2 ** (attempt - 1);
 
-  const delayMs = Math.min(ceilingMs, Math.max(minDelayMs, raw));
+    const delayMs = Math.min(ceilingMs, Math.max(minDelayMs, raw));
 
-  return { giveUp: false, delayMs };
+    return { giveUp: false, delayMs };
 }

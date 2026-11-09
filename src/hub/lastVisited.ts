@@ -17,10 +17,10 @@ export const LAST_VISITED_KEY = "emr.docs.lastVisited";
 
 /** Per-project last-visited record. */
 interface ProjectNav {
-  /** Last-visited repo id for the project. */
-  repo?: string;
-  /** Last-visited document path, keyed by repo id. */
-  paths?: Partial<Record<string, string>>;
+    /** Last-visited repo id for the project. */
+    repo?: string;
+    /** Last-visited document path, keyed by repo id. */
+    paths?: Partial<Record<string, string>>;
 }
 
 /**
@@ -31,59 +31,57 @@ type NavMap = Partial<Record<string, ProjectNav>>;
 
 /** Best-effort read + parse of the whole map. Returns `{}` on any failure. */
 function readMap(): NavMap {
-  try {
-    const raw = localStorage.getItem(LAST_VISITED_KEY);
-    if (raw === null || raw === "") return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed !== null && typeof parsed === "object") return parsed as NavMap;
+    try {
+        const raw = localStorage.getItem(LAST_VISITED_KEY);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: JSON.parse(null) is null and JSON.parse("") throws, and both still read back as {} below; candidate for removal
+        if (raw === null || raw === "") return {};
+        const parsed: unknown = JSON.parse(raw);
 
-    return {};
-  } catch {
-    return {};
-  }
+        // Stryker disable next-line ConditionalExpression: a primitive "map" has no project-id keys, so reads find nothing either way
+        if (parsed !== null && typeof parsed === "object") {
+            return parsed as NavMap;
+        }
+
+        return {};
+    } catch {
+        return {};
+    }
 }
 
 /** Best-effort serialize + persist of the whole map. Silent on failure. */
 function writeMap(map: NavMap): void {
-  try {
-    localStorage.setItem(LAST_VISITED_KEY, JSON.stringify(map));
-  } catch {
-    /* ignore */
-  }
+    try {
+        localStorage.setItem(LAST_VISITED_KEY, JSON.stringify(map));
+    } catch {
+        /* ignore */
+    }
 }
 
 /** Best-effort read of the last-visited repo id for a project. */
 export function readLastRepo(projectId: string): string | undefined {
-  return readMap()[projectId]?.repo;
+    return readMap()[projectId]?.repo;
 }
 
 /** Best-effort persist of the last-visited repo id for a project. */
 export function writeLastRepo(projectId: string, repoId: string): void {
-  const map = readMap();
-  const project = map[projectId] ?? {};
-  map[projectId] = { ...project, repo: repoId };
-  writeMap(map);
+    const map = readMap();
+    const project = map[projectId] ?? {};
+    map[projectId] = { ...project, repo: repoId };
+    writeMap(map);
 }
 
 /** Best-effort read of the last-visited document path for a repo. */
-export function readLastPath(
-  projectId: string,
-  repoId: string,
-): string | undefined {
-  return readMap()[projectId]?.paths?.[repoId];
+export function readLastPath(projectId: string, repoId: string): string | undefined {
+    return readMap()[projectId]?.paths?.[repoId];
 }
 
 /** Best-effort persist of the last-visited document path for a repo. */
-export function writeLastPath(
-  projectId: string,
-  repoId: string,
-  path: string,
-): void {
-  const map = readMap();
-  const project = map[projectId] ?? {};
-  map[projectId] = {
-    ...project,
-    paths: { ...project.paths, [repoId]: path },
-  };
-  writeMap(map);
+export function writeLastPath(projectId: string, repoId: string, path: string): void {
+    const map = readMap();
+    const project = map[projectId] ?? {};
+    map[projectId] = {
+        ...project,
+        paths: { ...project.paths, [repoId]: path },
+    };
+    writeMap(map);
 }

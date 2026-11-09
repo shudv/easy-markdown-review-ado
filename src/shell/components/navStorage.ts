@@ -8,31 +8,26 @@
 
 /** Persist a single heading-section's collapsed flag. */
 export function persistSectionState(
-  storageKey: string,
-  sectionId: string,
-  collapsed: boolean,
+    storageKey: string,
+    sectionId: string,
+    collapsed: boolean,
 ): void {
-  try {
-    const k = `emr.section.${storageKey}.${sectionId}`;
-    if (collapsed) sessionStorage.setItem(k, "1");
-    else sessionStorage.removeItem(k);
-  } catch {
-    /* ignore */
-  }
+    try {
+        const k = `emr.section.${storageKey}.${sectionId}`;
+        if (collapsed) sessionStorage.setItem(k, "1");
+        else sessionStorage.removeItem(k);
+    } catch {
+        /* ignore */
+    }
 }
 
 /** Read a heading-section's collapsed flag (defaults to expanded). */
-export function readSectionState(
-  storageKey: string,
-  sectionId: string,
-): boolean {
-  try {
-    return (
-      sessionStorage.getItem(`emr.section.${storageKey}.${sectionId}`) === "1"
-    );
-  } catch {
-    return false;
-  }
+export function readSectionState(storageKey: string, sectionId: string): boolean {
+    try {
+        return sessionStorage.getItem(`emr.section.${storageKey}.${sectionId}`) === "1";
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -40,43 +35,40 @@ export function readSectionState(
  * paths, suffixed with the count to constrain rare collisions. Returning to a
  * repo restores its state; switching repos starts fresh.
  */
-export function buildFolderStorageKey(
-  files: ReadonlyArray<{ path: string }>,
-): string {
-  if (files.length === 0) return "empty";
-  const paths = files.map((f) => f.path).sort();
-  let h = 5381;
+export function buildFolderStorageKey(files: ReadonlyArray<{ path: string }>): string {
+    if (files.length === 0) return "empty";
+    const paths = files.map((f) => f.path).sort();
+    let h = 5381;
 
-  for (const p of paths) {
-    for (let i = 0; i < p.length; i += 1) {
-      h = ((h << 5) + h + p.charCodeAt(i)) | 0;
+    for (const p of paths) {
+        for (let i = 0; i < p.length; i += 1) {
+            // Stryker disable next-line ArithmeticOperator: the key is an opaque per-file-list token; any variant of the mix stays deterministic and order-independent, so the same file list still restores its folders and a different one still starts fresh
+            h = ((h << 5) + h + p.charCodeAt(i)) | 0;
+        }
     }
-  }
 
-  return `${files.length}-${(h >>> 0).toString(36)}`;
+    return `${files.length}-${(h >>> 0).toString(36)}`;
 }
 
 /** Read the set of collapsed directory paths for a folder storage key. */
 export function readCollapsedDirs(key: string): Set<string> {
-  try {
-    const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
-    if (raw === null || raw === "") return new Set();
-    const arr: unknown = JSON.parse(raw);
+    try {
+        const raw = sessionStorage.getItem(`emr.docnav.collapsedDirs.${key}`);
+        // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `JSON.parse(null)` is not a list and `JSON.parse("")` throws into the catch below, so both read as an empty set without the guard
+        if (raw === null || raw === "") return new Set();
+        const arr: unknown = JSON.parse(raw);
 
-    return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
-  } catch {
-    return new Set();
-  }
+        return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
+    } catch {
+        return new Set();
+    }
 }
 
 /** Persist the set of collapsed directory paths for a folder storage key. */
 export function writeCollapsedDirs(key: string, set: Set<string>): void {
-  try {
-    sessionStorage.setItem(
-      `emr.docnav.collapsedDirs.${key}`,
-      JSON.stringify(Array.from(set)),
-    );
-  } catch {
-    /* ignore */
-  }
+    try {
+        sessionStorage.setItem(`emr.docnav.collapsedDirs.${key}`, JSON.stringify(Array.from(set)));
+    } catch {
+        /* ignore */
+    }
 }

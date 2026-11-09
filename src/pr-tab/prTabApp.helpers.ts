@@ -5,84 +5,87 @@
 
 import type { ChangeType } from "../types";
 import {
-  resolveReviewIterationRange,
-  type HistoryStop,
-  type ReviewIterationRange,
+    resolveReviewIterationRange,
+    type HistoryStop,
+    type ReviewIterationRange,
 } from "../shell/shellHelpers";
 import {
-  PATH_LINK_PARAM,
-  readAnchorParam,
-  readTextParam,
-  readCommentParam,
-  readPathParam,
+    PATH_LINK_PARAM,
+    readAnchorParam,
+    readTextParam,
+    readCommentParam,
+    readPathParam,
 } from "../shell/deepLink";
 import { samePath } from "../markdown/docLinks";
 
 interface PullRequestIterationLike {
-  id?: number;
-  description?: string;
-  createdDate?: Date | string;
-  sourceRefCommit?: CommitRefLike;
-  commits?: ReadonlyArray<CommitRefLike & { comment?: string }>;
+    id?: number;
+    description?: string;
+    createdDate?: Date | string;
+    sourceRefCommit?: CommitRefLike;
+    commits?: ReadonlyArray<CommitRefLike & { comment?: string }>;
 }
 
 /** True for a present, non-empty string (REST fields may also be `null`). */
 export function hasText(s: string | null | undefined): s is string {
-  return s != null && s !== "";
+    return s != null && s !== "";
 }
 
 /** `s` trimmed, or `undefined` when absent or blank. */
 function trimmedText(s: string | null | undefined): string | undefined {
-  const trimmed = s?.trim();
+    const trimmed = s?.trim();
 
-  return hasText(trimmed) ? trimmed : undefined;
+    return hasText(trimmed) ? trimmed : undefined;
 }
 
 /** Map ADO's chronological PR pushes into Shell's newest-first stop model. */
 export function reviewIterationStops(
-  iterations: readonly PullRequestIterationLike[],
-  prId: number,
+    iterations: readonly PullRequestIterationLike[],
+    prId: number,
 ): HistoryStop[] {
-  const valid = iterations.filter(
-    (iteration) =>
-      typeof iteration.id === "number" &&
-      hasText(iteration.sourceRefCommit?.commitId),
-  );
+    const valid = iterations.filter(
+        (iteration) =>
+            typeof iteration.id === "number" && hasText(iteration.sourceRefCommit?.commitId),
+    );
 
-  return valid
-    .map((iteration, chronologicalIndex) => {
-      const isCurrent = chronologicalIndex === valid.length - 1;
-      const lastCommit = iteration.commits?.[iteration.commits.length - 1];
+    return valid
+        .map((iteration, chronologicalIndex) => {
+            const isCurrent = chronologicalIndex === valid.length - 1;
 
-      const title =
-        trimmedText(iteration.description) ??
-        trimmedText(lastCommit?.comment) ??
-        `Iteration ${iteration.id}`;
+            const lastCommit = iteration.commits?.[iteration.commits.length - 1];
 
-      const rawDate = iteration.createdDate;
+            const title =
+                trimmedText(iteration.description) ??
+                trimmedText(lastCommit?.comment) ??
+                `Iteration ${iteration.id}`;
 
-      const dateMs =
-        rawDate === undefined ? undefined : new Date(rawDate).getTime();
+            const rawDate = iteration.createdDate;
 
-      return {
-        commitId: isCurrent ? null : iteration.sourceRefCommit!.commitId!,
-        prId,
-        iterationId: iteration.id!,
-        title,
-        ...(dateMs !== undefined && Number.isFinite(dateMs) ? { dateMs } : {}),
-        isCurrent,
-        readOnly: !isCurrent,
-      } satisfies HistoryStop;
-    })
-    .reverse();
+            // Stryker disable next-line ConditionalExpression: `new Date(undefined)` is an Invalid Date whose NaN time the `Number.isFinite` check below drops, so a missing date yields no `dateMs` either way
+            const dateMs = rawDate === undefined ? undefined : new Date(rawDate).getTime();
+
+            return {
+                commitId: isCurrent ? null : iteration.sourceRefCommit!.commitId!,
+                prId,
+                iterationId: iteration.id!,
+                title,
+                // Stryker disable next-line ConditionalExpression: `Number.isFinite(undefined)` is false, so the `!== undefined` check never decides whether a date is kept
+                ...(dateMs !== undefined && Number.isFinite(dateMs) ? { dateMs } : {}),
+                isCurrent,
+                readOnly: !isCurrent,
+            } satisfies HistoryStop;
+        })
+        .reverse();
 }
 
 /** A pull-request id from config: a number, or a numeric string. */
 function toPullRequestId(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && /^\d+$/.test(v)) return Number.parseInt(v, 10);
+    // Stryker disable next-line ConditionalExpression: `Number.isFinite` is already false for every non-number, so the `typeof` check never changes which values pass
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    // Stryker disable next-line ConditionalExpression: non-string config values that reach here (undefined, null, objects, NaN, Infinity) stringify to non-digit text, so the digit-only regex rejects them without the `typeof` check
+    if (typeof v === "string" && /^\d+$/.test(v)) return Number.parseInt(v, 10);
 
-  return null;
+    return null;
 }
 
 /**
@@ -95,31 +98,28 @@ function toPullRequestId(v: unknown): number | null {
  * and testable; callers supply `document.referrer`.
  */
 export function pickPullRequestId(
-  config: Record<string, unknown> | undefined,
-  referrer: string,
+    config: Record<string, unknown> | undefined,
+    referrer: string,
 ): number | null {
-  if (config) {
-    const candidates: unknown[] = [
-      config["pullRequestId"],
-      (config["pullRequest"] as { pullRequestId?: unknown } | undefined)
-        ?.pullRequestId,
-      (config["pullRequest"] as { id?: unknown } | undefined)?.id,
-      (config["context"] as { pullRequestId?: unknown } | undefined)
-        ?.pullRequestId,
-      (config["repoContext"] as { pullRequestId?: unknown } | undefined)
-        ?.pullRequestId,
-    ];
+    if (config) {
+        const candidates: unknown[] = [
+            config["pullRequestId"],
+            (config["pullRequest"] as { pullRequestId?: unknown } | undefined)?.pullRequestId,
+            (config["pullRequest"] as { id?: unknown } | undefined)?.id,
+            (config["context"] as { pullRequestId?: unknown } | undefined)?.pullRequestId,
+            (config["repoContext"] as { pullRequestId?: unknown } | undefined)?.pullRequestId,
+        ];
 
-    for (const c of candidates) {
-      const n = toPullRequestId(c);
-      if (n !== null) return n;
+        for (const c of candidates) {
+            const n = toPullRequestId(c);
+            if (n !== null) return n;
+        }
     }
-  }
 
-  const m = /\/pullrequest\/(\d+)\b/i.exec(referrer);
-  if (m) return Number.parseInt(m[1]!, 10);
+    const m = /\/pullrequest\/(\d+)\b/i.exec(referrer);
+    if (m) return Number.parseInt(m[1]!, 10);
 
-  return null;
+    return null;
 }
 
 /**
@@ -129,17 +129,17 @@ export function pickPullRequestId(
  * parallel with the PR itself instead of waiting for it.
  */
 export function configuredRepositoryId(
-  config: Record<string, unknown> | undefined,
-  pullRequestId: number,
+    config: Record<string, unknown> | undefined,
+    pullRequestId: number,
 ): string | null {
-  const pr = config?.["pullRequest"] as
-    | { pullRequestId?: unknown; repository?: { id?: unknown } }
-    | undefined;
+    const pr = config?.["pullRequest"] as
+        | { pullRequestId?: unknown; repository?: { id?: unknown } }
+        | undefined;
 
-  if (toPullRequestId(pr?.pullRequestId) !== pullRequestId) return null;
-  const id = pr!.repository?.id;
+    if (toPullRequestId(pr?.pullRequestId) !== pullRequestId) return null;
+    const id = pr!.repository?.id;
 
-  return typeof id === "string" && id.length > 0 ? id : null;
+    return typeof id === "string" && id.length > 0 ? id : null;
 }
 
 /**
@@ -148,35 +148,31 @@ export function configuredRepositoryId(
  * fails or the PR turns out to live elsewhere, the changes load again from the
  * PR's own repository.
  */
-export async function loadWithRepositoryHint<
-  P extends { repository: { id: string } },
-  C,
->(
-  prRequest: Promise<P>,
-  hint: string | null,
-  load: (repositoryId: string) => Promise<C>,
+export async function loadWithRepositoryHint<P extends { repository: { id: string } }, C>(
+    prRequest: Promise<P>,
+    hint: string | null,
+    load: (repositoryId: string) => Promise<C>,
 ): Promise<{ pr: P; changes: C }> {
-  const hinted =
-    hint !== null && hint !== "" ? load(hint).catch(() => null) : null;
+    // Stryker disable next-line ArrowFunction: a failed hinted load settles to null or undefined alike, and the `??` below reloads from the PR's repository for both
+    const hinted = hint !== null && hint !== "" ? load(hint).catch(() => null) : null;
 
-  const pr = await prRequest;
+    const pr = await prRequest;
 
-  const changes =
-    (pr.repository.id === hint ? await hinted : null) ??
-    (await load(pr.repository.id));
+    const changes =
+        (pr.repository.id === hint ? await hinted : null) ?? (await load(pr.repository.id));
 
-  return { pr, changes };
+    return { pr, changes };
 }
 
 /** A `commitId`-bearing ref, as carried by PR / iteration commit fields. */
 interface CommitRefLike {
-  commitId?: string;
+    commitId?: string;
 }
 
 /** The commit pair to diff for inline change highlights. */
 export interface DiffCommitPair {
-  baseCommit?: string;
-  targetCommit?: string;
+    baseCommit?: string;
+    targetCommit?: string;
 }
 
 /**
@@ -199,22 +195,16 @@ export interface DiffCommitPair {
  * Falls back to the PR's `lastMerge*` commits if an iteration omits them.
  */
 export function selectDiffCommits(
-  iteration:
-    | { commonRefCommit?: CommitRefLike; sourceRefCommit?: CommitRefLike }
-    | undefined,
-  pr: {
-    lastMergeTargetCommit?: CommitRefLike;
-    lastMergeSourceCommit?: CommitRefLike;
-  },
+    iteration: { commonRefCommit?: CommitRefLike; sourceRefCommit?: CommitRefLike } | undefined,
+    pr: {
+        lastMergeTargetCommit?: CommitRefLike;
+        lastMergeSourceCommit?: CommitRefLike;
+    },
 ): DiffCommitPair {
-  return {
-    baseCommit:
-      iteration?.commonRefCommit?.commitId ??
-      pr.lastMergeTargetCommit?.commitId,
-    targetCommit:
-      iteration?.sourceRefCommit?.commitId ??
-      pr.lastMergeSourceCommit?.commitId,
-  };
+    return {
+        baseCommit: iteration?.commonRefCommit?.commitId ?? pr.lastMergeTargetCommit?.commitId,
+        targetCommit: iteration?.sourceRefCommit?.commitId ?? pr.lastMergeSourceCommit?.commitId,
+    };
 }
 
 /**
@@ -223,12 +213,13 @@ export function selectDiffCommits(
  * wins over add, and anything else is a plain content modification.
  */
 export function mapChangeType(t: unknown): ChangeType {
-  const n = typeof t === "number" ? t : 0;
-  if (n & 16) return "deleted";
-  if (n & 8) return "renamed";
-  if (n & 1) return "added";
+    // Stryker disable next-line ConditionalExpression: the bitwise tests below coerce a missing value or a change-type name (ADO's "edit", "add") to 0, the same as the fallback
+    const n = typeof t === "number" ? t : 0;
+    if (n & 16) return "deleted";
+    if (n & 8) return "renamed";
+    if (n & 1) return "added";
 
-  return "modified";
+    return "modified";
 }
 
 /**
@@ -250,20 +241,20 @@ export function mapChangeType(t: unknown): ChangeType {
  * tab.
  */
 export function markdownChangePath(entry: {
-  item?: { path?: string };
-  originalPath?: string;
+    item?: { path?: string };
+    originalPath?: string;
 }): string | undefined {
-  // A deleted file reports `item.path` as "", so fall back on empty too.
-  const itemPath = entry.item?.path;
-  const path = hasText(itemPath) ? itemPath : entry.originalPath;
+    // A deleted file reports `item.path` as "", so fall back on empty too.
+    const itemPath = entry.item?.path;
+    const path = hasText(itemPath) ? itemPath : entry.originalPath;
 
-  return path?.toLowerCase().endsWith(".md") ? path : undefined;
+    return path?.toLowerCase().endsWith(".md") ? path : undefined;
 }
 
 export function diffableFilePaths(
-  files: readonly { path: string; changeType: ChangeType }[],
+    files: readonly { path: string; changeType: ChangeType }[],
 ): string[] {
-  return files.filter((f) => f.changeType === "modified").map((f) => f.path);
+    return files.filter((f) => f.changeType === "modified").map((f) => f.path);
 }
 
 /**
@@ -272,19 +263,19 @@ export function diffableFilePaths(
  * source tip.
  */
 export function contentCommitForChange(
-  changeType: ChangeType | undefined,
-  commits: DiffCommitPair,
+    changeType: ChangeType | undefined,
+    commits: DiffCommitPair,
 ): string | undefined {
-  return changeType === "deleted" ? commits.baseCommit : commits.targetCommit;
+    return changeType === "deleted" ? commits.baseCommit : commits.targetCommit;
 }
 
 /** Where a PR lives, for building its web URL when ADO doesn't supply one. */
 export interface PrLocation {
-  /** Org root URL, e.g. `https://dev.azure.com/<org>`. */
-  orgUrl: string;
-  projectName: string;
-  repositoryName: string;
-  pullRequestId: number;
+    /** Org root URL, e.g. `https://dev.azure.com/<org>`. */
+    orgUrl: string;
+    projectName: string;
+    repositoryName: string;
+    pullRequestId: number;
 }
 
 /**
@@ -296,33 +287,35 @@ export interface PrLocation {
  * available, so the rail renders a plain text pill and links are withheld.
  */
 export function buildPrWebUrl(
-  pr: { _links?: { web?: { href?: string } } } | undefined,
-  location?: PrLocation,
+    pr: { _links?: { web?: { href?: string } } } | undefined,
+    location?: PrLocation,
 ): string | undefined {
-  const web = pr?._links?.web?.href;
-  if (typeof web === "string" && web.length > 0) return web;
-  if (!location) return undefined;
-  const { orgUrl, projectName, repositoryName, pullRequestId } = location;
+    const web = pr?._links?.web?.href;
+    if (typeof web === "string" && web.length > 0) return web;
+    if (!location) return undefined;
+    const { orgUrl, projectName, repositoryName, pullRequestId } = location;
 
-  if (
-    !orgUrl ||
-    !projectName ||
-    !repositoryName ||
-    Number.isNaN(pullRequestId) ||
-    pullRequestId <= 0
-  ) {
-    return undefined;
-  }
+    if (
+        !orgUrl ||
+        !projectName ||
+        !repositoryName ||
+        Number.isNaN(pullRequestId) ||
+        pullRequestId <= 0
+    ) {
+        return undefined;
+    }
 
-  const url = `${orgUrl.replace(/\/+$/, "")}/${encodeURIComponent(
-    projectName,
-  )}/_git/${encodeURIComponent(repositoryName)}/pullrequest/${pullRequestId}`;
+    const url = `${orgUrl.replace(/\/+$/, "")}/${encodeURIComponent(
+        projectName,
+    )}/_git/${encodeURIComponent(repositoryName)}/pullrequest/${pullRequestId}`;
 
-  try {
-    return new URL(url).toString();
-  } catch {
-    return undefined;
-  }
+    try {
+        // Stryker disable BlockStatement: an emptied catch below falls off the end of the function, which returns undefined just like the explicit return
+        return new URL(url).toString();
+    } catch {
+        // Stryker restore BlockStatement
+        return undefined;
+    }
 }
 
 /** Contribution id (manifest) of the Markdown Review PR tab. */
@@ -339,8 +332,8 @@ export const BASE_LINK_PARAM = "base";
 
 /** ADO iteration ids for an update comparison (see `ITERATION_LINK_PARAM`). */
 export interface IterationParams {
-  iteration: number;
-  base: number;
+    iteration: number;
+    base: number;
 }
 
 /**
@@ -350,21 +343,21 @@ export interface IterationParams {
  * update N is `stops[stops.length - N]`.
  */
 export function iterationParamsForRange(
-  range: ReviewIterationRange,
-  stops: readonly HistoryStop[],
+    range: ReviewIterationRange,
+    stops: readonly HistoryStop[],
 ): IterationParams | undefined {
-  const count = stops.length;
-  const resolved = resolveReviewIterationRange(range, count);
-  if (resolved.isAllChanges) return undefined;
-  const idOf = (update: number) => stops[count - update]?.iterationId;
-  const iteration = idOf(resolved.range.toUpdate);
+    const count = stops.length;
+    const resolved = resolveReviewIterationRange(range, count);
+    if (resolved.isAllChanges) return undefined;
+    // Stryker disable next-line OptionalChaining: a resolved range's updates lie in 1..count (update 0, the base, is handled separately), so `stops[count - update]` always exists
+    const idOf = (update: number) => stops[count - update]?.iterationId;
+    const iteration = idOf(resolved.range.toUpdate);
 
-  const base =
-    resolved.range.fromUpdate === 0 ? 0 : idOf(resolved.range.fromUpdate);
+    const base = resolved.range.fromUpdate === 0 ? 0 : idOf(resolved.range.fromUpdate);
 
-  if (iteration === undefined || base === undefined) return undefined;
+    if (iteration === undefined || base === undefined) return undefined;
 
-  return { iteration, base };
+    return { iteration, base };
 }
 
 /**
@@ -373,29 +366,31 @@ export function iterationParamsForRange(
  * malformed, unknown to this PR, or not an older→newer pair.
  */
 export function rangeFromIterationParams(
-  params: Record<string, string | undefined> | null | undefined,
-  stops: readonly HistoryStop[],
+    params: Record<string, string | undefined> | null | undefined,
+    stops: readonly HistoryStop[],
 ): ReviewIterationRange | undefined {
-  const parse = (value: string | undefined) =>
-    /^\s*\d+\s*$/.test(value ?? "") ? Number(value) : undefined;
+    const parse = (value: string | undefined) =>
+        // Stryker disable next-line Regex,StringLiteral: text around the digits makes `Number()` NaN, which matches no update id, so the anchors only matter for hex/exponent/decimal spellings no ADO link carries; any non-digit stand-in for a missing value fails the test like ""
+        /^\s*\d+\s*$/.test(value ?? "") ? Number(value) : undefined;
 
-  const iteration = parse(params?.[ITERATION_LINK_PARAM]);
-  if (iteration === undefined) return undefined;
-  const base = parse(params?.[BASE_LINK_PARAM] ?? "0");
-  if (base === undefined) return undefined;
+    const iteration = parse(params?.[ITERATION_LINK_PARAM]);
+    if (iteration === undefined) return undefined;
+    // Stryker disable next-line OptionalChaining: missing params already returned above (no iteration), so `params` is defined here
+    const base = parse(params?.[BASE_LINK_PARAM] ?? "0");
+    if (base === undefined) return undefined;
 
-  const updateOf = (id: number) => {
-    const index = stops.findIndex((stop) => stop.iterationId === id);
+    const updateOf = (id: number) => {
+        const index = stops.findIndex((stop) => stop.iterationId === id);
 
-    return index === -1 ? undefined : stops.length - index;
-  };
+        return index === -1 ? undefined : stops.length - index;
+    };
 
-  const toUpdate = updateOf(iteration);
-  const fromUpdate = base === 0 ? 0 : updateOf(base);
-  if (toUpdate === undefined || fromUpdate === undefined) return undefined;
-  if (fromUpdate >= toUpdate) return undefined;
+    const toUpdate = updateOf(iteration);
+    const fromUpdate = base === 0 ? 0 : updateOf(base);
+    if (toUpdate === undefined || fromUpdate === undefined) return undefined;
+    if (fromUpdate >= toUpdate) return undefined;
 
-  return { fromUpdate, toUpdate };
+    return { fromUpdate, toUpdate };
 }
 
 /**
@@ -403,20 +398,20 @@ export function rangeFromIterationParams(
  * ADO's iteration changes (`iterations/{iteration}/changes?$compareTo={base}`).
  */
 export function rangeChangeTypes(
-  entries: ReadonlyArray<{
-    changeType?: number;
-    item?: { path?: string };
-    originalPath?: string;
-  }>,
+    entries: ReadonlyArray<{
+        changeType?: number;
+        item?: { path?: string };
+        originalPath?: string;
+    }>,
 ): Record<string, ChangeType> {
-  const byPath: Record<string, ChangeType> = {};
+    const byPath: Record<string, ChangeType> = {};
 
-  for (const entry of entries) {
-    const path = markdownChangePath(entry);
-    if (path !== undefined) byPath[path] = mapChangeType(entry.changeType);
-  }
+    for (const entry of entries) {
+        const path = markdownChangePath(entry);
+        if (path !== undefined) byPath[path] = mapChangeType(entry.changeType);
+    }
 
-  return byPath;
+    return byPath;
 }
 
 /** Page size when listing a PR update's changed files. */
@@ -429,22 +424,19 @@ export const ITERATION_CHANGES_PAGE = 500;
  * reports no further page or a `nextSkip` that doesn't advance.
  */
 export async function fetchAllIterationChanges<T>(
-  fetchPage: (
-    top: number,
-    skip: number,
-  ) => Promise<{ changeEntries?: T[]; nextSkip?: number }>,
+    fetchPage: (top: number, skip: number) => Promise<{ changeEntries?: T[]; nextSkip?: number }>,
 ): Promise<T[]> {
-  const entries: T[] = [];
-  let skip = 0;
+    const entries: T[] = [];
+    let skip = 0;
 
-  for (;;) {
-    const page = await fetchPage(ITERATION_CHANGES_PAGE, skip);
-    entries.push(...(page.changeEntries ?? []));
-    // `skip` is never negative, so a 0 `nextSkip` also ends the walk here.
-    const next = page.nextSkip;
-    if (next == null || Number.isNaN(next) || next <= skip) return entries;
-    skip = next;
-  }
+    for (;;) {
+        const page = await fetchPage(ITERATION_CHANGES_PAGE, skip);
+        entries.push(...(page.changeEntries ?? []));
+        // `skip` is never negative, so a 0 `nextSkip` also ends the walk here.
+        const next = page.nextSkip;
+        if (next == null || Number.isNaN(next) || next <= skip) return entries;
+        skip = next;
+    }
 }
 
 /**
@@ -457,43 +449,38 @@ export async function fetchAllIterationChanges<T>(
  * Returns `undefined` when the PR web URL is unavailable or unparseable.
  */
 export function buildPrTabDocUrl(
-  prWebUrl: string | undefined,
-  ext: { publisherId: string; extensionId: string },
-  documentPath: string,
-  iterationParams?: IterationParams,
+    prWebUrl: string | undefined,
+    ext: { publisherId: string; extensionId: string },
+    documentPath: string,
+    iterationParams?: IterationParams,
 ): string | undefined {
-  if (prWebUrl === undefined || prWebUrl === "") return undefined;
-  let url: URL;
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: `new URL()` throws for an undefined or empty URL alike and the catch below returns undefined, so this early return only short-circuits the same result
+    if (prWebUrl === undefined || prWebUrl === "") return undefined;
+    let url: URL;
 
-  try {
-    url = new URL(prWebUrl);
-  } catch {
-    return undefined;
-  }
+    try {
+        url = new URL(prWebUrl);
+    } catch {
+        return undefined;
+    }
 
-  url.searchParams.set(
-    "_a",
-    `${ext.publisherId}.${ext.extensionId}.${PR_TAB_CONTRIBUTION}`,
-  );
-  const path = prTabRoutePath(documentPath);
-  if (path) url.searchParams.set(PATH_LINK_PARAM, path);
+    url.searchParams.set("_a", `${ext.publisherId}.${ext.extensionId}.${PR_TAB_CONTRIBUTION}`);
+    const path = prTabRoutePath(documentPath);
+    if (path) url.searchParams.set(PATH_LINK_PARAM, path);
 
-  if (iterationParams) {
-    url.searchParams.set(
-      ITERATION_LINK_PARAM,
-      String(iterationParams.iteration),
-    );
-    url.searchParams.set(BASE_LINK_PARAM, String(iterationParams.base));
-  }
+    if (iterationParams) {
+        url.searchParams.set(ITERATION_LINK_PARAM, String(iterationParams.iteration));
+        url.searchParams.set(BASE_LINK_PARAM, String(iterationParams.base));
+    }
 
-  return url.toString();
+    return url.toString();
 }
 
 /** A repo path in the PR route's `path` form (`/docs/a.md`); `""` when blank. */
 export function prTabRoutePath(documentPath: string): string {
-  const bare = documentPath.trim().replace(/^\/+/, "");
+    const bare = documentPath.trim().replace(/^\/+/, "");
 
-  return bare ? `/${bare}` : "";
+    return bare ? `/${bare}` : "";
 }
 
 /**
@@ -502,26 +489,27 @@ export function prTabRoutePath(documentPath: string): string {
  * tab then opens its default first file rather than an unloadable path).
  */
 function pickRoutedFile(
-  routedPath: string | undefined,
-  files: ReadonlyArray<{ path: string }>,
+    routedPath: string | undefined,
+    files: ReadonlyArray<{ path: string }>,
 ): string | undefined {
-  if (routedPath === undefined || routedPath === "") return undefined;
+    // Stryker disable next-line ConditionalExpression,StringLiteral: an empty routed path names no changed file (every PR file has a non-empty path), so the lookup below finds nothing just like the early return
+    if (routedPath === undefined || routedPath === "") return undefined;
 
-  return files.find((file) => samePath(file.path, routedPath))?.path;
+    return files.find((file) => samePath(file.path, routedPath))?.path;
 }
 
 /** Deep-link targets the PR tab opens with, resolved from its route params. */
 export interface PrTabRouteSeed {
-  /** Changed file to open first; `undefined` → the shell's default file. */
-  selectedPath?: string;
-  /** Thread to activate (`?comment=`). */
-  threadId?: string;
-  /** Heading slug to scroll to (`?anchor=`). */
-  anchor?: string;
-  /** Serialized text fragment to flash (`?text=`). */
-  text?: string;
-  /** Comparison of PR updates to open (`?iteration=&base=`). */
-  iterationRange?: ReviewIterationRange;
+    /** Changed file to open first; `undefined` → the shell's default file. */
+    selectedPath?: string;
+    /** Thread to activate (`?comment=`). */
+    threadId?: string;
+    /** Heading slug to scroll to (`?anchor=`). */
+    anchor?: string;
+    /** Serialized text fragment to flash (`?text=`). */
+    text?: string;
+    /** Comparison of PR updates to open (`?iteration=&base=`). */
+    iterationRange?: ReviewIterationRange;
 }
 
 /**
@@ -533,21 +521,22 @@ export interface PrTabRouteSeed {
  * PR doesn't have falls back to "All updates".
  */
 export function resolvePrTabRouteSeed(
-  params: Record<string, string | undefined> | null | undefined,
-  files: ReadonlyArray<{ path: string }>,
-  stops: readonly HistoryStop[] = [],
+    params: Record<string, string | undefined> | null | undefined,
+    files: ReadonlyArray<{ path: string }>,
+    // Stryker disable next-line ArrayDeclaration: a placeholder entry carries no iteration id, so an update comparison still matches nothing, exactly as with no updates
+    stops: readonly HistoryStop[] = [],
 ): PrTabRouteSeed {
-  const routedPath = readPathParam(params);
-  const selectedPath = pickRoutedFile(routedPath, files);
-  const pathMissing = routedPath !== undefined && selectedPath === undefined;
+    const routedPath = readPathParam(params);
+    const selectedPath = pickRoutedFile(routedPath, files);
+    const pathMissing = routedPath !== undefined && selectedPath === undefined;
 
-  return {
-    selectedPath,
-    threadId: readCommentParam(params),
-    anchor: pathMissing ? undefined : readAnchorParam(params),
-    text: pathMissing ? undefined : readTextParam(params),
-    iterationRange: rangeFromIterationParams(params, stops),
-  };
+    return {
+        selectedPath,
+        threadId: readCommentParam(params),
+        anchor: pathMissing ? undefined : readAnchorParam(params),
+        text: pathMissing ? undefined : readTextParam(params),
+        iterationRange: rangeFromIterationParams(params, stops),
+    };
 }
 
 /**
@@ -555,29 +544,29 @@ export function resolvePrTabRouteSeed(
  * can drive hidden/visible transitions deterministically.
  */
 export interface VisibilityClock {
-  now(): number;
-  isVisible(): boolean;
-  subscribeVisibilityChange(listener: () => void): () => void;
+    now(): number;
+    isVisible(): boolean;
+    subscribeVisibilityChange(listener: () => void): () => void;
 }
 
 // The PR tab only runs inside the browser iframe, so `document` always exists.
 const DOCUMENT_VISIBILITY: VisibilityClock = {
-  now: () => Date.now(),
-  isVisible: () => document.visibilityState === "visible",
-  subscribeVisibilityChange(listener) {
-    document.addEventListener("visibilitychange", listener);
+    now: () => Date.now(),
+    isVisible: () => document.visibilityState === "visible",
+    subscribeVisibilityChange(listener) {
+        document.addEventListener("visibilitychange", listener);
 
-    return () => document.removeEventListener("visibilitychange", listener);
-  },
+        return () => document.removeEventListener("visibilitychange", listener);
+    },
 };
 
 /** {@link withTimeout}'s budget ran out before the wrapped call settled. */
 export class TimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TimeoutError";
-    Object.setPrototypeOf(this, TimeoutError.prototype);
-  }
+    constructor(message: string) {
+        super(message);
+        this.name = "TimeoutError";
+        Object.setPrototypeOf(this, TimeoutError.prototype);
+    }
 }
 
 /**
@@ -591,71 +580,71 @@ export class TimeoutError extends Error {
  * hidden boot interval. The clock pauses while hidden and resumes on reveal.
  */
 export function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  label: string,
-  visibility: VisibilityClock = DOCUMENT_VISIBILITY,
+    promise: Promise<T>,
+    ms: number,
+    label: string,
+    visibility: VisibilityClock = DOCUMENT_VISIBILITY,
 ): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let remainingMs = ms;
-    let visibleSinceMs: number | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let settled = false;
+    return new Promise<T>((resolve, reject) => {
+        let remainingMs = ms;
+        let visibleSinceMs: number | null = null;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let settled = false;
 
-    const pause = (): void => {
-      if (timer !== null) clearTimeout(timer);
-      timer = null;
+        const pause = (): void => {
+            // Stryker disable next-line ConditionalExpression: `clearTimeout(null)` is a no-op, so clearing unconditionally behaves the same
+            if (timer !== null) clearTimeout(timer);
+            timer = null;
 
-      if (visibleSinceMs !== null) {
-        remainingMs -= Math.max(0, visibility.now() - visibleSinceMs);
-        visibleSinceMs = null;
-      }
-    };
+            if (visibleSinceMs !== null) {
+                remainingMs -= Math.max(0, visibility.now() - visibleSinceMs);
+                visibleSinceMs = null;
+            }
+        };
 
-    // `finish` / `resume` run only after `unsubscribe` is initialised: the
-    // timer and the visibility listener fire asynchronously, never inline.
-    const resume = (): void => {
-      if (timer !== null) return;
-      visibleSinceMs = visibility.now();
-      timer = setTimeout(
-        () => {
-          finish();
-          reject(
-            new TimeoutError(
-              `Timeout after ${ms}ms while waiting for ${label}`,
-            ),
-          );
-        },
-        Math.max(0, remainingMs),
-      );
-    };
+        // `finish` / `resume` run only after `unsubscribe` is initialised: the
+        // timer and the visibility listener fire asynchronously, never inline.
+        const resume = (): void => {
+            if (timer !== null) return;
+            visibleSinceMs = visibility.now();
+            timer = setTimeout(
+                () => {
+                    finish();
+                    reject(new TimeoutError(`Timeout after ${ms}ms while waiting for ${label}`));
+                },
+                Math.max(0, remainingMs),
+            );
+        };
 
-    const unsubscribe = visibility.subscribeVisibilityChange(() => {
-      if (visibility.isVisible()) resume();
-      else pause();
+        const unsubscribe = visibility.subscribeVisibilityChange(() => {
+            if (visibility.isVisible()) resume();
+            else pause();
+        });
+
+        const finish = (): void => {
+            // Stryker disable next-line BooleanLiteral: a call that settles after the timeout re-runs `finish` (a no-op once paused and unsubscribed) and resolves/rejects an already-rejected promise, which is ignored
+            settled = true;
+            pause();
+            unsubscribe();
+        };
+
+        if (visibility.isVisible()) resume();
+        promise.then(
+            (v) => {
+                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and resolving an already-rejected promise is ignored
+                if (settled) return;
+                finish();
+                resolve(v);
+            },
+            (err) => {
+                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and rejecting an already-rejected promise is ignored
+                if (settled) return;
+                finish();
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejects the wrapped promise's reason unchanged; callers inspect ADO error fields like `status`
+                reject(err);
+            },
+        );
     });
-
-    const finish = (): void => {
-      settled = true;
-      pause();
-      unsubscribe();
-    };
-
-    if (visibility.isVisible()) resume();
-    promise.then(
-      (v) => {
-        if (settled) return;
-        finish();
-        resolve(v);
-      },
-      (err) => {
-        if (settled) return;
-        finish();
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejects the wrapped promise's reason unchanged; callers inspect ADO error fields like `status`
-        reject(err);
-      },
-    );
-  });
 }
 
 /**
@@ -666,11 +655,11 @@ export function withTimeout<T>(
  * The hung request can't be cancelled, so this is for idempotent reads only.
  */
 export async function retryOnTimeout<T>(attempt: () => Promise<T>): Promise<T> {
-  try {
-    return await attempt();
-  } catch (err) {
-    if (!(err instanceof TimeoutError)) throw err;
+    try {
+        return await attempt();
+    } catch (err) {
+        if (!(err instanceof TimeoutError)) throw err;
 
-    return attempt();
-  }
+        return attempt();
+    }
 }

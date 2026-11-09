@@ -13,36 +13,34 @@ const claimedRejections = new Set<(reason: unknown) => boolean>();
  * but the caller recovers from (and reports itself if recovery fails). The
  * global handler skips a claimed rejection entirely. Returns the release.
  */
-export function claimUnhandledRejections(
-  predicate: (reason: unknown) => boolean,
-): () => void {
-  claimedRejections.add(predicate);
+export function claimUnhandledRejections(predicate: (reason: unknown) => boolean): () => void {
+    claimedRejections.add(predicate);
 
-  return () => {
-    claimedRejections.delete(predicate);
-  };
+    return () => {
+        claimedRejections.delete(predicate);
+    };
 }
 
 function isClaimed(reason: unknown): boolean {
-  for (const predicate of claimedRejections) {
-    try {
-      if (predicate(reason)) return true;
-    } catch {
-      /* a faulty predicate must not hide the rejection */
+    for (const predicate of claimedRejections) {
+        try {
+            if (predicate(reason)) return true;
+        } catch {
+            /* a faulty predicate must not hide the rejection */
+        }
     }
-  }
 
-  return false;
+    return false;
 }
 
 function onError(event: ErrorEvent): void {
-  trackException({
-    error: event.error ?? new Error(event.message || "Unknown error"),
-    severity: "error",
-    source: "window.onerror",
-    handled: false,
-  });
-  markAppReady("error");
+    trackException({
+        error: event.error ?? new Error(event.message || "Unknown error"),
+        severity: "error",
+        source: "window.onerror",
+        handled: false,
+    });
+    markAppReady("error");
 }
 
 /**
@@ -51,67 +49,69 @@ function onError(event: ErrorEvent): void {
  * for exotic objects (null prototype, cross-frame proxies, throwing getters).
  */
 export function rejectionTypeOf(reason: unknown): string {
-  if (reason === null) return "null";
-  const kind = typeof reason;
-  if (kind !== "object" && kind !== "function") return kind;
+    if (reason === null) return "null";
+    const kind = typeof reason;
+    if (kind !== "object" && kind !== "function") return kind;
 
-  try {
-    const proto: unknown = Object.getPrototypeOf(reason);
-    if (proto === null) return `${kind}:null-prototype`;
-    const ctor = (proto as { constructor?: { name?: unknown } }).constructor;
-    const name = ctor?.name;
+    try {
+        const proto: unknown = Object.getPrototypeOf(reason);
+        if (proto === null) return `${kind}:null-prototype`;
 
-    return typeof name === "string" && name ? `${kind}:${name}` : kind;
-  } catch {
-    return `${kind}:opaque`;
-  }
+        const ctor = (proto as { constructor?: { name?: unknown } }).constructor;
+
+        const name = ctor?.name;
+
+        return typeof name === "string" && name ? `${kind}:${name}` : kind;
+    } catch {
+        return `${kind}:opaque`;
+    }
 }
 
 function onUnhandledRejection(event: PromiseRejectionEvent): void {
-  // A claimed rejection is handled by its owner: neither report it nor let
-  // the browser log it as uncaught.
-  if (isClaimed(event.reason)) {
-    event.preventDefault();
+    // A claimed rejection is handled by its owner: neither report it nor let
+    // the browser log it as uncaught.
+    if (isClaimed(event.reason)) {
+        event.preventDefault();
 
-    return;
-  }
+        return;
+    }
 
-  // Must never throw: an exception here escapes to `window.onerror` and hides
-  // the real rejection. The old `new Error(String(reason))` did exactly that
-  // for reasons with no primitive conversion ("Cannot convert object to
-  // primitive value"). The sink's `describeError` handles any value safely,
-  // so the reason is passed through as-is (keeping its HTTP status / TF code).
-  try {
-    const reason: unknown = event.reason;
-    trackException({
-      error: reason,
-      severity: "error",
-      source: "unhandledrejection",
-      handled: false,
-      ...(reason instanceof Error
-        ? {}
-        : { properties: { rejectionType: rejectionTypeOf(reason) } }),
-    });
-  } catch {
-    /* diagnostics must never throw from a global handler */
-  }
+    // Must never throw: an exception here escapes to `window.onerror` and hides
+    // the real rejection. The old `new Error(String(reason))` did exactly that
+    // for reasons with no primitive conversion ("Cannot convert object to
+    // primitive value"). The sink's `describeError` handles any value safely,
+    // so the reason is passed through as-is (keeping its HTTP status / TF code).
+    try {
+        const reason: unknown = event.reason;
+        trackException({
+            error: reason,
+            severity: "error",
+            source: "unhandledrejection",
+            handled: false,
+            ...(reason instanceof Error
+                ? {}
+                : { properties: { rejectionType: rejectionTypeOf(reason) } }),
+        });
+    } catch {
+        /* diagnostics must never throw from a global handler */
+    }
 
-  markAppReady("error");
+    markAppReady("error");
 }
 
 /** Attach global listeners. Idempotent; safe to call from each entry point. */
 export function installGlobalErrorHandlers(): void {
-  if (installed) return;
-  if (typeof window === "undefined") return;
-  installed = true;
-  window.addEventListener("error", onError);
-  window.addEventListener("unhandledrejection", onUnhandledRejection);
+    if (installed) return;
+    if (typeof window === "undefined") return;
+    installed = true;
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
 }
 
 /** Test-only teardown. */
 export function __uninstallGlobalErrorHandlersForTests(): void {
-  if (typeof window === "undefined") return;
-  window.removeEventListener("error", onError);
-  window.removeEventListener("unhandledrejection", onUnhandledRejection);
-  installed = false;
+    if (typeof window === "undefined") return;
+    window.removeEventListener("error", onError);
+    window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    installed = false;
 }

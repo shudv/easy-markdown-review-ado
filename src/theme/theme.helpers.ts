@@ -7,32 +7,32 @@
 export type EmrTheme = "light" | "dark" | "hc-light" | "hc-dark";
 
 export interface EmrThemeInfo {
-  id: EmrTheme;
-  label: string;
-  /** True for the two dark palettes. */
-  isDark: boolean;
+    id: EmrTheme;
+    label: string;
+    /** True for the two dark palettes. */
+    isDark: boolean;
 }
 
 export const ALL_THEMES: ReadonlyArray<EmrThemeInfo> = [
-  { id: "light", label: "Light", isDark: false },
-  { id: "dark", label: "Dark", isDark: true },
-  { id: "hc-light", label: "High contrast — light", isDark: false },
-  { id: "hc-dark", label: "High contrast — dark", isDark: true },
+    { id: "light", label: "Light", isDark: false },
+    { id: "dark", label: "Dark", isDark: true },
+    { id: "hc-light", label: "High contrast — light", isDark: false },
+    { id: "hc-dark", label: "High contrast — dark", isDark: true },
 ];
 
 const THEME_IDS: ReadonlySet<EmrTheme> = new Set(ALL_THEMES.map((t) => t.id));
 
 /** True if `s` is one of the four supported `EmrTheme` literals. */
 export function isEmrTheme(s: unknown): s is EmrTheme {
-  // Stryker disable next-line ConditionalExpression: the `typeof` guard is
-  // equivalent under mutation — THEME_IDS holds only strings, so
-  // `.has(nonString)` is always false regardless of the type check.
-  return typeof s === "string" && THEME_IDS.has(s as EmrTheme);
+    // Stryker disable next-line ConditionalExpression: the `typeof` guard is
+    // equivalent under mutation — THEME_IDS holds only strings, so
+    // `.has(nonString)` is always false regardless of the type check.
+    return typeof s === "string" && THEME_IDS.has(s as EmrTheme);
 }
 
 /** The `isDark` flag for a theme id, defaulting to light for unknown ids. */
 export function isDarkTheme(theme: string): boolean {
-  return ALL_THEMES.find((t) => t.id === theme)?.isDark ?? false;
+    return ALL_THEMES.find((t) => t.id === theme)?.isDark ?? false;
 }
 
 /**
@@ -41,9 +41,9 @@ export function isDarkTheme(theme: string): boolean {
  * high-contrast palette.
  */
 export function pickTheme(isDark: boolean, forcedColors: boolean): EmrTheme {
-  if (forcedColors) return isDark ? "hc-dark" : "hc-light";
+    if (forcedColors) return isDark ? "hc-dark" : "hc-light";
 
-  return isDark ? "dark" : "light";
+    return isDark ? "dark" : "light";
 }
 
 /**
@@ -55,21 +55,21 @@ export function pickTheme(isDark: boolean, forcedColors: boolean): EmrTheme {
  * theme, and the host injects no theme class the sandboxed iframe can read.
  */
 export function isHighContrastPrimary(primary: string): boolean {
-  const m = primary.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (!m) return false;
-  const r = Number(m[1]);
-  const g = Number(m[2]);
-  const b = Number(m[3]);
+    const m = primary.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (!m) return false;
+    const r = Number(m[1]);
+    const g = Number(m[2]);
+    const b = Number(m[3]);
 
-  return r === g && g === b;
+    return r === g && g === b;
 }
 
 /** Rec.709 luminance threshold below which a background reads as "dark". */
-export const DARK_LUMA_THRESHOLD = 0.5;
+const DARK_LUMA_THRESHOLD = 0.5;
 
 /** True when a parsed luminance is present and below the dark threshold. */
 export function isDarkLuminance(luma: number | null): boolean {
-  return luma !== null && luma < DARK_LUMA_THRESHOLD;
+    return luma !== null && luma < DARK_LUMA_THRESHOLD;
 }
 
 /**
@@ -77,36 +77,36 @@ export function isDarkLuminance(luma: number | null): boolean {
  * a 0–1 relative luminance, or null on miss.
  */
 export function parseLuminance(color: string): number | null {
-  // Stryker disable next-line ConditionalExpression: equivalent mutant — the
-  // only falsy string is "", which also yields null via the no-match path
-  // below, so removing this fast-path guard doesn't change the result.
-  if (!color) return null;
-  const s = color.trim();
-  let r: number, g: number, b: number;
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — the
+    // only falsy string is "", which also yields null via the no-match path
+    // below, so removing this fast-path guard doesn't change the result.
+    if (!color) return null;
+    const s = color.trim();
+    let r: number, g: number, b: number;
 
-  if (s.startsWith("#")) {
-    const hex = s.slice(1);
+    if (s.startsWith("#")) {
+        const hex = s.slice(1);
 
-    if (hex.length === 3) {
-      r = parseInt(hex[0]! + hex[0]!, 16);
-      g = parseInt(hex[1]! + hex[1]!, 16);
-      b = parseInt(hex[2]! + hex[2]!, 16);
-    } else if (hex.length === 6 || hex.length === 8) {
-      r = parseInt(hex.slice(0, 2), 16);
-      g = parseInt(hex.slice(2, 4), 16);
-      b = parseInt(hex.slice(4, 6), 16);
+        if (hex.length === 3) {
+            r = parseInt(hex[0]! + hex[0]!, 16);
+            g = parseInt(hex[1]! + hex[1]!, 16);
+            b = parseInt(hex[2]! + hex[2]!, 16);
+        } else if (hex.length === 6 || hex.length === 8) {
+            r = parseInt(hex.slice(0, 2), 16);
+            g = parseInt(hex.slice(2, 4), 16);
+            b = parseInt(hex.slice(4, 6), 16);
+        } else {
+            return null;
+        }
     } else {
-      return null;
+        const m = s.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+        if (!m) return null;
+        r = parseInt(m[1]!, 10);
+        g = parseInt(m[2]!, 10);
+        b = parseInt(m[3]!, 10);
     }
-  } else {
-    const m = s.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
-    if (!m) return null;
-    r = parseInt(m[1]!, 10);
-    g = parseInt(m[2]!, 10);
-    b = parseInt(m[3]!, 10);
-  }
 
-  if ([r, g, b].some((n) => Number.isNaN(n))) return null;
+    if ([r, g, b].some((n) => Number.isNaN(n))) return null;
 
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }

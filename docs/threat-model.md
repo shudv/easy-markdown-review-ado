@@ -63,17 +63,17 @@ The extension stores no credentials, tokens, or user identities. It keeps an uns
 1. The host loads the iframe with a one-time configuration object describing the current PR / repo / file.
 2. The iframe initializes the SDK, requests an access token, and uses ADO REST clients to fetch file contents and comment threads.
 3. Markdown source flows into the renderer (`src/markdown/render.ts`):
-   ```
-   md (string) ─► remark-parse ─► remark-gfm ─► remark-math ─► remarkCodeMetadata
-                ─► remark-emoji ─► remarkWikiMacros ─► remark-rehype
-                ─► rehypeSafeHtml (parse5 + tag/attribute allowlist)
-                ─► rehypeSourcePositions (adds data-source-line)
-                ─► rehypeMathPlaceholder / rehypeMermaidPlaceholder (inert lazy hosts)
-                ─► rehypeMentions (strips href on `mention://` links)
-                ─► rehypeAlerts ─► rehypeCollapsibleSections ─► rehypeWikiMacros
-                ─► rehypeSanitizeUrls (scrubs href/src schemes)
-                ─► rehype-stringify ─► HTML string
-   ```
+    ```
+    md (string) ─► remark-parse ─► remark-gfm ─► remark-math ─► remarkCodeMetadata
+                 ─► remark-emoji ─► remarkWikiMacros ─► remark-rehype
+                 ─► rehypeSafeHtml (parse5 + tag/attribute allowlist)
+                 ─► rehypeSourcePositions (adds data-source-line)
+                 ─► rehypeMathPlaceholder / rehypeMermaidPlaceholder (inert lazy hosts)
+                 ─► rehypeMentions (strips href on `mention://` links)
+                 ─► rehypeAlerts ─► rehypeCollapsibleSections ─► rehypeWikiMacros
+                 ─► rehypeSanitizeUrls (scrubs href/src schemes)
+                 ─► rehype-stringify ─► HTML string
+    ```
 4. The HTML string is mounted into a React-managed container via `dangerouslySetInnerHTML` (or imperatively via `Element.innerHTML` in the article-view layout effect).
 5. Comment mutations (create / reply / edit / delete / status) flow back through `adoCommentApi.ts` to the ADO PR Threads REST endpoints; the optimistic UI reducer is updated on success.
 6. When telemetry is enabled, the facade in `src/telemetry/` emits sanitized events to the configured sink (1DS). This is the only outbound channel that leaves the ADO organization and is described in §7.

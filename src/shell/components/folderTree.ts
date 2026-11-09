@@ -26,22 +26,22 @@
 import { compareRanks, orderRank, wikiPageName } from "../wikiOrder";
 
 export interface DirNode<F extends { path: string }> {
-  kind: "dir";
-  /** Full path of the deepest folder this node represents, e.g. "docs/api/v2". */
-  path: string;
-  /** Display label: the collapsed segments separated by `/`. */
-  displayName: string;
-  children: Array<DirNode<F> | FileNode<F>>;
-  /**
-   * The folder's own wiki page — the sibling `Foo.md` of folder `Foo/` — when
-   * `mergeWikiPages` folded it in. The node is then a page with subpages.
-   */
-  page?: F;
+    kind: "dir";
+    /** Full path of the deepest folder this node represents, e.g. "docs/api/v2". */
+    path: string;
+    /** Display label: the collapsed segments separated by `/`. */
+    displayName: string;
+    children: Array<DirNode<F> | FileNode<F>>;
+    /**
+     * The folder's own wiki page — the sibling `Foo.md` of folder `Foo/` — when
+     * `mergeWikiPages` folded it in. The node is then a page with subpages.
+     */
+    page?: F;
 }
 
 export interface FileNode<F extends { path: string }> {
-  kind: "file";
-  file: F;
+    kind: "file";
+    file: F;
 }
 
 export type TreeNode<F extends { path: string }> = DirNode<F> | FileNode<F>;
@@ -53,7 +53,8 @@ export type TreeNode<F extends { path: string }> = DirNode<F> | FileNode<F>;
  * slashes makes the two interchangeable as map/set keys.
  */
 export function normalizeFolderPath(path: string): string {
-  return path.replace(/^\/+/, "").replace(/\/+$/, "");
+    // Stryker disable next-line Regex: ADO and caller folder paths never carry doubled slashes, and empty segments are filtered out anyway, so trimming one slash or a run is the same
+    return path.replace(/^\/+/, "").replace(/\/+$/, "");
 }
 
 /**
@@ -71,57 +72,61 @@ export function normalizeFolderPath(path: string): string {
  * the populated one).
  */
 export function buildFolderTree<F extends { path: string }>(
-  files: readonly F[],
-  options?: {
-    extraFolders?: readonly string[];
-    /**
-     * Azure DevOps wiki `.order` page names per folder, keyed by the
-     * slash-free folder path (`""` for the root). Listed pages and folders sort
-     * first, in that order; the rest follow in the default order.
-     */
-    folderOrders?: Readonly<Record<string, readonly string[]>>;
-  },
+    files: readonly F[],
+    options?: {
+        extraFolders?: readonly string[];
+        /**
+         * Azure DevOps wiki `.order` page names per folder, keyed by the
+         * slash-free folder path (`""` for the root). Listed pages and folders sort
+         * first, in that order; the rest follow in the default order.
+         */
+        folderOrders?: Readonly<Record<string, readonly string[]>>;
+    },
 ): Array<TreeNode<F>> {
-  const root: Building<F> = { name: "", full: "", children: new Map() };
+    const root: Building<F> = { name: "", full: "", children: new Map() };
 
-  for (const f of files) {
-    // Strip leading slash so `"/docs/foo.md"` and `"docs/foo.md"` give
-    // identical trees. Empty segments (caused by `//` or trailing `/`)
-    // are filtered out.
-    const segments = f.path.replace(/^\/+/, "").split("/").filter(Boolean);
-    if (segments.length === 0) continue;
-    insertPath(root, segments).file = f;
-  }
+    for (const f of files) {
+        // Strip leading slash so `"/docs/foo.md"` and `"docs/foo.md"` give
+        // identical trees. Empty segments (caused by `//` or trailing `/`)
+        // are filtered out.
+        // Stryker disable next-line Regex: file paths never carry doubled slashes, and empty segments are filtered out anyway, so trimming one slash or a run is the same
+        const segments = f.path.replace(/^\/+/, "").split("/").filter(Boolean);
+        // Stryker disable next-line ConditionalExpression: dead code: an empty path would attach to the never-rendered root, so skipping it changes nothing; candidate for removal
+        if (segments.length === 0) continue;
+        insertPath(root, segments).file = f;
+    }
 
-  // Inject any known-but-unloaded folder paths as empty branches. Each
-  // path becomes a chain of `Building` nodes ending in a childless
-  // folder; the collapse pass below folds long chains into a single
-  // visible row.
-  for (const folderPath of options?.extraFolders ?? []) {
-    const segments = normalizeFolderPath(folderPath).split("/").filter(Boolean);
-    if (segments.length === 0) continue;
-    // No `.file = …` here — that's what makes this a lazy folder.
-    insertPath(root, segments);
-  }
+    // Inject any known-but-unloaded folder paths as empty branches. Each
+    // path becomes a chain of `Building` nodes ending in a childless
+    // folder; the collapse pass below folds long chains into a single
+    // visible row.
+    for (const folderPath of options?.extraFolders ?? []) {
+        const segments = normalizeFolderPath(folderPath).split("/").filter(Boolean);
 
-  const roots: TreeNode<F>[] = [];
+        // Stryker disable next-line ConditionalExpression: dead code: an empty folder path inserts nothing, so skipping it changes nothing; candidate for removal
+        if (segments.length === 0) continue;
+        // No `.file = …` here — that's what makes this a lazy folder.
+        insertPath(root, segments);
+    }
 
-  for (const child of root.children.values()) {
-    roots.push(buildTreeNode(child, options?.folderOrders));
-  }
+    const roots: TreeNode<F>[] = [];
 
-  sortNodes(roots, ownOrder(options?.folderOrders, ""));
+    for (const child of root.children.values()) {
+        roots.push(buildTreeNode(child, options?.folderOrders));
+    }
 
-  return roots;
+    sortNodes(roots, ownOrder(options?.folderOrders, ""));
+
+    return roots;
 }
 
 // Internal building shape: keep children in a Map keyed by segment name
 // so insertion is O(1). We flatten to arrays + sort at the end.
 interface Building<F extends { path: string }> {
-  name: string;
-  full: string;
-  children: Map<string, Building<F>>;
-  file?: F;
+    name: string;
+    full: string;
+    children: Map<string, Building<F>>;
+    file?: F;
 }
 
 /**
@@ -129,37 +134,36 @@ interface Building<F extends { path: string }> {
  * and return the node for the last segment.
  */
 function insertPath<F extends { path: string }>(
-  root: Building<F>,
-  segments: readonly string[],
+    root: Building<F>,
+    segments: readonly string[],
 ): Building<F> {
-  let cursor = root;
+    let cursor = root;
 
-  for (const seg of segments) {
-    let next = cursor.children.get(seg);
+    for (const seg of segments) {
+        let next = cursor.children.get(seg);
 
-    if (!next) {
-      next = {
-        name: seg,
-        full: cursor.full ? `${cursor.full}/${seg}` : seg,
-        children: new Map(),
-      };
-      cursor.children.set(seg, next);
+        if (!next) {
+            next = {
+                name: seg,
+                full: cursor.full ? `${cursor.full}/${seg}` : seg,
+                children: new Map(),
+            };
+            cursor.children.set(seg, next);
+        }
+
+        cursor = next;
     }
 
-    cursor = next;
-  }
-
-  return cursor;
+    return cursor;
 }
 
 /** A folder's only child when it is itself a folder (so the two collapse). */
-function collapsibleChild<F extends { path: string }>(
-  node: Building<F>,
-): Building<F> | undefined {
-  if (node.file !== undefined || node.children.size !== 1) return undefined;
-  const onlyChild = [...node.children.values()][0]!;
+function collapsibleChild<F extends { path: string }>(node: Building<F>): Building<F> | undefined {
+    // Stryker disable next-line ConditionalExpression: dead code: a git path can't be both a file and a folder, so a node never has a file and children at once; candidate for removal
+    if (node.file !== undefined || node.children.size !== 1) return undefined;
+    const onlyChild = [...node.children.values()][0]!;
 
-  return onlyChild.file === undefined ? onlyChild : undefined;
+    return onlyChild.file === undefined ? onlyChild : undefined;
 }
 
 // Convert + collapse: for every `Building` we visit, if it is a folder
@@ -167,43 +171,40 @@ function collapsibleChild<F extends { path: string }>(
 // single node and recurse. Stops as soon as we hit a folder whose
 // single child is a file, or a folder with !=1 children.
 function buildTreeNode<F extends { path: string }>(
-  node: Building<F>,
-  folderOrders: Readonly<Record<string, readonly string[]>> | undefined,
+    node: Building<F>,
+    folderOrders: Readonly<Record<string, readonly string[]>> | undefined,
 ): TreeNode<F> {
-  if (node.file && node.children.size === 0) {
-    return { kind: "file", file: node.file };
-  }
+    // Stryker disable next-line ConditionalExpression: dead code: a git path can't be both a file and a folder, so a node never has a file and children at once; candidate for removal
+    if (node.file && node.children.size === 0) {
+        return { kind: "file", file: node.file };
+    }
 
-  // Collapse: while this folder has exactly one child folder and no
-  // file-of-its-own, fold that child up into ourselves. We accumulate
-  // the display segments so the rendered label reflects the full
-  // collapsed path.
-  const displaySegments = [node.name];
-  let work = node;
+    // Collapse: while this folder has exactly one child folder and no
+    // file-of-its-own, fold that child up into ourselves. We accumulate
+    // the display segments so the rendered label reflects the full
+    // collapsed path.
+    const displaySegments = [node.name];
+    let work = node;
 
-  for (
-    let onlyChild = collapsibleChild(work);
-    onlyChild;
-    onlyChild = collapsibleChild(work)
-  ) {
-    displaySegments.push(onlyChild.name);
-    work = onlyChild;
-  }
+    for (let onlyChild = collapsibleChild(work); onlyChild; onlyChild = collapsibleChild(work)) {
+        displaySegments.push(onlyChild.name);
+        work = onlyChild;
+    }
 
-  const children: TreeNode<F>[] = [];
+    const children: TreeNode<F>[] = [];
 
-  for (const child of work.children.values()) {
-    children.push(buildTreeNode(child, folderOrders));
-  }
+    for (const child of work.children.values()) {
+        children.push(buildTreeNode(child, folderOrders));
+    }
 
-  sortNodes(children, ownOrder(folderOrders, work.full));
+    sortNodes(children, ownOrder(folderOrders, work.full));
 
-  return {
-    kind: "dir",
-    path: work.full,
-    displayName: displaySegments.join("/"),
-    children,
-  };
+    return {
+        kind: "dir",
+        path: work.full,
+        displayName: displaySegments.join("/"),
+        children,
+    };
 }
 
 /**
@@ -212,31 +213,32 @@ function buildTreeNode<F extends { path: string }>(
  * inherited value.
  */
 function ownOrder(
-  orders: Readonly<Record<string, readonly string[]>> | undefined,
-  folder: string,
+    orders: Readonly<Record<string, readonly string[]>> | undefined,
+    folder: string,
 ): readonly string[] | undefined {
-  return orders && Object.prototype.hasOwnProperty.call(orders, folder)
-    ? orders[folder]
-    : undefined;
+    return orders && Object.prototype.hasOwnProperty.call(orders, folder)
+        ? orders[folder]
+        : undefined;
 }
 
 function sortNodes<F extends { path: string }>(
-  nodes: TreeNode<F>[],
-  order: readonly string[] | undefined,
+    nodes: TreeNode<F>[],
+    order: readonly string[] | undefined,
 ): void {
-  const rank = orderRank(order);
-  nodes.sort((a, b) => {
-    const byOrder = compareRanks(rank(orderName(a)), rank(orderName(b)));
-    if (byOrder !== 0) return byOrder;
-    const aDir = a.kind === "dir";
-    const bDir = b.kind === "dir";
-    if (aDir && !bDir) return -1;
-    if (!aDir && bDir) return 1;
-    const an = a.kind === "dir" ? a.displayName : basename(a.file.path);
-    const bn = b.kind === "dir" ? b.displayName : basename(b.file.path);
+    const rank = orderRank(order);
+    nodes.sort((a, b) => {
+        const byOrder = compareRanks(rank(orderName(a)), rank(orderName(b)));
+        if (byOrder !== 0) return byOrder;
+        const aDir = a.kind === "dir";
+        const bDir = b.kind === "dir";
+        if (aDir && !bDir) return -1;
+        if (!aDir && bDir) return 1;
+        const an = a.kind === "dir" ? a.displayName : basename(a.file.path);
+        const bn = b.kind === "dir" ? b.displayName : basename(b.file.path);
 
-    return an.toLowerCase().localeCompare(bn.toLowerCase());
-  });
+        // Stryker disable next-line MethodExpression: upper-casing the left name only turns a case-only tie (0) into a positive result, and V8's sort only branches on a negative result, so no order changes; this line-level disable also covers the opposite-side mutant, which the case-only scenario in folderTree.test.ts does kill
+        return an.toLowerCase().localeCompare(bn.toLowerCase());
+    });
 }
 
 /**
@@ -244,15 +246,14 @@ function sortNodes<F extends { path: string }>(
  * collapsed `a/b/c` row is ordered by the folder it starts with.
  */
 function orderName<F extends { path: string }>(node: TreeNode<F>): string {
-  return node.kind === "dir"
-    ? node.displayName.split("/")[0]!
-    : wikiPageName(node.file.path);
+    return node.kind === "dir" ? node.displayName.split("/")[0]! : wikiPageName(node.file.path);
 }
 
 function basename(p: string): string {
-  const i = p.lastIndexOf("/");
+    const i = p.lastIndexOf("/");
 
-  return i === -1 ? p : p.slice(i + 1);
+    // Stryker disable next-line ConditionalExpression,EqualityOperator,UnaryOperator,MethodExpression: siblings share their folder prefix, so comparing full paths sorts them exactly like their base names
+    return i === -1 ? p : p.slice(i + 1);
 }
 
 /**
@@ -260,20 +261,20 @@ function basename(p: string): string {
  * which folder rows can be expanded/collapsed.
  */
 export function collectDirPaths<F extends { path: string }>(
-  nodes: ReadonlyArray<TreeNode<F>>,
+    nodes: ReadonlyArray<TreeNode<F>>,
 ): string[] {
-  const out: string[] = [];
+    const out: string[] = [];
 
-  function walk(n: TreeNode<F>): void {
-    if (n.kind === "dir") {
-      out.push(n.path);
-      for (const c of n.children) walk(c);
+    function walk(n: TreeNode<F>): void {
+        if (n.kind === "dir") {
+            out.push(n.path);
+            for (const c of n.children) walk(c);
+        }
     }
-  }
 
-  for (const n of nodes) walk(n);
+    for (const n of nodes) walk(n);
 
-  return out;
+    return out;
 }
 
 /**
@@ -286,36 +287,37 @@ export function collectDirPaths<F extends { path: string }>(
  * merged.
  */
 export function mergeWikiPages<F extends { path: string }>(
-  nodes: ReadonlyArray<TreeNode<F>>,
+    nodes: ReadonlyArray<TreeNode<F>>,
 ): Array<TreeNode<F>> {
-  const pagesByName = new Map<string, F>();
+    const pagesByName = new Map<string, F>();
 
-  for (const node of nodes) {
-    if (node.kind === "file" && /\.md$/i.test(node.file.path)) {
-      pagesByName.set(wikiPageName(node.file.path), node.file);
-    }
-  }
-
-  const merged = new Set<F>();
-  const out: Array<TreeNode<F>> = [];
-
-  for (const node of nodes) {
-    if (node.kind === "file") {
-      out.push(node);
-      continue;
+    for (const node of nodes) {
+        // Stryker disable next-line Regex: the tree only lists Markdown files, whose paths always end in .md
+        if (node.kind === "file" && /\.md$/i.test(node.file.path)) {
+            pagesByName.set(wikiPageName(node.file.path), node.file);
+        }
     }
 
-    const page = node.displayName.includes("/")
-      ? undefined
-      : pagesByName.get(node.displayName);
+    const merged = new Set<F>();
+    const out: Array<TreeNode<F>> = [];
 
-    if (page) merged.add(page);
-    out.push({
-      ...node,
-      children: mergeWikiPages(node.children),
-      ...(page ? { page } : {}),
-    });
-  }
+    for (const node of nodes) {
+        if (node.kind === "file") {
+            out.push(node);
+            continue;
+        }
 
-  return out.filter((node) => node.kind === "dir" || !merged.has(node.file));
+        const page = node.displayName.includes("/") ? undefined : pagesByName.get(node.displayName);
+
+        // Stryker disable next-line ConditionalExpression: dead code: recording "no page" never matches a real file below; candidate for removal
+        if (page) merged.add(page);
+        out.push({
+            ...node,
+            children: mergeWikiPages(node.children),
+            ...(page ? { page } : {}),
+        });
+    }
+
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: a folder node has no file, so `merged.has(undefined)` keeps it anyway; candidate for removal
+    return out.filter((node) => node.kind === "dir" || !merged.has(node.file));
 }

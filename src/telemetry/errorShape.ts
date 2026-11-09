@@ -12,34 +12,34 @@
 // user's identity GUID. Only the structured `TF######` code is extracted.
 
 export interface ErrorShape {
-  message: string;
-  name?: string;
-  stack?: string;
-  /** HTTP status when the error carries one (401 / 403 / 500 …). */
-  httpStatus?: number;
-  /** ADO error code, e.g. "TF400813", when present in the message / responseText. */
-  adoErrorCode?: string;
+    message: string;
+    name?: string;
+    stack?: string;
+    /** HTTP status when the error carries one (401 / 403 / 500 …). */
+    httpStatus?: number;
+    /** ADO error code, e.g. "TF400813", when present in the message / responseText. */
+    adoErrorCode?: string;
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
+    return typeof value === "object" && value !== null
+        ? (value as Record<string, unknown>)
+        : undefined;
 }
 
 /** Best-effort HTTP status across `status` / `statusCode` / nested `serverError`. */
 export function httpStatusOf(error: unknown): number | undefined {
-  const e = asObject(error);
-  if (!e) return undefined;
+    const e = asObject(error);
+    if (!e) return undefined;
 
-  for (const c of [e.status, e.statusCode, e.httpStatusCode]) {
-    if (typeof c === "number" && c >= 100 && c <= 599) return c;
-  }
+    for (const c of [e.status, e.statusCode, e.httpStatusCode]) {
+        if (typeof c === "number" && c >= 100 && c <= 599) return c;
+    }
 
-  const se = asObject(e.serverError);
-  if (se && typeof se.status === "number") return se.status;
+    const se = asObject(e.serverError);
+    if (se && typeof se.status === "number") return se.status;
 
-  return undefined;
+    return undefined;
 }
 
 // ADO surfaces server errors as `TF######` codes (e.g. TF400813). Match those
@@ -48,69 +48,72 @@ const ADO_CODE_RE = /\bTF\d{5,6}\b/;
 
 /** Extract the ADO `TF######` error code from the error's text, if any. */
 export function adoErrorCodeOf(error: unknown): string | undefined {
-  for (const t of errorTexts(error)) {
-    const m = ADO_CODE_RE.exec(t);
-    if (m) return m[0];
-  }
+    for (const t of errorTexts(error)) {
+        const m = ADO_CODE_RE.exec(t);
+        if (m) return m[0];
+    }
 
-  return undefined;
+    return undefined;
 }
 
 /** The error's searchable text fields, in priority order. */
 function errorTexts(error: unknown): string[] {
-  if (typeof error === "string") return [error];
-  const e = asObject(error);
-  if (!e) return [];
-  // Not only `Error`s: the SDK can reject with a plain `{ message }` object
-  // (e.g. a TF400893 network failure), or an Error from another realm.
-  const se = asObject(e.serverError);
+    if (typeof error === "string") return [error];
+    const e = asObject(error);
+    if (!e) return [];
+    // Not only `Error`s: the SDK can reject with a plain `{ message }` object
+    // (e.g. a TF400893 network failure), or an Error from another realm.
+    const se = asObject(e.serverError);
 
-  return [e.message, e.responseText, se?.message, se?.typeKey].filter(
-    (t): t is string => typeof t === "string",
-  );
+    return [e.message, e.responseText, se?.message, se?.typeKey].filter(
+        (t): t is string => typeof t === "string",
+    );
 }
 
 /** A readable message that never degrades to `"[object Object]"`. */
 function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  const e = asObject(error);
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+    const e = asObject(error);
 
-  if (e) {
-    if (typeof e.message === "string") return e.message;
+    if (e) {
+        if (typeof e.message === "string") return e.message;
 
-    try {
-      // Serialize for diagnosability, but strip `responseText`: an ADO error's
-      // raw HTTP body can carry the failing user's identity GUID, and the
-      // telemetry redactor doesn't scrub GUIDs. (PR AI review, security.)
-      const json = JSON.stringify(error, (key, value) =>
-        key === "responseText" ? undefined : (value as unknown),
-      );
+        try {
+            // Serialize for diagnosability, but strip `responseText`: an ADO error's
+            // raw HTTP body can carry the failing user's identity GUID, and the
+            // telemetry redactor doesn't scrub GUIDs. (PR AI review, security.)
+            const json = JSON.stringify(error, (key, value) =>
+                key === "responseText" ? undefined : (value as unknown),
+            );
 
-      if (json && json !== "{}") return json;
-    } catch {
-      /* circular / BigInt — fall through */
+            if (json && json !== "{}") return json;
+        } catch {
+            /* circular / BigInt — fall through */
+        }
+
+        return Object.prototype.toString.call(error);
     }
 
-    return Object.prototype.toString.call(error);
-  }
-
-  return String(error as string | number | boolean | null | undefined);
+    return String(error as string | number | boolean | null | undefined);
 }
 
 /** Extract the message, name, stack, HTTP status, and ADO code from any thrown value. */
 export function describeError(error: unknown): ErrorShape {
-  const shape: ErrorShape = { message: messageOf(error) };
+    const shape: ErrorShape = { message: messageOf(error) };
 
-  if (error instanceof Error) {
-    if (error.name) shape.name = error.name;
-    if (error.stack != null && error.stack !== "") shape.stack = error.stack;
-  }
+    if (error instanceof Error) {
+        if (error.name) shape.name = error.name;
 
-  const status = httpStatusOf(error);
-  if (status !== undefined) shape.httpStatus = status;
-  const code = adoErrorCodeOf(error);
-  if (code !== undefined) shape.adoErrorCode = code;
+        if (error.stack != null && error.stack !== "") {
+            shape.stack = error.stack;
+        }
+    }
 
-  return shape;
+    const status = httpStatusOf(error);
+    if (status !== undefined) shape.httpStatus = status;
+    const code = adoErrorCodeOf(error);
+    if (code !== undefined) shape.adoErrorCode = code;
+
+    return shape;
 }

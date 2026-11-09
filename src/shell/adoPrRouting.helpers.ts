@@ -6,147 +6,140 @@
 // `GitPullRequestQueryType.LastMergeCommit` = 1).
 
 import type {
-  GitPullRequest,
-  GitPullRequestQuery,
-  GitQueryCommitsCriteria,
-  GitRepository,
-  GitRestClient,
+    GitPullRequest,
+    GitPullRequestQuery,
+    GitQueryCommitsCriteria,
+    GitRepository,
+    GitRestClient,
 } from "azure-devops-extension-api/Git";
 
 import { trackUserFacingError } from "../telemetry";
 import { withRetry } from "./retry";
 import { isItemNotFoundError, type DocPrRef } from "./shellHelpers";
 import {
-  buildPrUrl,
-  commitIds,
-  COMPLETED_PR_STATUS,
-  docPrRefsFromHistory,
-  firstCommitId,
-  normalizePath,
-  selectRoutingPr,
-  selectRoutingPrFromQuery,
-  selectRoutingPrsFromQuery,
-  stripRefsHeads,
-  type GitScope,
+    buildPrUrl,
+    commitIds,
+    COMPLETED_PR_STATUS,
+    docPrRefsFromHistory,
+    firstCommitId,
+    normalizePath,
+    selectRoutingPr,
+    selectRoutingPrFromQuery,
+    selectRoutingPrsFromQuery,
+    stripRefsHeads,
+    type GitScope,
 } from "./adoGitData.helpers";
 
 type PrRoutingClient = Pick<
-  GitRestClient,
-  "getPullRequests" | "getCommits" | "getPullRequestQuery"
+    GitRestClient,
+    "getPullRequests" | "getCommits" | "getPullRequestQuery"
 >;
 type PrRoutingScope = GitScope<PrRoutingClient>;
 
 /** A document's reads: the client, its repo + project, and the file/branch. */
 interface DocRead {
-  gitClient: PrRoutingClient;
-  projectId: string;
-  repo: GitRepository;
-  branch: string;
-  wanted: string;
+    gitClient: PrRoutingClient;
+    projectId: string;
+    repo: GitRepository;
+    branch: string;
+    wanted: string;
 }
 
 /** Callers check `repo.defaultBranch` first. */
-function docRead(
-  scope: PrRoutingScope,
-  repo: GitRepository,
-  docPath: string,
-): DocRead {
-  return {
-    gitClient: scope.git(),
-    projectId: scope.projectId,
-    repo,
-    branch: stripRefsHeads(repo.defaultBranch),
-    wanted: normalizePath(docPath),
-  };
+function docRead(scope: PrRoutingScope, repo: GitRepository, docPath: string): DocRead {
+    return {
+        gitClient: scope.git(),
+        projectId: scope.projectId,
+        repo,
+        branch: stripRefsHeads(repo.defaultBranch),
+        wanted: normalizePath(docPath),
+    };
 }
 
 /** `getCommits` criteria for the commits on `branch` that touched a file. */
 function fileCommitsCriteria(
-  read: DocRead,
-  page: { $top: number; $skip?: number },
+    read: DocRead,
+    page: { $top: number; $skip?: number },
 ): GitQueryCommitsCriteria {
-  return {
-    itemPath: read.wanted,
-    itemVersion: {
-      version: read.branch,
-      versionType: 0 /* GitVersionType.Branch */,
-      versionOptions: 0 /* GitVersionOptions.None */,
-    },
-    ...page,
-  } as GitQueryCommitsCriteria;
+    return {
+        itemPath: read.wanted,
+        itemVersion: {
+            version: read.branch,
+            versionType: 0 /* GitVersionType.Branch */,
+            versionOptions: 0 /* GitVersionOptions.None */,
+        },
+        ...page,
+    } as GitQueryCommitsCriteria;
 }
 
 /** A `getPullRequestQuery` for the PRs whose last merge commit is in `ids`. */
 function lastMergeCommitQuery(ids: string[]): GitPullRequestQuery {
-  return {
-    queries: [
-      {
-        type: 1 /* GitPullRequestQueryType.LastMergeCommit */,
-        items: ids,
-      },
-    ],
-  } as GitPullRequestQuery;
+    return {
+        queries: [
+            {
+                type: 1 /* GitPullRequestQueryType.LastMergeCommit */,
+                items: ids,
+            },
+        ],
+    } as GitPullRequestQuery;
 }
 
 export async function mostRecentRoutingPr(
-  scope: PrRoutingScope,
-  repo: GitRepository,
+    scope: PrRoutingScope,
+    repo: GitRepository,
 ): Promise<GitPullRequest | null> {
-  if (!repo.defaultBranch) return null;
-  const gitClient = scope.git();
+    if (!repo.defaultBranch) return null;
+    const gitClient = scope.git();
 
-  // Fetch the most recent COMPLETED PRs targeting the default branch and let
-  // the pure `selectRoutingPr` helper make the routing decision (most recent
-  // completed; active PRs ignored). We over-fetch a small page rather than
-  // top-1 so the choice is robust to any host-side ordering quirks — the
-  // helper re-sorts by date regardless.
-  const criteria = {
-    targetRefName: repo.defaultBranch,
-    status: COMPLETED_PR_STATUS,
-  } as Parameters<GitRestClient["getPullRequests"]>[1];
-
-  try {
-    let completed: GitPullRequest[];
+    // Fetch the most recent COMPLETED PRs targeting the default branch and let
+    // the pure `selectRoutingPr` helper make the routing decision (most recent
+    // completed; active PRs ignored). We over-fetch a small page rather than
+    // top-1 so the choice is robust to any host-side ordering quirks — the
+    // helper re-sorts by date regardless.
+    const criteria = {
+        targetRefName: repo.defaultBranch,
+        status: COMPLETED_PR_STATUS,
+    } as Parameters<GitRestClient["getPullRequests"]>[1];
 
     try {
-      completed = await withRetry(
-        () =>
-          gitClient.getPullRequests(
-            repo.id,
-            criteria,
-            scope.projectId,
-            undefined,
-            0,
-            10,
-          ),
-        { mode: "read", label: "findMostRecentRoutingPr.getPullRequests" },
-      );
+        let completed: GitPullRequest[];
+
+        try {
+            completed = await withRetry(
+                () =>
+                    gitClient.getPullRequests(repo.id, criteria, scope.projectId, undefined, 0, 10),
+                // Stryker disable ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
+                {
+                    mode: "read",
+                    label: "findMostRecentRoutingPr.getPullRequests",
+                },
+            );
+        } catch (err) {
+            // Stryker restore ObjectLiteral,StringLiteral
+            // Retries exhausted (or terminal) — degrade to "no routing PR".
+            trackUserFacingError({
+                error: err,
+                source: "DocumentsHubApp.repository",
+                operation: "repository-pr-routing",
+                impact: "degraded",
+            });
+            // Stryker disable next-line ArrayDeclaration: selectRoutingPr skips entries that aren't completed PRs, so a placeholder entry still routes to no PR
+            completed = [];
+        }
+
+        return selectRoutingPr(completed);
     } catch (err) {
-      // Retries exhausted (or terminal) — degrade to "no routing PR".
-      trackUserFacingError({
-        error: err,
-        source: "DocumentsHubApp.repository",
-        operation: "repository-pr-routing",
-        impact: "degraded",
-      });
-      completed = [];
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
+        console.warn(`[documents-hub] getPullRequests failed for ${repo.name}:`, err);
+        trackUserFacingError({
+            error: err,
+            source: "DocumentsHubApp.repository",
+            operation: "repository-pr-routing",
+            impact: "degraded",
+        });
+
+        return null;
     }
-
-    return selectRoutingPr(completed);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getPullRequests failed for ${repo.name}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.repository",
-      operation: "repository-pr-routing",
-      impact: "degraded",
-    });
-
-    return null;
-  }
 }
 
 /**
@@ -168,98 +161,85 @@ export async function mostRecentRoutingPr(
  * the repo has no completed PRs at all.
  */
 export async function routingPrForDoc(
-  scope: PrRoutingScope,
-  repo: GitRepository,
-  docPath: string,
+    scope: PrRoutingScope,
+    repo: GitRepository,
+    docPath: string,
 ): Promise<GitPullRequest | null> {
-  if (!repo.defaultBranch) return null;
-  const read = docRead(scope, repo, docPath);
+    if (!repo.defaultBranch) return null;
+    const read = docRead(scope, repo, docPath);
 
-  // 1. The most recent commit on the default branch that touched this file.
-  //    `getCommits` returns newest-first, so `top: 1` is the last change.
-  const commitId = await lastCommitTouching(read);
+    // 1. The most recent commit on the default branch that touched this file.
+    //    `getCommits` returns newest-first, so `top: 1` is the last change.
+    const commitId = await lastCommitTouching(read);
 
-  // 2. The PR that merged that commit (its last-merge commit). When the file
-  //    landed via a direct push the commit has no PR and we drop to the
-  //    fallback below.
-  if (commitId !== null && commitId !== "") {
-    const pr = await prMergingCommit(read, commitId);
-    if (pr) return pr;
-  }
+    // 2. The PR that merged that commit (its last-merge commit). When the file
+    //    landed via a direct push the commit has no PR and we drop to the
+    //    fallback below.
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: ADO commit ids are never empty strings, so the `!== ""` half never decides anything; candidate for removal
+    if (commitId !== null && commitId !== "") {
+        const pr = await prMergingCommit(read, commitId);
+        if (pr) return pr;
+    }
 
-  // 3. No completed PR touched the document — fall back to the repo's most
-  //    recent completed PR so comments still have a home. No PR is ever created.
-  return mostRecentRoutingPr(scope, repo);
+    // 3. No completed PR touched the document — fall back to the repo's most
+    //    recent completed PR so comments still have a home. No PR is ever created.
+    return mostRecentRoutingPr(scope, repo);
 }
 
 async function lastCommitTouching(read: DocRead): Promise<string | null> {
-  const { gitClient, projectId, repo, wanted } = read;
+    const { gitClient, projectId, repo, wanted } = read;
 
-  try {
-    const commits = await withRetry(
-      () =>
-        gitClient.getCommits(
-          repo.id,
-          fileCommitsCriteria(read, { $top: 1 }),
-          projectId,
-        ),
-      { mode: "read", label: "findRoutingPrForDoc.getCommits" },
-    );
+    try {
+        const commits = await withRetry(
+            () => gitClient.getCommits(repo.id, fileCommitsCriteria(read, { $top: 1 }), projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
+            { mode: "read", label: "findRoutingPrForDoc.getCommits" },
+        );
 
-    return firstCommitId(commits);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`,
-      err,
-    );
+        return firstCommitId(commits);
+    } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
+        console.warn(`[documents-hub] getCommits failed for ${repo.name} @ ${wanted}:`, err);
 
-    // A path that's no longer on the branch can't be routed — expected, not a
-    // failure; fall through to the repo's most recent completed PR below.
-    if (!isItemNotFoundError(err)) {
-      trackUserFacingError({
-        error: err,
-        source: "DocumentsHubApp.comments",
-        operation: "document-routing-commit-load",
-        impact: "degraded",
-      });
+        // A path that's no longer on the branch can't be routed — expected, not a
+        // failure; fall through to the repo's most recent completed PR below.
+        if (!isItemNotFoundError(err)) {
+            trackUserFacingError({
+                error: err,
+                source: "DocumentsHubApp.comments",
+                operation: "document-routing-commit-load",
+                impact: "degraded",
+            });
+        }
+
+        return null;
     }
-
-    return null;
-  }
 }
 
-async function prMergingCommit(
-  read: DocRead,
-  commitId: string,
-): Promise<GitPullRequest | null> {
-  const { gitClient, projectId, repo } = read;
+async function prMergingCommit(read: DocRead, commitId: string): Promise<GitPullRequest | null> {
+    const { gitClient, projectId, repo } = read;
 
-  try {
-    const query = await withRetry(
-      () =>
-        gitClient.getPullRequestQuery(
-          lastMergeCommitQuery([commitId]),
-          repo.id,
-          projectId,
-        ),
-      { mode: "read", label: "findRoutingPrForDoc.getPullRequestQuery" },
-    );
+    try {
+        const query = await withRetry(
+            () =>
+                gitClient.getPullRequestQuery(lastMergeCommitQuery([commitId]), repo.id, projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
+            { mode: "read", label: "findRoutingPrForDoc.getPullRequestQuery" },
+        );
 
-    return selectRoutingPrFromQuery(query.results, commitId);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getPullRequestQuery failed for ${repo.name}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "DocumentsHubApp.comments",
-      operation: "document-pr-routing",
-      impact: "degraded",
-    });
+        return selectRoutingPrFromQuery(query.results, commitId);
+    } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
+        console.warn(`[documents-hub] getPullRequestQuery failed for ${repo.name}:`, err);
+        trackUserFacingError({
+            error: err,
+            source: "DocumentsHubApp.comments",
+            operation: "document-pr-routing",
+            impact: "degraded",
+        });
 
-    return null;
-  }
+        return null;
+    }
 }
 
 /**
@@ -280,127 +260,122 @@ async function prMergingCommit(
  * earlier history rather than breaking the document view.
  */
 interface DocPrHistoryPage {
-  prs: GitPullRequest[];
-  /** Pass as the next call's `skip` to continue paging older commits. */
-  nextCommitSkip: number;
-  /** Whether more file commits may remain to scan for older PRs. */
-  hasMore: boolean;
+    prs: GitPullRequest[];
+    /** Pass as the next call's `skip` to continue paging older commits. */
+    nextCommitSkip: number;
+    /** Whether more file commits may remain to scan for older PRs. */
+    hasMore: boolean;
 }
 
 /** Which slice of a document's history to load. */
 interface HistoryPageOptions {
-  top?: number;
-  skip?: number;
+    top?: number;
+    skip?: number;
 }
 
 async function findDocPrHistory(
-  scope: PrRoutingScope,
-  repo: GitRepository,
-  docPath: string,
-  opts: HistoryPageOptions,
+    scope: PrRoutingScope,
+    repo: GitRepository,
+    docPath: string,
+    opts: HistoryPageOptions,
 ): Promise<DocPrHistoryPage> {
-  const skip = opts.skip ?? 0;
-  const top = opts.top ?? 30;
+    const skip = opts.skip ?? 0;
+    const top = opts.top ?? 30;
 
-  const empty: DocPrHistoryPage = {
-    prs: [],
-    nextCommitSkip: skip,
-    hasMore: false,
-  };
+    const empty: DocPrHistoryPage = {
+        // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
+        prs: [],
+        nextCommitSkip: skip,
+        // Stryker disable next-line BooleanLiteral: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
+        hasMore: false,
+    };
 
-  if (!repo.defaultBranch) return empty;
-  const read = docRead(scope, repo, docPath);
+    if (!repo.defaultBranch) return empty;
+    const read = docRead(scope, repo, docPath);
 
-  // 1. Page the commits on the default branch that touched this file,
-  //    newest-first.
-  const ids = await fileCommitIdsPage(read, { $top: top, $skip: skip });
-  if (ids === null) return empty;
-  // A short page means we've reached the start of the file's history.
-  const hasMore = ids.length === top;
-  const nextCommitSkip = skip + ids.length;
-  if (ids.length === 0) return { prs: [], nextCommitSkip, hasMore: false };
+    // 1. Page the commits on the default branch that touched this file,
+    //    newest-first.
+    const ids = await fileCommitIdsPage(read, { $top: top, $skip: skip });
+    if (ids === null) return empty;
+    // A short page means we've reached the start of the file's history.
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
+    const hasMore = ids.length === top;
+    // Stryker disable next-line ArithmeticOperator: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
+    const nextCommitSkip = skip + ids.length;
+    // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
+    // Stryker disable next-line BooleanLiteral: dead code: docPrHistory, the only caller, reads just `prs` — the page's hasMore/nextCommitSkip are never consumed; candidate for removal
+    if (ids.length === 0) return { prs: [], nextCommitSkip, hasMore: false };
 
-  // 2. One batched query maps every commit to the PR(s) that merged it.
-  //    When that mapping fails, report no stops for this page but let the
-  //    caller keep paging in case older commits map cleanly.
-  const prs = await prsMergingCommits(read, ids);
+    // 2. One batched query maps every commit to the PR(s) that merged it.
+    //    When that mapping fails, report no stops for this page but let the
+    //    caller keep paging in case older commits map cleanly.
+    const prs = await prsMergingCommits(read, ids);
 
-  return { prs, nextCommitSkip, hasMore };
+    return { prs, nextCommitSkip, hasMore };
 }
 
 /** The page's file commit ids, or `null` when the commits can't be read. */
 async function fileCommitIdsPage(
-  read: DocRead,
-  page: { $top: number; $skip: number },
+    read: DocRead,
+    page: { $top: number; $skip: number },
 ): Promise<string[] | null> {
-  const { gitClient, projectId, repo, wanted } = read;
+    const { gitClient, projectId, repo, wanted } = read;
 
-  try {
-    const commits = await withRetry(
-      () =>
-        gitClient.getCommits(
-          repo.id,
-          fileCommitsCriteria(read, page),
-          projectId,
-        ),
-      { mode: "read", label: "findDocPrHistory.getCommits" },
-    );
+    try {
+        const commits = await withRetry(
+            () => gitClient.getCommits(repo.id, fileCommitsCriteria(read, page), projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
+            { mode: "read", label: "findDocPrHistory.getCommits" },
+        );
 
-    return commitIds(commits);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
-      err,
-    );
+        return commitIds(commits);
+    } catch (err) {
+        console.warn(
+            // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
+            `[documents-hub] getCommits (history) failed for ${repo.name} @ ${wanted}:`,
+            err,
+        );
 
-    // A path that's no longer on the branch has no history — expected, not a
-    // failure (the reader falls back to another document).
-    if (!isItemNotFoundError(err)) {
-      trackUserFacingError({
-        error: err,
-        source: "Shell.history",
-        operation: "history-commit-load",
-        impact: "degraded",
-      });
+        // A path that's no longer on the branch has no history — expected, not a
+        // failure (the reader falls back to another document).
+        if (!isItemNotFoundError(err)) {
+            trackUserFacingError({
+                error: err,
+                source: "Shell.history",
+                operation: "history-commit-load",
+                impact: "degraded",
+            });
+        }
+
+        return null;
     }
-
-    return null;
-  }
 }
 
 /** The completed PRs that merged `ids`, in history order; `[]` on failure. */
-async function prsMergingCommits(
-  read: DocRead,
-  ids: string[],
-): Promise<GitPullRequest[]> {
-  const { gitClient, projectId, repo } = read;
+async function prsMergingCommits(read: DocRead, ids: string[]): Promise<GitPullRequest[]> {
+    const { gitClient, projectId, repo } = read;
 
-  try {
-    const query = await withRetry(
-      () =>
-        gitClient.getPullRequestQuery(
-          lastMergeCommitQuery(ids),
-          repo.id,
-          projectId,
-        ),
-      { mode: "read", label: "findDocPrHistory.getPullRequestQuery" },
-    );
+    try {
+        const query = await withRetry(
+            () => gitClient.getPullRequestQuery(lastMergeCommitQuery(ids), repo.id, projectId),
+            // Stryker disable next-line ObjectLiteral,StringLiteral: withRetry treats any mode other than "write" as a read and never reads the label, so emptying these options retries exactly the same
+            { mode: "read", label: "findDocPrHistory.getPullRequestQuery" },
+        );
 
-    return selectRoutingPrsFromQuery(query.results, ids);
-  } catch (err) {
-    console.warn(
-      `[documents-hub] getPullRequestQuery (history) failed for ${repo.name}:`,
-      err,
-    );
-    trackUserFacingError({
-      error: err,
-      source: "Shell.history",
-      operation: "history-pr-load",
-      impact: "degraded",
-    });
+        return selectRoutingPrsFromQuery(query.results, ids);
+    } catch (err) {
+        // Stryker disable next-line StringLiteral: developer-console text only; failures reach telemetry via trackUserFacingError
+        console.warn(`[documents-hub] getPullRequestQuery (history) failed for ${repo.name}:`, err);
+        trackUserFacingError({
+            error: err,
+            source: "Shell.history",
+            operation: "history-pr-load",
+            impact: "degraded",
+        });
 
-    return [];
-  }
+        // Stryker disable next-line ArrayDeclaration: docPrRefsFromHistory skips entries without a numeric pullRequestId, so a placeholder entry projects to no stops either way
+        return [];
+    }
 }
 
 /**
@@ -412,12 +387,12 @@ async function prsMergingCommits(
  * document's history in practice; degrades to `[]` on failure.
  */
 export async function docPrHistory(
-  scope: PrRoutingScope,
-  repo: GitRepository,
-  docPath: string,
-  opts: HistoryPageOptions = {},
+    scope: PrRoutingScope,
+    repo: GitRepository,
+    docPath: string,
+    opts: HistoryPageOptions = {},
 ): Promise<DocPrRef[]> {
-  const page = await findDocPrHistory(scope, repo, docPath, opts);
+    const page = await findDocPrHistory(scope, repo, docPath, opts);
 
-  return docPrRefsFromHistory(page.prs, (id) => buildPrUrl(repo, id));
+    return docPrRefsFromHistory(page.prs, (id) => buildPrUrl(repo, id));
 }

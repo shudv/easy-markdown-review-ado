@@ -32,25 +32,21 @@
 import { useSyncExternalStore } from "react";
 
 import { events, track, trackUserFacingError } from "../telemetry";
-import {
-  classifyAdoGrant,
-  isSessionRefreshingError,
-  readAdoTokenExpiry,
-} from "./adoAuthToken";
+import { classifyAdoGrant, isSessionRefreshingError, readAdoTokenExpiry } from "./adoAuthToken";
 
 type AdoSessionState = "live" | "refreshing";
 
 export interface AdoSessionSnapshot {
-  state: AdoSessionState;
-  /**
-   * The user is waiting on the current spell (see {@link SessionSurfaceReason}),
-   * so it is shown to them. Always false while live.
-   */
-  surfaced: boolean;
-  /** Comment writes currently waiting for the session to come back. */
-  heldWrites: number;
-  /** Whether a host-page reload is available (wired by the entry point). */
-  canReload: boolean;
+    state: AdoSessionState;
+    /**
+     * The user is waiting on the current spell (see {@link SessionSurfaceReason}),
+     * so it is shown to them. Always false while live.
+     */
+    surfaced: boolean;
+    /** Comment writes currently waiting for the session to come back. */
+    heldWrites: number;
+    /** Whether a host-page reload is available (wired by the entry point). */
+    canReload: boolean;
 }
 
 export type SessionSpellTrigger = "boot" | "poll" | "write";
@@ -62,23 +58,18 @@ export type SessionSpellTrigger = "boot" | "poll" | "write";
 export type SessionSurfaceReason = "boot" | "refresh" | "write";
 
 const SURFACE_OPERATION: Record<SessionSurfaceReason, string> = {
-  boot: "session-refresh",
-  refresh: "comments-refresh",
-  write: "comment-write",
+    boot: "session-refresh",
+    refresh: "comments-refresh",
+    write: "comment-write",
 };
 
-type SpellOutcome =
-  | "remint"
-  | "success"
-  | "reload-auto"
-  | "reload-user"
-  | "left";
+type SpellOutcome = "remint" | "success" | "reload-auto" | "reload-user" | "left";
 
 export interface AdoSessionDeps {
-  /** Reads the host's current access token (`SDK.getAccessToken`). */
-  getToken?: () => Promise<string>;
-  /** Reloads the HOST page so it mints a fresh token immediately. */
-  reloadHost?: () => void | Promise<void>;
+    /** Reads the host's current access token (`SDK.getAccessToken`). */
+    getToken?: () => Promise<string>;
+    /** Reloads the HOST page so it mints a fresh token immediately. */
+    reloadHost?: () => void | Promise<void>;
 }
 
 /** How often the host token is re-read while refreshing. */
@@ -94,347 +85,350 @@ export const SESSION_SLOW_AFTER_MS = 11 * 60_000;
 export const HELD_WRITE_MAX_WAIT_MS = 12 * 60_000;
 
 interface Spell {
-  trigger: SessionSpellTrigger;
-  /** The rejection that opened the spell (reported if it is surfaced). */
-  error: Error;
-  startedAtMs: number;
-  grantState: string;
-  /** AAD `exp` of the rejected token (when the spell must end at the latest). */
-  expMs?: number;
-  /** Embedded `ado_exp` of the dead token, once read. */
-  adoExpMs?: number;
-  /** The `end` event was already sent (a reload / page hide closed it). */
-  endReported?: boolean;
+    trigger: SessionSpellTrigger;
+    /** The rejection that opened the spell (reported if it is surfaced). */
+    error: Error;
+    startedAtMs: number;
+    grantState: string;
+    /** AAD `exp` of the rejected token (when the spell must end at the latest). */
+    expMs?: number;
+    /** Embedded `ado_exp` of the dead token, once read. */
+    adoExpMs?: number;
+    /** The `end` event was already sent (a reload / page hide closed it). */
+    endReported?: boolean;
 }
 
 const LIVE: AdoSessionSnapshot = {
-  state: "live",
-  surfaced: false,
-  heldWrites: 0,
-  canReload: false,
+    state: "live",
+    surfaced: false,
+    heldWrites: 0,
+    canReload: false,
 };
 
 export class AdoSessionMonitor {
-  private snapshot: AdoSessionSnapshot = LIVE;
-  private readonly listeners = new Set<() => void>();
-  private readonly recoveredListeners = new Set<() => void>();
-  private readonly waiters = new Set<() => void>();
-  private spell: Spell | null = null;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private getToken?: () => Promise<string>;
-  private reloadHostFn?: () => void | Promise<void>;
-  private pageHideInstalled = false;
+    private snapshot: AdoSessionSnapshot = LIVE;
+    private readonly listeners = new Set<() => void>();
+    private readonly recoveredListeners = new Set<() => void>();
+    private readonly waiters = new Set<() => void>();
+    private spell: Spell | null = null;
+    private timer: ReturnType<typeof setTimeout> | null = null;
+    private getToken?: () => Promise<string>;
+    private reloadHostFn?: () => void | Promise<void>;
+    private pageHideInstalled = false;
 
-  constructor(private readonly now: () => number = Date.now) {}
+    constructor(private readonly now: () => number = Date.now) {}
 
-  /** Wire the host token reader and reload. Called once by each entry point. */
-  configure(deps: AdoSessionDeps): void {
-    this.getToken = deps.getToken;
-    this.reloadHostFn = deps.reloadHost;
-    this.update({ canReload: !!deps.reloadHost });
+    /** Wire the host token reader and reload. Called once by each entry point. */
+    configure(deps: AdoSessionDeps): void {
+        this.getToken = deps.getToken;
+        this.reloadHostFn = deps.reloadHost;
+        this.update({ canReload: !!deps.reloadHost });
 
-    if (!this.pageHideInstalled) {
-      this.pageHideInstalled = true;
-      window.addEventListener("pagehide", () => this.notePageHide());
+        // Stryker disable next-line ConditionalExpression: a second pagehide listener only re-reports the spell end, which `endReported` already makes once-only
+        if (!this.pageHideInstalled) {
+            // Stryker disable next-line BooleanLiteral: a second pagehide listener only re-reports the spell end, which `endReported` already makes once-only
+            this.pageHideInstalled = true;
+            window.addEventListener("pagehide", () => this.notePageHide());
+        }
     }
-  }
 
-  getSnapshot = (): AdoSessionSnapshot => this.snapshot;
+    getSnapshot = (): AdoSessionSnapshot => this.snapshot;
 
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
+    subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener);
 
-    return () => this.listeners.delete(listener);
-  };
-
-  /** Notified each time a refreshing spell ends (the session is usable again). */
-  onRecovered = (listener: () => void): (() => void) => {
-    this.recoveredListeners.add(listener);
-
-    return () => this.recoveredListeners.delete(listener);
-  };
-
-  /**
-   * Record a failure. Returns true (and enters `refreshing`) only when it is a
-   * confirmed dead-window `SessionRefreshingError`; anything else is ignored.
-   */
-  report(err: unknown, trigger: SessionSpellTrigger): boolean {
-    if (!isSessionRefreshingError(err)) return false;
-    if (this.spell) return true;
-    const startedAtMs = this.now();
-    this.spell = {
-      trigger,
-      error: err,
-      startedAtMs,
-      grantState: err.grantState,
-      expMs: err.recoverAtMs,
+        return () => this.listeners.delete(listener);
     };
-    track(
-      events.authSessionRefresh({
-        phase: "start",
-        trigger,
-        grantState: err.grantState,
-        ...(err.recoverAtMs !== undefined
-          ? { secsUntilExpAtStart: (err.recoverAtMs - startedAtMs) / 1000 }
-          : {}),
-      }),
-    );
-    this.update({ state: "refreshing" });
-    this.schedule(0);
 
-    return true;
-  }
+    /** Notified each time a refreshing spell ends (the session is usable again). */
+    onRecovered = (listener: () => void): (() => void) => {
+        this.recoveredListeners.add(listener);
 
-  /**
-   * The user is now waiting on the current spell: show it, and report it as a
-   * user-facing degradation — once per spell, whatever surfaces it first. A
-   * no-op while live, so a late caller can't surface an already-ended spell.
-   */
-  surface(reason: SessionSurfaceReason): void {
-    const spell = this.spell;
-    if (!spell || this.snapshot.surfaced) return;
-    this.update({ surfaced: true });
-    trackUserFacingError({
-      error: spell.error,
-      source: "AdoSession",
-      operation: SURFACE_OPERATION[reason],
-      impact: "degraded",
-    });
-  }
+        return () => this.recoveredListeners.delete(listener);
+    };
 
-  /**
-   * Thread-sync failure policy (see `useThreadSync`'s `claimFailure`): a
-   * dead-window rejection belongs to this monitor, which surfaces it only when
-   * the user is waiting for the result. Anything else is left to the poller.
-   */
-  claimPollFailure = (err: unknown, userWaiting: boolean): boolean => {
-    if (!isSessionRefreshingError(err)) return false;
-    if (userWaiting) this.surface("refresh");
+    /**
+     * Record a failure. Returns true (and enters `refreshing`) only when it is a
+     * confirmed dead-window `SessionRefreshingError`; anything else is ignored.
+     */
+    report(err: unknown, trigger: SessionSpellTrigger): boolean {
+        if (!isSessionRefreshingError(err)) return false;
+        if (this.spell) return true;
+        const startedAtMs = this.now();
+        this.spell = {
+            trigger,
+            error: err,
+            startedAtMs,
+            grantState: err.grantState,
+            expMs: err.recoverAtMs,
+        };
+        track(
+            events.authSessionRefresh({
+                phase: "start",
+                trigger,
+                grantState: err.grantState,
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
+                ...(err.recoverAtMs !== undefined
+                    ? {
+                          secsUntilExpAtStart: (err.recoverAtMs - startedAtMs) / 1000,
+                      }
+                    : {}),
+            }),
+        );
+        this.update({ state: "refreshing" });
+        this.schedule(0);
 
-    return true;
-  };
-
-  /**
-   * An ADO call succeeded: the session is demonstrably usable. Only counts
-   * for a request started at or after the current spell began — a slow
-   * request authenticated before the grant lapsed proves nothing about the
-   * token the host is serving now.
-   */
-  noteSuccess(requestStartedAtMs: number): void {
-    if (this.spell && requestStartedAtMs >= this.spell.startedAtMs) {
-      this.recover("success");
-    }
-  }
-
-  /** Resolves `true` once live, or `false` after `timeoutMs`. */
-  waitUntilLive(timeoutMs: number): Promise<boolean> {
-    if (!this.spell) return Promise.resolve(true);
-
-    return new Promise<boolean>((resolve) => {
-      const done = (live: boolean): void => {
-        clearTimeout(timeout);
-        this.waiters.delete(onLive);
-        resolve(live);
-      };
-
-      const onLive = (): void => done(true);
-      const timeout = setTimeout(() => done(false), timeoutMs);
-      this.waiters.add(onLive);
-    });
-  }
-
-  /**
-   * Run a write; if the dead window rejects it, hold it until the session is
-   * live again (up to `maxWaitMs`) and retry once. Any other failure — or a
-   * second rejection, or a hold that times out — rethrows the error.
-   *
-   * Alarm — the retry must never post twice; investigate if this finds any:
-   *
-   *     engagement
-   *     | where EventInfo_Time > ago(1d) and name in ("comment.created", "comment.replied")
-   *     | order by sessionId asc, EventInfo_Time asc
-   *     | where sessionId == prev(sessionId) and name == prev(name)
-   *         and bodyLength == prev(bodyLength)
-   *         and datetime_diff('second', EventInfo_Time, prev(EventInfo_Time)) <= 30
-   *     | summarize likelyDuplicates = count(), sessions = dcount(sessionId)
-   */
-  async holdWrite<T>(
-    attempt: () => Promise<T>,
-    maxWaitMs: number = HELD_WRITE_MAX_WAIT_MS,
-  ): Promise<T> {
-    try {
-      const startedAt = this.now();
-      const result = await attempt();
-      this.noteSuccess(startedAt);
-
-      return result;
-    } catch (err) {
-      if (!this.report(err, "write")) throw err;
-      this.surface("write");
-      this.update({ heldWrites: this.snapshot.heldWrites + 1 });
-      let live: boolean;
-
-      try {
-        live = await this.waitUntilLive(maxWaitMs);
-      } finally {
-        this.update({ heldWrites: this.snapshot.heldWrites - 1 });
-      }
-
-      if (!live) throw err;
-
-      try {
-        const startedAt = this.now();
-        const result = await attempt();
-        this.noteSuccess(startedAt);
-
-        return result;
-      } catch (retryErr) {
-        this.report(retryErr, "write");
-        throw retryErr;
-      }
-    }
-  }
-
-  /**
-   * Reload the host page. Resolves `true` once the reload was requested, or
-   * `false` when no reload is wired or the request failed (reported as a
-   * user-facing failure) — so the caller can offer another way out.
-   *
-   * A successful request closes the spell for the diagnostics only: the
-   * session is NOT back yet, so held writes stay held and nothing is told to
-   * resume until a real re-mint or success.
-   */
-  async reloadHost(by: "auto" | "user"): Promise<boolean> {
-    if (!this.reloadHostFn) return false;
-
-    try {
-      await this.reloadHostFn();
-    } catch (error) {
-      trackUserFacingError({
-        error,
-        source: "AdoSession.reloadHost",
-        operation: "host-reload",
-        impact: by === "user" ? "action-failed" : "degraded",
-      });
-
-      return false;
+        return true;
     }
 
-    this.reportEnd(by === "auto" ? "reload-auto" : "reload-user");
-
-    return true;
-  }
-
-  /**
-   * The page is going away mid-spell: close it out for the diagnostics only.
-   * (`pagehide` also fires on entering the back/forward cache, after which the
-   * page can resume — so the spell itself stays open.)
-   */
-  notePageHide(): void {
-    this.reportEnd("left");
-  }
-
-  private schedule(delayMs: number): void {
-    // Only called with no timer pending: from `report` (a fresh spell) and from
-    // a fired check. `end` clears any pending timer.
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      void this.checkToken();
-    }, delayMs);
-  }
-
-  private async checkToken(): Promise<void> {
-    // Only a pending timer calls this, and `recover` (the sole place a spell
-    // ends) clears that timer, so a spell is always open here.
-    const spell = this.spell!;
-    let token: string | null;
-
-    try {
-      token = this.getToken ? await this.getToken() : null;
-    } catch {
-      token = null;
+    /**
+     * The user is now waiting on the current spell: show it, and report it as a
+     * user-facing degradation — once per spell, whatever surfaces it first. A
+     * no-op while live, so a late caller can't surface an already-ended spell.
+     */
+    surface(reason: SessionSurfaceReason): void {
+        const spell = this.spell;
+        if (!spell || this.snapshot.surfaced) return;
+        this.update({ surfaced: true });
+        trackUserFacingError({
+            error: spell.error,
+            source: "AdoSession",
+            operation: SURFACE_OPERATION[reason],
+            impact: "degraded",
+        });
     }
 
-    if (this.spell !== spell) return;
+    /**
+     * Thread-sync failure policy (see `useThreadSync`'s `claimFailure`): a
+     * dead-window rejection belongs to this monitor, which surfaces it only when
+     * the user is waiting for the result. Anything else is left to the poller.
+     */
+    claimPollFailure = (err: unknown, userWaiting: boolean): boolean => {
+        if (!isSessionRefreshingError(err)) return false;
+        if (userWaiting) this.surface("refresh");
 
-    if (token !== null) {
-      const { state } = classifyAdoGrant(token, this.now());
+        return true;
+    };
 
-      // `unknown` = undecodable: never hold the app hostage to a parse miss.
-      if (state === "live" || state === "unknown") {
-        this.recover("remint");
-
-        return;
-      }
-
-      spell.adoExpMs ??= readAdoTokenExpiry(token).adoExpMs;
+    /**
+     * An ADO call succeeded: the session is demonstrably usable. Only counts
+     * for a request started at or after the current spell began — a slow
+     * request authenticated before the grant lapsed proves nothing about the
+     * token the host is serving now.
+     */
+    noteSuccess(requestStartedAtMs: number): void {
+        if (this.spell && requestStartedAtMs >= this.spell.startedAtMs) {
+            this.recover("success");
+        }
     }
 
-    const age = this.now() - spell.startedAtMs;
-    this.schedule(
-      age >= SESSION_SLOW_AFTER_MS ? SESSION_SLOW_POLL_MS : SESSION_POLL_MS,
-    );
-  }
+    /** Resolves `true` once live, or `false` after `timeoutMs`. */
+    waitUntilLive(timeoutMs: number): Promise<boolean> {
+        if (!this.spell) return Promise.resolve(true);
 
-  /** Send the spell's `end` event once (no state change). */
-  private reportEnd(outcome: SpellOutcome): void {
-    const spell = this.spell;
-    if (!spell || spell.endReported) return;
-    spell.endReported = true;
-    const nowMs = this.now();
-    track(
-      events.authSessionRefresh({
-        phase: "end",
-        trigger: spell.trigger,
-        grantState: spell.grantState,
-        outcome,
-        durationSec: (nowMs - spell.startedAtMs) / 1000,
-        heldWrites: this.snapshot.heldWrites,
-        ...(spell.expMs !== undefined
-          ? {
-              secsUntilExpAtStart: (spell.expMs - spell.startedAtMs) / 1000,
-              secsBeforeExpAtEnd: (spell.expMs - nowMs) / 1000,
+        return new Promise<boolean>((resolve) => {
+            const done = (live: boolean): void => {
+                clearTimeout(timeout);
+                this.waiters.delete(onLive);
+                resolve(live);
+            };
+
+            const onLive = (): void => done(true);
+            const timeout = setTimeout(() => done(false), timeoutMs);
+            this.waiters.add(onLive);
+        });
+    }
+
+    /**
+     * Run a write; if the dead window rejects it, hold it until the session is
+     * live again (up to `maxWaitMs`) and retry once. Any other failure — or a
+     * second rejection, or a hold that times out — rethrows the error.
+     *
+     * Alarm — the retry must never post twice; investigate if this finds any:
+     *
+     *     engagement
+     *     | where EventInfo_Time > ago(1d) and name in ("comment.created", "comment.replied")
+     *     | order by sessionId asc, EventInfo_Time asc
+     *     | where sessionId == prev(sessionId) and name == prev(name)
+     *         and bodyLength == prev(bodyLength)
+     *         and datetime_diff('second', EventInfo_Time, prev(EventInfo_Time)) <= 30
+     *     | summarize likelyDuplicates = count(), sessions = dcount(sessionId)
+     */
+    async holdWrite<T>(
+        attempt: () => Promise<T>,
+        maxWaitMs: number = HELD_WRITE_MAX_WAIT_MS,
+    ): Promise<T> {
+        try {
+            const startedAt = this.now();
+            const result = await attempt();
+            this.noteSuccess(startedAt);
+
+            return result;
+        } catch (err) {
+            if (!this.report(err, "write")) throw err;
+            this.surface("write");
+            this.update({ heldWrites: this.snapshot.heldWrites + 1 });
+            let live: boolean;
+
+            try {
+                live = await this.waitUntilLive(maxWaitMs);
+            } finally {
+                this.update({ heldWrites: this.snapshot.heldWrites - 1 });
             }
-          : {}),
-        ...(spell.adoExpMs !== undefined
-          ? {
-              secsSinceAdoExpAtStart:
-                (spell.startedAtMs - spell.adoExpMs) / 1000,
+
+            if (!live) throw err;
+
+            try {
+                const startedAt = this.now();
+                const result = await attempt();
+                this.noteSuccess(startedAt);
+
+                return result;
+            } catch (retryErr) {
+                this.report(retryErr, "write");
+                throw retryErr;
             }
-          : {}),
-      }),
-    );
-  }
-
-  /** The session is usable again: end the spell and release everyone. */
-  private recover(outcome: "remint" | "success"): void {
-    this.reportEnd(outcome);
-    this.spell = null;
-
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
+        }
     }
 
-    this.update({ state: "live", surfaced: false });
-    for (const waiter of [...this.waiters]) waiter();
-    for (const listener of [...this.recoveredListeners]) listener();
-  }
+    /**
+     * Reload the host page. Resolves `true` once the reload was requested, or
+     * `false` when no reload is wired or the request failed (reported as a
+     * user-facing failure) — so the caller can offer another way out.
+     *
+     * A successful request closes the spell for the diagnostics only: the
+     * session is NOT back yet, so held writes stay held and nothing is told to
+     * resume until a real re-mint or success.
+     */
+    async reloadHost(by: "auto" | "user"): Promise<boolean> {
+        if (!this.reloadHostFn) return false;
 
-  private update(patch: Partial<AdoSessionSnapshot>): void {
-    this.snapshot = { ...this.snapshot, ...patch };
-    for (const listener of [...this.listeners]) listener();
-  }
+        try {
+            await this.reloadHostFn();
+        } catch (error) {
+            trackUserFacingError({
+                error,
+                source: "AdoSession.reloadHost",
+                operation: "host-reload",
+                impact: by === "user" ? "action-failed" : "degraded",
+            });
+
+            return false;
+        }
+
+        this.reportEnd(by === "auto" ? "reload-auto" : "reload-user");
+
+        return true;
+    }
+
+    /**
+     * The page is going away mid-spell: close it out for the diagnostics only.
+     * (`pagehide` also fires on entering the back/forward cache, after which the
+     * page can resume — so the spell itself stays open.)
+     */
+    notePageHide(): void {
+        this.reportEnd("left");
+    }
+
+    private schedule(delayMs: number): void {
+        // Only called with no timer pending: from `report` (a fresh spell) and from
+        // a fired check. `end` clears any pending timer.
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            void this.checkToken();
+        }, delayMs);
+    }
+
+    private async checkToken(): Promise<void> {
+        // Only a pending timer calls this, and `recover` (the sole place a spell
+        // ends) clears that timer, so a spell is always open here.
+        const spell = this.spell!;
+        let token: string | null;
+
+        try {
+            token = this.getToken ? await this.getToken() : null;
+        } catch {
+            token = null;
+        }
+
+        if (this.spell !== spell) return;
+
+        if (token !== null) {
+            const { state } = classifyAdoGrant(token, this.now());
+
+            // `unknown` = undecodable: never hold the app hostage to a parse miss.
+            if (state === "live" || state === "unknown") {
+                this.recover("remint");
+
+                return;
+            }
+
+            spell.adoExpMs ??= readAdoTokenExpiry(token).adoExpMs;
+        }
+
+        const age = this.now() - spell.startedAtMs;
+        // Stryker disable next-line EqualityOperator: a check landing on the exact millisecond of the slow-poll threshold has no practical meaning
+        this.schedule(age >= SESSION_SLOW_AFTER_MS ? SESSION_SLOW_POLL_MS : SESSION_POLL_MS);
+    }
+
+    /** Send the spell's `end` event once (no state change). */
+    private reportEnd(outcome: SpellOutcome): void {
+        const spell = this.spell;
+        if (!spell || spell.endReported) return;
+        spell.endReported = true;
+        const nowMs = this.now();
+        track(
+            events.authSessionRefresh({
+                phase: "end",
+                trigger: spell.trigger,
+                grantState: spell.grantState,
+                outcome,
+                durationSec: (nowMs - spell.startedAtMs) / 1000,
+                heldWrites: this.snapshot.heldWrites,
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
+                ...(spell.expMs !== undefined
+                    ? {
+                          secsUntilExpAtStart: (spell.expMs - spell.startedAtMs) / 1000,
+                          secsBeforeExpAtEnd: (spell.expMs - nowMs) / 1000,
+                      }
+                    : {}),
+                // Stryker disable next-line ConditionalExpression: without that expiry the measurement is NaN, which telemetry sanitisation drops, so the event is identical
+                ...(spell.adoExpMs !== undefined
+                    ? {
+                          secsSinceAdoExpAtStart: (spell.startedAtMs - spell.adoExpMs) / 1000,
+                      }
+                    : {}),
+            }),
+        );
+    }
+
+    /** The session is usable again: end the spell and release everyone. */
+    private recover(outcome: "remint" | "success"): void {
+        this.reportEnd(outcome);
+        this.spell = null;
+
+        if (this.timer !== null) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
+        this.update({ state: "live", surfaced: false });
+        for (const waiter of [...this.waiters]) waiter();
+        for (const listener of [...this.recoveredListeners]) listener();
+    }
+
+    private update(patch: Partial<AdoSessionSnapshot>): void {
+        this.snapshot = { ...this.snapshot, ...patch };
+        for (const listener of [...this.listeners]) listener();
+    }
 }
 
 /** The app-wide monitor. Entry points `configure` it with the SDK. */
 export const adoSession = new AdoSessionMonitor();
 
 /** React view of {@link adoSession}. */
-export function useAdoSession(
-  monitor: AdoSessionMonitor = adoSession,
-): AdoSessionSnapshot {
-  return useSyncExternalStore(monitor.subscribe, monitor.getSnapshot);
+export function useAdoSession(monitor: AdoSessionMonitor = adoSession): AdoSessionSnapshot {
+    return useSyncExternalStore(monitor.subscribe, monitor.getSnapshot);
 }
 
 // ---------------------------------------------------------------------------
@@ -469,28 +463,30 @@ export const AUTO_RELOAD_STALL_MS = 10_000;
  *     | where reloads > 1
  */
 export const AUTO_RELOAD_COOLDOWN_MS = 10 * 60_000;
+// Stryker disable next-line StringLiteral: reader and writer share this constant, so any distinct key name guards the reload the same
 export const AUTO_RELOAD_STORAGE_KEY = "emr.sessionAutoReloadAt";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
 /** `window.sessionStorage`, or undefined where reading it throws (sandboxing). */
 export function sessionStorageOrUndefined(): StorageLike | undefined {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return undefined;
-  }
+    try {
+        return window.sessionStorage;
+    } /* Stryker disable next-line BlockStatement: dead code: an empty catch returns undefined too; candidate for removal */ catch {
+        return undefined;
+    }
 }
 
 function lastAutoReloadAt(storage: StorageLike): number | null {
-  const last = Number(storage.getItem(AUTO_RELOAD_STORAGE_KEY));
+    const last = Number(storage.getItem(AUTO_RELOAD_STORAGE_KEY));
 
-  return Number.isFinite(last) && last > 0 ? last : null;
+    return Number.isFinite(last) && last > 0 ? last : null;
 }
 
 /** A load within this long of our automatic reload is that reload's result. */
 export const AUTO_RELOAD_RESULT_WINDOW_MS = 2 * 60_000;
 /** Which automatic reload (by claim time) a page load has already been tagged for. */
+// Stryker disable next-line StringLiteral: reader and writer share this constant, so any distinct key name tags the reload the same
 export const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
 
 /**
@@ -501,47 +497,46 @@ export const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
  * manual reload or navigation inside the window isn't mis-tagged. (The claim
  * itself stays — it is the reload-loop guard.)
  */
-export function followsRecentAutoReload(
-  storage: StorageLike | undefined,
-  nowMs: number,
-): boolean {
-  if (!storage) return false;
+export function followsRecentAutoReload(storage: StorageLike | undefined, nowMs: number): boolean {
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
+    if (!storage) return false;
 
-  try {
-    const last = lastAutoReloadAt(storage);
+    try {
+        const last = lastAutoReloadAt(storage);
 
-    if (
-      last === null ||
-      nowMs < last ||
-      nowMs - last >= AUTO_RELOAD_RESULT_WINDOW_MS ||
-      storage.getItem(AUTO_RELOAD_SEEN_STORAGE_KEY) === String(last)
-    ) {
-      return false;
+        if (
+            last === null ||
+            nowMs < last ||
+            nowMs - last >= AUTO_RELOAD_RESULT_WINDOW_MS ||
+            storage.getItem(AUTO_RELOAD_SEEN_STORAGE_KEY) === String(last)
+        ) {
+            return false;
+        }
+
+        storage.setItem(AUTO_RELOAD_SEEN_STORAGE_KEY, String(last));
+
+        return true;
+    } catch {
+        return false;
     }
-
-    storage.setItem(AUTO_RELOAD_SEEN_STORAGE_KEY, String(last));
-
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Read-only: would {@link claimAutoReload} allow a reload right now? */
 export function autoReloadAllowed(
-  storage: StorageLike | undefined,
-  nowMs: number,
-  cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
+    storage: StorageLike | undefined,
+    nowMs: number,
+    cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
-  if (!storage) return false;
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
+    if (!storage) return false;
 
-  try {
-    const last = lastAutoReloadAt(storage);
+    try {
+        const last = lastAutoReloadAt(storage);
 
-    return last === null || nowMs - last >= cooldownMs;
-  } catch {
-    return false;
-  }
+        return last === null || nowMs - last >= cooldownMs;
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -552,19 +547,20 @@ export function autoReloadAllowed(
  * another reload only makes things worse.
  */
 export function autoReloadRecentlyTried(
-  storage: StorageLike | undefined,
-  nowMs: number,
-  cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
+    storage: StorageLike | undefined,
+    nowMs: number,
+    cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
-  if (!storage) return false;
+    // Stryker disable next-line ConditionalExpression: dead code: without storage the read below throws, and the catch returns false anyway; candidate for removal
+    if (!storage) return false;
 
-  try {
-    const last = lastAutoReloadAt(storage);
+    try {
+        const last = lastAutoReloadAt(storage);
 
-    return last !== null && nowMs >= last && nowMs - last < cooldownMs;
-  } catch {
-    return false;
-  }
+        return last !== null && nowMs >= last && nowMs - last < cooldownMs;
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -574,17 +570,17 @@ export function autoReloadRecentlyTried(
  * can't rule out a reload loop.
  */
 export function claimAutoReload(
-  storage: StorageLike | undefined,
-  nowMs: number,
-  cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
+    storage: StorageLike | undefined,
+    nowMs: number,
+    cooldownMs: number = AUTO_RELOAD_COOLDOWN_MS,
 ): boolean {
-  if (!autoReloadAllowed(storage, nowMs, cooldownMs)) return false;
+    if (!autoReloadAllowed(storage, nowMs, cooldownMs)) return false;
 
-  try {
-    storage!.setItem(AUTO_RELOAD_STORAGE_KEY, String(nowMs));
+    try {
+        storage!.setItem(AUTO_RELOAD_STORAGE_KEY, String(nowMs));
 
-    return storage!.getItem(AUTO_RELOAD_STORAGE_KEY) === String(nowMs);
-  } catch {
-    return false;
-  }
+        return storage!.getItem(AUTO_RELOAD_STORAGE_KEY) === String(nowMs);
+    } catch {
+        return false;
+    }
 }

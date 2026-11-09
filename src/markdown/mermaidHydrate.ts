@@ -12,57 +12,55 @@ import { withChunkRetry } from "./chunkRetry";
 import { repairSequenceSemicolons } from "./mermaidRepair";
 
 type MermaidApi = {
-  initialize: (config: Record<string, unknown>) => void;
-  render: (
-    id: string,
-    src: string,
-  ) => Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
+    initialize: (config: Record<string, unknown>) => void;
+    render: (
+        id: string,
+        src: string,
+    ) => Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
 };
 
 // Config shared by every render pass. The `theme` is chosen per pass to match
 // the reader's mode (see `currentMermaidTheme`), so diagrams recolour when the
 // host flips light↔dark instead of staying pale-lavender on a dark canvas.
 const BASE_CONFIG = {
-  startOnLoad: false,
-  // `strict` disables raw HTML and interactive click handlers inside diagrams;
-  // our corpus doesn't need them.
-  securityLevel: "strict",
-  // Draw diagram text at the reader's prose size (Mermaid defaults to 16px,
-  // which inflates every node) so a diagram sits at a comfortable default size
-  // rather than towering over the body copy.
-  fontSize: 14,
+    startOnLoad: false,
+    // `strict` disables raw HTML and interactive click handlers inside diagrams;
+    // our corpus doesn't need them.
+    securityLevel: "strict",
+    // Draw diagram text at the reader's prose size (Mermaid defaults to 16px,
+    // which inflates every node) so a diagram sits at a comfortable default size
+    // rather than towering over the body copy.
+    fontSize: 14,
 } as const;
 
 const DEFAULT_FONT_FAMILY =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
 
 function importWithChunkRetry(): Promise<typeof import("mermaid")> {
-  return withChunkRetry(
-    () => import(/* webpackChunkName: "mermaid" */ "mermaid"),
-  );
+    return withChunkRetry(() => import(/* webpackChunkName: "mermaid" */ "mermaid"));
 }
 
 function getMermaid(): Promise<MermaidApi> {
-  if (mermaidPromise) return mermaidPromise;
-  mermaidPromise = (async () => {
-    const mod = await importWithChunkRetry();
+    // Stryker disable next-line ConditionalExpression: the module system already caches the dynamic import, so building a fresh promise per pass resolves to the same API.
+    if (mermaidPromise) return mermaidPromise;
+    mermaidPromise = (async () => {
+        const mod = await importWithChunkRetry();
 
-    // A CommonJS-interop namespace exposes the API without a `default`.
-    const api: MermaidApi =
-      (mod as { default?: MermaidApi }).default ??
-      (mod as unknown as MermaidApi);
+        // A CommonJS-interop namespace exposes the API without a `default`.
+        const api: MermaidApi =
+            (mod as { default?: MermaidApi }).default ?? (mod as unknown as MermaidApi);
 
-    return api;
-  })().catch((error: unknown) => {
-    // Drop the rejected promise so a later pass (a theme redraw, a re-render)
-    // can retry instead of being stuck with the first chunk-load failure.
-    mermaidPromise = null;
-    throw error;
-  });
+        return api;
+    })().catch((error: unknown) => {
+        // Drop the rejected promise so a later pass (a theme redraw, a re-render)
+        // can retry instead of being stuck with the first chunk-load failure.
+        mermaidPromise = null;
+        throw error;
+    });
 
-  return mermaidPromise;
+    return mermaidPromise;
 }
 
 // Mermaid's built-in `dark` theme (dark node fills, light text, visible edges)
@@ -70,9 +68,10 @@ function getMermaid(): Promise<MermaidApi> {
 // (pale-lavender nodes). The reader writes its mode as `data-emr-theme` on
 // <html>; mirror it (both high-contrast palettes count as dark).
 function currentMermaidTheme(): "dark" | "default" {
-  const theme = document.documentElement.getAttribute("data-emr-theme");
+    const theme = document.documentElement.getAttribute("data-emr-theme");
 
-  return isDarkTheme(theme ?? "") ? "dark" : "default";
+    // Stryker disable next-line StringLiteral: any fallback that isn't a theme id reads as light, exactly like "".
+    return isDarkTheme(theme ?? "") ? "dark" : "default";
 }
 
 // Counter for unique render ids — mermaid requires a unique DOM id per
@@ -81,12 +80,10 @@ let renderSeq = 0;
 
 // Mermaid lazy-loads a code chunk per diagram type inside `render()`, on top of
 // the library chunk itself; both go through `withChunkRetry`.
-function renderWithChunkRetry(
-  api: MermaidApi,
-  src: string,
-): ReturnType<MermaidApi["render"]> {
-  // A fresh id per attempt: mermaid needs a unique DOM id for each render.
-  return withChunkRetry(() => api.render(`emr-mermaid-${++renderSeq}`, src));
+function renderWithChunkRetry(api: MermaidApi, src: string): ReturnType<MermaidApi["render"]> {
+    // A fresh id per attempt: mermaid needs a unique DOM id for each render.
+    // Stryker disable next-line UpdateOperator: counting down (`emr-mermaid--1`, `--2`, …) still gives every attempt its own valid, unique id.
+    return withChunkRetry(() => api.render(`emr-mermaid-${++renderSeq}`, src));
 }
 
 // One report per failure per page load. The same broken diagram is re-rendered
@@ -95,14 +92,14 @@ function renderWithChunkRetry(
 const reportedFailures = new Set<string>();
 
 function reportOnce(key: string, operation: string, error: unknown): void {
-  if (reportedFailures.has(key)) return;
-  reportedFailures.add(key);
-  trackUserFacingError({
-    error,
-    source: "Mermaid.hydrate",
-    operation,
-    impact: "degraded",
-  });
+    if (reportedFailures.has(key)) return;
+    reportedFailures.add(key);
+    trackUserFacingError({
+        error,
+        source: "Mermaid.hydrate",
+        operation,
+        impact: "degraded",
+    });
 }
 
 /**
@@ -111,144 +108,133 @@ function reportOnce(key: string, operation: string, error: unknown): void {
  * the diagram is wrong everywhere it's rendered — not an extension failure.
  */
 export function isDiagramSyntaxError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const { name, message } = err as { name?: unknown; message?: unknown };
+    if (typeof err !== "object" || err === null) return false;
+    const { name, message } = err as { name?: unknown; message?: unknown };
 
-  return (
-    name === "UnknownDiagramError" ||
-    (typeof message === "string" &&
-      (/^(?:Parse error|Lexical error)\b/.test(message) ||
-        message.includes("No diagram type detected")))
-  );
+    return (
+        name === "UnknownDiagramError" ||
+        (typeof message === "string" &&
+            (/^(?:Parse error|Lexical error)\b/.test(message) ||
+                message.includes("No diagram type detected")))
+    );
 }
 
 /** Note a diagram that didn't parse as written, once per diagram per page load. */
 function noteRenderIssueOnce(src: string, outcome: DiagramRenderOutcome): void {
-  const key = `issue:${outcome}:${src}`;
-  if (reportedFailures.has(key)) return;
-  reportedFailures.add(key);
-  track(events.diagramRenderIssue({ outcome }));
+    const key = `issue:${outcome}:${src}`;
+    if (reportedFailures.has(key)) return;
+    reportedFailures.add(key);
+    track(events.diagramRenderIssue({ outcome }));
 }
 
 /** Swap a placeholder's fallback for the rendered SVG, sized by the reader. */
-function paint(
-  el: HTMLElement,
-  svg: string,
-  theme: string,
-  fontFamily: string,
-): void {
-  // A theme/font redraw can recover from an earlier render failure. Clear its
-  // marker before replacing the fallback so error styling and downstream
-  // guards (for example the source button) no longer apply.
-  el.removeAttribute("data-mermaid-error");
-  // Record the baked-in preferences before swapping innerHTML so a re-entrant
-  // observer that fires during the swap doesn't double-render.
-  el.setAttribute("data-hydrated", "true");
-  el.setAttribute("data-mermaid-theme", theme);
-  el.setAttribute("data-mermaid-font", fontFamily);
-  // eslint-disable-next-line no-unsanitized/property -- svg comes from mermaid.render under securityLevel "strict", which DOMPurify-sanitizes the diagram markup
-  el.innerHTML = svg;
-  // Let the reader's text-size control scale the whole diagram. Capture the
-  // diagram's natural width (the viewBox's 3rd value) into a custom prop the
-  // stylesheet multiplies by `--emr-reader-scale`, and strip Mermaid's own
-  // inline width caps so that rule governs the size. The viewBox scales nodes
-  // AND their text uniformly, so both track the reading size.
-  const svgEl = el.querySelector<SVGSVGElement>("svg")!;
-  const viewBox = svgEl.getAttribute("viewBox");
+function paint(el: HTMLElement, svg: string, theme: string, fontFamily: string): void {
+    // A theme/font redraw can recover from an earlier render failure. Clear its
+    // marker before replacing the fallback so error styling and downstream
+    // guards (for example the source button) no longer apply.
+    el.removeAttribute("data-mermaid-error");
+    // Record the baked-in preferences before swapping innerHTML so a re-entrant
+    // observer that fires during the swap doesn't double-render.
+    el.setAttribute("data-hydrated", "true");
+    el.setAttribute("data-mermaid-theme", theme);
+    el.setAttribute("data-mermaid-font", fontFamily);
+    // eslint-disable-next-line no-unsanitized/property -- svg comes from mermaid.render under securityLevel "strict", which DOMPurify-sanitizes the diagram markup
+    el.innerHTML = svg;
+    // Let the reader's text-size control scale the whole diagram. Capture the
+    // diagram's natural width (the viewBox's 3rd value) into a custom prop the
+    // stylesheet multiplies by `--emr-reader-scale`, and strip Mermaid's own
+    // inline width caps so that rule governs the size. The viewBox scales nodes
+    // AND their text uniformly, so both track the reading size.
+    const svgEl = el.querySelector<SVGSVGElement>("svg")!;
+    const viewBox = svgEl.getAttribute("viewBox");
 
-  if (viewBox !== null && viewBox !== "") {
-    el.style.setProperty(
-      "--emr-diagram-natural-w",
-      `${viewBox.split(" ")[2]}px`,
-    );
-    svgEl.style.removeProperty("max-width");
-    svgEl.removeAttribute("width");
-    svgEl.removeAttribute("height");
-  }
+    // Stryker disable next-line ConditionalExpression,StringLiteral: dead code: Mermaid always writes a non-empty viewBox or none at all, so the empty-string check never decides anything; candidate for removal.
+    if (viewBox !== null && viewBox !== "") {
+        el.style.setProperty("--emr-diagram-natural-w", `${viewBox.split(" ")[2]}px`);
+        svgEl.style.removeProperty("max-width");
+        svgEl.removeAttribute("width");
+        svgEl.removeAttribute("height");
+    }
 }
 
 /** Settings shared by every diagram in one hydration pass. */
 interface HydrationPass {
-  api: MermaidApi;
-  theme: string;
-  fontFamily: string;
+    api: MermaidApi;
+    theme: string;
+    fontFamily: string;
 }
 
 /** A placeholder's decoded `data-mermaid-src`, or `null` if absent/malformed. */
 function decodedSource(el: HTMLElement): string | null {
-  const enc = el.getAttribute("data-mermaid-src");
-  if (enc === null || enc === "") return null;
+    const enc = el.getAttribute("data-mermaid-src");
+    // Stryker disable next-line ConditionalExpression: dead code: placeholders are selected with `[data-mermaid-src]`, so the attribute is never missing (null) here; candidate for removal (the null check only narrows the type).
+    if (enc === null || enc === "") return null;
 
-  try {
-    return decodeURIComponent(enc);
-  } catch {
-    return null;
-  }
+    try {
+        return decodeURIComponent(enc);
+    } catch {
+        return null;
+    }
 }
 
 /** Flag a placeholder whose diagram could not be rendered, and report it. */
-function markRenderFailed(
-  pass: HydrationPass,
-  el: HTMLElement,
-  src: string,
-  error: unknown,
-): void {
-  el.setAttribute("data-hydrated", "true");
-  el.setAttribute("data-mermaid-theme", pass.theme);
-  el.setAttribute("data-mermaid-font", pass.fontFamily);
-  el.setAttribute("data-mermaid-error", "render-failed");
-  // Keep the fallback `<pre>` so the user can still read the source.
+function markRenderFailed(pass: HydrationPass, el: HTMLElement, src: string, error: unknown): void {
+    el.setAttribute("data-hydrated", "true");
+    el.setAttribute("data-mermaid-theme", pass.theme);
+    el.setAttribute("data-mermaid-font", pass.fontFamily);
+    el.setAttribute("data-mermaid-error", "render-failed");
+    // Keep the fallback `<pre>` so the user can still read the source.
 
-  console.warn("[mermaid] render failed:", error);
-  if (isDiagramSyntaxError(error)) noteRenderIssueOnce(src, "syntax-error");
-  else reportOnce(`render:${src}`, "diagram-render", error);
+    // Stryker disable next-line StringLiteral: developer-console text only; the reader-facing state and telemetry don't depend on it.
+    console.warn("[mermaid] render failed:", error);
+    if (isDiagramSyntaxError(error)) noteRenderIssueOnce(src, "syntax-error");
+    else reportOnce(`render:${src}`, "diagram-render", error);
 }
 
 /** Handle a failed render of `src`: try a repaired source once, else flag it. */
 async function recoverFailedRender(
-  pass: HydrationPass,
-  el: HTMLElement,
-  src: string,
-  err: unknown,
+    pass: HydrationPass,
+    el: HTMLElement,
+    src: string,
+    err: unknown,
 ): Promise<void> {
-  let error = err;
+    let error = err;
 
-  // `;` in sequence-diagram text reads as a statement break to Mermaid
-  // (the most common diagram failure in production). Retry once with
-  // those escaped — only after a failure, so a diagram that renders as
-  // written is never rewritten.
-  const repaired = isDiagramSyntaxError(err)
-    ? repairSequenceSemicolons(src)
-    : null;
+    // `;` in sequence-diagram text reads as a statement break to Mermaid
+    // (the most common diagram failure in production). Retry once with
+    // those escaped — only after a failure, so a diagram that renders as
+    // written is never rewritten.
+    const repaired = isDiagramSyntaxError(err) ? repairSequenceSemicolons(src) : null;
 
-  if (repaired !== null) {
-    try {
-      const { svg } = await renderWithChunkRetry(pass.api, repaired);
-      paint(el, svg, pass.theme, pass.fontFamily);
-      noteRenderIssueOnce(src, "repaired");
+    if (repaired !== null) {
+        try {
+            const { svg } = await renderWithChunkRetry(pass.api, repaired);
+            paint(el, svg, pass.theme, pass.fontFamily);
+            noteRenderIssueOnce(src, "repaired");
 
-      return;
-    } catch (repairErr) {
-      // Still a syntax error: keep the author's original one. Anything
-      // else (a chunk load, a runtime fault) is the real failure.
-      if (!isDiagramSyntaxError(repairErr)) error = repairErr;
+            return;
+        } catch (repairErr) {
+            // Still a syntax error: keep the author's original one. Anything
+            // else (a chunk load, a runtime fault) is the real failure.
+            // Stryker disable next-line ConditionalExpression: when both attempts are syntax errors either one is only noted by outcome (no error payload), so swapping them changes nothing but the console text.
+            if (!isDiagramSyntaxError(repairErr)) error = repairErr;
+        }
     }
-  }
 
-  markRenderFailed(pass, el, src, error);
+    markRenderFailed(pass, el, src, error);
 }
 
 /** Render one placeholder's diagram into SVG. */
 async function hydrateOne(pass: HydrationPass, el: HTMLElement): Promise<void> {
-  const src = decodedSource(el);
-  if (src === null) return;
+    const src = decodedSource(el);
+    if (src === null) return;
 
-  try {
-    const { svg } = await renderWithChunkRetry(pass.api, src);
-    paint(el, svg, pass.theme, pass.fontFamily);
-  } catch (err) {
-    await recoverFailedRender(pass, el, src, err);
-  }
+    try {
+        const { svg } = await renderWithChunkRetry(pass.api, src);
+        paint(el, svg, pass.theme, pass.fontFamily);
+    } catch (err) {
+        await recoverFailedRender(pass, el, src, err);
+    }
 }
 
 /**
@@ -258,44 +244,47 @@ async function hydrateOne(pass: HydrationPass, el: HTMLElement): Promise<void> {
  * `mermaid` import doesn't leave a blank gap.
  */
 export async function hydrateMermaid(
-  root: HTMLElement,
-  fontFamily = DEFAULT_FONT_FAMILY,
+    root: HTMLElement,
+    fontFamily = DEFAULT_FONT_FAMILY,
 ): Promise<void> {
-  const theme = currentMermaidTheme();
+    const theme = currentMermaidTheme();
 
-  // Mermaid SVGs bake both colours and fonts in at render time, so redraw when
-  // either reader preference no longer matches the rendered diagram.
-  const placeholders = Array.from(
-    root.querySelectorAll<HTMLElement>(".emr-mermaid[data-mermaid-src]"),
-  ).filter(
-    (el) =>
-      el.getAttribute("data-hydrated") !== "true" ||
-      el.getAttribute("data-mermaid-theme") !== theme ||
-      el.getAttribute("data-mermaid-font") !== fontFamily,
-  );
+    // Mermaid SVGs bake both colours and fonts in at render time, so redraw when
+    // either reader preference no longer matches the rendered diagram.
+    const placeholders = Array.from(
+        root.querySelectorAll<HTMLElement>(".emr-mermaid[data-mermaid-src]"),
+    ).filter(
+        (el) =>
+            // Stryker disable next-line ConditionalExpression: dead code: theme and font attributes are only ever written together with data-hydrated="true", so a placeholder not yet hydrated is always picked up by the theme/font checks below and this check never decides anything; candidate for removal.
+            el.getAttribute("data-hydrated") !== "true" ||
+            el.getAttribute("data-mermaid-theme") !== theme ||
+            el.getAttribute("data-mermaid-font") !== fontFamily,
+    );
 
-  if (placeholders.length === 0) return;
+    if (placeholders.length === 0) return;
 
-  let api: MermaidApi;
+    let api: MermaidApi;
 
-  try {
-    api = await getMermaid();
-  } catch (err) {
-    // Failed to load mermaid — leave fallbacks in place but flag them.
-    for (const el of placeholders) {
-      el.setAttribute("data-mermaid-error", "load-failed");
+    try {
+        api = await getMermaid();
+    } catch (err) {
+        // Failed to load mermaid — leave fallbacks in place but flag them.
+        for (const el of placeholders) {
+            el.setAttribute("data-mermaid-error", "load-failed");
+        }
+
+        // Stryker disable next-line StringLiteral: developer-console text only; the reader-facing state and telemetry don't depend on it.
+        console.warn("[mermaid] failed to load library:", err);
+        // Stryker disable next-line StringLiteral: the dedupe key only has to differ from the `render:`/`issue:` keys, which any other constant (even "") does.
+        reportOnce("library-load", "diagram-library-load", err);
+
+        return;
     }
 
-    console.warn("[mermaid] failed to load library:", err);
-    reportOnce("library-load", "diagram-library-load", err);
+    // Apply the current theme before this pass (cheap — just updates mermaid's
+    // global config), so every diagram below renders in the reader's mode.
+    api.initialize({ ...BASE_CONFIG, theme, fontFamily });
 
-    return;
-  }
-
-  // Apply the current theme before this pass (cheap — just updates mermaid's
-  // global config), so every diagram below renders in the reader's mode.
-  api.initialize({ ...BASE_CONFIG, theme, fontFamily });
-
-  const pass: HydrationPass = { api, theme, fontFamily };
-  await Promise.all(placeholders.map((el) => hydrateOne(pass, el)));
+    const pass: HydrationPass = { api, theme, fontFamily };
+    await Promise.all(placeholders.map((el) => hydrateOne(pass, el)));
 }

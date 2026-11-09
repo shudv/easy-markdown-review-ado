@@ -14,93 +14,96 @@
 import { get } from "node:https";
 import { E2E } from "./env";
 
-/** Fetch response headers for a dev-origin URL, tolerating the self-signed cert. */
-function headOf(
-  url: string,
-): Promise<{ status: number; headers: Record<string, string> }> {
-  return new Promise((resolve, reject) => {
-    const req = get(url, { rejectUnauthorized: false }, (res) => {
-      // Drain so the socket can close; we only need status + headers.
-      res.resume();
-      const headers: Record<string, string> = {};
+// The dev server's certificate is a self-signed localhost leaf (`npm run
+// setup:cert` installs it as a trusted root for browsers). Node's TLS won't use
+// a certificate without CA key usage as a trust anchor, so verification is
+// skipped for loopback hosts only, matching `ignoreHTTPSErrors` for this origin
+// in playwright.config.ts. Any other dev origin is verified normally.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-      for (const [k, v] of Object.entries(res.headers)) {
-        headers[k.toLowerCase()] = Array.isArray(v) ? v.join(", ") : (v ?? "");
-      }
+/** Fetch response headers for a dev-origin URL. */
+function headOf(url: string): Promise<{ status: number; headers: Record<string, string> }> {
+    return new Promise((resolve, reject) => {
+        const rejectUnauthorized = !LOOPBACK_HOSTS.has(new URL(url).hostname);
 
-      resolve({ status: res.statusCode ?? 0, headers });
+        const req = get(url, { rejectUnauthorized }, (res) => {
+            // Drain so the socket can close; we only need status + headers.
+            res.resume();
+            const headers: Record<string, string> = {};
+
+            for (const [k, v] of Object.entries(res.headers)) {
+                headers[k.toLowerCase()] = Array.isArray(v) ? v.join(", ") : (v ?? "");
+            }
+
+            resolve({ status: res.statusCode ?? 0, headers });
+        });
+
+        req.on("error", reject);
+        req.setTimeout(5000, () => req.destroy(new Error("timeout")));
     });
-
-    req.on("error", reject);
-    req.setTimeout(5000, () => req.destroy(new Error("timeout")));
-  });
 }
 
 export default async function globalSetup(): Promise<void> {
-  const url = `${E2E.devOrigin}/pr-tab/pr-tab.html`;
+    const url = `${E2E.devOrigin}/pr-tab/pr-tab.html`;
 
-  let res: { status: number; headers: Record<string, string> };
+    let res: { status: number; headers: Record<string, string> };
 
-  try {
-    res = await headOf(url);
-  } catch (err) {
-    throw new Error(
-      `e2e: could not reach the dev server at ${E2E.devOrigin} (${
-        (err as Error).message
-      }).\n` +
-        "`npm run e2e` starts the STRICT verification server automatically; if it\n" +
-        "failed to start, run it yourself to see why:\n" +
-        "  npm run dev:verify\n" +
-        "(e2e enforces the strict server so it runs under the same CSP the ADO host imposes.)",
-      { cause: err },
-    );
-  }
+    try {
+        res = await headOf(url);
+    } catch (err) {
+        throw new Error(
+            `e2e: could not reach the dev server at ${E2E.devOrigin} (${
+                (err as Error).message
+            }).\n` +
+                "`npm run e2e` starts the STRICT verification server automatically; if it\n" +
+                "failed to start, run it yourself to see why:\n" +
+                "  npm run dev:verify\n" +
+                "(e2e enforces the strict server so it runs under the same CSP the ADO host imposes.)",
+            { cause: err },
+        );
+    }
 
-  if (res.status < 200 || res.status >= 300) {
-    throw new Error(
-      `e2e: dev server at ${E2E.devOrigin} responded with HTTP ${res.status} for ${url}.\n` +
-        "The e2e suite requires this page to be available before validating CSP headers.\n" +
-        "Start (or restart) the STRICT verification server:\n" +
-        "  npm run dev:verify",
-    );
-  }
+    if (res.status < 200 || res.status >= 300) {
+        throw new Error(
+            `e2e: dev server at ${E2E.devOrigin} responded with HTTP ${res.status} for ${url}.\n` +
+                "The e2e suite requires this page to be available before validating CSP headers.\n" +
+                "Start (or restart) the STRICT verification server:\n" +
+                "  npm run dev:verify",
+        );
+    }
 
-  const csp = res.headers["content-security-policy"] ?? "";
-  const nosniff = res.headers["x-content-type-options"] ?? "";
+    const csp = res.headers["content-security-policy"] ?? "";
+    const nosniff = res.headers["x-content-type-options"] ?? "";
 
-  // The strict server sets a script-src that forbids inline + eval. The plain
-  // `dev:https` loop sends no CSP at all, so an empty/missing header is the
-  // tell-tale that the wrong server is running.
-  const scriptSrc = /(?:^|;)\s*script-src\s+([^;]+)/i.exec(csp)?.[1] ?? "";
+    // The strict server sets a script-src that forbids inline + eval. The plain
+    // `dev:https` loop sends no CSP at all, so an empty/missing header is the
+    // tell-tale that the wrong server is running.
+    const scriptSrc = /(?:^|;)\s*script-src\s+([^;]+)/i.exec(csp)?.[1] ?? "";
 
-  const scriptAllowsSelfOnly =
-    /'self'/.test(scriptSrc) &&
-    !/'unsafe-inline'/.test(scriptSrc) &&
-    !/'unsafe-eval'/.test(scriptSrc);
+    const scriptAllowsSelfOnly =
+        /'self'/.test(scriptSrc) &&
+        !/'unsafe-inline'/.test(scriptSrc) &&
+        !/'unsafe-eval'/.test(scriptSrc);
 
-  if (!csp || !scriptAllowsSelfOnly) {
-    const got = csp
-      ? `Content-Security-Policy: ${csp}`
-      : "no Content-Security-Policy header";
+    if (!csp || !scriptAllowsSelfOnly) {
+        const got = csp ? `Content-Security-Policy: ${csp}` : "no Content-Security-Policy header";
 
-    throw new Error(
-      "e2e: the dev server is not running in STRICT verification mode.\n" +
-        `  expected a Content-Security-Policy with "script-src 'self'" (no inline/eval) at ${url}\n` +
-        `  got: ${got}\n` +
-        "Restart the dev server in strict mode (it mirrors the ADO host CSP):\n" +
-        "  npm run dev:verify\n" +
-        "(plain `npm run dev:https` is not accepted for e2e — it doesn't enforce the production security posture.)",
-    );
-  }
+        throw new Error(
+            "e2e: the dev server is not running in STRICT verification mode.\n" +
+                `  expected a Content-Security-Policy with "script-src 'self'" (no inline/eval) at ${url}\n` +
+                `  got: ${got}\n` +
+                "Restart the dev server in strict mode (it mirrors the ADO host CSP):\n" +
+                "  npm run dev:verify\n" +
+                "(plain `npm run dev:https` is not accepted for e2e — it doesn't enforce the production security posture.)",
+        );
+    }
 
-  if (!/nosniff/i.test(nosniff)) {
-    throw new Error(
-      `e2e: dev server is missing "X-Content-Type-Options: nosniff" at ${url}. ` +
-        "Ensure you started it with `npm run dev:verify`.",
-    );
-  }
+    if (!/nosniff/i.test(nosniff)) {
+        throw new Error(
+            `e2e: dev server is missing "X-Content-Type-Options: nosniff" at ${url}. ` +
+                "Ensure you started it with `npm run dev:verify`.",
+        );
+    }
 
-  console.log(
-    `e2e: verified strict dev server at ${E2E.devOrigin} (CSP enforced, nosniff on).`,
-  );
+    console.log(`e2e: verified strict dev server at ${E2E.devOrigin} (CSP enforced, nosniff on).`);
 }

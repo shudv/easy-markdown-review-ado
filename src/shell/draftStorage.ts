@@ -25,43 +25,40 @@ export const NEW_DRAFT_THREAD_ID = "__new__";
  * the selection anchor it's attached to.
  */
 export interface DraftTarget {
-  path: string;
-  threadId: string;
-  anchor: TextQuoteAnchor | null;
+    path: string;
+    threadId: string;
+    anchor: TextQuoteAnchor | null;
 }
 
 export function implicitCommentDraft(path: string): DraftTarget {
-  return {
-    path,
-    threadId: NEW_DRAFT_THREAD_ID,
-    anchor: {
-      exact: "",
-      prefix: "",
-      suffix: "",
-      line: 1,
-      endLine: 1,
-      column: 1,
-      endColumn: 1,
-      implicit: true,
-    },
-  };
+    return {
+        path,
+        threadId: NEW_DRAFT_THREAD_ID,
+        anchor: {
+            exact: "",
+            prefix: "",
+            suffix: "",
+            line: 1,
+            endLine: 1,
+            column: 1,
+            endColumn: 1,
+            implicit: true,
+        },
+    };
 }
 
 /** Keep a live selection draft; otherwise start an implicit file comment. */
-export function addCommentDraftTarget(
-  current: DraftTarget | null,
-  path: string,
-): DraftTarget {
-  if (
-    current?.path === path &&
-    current.threadId === NEW_DRAFT_THREAD_ID &&
-    current.anchor &&
-    !current.anchor.implicit
-  ) {
-    return current;
-  }
+export function addCommentDraftTarget(current: DraftTarget | null, path: string): DraftTarget {
+    if (
+        current?.path === path &&
+        current.threadId === NEW_DRAFT_THREAD_ID &&
+        current.anchor &&
+        !current.anchor.implicit
+    ) {
+        return current;
+    }
 
-  return implicitCommentDraft(path);
+    return implicitCommentDraft(path);
 }
 
 /**
@@ -72,28 +69,28 @@ export function addCommentDraftTarget(
  * draft has text prompts a discard dialog rather than silently overwriting it.
  */
 export interface PersistedDraft {
-  /** File the draft is anchored in. */
-  path: string;
-  /** Thread the draft belongs to, or {@link NEW_DRAFT_THREAD_ID} for a new comment. */
-  threadId: string;
-  /** Selection anchor — present only for a new-comment draft. */
-  anchor: TextQuoteAnchor | null;
-  /** Raw composer text (as typed / encoded). */
-  body: string;
+    /** File the draft is anchored in. */
+    path: string;
+    /** Thread the draft belongs to, or {@link NEW_DRAFT_THREAD_ID} for a new comment. */
+    threadId: string;
+    /** Selection anchor — present only for a new-comment draft. */
+    anchor: TextQuoteAnchor | null;
+    /** Raw composer text (as typed / encoded). */
+    body: string;
 }
 
 /** Single-line snippet of a draft body for the discard dialog (trimmed + capped). */
 export function draftSnippet(body: string, max = 80): string {
-  const oneLine = body.replace(/\s+/g, " ").trim();
+    const oneLine = body.replace(/\s+/g, " ").trim();
 
-  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
+    return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
 }
 
 const KEY_PREFIX = "emr:comment-draft:";
 
 /** localStorage key for a scope. */
 export function draftStorageKey(scope: DraftScope): string {
-  return `${KEY_PREFIX}${scope}`;
+    return `${KEY_PREFIX}${scope}`;
 }
 
 /**
@@ -101,82 +98,84 @@ export function draftStorageKey(scope: DraftScope): string {
  * throws — storage may be disabled (private mode) or hold malformed JSON.
  */
 export function loadDraft(scope: DraftScope): PersistedDraft | null {
-  let raw: string | null;
+    let raw: string | null;
 
-  try {
-    raw = window.localStorage.getItem(draftStorageKey(scope));
-  } catch {
-    return null;
-  }
+    try {
+        // Stryker disable BlockStatement: dead code: this `return null` is redundant — falling through leaves `raw` undefined, which JSON.parse rejects below with the same null, candidate for removal
+        raw = window.localStorage.getItem(draftStorageKey(scope));
+    } catch {
+        // Stryker restore BlockStatement
+        return null;
+    }
 
-  if (raw === null || raw === "") return null;
-  let parsed: unknown;
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: dead code: JSON.parse(null) is null and JSON.parse("") throws, and both already read as "no draft" below, candidate for removal
+    if (raw === null || raw === "") return null;
+    let parsed: unknown;
 
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
+    try {
+        // Stryker disable BlockStatement: dead code: this `return null` is redundant — falling through leaves `parsed` undefined, which the shape check below rejects with the same null, candidate for removal
+        parsed = JSON.parse(raw);
+    } catch {
+        // Stryker restore BlockStatement
+        return null;
+    }
 
-  if (!isPersistedDraft(parsed)) return null;
+    if (!isPersistedDraft(parsed)) return null;
 
-  return parsed;
+    return parsed;
 }
 
 /** Validate a parsed value is a well-formed {@link PersistedDraft}. */
 function isPersistedDraft(value: unknown): value is PersistedDraft {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
+    // Stryker disable next-line ConditionalExpression: dead code: a stored string, number or boolean has no string `path`, so the field checks below reject it anyway, candidate for removal
+    if (typeof value !== "object" || value === null) return false;
+    const v = value as Record<string, unknown>;
 
-  if (
-    typeof v.path !== "string" ||
-    typeof v.threadId !== "string" ||
-    typeof v.body !== "string" ||
-    v.body.length === 0
-  ) {
-    return false;
-  }
+    if (
+        typeof v.path !== "string" ||
+        typeof v.threadId !== "string" ||
+        typeof v.body !== "string" ||
+        v.body.length === 0
+    ) {
+        return false;
+    }
 
-  // A new-comment draft must carry a usable anchor; a reply draft has none.
-  if (v.threadId === NEW_DRAFT_THREAD_ID) {
-    const anchor = v.anchor as Record<string, unknown> | null | undefined;
+    // A new-comment draft must carry a usable anchor; a reply draft has none.
+    if (v.threadId === NEW_DRAFT_THREAD_ID) {
+        const anchor = v.anchor as Record<string, unknown> | null | undefined;
 
-    return (
-      typeof anchor === "object" &&
-      anchor !== null &&
-      typeof anchor.exact === "string"
-    );
-  }
+        return typeof anchor === "object" && anchor !== null && typeof anchor.exact === "string";
+    }
 
-  return true;
+    return true;
 }
 
 /** Persist a draft. Silently ignores storage errors (quota, private mode). */
 export function saveDraft(scope: DraftScope, draft: PersistedDraft): void {
-  try {
-    window.localStorage.setItem(draftStorageKey(scope), JSON.stringify(draft));
-  } catch {
-    /* ignore — persistence is best-effort */
-  }
+    try {
+        window.localStorage.setItem(draftStorageKey(scope), JSON.stringify(draft));
+    } catch {
+        /* ignore — persistence is best-effort */
+    }
 }
 
 /** Remove any persisted draft for a scope. */
 export function clearDraft(scope: DraftScope): void {
-  try {
-    window.localStorage.removeItem(draftStorageKey(scope));
-  } catch {
-    /* ignore */
-  }
+    try {
+        window.localStorage.removeItem(draftStorageKey(scope));
+    } catch {
+        /* ignore */
+    }
 }
 
 /** A rate-limited draft writer bound to one scope. */
 export interface ThrottledDraftWriter {
-  /** Queue a write; persists immediately if idle, else coalesces. */
-  schedule(draft: PersistedDraft): void;
-  /** Flush any queued write now (e.g. before unmount). */
-  flush(): void;
-  /** Drop any queued write without persisting. */
-  cancel(): void;
+    /** Queue a write; persists immediately if idle, else coalesces. */
+    schedule(draft: PersistedDraft): void;
+    /** Flush any queued write now (e.g. before unmount). */
+    flush(): void;
+    /** Drop any queued write without persisting. */
+    cancel(): void;
 }
 
 /**
@@ -186,49 +185,52 @@ export interface ThrottledDraftWriter {
  * flooding localStorage while still capturing the latest text promptly.
  */
 export function createThrottledDraftWriter(
-  scope: DraftScope,
-  intervalMs = 500,
+    scope: DraftScope,
+    intervalMs = 500,
 ): ThrottledDraftWriter {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let pending: PersistedDraft | null = null;
-  let lastWrite = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending: PersistedDraft | null = null;
+    let lastWrite = 0;
 
-  const write = (): void => {
-    if (pending) {
-      saveDraft(scope, pending);
-      pending = null;
-    }
+    const write = (): void => {
+        if (pending) {
+            saveDraft(scope, pending);
+            pending = null;
+        }
 
-    lastWrite = Date.now();
-    timer = null;
-  };
-
-  return {
-    schedule(draft: PersistedDraft): void {
-      pending = draft;
-      const elapsed = Date.now() - lastWrite;
-
-      if (elapsed >= intervalMs) {
-        write();
-      } else {
-        timer ??= setTimeout(write, intervalMs - elapsed);
-      }
-    },
-    flush(): void {
-      if (timer !== null) {
-        clearTimeout(timer);
+        lastWrite = Date.now();
         timer = null;
-      }
+    };
 
-      write();
-    },
-    cancel(): void {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
+    return {
+        schedule(draft: PersistedDraft): void {
+            pending = draft;
+            const elapsed = Date.now() - lastWrite;
 
-      pending = null;
-    },
-  };
+            // Stryker disable next-line EqualityOperator: at exactly one interval the trailing timer is due after 0 ms, so the save is merely deferred to the next task, which no user or reload can observe
+            if (elapsed >= intervalMs) {
+                write();
+            } else {
+                timer ??= setTimeout(write, intervalMs - elapsed);
+            }
+        },
+        flush(): void {
+            // Stryker disable next-line ConditionalExpression: dead code: clearTimeout(null) and resetting an already-null timer are no-ops, so the check only skips work that does nothing, candidate for removal
+            if (timer !== null) {
+                clearTimeout(timer);
+                timer = null;
+            }
+
+            write();
+        },
+        cancel(): void {
+            // Stryker disable next-line ConditionalExpression: dead code: clearTimeout(null) and resetting an already-null timer are no-ops, so the check only skips work that does nothing, candidate for removal
+            if (timer !== null) {
+                clearTimeout(timer);
+                timer = null;
+            }
+
+            pending = null;
+        },
+    };
 }

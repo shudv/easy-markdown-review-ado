@@ -14,10 +14,10 @@
 
 import * as SDK from "azure-devops-extension-sdk";
 import {
-  CommonServiceIds,
-  getClient,
-  type ILocationService,
-  type IProjectPageService,
+    CommonServiceIds,
+    getClient,
+    type ILocationService,
+    type IProjectPageService,
 } from "azure-devops-extension-api";
 import { GitRestClient } from "azure-devops-extension-api/Git";
 import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
@@ -34,46 +34,38 @@ let workItems: WorkItemTrackingRestClient | null = null;
  * dropped and re-run by the next request instead of failing the client (and
  * every caller holding it) for the rest of the page.
  */
-function createClient<T>(clientClass: {
-  new (options: object): T;
-  RESOURCE_AREA_ID: string;
-}): T {
-  let lookup: Promise<string> | null = null;
+function createClient<T>(clientClass: { new (options: object): T; RESOURCE_AREA_ID: string }): T {
+    let lookup: Promise<string> | null = null;
 
-  const resolveRoot = (): Promise<string> =>
-    (lookup ??= SDK.getService<ILocationService>(
-      CommonServiceIds.LocationService,
-    )
-      .then((locations) =>
-        locations.getResourceAreaLocation(clientClass.RESOURCE_AREA_ID),
-      )
-      .catch((err: unknown) => {
-        lookup = null;
-        throw err;
-      }));
+    const resolveRoot = (): Promise<string> =>
+        (lookup ??= SDK.getService<ILocationService>(CommonServiceIds.LocationService)
+            .then((locations) => locations.getResourceAreaLocation(clientClass.RESOURCE_AREA_ID))
+            .catch((err: unknown) => {
+                lookup = null;
+                throw err;
+            }));
 
-  resolveRoot().catch(() => undefined);
+    resolveRoot().catch(() => undefined);
 
-  const rootPath: PromiseLike<string> = {
-    then: (onResolved, onRejected) =>
-      resolveRoot().then(onResolved, onRejected),
-  };
+    const rootPath: PromiseLike<string> = {
+        then: (onResolved, onRejected) => resolveRoot().then(onResolved, onRejected),
+    };
 
-  return getClient(clientClass, { rootPath: rootPath as Promise<string> });
+    return getClient(clientClass, { rootPath: rootPath as Promise<string> });
 }
 
 /** The page's Git REST client (base URL resolved once). */
 export function sharedGitClient(): GitRestClient {
-  git ??= createClient(GitRestClient);
+    git ??= createClient(GitRestClient);
 
-  return git;
+    return git;
 }
 
 /** The page's Work Item Tracking REST client (base URL resolved once). */
 export function sharedWorkItemClient(): WorkItemTrackingRestClient {
-  workItems ??= createClient(WorkItemTrackingRestClient);
+    workItems ??= createClient(WorkItemTrackingRestClient);
 
-  return workItems;
+    return workItems;
 }
 
 /**
@@ -82,21 +74,21 @@ export function sharedWorkItemClient(): WorkItemTrackingRestClient {
  * rest of boot instead of stalling the first REST call. Best-effort.
  */
 export function warmAdoClients(): void {
-  try {
-    sharedGitClient();
-    void SDK.getAccessToken().catch(() => undefined);
-  } catch {
-    // Warming is an optimisation; the first real call retries the lookup.
-  }
+    try {
+        sharedGitClient();
+        void SDK.getAccessToken().catch(() => undefined);
+    } catch {
+        // Warming is an optimisation; the first real call retries the lookup.
+    }
 }
 
 /** The SDK's web context, or undefined if the host didn't provide one. */
 function readWebContext(): ReturnType<typeof SDK.getWebContext> | undefined {
-  try {
-    return SDK.getWebContext();
-  } catch {
-    return undefined;
-  }
+    try {
+        return SDK.getWebContext();
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -104,18 +96,16 @@ function readWebContext(): ReturnType<typeof SDK.getWebContext> | undefined {
  * host round-trip), otherwise from the ProjectPageService.
  */
 export async function resolveCurrentProject(): Promise<{
-  id: string;
-  name: string;
+    id: string;
+    name: string;
 }> {
-  const fromContext = webContextProject(readWebContext());
-  if (fromContext) return fromContext;
+    const fromContext = webContextProject(readWebContext());
+    if (fromContext) return fromContext;
 
-  const service = await SDK.getService<IProjectPageService>(
-    CommonServiceIds.ProjectPageService,
-  );
+    const service = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
 
-  const project = await service.getProject();
-  if (!project) throw new Error("No active project on the page.");
+    const project = await service.getProject();
+    if (!project) throw new Error("No active project on the page.");
 
-  return { id: project.id, name: project.name };
+    return { id: project.id, name: project.name };
 }

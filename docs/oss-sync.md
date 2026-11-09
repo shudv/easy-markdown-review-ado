@@ -1,11 +1,66 @@
 # OSS mirror sync ledger
 
+## 2026-11-07 Four-space indentation sync
+
+- Public base: `3326f9f` (#32).
+- Previously mirrored product boundary: `fb1cc3f` (source merge `448a0cc`).
+- New product boundary: `5868ac9` (source branch `chore/four-space-indent`; not
+  yet merged, record the source merge commit here once it lands).
+- OSS release version: unchanged at `1.3.1`.
+- Strategy: replay the product tree delta without importing private history.
+  The reformat is replayed by re-running the source's formatting sequence on
+  the public tree (Prettier at 80 columns, `eslint --fix`, Prettier at 100
+  columns, `eslint --fix`, a final Prettier pass), so every file shared
+  unchanged with the source matches it byte-for-byte afterwards.
+
+### Mirrored changes
+
+| Source commit        | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ef62f86`            | Three diff-decoration guards (`attachTableBeforeDisclosure` without original text, `applyLinkTargetIndicators` with an index past the last link, the removed-cell `td` fallback in `diffTableRowCells`) are covered by direct tests instead of `v8 ignore` comments; nine ignores remain in `src/`.                                                                                                                                                                                                                                          |
+| `61b5787`            | Prettier indents with 4 spaces and wraps at 100 columns, and the repository is reformatted; VS Code workspace settings match the formatter (4-space tabs, no indentation detection, LF, Prettier as default formatter and a recommended extension). Reflow follow-ups: `eslint --fix` blank lines, one `react-hooks/refs` disable kept above its line, two functions back under the 80-line limit, two `it.each` tables.                                                                                                                     |
+| `8baddb5`            | Unit tests are type-checked: `test/tsconfig.json` (ES2023 lib for Node/jsdom) replaces `tsconfig.test.json`, which inherited the root `exclude` of `test`, and `tsconfig.eslint.json`; `npm run typecheck:test`, type-aware ESLint and the editor share it. The 40 errors it surfaced in 18 test files are fixed, and `coverage-ignore-rationale.mjs` gets a `.d.mts`.                                                                                                                                                                       |
+| `e01ef29`            | The source removes its local multi-agent Agency review tooling (agents, contracts, `review:local` runner and `test:review` tests, which were never mirrored). Mirrored as the matching cleanup: the cspell `.agency/**` ignore path and three words only that tooling used.                                                                                                                                                                                                                                                                  |
+| `fa7994f`            | Tests are rewritten as scenarios: mutant-only tests are reworded or removed, duplicates removed, the rendered-diff suites become one suite per feature (`markdown.diff.<feature>`), tests record telemetry through `test/telemetrySink.ts` instead of mocking it, and stories use role/label/text queries. Eight test-only exports become module-private.                                                                                                                                                                                    |
+| `e8b244a`            | Mutation testing is re-scoped to match its own rule and the coverage config (comment fixtures, SDK glue and Storybook-only hooks/DOM helpers excluded; volatile Playwright output skipped when copying the sandbox); the measured score is 84.9%, so the break threshold and README rule become 84%. ESLint ignores `.stryker-tmp/`; the boot-error panel's empty-stack fallback gets a scenario test.                                                                                                                                       |
+| `77a6113`            | Every surviving mutant is triaged: observable ones get scenario tests (including unit scenarios for the shell hooks only Storybook exercised), unobservable ones get `Stryker disable` comments with specific reasons, and dead code is marked "candidate for removal". `src/` changes are comments only. Product bugs found are listed in the PR and not fixed here.                                                                                                                                                                        |
+| `a55da67`            | The mutation threshold rises to the measured 98% (high 99, low 95); the README rule and the Stryker config comment explain that mutants no scenario can observe are disabled in place with a written reason.                                                                                                                                                                                                                                                                                                                                 |
+| `efd7d67`            | Fixes the 15 product bugs found by the mutation triage: stale text-link cue spans, Greek final sigma in text links, history lost on a fast document switch, blank-message first-document failures (app.loaded and the reader's error panel), raw `<details>`/table nesting in documents, and eight rendered-diff placement and labelling issues. Each fix has a reproducing scenario test.                                                                                                                                                   |
+| `ab26509`            | The Excalidraw tests stop timing out on a busy machine: only the SVG renderer's scenarios re-import the module; path and scene parsing import it once.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `aade966`, `66cd319` | `npm run test:mutation:changed` mutates only the src files changed against `origin/main` (keeping the config's exclusions and incremental cache); the README documents it beside the incremental and full runs. The public README keeps its own lint wording around the new section.                                                                                                                                                                                                                                                         |
+| `5868ac9`            | Resolves the CodeQL alerts: the e2e ADO-host check accepts only dev.azure.com and its subdomains; telemetry session ids fall back to `crypto.getRandomValues`, never `Math.random`; `visual-docker.mjs` runs commands without a shell; the dev-server probes skip certificate verification for loopback hosts only (the self-signed localhost leaf can't be a Node trust anchor). This replaces the public dev launcher's earlier system-trust-store probe, which could never verify that certificate and so never saw a running dev server. |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The public link example (`example.visualstudio.com`,
+  `docs/ReviewGuide/README.md`) now lives in
+  `test/markdown.diff.inlineChanges.test.ts` (the source split
+  `markdown.diffScenarios.test.ts` into per-feature suites) and stays in
+  `ArticleView.productionDiffs.stories.tsx`.
+- The RepoPicker story's hover-tolerant chevron check is no longer needed: the
+  rewritten story no longer asserts the chevron's resting opacity.
+- The source's `verifyMarketplaceVersion.test.ts` edits are not mirrored; that
+  test covers the private Marketplace helper, which is excluded.
+- Public-only files (`.github/workflows/*`, this ledger) and adapted files
+  (`package.json`, `vss-extension.json`, the feedback contacts in
+  `DocumentsApp.tsx` and `PrTabApp.tsx`, and the rest) are reformatted in
+  place; their public content is unchanged.
+- The source adds the `typecheck:test` step to its private Azure PR
+  validation pipeline; here it is a step in `.github/workflows/ci.yml`.
+
+### Next sync
+
+Compare the next source product tree against the merged form of `5868ac9` and
+integrate the delta on the latest public `main`. Preserve the adaptations and
+exclusions below, and record validation in the sync PR.
+
 ## 2026-11-06 Reliability (ACE) sync
 
 - Public base: `c26d0d8` (#31).
 - Previously mirrored product boundary: `1c1ed97` (source merge `32c7b5c`).
-- New product boundary: `fb1cc3f` (source branch `fix/ace-reliability`; not yet
-  merged, record the source merge commit here once it lands).
+- New product boundary: `fb1cc3f` (source branch `fix/ace-reliability`),
+  merged in the source as `448a0cc` and on public `main` as `3326f9f` (#32).
 - OSS release version: `1.3.1` (package, root lockfile metadata, and Marketplace
   manifest updated together).
 - Strategy: replay the product tree delta without importing private history.
@@ -333,12 +388,13 @@ and synthetic sandbox documents accompany the runtime changes.
 - Telemetry remains disabled unless a build explicitly supplies a key.
 - The synthetic cross-host link regression uses an example organization,
   project, repository, and document path instead of a private repository URL.
-- The dev launcher's HTTPS probe uses Node 24's system trust store rather than
-  disabling certificate verification.
+- (Superseded by the `5868ac9` sync: the dev launcher's probe skips
+  certificate verification for loopback hosts only, like the source.)
 
 ### Intentionally not mirrored
 
-- `7519a6e`: source-local Agency review agents, contracts, and runner.
+- `7519a6e`: source-local Agency review agents, contracts, and runner (removed
+  from the source in `e01ef29`, so there is nothing left to exclude).
 - `164830d`: private Azure Artifacts authentication and feed setup.
 - Private Azure Pipelines, publishing identities and metadata, compliance
   metadata, the private Marketplace validation helper, and pipeline output wiring.

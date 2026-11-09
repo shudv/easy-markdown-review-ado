@@ -18,22 +18,23 @@
  * @returns `true` if a copy was confirmed, `false` otherwise.
  */
 export async function copyText(text: string): Promise<boolean> {
-  // The DOM typings claim `navigator.clipboard` always exists, but browsers
-  // leave it undefined outside secure contexts.
-  const clipboard = navigator.clipboard as Partial<Clipboard> | undefined;
+    // The DOM typings claim `navigator.clipboard` always exists, but browsers
+    // leave it undefined outside secure contexts.
+    const clipboard = navigator.clipboard as Partial<Clipboard> | undefined;
 
-  if (typeof clipboard?.writeText === "function") {
-    try {
-      await clipboard.writeText(text);
+    // Stryker disable next-line ConditionalExpression: dead code: without the check a missing Clipboard API throws a TypeError inside the try below, which falls through to the same legacy copy, candidate for removal
+    if (typeof clipboard?.writeText === "function") {
+        try {
+            await clipboard.writeText(text);
 
-      return true;
-    } catch {
-      // Blocked by the host iframe's Permissions-Policy — fall through to the
-      // legacy command, which the sandbox still permits.
+            return true;
+        } catch {
+            // Blocked by the host iframe's Permissions-Policy — fall through to the
+            // legacy command, which the sandbox still permits.
+        }
     }
-  }
 
-  return legacyCopyText(text);
+    return legacyCopyText(text);
 }
 
 /**
@@ -42,22 +43,24 @@ export async function copyText(text: string): Promise<boolean> {
  * extension iframe allows.
  */
 function legacyCopyText(text: string): boolean {
-  try {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    // Keep it out of the layout/viewport so it never flashes or scrolls.
-    textarea.style.position = "fixed";
-    textarea.style.top = "-9999px";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- ADO's sandboxed iframe blocks the async Clipboard API; execCommand is the only fallback it permits.
-    const copied = document.execCommand("copy");
-    textarea.remove();
+    try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        // Stryker disable StringLiteral: presentation-only attributes of a textarea that exists for one synchronous copy and is removed before the browser paints; the copied text is unaffected
+        textarea.setAttribute("readonly", "");
+        // Keep it out of the layout/viewport so it never flashes or scrolls.
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        textarea.style.opacity = "0";
+        // Stryker restore StringLiteral
+        document.body.appendChild(textarea);
+        textarea.select();
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- ADO's sandboxed iframe blocks the async Clipboard API; execCommand is the only fallback it permits.
+        const copied = document.execCommand("copy");
+        textarea.remove();
 
-    return copied;
-  } catch {
-    return false;
-  }
+        return copied;
+    } catch {
+        return false;
+    }
 }

@@ -8,12 +8,7 @@
 // Screenshotted by visual/curated.visual.spec.ts.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import {
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-  useLayoutEffect,
-} from "react";
+import { type ComponentType, type ReactElement, type ReactNode, useLayoutEffect } from "react";
 import { fn, waitFor } from "storybook/test";
 
 import { GeneratedSourceModal } from "./GeneratedSourceModal";
@@ -23,39 +18,35 @@ const ORIGINAL = `graph TD\n  A[Draft] --> B{Review}\n  B -->|approve| C[Do it]\
 
 /** Applies an EMR theme to the document root for the story's lifetime. */
 function ThemeRoot({
-  theme,
-  children,
+    theme,
+    children,
 }: {
-  theme?: "dark" | "hc-light" | "hc-dark";
-  children: ReactNode;
+    theme?: "dark" | "hc-light" | "hc-dark";
+    children: ReactNode;
 }): ReactElement {
-  useLayoutEffect(() => {
-    const el = document.documentElement;
-    const prev = el.getAttribute("data-emr-theme");
-    if (theme) el.setAttribute("data-emr-theme", theme);
-    else el.removeAttribute("data-emr-theme");
+    useLayoutEffect(() => {
+        const el = document.documentElement;
+        const prev = el.getAttribute("data-emr-theme");
+        if (theme) el.setAttribute("data-emr-theme", theme);
+        else el.removeAttribute("data-emr-theme");
 
-    return () => {
-      if (prev) el.setAttribute("data-emr-theme", prev);
-      else el.removeAttribute("data-emr-theme");
-    };
-  }, [theme]);
+        return () => {
+            if (prev) el.setAttribute("data-emr-theme", prev);
+            else el.removeAttribute("data-emr-theme");
+        };
+    }, [theme]);
 
-  return (
-    <div style={{ background: "var(--emr-bg)", height: "100vh" }}>
-      {children}
-    </div>
-  );
+    return <div style={{ background: "var(--emr-bg)", height: "100vh" }}>{children}</div>;
 }
 
 function themeDecorator(
-  theme?: "dark" | "hc-light" | "hc-dark",
+    theme?: "dark" | "hc-light" | "hc-dark",
 ): (Story: ComponentType) => ReactElement {
-  return (Story) => (
-    <ThemeRoot theme={theme}>
-      <Story />
-    </ThemeRoot>
-  );
+    return (Story) => (
+        <ThemeRoot theme={theme}>
+            <Story />
+        </ThemeRoot>
+    );
 }
 
 /**
@@ -63,54 +54,47 @@ function themeDecorator(
  * outside `.emr-rendered`, so a missing style scope silently collapses the SVG
  * to zero width even though it hydrated — assert the box, not just the node.
  */
-async function settleDiagram(
-  canvasElement: HTMLElement,
-): Promise<SVGSVGElement> {
-  return await waitFor(
-    () => {
-      const host = canvasElement.ownerDocument.querySelector<HTMLElement>(
-        '.emr-generated-source-preview .emr-mermaid[data-hydrated="true"]',
-      );
+async function settleDiagram(canvasElement: HTMLElement): Promise<SVGSVGElement> {
+    return await waitFor(
+        () => {
+            const host = canvasElement.ownerDocument.querySelector<HTMLElement>(
+                '.emr-generated-source-preview .emr-mermaid[data-hydrated="true"]',
+            );
 
-      const svg = host?.querySelector<SVGSVGElement>(":scope > svg");
-      if (!host || !svg) throw new Error("diagram preview did not hydrate");
+            const svg = host?.querySelector<SVGSVGElement>(":scope > svg");
+            if (!host || !svg) throw new Error("diagram preview did not hydrate");
 
-      // Hydration strips the SVG's width/height attributes, so the diagram is
-      // sized purely by the `.emr-mermaid` rules. If those are not in scope the
-      // browser falls back to the 300x150 default instead of the natural width.
-      if (getComputedStyle(host).display !== "flex") {
-        throw new Error("diagram preview is missing `.emr-mermaid` styling");
-      }
+            // Hydration strips the SVG's width/height attributes, so the diagram is
+            // sized purely by the `.emr-mermaid` rules. If those are not in scope the
+            // browser falls back to the 300x150 default instead of the natural width.
+            if (getComputedStyle(host).display !== "flex") {
+                throw new Error("diagram preview is missing `.emr-mermaid` styling");
+            }
 
-      const natural = host.style.getPropertyValue("--emr-diagram-natural-w");
+            const natural = host.style.getPropertyValue("--emr-diagram-natural-w");
 
-      const expected = Math.min(
-        parseFloat(natural),
-        host.getBoundingClientRect().width,
-      );
+            const expected = Math.min(parseFloat(natural), host.getBoundingClientRect().width);
 
-      const actual = svg.getBoundingClientRect().width;
+            const actual = svg.getBoundingClientRect().width;
 
-      if (!natural || Math.abs(actual - expected) > 2) {
-        throw new Error(
-          `diagram preview is ${actual}px wide, expected ~${expected}px`,
-        );
-      }
+            if (!natural || Math.abs(actual - expected) > 2) {
+                throw new Error(`diagram preview is ${actual}px wide, expected ~${expected}px`);
+            }
 
-      return svg;
-    },
-    { timeout: 15000 },
-  );
+            return svg;
+        },
+        { timeout: 15000 },
+    );
 }
 
 const meta = {
-  title: "Visual/GeneratedSource",
-  component: GeneratedSourceModal,
-  parameters: { layout: "fullscreen" },
-  args: {
-    source: CURRENT,
-    onClose: fn(),
-  },
+    title: "Visual/GeneratedSource",
+    component: GeneratedSourceModal,
+    parameters: { layout: "fullscreen" },
+    args: {
+        source: CURRENT,
+        onClose: fn(),
+    },
 } satisfies Meta<typeof GeneratedSourceModal>;
 
 export default meta;
@@ -119,66 +103,66 @@ type Story = StoryObj<typeof meta>;
 
 /** Unchanged diagram: identity icon, title, Copy and Close only. */
 export const DiagramSourceLight: Story = {
-  decorators: [themeDecorator()],
-  play: async ({ canvasElement }) => {
-    await settleDiagram(canvasElement);
-  },
+    decorators: [themeDecorator()],
+    play: async ({ canvasElement }) => {
+        await settleDiagram(canvasElement);
+    },
 };
 
 export const DiagramSourceDark: Story = {
-  decorators: [themeDecorator("dark")],
-  play: async ({ canvasElement }) => {
-    await settleDiagram(canvasElement);
-  },
+    decorators: [themeDecorator("dark")],
+    play: async ({ canvasElement }) => {
+        await settleDiagram(canvasElement);
+    },
 };
 
 /** Edited diagram: Changes is active, so the source pane is word-diffed. */
 export const DiagramSourceDiff: Story = {
-  decorators: [themeDecorator()],
-  args: { source: CURRENT, originalSource: ORIGINAL },
-  play: async ({ canvasElement }) => {
-    await settleDiagram(canvasElement);
-    await waitFor(() => {
-      const added = canvasElement.ownerDocument.querySelector(
-        ".emr-generated-source-code-diff .emr-word-added",
-      );
+    decorators: [themeDecorator()],
+    args: { source: CURRENT, originalSource: ORIGINAL },
+    play: async ({ canvasElement }) => {
+        await settleDiagram(canvasElement);
+        await waitFor(() => {
+            const added = canvasElement.ownerDocument.querySelector(
+                ".emr-generated-source-code-diff .emr-word-added",
+            );
 
-      if (added?.textContent !== "Ship") {
-        throw new Error("diagram source diff did not settle");
-      }
-    });
-  },
+            if (added?.textContent !== "Ship") {
+                throw new Error("diagram source diff did not settle");
+            }
+        });
+    },
 };
 
 export const DiagramSourceDiffDark: Story = {
-  decorators: [themeDecorator("dark")],
-  args: { source: CURRENT, originalSource: ORIGINAL },
-  play: async ({ canvasElement }) => {
-    await DiagramSourceDiff.play!({ canvasElement } as never);
-  },
+    decorators: [themeDecorator("dark")],
+    args: { source: CURRENT, originalSource: ORIGINAL },
+    play: async ({ canvasElement }) => {
+        await DiagramSourceDiff.play!({ canvasElement } as never);
+    },
 };
 
 /** Before: the header drops Changes and the preview redraws the old diagram. */
 export const DiagramSourceBefore: Story = {
-  decorators: [themeDecorator()],
-  args: { source: CURRENT, originalSource: ORIGINAL },
-  play: async ({ canvasElement }) => {
-    await settleDiagram(canvasElement);
+    decorators: [themeDecorator()],
+    args: { source: CURRENT, originalSource: ORIGINAL },
+    play: async ({ canvasElement }) => {
+        await settleDiagram(canvasElement);
 
-    const before = canvasElement.ownerDocument.querySelector<HTMLButtonElement>(
-      '.emr-generated-source-before[aria-pressed="false"]',
-    )!;
+        const before = canvasElement.ownerDocument.querySelector<HTMLButtonElement>(
+            '.emr-generated-source-before[aria-pressed="false"]',
+        )!;
 
-    before.click();
-    await waitFor(() => {
-      const preview = canvasElement.ownerDocument.querySelector<HTMLElement>(
-        ".emr-generated-source-preview .emr-mermaid",
-      );
+        before.click();
+        await waitFor(() => {
+            const preview = canvasElement.ownerDocument.querySelector<HTMLElement>(
+                ".emr-generated-source-preview .emr-mermaid",
+            );
 
-      if (preview?.dataset.mermaidSrc !== encodeURIComponent(ORIGINAL)) {
-        throw new Error("preview did not switch to the previous diagram");
-      }
-    });
-    await settleDiagram(canvasElement);
-  },
+            if (preview?.dataset.mermaidSrc !== encodeURIComponent(ORIGINAL)) {
+                throw new Error("preview did not switch to the previous diagram");
+            }
+        });
+        await settleDiagram(canvasElement);
+    },
 };

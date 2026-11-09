@@ -3,34 +3,26 @@
 // user. Every call is best-effort so a missing host service degrades quietly.
 
 import * as SDK from "azure-devops-extension-sdk";
-import {
-  CommonServiceIds,
-  type IHostNavigationService,
-} from "azure-devops-extension-api";
+import { CommonServiceIds, type IHostNavigationService } from "azure-devops-extension-api";
 
 import type { CommentAuthor } from "../types";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import type { DeepLinkTarget } from "../shell/deepLink";
 import {
-  assembleHubDeepLinkUrl,
-  initialsOf,
-  orgUrlFromReferrer,
-  type HubDocLocation,
+    assembleHubDeepLinkUrl,
+    initialsOf,
+    orgUrlFromReferrer,
+    type HubDocLocation,
 } from "./documentsHub.helpers";
 
 /**
  * The host's current query params. The SDK types them as always present, but
  * the host can resolve nothing, so treat a missing bag as empty.
  */
-async function queryParamsOf(
-  nav: IHostNavigationService,
-): Promise<Record<string, string>> {
-  const params = (await nav.getQueryParams()) as
-    | Record<string, string>
-    | null
-    | undefined;
+async function queryParamsOf(nav: IHostNavigationService): Promise<Record<string, string>> {
+    const params = (await nav.getQueryParams()) as Record<string, string> | null | undefined;
 
-  return params ?? {};
+    return params ?? {};
 }
 
 /**
@@ -38,15 +30,15 @@ async function queryParamsOf(
  * Best-effort: returns `{}` when the navigation service is unavailable.
  */
 export async function readRouteParams(): Promise<Record<string, string>> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
+    try {
+        const nav = await SDK.getService<IHostNavigationService>(
+            CommonServiceIds.HostNavigationService,
+        );
 
-    return await queryParamsOf(nav);
-  } catch {
-    return {};
-  }
+        return await queryParamsOf(nav);
+    } catch {
+        return {};
+    }
 }
 
 /**
@@ -55,15 +47,15 @@ export async function readRouteParams(): Promise<Record<string, string>> {
  * a missing navigation service is silently ignored (the click just no-ops).
  */
 export async function openInNewTab(url: string): Promise<void> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
+    try {
+        const nav = await SDK.getService<IHostNavigationService>(
+            CommonServiceIds.HostNavigationService,
+        );
 
-    nav.openNewWindow(url, "");
-  } catch {
-    /* navigation service unavailable — opening the file is best-effort */
-  }
+        nav.openNewWindow(url, "");
+    } catch {
+        /* navigation service unavailable — opening the file is best-effort */
+    }
 }
 
 /**
@@ -76,24 +68,19 @@ export async function openInNewTab(url: string): Promise<void> {
  * Best-effort when the navigation service is missing.
  */
 export async function setRouteQuery(
-  updates:
-    | Record<string, string>
-    | ((current: Record<string, string>) => Record<string, string>),
+    updates: Record<string, string> | ((current: Record<string, string>) => Record<string, string>),
 ): Promise<void> {
-  try {
-    const nav = await SDK.getService<IHostNavigationService>(
-      CommonServiceIds.HostNavigationService,
-    );
+    try {
+        const nav = await SDK.getService<IHostNavigationService>(
+            CommonServiceIds.HostNavigationService,
+        );
 
-    const next =
-      typeof updates === "function"
-        ? updates(await queryParamsOf(nav))
-        : updates;
+        const next = typeof updates === "function" ? updates(await queryParamsOf(nav)) : updates;
 
-    nav.setQueryParams(next);
-  } catch {
-    /* navigation service unavailable — route syncing is best-effort */
-  }
+        nav.setQueryParams(next);
+    } catch {
+        /* navigation service unavailable — route syncing is best-effort */
+    }
 }
 
 /**
@@ -103,18 +90,18 @@ export async function setRouteQuery(
  * the extension context can't be resolved (the copy then reports a failure).
  */
 export function buildHubDeepLinkUrl(
-  doc: HubDocLocation,
-  target: DeepLinkTarget,
+    doc: HubDocLocation,
+    target: DeepLinkTarget,
 ): string | undefined {
-  let ext: { publisherId: string; extensionId: string };
+    let ext: { publisherId: string; extensionId: string };
 
-  try {
-    ext = SDK.getExtensionContext();
-  } catch {
-    return undefined;
-  }
+    try {
+        ext = SDK.getExtensionContext();
+    } catch {
+        return undefined;
+    }
 
-  return assembleHubDeepLinkUrl(doc, ext, target);
+    return assembleHubDeepLinkUrl(doc, ext, target);
 }
 
 /**
@@ -123,26 +110,27 @@ export function buildHubDeepLinkUrl(
  * resolvable, leaving mentions non-navigable rather than pointing wrong.
  */
 export function resolveOrgUrl(): string {
-  try {
-    // `getHost()` is typed non-null but is undefined until SDK init completes.
-    const host = SDK.getHost() as SDK.IHostContext | undefined;
-    const name = host?.name;
-    if (name != null && name !== "") return `https://dev.azure.com/${name}`;
-  } catch {
-    // Falls through to the referrer-based heuristic.
-  }
+    try {
+        // `getHost()` is typed non-null but is undefined until SDK init completes.
+        const host = SDK.getHost() as SDK.IHostContext | undefined;
+        // Stryker disable next-line OptionalChaining: reading a name off a missing host throws into the catch below, which falls back to the referrer exactly as a missing name does
+        const name = host?.name;
+        if (name != null && name !== "") return `https://dev.azure.com/${name}`;
+    } catch {
+        // Falls through to the referrer-based heuristic.
+    }
 
-  return orgUrlFromReferrer(document.referrer);
+    return orgUrlFromReferrer(document.referrer);
 }
 
 /** The signed-in user as a comment author. */
 export function readCurrentUser(): CommentAuthor {
-  const u = SDK.getUser();
+    const u = SDK.getUser();
 
-  return {
-    id: u.id,
-    displayName: u.displayName,
-    initials: initialsOf(u.displayName),
-    avatarUrl: identityAvatarUrl(u),
-  };
+    return {
+        id: u.id,
+        displayName: u.displayName,
+        initials: initialsOf(u.displayName),
+        avatarUrl: identityAvatarUrl(u),
+    };
 }

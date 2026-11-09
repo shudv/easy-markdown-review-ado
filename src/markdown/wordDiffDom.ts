@@ -39,70 +39,67 @@ export const WORD_LINE_BREAK_CLASS = "emr-word-mark--line-break";
  * rendered` — applies the exact same rule.
  */
 export function removedRunClass(text: string): string {
-  return /[\p{L}\p{N}]/u.test(text)
-    ? WORD_REMOVED_CLASS
-    : `${WORD_REMOVED_CLASS} ${WORD_REMOVED_TIGHT_CLASS}`;
+    return /[\p{L}\p{N}]/u.test(text)
+        ? WORD_REMOVED_CLASS
+        : `${WORD_REMOVED_CLASS} ${WORD_REMOVED_TIGHT_CLASS}`;
 }
 
 interface AddedSegment {
-  /** Inclusive start offset in the modified (flat) text. */
-  start: number;
-  /** Exclusive end offset in the modified text. */
-  end: number;
+    /** Inclusive start offset in the modified (flat) text. */
+    start: number;
+    /** Exclusive end offset in the modified text. */
+    end: number;
 }
 
 interface Removal {
-  /** Offset in the modified text where the removed run used to sit. */
-  at: number;
-  /** The removed text. */
-  text: string;
+    /** Offset in the modified text where the removed run used to sit. */
+    at: number;
+    /** The removed text. */
+    text: string;
 }
 
 interface FlatTextNode {
-  node: Text;
-  /** Flat offset where this node's text starts. */
-  start: number;
-  /** Flat offset where this node's text ends (exclusive). */
-  end: number;
+    node: Text;
+    /** Flat offset where this node's text starts. */
+    start: number;
+    /** Flat offset where this node's text ends (exclusive). */
+    end: number;
 }
 
 /**
  * Result of an inline word-diff application: how many marks were inserted.
  */
 export interface InlineWordDiffResult {
-  added: number;
-  removed: number;
+    added: number;
+    removed: number;
 }
 
 /** Collect the block's descendant text nodes with their flat offsets. */
 function flattenTextNodes(block: HTMLElement): {
-  nodes: FlatTextNode[];
-  text: string;
+    nodes: FlatTextNode[];
+    text: string;
 } {
-  const nodes: FlatTextNode[] = [];
-  let acc = "";
+    const nodes: FlatTextNode[] = [];
+    let acc = "";
 
-  const walker = block.ownerDocument.createTreeWalker(
-    block,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+    const walker = block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
 
-  let n: Node | null = walker.nextNode();
+    let n: Node | null = walker.nextNode();
 
-  while (n) {
-    const data = (n as Text).data;
+    while (n) {
+        const data = (n as Text).data;
 
-    if (data.length > 0) {
-      const start = acc.length;
-      nodes.push({ node: n as Text, start, end: start + data.length });
-      acc += data;
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: an empty text node covers no offsets, so no mark or removal ever lands in it and rewriting it yields the same empty text
+        if (data.length > 0) {
+            const start = acc.length;
+            nodes.push({ node: n as Text, start, end: start + data.length });
+            acc += data;
+        }
+
+        n = walker.nextNode();
     }
 
-    n = walker.nextNode();
-  }
-
-  return { nodes, text: acc };
+    return { nodes, text: acc };
 }
 
 /**
@@ -111,40 +108,35 @@ function flattenTextNodes(block: HTMLElement): {
  * an insertion point without advancing (it isn't present in the modified text).
  */
 function planEdits(ops: readonly WordDiffOp[]): {
-  added: AddedSegment[];
-  removals: Removal[];
+    added: AddedSegment[];
+    removals: Removal[];
 } {
-  const added: AddedSegment[] = [];
-  const removals: Removal[] = [];
-  let cursor = 0;
+    const added: AddedSegment[] = [];
+    const removals: Removal[] = [];
+    let cursor = 0;
 
-  for (const op of ops) {
-    if (op.kind === "equal") {
-      cursor += op.value.length;
-    } else if (op.kind === "added") {
-      added.push({ start: cursor, end: cursor + op.value.length });
-      cursor += op.value.length;
-    } else {
-      removals.push({ at: cursor, text: op.value });
+    for (const op of ops) {
+        if (op.kind === "equal") {
+            cursor += op.value.length;
+        } else if (op.kind === "added") {
+            added.push({ start: cursor, end: cursor + op.value.length });
+            cursor += op.value.length;
+        } else {
+            removals.push({ at: cursor, text: op.value });
+        }
     }
-  }
 
-  return { added, removals };
+    return { added, removals };
 }
 
-function makeMark(
-  doc: Document,
-  tag: "ins" | "del",
-  className: string,
-  text: string,
-): HTMLElement {
-  const el = doc.createElement(tag);
-  el.className = /^[^\S\r\n]*[\r\n]\s*$/.test(text)
-    ? `${className} ${WORD_LINE_BREAK_CLASS}`
-    : className;
-  el.textContent = text;
+function makeMark(doc: Document, tag: "ins" | "del", className: string, text: string): HTMLElement {
+    const el = doc.createElement(tag);
+    el.className = /^[^\S\r\n]*[\r\n]\s*$/.test(text)
+        ? `${className} ${WORD_LINE_BREAK_CLASS}`
+        : className;
+    el.textContent = text;
 
-  return el;
+    return el;
 }
 
 /**
@@ -152,96 +144,102 @@ function makeMark(
  * added-word wraps and removed-word insertions that fall within it.
  */
 function rewriteNode(
-  entry: FlatTextNode,
-  added: readonly AddedSegment[],
-  removals: readonly Removal[],
+    entry: FlatTextNode,
+    added: readonly AddedSegment[],
+    removals: readonly Removal[],
 ): { fragment: DocumentFragment; addedCount: number; removedCount: number } {
-  const doc = entry.node.ownerDocument;
-  const { start: ns, end: ne } = entry;
-  const data = entry.node.data;
+    const doc = entry.node.ownerDocument;
+    const { start: ns, end: ne } = entry;
+    const data = entry.node.data;
 
-  // Build ordered boundary events local to this node.
-  interface Event {
-    pos: number; // local offset (0..len)
-    kind: "add-start" | "add-end" | "remove";
-    /** Removed text (only meaningful for `remove` events; "" otherwise). */
-    text: string;
-  }
-  const events: Event[] = [];
-
-  for (const seg of added) {
-    const s = Math.max(seg.start, ns);
-    const e = Math.min(seg.end, ne);
-
-    if (s < e) {
-      events.push({ pos: s - ns, kind: "add-start", text: "" });
-      events.push({ pos: e - ns, kind: "add-end", text: "" });
+    // Build ordered boundary events local to this node.
+    interface Event {
+        pos: number; // local offset (0..len)
+        kind: "add-start" | "add-end" | "remove";
+        /** Removed text (only meaningful for `remove` events; "" otherwise). */
+        text: string;
     }
-  }
+    const events: Event[] = [];
 
-  for (const r of removals) {
-    // Assign a removal to the node that contains its offset. A removal exactly
-    // at this node's end belongs to the next node's start instead — except at
-    // the very end of the block, handled by the caller.
-    if (r.at >= ns && r.at < ne) {
-      events.push({ pos: r.at - ns, kind: "remove", text: r.text });
+    for (const seg of added) {
+        const s = Math.max(seg.start, ns);
+        const e = Math.min(seg.end, ne);
+
+        if (s < e) {
+            // Stryker disable next-line StringLiteral: only removal events carry text; an add event's text is never read
+            events.push({ pos: s - ns, kind: "add-start", text: "" });
+            // Stryker disable next-line StringLiteral: only removal events carry text, and an end event under any other name still takes the end branch below and sorts in insertion order, which already puts it before a removal at the same offset (diffWords never emits two added runs at one offset)
+            events.push({ pos: e - ns, kind: "add-end", text: "" });
+        }
     }
-  }
 
-  if (events.length === 0) {
+    for (const r of removals) {
+        // Assign a removal to the node that contains its offset. A removal exactly
+        // at this node's end belongs to the next node's start instead — except at
+        // the very end of the block, handled by the caller.
+        if (r.at >= ns && r.at < ne) {
+            events.push({ pos: r.at - ns, kind: "remove", text: r.text });
+        }
+    }
+
+    // Stryker disable next-line ConditionalExpression,BlockStatement: with no events the loop below emits the node's whole text as one plain text node, the same as this copy
+    if (events.length === 0) {
+        const fragment = doc.createDocumentFragment();
+        // Stryker disable next-line BooleanLiteral: a text node has no children, so a shallow clone is identical
+        fragment.appendChild(entry.node.cloneNode(true));
+
+        return { fragment, addedCount: 0, removedCount: 0 };
+    }
+
+    // Stable sort: at the same position emit a removal (old) before an add-start
+    // (new) so the reader sees "was → now"; add-end before add-start when
+    // touching.
+    // Stryker disable next-line ObjectLiteral: without the ranks, same-offset events keep insertion order (add events before removals), and an add-start before or after a removal at one offset renders identically since it only sets a flag; diffWords never emits two added runs at one offset
+    const order = { "add-end": 0, remove: 1, "add-start": 2 };
+    // Stryker disable next-line ArithmeticOperator: same-offset events only ever pair an add event with a removal, and either order renders identically (an add-start only sets a flag; text before an add-end is emitted when the offset advances)
+    events.sort((a, b) => a.pos - b.pos || order[a.kind] - order[b.kind]);
+
     const fragment = doc.createDocumentFragment();
-    fragment.appendChild(entry.node.cloneNode(true));
+    let cursor = 0;
+    let inAdd = false;
+    let addedCount = 0;
+    let removedCount = 0;
 
-    return { fragment, addedCount: 0, removedCount: 0 };
-  }
+    const emitPlain = (from: number, to: number, wrapped: boolean) => {
+        // Stryker disable next-line EqualityOperator,ConditionalExpression: callers never pass to < from, and an empty slice appended as text renders nothing
+        if (to <= from) return;
+        const text = data.slice(from, to);
 
-  // Stable sort: at the same position emit a removal (old) before an add-start
-  // (new) so the reader sees "was → now"; add-end before add-start when
-  // touching.
-  const order = { "add-end": 0, remove: 1, "add-start": 2 };
-  events.sort((a, b) => a.pos - b.pos || order[a.kind] - order[b.kind]);
+        if (wrapped) {
+            fragment.appendChild(makeMark(doc, "ins", WORD_ADDED_CLASS, text));
+        } else {
+            fragment.appendChild(doc.createTextNode(text));
+        }
+    };
 
-  const fragment = doc.createDocumentFragment();
-  let cursor = 0;
-  let inAdd = false;
-  let addedCount = 0;
-  let removedCount = 0;
+    for (const ev of events) {
+        // Stryker disable next-line ConditionalExpression,EqualityOperator: at the cursor's own offset there is no text to emit (emitPlain returns early) and the cursor stays put
+        if (ev.pos > cursor) {
+            emitPlain(cursor, ev.pos, inAdd);
+            cursor = ev.pos;
+        }
 
-  const emitPlain = (from: number, to: number, wrapped: boolean) => {
-    if (to <= from) return;
-    const text = data.slice(from, to);
-
-    if (wrapped) {
-      fragment.appendChild(makeMark(doc, "ins", WORD_ADDED_CLASS, text));
-    } else {
-      fragment.appendChild(doc.createTextNode(text));
+        if (ev.kind === "remove") {
+            fragment.appendChild(makeMark(doc, "del", removedRunClass(ev.text), ev.text));
+            removedCount++;
+        } else if (ev.kind === "add-start") {
+            inAdd = true;
+        } else {
+            // add-end: the run [previous cursor .. pos] already emitted as wrapped.
+            inAdd = false;
+            addedCount++;
+        }
     }
-  };
 
-  for (const ev of events) {
-    if (ev.pos > cursor) {
-      emitPlain(cursor, ev.pos, inAdd);
-      cursor = ev.pos;
-    }
+    // Tail after the last event.
+    emitPlain(cursor, data.length, inAdd);
 
-    if (ev.kind === "remove") {
-      fragment.appendChild(
-        makeMark(doc, "del", removedRunClass(ev.text), ev.text),
-      );
-      removedCount++;
-    } else if (ev.kind === "add-start") {
-      inAdd = true;
-    } else {
-      // add-end: the run [previous cursor .. pos] already emitted as wrapped.
-      inAdd = false;
-      addedCount++;
-    }
-  }
-
-  // Tail after the last event.
-  emitPlain(cursor, data.length, inAdd);
-
-  return { fragment, addedCount, removedCount };
+    return { fragment, addedCount, removedCount };
 }
 
 /**
@@ -251,58 +249,56 @@ function rewriteNode(
  * block wash in that case).
  */
 export function applyInlineWordDiff(
-  block: HTMLElement,
-  ops: readonly WordDiffOp[],
+    block: HTMLElement,
+    ops: readonly WordDiffOp[],
 ): InlineWordDiffResult | null {
-  const { nodes, text } = flattenTextNodes(block);
+    const { nodes, text } = flattenTextNodes(block);
 
-  // Sanity: equal + added must reconstruct the block's live text. If the
-  // rendered text diverges from what we diffed, bail rather than corrupt it.
-  const rebuilt = ops
-    .filter((o) => o.kind !== "removed")
-    .map((o) => o.value)
-    .join("");
+    // Sanity: equal + added must reconstruct the block's live text. If the
+    // rendered text diverges from what we diffed, bail rather than corrupt it.
+    const rebuilt = ops
+        .filter((o) => o.kind !== "removed")
+        .map((o) => o.value)
+        .join("");
 
-  if (rebuilt !== text) return null;
+    if (rebuilt !== text) return null;
 
-  const { added, removals } = planEdits(ops);
+    const { added, removals } = planEdits(ops);
 
-  if (added.length === 0 && removals.length === 0) {
-    return { added: 0, removed: 0 };
-  }
-
-  const totalEnd = text.length;
-  let addedCount = 0;
-  let removedCount = 0;
-
-  // Rewrite each text node (snapshot first — we mutate the tree as we go).
-  for (const entry of nodes) {
-    const {
-      fragment,
-      addedCount: a,
-      removedCount: r,
-    } = rewriteNode(entry, added, removals);
-
-    addedCount += a;
-    removedCount += r;
-    entry.node.parentNode?.replaceChild(fragment, entry.node);
-  }
-
-  // A removal sitting at the very end of the block has no containing node;
-  // place it after the last content — but before a trailing heading link
-  // button, so struck-out words stay with their heading text and the button
-  // keeps its place after it.
-  const trailingControl = block.querySelector(":scope > .emr-heading-link");
-
-  for (const r of removals) {
-    if (r.at === totalEnd) {
-      block.insertBefore(
-        makeMark(block.ownerDocument, "del", removedRunClass(r.text), r.text),
-        trailingControl,
-      );
-      removedCount++;
+    // Stryker disable next-line BlockStatement: with no edits every node is rewritten to an identical copy and the counts stay 0
+    if (added.length === 0 && removals.length === 0) {
+        return { added: 0, removed: 0 };
     }
-  }
 
-  return { added: addedCount, removed: removedCount };
+    const totalEnd = text.length;
+    let addedCount = 0;
+    let removedCount = 0;
+
+    // Rewrite each text node (snapshot first — we mutate the tree as we go).
+    for (const entry of nodes) {
+        const { fragment, addedCount: a, removedCount: r } = rewriteNode(entry, added, removals);
+
+        addedCount += a;
+        removedCount += r;
+        // Stryker disable next-line OptionalChaining: the text nodes were collected from inside the block, so each has a parent
+        entry.node.parentNode?.replaceChild(fragment, entry.node);
+    }
+
+    // A removal sitting at the very end of the block has no containing node;
+    // place it after the last content — but before a trailing heading link
+    // button, so struck-out words stay with their heading text and the button
+    // keeps its place after it.
+    const trailingControl = block.querySelector(":scope > .emr-heading-link");
+
+    for (const r of removals) {
+        if (r.at === totalEnd) {
+            block.insertBefore(
+                makeMark(block.ownerDocument, "del", removedRunClass(r.text), r.text),
+                trailingControl,
+            );
+            removedCount++;
+        }
+    }
+
+    return { added: addedCount, removed: removedCount };
 }

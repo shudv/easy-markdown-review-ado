@@ -14,10 +14,19 @@
 import { get } from "node:https";
 import { E2E } from "./env";
 
-/** Fetch response headers for a dev-origin URL, tolerating the self-signed cert. */
+// The dev server's certificate is a self-signed localhost leaf (`npm run
+// setup:cert` installs it as a trusted root for browsers). Node's TLS won't use
+// a certificate without CA key usage as a trust anchor, so verification is
+// skipped for loopback hosts only, matching `ignoreHTTPSErrors` for this origin
+// in playwright.config.ts. Any other dev origin is verified normally.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Fetch response headers for a dev-origin URL. */
 function headOf(url: string): Promise<{ status: number; headers: Record<string, string> }> {
     return new Promise((resolve, reject) => {
-        const req = get(url, { rejectUnauthorized: false }, (res) => {
+        const rejectUnauthorized = !LOOPBACK_HOSTS.has(new URL(url).hostname);
+
+        const req = get(url, { rejectUnauthorized }, (res) => {
             // Drain so the socket can close; we only need status + headers.
             res.resume();
             const headers: Record<string, string> = {};

@@ -44,7 +44,9 @@ setup("authenticate against Azure DevOps", async ({ page }) => {
     // unauthenticated users to login.microsoftonline.com / login.live.com first.
     const onAdoHost = () => {
         try {
-            return new URL(page.url()).host.endsWith("dev.azure.com");
+            const host = new URL(page.url()).host;
+
+            return host === "dev.azure.com" || host.endsWith(".dev.azure.com");
         } catch {
             return false;
         }

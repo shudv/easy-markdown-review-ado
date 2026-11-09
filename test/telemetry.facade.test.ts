@@ -217,16 +217,23 @@ describe("telemetry facade", () => {
         expect(getTelemetryContext().appName).toBe("pr-tab");
     });
 
-    it("falls back to a non-crypto session id when randomUUID is unavailable", () => {
+    it.each([
+        {
+            name: "outside a secure context, where only getRandomValues exists",
+            crypto: { getRandomValues: (bytes: Uint8Array) => bytes.fill(0xab) },
+            expected: /^s-(ab){8}$/,
+        },
+        { name: "without Web Crypto at all", crypto: {}, expected: /^s-[0-9a-z]+$/ },
+    ])("still gives the session an id $name", ({ crypto, expected }) => {
         const original = globalThis.crypto;
         Object.defineProperty(globalThis, "crypto", {
-            value: {},
+            value: crypto,
             configurable: true,
         });
 
         try {
             initTelemetry({ appName: "pr-tab" });
-            expect(getTelemetryContext().sessionId).toMatch(/^s-/);
+            expect(getTelemetryContext().sessionId).toMatch(expected);
         } finally {
             Object.defineProperty(globalThis, "crypto", {
                 value: original,

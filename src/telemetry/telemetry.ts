@@ -41,12 +41,17 @@ let initialised = false;
 function makeSessionId(): string {
     const cryptoObj = globalThis.crypto as Crypto | undefined;
 
-    if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
-        return cryptoObj.randomUUID();
+    if (typeof cryptoObj?.randomUUID === "function") return cryptoObj.randomUUID();
+
+    // randomUUID needs a secure context; getRandomValues doesn't.
+    if (typeof cryptoObj?.getRandomValues === "function") {
+        const bytes = cryptoObj.getRandomValues(new Uint8Array(8));
+
+        return `s-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     }
 
-    // eslint-disable-next-line sonarjs/pseudo-random -- fallback only when crypto.randomUUID is unavailable; the id merely groups telemetry events and grants nothing.
-    return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    // No Web Crypto at all: the id only groups this load's events.
+    return `s-${Date.now().toString(36)}`;
 }
 
 function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {

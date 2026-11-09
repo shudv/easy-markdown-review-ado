@@ -38,7 +38,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { get } from "node:https";
 import os from "node:os";
 import path from "node:path";
-import { getCACertificates } from "node:tls";
 
 import { chromium } from "@playwright/test";
 
@@ -141,20 +140,19 @@ function profileDir(browser) {
 /** Probe the dev server; resolves `null` when nothing answers. */
 function probeDevServer(devOrigin) {
     return new Promise((resolve) => {
-        // Include the OS trust store where setup:cert installs the dev certificate.
-        const req = get(
-            `${devOrigin}/pr-tab/pr-tab.html`,
-            {
-                ca: [...getCACertificates("default"), ...getCACertificates("system")],
-            },
-            (res) => {
-                res.resume();
-                resolve({
-                    status: res.statusCode ?? 0,
-                    strict: Boolean(res.headers["content-security-policy"]),
-                });
-            },
-        );
+        // Reachability only; the BROWSER validates the certificate. The dev
+        // certificate is a self-signed localhost leaf that Node's TLS won't use
+        // as a trust anchor, so verification is skipped for loopback hosts only.
+        const { hostname } = new URL(devOrigin);
+        const rejectUnauthorized = !["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+
+        const req = get(`${devOrigin}/pr-tab/pr-tab.html`, { rejectUnauthorized }, (res) => {
+            res.resume();
+            resolve({
+                status: res.statusCode ?? 0,
+                strict: Boolean(res.headers["content-security-policy"]),
+            });
+        });
         req.on("error", () => resolve(null));
         req.setTimeout(5000, () => req.destroy());
     });

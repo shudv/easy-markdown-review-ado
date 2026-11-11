@@ -20,6 +20,7 @@ import type {
     ThreadStatus,
 } from "../types";
 import { identityAvatarUrl } from "./adoGitData.helpers";
+import { stripBackLink } from "./backLink";
 import {
     mergeMentionIdentities,
     normalizeIdentityGuid,
@@ -141,23 +142,39 @@ export function initialsOf(name: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a WIQL query for the top work items matching `query`. Pure-numeric
- * queries hit the id index; otherwise a title `CONTAINS` clause. Single
- * quotes are escaped so unusual titles don't break the literal (defensive
- * formatting — WIQL has no code execution; ADO validates further).
+ * How far back a work-item title search looks. An unbounded title `CONTAINS`
+ * across a large org timed out in production (VS402335, ADO's 30-second query
+ * limit); recently changed items are what people mention. An id finds any
+ * item regardless of age.
  */
-export function buildWorkItemWiql(query: string): string {
+export const WORK_ITEM_TITLE_LOOKBACK_DAYS = 180;
+
+/** Shortest title query worth a server search (a lone letter matches everything). */
+const WORK_ITEM_MIN_TITLE_QUERY = 2;
+
+/**
+ * Build a WIQL query for the top work items matching `query`, or `null` when
+ * the query is too short to search. Pure-numeric queries hit the id index;
+ * otherwise a title `CONTAINS` clause, scoped to this project and to items
+ * changed within {@link WORK_ITEM_TITLE_LOOKBACK_DAYS}. Single quotes are
+ * escaped so unusual titles don't break the literal (defensive formatting —
+ * WIQL has no code execution; ADO validates further).
+ */
+export function buildWorkItemWiql(query: string): string | null {
     const numeric = /^\d+$/.test(query) ? Number(query) : null;
 
     if (numeric !== null) {
         return `SELECT [System.Id] FROM WorkItems WHERE [System.Id] = ${numeric}`;
     }
 
+    if (query.length < WORK_ITEM_MIN_TITLE_QUERY) return null;
     const escaped = query.replace(/'/g, "''");
 
     return (
         "SELECT [System.Id] FROM WorkItems " +
-        `WHERE [System.Title] CONTAINS '${escaped}' ` +
+        "WHERE [System.TeamProject] = @project " +
+        `AND [System.ChangedDate] >= @Today - ${WORK_ITEM_TITLE_LOOKBACK_DAYS} ` +
+        `AND [System.Title] CONTAINS '${escaped}' ` +
         "ORDER BY [System.ChangedDate] DESC"
     );
 }
@@ -245,6 +262,8 @@ export const PROP_SCHEMA = "emrSchema";
  * network-free fast path; candidate for removal if we want the leanest change.
  */
 export const PROP_MENTIONS = "emrMentions";
+/** Thread property holding the key its back link uses (see `backLink.ts`). */
+export const PROP_LINK_KEY = "emrLinkKey";
 export const SCHEMA_VERSION = "1";
 
 /**
@@ -525,7 +544,8 @@ function adoCommentToLocal(c: AdoCommentWire): Comment {
     return {
         id,
         author: authorFromAdo(c.author),
-        bodyMarkdown: c.content ?? "",
+        // The "Open in Markdown Review ↗" link is for ADO's own UI only.
+        bodyMarkdown: stripBackLink(c.content ?? ""),
         createdAt: new Date(createdAt).toISOString(),
         updatedAt,
         reactions,
@@ -606,6 +626,8 @@ export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
     const extensionAnchor = readExtensionAnchor(t);
 
     if (extensionAnchor !== undefined) {
+        const linkKey = readProp(t.properties, PROP_LINK_KEY);
+
         return withMentions({
             id,
             filePath: t.threadContext?.filePath ?? "",
@@ -613,6 +635,7 @@ export function adoThreadToLocal(t: AdoThreadWire): CommentThread | null {
             status,
             comments,
             origin: "extension",
+            ...(typeof linkKey === "string" && linkKey !== "" ? { linkKey } : {}),
         });
     }
 

@@ -144,6 +144,7 @@ function DirNavRow(props: NavTreeItemProps & { node: DirNavNode }): ReactElement
 
     const page = node.page;
     const isLazy = node.lazy === true;
+    const isEmpty = node.empty === true;
     const isLoading = loadingDirs.has(node.path);
     // Lazy folders are always "collapsed" until the user triggers a fetch
     // via the chevron or label.
@@ -164,6 +165,7 @@ function DirNavRow(props: NavTreeItemProps & { node: DirNavNode }): ReactElement
     const rowClass = [
         "emr-docnav-item emr-docnav-dir",
         isLoading ? "is-loading" : "",
+        isEmpty ? "is-empty" : "",
         page ? "emr-docnav-page" : "",
         isActivePage ? "is-active" : "",
     ]
@@ -182,6 +184,7 @@ function DirNavRow(props: NavTreeItemProps & { node: DirNavNode }): ReactElement
             >
                 <DirTwistButton
                     twist={twist}
+                    isEmpty={isEmpty}
                     isCollapsed={isCollapsed}
                     isLoading={isLoading}
                     onToggle={onDirToggle}
@@ -197,6 +200,7 @@ function DirNavRow(props: NavTreeItemProps & { node: DirNavNode }): ReactElement
                 ) : (
                     <DirFolderLabel
                         node={node}
+                        isEmpty={isEmpty}
                         isLazy={isLazy}
                         isLoading={isLoading}
                         isCollapsed={isCollapsed}

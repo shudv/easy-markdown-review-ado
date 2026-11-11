@@ -38,7 +38,7 @@ import {
 } from "azure-devops-extension-api/Identities/IdentityService";
 
 import type { CommentThread, ReactionKind, ThreadStatus } from "../types";
-import { trackUserFacingError } from "../telemetry";
+import { trackUserFacingError, type HeldWriteKind } from "../telemetry";
 import type { CommentApi, CreatedThreadIds, NewThreadInput } from "../comments/api";
 import type {
     PullRequestSuggestion,
@@ -47,6 +47,7 @@ import type {
 } from "../comments/mentions";
 import { withRetry } from "./retry";
 import { withAdoSessionRefreshDetection } from "./adoAuthToken";
+import { newLinkKey, splitBackLink, withBackLink } from "./backLink";
 import { FailureStreaks } from "./failureStreaks";
 import { adoSession } from "./adoSession";
 import { readHostToken } from "./adoSessionSdk";
@@ -65,6 +66,7 @@ import {
     reactionClientMethod,
     toAdoStatusValue,
     PROP_ANCHOR,
+    PROP_LINK_KEY,
     PROP_MENTIONS,
     PROP_SCHEMA,
     SCHEMA_VERSION,
@@ -78,6 +80,9 @@ import { sharedGitClient, sharedWorkItemClient } from "./adoClients";
 // same place as the SDK-touching API surface.
 export { adoThreadToLocal };
 export type { FileDiffInfo };
+
+/** ADO numbers a thread's comments from 1: the root (first) comment is "1". */
+const ROOT_COMMENT_ID = "1";
 
 // ---------------------------------------------------------------------------
 // Status mapping
@@ -186,6 +191,13 @@ export interface AdoCommentApiContext {
     repositoryId: string;
     pullRequestId: number;
     project: string;
+    /**
+     * Where a thread started here can be read in Markdown Review, with that
+     * thread selected via its `linkKey` — appended as a "Open in Markdown Review ↗"
+     * line that only ADO's own comment UI shows (see `backLink.ts`). Omitted:
+     * no link.
+     */
+    backLinkFor?: (thread: { filePath: string; linkKey: string }) => string | undefined;
 }
 
 export class AdoCommentApi implements CommentApi {
@@ -204,8 +216,8 @@ export class AdoCommentApi implements CommentApi {
      * dead window rejects is held until the session is live again and retried
      * once (see `adoSession.holdWrite`), instead of failing outright.
      */
-    private async write<T>(label: string, op: () => Promise<T>): Promise<T> {
-        return adoSession.holdWrite(() =>
+    private async write<T>(kind: HeldWriteKind, label: string, op: () => Promise<T>): Promise<T> {
+        return adoSession.holdWrite(kind, () =>
             withRetry(() => withAdoSessionRefreshDetection(op, readHostToken), {
                 mode: "write",
                 label,
@@ -215,6 +227,8 @@ export class AdoCommentApi implements CommentApi {
 
     async createThread(input: NewThreadInput): Promise<CreatedThreadIds> {
         const { repositoryId, pullRequestId, project } = this.ctx;
+        const linkKey = newLinkKey();
+        const backLink = this.ctx.backLinkFor?.({ filePath: input.filePath, linkKey });
 
         const threadInput: Partial<GitPullRequestCommentThread> = {
             status: CommentThreadStatus.Active,
@@ -222,7 +236,7 @@ export class AdoCommentApi implements CommentApi {
                 input.filePath,
                 input.anchor,
             ) as GitPullRequestCommentThread["threadContext"],
-            comments: [buildRootComment(input.bodyMarkdown) as AdoComment],
+            comments: [buildRootComment(withBackLink(input.bodyMarkdown, backLink)) as AdoComment],
             properties: {
                 [PROP_SCHEMA]: {
                     $type: "System.String",
@@ -232,6 +246,9 @@ export class AdoCommentApi implements CommentApi {
                     $type: "System.String",
                     $value: JSON.stringify(input.anchor),
                 },
+                ...(backLink !== undefined
+                    ? { [PROP_LINK_KEY]: { $type: "System.String", $value: linkKey } }
+                    : {}),
                 // Persist the compose-time mention names so they resolve on load even
                 // where ADO can't (cross-tenant guests / personal-MSA orgs).
                 ...(input.mentions && input.mentions.length > 0
@@ -245,7 +262,7 @@ export class AdoCommentApi implements CommentApi {
             },
         };
 
-        const created: AdoThreadWire = await this.write("createThread", () =>
+        const created: AdoThreadWire = await this.write("create", "createThread", () =>
             this.client().createThread(
                 threadInput as GitPullRequestCommentThread,
                 repositoryId,
@@ -273,7 +290,7 @@ export class AdoCommentApi implements CommentApi {
     ): Promise<{ commentId: string; createdAt: string }> {
         const { repositoryId, pullRequestId, project } = this.ctx;
 
-        const created: AdoCommentWire = await this.write("addReply", () =>
+        const created: AdoCommentWire = await this.write("reply", "addReply", () =>
             this.client().createComment(
                 buildReplyComment(bodyMarkdown) as AdoComment,
                 repositoryId,
@@ -302,25 +319,48 @@ export class AdoCommentApi implements CommentApi {
     ): Promise<{ updatedAt: string }> {
         const { repositoryId, pullRequestId, project } = this.ctx;
 
-        const updated: AdoCommentWire = await this.write("editComment", () =>
-            this.client().updateComment(
-                { content: bodyMarkdown } as AdoComment,
+        const updated: AdoCommentWire = await this.write("edit", "editComment", async () => {
+            // The app shows the comment without its back link; keep the link on
+            // save. Read inside the write so it is held and retried with it.
+            const footer = await this.backLinkFooter(threadId, commentId);
+
+            return this.client().updateComment(
+                { content: bodyMarkdown + footer } as AdoComment,
                 repositoryId,
                 pullRequestId,
                 Number(threadId),
                 Number(commentId),
                 project,
-            ),
-        );
+            );
+        });
 
         return {
             updatedAt: new Date(updated.lastContentUpdatedDate ?? Date.now()).toISOString(),
         };
     }
 
+    /**
+     * The back-link line a thread's root comment carries in ADO, or "". Only
+     * root comments of threads started here have one.
+     */
+    private async backLinkFooter(threadId: string, commentId: string): Promise<string> {
+        if (commentId !== ROOT_COMMENT_ID) return "";
+        const { repositoryId, pullRequestId, project } = this.ctx;
+
+        const current: AdoCommentWire = await this.client().getComment(
+            repositoryId,
+            pullRequestId,
+            Number(threadId),
+            Number(commentId),
+            project,
+        );
+
+        return splitBackLink(current.content ?? "").footer;
+    }
+
     async deleteComment(threadId: string, commentId: string): Promise<void> {
         const { repositoryId, pullRequestId, project } = this.ctx;
-        await this.write("deleteComment", () =>
+        await this.write("delete", "deleteComment", () =>
             this.client().deleteComment(
                 repositoryId,
                 pullRequestId,
@@ -333,7 +373,7 @@ export class AdoCommentApi implements CommentApi {
 
     async setStatus(threadId: string, status: ThreadStatus): Promise<void> {
         const { repositoryId, pullRequestId, project } = this.ctx;
-        await this.write("setStatus", () =>
+        await this.write("status", "setStatus", () =>
             this.client().updateThread(
                 {
                     status: toAdoStatusValue(status),
@@ -356,7 +396,7 @@ export class AdoCommentApi implements CommentApi {
         const { repositoryId, pullRequestId, project } = this.ctx;
         // add → createLike, remove → deleteLike (locked by `reactionClientMethod`).
         const method = reactionClientMethod(add);
-        await this.write(method, () =>
+        await this.write("reaction", method, () =>
             this.client()[method](
                 repositoryId,
                 pullRequestId,
@@ -457,12 +497,12 @@ export class AdoCommentApi implements CommentApi {
 
     async searchWorkItems(query: string): Promise<WorkItemSuggestion[]> {
         const trimmed = query.trim();
-        if (trimmed.length === 0) return [];
+        const wiql = buildWorkItemWiql(trimmed);
+        if (wiql === null) return [];
         const { project } = this.ctx;
 
         return this.mentionSearch("work-item-search", "searchWorkItems", async () => {
             const client = sharedWorkItemClient();
-            const wiql = buildWorkItemWiql(trimmed);
 
             const result: Partial<WorkItemQueryResult> = await withRetry(
                 () => client.queryByWiql({ query: wiql }, project, undefined, undefined, 10),

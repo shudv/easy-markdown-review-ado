@@ -20,6 +20,8 @@
 // `exp` passes). It is framework-free (no SDK / DOM beyond `atob`) so the whole
 // classification is deterministically unit-testable.
 
+import { tagError } from "../telemetry/errorTags";
+import type { TelemetryProperties } from "../telemetry/types";
 import { extractStatus } from "./retryClassify";
 
 /** Expiry timestamps (ms epoch) decoded from an ADO extension access token. */
@@ -269,17 +271,52 @@ export async function detectSessionRefreshing(
     if (!isAdoAuthError(err)) return null;
     // Stryker disable next-line StringLiteral: an unreadable placeholder token classifies as unknown just like an empty one
     let token = "";
+    let grantRead: GrantRead = "ok";
 
     try {
         token = await getToken();
     } catch {
-        /* empty token → classifies as "unknown" (not lapsed) */
+        // The token stays empty, so it classifies as "unknown" (not lapsed).
+        grantRead = "failed";
     }
 
+    if (grantRead === "ok" && token === "") grantRead = "empty";
     const currentTimeMs = typeof nowMs === "function" ? nowMs() : nowMs;
-    const { state, recoverAtMs } = classifyAdoGrant(token, currentTimeMs);
+    const classification = classifyAdoGrant(token, currentTimeMs);
+    const { state, recoverAtMs } = classification;
 
-    return isAdoGrantLapsed(state) ? new SessionRefreshingError(state, recoverAtMs) : null;
+    const result = isAdoGrantLapsed(state) ? new SessionRefreshingError(state, recoverAtMs) : null;
+
+    // Whichever error is reported carries what the check found, so a 401 that
+    // was NOT the dead window shows why (fresh grant, unreadable token, …).
+    tagError(result ?? err, grantInspectionTags(classification, grantRead, currentTimeMs));
+
+    return result;
+}
+
+/** Whether the host token could be read for a grant check. */
+type GrantRead = "ok" | "failed" | "empty";
+
+/**
+ * Telemetry for one grant check: the state, whether the token was readable,
+ * and seconds until its AAD `exp` / `ado_exp` (negative = already passed).
+ * Never the token itself.
+ */
+function grantInspectionTags(
+    { state, expiry }: AdoGrantClassification,
+    grantRead: GrantRead,
+    nowMs: number,
+): TelemetryProperties {
+    return {
+        grantState: state,
+        grantRead,
+        ...(expiry.expMs === undefined
+            ? {}
+            : { secsUntilExp: Math.round((expiry.expMs - nowMs) / 1000) }),
+        ...(expiry.adoExpMs === undefined
+            ? {}
+            : { secsUntilAdoExp: Math.round((expiry.adoExpMs - nowMs) / 1000) }),
+    };
 }
 
 /**

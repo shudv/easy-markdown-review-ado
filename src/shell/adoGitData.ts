@@ -32,15 +32,20 @@ import {
 } from "./almSearch";
 import {
     buildPrUrl,
-    escapeSearchQuery,
+    contentSearchText,
+    fileNameSearchText,
+    markdownHitsToFiles,
     normalizePath,
     normalizeRepoFilter,
     repoSkeleton,
+    searchWords,
+    type CodeSearchHit,
     type GitScope,
 } from "./adoGitData.helpers";
 import { listMarkdownLevel, type ListedRepo } from "./adoFolderListing.helpers";
 import { docPrHistory, mostRecentRoutingPr, routingPrForDoc } from "./adoPrRouting.helpers";
 import { sharedGitClient } from "./adoClients";
+import { readThroughDocCache } from "./documentCache";
 
 // Re-export `buildPrUrl` (the one helper external callers reach for through
 // this module's SDK-touching API surface).
@@ -412,23 +417,44 @@ export async function fetchRepoFileContent(
     return new TextDecoder("utf-8").decode(new Uint8Array(ab));
 }
 
+/**
+ * The text of the git blob `objectId` (a file's content as listed — see
+ * `FileInfo.objectId`), resolving Git LFS pointers like the item reads do.
+ * Served from this browser's document cache when it holds the blob.
+ */
+export async function fetchBlobText(
+    repositoryId: string,
+    projectId: string,
+    objectId: string,
+): Promise<string> {
+    return readThroughDocCache(objectId, async () => {
+        const ab = await withRetry(
+            () =>
+                sharedGitClient().getBlobContent(
+                    repositoryId,
+                    objectId,
+                    projectId,
+                    false,
+                    undefined,
+                    true,
+                ),
+            { mode: "read", label: "fetchBlobText.getBlobContent" },
+        );
+
+        return new TextDecoder("utf-8").decode(new Uint8Array(ab));
+    });
+}
+
 // ---------------------------------------------------------------------------
-// Filename search (ALM Code Search)
+// Document search (ALM Code Search)
 //
 // ADO's Code Search REST endpoint (`almsearch.dev.azure.com/{org}/...`)
 // supports filename/content search across a project's repos. It isn't in the
 // `azure-devops-extension-api` package, so we go through our typed wrapper in
 // `./almSearch`. Requires the "Code Search" extension (`ms.vss-code-search`)
-// installed and read access to the repo. We use the `file:` operator with
-// wildcards + an `ext:md` filter; results are re-checked for `.md` client-side.
+// installed and read access to the repo. Results are re-checked for `.md`
+// client-side.
 // ---------------------------------------------------------------------------
-
-interface CodeSearchHit {
-    path?: string;
-    fileName?: string;
-    repository?: { name?: string };
-    project?: { name?: string };
-}
 
 // Module-scoped client cache. Holding one keeps the `source` / availability
 // state observable across calls.
@@ -463,9 +489,9 @@ function getOrCreateAlmClient(): AlmSearchClient | null {
 }
 
 /**
- * Search markdown filenames across a single repo. Queries under two chars
- * return `{ kind: "ok", files: [] }` without a network call (the DocNav falls
- * back to its local substring filter). Any failure returns
+ * Search a single repo's Markdown documents by file name and by text. Queries
+ * under two chars return `{ kind: "ok", files: [] }` without a network call
+ * (the DocNav falls back to its local filter). If both searches fail, returns
  * `{ kind: "unavailable", reason, message? }` so the DocNav can hint inline.
  */
 export async function searchRepoFiles(
@@ -489,15 +515,15 @@ export async function searchRepoFiles(
         };
     }
 
-    // `file:` + wildcards so "deploy" matches "deployment.md",
-    // "auto-deploy.md", "runbooks/deploy.md". `ext:md` cuts the result set to
-    // markdown server-side.
-    const searchText = `file:*${escapeSearchQuery(trimmed)}* ext:md`;
+    // Two searches in parallel: file names (one wildcard per word, so "deploy"
+    // matches "auto-deploy.md" and "release notes" matches "Release-Notes.md")
+    // and document text. Name matches are listed first. `ext:md` cuts both to
+    // Markdown server-side.
+    const words = searchWords(trimmed);
+    if (words.length === 0) return { kind: "ok", files: [] };
 
-    let json: CodeSearchResponse;
-
-    try {
-        json = await client.searchCode(
+    const search = (searchText: string): Promise<CodeSearchResponse> =>
+        client.searchCode(
             {
                 searchText,
                 $top: 25,
@@ -513,30 +539,24 @@ export async function searchRepoFiles(
             projectName,
             signal,
         );
-    } catch (err) {
-        console.warn("[documents-hub] code search failed:", err);
 
-        return outcomeFromError(err);
+    const [byName, byText] = await Promise.allSettled([
+        search(fileNameSearchText(words)),
+        search(contentSearchText(words)),
+    ]);
+
+    // One search failing still shows the other's results; both failing is
+    // reported like before.
+    if (byName.status === "rejected" && byText.status === "rejected") {
+        console.warn("[documents-hub] code search failed:", byName.reason);
+
+        return outcomeFromError(byName.reason);
     }
 
-    const out: FileInfo[] = [];
-    const seen = new Set<string>();
+    const hitsOf = (settled: PromiseSettledResult<CodeSearchResponse>): CodeSearchHit[] =>
+        settled.status === "fulfilled" ? ((settled.value.results ?? []) as CodeSearchHit[]) : [];
 
-    for (const hit of (json.results ?? []) as CodeSearchHit[]) {
-        const path = hit.path ?? "";
-        if (!path) continue;
-        if (!path.toLowerCase().endsWith(".md")) continue;
-        if (seen.has(path)) continue;
-        seen.add(path);
-        out.push({
-            path,
-            changeType: "modified",
-            linesAdded: 0,
-            linesDeleted: 0,
-        });
-    }
-
-    return { kind: "ok", files: out };
+    return { kind: "ok", files: markdownHitsToFiles([hitsOf(byName), hitsOf(byText)]) };
 }
 
 /**

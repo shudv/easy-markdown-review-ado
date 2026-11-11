@@ -30,6 +30,7 @@ import { markAppReady, trackUserFacingError } from "../telemetry";
 import {
     buildPrUrl,
     fetchRepoPage,
+    fetchBlobText,
     fetchRepoFileContent,
     findRoutingPrForDoc,
     listFolderMarkdown,
@@ -58,6 +59,7 @@ import {
     buildHubDeepLinkUrl,
     openInNewTab,
     readCurrentUser,
+    hubBackLinkFor,
     resolveOrgUrl,
     setRouteQuery,
 } from "./hubNavigation";
@@ -377,12 +379,15 @@ export function DocumentsHubApp(): ReactElement {
     // ---- per-repo loaders + commentApi factories ----
 
     const loadFileSource = useCallback(
-        async (repoId: string, path: string): Promise<string> => {
+        async (repoId: string, path: string, objectId?: string): Promise<string> => {
             if (!state) throw new Error("project not loaded yet");
             const repo = state.repos.find((r) => r.id === repoId);
             if (!repo) throw new Error(`Unknown repo ${repoId}`);
 
-            return fetchRepoFileContent(repo, state.projectId, path);
+            // The listed blob, exactly (it is cached under its id); else the tip.
+            return objectId !== undefined && objectId !== ""
+                ? fetchBlobText(repo.id, state.projectId, objectId)
+                : fetchRepoFileContent(repo, state.projectId, path);
         },
         [state],
     );
@@ -486,6 +491,7 @@ export function DocumentsHubApp(): ReactElement {
                 repositoryId: repoId,
                 pullRequestId: pr.pullRequestId,
                 project: state.projectId,
+                backLinkFor: hubBackLinkFor(state.projectName, repoId),
             });
 
             apiCacheRef.current.set(repoId, api);
@@ -552,6 +558,7 @@ export function DocumentsHubApp(): ReactElement {
                 repositoryId: repoId,
                 pullRequestId: pr.pullRequestId,
                 project: snapshot.projectId,
+                backLinkFor: hubBackLinkFor(snapshot.projectName, repoId),
             });
 
             pathApiCacheRef.current.set(key, api);

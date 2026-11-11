@@ -2,11 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { countDocumentFeatures, hasDocumentFeatures } from "../../markdown/documentFeatures";
 import { renderMarkdown } from "../../markdown/render";
-import { markAppReady, trackUserFacingError } from "../../telemetry";
+import { events, markAppReady, noteBootShape, track, trackUserFacingError } from "../../telemetry";
+import type { FileInfo } from "../../types";
 import { errorMessage, isItemNotFoundError } from "../shellHelpers";
 
 type MissingDocOutcome = "replaced" | "expected" | "unexpected";
+
+/** Report which rich features a freshly rendered document uses, if any. */
+function reportDocumentFeatures(html: string): void {
+    const features = countDocumentFeatures(html);
+    if (hasDocumentFeatures(features)) track(events.documentFeatures(features));
+}
+
+/** A ref always holding the latest `value`, for reads from async callbacks. */
+function useLatestRef<T>(value: T): { readonly current: T } {
+    const ref = useRef(value);
+
+    useEffect(() => {
+        ref.current = value;
+    }, [value]);
+
+    return ref;
+}
 
 /**
  * The selected document's Markdown source and rendered HTML (cached per file),
@@ -14,8 +33,14 @@ type MissingDocOutcome = "replaced" | "expected" | "unexpected";
  */
 export function useDocumentSource(
     selectedPath: string,
-    loadFileSource: (path: string) => Promise<string>,
+    loadFileSource: (path: string, objectId?: string) => Promise<string>,
+    files: readonly FileInfo[],
 ) {
+    // The listed files, read when a load starts: a file's blob id goes to the
+    // loader (see `ShellProps.loadFileSource`). A ref, so the list growing
+    // (folders expanding in the hub) doesn't restart a load.
+    const filesRef = useLatestRef(files);
+
     // Per-file rendered HTML cache.
     const [htmlByPath, setHtmlByPath] = useState<Record<string, string>>({});
 
@@ -58,13 +83,17 @@ export function useDocumentSource(
         let cancelled = false;
         setLoading(true);
         setError(null);
-        loadFileSource(selectedPath)
+        loadFileSource(
+            selectedPath,
+            filesRef.current.find((f) => f.path === selectedPath)?.objectId,
+        )
             .then(async (source) => {
                 // Stryker disable next-line ConditionalExpression: a cancelled load is re-checked after rendering (next check), so skipping this early exit only wastes a render
                 if (cancelled) return;
                 const html = await renderMarkdown(source);
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the effect cleanup can cancel during the awaited render; TS wrongly keeps the narrowing from the pre-await check.
                 if (cancelled) return;
+                reportDocumentFeatures(html);
                 setSourceByPath((prev) => ({
                     ...prev,
                     [selectedPath]: source,
@@ -99,9 +128,9 @@ export function useDocumentSource(
         return () => {
             cancelled = true;
         };
-    }, [selectedPath, loadFileSource, htmlByPath]);
+    }, [selectedPath, loadFileSource, htmlByPath, filesRef]);
 
-    useBootReadySignal(htmlByPath, selectedPath, error);
+    useBootReadySignal(htmlByPath, sourceByPath, selectedPath, error);
 
     return {
         htmlByPath,
@@ -128,6 +157,7 @@ export function useDocumentSource(
 // lands after commit/paint.
 function useBootReadySignal(
     htmlByPath: Record<string, string>,
+    sourceByPath: Record<string, string>,
     selectedPath: string,
     error: string | null,
 ): void {
@@ -142,11 +172,12 @@ function useBootReadySignal(
         if (hasRenderedHtmlForSelected) {
             // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
+            noteBootShape({ docChars: sourceByPath[selectedPath].length });
             markAppReady("content");
         } else if (error !== null) {
             // Stryker disable next-line BooleanLiteral: dead code: markAppReady is itself once-per-boot, so leaving the latch open reports nothing more; candidate for removal
             bootReadyFiredRef.current = true;
             markAppReady("error");
         }
-    }, [htmlByPath, selectedPath, error]);
+    }, [htmlByPath, sourceByPath, selectedPath, error]);
 }

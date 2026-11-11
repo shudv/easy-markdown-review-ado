@@ -49,12 +49,13 @@ import { useDocNavigation, usePendingDocScroll } from "./shell/useDocNavigation"
 import { useLinkCopy } from "./shell/useLinkCopy";
 import { useThreadSelection } from "./shell/useThreadSelection";
 import { useCommentWrites } from "./shell/useCommentWrites";
-import { useCommentPosting } from "./shell/useCommentPosting";
+import { useCommentPosting, useReplyAndResolve } from "./shell/useCommentPosting";
 import { useThreadMutations } from "./shell/useThreadMutations";
 import { useActiveArticle } from "./shell/useActiveArticle";
 import { useActiveDiff } from "./shell/useActiveDiff";
 import { useTooNarrow } from "./shell/useTooNarrow";
 import { useIterationControls } from "./shell/useIterationControls";
+import { trackMinimapUse } from "./shell/readerTelemetry";
 import { useRailModel } from "./shell/useRailModel";
 import { CommentApiScope } from "./shell/CommentApiScope";
 import { ShellNotices } from "./shell/ShellNotices";
@@ -175,7 +176,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
         loadFileSourceAt: props.loadFileSourceAt,
     });
 
-    const doc = useDocumentSource(selectedPath, loadFileSource);
+    const doc = useDocumentSource(selectedPath, loadFileSource, pr.files);
     const { htmlByPath, renderVersion } = doc;
 
     const [navigationActivities, setNavigationActivities] = useState<readonly ReaderActivity[]>([]);
@@ -294,6 +295,8 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
         threadsById: threadState.threadsById,
         setActiveThreadId,
     });
+
+    const onReply = useReplyAndResolve(posting.onReply, mutations.onResolve);
 
     // -------------------------------------------------------------------------
     // Refs for components that need to measure the article
@@ -450,7 +453,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
         <IdentityStoreContext.Provider value={identityStore}>
             <CommentApiScope
                 api={commentApi}
-                busy={writes.writesInFlight > 0}
+                busy={writes.composerWritesInFlight > 0}
                 registerEditor={writes.registerEditor}
             >
                 <div
@@ -490,6 +493,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                                 onSelectPath={nav.selectDocPath}
                                 threadCountsByPath={views.threadCountsByPath}
                                 unloadedFolders={props.unloadedFolders}
+                                emptyFolders={props.emptyFolders}
                                 onExpandFolder={props.onExpandFolder}
                                 folderOrders={props.folderOrders}
                                 wikiPages={props.documentsMode}
@@ -519,6 +523,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                                     scrollRef={bodyRef}
                                     version={renderVersion}
                                     showDiff={diff.showDiff}
+                                    onUse={trackMinimapUse}
                                 />
                             </div>
                             <ArticleColumn
@@ -581,7 +586,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                                 activeThreadId={activeThreadId}
                                 currentUser={currentUser}
                                 onSelectThread={selection.onSelectThread}
-                                onReply={posting.onReply}
+                                onReply={onReply}
                                 onResolve={mutations.onResolve}
                                 onReopen={mutations.onReopen}
                                 onMarkPending={mutations.onMarkPending}

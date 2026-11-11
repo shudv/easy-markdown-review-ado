@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDocumentSource } from "../src/shell/shell/useDocumentSource";
+import type { FileInfo } from "../src/types";
 import { __resetBootTimingForTests, markBootStart } from "../src/telemetry/bootTiming";
 import { deferred, HELD_SOURCE, heldRender, type Deferred } from "./shellHarness";
 import { recordTelemetryEachTest } from "./telemetrySink";
@@ -30,10 +31,11 @@ type MissingDocOutcome = ReturnType<DocumentSource["handleMissingDocRef"]["curre
 
 function Harness(props: {
     selectedPath: string;
-    loadFileSource: (path: string) => Promise<string>;
+    loadFileSource: (path: string, objectId?: string) => Promise<string>;
     missingDocOutcome: MissingDocOutcome;
+    files: FileInfo[];
 }): null {
-    const source = useDocumentSource(props.selectedPath, props.loadFileSource);
+    const source = useDocumentSource(props.selectedPath, props.loadFileSource, props.files);
     const missingDocRef = source.handleMissingDocRef;
     const { missingDocOutcome } = props;
     // Publish after commit, before the hook's passive load effect reads the ref.
@@ -47,11 +49,14 @@ function Harness(props: {
 
 async function show(
     selectedPath: string,
-    loadFileSource: (path: string) => Promise<string>,
+    loadFileSource: (path: string, objectId?: string) => Promise<string>,
     missingDocOutcome: MissingDocOutcome = "unexpected",
+    files: FileInfo[] = [],
 ): Promise<void> {
     await act(async () => {
-        root.render(createElement(Harness, { selectedPath, loadFileSource, missingDocOutcome }));
+        root.render(
+            createElement(Harness, { selectedPath, loadFileSource, missingDocOutcome, files }),
+        );
     });
     // Let the load and the Markdown render settle.
     await act(async () => {
@@ -164,6 +169,41 @@ describe("useDocumentSource", () => {
     });
 });
 
+describe("useDocumentSource: the listed blob", () => {
+    const listed = (path: string, objectId?: string): FileInfo => ({
+        path,
+        changeType: "modified",
+        linesAdded: 0,
+        linesDeleted: 0,
+        objectId,
+    });
+
+    it("passes a listed file's blob id to the loader", async () => {
+        const load = vi.fn(async () => "# A");
+        await show("docs/a.md", load, "unexpected", [listed("docs/a.md", "e5492baf")]);
+
+        expect(load).toHaveBeenCalledExactlyOnceWith("docs/a.md", "e5492baf");
+    });
+
+    it("passes no blob id for a file that isn't listed with one", async () => {
+        const load = vi.fn(async () => "# A");
+        await show("docs/a.md", load, "unexpected", [listed("docs/b.md", "e5492baf")]);
+
+        expect(load).toHaveBeenCalledExactlyOnceWith("docs/a.md", undefined);
+    });
+
+    it("doesn't reload a document when the file list grows", async () => {
+        const load = vi.fn(async () => "# A");
+        await show("docs/a.md", load, "unexpected", [listed("docs/a.md", "e5492baf")]);
+        await show("docs/a.md", load, "unexpected", [
+            listed("docs/a.md", "e5492baf"),
+            listed("docs/b.md"),
+        ]);
+
+        expect(load).toHaveBeenCalledOnce();
+    });
+});
+
 describe("useDocumentSource: opening a document", () => {
     it("shows the rendered document and keeps its source for anchoring comments", async () => {
         await show("docs/a.md", loadsOnly("docs/a.md", "# Alpha"));
@@ -222,6 +262,33 @@ describe("useDocumentSource: opening a document", () => {
     });
 });
 
+describe("useDocumentSource: reporting which rich features a document uses", () => {
+    const featureEvents = () =>
+        telemetry.current.events.filter((event) => event.name === "document.features");
+
+    it("counts the diagrams, equations, drawings and wiki macros a rendered document uses", async () => {
+        const source = [
+            "# A",
+            "[[_TOC_]]",
+            "```mermaid\ngraph TD; A-->B\n```",
+            "Energy $E=mc^2$",
+            "![flow](flow.excalidraw)",
+        ].join("\n\n");
+
+        await show("docs/a.md", loadsOnly("docs/a.md", source));
+        expect(featureEvents()).toEqual([
+            expect.objectContaining({
+                measurements: { diagrams: 1, equations: 1, drawings: 1, wikiMacros: 1 },
+            }),
+        ]);
+    });
+
+    it("reports nothing for a plain document", async () => {
+        await show("docs/a.md", loadsOnly("docs/a.md", "# Plain\n\nJust text."));
+        expect(featureEvents()).toEqual([]);
+    });
+});
+
 describe("useDocumentSource: reporting when the app has loaded", () => {
     beforeEach(() => {
         __resetBootTimingForTests();
@@ -240,6 +307,12 @@ describe("useDocumentSource: reporting when the app has loaded", () => {
     it("reports the app loaded once the first document has rendered", async () => {
         await show("docs/a.md", loadsOnly("docs/a.md", "# Alpha"));
         expect(readyReasons()).toEqual(["content"]);
+    });
+
+    it("reports the size of the first rendered document", async () => {
+        await show("docs/a.md", loadsOnly("docs/a.md", "# Alpha"));
+        const loaded = telemetry.current.events.find((event) => event.name === "app.loaded");
+        expect(loaded!.measurements).toMatchObject({ docChars: "# Alpha".length });
     });
 
     it.each([

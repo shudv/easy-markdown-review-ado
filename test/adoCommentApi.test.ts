@@ -25,8 +25,10 @@ import {
     prStatusLabel,
     readMentionsProp,
     readProp,
+    WORK_ITEM_TITLE_LOOKBACK_DAYS,
 } from "../src/shell/adoCommentApi.helpers";
 import { identityAvatarUrl } from "../src/shell/adoGitData.helpers";
+import { withBackLink } from "../src/shell/backLink";
 
 // Numeric runtime values of `PullRequestStatus` (kept in-test so we don't
 // need to import the SDK enum, which uses an AMD bundle Node can't load).
@@ -130,16 +132,26 @@ describe("file diff cache privacy", () => {
 });
 
 describe("buildWorkItemWiql", () => {
-    it("uses `id =` when the query is purely numeric", () => {
+    it("uses `id =` when the query is purely numeric, at any age and length", () => {
         expect(buildWorkItemWiql("42")).toBe(
             "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 42",
         );
+        expect(buildWorkItemWiql("7")).toBe(
+            "SELECT [System.Id] FROM WorkItems WHERE [System.Id] = 7",
+        );
     });
 
-    it("uses a `Title CONTAINS` clause for text queries", () => {
+    // Production: the unscoped title search timed out (VS402335) in large orgs.
+    it("searches recent titles in this project only", () => {
         expect(buildWorkItemWiql("login bug")).toBe(
-            "SELECT [System.Id] FROM WorkItems WHERE [System.Title] CONTAINS 'login bug' ORDER BY [System.ChangedDate] DESC",
+            "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project " +
+                `AND [System.ChangedDate] >= @Today - ${WORK_ITEM_TITLE_LOOKBACK_DAYS} ` +
+                "AND [System.Title] CONTAINS 'login bug' ORDER BY [System.ChangedDate] DESC",
         );
+    });
+
+    it.each(["", "a"])("skips a title query too short to search (%j)", (query) => {
+        expect(buildWorkItemWiql(query)).toBeNull();
     });
 
     it.each(["Sprint 12", "2fa login"])(
@@ -785,6 +797,17 @@ describe("adoThreadToLocal", () => {
         expect(local!.comments[0]!.bodyMarkdown).toBe("");
     });
 
+    it("shows a comment without the back link ADO's comment UI shows", () => {
+        const content = withBackLink(
+            "Can we split this?",
+            "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?path=a.md",
+        );
+
+        const local = conv(thread({ comments: [comment({ content })] }));
+
+        expect(local!.comments[0]!.bodyMarkdown).toBe("Can we split this?");
+    });
+
     it("returns null when the thread has no comments array at all", () => {
         expect(conv(thread({ comments: undefined }))).toBeNull();
     });
@@ -804,6 +827,24 @@ describe("adoThreadToLocal", () => {
         expect(local!.origin).toBe("extension");
         expect(local!.filePath).toBe("");
         expect(local!.anchor).toEqual(anchor);
+        expect(local).not.toHaveProperty("linkKey");
+    });
+
+    it.each([
+        { name: "a key", value: "k-0123456789ab", linkKey: "k-0123456789ab" },
+        { name: "a blank key", value: "", linkKey: undefined },
+    ])("bucket 1: reads $name its back link names the thread by", ({ value, linkKey }) => {
+        const local = conv(
+            thread({
+                properties: {
+                    emrSchema: { $value: "1" },
+                    emrAnchor: { $value: JSON.stringify({ exact: "w", prefix: "", suffix: "" }) },
+                    emrLinkKey: { $value: value },
+                },
+            }),
+        );
+
+        expect(local!.linkKey).toBe(linkKey);
     });
 
     it("surfaces lastContentUpdatedDate as the comment's updatedAt", () => {

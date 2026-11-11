@@ -476,6 +476,11 @@ export function buildPrTabDocUrl(
     return url.toString();
 }
 
+/** The first changed file's path, or `\"\"` when the PR changes none. */
+export function firstFilePath(files: ReadonlyArray<{ path: string }>): string {
+    return files.length > 0 ? files[0]!.path : "";
+}
+
 /** A repo path in the PR route's `path` form (`/docs/a.md`); `""` when blank. */
 export function prTabRoutePath(documentPath: string): string {
     const bare = documentPath.trim().replace(/^\/+/, "");
@@ -540,7 +545,7 @@ export function resolvePrTabRouteSeed(
 }
 
 /**
- * The page-visibility signals {@link withTimeout} needs. Injectable so tests
+ * The page-visibility signals {@link startVisibleTimer} needs. Injectable so tests
  * can drive hidden/visible transitions deterministically.
  */
 export interface VisibilityClock {
@@ -560,106 +565,57 @@ const DOCUMENT_VISIBILITY: VisibilityClock = {
     },
 };
 
-/** {@link withTimeout}'s budget ran out before the wrapped call settled. */
-export class TimeoutError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = "TimeoutError";
-        Object.setPrototypeOf(this, TimeoutError.prototype);
-    }
-}
-
 /**
- * Wrap a promise with a hard timeout so a misbehaving SDK/REST call surfaces
- * as a concrete error in the loading UI rather than spinning forever.
- *
- * Only VISIBLE time counts against the budget. Browsers throttle background
- * tabs (timers, the host↔iframe postMessage channel), so a PR opened in a
- * background tab used to burn the whole budget while hidden and greet the user
- * with a false "Timeout" error on arrival — 96% of production timeouts had a
- * hidden boot interval. The clock pauses while hidden and resumes on reveal.
+ * Run `onElapsed` once `ms` of VISIBLE time has passed. Browsers throttle
+ * background tabs (timers, the host↔iframe postMessage channel), so the clock
+ * pauses while the page is hidden and resumes on reveal. Returns a function
+ * that cancels the timer.
  */
-export function withTimeout<T>(
-    promise: Promise<T>,
+export function startVisibleTimer(
     ms: number,
-    label: string,
+    onElapsed: () => void,
     visibility: VisibilityClock = DOCUMENT_VISIBILITY,
-): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        let remainingMs = ms;
-        let visibleSinceMs: number | null = null;
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        let settled = false;
+): () => void {
+    let remainingMs = ms;
+    let visibleSinceMs: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-        const pause = (): void => {
-            // Stryker disable next-line ConditionalExpression: `clearTimeout(null)` is a no-op, so clearing unconditionally behaves the same
-            if (timer !== null) clearTimeout(timer);
-            timer = null;
+    const pause = (): void => {
+        // Stryker disable next-line ConditionalExpression: `clearTimeout(null)` is a no-op, so clearing unconditionally behaves the same
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
 
-            if (visibleSinceMs !== null) {
-                remainingMs -= Math.max(0, visibility.now() - visibleSinceMs);
-                visibleSinceMs = null;
-            }
-        };
+        if (visibleSinceMs !== null) {
+            remainingMs -= Math.max(0, visibility.now() - visibleSinceMs);
+            visibleSinceMs = null;
+        }
+    };
 
-        // `finish` / `resume` run only after `unsubscribe` is initialised: the
-        // timer and the visibility listener fire asynchronously, never inline.
-        const resume = (): void => {
-            if (timer !== null) return;
-            visibleSinceMs = visibility.now();
-            timer = setTimeout(
-                () => {
-                    finish();
-                    reject(new TimeoutError(`Timeout after ${ms}ms while waiting for ${label}`));
-                },
-                Math.max(0, remainingMs),
-            );
-        };
-
-        const unsubscribe = visibility.subscribeVisibilityChange(() => {
-            if (visibility.isVisible()) resume();
-            else pause();
-        });
-
-        const finish = (): void => {
-            // Stryker disable next-line BooleanLiteral: a call that settles after the timeout re-runs `finish` (a no-op once paused and unsubscribed) and resolves/rejects an already-rejected promise, which is ignored
-            settled = true;
-            pause();
-            unsubscribe();
-        };
-
-        if (visibility.isVisible()) resume();
-        promise.then(
-            (v) => {
-                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and resolving an already-rejected promise is ignored
-                if (settled) return;
-                finish();
-                resolve(v);
+    // `stop` / `resume` run only after `unsubscribe` is initialised: the timer
+    // and the visibility listener fire asynchronously, never inline.
+    const resume = (): void => {
+        if (timer !== null) return;
+        visibleSinceMs = visibility.now();
+        timer = setTimeout(
+            () => {
+                stop();
+                onElapsed();
             },
-            (err) => {
-                // Stryker disable next-line ConditionalExpression: after a timeout, finishing again is a no-op and rejecting an already-rejected promise is ignored
-                if (settled) return;
-                finish();
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejects the wrapped promise's reason unchanged; callers inspect ADO error fields like `status`
-                reject(err);
-            },
+            Math.max(0, remainingMs),
         );
+    };
+
+    const unsubscribe = visibility.subscribeVisibilityChange(() => {
+        if (visibility.isVisible()) resume();
+        else pause();
     });
-}
 
-/**
- * Run `attempt` (a {@link withTimeout}-bounded call) and, if it hangs past its
- * budget, issue it once more. A hung read is usually a stuck connection a
- * fresh request gets past: production saw the PR lookup time out at boot with
- * nothing else wrong, blocking the tab. Other failures are not retried here.
- * The hung request can't be cancelled, so this is for idempotent reads only.
- */
-export async function retryOnTimeout<T>(attempt: () => Promise<T>): Promise<T> {
-    try {
-        return await attempt();
-    } catch (err) {
-        if (!(err instanceof TimeoutError)) throw err;
+    const stop = (): void => {
+        pause();
+        unsubscribe();
+    };
 
-        return attempt();
-    }
+    if (visibility.isVisible()) resume();
+
+    return stop;
 }

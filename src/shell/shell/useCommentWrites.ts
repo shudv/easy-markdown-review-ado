@@ -6,17 +6,20 @@ import { trackUserFacingError } from "../../telemetry";
 import { friendlyWriteError } from "../shellHelpers";
 
 /**
- * Comment-write bookkeeping: the failed-write banner, the in-flight count that
- * disables every composer's submit, and the open inline editors.
+ * Comment-write bookkeeping: the failed-write banner, the in-flight count of
+ * composer writes that disables every composer's submit, and the open inline
+ * editors.
  */
 export function useCommentWrites() {
     // Transient error surfaced when a remote write fails. Cleared on next success.
     const [persistError, setPersistError] = useState<string | null>(null);
     // Wrap an async persistence call so errors surface in the rail banner. While
-    // any write is in flight every composer's submit is disabled (see
-    // ComposerBusyContext) — a write can be held for minutes through the ADO
-    // token dead window, and a second click must not post a duplicate.
-    const [writesInFlight, setWritesInFlight] = useState(0);
+    // a composer's write (post, reply, edit) is in flight every composer's
+    // submit is disabled (see ComposerBusyContext) — a write can be held for
+    // minutes through the ADO token dead window, and a second click must not
+    // post a duplicate. Other writes (likes, status, deletes) don't count:
+    // they can't duplicate a comment.
+    const [composerWritesInFlight, setComposerWritesInFlight] = useState(0);
     // Open inline comment editors (see editorRegistry.ts): their text isn't kept
     // as a draft, so the reconnect notice hides "Reload page" while any is open.
     const [openEditors, setOpenEditors] = useState(0);
@@ -28,8 +31,13 @@ export function useCommentWrites() {
     }, []);
 
     const persistWith = useCallback(
-        async <T>(label: string, op: () => Promise<T>): Promise<T | null> => {
-            setWritesInFlight((n) => n + 1);
+        async <T>(
+            label: string,
+            op: () => Promise<T>,
+            opts?: { fromComposer?: boolean },
+        ): Promise<T | null> => {
+            const fromComposer = opts?.fromComposer === true;
+            if (fromComposer) setComposerWritesInFlight((n) => n + 1);
 
             try {
                 const result = await op();
@@ -49,7 +57,7 @@ export function useCommentWrites() {
 
                 return null;
             } finally {
-                setWritesInFlight((n) => n - 1);
+                if (fromComposer) setComposerWritesInFlight((n) => n - 1);
             }
         },
         [],
@@ -58,7 +66,7 @@ export function useCommentWrites() {
     return {
         persistError,
         setPersistError,
-        writesInFlight,
+        composerWritesInFlight,
         openEditors,
         registerEditor,
         persistWith,

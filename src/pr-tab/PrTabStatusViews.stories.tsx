@@ -6,8 +6,10 @@ import {
     BootErrorView,
     DEAD_WINDOW_ISSUE_URL,
     NoMarkdownFilesView,
+    PrDocNavTitle,
     SessionRefreshingView,
 } from "./PrTabStatusViews";
+import { PrTabLoadingView } from "./useSlowBoot";
 
 // The PR tab's full-page states before a document renders: the ADO token dead
 // window at boot (three stages), a boot failure, and a PR with no Markdown.
@@ -107,14 +109,69 @@ export const BootError: StoryObj<typeof BootErrorView> = {
     },
 };
 
-/** A PR whose changes include no Markdown files. */
+const browseDocuments = fn();
+
+/**
+ * A PR whose changes include no Markdown files: rather than a dead end, the
+ * page offers the repository's documents.
+ */
 export const NoMarkdownFiles: StoryObj<typeof NoMarkdownFilesView> = {
-    render: () => <NoMarkdownFilesView />,
+    render: () => <NoMarkdownFilesView onBrowseDocuments={browseDocuments} />,
+    beforeEach: () => {
+        browseDocuments.mockClear();
+    },
     play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
         await expect(
-            within(canvasElement).getByRole("heading", {
-                name: "No Markdown files changed in this PR",
-            }),
+            canvas.getByRole("heading", { name: "No Markdown files changed in this PR" }),
         ).toBeVisible();
+        await userEvent.click(canvas.getByRole("button", { name: "Browse repository documents" }));
+        await expect(browseDocuments).toHaveBeenCalledOnce();
+    },
+};
+
+const openDocuments = fn();
+
+/** The PR tab's file-list title, with its way into the Documents hub. */
+export const DocNavTitleWithDocumentsLink: StoryObj<typeof PrDocNavTitle> = {
+    render: () => (
+        <div className="emr-docnav-header" style={{ width: 260 }}>
+            <PrDocNavTitle onOpenDocuments={openDocuments} />
+        </div>
+    ),
+    beforeEach: () => {
+        openDocuments.mockClear();
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByText("Documents")).toBeVisible();
+        await userEvent.click(
+            canvas.getByRole("button", {
+                name: "Open all of this repository's documents in a new tab",
+            }),
+        );
+        await expect(openDocuments).toHaveBeenCalledOnce();
+    },
+};
+
+const retrySlowBoot = fn();
+
+/**
+ * Azure DevOps is slow to return the pull request (production: one project's
+ * lookup took 30 s+): the loading page keeps waiting and offers a retry in the
+ * status bar instead of failing.
+ */
+export const SlowBoot: StoryObj<typeof PrTabLoadingView> = {
+    render: () => <PrTabLoadingView slow onRetry={retrySlowBoot} />,
+    beforeEach: () => {
+        retrySlowBoot.mockClear();
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("status")).toHaveTextContent(
+            "Azure DevOps is slow to respond — still loading…",
+        );
+        await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+        await expect(retrySlowBoot).toHaveBeenCalledOnce();
     },
 };

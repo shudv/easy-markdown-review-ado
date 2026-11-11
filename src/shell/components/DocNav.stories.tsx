@@ -175,15 +175,17 @@ function Harness(props: HarnessProps): ReactElement {
  */
 function LazyHostHarness(props: {
     initialSelected: string;
+    initialFiles?: FileInfo[];
     initialUnloaded: string[];
     expansions: Record<string, { files: FileInfo[]; folders: string[] }>;
     onExpand: (path: string) => void;
 }): ReactElement {
     const scrollRef = useRef<HTMLElement | null>(null);
     const articleWrapRef = useRef<HTMLDivElement | null>(null);
-    const [files, setFiles] = useState<FileInfo[]>([]);
+    const [files, setFiles] = useState<FileInfo[]>(props.initialFiles ?? []);
 
     const [unloadedFolders, setUnloadedFolders] = useState<string[]>(props.initialUnloaded);
+    const [emptyFolders, setEmptyFolders] = useState<string[]>([]);
 
     const onExpandFolder = useCallback(
         async (path: string) => {
@@ -198,6 +200,11 @@ function LazyHostHarness(props: {
             // A fresh array reference each time (matching the host) so the lazy-set
             // memo recomputes and the auto-expand effect re-runs.
             setUnloadedFolders((curr) => [...curr.filter((f) => f !== path), ...yielded.folders]);
+
+            // Like the hub: a folder with nothing to show is kept, as empty.
+            if (yielded.files.length === 0 && yielded.folders.length === 0) {
+                setEmptyFolders((curr) => [...curr, path]);
+            }
 
             return yielded;
         },
@@ -215,6 +222,7 @@ function LazyHostHarness(props: {
                 onSelectPath={() => {}}
                 threadCountsByPath={{}}
                 unloadedFolders={unloadedFolders}
+                emptyFolders={emptyFolders}
                 onExpandFolder={onExpandFolder}
             />
             <main ref={scrollRef as Ref<HTMLElement>} style={{ flex: 1 }}>
@@ -749,6 +757,44 @@ export const DeepLinkLazyAncestorFetchedOnce: Story = {
             expect(within(canvasElement).getByRole("button", { name: "Load folder" })).toBeTruthy(),
         );
         expect(guardExpandSpy).toHaveBeenCalledTimes(1);
+    },
+};
+
+const emptyExpandSpy = fn();
+
+/**
+ * A folder holding no Markdown and no subfolders (e.g. only drawings): once
+ * opened it stays in the tree, quiet and without a chevron, instead of
+ * collapsing back to "Load folder" to be opened (and fetched) again and again.
+ */
+export const EmptyFolderLosesChevron: Story = {
+    render: () => (
+        <LazyHostHarness
+            initialSelected="design.md"
+            initialFiles={[
+                { path: "design.md", changeType: "modified", linesAdded: 0, linesDeleted: 0 },
+            ]}
+            initialUnloaded={["diagrams"]}
+            expansions={{}}
+            onExpand={emptyExpandSpy}
+        />
+    ),
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByRole("button", { name: "Load folder" }));
+        await waitFor(() =>
+            expect(canvas.queryByRole("button", { name: "Load folder" })).toBeNull(),
+        );
+
+        const label = canvas.getByRole("button", { name: /diagrams/ });
+        await expect(label).toBeDisabled();
+        await expect(label).toHaveAttribute("title", "No Markdown documents in diagrams");
+        const row = label.closest(".emr-docnav-item")!;
+        await expect(row.classList).toContain("is-empty");
+        await expect(row.querySelector(".emr-docnav-twist")).toBeNull();
+
+        await userEvent.click(label);
+        await expect(emptyExpandSpy).toHaveBeenCalledOnce();
     },
 };
 

@@ -23,7 +23,7 @@ function refreshingMonitor(opts: {
 
     for (let i = 0; i < (opts.heldWrites ?? 0); i++) {
         void monitor
-            .holdWrite(() =>
+            .holdWrite("reply", () =>
                 Promise.reject(new SessionRefreshingError("refreshing", Date.now() + 5 * 60_000)),
             )
             .catch(() => {});

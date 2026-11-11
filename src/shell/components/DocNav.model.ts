@@ -64,6 +64,8 @@ export type NavNode =
           children: NavNode[];
           /** True when the folder is unenumerated; chevron triggers a fetch. */
           lazy?: boolean;
+          /** Listed, with nothing to show: no chevron, nothing to open. */
+          empty?: boolean;
           /** The folder's own wiki page (a page with subpages). */
           page?: { file: FileInfo; openComments: number };
           /**

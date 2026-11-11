@@ -78,6 +78,11 @@ interface DocNavProps {
      */
     unloadedFolders?: ReadonlyArray<string>;
     /**
+     * Folders already listed that hold no Markdown and no subfolders. Each stays
+     * in the tree as a plain row, with no chevron: there's nothing to open.
+     */
+    emptyFolders?: ReadonlyArray<string>;
+    /**
      * Lazy expansion callback, called once per folder the first time it opens.
      * The host merges the returned files + subfolders into the tree. Resolves
      * with `null` on error so the DocNav can show an inline retry.
@@ -152,6 +157,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         onSelectPath,
         threadCountsByPath,
         unloadedFolders,
+        emptyFolders,
         onExpandFolder,
         folderOrders,
         wikiPages,
@@ -551,7 +557,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
     // -----------------------------------------------------------------------
     const tree = useMemo<NavNode[]>(() => {
         const builtTree = buildFolderTree<FileInfo>(files, {
-            extraFolders: unloadedFolders,
+            extraFolders: [...(unloadedFolders ?? []), ...(emptyFolders ?? [])],
             folderOrders,
         });
 
@@ -572,6 +578,8 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
                     displayName: dirNode.displayName,
                     children: dirNode.children.map(toNavNode),
                     lazy: isLazy,
+                    // Listed, and nothing came of it (folders from files always have children).
+                    empty: dirNode.children.length === 0 && !isLazy,
                     ...(page
                         ? {
                               page: {
@@ -598,6 +606,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
     }, [
         files,
         unloadedFolders,
+        emptyFolders,
         folderOrders,
         wikiPages,
         lazyDirSet,

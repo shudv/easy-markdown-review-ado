@@ -143,8 +143,8 @@ async function boot(): Promise<void> {
         installDevFaults();
     }
 
-    // Start the boot-time clock before the SDK handshake so the measurement spans
-    // the whole path to first rendered Markdown, not just React startup.
+    // Mark when our code started, before the SDK handshake. Boot is timed from
+    // the host starting to load this iframe (see telemetry/bootTiming.ts).
     // `markAppReady()` fires later — from Shell when the first document renders,
     // or from HubApp for the empty landing state.
     markBootStart();

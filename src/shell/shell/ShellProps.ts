@@ -21,8 +21,13 @@ import type { DocLinkNavigation, RoutedPrInfo } from "./types";
 
 export interface ShellProps {
     pr: PrInfo;
-    /** Async loader for the Markdown source of a given file path. */
-    loadFileSource: (path: string) => Promise<string>;
+    /**
+     * Async loader for the Markdown source of a given file path. When the
+     * file was listed with its git blob (`FileInfo.objectId`), that id is
+     * passed too: read exactly that blob, since the result is cached under it
+     * in this browser (see `documentCache.ts`).
+     */
+    loadFileSource: (path: string, objectId?: string) => Promise<string>;
     diffsByFile: Record<string, DiffRange[]>;
     /** Complete base-commit Markdown by file, used for trustworthy old-block reconstruction. */
     originalSourcesByFile?: Record<string, string>;
@@ -50,6 +55,8 @@ export interface ShellProps {
     routedPrForPath?: (path: string) => RoutedPrInfo | null | undefined;
     /** Folder paths known to exist but not yet enumerated; forwarded to DocNav. */
     unloadedFolders?: ReadonlyArray<string>;
+    /** Folders already listed with nothing to show; forwarded to DocNav. */
+    emptyFolders?: ReadonlyArray<string>;
     /** Lazy folder expansion; undefined when every file is already loaded. */
     onExpandFolder?: (path: string) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
     /**

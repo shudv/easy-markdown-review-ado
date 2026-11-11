@@ -50,3 +50,22 @@ export function PlusIcon({ size = 16, className }: Readonly<IconProps>): ReactEl
         </svg>
     );
 }
+
+/** An arrow leaving a box: the action opens somewhere else (a new tab). */
+export function OpenElsewhereIcon({ size = 16, className }: Readonly<IconProps>): ReactElement {
+    return (
+        <svg
+            className={iconClassName(className)}
+            viewBox="0 0 24 24"
+            width={size}
+            height={size}
+            aria-hidden="true"
+            focusable="false"
+            {...strokeProps}
+        >
+            <path d="M14 4h6v6" />
+            <path d="M20 4 11 13" />
+            <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+        </svg>
+    );
+}

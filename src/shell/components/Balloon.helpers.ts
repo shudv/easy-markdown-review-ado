@@ -7,6 +7,11 @@ import type { ThreadStatus } from "../../types";
 /** Status a balloon displays; orphaned cards override the thread status. */
 export type BalloonDisplayStatus = ThreadStatus | "orphaned";
 
+/** Options for posting a reply: `resolve` also resolves the thread once it's saved. */
+export interface ReplyOptions {
+    resolve?: boolean;
+}
+
 const STATUS_LABELS: Record<BalloonDisplayStatus, string> = {
     active: "Active",
     resolved: "Resolved",

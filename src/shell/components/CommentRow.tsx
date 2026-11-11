@@ -1,9 +1,11 @@
 // A single comment inside a Balloon: avatar, name + date, and hover tools
-// (like toggle + ⋯ menu). The ⋯ popover carries per-comment actions; the first
-// comment also carries thread-level actions (Resolve / Delete thread). All
-// mutations are delegated upward so the reducer stays the source of truth.
+// (⋯ menu, one-click Resolve / Reopen on the first comment, like toggle). The ⋯
+// popover carries per-comment actions; the first comment also carries
+// thread-level actions (Resolve / Delete thread). All mutations are delegated
+// upward so the reducer stays the source of truth.
 
 import type { ReactElement } from "react";
+import type { ResolveVia } from "../../telemetry";
 import type { Comment, CommentAuthor, ReactionKind, ThreadStatus } from "../../types";
 import { isResolvedLike } from "../../types";
 import { Avatar } from "./Avatar";
@@ -15,6 +17,7 @@ import {
     CommentLikeButton,
     CommentLikePill,
     CommentMenuToggle,
+    CommentResolveToggle,
     CommentRowMenu,
     CommentRowMeta,
 } from "./CommentRow.parts";
@@ -40,7 +43,7 @@ interface CommentRowProps {
      */
     onEdit: (threadId: string, commentId: string, newBody: string) => void | Promise<boolean>;
     onDelete: (threadId: string, commentId: string) => void;
-    onResolveThread: (threadId: string) => void;
+    onResolveThread: (threadId: string, via?: ResolveVia) => void;
     onReopenThread: (threadId: string) => void;
     onMarkPendingThread: (threadId: string) => void;
     onCloseThread: (threadId: string) => void;
@@ -146,8 +149,15 @@ export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
                                         onToggle={menu.toggle}
                                     />
                                 ) : null}
-                                {canReact && likeCount === 0 ? (
-                                    <CommentLikeButton onLike={toggleLike} />
+                                {isFirst ? (
+                                    <CommentResolveToggle
+                                        resolved={isTerminal}
+                                        onToggle={() =>
+                                            isTerminal
+                                                ? onReopenThread(threadId)
+                                                : onResolveThread(threadId, "button")
+                                        }
+                                    />
                                 ) : null}
                             </div>
 
@@ -159,6 +169,9 @@ export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
                                     canReact={canReact}
                                     onLike={toggleLike}
                                 />
+                            ) : null}
+                            {canReact && likeCount === 0 ? (
+                                <CommentLikeButton onLike={toggleLike} />
                             ) : null}
 
                             {menu.menuOpen ? (

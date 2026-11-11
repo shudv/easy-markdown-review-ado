@@ -61,16 +61,29 @@ export function ReaderActivityIndicator({
     const title =
         activeCount > 1 ? `${activity.label} (${activeCount} operations running)` : activity.label;
 
+    const { action } = activity;
+
     return (
-        <div
-            className="emr-statusbar-activity"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            title={title}
-        >
-            <span className="emr-statusbar-spinner" aria-hidden="true" />
-            <span className="emr-statusbar-activity-label">{activity.label}</span>
+        <div className="emr-statusbar-activity">
+            <span
+                className="emr-statusbar-activity-message"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                title={title}
+            >
+                <span className="emr-statusbar-spinner" aria-hidden="true" />
+                <span className="emr-statusbar-activity-label">{activity.label}</span>
+            </span>
+            {action ? (
+                <button
+                    type="button"
+                    className="emr-statusbar-activity-action"
+                    onClick={() => action.onClick()}
+                >
+                    {action.label}
+                </button>
+            ) : null}
         </div>
     );
 }

@@ -13,8 +13,11 @@ export interface DocumentsAppProps {
     repos: DocRepo[];
     /** Initial repo id; defaults to the first repo. */
     initialRepoId?: string;
-    /** Resolve a markdown source by (repoId, path). */
-    loadFileSource: (repoId: string, path: string) => Promise<string>;
+    /**
+     * Resolve a markdown source by (repoId, path) — by its git blob when
+     * objectId is given (see `ShellProps.loadFileSource`).
+     */
+    loadFileSource: (repoId: string, path: string, objectId?: string) => Promise<string>;
     /** Resolve an image referenced from a repository document. */
     resolveDocumentImage?: (
         repoId: string,

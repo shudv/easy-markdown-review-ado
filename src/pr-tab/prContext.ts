@@ -24,9 +24,7 @@ import {
     pickPullRequestId,
     rangeChangeTypes,
     reviewIterationStops as mapReviewIterationStops,
-    retryOnTimeout,
     selectDiffCommits,
-    withTimeout,
     type IterationParams,
 } from "./prTabApp.helpers";
 import { changedMarkdownFiles, contentCommitForPath, type PrContext } from "./prContext.helpers";
@@ -46,12 +44,25 @@ interface PrRequestScope {
     log: BootLog;
 }
 
-export async function resolvePrContext(log: BootLog): Promise<PrContext> {
-    const { config, pullRequestId } = readPullRequestId(log);
+/** Which PR the tab shows: its id (from the tab's configuration) and project. */
+export interface PrTarget {
+    config: Record<string, unknown> | undefined;
+    pullRequestId: number;
+    project: { id: string; name: string };
+}
 
+/** The PR this tab shows — known before any of its details are loaded. */
+export async function resolvePrTarget(log: BootLog): Promise<PrTarget> {
+    const { config, pullRequestId } = readPullRequestId(log);
     const project = await resolveCurrentProject();
     log("got project", project);
 
+    return { config, pullRequestId, project };
+}
+
+/** The PR's details from ADO: the PR, its updates and its changed files. */
+export async function resolvePrContext(target: PrTarget, log: BootLog): Promise<PrContext> {
+    const { config, pullRequestId, project } = target;
     const gitClient = sharedGitClient();
     const projectId = project.id;
 
@@ -145,30 +156,15 @@ function requestPullRequest(
     pullRequestId: number,
     projectId: string,
 ): Promise<GitPullRequest> {
-    // Timeout wraps the WHOLE retry sequence (not each attempt). `withTimeout`
-    // can't cancel the underlying SDK request, so a per-attempt timeout would let
-    // a timed-out-but-still-in-flight call stack up with its retries. Bounding
-    // the entire `withRetry` instead means retries only fire on SETTLED
-    // rejections (a real 4xx/5xx — no dangling request), while a genuinely hung
-    // call fails after 15s. That hung call is then re-issued once
-    // (`retryOnTimeout`): one dangling read is a fair price for not blocking the
-    // tab on a stuck connection.
-    return retryOnTimeout(() =>
-        withTimeout(
-            withRetry(
-                () =>
-                    withAdoSessionRefreshDetection(
-                        () => gitClient.getPullRequestById(pullRequestId, projectId),
-                        readHostToken,
-                    ),
-                {
-                    mode: "read",
-                    label: "getPullRequestById",
-                },
+    // A lookup that is just slow keeps waiting: the reader shows "Still
+    // loading… Try again" after a while (see `useSlowBoot`).
+    return withRetry(
+        () =>
+            withAdoSessionRefreshDetection(
+                () => gitClient.getPullRequestById(pullRequestId, projectId),
+                readHostToken,
             ),
-            15_000,
-            `getPullRequestById(${pullRequestId}, ${projectId})`,
-        ),
+        { mode: "read", label: "getPullRequestById" },
     );
 }
 

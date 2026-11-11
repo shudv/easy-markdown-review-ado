@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+    ReaderActivityIndicator,
     readerActivityKey,
     selectReaderActivity,
     useDelayedReaderActivity,
@@ -105,6 +106,51 @@ describe("buildReaderActivities", () => {
         expect(buildReaderActivities({ ...settled, ...state })).toEqual(expected);
     });
 });
+describe("ReaderActivityIndicator", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+        true;
+
+    function show(activity: ReaderActivity, activeCount?: number): HTMLElement {
+        const host = document.createElement("div");
+        const root = createRoot(host);
+        act(() => {
+            root.render(createElement(ReaderActivityIndicator, { activity, activeCount }));
+        });
+        onCleanup.push(() => act(() => root.unmount()));
+
+        return host;
+    }
+
+    const onCleanup: Array<() => void> = [];
+
+    afterEach(() => {
+        while (onCleanup.length > 0) onCleanup.pop()!();
+    });
+
+    it("shows work in progress with a spinner and no action", () => {
+        const host = show({ id: "doc", label: "Loading document…", priority: 100 }, 2);
+        expect(host.querySelector(".emr-statusbar-spinner")).toBeTruthy();
+        expect(host.querySelector("button")).toBeNull();
+        expect(host.querySelector('[role="status"]')?.getAttribute("title")).toBe(
+            "Loading document… (2 operations running)",
+        );
+    });
+
+    it("offers the activity's action beside its message", () => {
+        const onClick = vi.fn();
+
+        const host = show({
+            id: "boot-slow",
+            label: "Still loading…",
+            priority: 100,
+            action: { label: "Try again", onClick },
+        });
+
+        act(() => host.querySelector("button")!.click());
+        expect(onClick).toHaveBeenCalledOnce();
+    });
+});
+
 describe("useDelayedReaderActivity", () => {
     (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
         true;

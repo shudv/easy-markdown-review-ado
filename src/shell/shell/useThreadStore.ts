@@ -22,6 +22,7 @@ import { collectUserMentionIds } from "../../comments/mentions";
 import { useThreadSync } from "../../comments/useThreadSync";
 import { events, track, trackUserFacingError } from "../../telemetry";
 import { adoSession } from "../adoSession";
+import { reportThreadSnapshot } from "./threadSnapshot";
 
 interface ThreadStoreOptions {
     initialThreads: CommentThread[];
@@ -65,10 +66,16 @@ export function useThreadStore(opts: ThreadStoreOptions) {
     // `?comment=` deep link tell "not loaded yet" from "doesn't exist". A
     // per-document snapshot can't: it only covers whichever file was open.
     const [prThreadSnapshots, setPrThreadSnapshots] = useState(0);
+    const snapshotReportedRef = useRef(false);
 
     const onPrThreads = useCallback((threads: CommentThread[]) => {
         dispatch({ type: "MERGE_REMOTE_THREADS", threads });
         setPrThreadSnapshots((n) => n + 1);
+
+        if (!snapshotReportedRef.current) {
+            snapshotReportedRef.current = true;
+            reportThreadSnapshot(threads);
+        }
     }, []);
 
     const noopFetch = useCallback(

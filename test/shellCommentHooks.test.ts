@@ -10,10 +10,10 @@ import type { CommentAuthor, CommentThread, TextQuoteAnchor } from "../src/types
 import type { DraftTarget } from "../src/shell/draftStorage";
 import type { DraftPersistence } from "../src/shell/useDraftPersistence";
 import type { PersistWith } from "../src/shell/shell/useCommentWrites";
-import { useCommentPosting } from "../src/shell/shell/useCommentPosting";
+import { useCommentPosting, useReplyAndResolve } from "../src/shell/shell/useCommentPosting";
 import { useCommentWrites } from "../src/shell/shell/useCommentWrites";
 import { useDraftController } from "../src/shell/shell/useDraftController";
-import { useThreadMutations } from "../src/shell/shell/useThreadMutations";
+import { threadAgeMs, useThreadMutations } from "../src/shell/shell/useThreadMutations";
 import { useThreadSelection } from "../src/shell/shell/useThreadSelection";
 import {
     mountTracked,
@@ -104,6 +104,42 @@ describe("useCommentPosting", () => {
 });
 
 type PostingOptions = ReturnType<typeof postingOptions>;
+
+describe("useReplyAndResolve", () => {
+    async function mountReply(replySaves: boolean) {
+        const resolve = vi.fn();
+
+        const postReply = vi.fn((_tid: string, _body: string, afterPosted?: () => void) => {
+            if (replySaves) afterPosted?.();
+        });
+
+        const hook = await mountTracked(
+            (p: { post: typeof postReply }) => useReplyAndResolve(p.post, resolve),
+            { post: postReply },
+        );
+
+        return { hook, postReply, resolve };
+    }
+
+    it("posts a plain reply without resolving", async () => {
+        const { hook, postReply, resolve } = await mountReply(true);
+        await userAction(() => hook.current("t1", "Thanks"));
+        expect(postReply).toHaveBeenCalledWith("t1", "Thanks", undefined);
+        expect(resolve).not.toHaveBeenCalled();
+    });
+
+    it("resolves the thread once the reply is saved", async () => {
+        const { hook, resolve } = await mountReply(true);
+        await userAction(() => hook.current("t1", "Fixed", { resolve: true }));
+        expect(resolve).toHaveBeenCalledWith("t1", "reply");
+    });
+
+    it("leaves the thread open when the reply doesn't save", async () => {
+        const { hook, resolve } = await mountReply(false);
+        await userAction(() => hook.current("t1", "Fixed", { resolve: true }));
+        expect(resolve).not.toHaveBeenCalled();
+    });
+});
 
 /** Comment posting wired to the shell's real write bookkeeping (error banner). */
 function usePostingWithBanner(opts: PostingOptions) {
@@ -211,8 +247,20 @@ describe("useCommentPosting: posting comments and replies", () => {
         expect(telemetry.current.events).toEqual([
             expect.objectContaining({
                 name: "comment.replied",
-                measurements: { bodyLength: 6 },
+                measurements: { bodyLength: 6, threadOrdinal: 1 },
             }),
+        ]);
+    });
+
+    // The duplicate-post alarm matches replies on the same thread only, so two
+    // "Done" replies on different threads stop looking like a double post.
+    it("numbers the threads replied to in this load, never naming them", async () => {
+        const { hook } = await mountPosting(true);
+        await userAction(() => hook.current.onReply("t1", "Done"));
+        await userAction(() => hook.current.onReply("t2", "Done"));
+        await userAction(() => hook.current.onReply("t1", "Done"));
+        expect(telemetry.current.events.map((e) => e.measurements?.threadOrdinal)).toEqual([
+            1, 2, 1,
         ]);
     });
 
@@ -229,6 +277,18 @@ describe("useCommentPosting: posting comments and replies", () => {
         await userAction(() => hook.current.onReply("t1", "Thanks"));
         expect(opts.dispatch).not.toHaveBeenCalled();
         expect(opts.draft.clear).not.toHaveBeenCalled();
+    });
+
+    it("runs a reply's follow-up (resolve) only once the reply is saved", async () => {
+        const { opts, hook } = await mountPosting(true);
+        const afterPosted = vi.fn();
+        await userAction(() => hook.current.onReply("t1", "Done", afterPosted));
+        expect(afterPosted).toHaveBeenCalledOnce();
+
+        opts.commentApi.addReply.mockRejectedValue(new Error("offline"));
+        const notRun = vi.fn();
+        await userAction(() => hook.current.onReply("t1", "Done", notRun));
+        expect(notRun).not.toHaveBeenCalled();
     });
 
     it("posts a reply to the pull request now backing the comments", async () => {
@@ -414,6 +474,31 @@ describe("useThreadMutations", () => {
         expect(opts.commentApi.toggleReaction).toHaveBeenCalledWith("t1", commentId, "like", add);
     });
 });
+describe("threadAgeMs", () => {
+    const at = (createdAt: string) => ({
+        ...thread(),
+        comments: [{ ...thread().comments[0]!, createdAt }],
+    });
+
+    it.each([
+        { name: "is the time since the first comment", t: at("2024-01-01T00:00:00Z"), age: 60_000 },
+        { name: "is unknown for a thread that isn't loaded", t: undefined, age: undefined },
+        { name: "is unknown for an unreadable timestamp", t: at(""), age: undefined },
+        {
+            name: "is unknown for a timestamp in the future",
+            t: at("2024-01-01T00:02:00Z"),
+            age: undefined,
+        },
+        {
+            name: "is unknown for a thread with no comments",
+            t: { ...thread(), comments: [] },
+            age: undefined,
+        },
+    ])("$name", ({ t, age }) => {
+        expect(threadAgeMs(t, Date.parse("2024-01-01T00:01:00Z"))).toBe(age);
+    });
+});
+
 type RailOptions = Omit<Parameters<typeof useThreadMutations>[0], "persistWith">;
 
 /** The rail's actions wired to the shell's real write bookkeeping (error banner). */
@@ -492,6 +577,27 @@ describe("useThreadMutations: rail actions", () => {
         await userAction(() => run(hook.current));
         expect(opts.dispatch).toHaveBeenCalledWith({ type: "SET_STATUS", threadId: "t1", status });
         expect(telemetry.current.eventNames()).toEqual([event]);
+    });
+
+    it("reports how long a thread was open when it is resolved", async () => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(Date.parse("2024-03-03T02:00:00Z"));
+        const dated = twoCommentThread();
+        dated.comments[0] = { ...dated.comments[0]!, createdAt: "2024-03-03T00:00:00Z" };
+        const { hook } = await mountRail({ t1: dated });
+        await userAction(() => hook.current.onResolve("t1"));
+        vi.useRealTimers();
+        expect(telemetry.current.events[0]!.measurements).toEqual({ durationMs: 2 * 3_600_000 });
+    });
+
+    it.each([
+        { name: "the ⋯ menu", via: undefined, reported: "menu" },
+        { name: "the one-click button", via: "button" as const, reported: "button" },
+        { name: "Reply and resolve", via: "reply" as const, reported: "reply" },
+    ])("reports a thread resolved from $name", async ({ via, reported }) => {
+        const { hook } = await mountRail();
+        await userAction(() => hook.current.onResolve("t1", via));
+        expect(telemetry.current.events[0]!.properties).toEqual({ via: reported });
     });
 
     it.each([

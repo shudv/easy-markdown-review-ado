@@ -114,6 +114,8 @@ export const Active: Story = {
         await userEvent.type(ta, "Sounds good");
         await userEvent.click(canvas.getByRole("button", { name: "Reply" }));
         await expect(args.onReply).toHaveBeenCalledWith("t1", "Sounds good");
+        // Ctrl/⌘+Enter and "Reply" stay a plain reply; resolving is explicit.
+        await expect((args.onReply as ReturnType<typeof fn>).mock.calls[0]).toHaveLength(2);
 
         // Cancel closes the composer (the decorator flips replyOpen off).
         await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
@@ -125,12 +127,68 @@ export const Active: Story = {
 /** Resolved thread is quiet and shows a status chip; inactive collapses replies. */
 export const Resolved: Story = {
     args: { thread: thread("resolved"), isActive: false },
-    play: async ({ canvasElement }) => {
+    play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
         await expect(canvas.getByText("Resolved")).toBeTruthy();
         // ADO allows replying to a resolved thread (without reopening it), so the
         // reply affordance stays available.
         await expect(canvas.getByText("@mention or reply")).toBeTruthy();
+        // A finished thread isn't offered Resolve again; the same spot reopens it.
+        await expect(canvas.queryByRole("button", { name: "Resolve thread" })).toBeNull();
+        await userEvent.click(canvas.getByRole("button", { name: "Reopen thread" }));
+        await expect(args.onReopen).toHaveBeenCalledWith("t1");
+        await expect(args.onClick).not.toHaveBeenCalled();
+    },
+};
+
+/**
+ * Production: only 19% of PRs with comments started here saw one resolved
+ * here. An open thread can be resolved in one click from the ✓ beside the
+ * first comment's 👍, which (like ⋯ and 👍) only shows while that comment is
+ * hovered or focused, so the reply box keeps its full width.
+ */
+export const ResolveInOneClick: Story = {
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const resolve = canvas.getByRole("button", { name: "Resolve thread" });
+        // Thread-level, so only the first comment carries it.
+        await expect(canvas.getAllByRole("button", { name: "Resolve thread" })).toHaveLength(1);
+        await expect(resolve.closest(".emr-comment-tools-hover")).not.toBeNull();
+        await expect(resolve.closest("[data-comment-id]")?.getAttribute("data-comment-id")).toBe(
+            "c1",
+        );
+        await userEvent.click(resolve);
+        await expect(args.onResolve).toHaveBeenCalledWith("t1", "button");
+        // Resolving isn't a click on the card: the thread selection doesn't change.
+        await expect(args.onClick).not.toHaveBeenCalled();
+    },
+};
+
+/** "Reply and resolve" posts the reply and asks for the thread to be resolved. */
+export const ReplyAndResolve: Story = {
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByText("@mention or reply"));
+        const ta = await waitFor(() => canvas.getByRole("textbox") as HTMLTextAreaElement);
+        const both = canvas.getByRole("button", { name: "Reply and resolve" });
+        await expect(both).toBeDisabled();
+        await userEvent.type(ta, "Fixed in the next push");
+        await userEvent.click(both);
+        await expect(args.onReply).toHaveBeenCalledWith("t1", "Fixed in the next push", {
+            resolve: true,
+        });
+    },
+};
+
+/** Replying to a resolved thread doesn't offer to resolve it again. */
+export const ReplyToResolvedThread: Story = {
+    args: { thread: thread("resolved") },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByText("@mention or reply"));
+        await waitFor(() => expect(canvas.getByRole("textbox")).toBeTruthy());
+        await expect(canvas.getByRole("button", { name: "Reply" })).toBeTruthy();
+        await expect(canvas.queryByRole("button", { name: "Reply and resolve" })).toBeNull();
     },
 };
 

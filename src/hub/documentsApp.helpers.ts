@@ -20,6 +20,8 @@ export interface LazyTreeState {
     repoId: string;
     files: FileInfo[];
     unloadedFolders: string[];
+    /** Folders listed with nothing to show: no Markdown, no subfolders (slash-free). */
+    emptyFolders: string[];
     /** Wiki `.order` page names per listed folder (slash-free path, root `""`). */
     folderOrders: Record<string, string[]>;
 }
@@ -30,6 +32,7 @@ export function seedLazyTree(repo: DocRepo): LazyTreeState {
         repoId: repo.id,
         files: repo.files,
         unloadedFolders: [...(repo.topLevelFolders ?? [])],
+        emptyFolders: [],
         folderOrders: repo.rootOrder ? { "": repo.rootOrder } : {},
     };
 }
@@ -65,11 +68,14 @@ export function mergeFolderListing(
     }
 
     mergedFiles.sort((a, b) => a.path.localeCompare(b.path));
+    // Nothing to show: the tree keeps the folder, without a way to open it.
+    const isEmpty = payload.files.length === 0 && payload.folders.length === 0;
 
     return {
         repoId,
         files: mergedFiles,
         unloadedFolders: Array.from(unloaded).sort((a, b) => a.localeCompare(b)),
+        emptyFolders: isEmpty ? [...entry.emptyFolders, canonicalize(path)] : entry.emptyFolders,
         folderOrders: payload.order
             ? {
                   ...entry.folderOrders,

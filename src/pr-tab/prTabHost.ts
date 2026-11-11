@@ -5,13 +5,18 @@ import * as SDK from "azure-devops-extension-sdk";
 import { CommonServiceIds, type IHostNavigationService } from "azure-devops-extension-api";
 
 import type { DocLinkNavigation } from "../shell/Shell";
-import type { HistoryStop } from "../shell/shellHelpers";
 import { withDeepLinkTarget } from "../shell/deepLink";
 import { buildReposFileUrl } from "../markdown/docLinks";
 import { buildHubDocUrl } from "../hub/documentsHub.helpers";
-import { trackUserFacingError } from "../telemetry";
-import type { FileInfo } from "../types";
-import { resolvePrTabRouteSeed, type PrTabRouteSeed } from "./prTabApp.helpers";
+import {
+    events,
+    markBootPhase,
+    noteBootCache,
+    noteBootShape,
+    setTelemetryContext,
+    track,
+    trackUserFacingError,
+} from "../telemetry";
 import { prBranchVersion, type PrContext } from "./prContext.helpers";
 
 /**
@@ -35,54 +40,81 @@ export function readExtensionIdentity(): { publisherId: string; extensionId: str
  * click just no-ops).
  */
 export async function openDocTarget(ctx: PrContext, target: DocLinkNavigation): Promise<void> {
-    let url: string | undefined;
-
     if (target.kind === "repo-file") {
-        url = buildReposFileUrl(
-            {
-                orgUrl: ctx.orgUrl,
-                project: ctx.projectName,
-                repoName: ctx.repositoryName,
-            },
-            target.path,
-            prBranchVersion(ctx.pr),
-        );
-    } else {
-        let ext: { publisherId: string; extensionId: string };
-
-        try {
-            ext = SDK.getExtensionContext();
-        } catch (err) {
-            trackUserFacingError({
-                error: err,
-                source: "PrTabApp.navigation",
-                operation: "document-link-open",
-                impact: "action-failed",
-            });
-
-            return;
-        }
-
-        url = buildHubDocUrl(
-            {
-                orgUrl: ctx.orgUrl,
-                projectName: ctx.projectName,
-                repoId: ctx.repositoryId,
-                path: target.path,
-            },
-            ext,
+        await openInNewTab(
+            buildReposFileUrl(
+                {
+                    orgUrl: ctx.orgUrl,
+                    project: ctx.projectName,
+                    repoName: ctx.repositoryName,
+                },
+                target.path,
+                prBranchVersion(ctx.pr),
+            ),
         );
 
-        // Carry a `#heading` from the link so the hub opens scrolled to it.
-        if (url !== undefined && url !== "" && target.hash) {
-            url =
-                withDeepLinkTarget(url, {
-                    kind: "heading",
-                    anchor: target.hash,
-                }) ?? url;
-        }
+        return;
     }
 
+    let url = hubUrlFor(ctx, target.path);
+
+    // Carry a `#heading` from the link so the hub opens scrolled to it.
+    if (url !== undefined && url !== "" && target.hash) {
+        url =
+            withDeepLinkTarget(url, {
+                kind: "heading",
+                anchor: target.hash,
+            }) ?? url;
+    }
+
+    await openInNewTab(url);
+}
+
+/**
+ * Open this repository's documents in the Documents hub, in a new tab: the
+ * PR tab's way into every other Markdown file in the repo. `from` says which
+ * entry point the reader used.
+ */
+export async function openRepositoryDocuments(
+    ctx: PrContext,
+    from: "nav" | "empty-pr",
+): Promise<void> {
+    const url = hubUrlFor(ctx, "");
+    if (url === undefined) return;
+    track(events.documentsHubOpened({ from }));
+    await openInNewTab(url);
+}
+
+/** The Documents-hub URL for `path` in this PR's repository, or `undefined`. */
+function hubUrlFor(ctx: PrContext, path: string): string | undefined {
+    let ext: { publisherId: string; extensionId: string };
+
+    try {
+        ext = SDK.getExtensionContext();
+    } catch (err) {
+        trackUserFacingError({
+            error: err,
+            source: "PrTabApp.navigation",
+            operation: "document-link-open",
+            impact: "action-failed",
+        });
+
+        return undefined;
+    }
+
+    return buildHubDocUrl(
+        {
+            orgUrl: ctx.orgUrl,
+            projectName: ctx.projectName,
+            repoId: ctx.repositoryId,
+            path,
+        },
+        ext,
+    );
+}
+
+/** Open `url` in a new browser tab via the host. Best-effort. */
+async function openInNewTab(url: string | undefined): Promise<void> {
     if (url === undefined || url === "") return;
 
     try {
@@ -106,14 +138,11 @@ export async function openDocTarget(ctx: PrContext, target: DocLinkNavigation): 
 }
 
 /**
- * Read the PR tab's deep-link targets (`?path=`, `?comment=`, `?anchor=`) from
- * the host's query params. Best-effort: an unavailable navigation service
- * yields no targets (the tab opens normally).
+ * The host's query params the PR tab opened with — its deep-link targets
+ * (`?path=`, `?comment=`, `?anchor=`, …). Read once per boot. Best-effort: an unavailable navigation service yields
+ * none (the tab opens normally).
  */
-export async function readRouteSeed(
-    files: readonly FileInfo[],
-    stops: readonly HistoryStop[],
-): Promise<PrTabRouteSeed> {
+export async function readBootRoute(): Promise<Record<string, string>> {
     let params: Record<string, string> = {};
 
     try {
@@ -132,7 +161,7 @@ export async function readRouteSeed(
         /* navigation service unavailable — open without deep-link targets */
     }
 
-    return resolvePrTabRouteSeed(params, files, stops);
+    return params;
 }
 
 /**
@@ -151,4 +180,28 @@ export async function writeRouteParams(updates: Record<string, string>): Promise
     } catch {
         /* navigation service unavailable — route syncing is best-effort */
     }
+}
+
+/**
+ * Record that the tab shows the PR (as cached in this browser, or as just
+ * loaded): the boot phase, its shape, and — ids only, the PR id hashed — the
+ * telemetry context for everything after.
+ */
+export function notePrShown(
+    ctx: PrContext,
+    cached: boolean,
+    log: (step: string, extra?: unknown) => void,
+): void {
+    markBootPhase("context-ready");
+    noteBootShape({ mdFileCount: ctx.changedMdFiles.length });
+    noteBootCache("pr", cached);
+
+    const ids = {
+        projectId: ctx.projectId,
+        repositoryId: ctx.repositoryId,
+        pullRequestId: ctx.pullRequestId,
+    };
+
+    log("pr context resolved", { ...ids, fileCount: ctx.changedMdFiles.length, cached });
+    setTelemetryContext(ids);
 }

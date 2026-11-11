@@ -430,10 +430,10 @@ describe("useRepoBindings", () => {
         args: unknown[];
     }>([
         {
-            name: "document sources",
-            use: (b) => b.repoScopedLoader("/a.md"),
+            name: "document sources (by their listed blob)",
+            use: (b) => b.repoScopedLoader("/a.md", "e5492baf"),
             host: (p) => p.loadFileSource,
-            args: ["r2", "/a.md"],
+            args: ["r2", "/a.md", "e5492baf"],
         },
         {
             name: "document images",

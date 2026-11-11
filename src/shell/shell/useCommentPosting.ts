@@ -1,6 +1,12 @@
 // Shell: posting new comments and replies.
 
-import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from "react";
+import {
+    type Dispatch,
+    type MutableRefObject,
+    type SetStateAction,
+    useCallback,
+    useRef,
+} from "react";
 
 import type { CommentAuthor, CommentThread, MentionedIdentity, TextQuoteAnchor } from "../../types";
 import type { CommentApi, CreatedThreadIds } from "../../comments/api";
@@ -12,6 +18,7 @@ import { events, track } from "../../telemetry";
 import { anchorKindOf } from "../anchorKind";
 import type { DraftTarget } from "../draftStorage";
 import type { DraftPersistence } from "../useDraftPersistence";
+import type { ReplyOptions } from "../components/Balloon.helpers";
 import type { PersistWith } from "./useCommentWrites";
 
 interface CommentPostingOptions {
@@ -37,6 +44,25 @@ export function useCommentPosting(opts: CommentPostingOptions) {
     const onReply = useReply(opts);
 
     return { onSubmitDraft, onReply };
+}
+
+/**
+ * The rail's reply action: post the reply and, for "Reply and resolve",
+ * resolve the thread once — and only if — the reply is saved.
+ */
+export function useReplyAndResolve(
+    postReply: (threadId: string, body: string, afterPosted?: () => void) => void,
+    resolve: (threadId: string, via: "reply") => void,
+) {
+    return useCallback(
+        (threadId: string, body: string, opts?: ReplyOptions) =>
+            postReply(
+                threadId,
+                body,
+                opts?.resolve === true ? () => resolve(threadId, "reply") : undefined,
+            ),
+        [postReply, resolve],
+    );
 }
 
 /** Posts the open new-comment composer as a fresh thread. */
@@ -74,13 +100,16 @@ function useSubmitDraft(opts: CommentPostingOptions) {
             const postedTarget = activeDraftRef.current;
 
             void (async () => {
-                const created = await persistWith("Create comment", () =>
-                    commentApi.createThread({
-                        filePath: selectedPath,
-                        anchor,
-                        bodyMarkdown: body,
-                        mentions,
-                    }),
+                const created = await persistWith(
+                    "Create comment",
+                    () =>
+                        commentApi.createThread({
+                            filePath: selectedPath,
+                            anchor,
+                            bodyMarkdown: body,
+                            mentions,
+                        }),
+                    { fromComposer: true },
                 );
 
                 if (!created) return;
@@ -140,13 +169,24 @@ function useReply(opts: CommentPostingOptions) {
         setActiveDraft,
     } = opts;
 
+    // Per-page-load ordinal of each thread replied to (1, 2, …). Lets the
+    // duplicate-post alarm tell a repeat on the SAME thread from two short
+    // replies ("Done") on different ones, without sending any thread id.
+    const threadOrdinalsRef = useRef(new Map<string, number>());
+
+    // `afterPosted` runs only once the reply is saved (e.g. resolve the thread).
     return useCallback(
-        (threadId: string, body: string) => {
+        (threadId: string, body: string, afterPosted?: () => void) => {
             const postedTarget = activeDraftRef.current;
+            const ordinals = threadOrdinalsRef.current;
+            const threadOrdinal = ordinals.get(threadId) ?? ordinals.size + 1;
+            ordinals.set(threadId, threadOrdinal);
 
             void (async () => {
-                const created = await persistWith("Add reply", () =>
-                    commentApi.addReply(threadId, body),
+                const created = await persistWith(
+                    "Add reply",
+                    () => commentApi.addReply(threadId, body),
+                    { fromComposer: true },
                 );
 
                 if (!created) return;
@@ -160,7 +200,8 @@ function useReply(opts: CommentPostingOptions) {
                         createdAt: created.createdAt,
                     },
                 });
-                track(events.commentReplied({ bodyLength: body.length }));
+                track(events.commentReplied({ bodyLength: body.length, threadOrdinal }));
+                afterPosted?.();
                 if (!isStillPostedDraft(postedTarget, body)) return;
                 draft.clear();
                 setActiveDraft(null);

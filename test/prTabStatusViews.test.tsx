@@ -8,6 +8,7 @@ import {
     BootErrorView,
     DEAD_WINDOW_ISSUE_URL,
     NoMarkdownFilesView,
+    PrDocNavTitle,
     SessionRefreshingView,
     reconnectEta,
 } from "../src/pr-tab/PrTabStatusViews";
@@ -149,13 +150,26 @@ describe("BootErrorView", () => {
 });
 
 describe("NoMarkdownFilesView", () => {
-    it("explains that only Markdown files are shown", () => {
-        const el = mount(<NoMarkdownFilesView />);
+    it("explains that only Markdown files are shown, and offers the repository's documents", () => {
+        const onBrowseDocuments = vi.fn();
+        const el = mount(<NoMarkdownFilesView onBrowseDocuments={onBrowseDocuments} />);
         expect(el.querySelector(".emr-error h2")?.textContent).toBe(
             "No Markdown files changed in this PR",
         );
         expect(el.querySelector("p")?.textContent).toContain(
-            "Switch to the Files tab for the rest.",
+            "Switch to the Files tab for the rest",
         );
+        click(el.querySelector("button.emr-error-retry"));
+        expect(onBrowseDocuments).toHaveBeenCalledOnce();
+    });
+});
+
+describe("PrDocNavTitle", () => {
+    it("labels the file list and opens the repository's documents", () => {
+        const onOpenDocuments = vi.fn();
+        const el = mount(<PrDocNavTitle onOpenDocuments={onOpenDocuments} />);
+        expect(el.querySelector(".emr-docnav-title")?.textContent).toBe("Documents");
+        click(el.querySelector("button"));
+        expect(onOpenDocuments).toHaveBeenCalledOnce();
     });
 });

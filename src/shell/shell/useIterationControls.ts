@@ -4,9 +4,11 @@ import { type MutableRefObject, useCallback, useMemo } from "react";
 
 import type { TextQuoteAnchor } from "../../types";
 import { relocateAnchor } from "../../comments/anchor";
+import { events, track } from "../../telemetry";
 import type { ReaderIterationOption } from "../components/ReaderStatusBar";
 import type { HistoryStop, ReviewIterationRange } from "../shellHelpers";
 import { buildHistoryNav } from "./derive";
+import { comparisonScope } from "./readerTelemetry";
 
 interface IterationControlsOptions {
     completedPrHistoryEnabled: boolean;
@@ -74,8 +76,9 @@ export function useIterationControls(opts: IterationControlsOptions) {
             setIterationRange(range);
             setActiveThreadId(null);
             dismissEmptyDraftRef.current();
+            track(events.updatesCompared({ scope: comparisonScope(range, nativeUpdateCount) }));
         },
-        [setIterationRange, setActiveThreadId, dismissEmptyDraftRef],
+        [setIterationRange, setActiveThreadId, dismissEmptyDraftRef, nativeUpdateCount],
     );
 
     // Comparing up to an EARLIER update: comments still attach to the latest

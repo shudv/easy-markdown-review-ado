@@ -287,13 +287,13 @@ describe("AdoSessionMonitor — waitUntilLive", () => {
 describe("AdoSessionMonitor — held writes", () => {
     it("passes a successful write straight through", async () => {
         const m = new AdoSessionMonitor();
-        await expect(m.holdWrite(async () => "ok")).resolves.toBe("ok");
+        await expect(m.holdWrite("reply", async () => "ok")).resolves.toBe("ok");
     });
 
     it("rethrows a failure that is not the dead window without holding", async () => {
         const m = new AdoSessionMonitor();
         const boom = Object.assign(new Error("conflict"), { status: 409 });
-        await expect(m.holdWrite(() => Promise.reject(boom))).rejects.toBe(boom);
+        await expect(m.holdWrite("reply", () => Promise.reject(boom))).rejects.toBe(boom);
         expect(m.getSnapshot()).toMatchObject({ state: "live", heldWrites: 0 });
     });
 
@@ -308,7 +308,7 @@ describe("AdoSessionMonitor — held writes", () => {
             .mockRejectedValueOnce(refreshing())
             .mockResolvedValueOnce("posted");
 
-        const write = m.holdWrite(attempt);
+        const write = m.holdWrite("reply", attempt);
         await vi.advanceTimersByTimeAsync(0);
         expect(m.getSnapshot()).toMatchObject({
             state: "refreshing",
@@ -343,7 +343,7 @@ describe("AdoSessionMonitor — held writes", () => {
         m.configure({ getToken: async () => DEAD });
         const err = refreshing();
         const attempt = vi.fn(() => Promise.reject(err));
-        const write = m.holdWrite(attempt, 30_000);
+        const write = m.holdWrite("reply", attempt, 30_000);
         await Promise.all([expect(write).rejects.toBe(err), vi.advanceTimersByTimeAsync(30_000)]);
         expect(attempt).toHaveBeenCalledOnce();
         expect(m.getSnapshot().heldWrites).toBe(0);
@@ -351,7 +351,7 @@ describe("AdoSessionMonitor — held writes", () => {
 
     it("gives up on a held write after HELD_WRITE_MAX_WAIT_MS by default", async () => {
         const m = new AdoSessionMonitor();
-        const write = m.holdWrite(() => Promise.reject(refreshing()));
+        const write = m.holdWrite("reply", () => Promise.reject(refreshing()));
         let settled = false;
         write.catch(() => (settled = true));
         await vi.advanceTimersByTimeAsync(HELD_WRITE_MAX_WAIT_MS - 1);
@@ -369,13 +369,96 @@ describe("AdoSessionMonitor — held writes", () => {
             .mockRejectedValueOnce(refreshing())
             .mockRejectedValueOnce(second);
 
-        const write = m.holdWrite(attempt);
+        const write = m.holdWrite("reply", attempt);
         await vi.advanceTimersByTimeAsync(0);
         m.noteSuccess(Date.now());
         await expect(write).rejects.toBe(second);
         expect(attempt).toHaveBeenCalledTimes(2);
         expect(m.getSnapshot().state).toBe("refreshing");
         expect(eventsNamed("start").map((e) => e.properties?.trigger)).toEqual(["write", "write"]);
+    });
+});
+
+describe("AdoSessionMonitor — held-write outcomes", () => {
+    const heldWriteEvents = () =>
+        telemetry.current.events.filter((e) => e.name === "auth.heldWrite");
+
+    const heldWrite = (kind: string, outcome: string, heldSec: number) => ({
+        name: "auth.heldWrite",
+        properties: { kind, outcome },
+        measurements: { heldSec },
+    });
+
+    it("reports nothing for a write that was never held", async () => {
+        const m = new AdoSessionMonitor();
+        await m.holdWrite("create", async () => "ok");
+        await m.holdWrite("create", () => Promise.reject(new Error("409"))).catch(() => {});
+        expect(heldWriteEvents()).toEqual([]);
+    });
+
+    it("reports a held write that posts, with its kind and time held", async () => {
+        const m = new AdoSessionMonitor();
+
+        const attempt = vi
+            .fn<() => Promise<string>>()
+            .mockRejectedValueOnce(refreshing())
+            .mockResolvedValueOnce("posted");
+
+        const write = m.holdWrite("create", attempt);
+        await vi.advanceTimersByTimeAsync(90_000);
+        m.noteSuccess(Date.now());
+        await expect(write).resolves.toBe("posted");
+        expect(heldWriteEvents()).toEqual([heldWrite("create", "posted", 90)]);
+    });
+
+    it("reports a held write whose retry is rejected", async () => {
+        const m = new AdoSessionMonitor();
+
+        const attempt = vi
+            .fn<() => Promise<string>>()
+            .mockRejectedValueOnce(refreshing())
+            .mockRejectedValueOnce(new Error("conflict"));
+
+        const write = m.holdWrite("status", attempt);
+        await vi.advanceTimersByTimeAsync(0);
+        m.noteSuccess(Date.now());
+        await expect(write).rejects.toThrow("conflict");
+        expect(heldWriteEvents()).toEqual([heldWrite("status", "failed", 0)]);
+    });
+
+    it("reports a held write that times out", async () => {
+        const m = new AdoSessionMonitor();
+        const err = refreshing();
+        const write = m.holdWrite("edit", () => Promise.reject(err), 30_000);
+        await Promise.all([expect(write).rejects.toBe(err), vi.advanceTimersByTimeAsync(30_000)]);
+        expect(heldWriteEvents()).toEqual([heldWrite("edit", "timed-out", 30)]);
+    });
+
+    // Production: in 4 of 5 sessions with a held write the user left before it posted.
+    it("reports every write still held when the page goes away, once", async () => {
+        const m = new AdoSessionMonitor();
+
+        const attempt = vi
+            .fn<() => Promise<string>>()
+            .mockRejectedValueOnce(refreshing())
+            .mockResolvedValue("posted");
+
+        const reaction = m.holdWrite("reaction", attempt);
+        const reply = m.holdWrite("reply", () => Promise.reject(refreshing()));
+        await vi.advanceTimersByTimeAsync(5_000);
+        m.notePageHide();
+        m.notePageHide();
+        expect(heldWriteEvents()).toEqual([
+            heldWrite("reaction", "left", 5),
+            heldWrite("reply", "left", 5),
+        ]);
+
+        // Restored from the back/forward cache: the write still completes, but
+        // its outcome was already reported.
+        m.noteSuccess(Date.now());
+        await expect(reaction).resolves.toBe("posted");
+        await reply.catch(() => {});
+        expect(heldWriteEvents()).toHaveLength(2);
     });
 });
 
@@ -514,7 +597,7 @@ describe("AdoSessionMonitor — host reload and page hide", () => {
             .mockRejectedValueOnce(refreshing())
             .mockResolvedValueOnce("posted");
 
-        const write = m.holdWrite(attempt);
+        const write = m.holdWrite("reply", attempt);
         await vi.advanceTimersByTimeAsync(0);
         await m.reloadHost("user");
         await vi.advanceTimersByTimeAsync(0);

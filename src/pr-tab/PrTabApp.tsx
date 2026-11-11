@@ -9,9 +9,9 @@ import { PullRequestStatus } from "azure-devops-extension-api/Git";
 
 import { Shell, type RoutedPrInfo } from "../shell/Shell";
 import type { ReviewIterationRange } from "../shell/shellHelpers";
-import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AvatarImageContext } from "../shell/components/Avatar";
-import { listSubpageFolder, resolveAdoAvatarObjectUrl } from "../shell/adoGitData";
+import { backLinkUrl } from "../shell/backLink";
+import { fetchBlobText, listSubpageFolder, resolveAdoAvatarObjectUrl } from "../shell/adoGitData";
 import type { FolderLister } from "../shell/wikiOrder";
 import { resolveAdoRepositoryImageObjectUrl } from "../shell/adoRepositoryImages";
 import { formatError } from "../hub/documentsHub.helpers";
@@ -36,8 +36,6 @@ import {
     markAppReady,
     markBootAuthWaitEnd,
     markBootAuthWaitStart,
-    markBootPhase,
-    setTelemetryContext,
     trackUserFacingError,
 } from "../telemetry";
 import {
@@ -59,6 +57,8 @@ import {
     BASE_LINK_PARAM,
     ITERATION_LINK_PARAM,
     buildPrTabDocUrl,
+    firstFilePath,
+    resolvePrTabRouteSeed,
     buildPrWebUrl,
     iterationParamsForRange,
     diffableFilePaths,
@@ -79,14 +79,35 @@ import {
     fetchFileContentAtCommit,
     fetchRangeChangeTypes,
     resolvePrContext,
+    resolvePrTarget,
 } from "./prContext";
-import { openDocTarget, readExtensionIdentity, readRouteSeed, writeRouteParams } from "./prTabHost";
-import { BootErrorView, NoMarkdownFilesView, SessionRefreshingView } from "./PrTabStatusViews";
+import { cachedPrFitsRoute, cachePr, prCacheKey, prRevision, readCachedPr } from "./prContextCache";
+import {
+    openDocTarget,
+    openRepositoryDocuments,
+    notePrShown,
+    readBootRoute,
+    readExtensionIdentity,
+    writeRouteParams,
+} from "./prTabHost";
+import {
+    BootErrorView,
+    NoMarkdownFilesView,
+    PrDocNavTitle,
+    SessionRefreshingView,
+} from "./PrTabStatusViews";
+import { isBootWaiting, PrTabLoadingView, useSlowBoot } from "./useSlowBoot";
 
 // Stable empty array: threads load after mount via Shell's thread sync, so
 // the shell seeds its reducer with this instead of blocking first paint on the
 // thread fetch. Module-scoped so its identity never changes across renders.
 const EMPTY_INITIAL_THREADS: CommentThread[] = [];
+
+/** Boot step trace in the host DevTools console, for diagnosing boot in a real org. */
+function bootLog(step: string, extra?: unknown): void {
+    // eslint-disable-next-line no-console -- see above
+    console.log(`[PrTabApp] ${step}`, extra ?? "");
+}
 
 // eslint-disable-next-line max-lines-per-function -- PR tab root inside the Azure DevOps SDK: boot states, PR context, update comparison and routing into Shell. Logic is extracted to tested modules; the rest is host wiring.
 export function PrTabApp(): ReactElement {
@@ -134,53 +155,68 @@ export function PrTabApp(): ReactElement {
 
     const [originalSourcesByFile, setOriginalSourcesByFile] = useState<Record<string, string>>({});
 
+    // Show the PR (as cached, or as ADO has it) at the route's targets.
+    const showPr = useCallback(
+        (context: PrContext, route: Record<string, string>, cached: boolean) => {
+            notePrShown(context, cached, bootLog);
+            setCtx(context);
+            setUser(commentAuthorFromUser(SDK.getUser()));
+
+            const seed = resolvePrTabRouteSeed(
+                route,
+                context.changedMdFiles,
+                context.reviewIterationStops,
+            );
+
+            setActiveDocPath(seed.selectedPath ?? firstFilePath(context.changedMdFiles));
+            setRouteSeed(seed);
+            setRefreshAttempt(0);
+        },
+        [],
+    );
+
     useEffect(() => {
+        // A newer attempt ("Try again" on a slow boot, or a recovery retry)
+        // supersedes this one: its late result must not overwrite the new run.
+        const run = { superseded: false };
+        const superseded = (): boolean => run.superseded;
+
         void (async () => {
             setError(null);
             setRefreshing(null);
 
-            const log = (step: string, extra?: unknown) => {
-                // eslint-disable-next-line no-console -- boot step trace in the host DevTools console, for diagnosing PR tab boot problems in a real org
-                console.log(`[PrTabApp] ${step}`, extra ?? "");
-            };
-
             try {
-                log("resolving pr context");
+                bootLog("resolving pr context");
                 const bootStartedAt = Date.now();
-                const context = await resolvePrContext(log);
+                const target = await resolvePrTarget(bootLog);
+                const loading = resolvePrContext(target, bootLog);
+                // Awaited below; this only keeps an early failure from reading as unhandled.
+                loading.catch(() => undefined);
+                const route = await readBootRoute();
+                if (superseded()) return;
+                // A PR this browser opened before shows at once while ADO loads it.
+                const cacheKey = prCacheKey(target.project.id, target.pullRequestId);
+                const cached = readCachedPr(cacheKey);
+                const shown = cached && cachedPrFitsRoute(route, cached) ? cached : undefined;
+                if (shown) showPr(shown, route, true);
+                const context = await loading;
+                if (superseded()) return;
                 adoSession.noteSuccess(bootStartedAt);
-                markBootPhase("context-ready");
-                log("pr context resolved", {
-                    projectId: context.projectId,
-                    repositoryId: context.repositoryId,
-                    pullRequestId: context.pullRequestId,
-                    fileCount: context.changedMdFiles.length,
-                });
-                // De-identified context for all subsequent telemetry. IDs only — the
-                // PR id is hashed inside setTelemetryContext.
-                setTelemetryContext({
-                    projectId: context.projectId,
-                    repositoryId: context.repositoryId,
-                    pullRequestId: context.pullRequestId,
-                });
-                setCtx(context);
-                log("reading current user");
-                setUser(commentAuthorFromUser(SDK.getUser()));
+                cachePr(cacheKey, context);
 
-                const seed = await readRouteSeed(
-                    context.changedMdFiles,
-                    context.reviewIterationStops,
-                );
+                if (shown && prRevision(shown) === prRevision(context)) {
+                    setCtx(context);
 
-                setActiveDocPath(
-                    seed.selectedPath ??
-                        (context.changedMdFiles.length > 0 ? context.changedMdFiles[0]!.path : ""),
-                );
-                setRouteSeed(seed);
-                setRefreshAttempt(0);
-                log("ready");
+                    return;
+                }
+
+                // Pushed to since it was cached: the reader reopens on it (see `key`).
+                setDiffsByFile({});
+                setOriginalSourcesByFile({});
+                showPr(context, route, false);
             } catch (err: unknown) {
                 const refresh = await detectSessionRefreshing(err, readHostToken);
+                if (superseded()) return;
 
                 if (refresh) {
                     console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
@@ -212,7 +248,11 @@ export function PrTabApp(): ReactElement {
                 setError(formatError(err));
             }
         })();
-    }, [bootAttempt]);
+
+        return () => {
+            run.superseded = true;
+        };
+    }, [bootAttempt, showPr]);
 
     // Auto-recover from the token dead-window, whichever comes first:
     //   - the shared session monitor sees the host hand out a fresh token (it
@@ -333,10 +373,13 @@ export function PrTabApp(): ReactElement {
     }, [ctx]);
 
     const loadFileSource = useCallback(
-        async (path: string): Promise<string> => {
+        async (path: string, objectId?: string): Promise<string> => {
             if (!ctx) throw new Error("PR context not loaded yet");
 
-            return fetchFileContent(ctx, path);
+            // The changed file's blob, exactly (it is cached under its id).
+            return hasText(objectId)
+                ? fetchBlobText(ctx.repositoryId, ctx.projectId, objectId)
+                : fetchFileContent(ctx, path);
         },
         [ctx],
     );
@@ -443,8 +486,16 @@ export function PrTabApp(): ReactElement {
             repositoryId: ctx.repositoryId,
             pullRequestId: ctx.pullRequestId,
             project: ctx.projectId,
+            backLinkFor: (thread) => {
+                const ext = readExtensionIdentity();
+
+                return backLinkUrl(
+                    ext && buildPrTabDocUrl(prWebUrl, ext, thread.filePath),
+                    thread.linkKey,
+                );
+            },
         });
-    }, [ctx]);
+    }, [ctx, prWebUrl]);
 
     // Stable closure fetching the latest threads for this PR, used by Shell's
     // `useThreadSync` to poll ~30s while visible. Must stay referentially stable.
@@ -456,6 +507,8 @@ export function PrTabApp(): ReactElement {
         },
         [ctx],
     );
+
+    const slowBoot = useSlowBoot(isBootWaiting(ctx, error, refreshing), bootAttempt);
 
     if (refreshing) {
         return (
@@ -473,7 +526,7 @@ export function PrTabApp(): ReactElement {
     }
 
     if (!ctx || !user || !routeSeed) {
-        return <ReaderLoadingShell scope="pr" ariaLabel="Loading pull request" />;
+        return <PrTabLoadingView slow={slowBoot} onRetry={() => setBootAttempt((n) => n + 1)} />;
     }
 
     // `title` / `createdBy` are typed required but can be absent from the REST
@@ -499,7 +552,11 @@ export function PrTabApp(): ReactElement {
     };
 
     if (pr.files.length === 0) {
-        return <NoMarkdownFilesView />;
+        return (
+            <NoMarkdownFilesView
+                onBrowseDocuments={() => void openRepositoryDocuments(ctx, "empty-pr")}
+            />
+        );
     }
 
     // Mention-link hydration context — resolves work-item and PR mentions to
@@ -517,8 +574,15 @@ export function PrTabApp(): ReactElement {
             <AvatarImageContext.Provider value={resolveAdoAvatarObjectUrl}>
                 <DeepLinkContext.Provider value={buildDeepLink}>
                     <Shell
+                        // A new revision (a push) reopens the reader on it.
+                        key={prRevision(ctx)}
                         pr={pr}
                         listFolder={listFolder}
+                        docNavTitleSlot={
+                            <PrDocNavTitle
+                                onOpenDocuments={() => void openRepositoryDocuments(ctx, "nav")}
+                            />
+                        }
                         loadFileSource={loadFileSource}
                         resolveDocumentImage={resolveDocumentImage}
                         diffsByFile={diffsByFile}

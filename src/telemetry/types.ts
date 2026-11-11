@@ -47,6 +47,12 @@ export interface TelemetryContext {
     pullRequestId?: string;
     /** Random per-load id correlating a single session's events. Not a user id. */
     sessionId?: string;
+    /**
+     * Random id persisted in this browser's localStorage (`emr.installId`), so
+     * return usage can be measured. Never derived from or joined to identity;
+     * clearing site data resets it. Absent when storage is unavailable.
+     */
+    installId?: string;
 }
 
 export interface TelemetryEvent {

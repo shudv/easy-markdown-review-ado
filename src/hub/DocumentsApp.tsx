@@ -420,6 +420,7 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
                             docNavTitleSlot={docNavTitleSlot}
                             onRefreshFiles={onRefreshRepo ? handleRefresh : undefined}
                             feedbackEmail="shubd3@gmail.com"
+                            usageDataToggle={props.usageDataToggle}
                             initialSelectedPath={deepLinkSeeds.initialSelectedPath}
                             initialActiveThreadId={deepLinkSeeds.initialActiveThreadId}
                             initialAnchor={deepLinkSeeds.initialAnchor}

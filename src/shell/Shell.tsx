@@ -673,7 +673,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                         iterationRange={history.iterationRange}
                         onIterationRangeChange={changeIterationRange}
                         feedbackHref={feedbackHrefFor(props.feedbackEmail)}
-                        usageDataToggle={isTelemetryConfigured()}
+                        usageDataToggle={props.usageDataToggle ?? isTelemetryConfigured()}
                         onRefresh={statusExtras.onRefresh}
                         refreshing={statusExtras.refreshing}
                         refreshLabel={store.refreshLabel}

@@ -341,6 +341,9 @@ const meta = {
         diffsByFile: { [GUIDE]: DIFF },
         initialThreads: threads(),
         currentUser: shubhd,
+        // The shipped status bar: Feedback plus the "Send usage data" toggle.
+        feedbackEmail: "feedback@example.com",
+        usageDataToggle: true,
     },
 } satisfies Meta<typeof Shell>;
 

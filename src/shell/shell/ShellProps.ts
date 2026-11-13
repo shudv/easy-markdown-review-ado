@@ -86,6 +86,11 @@ export interface ShellProps {
      */
     feedbackEmail?: string;
     /**
+     * Show the "Send usage data" toggle beside Feedback. Defaults to whether
+     * this build sends telemetry; stories set it to picture the shipped chrome.
+     */
+    usageDataToggle?: boolean;
+    /**
      * Work the host is doing for the reader, shown in the status bar with the
      * shell's own (the highest priority wins), e.g. the PR tab checking ADO for
      * a newer version of the PR it shows from this browser's cache.

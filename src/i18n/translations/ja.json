@@ -354,6 +354,10 @@
     "navigation.statusBar.hideComments": "コメントを非表示",
     "navigation.statusBar.showComments": "コメントを表示",
     "navigation.statusBar.feedback": "フィードバックの共有またはバグの報告",
+    "navigation.statusBar.usageData": "使用状況データを送信する",
+    "navigation.statusBar.usageDataOn": "使用状況データを送信しています。クリックすると停止します。",
+    "navigation.statusBar.usageDataOff": "使用状況データは送信されていません。クリックすると再開します。",
+    "navigation.statusBar.usageDataHint": "使用状況とエラーのレポートは、この拡張機能の改善に役立ちます。ドキュメント、コメント、名前、メール アドレスが含まれることはありません。",
     "navigation.activity.withRunningCount": {
         "other": "{activity} ({count} 個の操作を実行中)"
     },

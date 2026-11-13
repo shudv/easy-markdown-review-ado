@@ -3,15 +3,15 @@
 // reference one source of truth.
 
 export interface TelemetryBuildConfig {
-    /** Vendor-neutral ingestion key/instrumentation key. Empty disables egress. */
+    /** Application Insights connection string. Empty disables usage telemetry. */
     key: string;
-    /** Optional collector endpoint override. Sink picks a default when absent. */
-    endpoint?: string;
+    /** Sentry DSN for exception reports. Empty disables error reporting. */
+    errorDsn: string;
     /** Extension version stamped onto every event. */
     appVersion: string;
     /** Deployment ring this build targets, for prod/dev slicing. */
     environment: "production" | "development";
-    /** True when a real key is present and network egress is permitted. */
+    /** True when a connection string or DSN is present and network egress is permitted. */
     enabled: boolean;
     /** Force console sink + verbose logging regardless of key presence. */
     debug: boolean;

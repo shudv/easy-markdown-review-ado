@@ -354,6 +354,10 @@
     "navigation.statusBar.hideComments": "隐藏评论",
     "navigation.statusBar.showComments": "显示评论",
     "navigation.statusBar.feedback": "分享反馈或报告 bug",
+    "navigation.statusBar.usageData": "发送使用情况数据",
+    "navigation.statusBar.usageDataOn": "正在发送使用情况数据。单击可停止。",
+    "navigation.statusBar.usageDataOff": "未发送使用情况数据。单击可恢复。",
+    "navigation.statusBar.usageDataHint": "使用情况和错误报告有助于改进此扩展。报告绝不会包含你的文档、评论、姓名或电子邮件。",
     "navigation.activity.withRunningCount": {
         "other": "{activity}（{count} 个操作正在运行）"
     },

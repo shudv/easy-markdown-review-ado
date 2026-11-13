@@ -86,6 +86,11 @@ export const navigation = {
     "navigation.statusBar.hideComments": "Hide comments",
     "navigation.statusBar.showComments": "Show comments",
     "navigation.statusBar.feedback": "Share feedback or report a bug",
+    "navigation.statusBar.usageData": "Send usage data",
+    "navigation.statusBar.usageDataOn": "Sending usage data. Click to stop.",
+    "navigation.statusBar.usageDataOff": "Not sending usage data. Click to resume.",
+    "navigation.statusBar.usageDataHint":
+        "Usage and error reports help improve this extension. They never include your documents, comments, names or email.",
     "navigation.activity.withRunningCount": {
         one: "{activity} ({count} operation running)",
         other: "{activity} ({count} operations running)",

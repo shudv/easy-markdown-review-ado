@@ -817,3 +817,38 @@ export const OutlineToggleSingleFile: Story = {
         await expect(within(canvasElement).queryByRole("button", { name: "Outline" })).toBeNull();
     },
 };
+
+/**
+ * Builds that send telemetry show a "Send usage data" icon beside Feedback. It
+ * is on by default; turning it off (the icon is struck through) persists for
+ * this browser, and turning it on again clears the opt-out.
+ */
+export const SendUsageDataToggle: Story = {
+    args: { usageDataToggle: true },
+    play: async ({ canvasElement }) => {
+        window.localStorage.removeItem("emr.usageData");
+        const canvas = within(canvasElement);
+        const toggle = canvas.getByRole("button", { name: "Send usage data" });
+        await expect(toggle).toHaveAttribute("aria-pressed", "true");
+        await expect(toggle.title).toMatch(/^Sending usage data\. Click to stop\.\n/);
+
+        await userEvent.click(toggle);
+        await expect(toggle).toHaveAttribute("aria-pressed", "false");
+        await expect(toggle.title).toMatch(/^Not sending usage data\. Click to resume\.\n/);
+        await expect(window.localStorage.getItem("emr.usageData")).toBe("off");
+
+        await userEvent.click(toggle);
+        await expect(toggle).toHaveAttribute("aria-pressed", "true");
+        await expect(window.localStorage.getItem("emr.usageData")).toBeNull();
+    },
+};
+
+/** The usage-data toggle alone still gets its trailing group. */
+export const UsageDataToggleOnly: Story = {
+    args: { feedbackHref: undefined, onRefresh: undefined, usageDataToggle: true },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("button", { name: "Send usage data" })).toBeTruthy();
+        await expect(canvas.queryByRole("button", { name: "Refresh" })).toBeNull();
+    },
+};

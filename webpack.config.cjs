@@ -24,29 +24,31 @@ const pkgVersion = (() => {
 
 /**
  * Build-time telemetry config injected via DefinePlugin as the global
- * `__EMR_TELEMETRY_CONFIG__`. The key is vendor-neutral by design — it carries
- * whatever the active sink needs (e.g. a 1DS instrumentation key).
+ * `__EMR_TELEMETRY_CONFIG__`. Both values are public-by-design, write-only
+ * ingestion credentials (they end up in the shipped bundle either way); the
+ * release workflow passes them from repository secrets so forks don't inherit
+ * them.
  *
- *   TELEMETRY_KEY       optional ingestion/instrumentation key. Telemetry stays
- *                       disabled unless a build explicitly supplies one.
- *   TELEMETRY_ENDPOINT  optional collector endpoint override
- *   TELEMETRY_DEBUG     "1" to force the console sink (local diagnostics)
+ *   TELEMETRY_KEY    Application Insights connection string (usage events and
+ *                    exceptions). Unset ⇒ no usage telemetry.
+ *   SENTRY_DSN       Sentry DSN (exception reports). Unset ⇒ no error reports.
+ *   TELEMETRY_DEBUG  "1" to force the console sink (local diagnostics)
  *
  * `environment` is derived from the webpack mode so prod and dev builds can be
  * sliced apart in the telemetry backend.
  */
 function telemetryDefineConfig(isDev) {
     const key = process.env.TELEMETRY_KEY || "";
+    const errorDsn = process.env.SENTRY_DSN || "";
     return {
         key,
-        endpoint: process.env.TELEMETRY_ENDPOINT || "",
+        errorDsn,
         appVersion: pkgVersion,
         environment: isDev ? "development" : "production",
-        enabled: Boolean(key),
+        enabled: Boolean(key || errorDsn),
         debug: process.env.TELEMETRY_DEBUG === "1",
     };
 }
-
 /** @type {(env: any, argv: { mode?: string }) => import('webpack').Configuration} */
 module.exports = (env, argv) => {
     const isDev = argv.mode !== "production";

@@ -369,6 +369,10 @@
     "navigation.statusBar.hideComments": "Masquer les commentaires",
     "navigation.statusBar.showComments": "Afficher les commentaires",
     "navigation.statusBar.feedback": "Envoyer des commentaires ou signaler un bogue",
+    "navigation.statusBar.usageData": "Envoyer des données d'utilisation",
+    "navigation.statusBar.usageDataOn": "Les données d'utilisation sont envoyées. Cliquez pour arrêter.",
+    "navigation.statusBar.usageDataOff": "Aucune donnée d'utilisation n'est envoyée. Cliquez pour reprendre.",
+    "navigation.statusBar.usageDataHint": "Les rapports d'utilisation et d'erreurs aident à améliorer cette extension. Ils n'incluent jamais vos documents, commentaires, noms ou adresse e-mail.",
     "navigation.activity.withRunningCount": {
         "one": "{activity} ({count} opération en cours)",
         "other": "{activity} ({count} opérations en cours)"

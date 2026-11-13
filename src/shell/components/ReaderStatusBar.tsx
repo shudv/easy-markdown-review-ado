@@ -190,6 +190,7 @@ export function ReaderStatusBar(props: Readonly<ReaderStatusBarProps>): ReactEle
                     refreshing={props.refreshing}
                     refreshLabel={props.refreshLabel}
                     feedbackHref={props.feedbackHref}
+                    usageDataToggle={props.usageDataToggle}
                 />
             </div>
         </div>

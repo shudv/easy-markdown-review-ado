@@ -369,6 +369,10 @@
     "navigation.statusBar.hideComments": "Ocultar comentários",
     "navigation.statusBar.showComments": "Mostrar comentários",
     "navigation.statusBar.feedback": "Enviar feedback ou relatar um bug",
+    "navigation.statusBar.usageData": "Enviar dados de uso",
+    "navigation.statusBar.usageDataOn": "Enviando dados de uso. Clique para parar.",
+    "navigation.statusBar.usageDataOff": "Os dados de uso não estão sendo enviados. Clique para retomar.",
+    "navigation.statusBar.usageDataHint": "Relatórios de uso e de erros ajudam a melhorar esta extensão. Eles nunca incluem seus documentos, comentários, nomes ou email.",
     "navigation.activity.withRunningCount": {
         "one": "{activity} ({count} operação em andamento)",
         "other": "{activity} ({count} operações em andamento)"

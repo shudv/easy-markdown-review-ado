@@ -1,8 +1,9 @@
 // Status-bar control groups: navigation, comparison, comments, refresh.
 
-import type { ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 
 import { formatNumber, t, tRich } from "../../i18n";
+import { readUsageDataEnabled, setUsageDataEnabled } from "../../telemetry";
 import type { ReviewIterationRange, WordDeltaPart } from "../shellHelpers";
 import type { StatusBarVisibility } from "./readerStatusBarModel";
 import type { ReaderStatusBarProps } from "./ReaderStatusBar.types";
@@ -16,6 +17,7 @@ import {
     IconPullRequest,
     IconFeedback,
     IconRefresh,
+    IconUsageData,
 } from "./ReaderStatusBar.icons";
 import { IterationPicker } from "./IterationPicker";
 
@@ -349,16 +351,48 @@ export function CommentControls({
     );
 }
 
-/** Refresh and Feedback controls, after a separator; nothing when neither. */
+/**
+ * "Send usage data": the telemetry opt-out, an on/off icon beside Feedback.
+ * Applies at once (queued data is dropped) and persists for this browser.
+ */
+function UsageDataToggle(): ReactElement {
+    const [enabled, setEnabled] = useState(readUsageDataEnabled);
+
+    const state = enabled
+        ? t("navigation.statusBar.usageDataOn")
+        : t("navigation.statusBar.usageDataOff");
+
+    return (
+        <button
+            type="button"
+            className={`emr-statusbar-btn emr-statusbar-usage${enabled ? "" : " is-off"}`}
+            aria-pressed={enabled}
+            aria-label={t("navigation.statusBar.usageData")}
+            title={`${state}\n${t("navigation.statusBar.usageDataHint")}`}
+            onClick={() => {
+                setEnabled(!enabled);
+                setUsageDataEnabled(!enabled);
+            }}
+        >
+            <IconUsageData off={!enabled} />
+        </button>
+    );
+}
+
+/** Refresh, Feedback and usage-data controls, after a separator; nothing when none. */
 export function RefreshFeedbackControls({
     onRefresh,
     refreshing,
     refreshLabel,
     feedbackHref,
+    usageDataToggle,
 }: Readonly<
-    Pick<ReaderStatusBarProps, "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref">
+    Pick<
+        ReaderStatusBarProps,
+        "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref" | "usageDataToggle"
+    >
 >): ReactElement | null {
-    if (!onRefresh && !hasText(feedbackHref)) return null;
+    if (!onRefresh && !hasText(feedbackHref) && usageDataToggle !== true) return null;
     const label = refreshLabel ?? t("common.refresh");
 
     return (
@@ -392,6 +426,7 @@ export function RefreshFeedbackControls({
                         <IconFeedback />
                     </a>
                 ) : null}
+                {usageDataToggle === true ? <UsageDataToggle /> : null}
             </div>
         </>
     );

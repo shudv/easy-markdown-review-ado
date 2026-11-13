@@ -78,6 +78,8 @@ export interface ReaderStatusBarProps {
 
     /** `mailto:`/https feedback target. Omitted drops the Feedback control. */
     feedbackHref?: string;
+    /** Show the "Send usage data" toggle (only builds that send telemetry). */
+    usageDataToggle?: boolean;
 
     /** Refresh the document data + comments. Omitted drops the control. */
     onRefresh?: () => void;

@@ -1,11 +1,9 @@
 # Telemetry tables
 
-Every event goes to one of two thematic tables. The original per-event tables
-(`comment_created`, `app_exception`, …) were retired on 2026-11-04 and receive
-no new rows.
+Every event goes to one of two thematic tables.
 
 Code: [src/telemetry/eventTables.ts](../src/telemetry/eventTables.ts) (routing
-and why), [src/telemetry/sinks/oneDsSink.ts](../src/telemetry/sinks/oneDsSink.ts)
+and why), [src/telemetry/sinks/appInsightsSink.ts](../src/telemetry/sinks/appInsightsSink.ts)
 (emission), [src/telemetry/events.ts](../src/telemetry/events.ts) (event-name
 catalog). Privacy model: [docs/threat-model.md §7](./threat-model.md).
 
@@ -16,14 +14,19 @@ catalog). Privacy model: [docs/threat-model.md §7](./threat-model.md).
 | `Engagement`  | Deliberate, user-triggered actions             | Product / PM          |
 | `Diagnostics` | Non-triggered app/system observations (health) | Engineering / on-call |
 
-Aria materializes these names as lowercase Kusto tables (`engagement`,
-`diagnostics`). Kusto identifiers are case-sensitive, so queries against the
-production database must use those lowercase names even though the 1DS envelope
-names remain `Engagement` / `Diagnostics` in code.
+Official builds send to Azure Application Insights. Events land in
+`customEvents` (the `name` column is the event name, e.g. `comment.created`)
+and `app.exception` in `exceptions`. Each item carries its table as the
+`customDimensions.table` dimension. Strings and booleans are stored in
+`customDimensions` and numbers in `customMeasurements`. The `engagement` and
+`diagnostics` functions in [Querying](#querying) recreate the two tables.
 
 Each row is discriminated by a **`name` column** carrying the original event
-name. The 1DS envelope name is the theme (`Engagement`/`Diagnostics`) → the
-table; `name` inside the payload is the specific event.
+name.
+
+Unhandled and reported errors also go to Sentry (when a DSN is configured),
+which groups them into issues and un-minifies stacks with the release's source
+maps. App Insights stays the place to count them.
 
 ### Event → table map
 
@@ -106,16 +109,18 @@ pollute product counts.
 ### Columns
 
 - **Shared context** (both tables, from `TelemetryContext`): `appName`,
-  `appVersion`, `extensionVersion`, `environment`, `projectId`, `repositoryId`,
-  `pullRequestId` (hashed), `sessionId` (one page load), `installId` (one
-  browser, persisted; use `dcount(installId)` for returning users).
+  `appVersion`, `extensionVersion`, `environment`, `locale`, `projectId`,
+  `repositoryId`, `pullRequestId` (hashed), `sessionId` (one page load),
+  `installId` (one browser, persisted; use `dcount(installId)` for returning
+  users). `sessionId` and `installId` also fill App Insights' own
+  `session_Id` / `user_Id`, so the portal's Users and Sessions views work.
 - **Discriminator**: `name` (the original event name).
-- **Per-event**: sparse property/measurement columns (e.g. `anchorKind`,
+- **Per-event**: sparse dimension/measurement columns (e.g. `anchorKind`,
   `bodyLength`, `queryLength`, `resultCount`, `succeeded`, `bootTimeMs`,
   `activeBootTimeMs`, `hiddenTimeMs`, `authRefreshWaitMs`, `bundleLoadMs`, `sdkReadyMs`,
-  `contextReadyMs`, `renderReadyMs`, `status`, `message`, `stack`). Kusto stores
-  absent columns sparsely, so mixing lean events with the wider exception schema
-  in `Diagnostics` is fine.
+  `contextReadyMs`, `renderReadyMs`, `status`, `message`, `stack`). An item
+  carries only its own keys, so mixing lean events with the wider exception
+  schema in `Diagnostics` is fine.
 
 ### Boot timing semantics
 
@@ -193,6 +198,38 @@ failure streak rather than per attempt, so measure reliability in sessions,
 not rows.
 
 ## Querying
+
+Run these in the Application Insights resource's **Logs** blade. Every query
+below assumes this preamble, which rebuilds the two tables with typed columns
+(App Insights stores the dimensions as strings and the measurements as numbers
+in two property bags):
+
+```kusto
+let rows = (table: string) {
+    union customEvents, exceptions
+    | where tostring(customDimensions.table) == table
+    | extend EventInfo_Time = timestamp,
+        name = iff(itemType == "exception", "app.exception", name),
+        errorName = type, message = outerMessage,
+        d = customDimensions, m = customMeasurements
+    | extend appName = tostring(d.appName), extensionVersion = tostring(d.extensionVersion),
+        environment = tostring(d.environment), locale = tostring(d.locale),
+        projectId = tostring(d.projectId), repositoryId = tostring(d.repositoryId),
+        pullRequestId = tostring(d.pullRequestId), sessionId = tostring(d.sessionId),
+        installId = tostring(d.installId), handled = tobool(d.handled),
+        readyReason = tostring(d.readyReason), cache = tostring(d.cache),
+        bootHadHiddenInterval = tobool(d.bootHadHiddenInterval),
+        bootTimeMs = todouble(m.bootTimeMs), activeBootTimeMs = todouble(m.activeBootTimeMs),
+        bundleLoadMs = todouble(m.bundleLoadMs), contextReadyMs = todouble(m.contextReadyMs),
+        ourOpen = tolong(m.ourOpen), ourDone = tolong(m.ourDone)
+};
+let engagement = rows("Engagement");
+let diagnostics = rows("Diagnostics");
+```
+
+Any other column is `tostring(d.<key>)` (strings and booleans) or
+`todouble(m.<key>)` (numbers). App Insights keeps data for 90 days by default,
+so "first seen" below means first seen in that window.
 
 **Production cohort.** Old `0.x` builds that are still installed report
 `environment == "production"`, and their behaviour (and error volume) no

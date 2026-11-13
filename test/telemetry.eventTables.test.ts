@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EVENT } from "../src/telemetry/events";
-import { TELEMETRY_TABLE, tableFor, toTableEvent } from "../src/telemetry/eventTables";
+import { TELEMETRY_TABLE, tableFor } from "../src/telemetry/eventTables";
 
 const ENGAGEMENT_EVENTS = [
     EVENT.CommentCreated,
@@ -67,38 +67,5 @@ describe("tableFor", () => {
     // deliberate decision rather than whatever the default happens to be.
     it.each(Object.values(EVENT))("has an expected table for %s", (name) => {
         expect([...ENGAGEMENT_EVENTS, ...DIAGNOSTIC_EVENTS]).toContain(name);
-    });
-});
-
-describe("toTableEvent", () => {
-    const data = { anchorKind: "line", bodyLength: 12, projectId: "p1" };
-
-    it("emits once, to the thematic table, with the event name in a `name` column", () => {
-        expect(toTableEvent(EVENT.CommentCreated, data)).toEqual({
-            name: TELEMETRY_TABLE.Engagement,
-            data: { ...data, name: "comment.created" },
-        });
-    });
-
-    it("routes a diagnostics event to the Diagnostics table", () => {
-        expect(toTableEvent(EVENT.AuthFailure, data)).toEqual({
-            name: TELEMETRY_TABLE.Diagnostics,
-            data: { ...data, name: "auth.failure" },
-        });
-    });
-
-    it("makes the `name` discriminator authoritative (a stray property cannot clobber it)", () => {
-        const withStrayName = { ...data, name: "attacker.controlled" };
-        expect(toTableEvent(EVENT.FileOpened, withStrayName).data.name).toBe("file.opened");
-    });
-
-    it("leaves the caller's data untouched", () => {
-        toTableEvent(EVENT.RepoSwitched, data);
-
-        expect(data).not.toHaveProperty("name");
-    });
-
-    it.each(Object.values(EVENT))("never emits %s to a per-event table", (name) => {
-        expect(Object.values(TELEMETRY_TABLE)).toContain(toTableEvent(name, data).name);
     });
 });

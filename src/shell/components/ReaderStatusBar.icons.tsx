@@ -185,3 +185,15 @@ export function IconRefresh(): ReactElement {
         </RoundStrokeSvg>
     );
 }
+
+/** Usage data: a small bar chart, struck through when sending is off. */
+export function IconUsageData(props: Readonly<{ off: boolean }>): ReactElement {
+    return (
+        <RoundStrokeSvg>
+            <path d="M5 20v-6" />
+            <path d="M12 20V9" />
+            <path d="M19 20V4" />
+            {props.off ? <path d="M3 3l18 18" /> : null}
+        </RoundStrokeSvg>
+    );
+}

@@ -38,9 +38,14 @@ The extension never sends document or file contents, file or repository
 names, comment text, search text, user names, email addresses, or access
 tokens.
 
-**Turning it off.** Open the **Aa** menu in the reader's status bar and clear
-**Send usage data**. The setting applies to this browser. When it is off the
-extension sends nothing and deletes its random browser ID.
+**Turning it off.** Click the bar-chart icon next to the bug icon in the
+reader's status bar ("Send usage data"); it is struck through while off. The
+setting applies to this browser. When it is off the extension sends nothing,
+discards anything not yet sent, and deletes its random browser ID.
+
+Usage events not yet sent are kept briefly in the browser's session storage, so
+they can still be delivered if the page reloads; that copy is deleted when it is
+sent, when the tab closes, or when you turn sending off.
 
 Application Insights keeps data for 90 days. Sentry keeps error reports for 30
 days on its free plan. Builds that you create yourself send nothing unless you

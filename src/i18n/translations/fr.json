@@ -369,6 +369,10 @@
     "navigation.statusBar.hideComments": "Masquer les commentaires",
     "navigation.statusBar.showComments": "Afficher les commentaires",
     "navigation.statusBar.feedback": "Envoyer des commentaires ou signaler un bogue",
+    "navigation.statusBar.usageData": "Envoyer des données d'utilisation",
+    "navigation.statusBar.usageDataOn": "Les données d'utilisation sont envoyées. Cliquez pour arrêter.",
+    "navigation.statusBar.usageDataOff": "Aucune donnée d'utilisation n'est envoyée. Cliquez pour reprendre.",
+    "navigation.statusBar.usageDataHint": "Les rapports d'utilisation et d'erreurs aident à améliorer cette extension. Ils n'incluent jamais vos documents, commentaires, noms ou adresse e-mail.",
     "navigation.activity.withRunningCount": {
         "one": "{activity} ({count} opération en cours)",
         "other": "{activity} ({count} opérations en cours)"
@@ -383,8 +387,6 @@
     "navigation.readingPrefs.decreaseTextSize": "Réduire la taille du texte",
     "navigation.readingPrefs.increaseTextSize": "Augmenter la taille du texte",
     "navigation.readingPrefs.percent": "{value} %",
-    "navigation.readingPrefs.usageData": "Envoyer des données d'utilisation",
-    "navigation.readingPrefs.usageDataHint": "Les rapports d'utilisation et d'erreurs aident à améliorer cette extension. Ils n'incluent jamais vos documents, commentaires, noms ou adresse e-mail.",
     "navigation.iterationPicker.minutesAgo": "il y a {minutes} min",
     "navigation.iterationPicker.hoursAgo": "il y a {hours} h",
     "navigation.iterationPicker.daysAgo": "il y a {days} j",

@@ -19,9 +19,9 @@ import type {
     TelemetrySink,
 } from "./types";
 import { readUsageDataEnabled, writeUsageDataEnabled } from "./consent";
-import { createAppInsightsSink } from "./sinks/appInsightsSink";
 import { consoleSink } from "./sinks/consoleSink";
-import { createSentrySink } from "./sinks/sentrySink";
+import { isUsableDsn, parseConnectionString } from "./sinks/credentials";
+import { deferredSink } from "./sinks/deferredSink";
 
 // No-op sink — the safe default. Selected whenever no ingestion key is
 // configured (local dev, standalone preview, Storybook, unit tests) and used as
@@ -107,11 +107,29 @@ function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
     if (!cfg.enabled) return fallback;
 
     // Usage events (and exceptions) go to Application Insights; exceptions also
-    // go to Sentry for symbolicated stacks. Either can be configured alone.
-    const sinks = [
-        cfg.key === "" ? null : createAppInsightsSink(cfg.key),
-        cfg.errorDsn === "" ? null : createSentrySink(cfg.errorDsn),
-    ].filter((s): s is TelemetrySink => s !== null);
+    // go to Sentry for symbolicated stacks. Either can be configured alone. The
+    // SDKs load in their own chunks, after boot has started, never blocking it.
+    const sinks: TelemetrySink[] = [];
+
+    if (parseConnectionString(cfg.key) !== null) {
+        sinks.push(
+            deferredSink("appinsights", () =>
+                import(
+                    /* webpackChunkName: "telemetry-appinsights" */ "./sinks/appInsightsSink"
+                ).then((m) => m.createAppInsightsSink(cfg.key)),
+            ),
+        );
+    }
+
+    if (isUsableDsn(cfg.errorDsn)) {
+        sinks.push(
+            deferredSink("sentry", () =>
+                import(/* webpackChunkName: "telemetry-sentry" */ "./sinks/sentrySink").then((m) =>
+                    m.createSentrySink(cfg.errorDsn),
+                ),
+            ),
+        );
+    }
 
     if (sinks.length === 0) {
         console.warn(
@@ -175,6 +193,14 @@ export function initTelemetry(opts: {
         // Defensive: telemetry setup must never break app boot.
         sink = NOOP_SINK;
     }
+}
+
+/**
+ * Whether this build sends telemetry at all (a connection string or DSN was
+ * injected), i.e. whether the "Send usage data" choice means anything.
+ */
+export function isTelemetryConfigured(): boolean {
+    return readBuildConfig().enabled;
 }
 
 /**

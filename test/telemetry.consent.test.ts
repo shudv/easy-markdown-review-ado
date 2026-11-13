@@ -1,6 +1,6 @@
 // The "Send usage data" opt-out: the persisted choice, and the facade honouring
-// it — nothing is sent or persisted when it's off, and turning it off mid-session
-// drops queued data and forgets the install id.
+// it — nothing is loaded, sent or persisted when it's off, and turning it off
+// mid-session discards the backends and forgets the install id.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,14 +10,43 @@ import {
     writeUsageDataEnabled,
 } from "../src/telemetry/consent";
 import { events } from "../src/telemetry/events";
+import { createAppInsightsSink } from "../src/telemetry/sinks/appInsightsSink";
+import { createSentrySink } from "../src/telemetry/sinks/sentrySink";
 import {
     __resetTelemetryForTests,
     getTelemetryContext,
     initTelemetry,
     INSTALL_ID_STORAGE_KEY,
+    isTelemetryConfigured,
     setUsageDataEnabled,
     track,
 } from "../src/telemetry/telemetry";
+import type { TelemetrySink } from "../src/telemetry/types";
+
+function fakeSink(name: string) {
+    return {
+        name,
+        init: vi.fn(),
+        setContext: vi.fn(),
+        trackEvent: vi.fn(),
+        trackException: vi.fn(),
+        flush: vi.fn(),
+        discard: vi.fn(),
+    } satisfies TelemetrySink;
+}
+
+const { appInsights, sentry } = vi.hoisted(() => ({
+    appInsights: {} as ReturnType<typeof fakeSink>,
+    sentry: {} as ReturnType<typeof fakeSink>,
+}));
+
+vi.mock("../src/telemetry/sinks/appInsightsSink", () => ({
+    createAppInsightsSink: vi.fn(() => appInsights),
+}));
+
+vi.mock("../src/telemetry/sinks/sentrySink", () => ({
+    createSentrySink: vi.fn(() => sentry),
+}));
 
 const CONNECTION =
     "InstrumentationKey=abc;IngestionEndpoint=https://x.in.applicationinsights.azure.com/";
@@ -31,6 +60,10 @@ function configure(config: Record<string, unknown>) {
 
 beforeEach(() => {
     __resetTelemetryForTests();
+    Object.assign(appInsights, fakeSink("appinsights"));
+    Object.assign(sentry, fakeSink("sentry"));
+    vi.mocked(createAppInsightsSink).mockClear();
+    vi.mocked(createSentrySink).mockClear();
 });
 
 afterEach(() => {
@@ -39,7 +72,6 @@ afterEach(() => {
     window.localStorage.removeItem(USAGE_DATA_STORAGE_KEY);
     window.localStorage.removeItem(INSTALL_ID_STORAGE_KEY);
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
 });
 
 describe("usage-data consent", () => {
@@ -69,75 +101,64 @@ describe("usage-data consent", () => {
 });
 
 describe("telemetry with Application Insights and Sentry configured", () => {
-    function stubFetch() {
-        const fetchMock = vi.fn((_url: string, _init?: RequestInit) =>
-            Promise.resolve(new Response(null)),
-        );
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-        vi.stubGlobal("fetch", fetchMock);
-
-        return fetchMock;
-    }
-
-    it("sends usage events to Application Insights", async () => {
+    it("loads both backends and forwards to them", async () => {
         configure({ key: CONNECTION, errorDsn: DSN });
-        const fetchMock = stubFetch();
 
         initTelemetry({ appName: "pr-tab" });
         track(events.appLoaded());
-        await Promise.resolve();
-        window.dispatchEvent(new Event("pagehide"));
+        await settle();
 
-        expect(fetchMock.mock.calls.some(([url]) => url.includes("applicationinsights"))).toBe(
-            true,
-        );
+        expect(createAppInsightsSink).toHaveBeenCalledWith(CONNECTION);
+        expect(createSentrySink).toHaveBeenCalledWith(DSN);
+        expect(appInsights.trackEvent).toHaveBeenCalledTimes(1);
+        expect(sentry.trackEvent).toHaveBeenCalledTimes(1);
     });
 
-    it("sends nothing and persists no install id when the user opted out", () => {
+    it("loads nothing and persists no install id when the user opted out", async () => {
         configure({ key: CONNECTION });
         writeUsageDataEnabled(false);
-        const fetchMock = stubFetch();
 
         initTelemetry({ appName: "pr-tab" });
         track(events.appLoaded());
-        window.dispatchEvent(new Event("pagehide"));
+        await settle();
 
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(createAppInsightsSink).not.toHaveBeenCalled();
         expect(getTelemetryContext().installId).toBeUndefined();
         expect(window.localStorage.getItem(INSTALL_ID_STORAGE_KEY)).toBeNull();
     });
 
-    it("drops queued data and forgets the install id when turned off mid-session", () => {
+    it("discards the backends and forgets the install id when turned off mid-session", async () => {
         configure({ key: CONNECTION });
-        const fetchMock = stubFetch();
         initTelemetry({ appName: "pr-tab" });
-        track(events.appLoaded());
+        await settle();
         expect(window.localStorage.getItem(INSTALL_ID_STORAGE_KEY)).not.toBeNull();
 
         setUsageDataEnabled(false);
-        window.dispatchEvent(new Event("pagehide"));
+        track(events.appLoaded());
 
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(appInsights.discard).toHaveBeenCalledTimes(1);
+        expect(appInsights.trackEvent).not.toHaveBeenCalled();
         expect(window.localStorage.getItem(INSTALL_ID_STORAGE_KEY)).toBeNull();
         expect(getTelemetryContext().installId).toBeUndefined();
         expect(readUsageDataEnabled()).toBe(false);
     });
 
-    it("resumes when turned back on", () => {
+    it("resumes when turned back on", async () => {
         configure({ key: CONNECTION });
         writeUsageDataEnabled(false);
-        const fetchMock = stubFetch();
         initTelemetry({ appName: "pr-tab" });
 
         setUsageDataEnabled(true);
         track(events.appLoaded());
-        window.dispatchEvent(new Event("pagehide"));
+        await settle();
 
-        expect(fetchMock).toHaveBeenCalled();
+        expect(appInsights.trackEvent).toHaveBeenCalledTimes(1);
         expect(getTelemetryContext().installId).toMatch(/^[\w-]+$/);
         // Already on: a second call changes nothing.
         setUsageDataEnabled(true);
-        expect(readUsageDataEnabled()).toBe(true);
+        expect(createAppInsightsSink).toHaveBeenCalledTimes(1);
     });
 
     it("stays off when re-enabled before telemetry started", () => {
@@ -145,15 +166,22 @@ describe("telemetry with Application Insights and Sentry configured", () => {
         expect(getTelemetryContext()).toEqual({});
     });
 
-    it("warns and stays off when the configured credentials are unusable", () => {
+    it("warns and stays off when the configured credentials are unusable", async () => {
         configure({ key: "nonsense", errorDsn: "also nonsense" });
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-        const fetchMock = stubFetch();
 
         initTelemetry({ appName: "pr-tab" });
         track(events.appLoaded());
+        await settle();
 
         expect(warn).toHaveBeenCalled();
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(createAppInsightsSink).not.toHaveBeenCalled();
+        expect(createSentrySink).not.toHaveBeenCalled();
+    });
+
+    it("reports whether the build sends telemetry", () => {
+        expect(isTelemetryConfigured()).toBe(false);
+        configure({ errorDsn: DSN });
+        expect(isTelemetryConfigured()).toBe(true);
     });
 });

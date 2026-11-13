@@ -86,6 +86,11 @@ export const navigation = {
     "navigation.statusBar.hideComments": "Hide comments",
     "navigation.statusBar.showComments": "Show comments",
     "navigation.statusBar.feedback": "Share feedback or report a bug",
+    "navigation.statusBar.usageData": "Send usage data",
+    "navigation.statusBar.usageDataOn": "Sending usage data. Click to stop.",
+    "navigation.statusBar.usageDataOff": "Not sending usage data. Click to resume.",
+    "navigation.statusBar.usageDataHint":
+        "Usage and error reports help improve this extension. They never include your documents, comments, names or email.",
     "navigation.activity.withRunningCount": {
         one: "{activity} ({count} operation running)",
         other: "{activity} ({count} operations running)",
@@ -100,9 +105,6 @@ export const navigation = {
     "navigation.readingPrefs.decreaseTextSize": "Decrease text size",
     "navigation.readingPrefs.increaseTextSize": "Increase text size",
     "navigation.readingPrefs.percent": "{value}%",
-    "navigation.readingPrefs.usageData": "Send usage data",
-    "navigation.readingPrefs.usageDataHint":
-        "Usage and error reports help improve this extension. They never include your documents, comments, names or email.",
     "navigation.iterationPicker.minutesAgo": "{minutes}m ago",
     "navigation.iterationPicker.hoursAgo": "{hours}h ago",
     "navigation.iterationPicker.daysAgo": "{days}d ago",

@@ -354,6 +354,10 @@
     "navigation.statusBar.hideComments": "댓글 숨기기",
     "navigation.statusBar.showComments": "댓글 표시",
     "navigation.statusBar.feedback": "피드백 공유 또는 버그 보고",
+    "navigation.statusBar.usageData": "사용 현황 데이터 보내기",
+    "navigation.statusBar.usageDataOn": "사용 현황 데이터를 보내는 중입니다. 중지하려면 클릭하세요.",
+    "navigation.statusBar.usageDataOff": "사용 현황 데이터를 보내지 않습니다. 다시 보내려면 클릭하세요.",
+    "navigation.statusBar.usageDataHint": "사용 현황 및 오류 보고서는 이 확장을 개선하는 데 도움이 됩니다. 문서, 댓글, 이름 또는 메일 주소는 포함되지 않습니다.",
     "navigation.activity.withRunningCount": {
         "other": "{activity}(작업 {count}개 실행 중)"
     },
@@ -367,8 +371,6 @@
     "navigation.readingPrefs.decreaseTextSize": "텍스트 크기 줄이기",
     "navigation.readingPrefs.increaseTextSize": "텍스트 크기 늘리기",
     "navigation.readingPrefs.percent": "{value}%",
-    "navigation.readingPrefs.usageData": "사용 현황 데이터 보내기",
-    "navigation.readingPrefs.usageDataHint": "사용 현황 및 오류 보고서는 이 확장을 개선하는 데 도움이 됩니다. 문서, 댓글, 이름 또는 메일 주소는 포함되지 않습니다.",
     "navigation.iterationPicker.minutesAgo": "{minutes}분 전",
     "navigation.iterationPicker.hoursAgo": "{hours}시간 전",
     "navigation.iterationPicker.daysAgo": "{days}일 전",

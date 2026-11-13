@@ -1,9 +1,8 @@
 // Status-bar reading preferences: the "Aa" font/spacing popover and text size.
 
-import { type CSSProperties, type ReactElement, type RefObject, useState } from "react";
+import type { CSSProperties, ReactElement, RefObject } from "react";
 
 import { t } from "../../i18n";
-import { readUsageDataEnabled, setUsageDataEnabled } from "../../telemetry";
 import {
     clampReaderPct,
     nudgeReaderPct,
@@ -108,31 +107,6 @@ function PercentSlider({
     );
 }
 
-/**
- * "Send usage data": the user's telemetry opt-out. Applies immediately (queued
- * data is dropped) and persists for the PR tab and the Documents hub.
- */
-function UsageDataToggle(): ReactElement {
-    const [enabled, setEnabled] = useState(readUsageDataEnabled);
-
-    return (
-        <div className="emr-statusbar-pop-section emr-statusbar-usage">
-            <label className="emr-statusbar-usage-row">
-                <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={(e) => {
-                        setEnabled(e.target.checked);
-                        setUsageDataEnabled(e.target.checked);
-                    }}
-                />
-                <span>{t("navigation.readingPrefs.usageData")}</span>
-            </label>
-            <p className="emr-statusbar-usage-hint">{t("navigation.readingPrefs.usageDataHint")}</p>
-        </div>
-    );
-}
-
 /** The "Aa" reading-preferences popover plus the text-size slider. */
 // eslint-disable-next-line max-lines-per-function -- Reading preferences popover: font, size, spacing and width controls bound to one preferences object.
 export function ReadingPreferencesControls(
@@ -231,7 +205,6 @@ export function ReadingPreferencesControls(
                             showDefaultMarker={false}
                         />
                     </div>
-                    <UsageDataToggle />
                 </div>
             </div>
 

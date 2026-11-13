@@ -819,23 +819,36 @@ export const OutlineToggleSingleFile: Story = {
 };
 
 /**
- * The reading-preferences popover carries the "Send usage data" opt-out. It is
- * on by default; turning it off persists for the PR tab and the Documents hub.
+ * Builds that send telemetry show a "Send usage data" icon beside Feedback. It
+ * is on by default; turning it off (the icon is struck through) persists for
+ * this browser, and turning it on again clears the opt-out.
  */
-export const SendUsageDataOptOut: Story = {
+export const SendUsageDataToggle: Story = {
+    args: { usageDataToggle: true },
     play: async ({ canvasElement }) => {
         window.localStorage.removeItem("emr.usageData");
         const canvas = within(canvasElement);
-        await userEvent.click(canvas.getByTitle("Reading preferences"));
-        const optIn = canvas.getByRole("checkbox", { name: "Send usage data" });
-        await expect(optIn).toBeChecked();
+        const toggle = canvas.getByRole("button", { name: "Send usage data" });
+        await expect(toggle).toHaveAttribute("aria-pressed", "true");
+        await expect(toggle.title).toMatch(/^Sending usage data\. Click to stop\.\n/);
 
-        await userEvent.click(optIn);
-        await expect(optIn).not.toBeChecked();
+        await userEvent.click(toggle);
+        await expect(toggle).toHaveAttribute("aria-pressed", "false");
+        await expect(toggle.title).toMatch(/^Not sending usage data\. Click to resume\.\n/);
         await expect(window.localStorage.getItem("emr.usageData")).toBe("off");
 
-        await userEvent.click(optIn);
-        await expect(optIn).toBeChecked();
+        await userEvent.click(toggle);
+        await expect(toggle).toHaveAttribute("aria-pressed", "true");
         await expect(window.localStorage.getItem("emr.usageData")).toBeNull();
+    },
+};
+
+/** The usage-data toggle alone still gets its trailing group. */
+export const UsageDataToggleOnly: Story = {
+    args: { feedbackHref: undefined, onRefresh: undefined, usageDataToggle: true },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await expect(canvas.getByRole("button", { name: "Send usage data" })).toBeTruthy();
+        await expect(canvas.queryByRole("button", { name: "Refresh" })).toBeNull();
     },
 };

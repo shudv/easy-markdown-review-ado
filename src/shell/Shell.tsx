@@ -16,6 +16,7 @@ import {
 } from "react";
 
 import { IdentityStoreContext } from "../comments/identityStore";
+import { isTelemetryConfigured } from "../telemetry";
 import { ArticleView, type AnchorLayout } from "./components/ArticleView";
 import { DiffMinimap } from "./components/DiffMinimap";
 import { CommentRail } from "./components/CommentRail";
@@ -672,6 +673,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                         iterationRange={history.iterationRange}
                         onIterationRangeChange={changeIterationRange}
                         feedbackHref={feedbackHrefFor(props.feedbackEmail)}
+                        usageDataToggle={isTelemetryConfigured()}
                         onRefresh={statusExtras.onRefresh}
                         refreshing={statusExtras.refreshing}
                         refreshLabel={store.refreshLabel}

@@ -1,22 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EVENT, events } from "../src/telemetry/events";
 import {
     createAppInsightsSink,
-    eventEnvelope,
-    exceptionEnvelope,
-    parseConnectionString,
+    eventItem,
+    exceptionItem,
 } from "../src/telemetry/sinks/appInsightsSink";
-import type { Transport } from "../src/telemetry/sinks/transport";
-import type { TelemetryContext } from "../src/telemetry/types";
+import type { TelemetryContext, TelemetrySink } from "../src/telemetry/types";
 
-const CONNECTION =
-    "InstrumentationKey=00000000-1111-2222-3333-444444444444;IngestionEndpoint=https://westeurope-5.in.applicationinsights.azure.com/;LiveEndpoint=https://westeurope.livediagnostics.monitor.azure.com/";
+const INSTRUMENTATION_KEY = "00000000-1111-2222-3333-444444444444";
 
-const TARGET = {
-    instrumentationKey: "00000000-1111-2222-3333-444444444444",
-    trackUrl: "https://westeurope-5.in.applicationinsights.azure.com/v2/track",
-};
+const CONNECTION = `InstrumentationKey=${INSTRUMENTATION_KEY};IngestionEndpoint=https://westeurope-5.in.applicationinsights.azure.com/`;
 
 const NOW = new Date("2026-11-13T10:00:00.000Z");
 
@@ -31,31 +25,9 @@ const CTX: TelemetryContext = {
     installId: "i-1",
 };
 
-describe("parseConnectionString", () => {
-    it("reads the instrumentation key and ingestion endpoint", () => {
-        expect(parseConnectionString(CONNECTION)).toEqual(TARGET);
-    });
-
-    it("defaults the endpoint and ignores key case and malformed parts", () => {
-        expect(parseConnectionString("instrumentationkey=abc;junk;=x")).toEqual({
-            instrumentationKey: "abc",
-            trackUrl: "https://dc.services.visualstudio.com/v2/track",
-        });
-    });
-
-    it.each([
-        ["no instrumentation key", "IngestionEndpoint=https://x.example/"],
-        ["an http endpoint", "InstrumentationKey=abc;IngestionEndpoint=http://x.example/"],
-        ["an empty string", ""],
-    ])("rejects %s", (_, raw) => {
-        expect(parseConnectionString(raw)).toBeNull();
-    });
-});
-
-describe("eventEnvelope", () => {
+describe("eventItem", () => {
     it("sends the catalog name, string dimensions with the table, and tags", () => {
-        const envelope = eventEnvelope(
-            TARGET,
+        const item = eventItem(
             {
                 name: EVENT.CommentCreated,
                 properties: {
@@ -72,71 +44,56 @@ describe("eventEnvelope", () => {
             NOW,
         );
 
-        expect(envelope).toEqual({
-            name: "Microsoft.ApplicationInsights.Event",
+        expect(item).toEqual({
+            name: "Microsoft.ApplicationInsights.{0}.Event",
             time: "2026-11-13T10:00:00.000Z",
-            iKey: TARGET.instrumentationKey,
             tags: {
                 "ai.session.id": "s-1",
                 "ai.user.id": "i-1",
                 "ai.application.ver": "1.5.0.1794000000",
                 "ai.cloud.role": "pr-tab",
-                "ai.internal.sdkVersion": "emr-breeze:1",
             },
-            data: {
-                baseType: "EventData",
-                baseData: {
-                    ver: 2,
-                    name: "comment.created",
-                    properties: {
-                        anchorKind: "line",
-                        draft: "true",
-                        appName: "pr-tab",
-                        appVersion: "1.5.0",
-                        extensionVersion: "1.5.0.1794000000",
-                        environment: "production",
-                        locale: "de",
-                        // Context wins over a stray property of the same name.
-                        projectId: "p1",
-                        sessionId: "s-1",
-                        installId: "i-1",
-                        table: "Engagement",
-                    },
-                    // Numeric properties join the measurements; non-finite ones are dropped.
-                    measurements: { resultCount: 3, bodyLength: 12 },
+            baseType: "EventData",
+            baseData: {
+                name: "comment.created",
+                properties: {
+                    anchorKind: "line",
+                    draft: "true",
+                    appName: "pr-tab",
+                    appVersion: "1.5.0",
+                    extensionVersion: "1.5.0.1794000000",
+                    environment: "production",
+                    locale: "de",
+                    // Context wins over a stray property of the same name.
+                    projectId: "p1",
+                    sessionId: "s-1",
+                    installId: "i-1",
+                    table: "Engagement",
                 },
+                // Numeric properties join the measurements; non-finite ones are dropped.
+                measurements: { resultCount: 3, bodyLength: 12 },
             },
         });
     });
 
     it("falls back to the bundled version when the host gives none", () => {
-        const envelope = eventEnvelope(
-            TARGET,
-            events.appLoaded(),
-            { appVersion: "1.5.0" },
-            NOW,
-        ) as {
-            tags: Record<string, string>;
-        };
-
-        expect(envelope.tags).toEqual({
+        expect(eventItem(events.appLoaded(), { appVersion: "1.5.0" }, NOW).tags).toEqual({
             "ai.application.ver": "1.5.0",
-            "ai.internal.sdkVersion": "emr-breeze:1",
         });
     });
 });
 
-describe("exceptionEnvelope", () => {
-    it("scrubs the message and stack and maps severity", () => {
+describe("exceptionItem", () => {
+    it("scrubs the message and stack, maps severity, and splits dimensions from numbers", () => {
         const error = Object.assign(
-            new TypeError("failed for alice@contoso.com at C:\\Users\\alice\\x"),
+            new TypeError("failed for alice@contoso.com at https://dev.azure.com/org"),
             {
+                stack: "TypeError: x\n    at f (https://dev.azure.com/org/a.js:1:2)",
                 status: 503,
             },
         );
 
-        const envelope = exceptionEnvelope(
-            TARGET,
+        const baseData = exceptionItem(
             {
                 error,
                 severity: "critical",
@@ -146,22 +103,16 @@ describe("exceptionEnvelope", () => {
             },
             CTX,
             NOW,
-        ) as {
-            data: {
-                baseData: {
-                    severityLevel: number;
-                    exceptions: Array<Record<string, unknown>>;
-                    properties: Record<string, string>;
-                    measurements: Record<string, number>;
-                };
-            };
+        ).baseData as {
+            severityLevel: number;
+            exceptions: Array<Record<string, unknown>>;
+            properties: Record<string, string>;
+            measurements: Record<string, number>;
         };
-
-        const { baseData } = envelope.data;
 
         expect(baseData.severityLevel).toBe(4);
         expect(baseData.exceptions[0]).toMatchObject({ typeName: "TypeError", hasFullStack: true });
-        expect(baseData.exceptions[0]!.message).not.toContain("alice");
+        expect(JSON.stringify(baseData.exceptions)).not.toMatch(/alice|dev\.azure\.com/);
         expect(baseData.measurements).toEqual({ httpStatus: 503 });
         expect(baseData.properties).toMatchObject({
             impact: "blocking",
@@ -174,145 +125,124 @@ describe("exceptionEnvelope", () => {
     });
 
     it("defaults a bare thrown value to a handled Error at error level", () => {
-        const envelope = exceptionEnvelope(TARGET, { error: "boom" }, {}, NOW) as {
-            data: {
-                baseData: {
-                    severityLevel: number;
-                    exceptions: Array<Record<string, unknown>>;
-                    properties: Record<string, string>;
-                };
-            };
+        const baseData = exceptionItem({ error: "boom" }, {}, NOW).baseData as {
+            severityLevel: number;
+            exceptions: Array<Record<string, unknown>>;
+            properties: Record<string, string>;
         };
 
-        expect(envelope.data.baseData.severityLevel).toBe(3);
-        expect(envelope.data.baseData.exceptions[0]).toMatchObject({
+        expect(baseData.severityLevel).toBe(3);
+        expect(baseData.exceptions[0]).toMatchObject({
             typeName: "Error",
             message: "boom",
             hasFullStack: false,
         });
-        expect(envelope.data.baseData.properties.handled).toBe("true");
+        expect(baseData.properties.handled).toBe("true");
     });
 
     it("gives an exception without a message a placeholder ingestion accepts", () => {
-        const envelope = exceptionEnvelope(TARGET, { error: new Error("") }, {}, NOW) as {
-            data: { baseData: { exceptions: Array<Record<string, unknown>> } };
+        const baseData = exceptionItem({ error: new Error("") }, {}, NOW).baseData as {
+            exceptions: Array<Record<string, unknown>>;
         };
 
-        expect(envelope.data.baseData.exceptions[0]!.message).toBe("not_specified");
+        expect(baseData.exceptions[0]!.message).toBe("not_specified");
     });
 });
 
-describe("createAppInsightsSink", () => {
-    let post: Mock<Transport["post"]>;
-    let beacon: Mock<Transport["beacon"]>;
-    let transport: Transport;
-
-    beforeEach(() => {
-        vi.useFakeTimers();
-        post = vi.fn<Transport["post"]>();
-        beacon = vi.fn<Transport["beacon"]>(() => true);
-        transport = { post, beacon };
-    });
+describe("createAppInsightsSink (on the SDK)", () => {
+    let sink: TelemetrySink | null = null;
 
     afterEach(() => {
-        vi.useRealTimers();
+        sink?.discard?.();
+        sink = null;
+        window.sessionStorage.clear();
     });
 
-    const sentItems = (call: unknown[]) => JSON.parse(call[1] as string) as unknown[];
+    /** A sink whose sends are captured instead of hitting the network. */
+    function captured(config: Record<string, unknown> = {}) {
+        const batches: Array<Array<Record<string, unknown>>> = [];
+
+        sink = createAppInsightsSink(CONNECTION, {
+            now: () => NOW,
+            config: {
+                alwaysUseXhrOverride: true,
+                httpXHROverride: {
+                    sendPOST: (
+                        payload: { data: string | Uint8Array },
+                        done: (status: number, headers: Record<string, string>) => void,
+                    ) => {
+                        const text =
+                            typeof payload.data === "string"
+                                ? payload.data
+                                : new TextDecoder().decode(payload.data);
+
+                        batches.push(JSON.parse(text) as Array<Record<string, unknown>>);
+                        done(200, {});
+                    },
+                },
+                ...config,
+            },
+        })!;
+
+        return { sink, batches };
+    }
 
     it("is null for an unusable connection string", () => {
         expect(createAppInsightsSink("nonsense")).toBeNull();
     });
 
-    it("batches items and sends them a few seconds after the first", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport, now: () => NOW })!;
-        sink.init({});
-        sink.setContext({});
+    it("sends events and exceptions as App Insights envelopes", async () => {
+        const { sink, batches } = captured();
+        sink.init(CTX);
+        sink.setContext(CTX);
         sink.trackEvent(events.appLoaded(), CTX);
         sink.trackException({ error: new Error("x") }, CTX);
-        expect(post).not.toHaveBeenCalled();
-
-        vi.advanceTimersByTime(5000);
-
-        expect(post).toHaveBeenCalledTimes(1);
-        expect(post.mock.calls[0]![0]).toBe(TARGET.trackUrl);
-        expect(sentItems(post.mock.calls[0]!)).toHaveLength(2);
-        sink.discard?.();
-    });
-
-    it("sends at once when the batch is full", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport })!;
-
-        for (let i = 0; i < 20; i++) sink.trackEvent(events.appLoaded(), CTX);
-
-        expect(post).toHaveBeenCalledTimes(1);
-        expect(sentItems(post.mock.calls[0]!)).toHaveLength(20);
-    });
-
-    it("flushes on demand, and does nothing with an empty queue", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport })!;
-        void sink.flush();
-        expect(post).not.toHaveBeenCalled();
-
-        sink.trackEvent(events.appLoaded(), CTX);
         void sink.flush();
 
-        expect(post).toHaveBeenCalledTimes(1);
-    });
+        await vi.waitFor(() => expect(batches.flat()).toHaveLength(2));
+        const [event, exception] = batches.flat();
 
-    it("beacons the queue when the page hides or unloads, falling back to a POST", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport })!;
-        sink.init(CTX);
-        sink.init(CTX);
-
-        sink.trackEvent(events.appLoaded(), CTX);
-        Object.defineProperty(document, "visibilityState", {
-            value: "visible",
-            configurable: true,
+        expect(event).toMatchObject({
+            name: `Microsoft.ApplicationInsights.${INSTRUMENTATION_KEY.replaceAll("-", "")}.Event`,
+            iKey: INSTRUMENTATION_KEY,
+            tags: { "ai.user.id": "i-1", "ai.session.id": "s-1" },
+            data: {
+                baseType: "EventData",
+                baseData: { name: "app.loaded", properties: { table: "Diagnostics" } },
+            },
         });
-        document.dispatchEvent(new Event("visibilitychange"));
-        expect(beacon).not.toHaveBeenCalled();
-
-        Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
-        document.dispatchEvent(new Event("visibilitychange"));
-        expect(beacon).toHaveBeenCalledTimes(1);
-        expect(post).not.toHaveBeenCalled();
-
-        beacon.mockReturnValue(false);
-        sink.trackEvent(events.appLoaded(), CTX);
-        window.dispatchEvent(new Event("pagehide"));
-        expect(post).toHaveBeenCalledTimes(1);
-        expect(post.mock.calls[0]![2]).toBe(true);
-        sink.discard?.();
+        expect(exception).toMatchObject({
+            data: {
+                baseType: "ExceptionData",
+                baseData: { exceptions: [{ typeName: "Error", message: "x" }] },
+            },
+        });
     });
 
-    it("sends items emitted after pagehide at once, until the page is shown again", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport })!;
-        sink.init(CTX);
-
-        window.dispatchEvent(new Event("pagehide"));
+    it("drops queued items, stored copies included, and stops when discarded", async () => {
+        const { sink, batches } = captured();
         sink.trackEvent(events.appLoaded(), CTX);
-        expect(beacon).toHaveBeenCalledTimes(1);
+        expect(Object.keys(window.sessionStorage).some((k) => k.startsWith("emr_AI_"))).toBe(true);
+        window.sessionStorage.setItem("other", "kept");
 
-        window.dispatchEvent(new Event("pageshow"));
-        sink.trackEvent(events.appLoaded(), CTX);
-        expect(beacon).toHaveBeenCalledTimes(1);
-
-        vi.advanceTimersByTime(5000);
-        expect(post).toHaveBeenCalledWith(TARGET.trackUrl, expect.any(String), false);
         sink.discard?.();
+        sink.discard?.();
+        sink.trackEvent(events.appLoaded(), CTX);
+        sink.trackException({ error: new Error("x") }, CTX);
+        void sink.flush();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(batches).toEqual([]);
+        expect(Object.keys(window.sessionStorage)).toEqual(["other"]);
     });
 
-    it("drops the queue and stops listening once discarded", () => {
-        const sink = createAppInsightsSink(CONNECTION, { transport })!;
-        sink.init(CTX);
-        sink.trackEvent(events.appLoaded(), CTX);
+    it("tolerates blocked storage when discarding", () => {
+        const { sink } = captured({ enableSessionStorageBuffer: false });
+        vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+            throw new DOMException("blocked", "SecurityError");
+        });
 
-        sink.discard?.();
-        vi.advanceTimersByTime(10_000);
-        window.dispatchEvent(new Event("pagehide"));
-
-        expect(post).not.toHaveBeenCalled();
-        expect(beacon).not.toHaveBeenCalled();
+        expect(() => sink.discard?.()).not.toThrow();
+        vi.restoreAllMocks();
     });
 });

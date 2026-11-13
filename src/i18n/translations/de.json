@@ -369,6 +369,10 @@
     "navigation.statusBar.hideComments": "Kommentare ausblenden",
     "navigation.statusBar.showComments": "Kommentare anzeigen",
     "navigation.statusBar.feedback": "Feedback geben oder Fehler melden",
+    "navigation.statusBar.usageData": "Nutzungsdaten senden",
+    "navigation.statusBar.usageDataOn": "Nutzungsdaten werden gesendet. Zum Beenden klicken.",
+    "navigation.statusBar.usageDataOff": "Es werden keine Nutzungsdaten gesendet. Zum Fortsetzen klicken.",
+    "navigation.statusBar.usageDataHint": "Nutzungs- und Fehlerberichte helfen, diese Erweiterung zu verbessern. Sie enthalten nie Ihre Dokumente, Kommentare, Namen oder E-Mail-Adresse.",
     "navigation.activity.withRunningCount": {
         "one": "{activity} ({count} Vorgang wird ausgeführt)",
         "other": "{activity} ({count} Vorgänge werden ausgeführt)"
@@ -383,8 +387,6 @@
     "navigation.readingPrefs.decreaseTextSize": "Textgröße verringern",
     "navigation.readingPrefs.increaseTextSize": "Textgröße erhöhen",
     "navigation.readingPrefs.percent": "{value} %",
-    "navigation.readingPrefs.usageData": "Nutzungsdaten senden",
-    "navigation.readingPrefs.usageDataHint": "Nutzungs- und Fehlerberichte helfen, diese Erweiterung zu verbessern. Sie enthalten nie Ihre Dokumente, Kommentare, Namen oder E-Mail-Adresse.",
     "navigation.iterationPicker.minutesAgo": "vor {minutes} Min.",
     "navigation.iterationPicker.hoursAgo": "vor {hours} Std.",
     "navigation.iterationPicker.daysAgo": "vor {days} T.",

@@ -8,6 +8,7 @@ export {
     track,
     trackUserFacingError,
     setUsageDataEnabled,
+    isTelemetryConfigured,
 } from "./telemetry";
 export { readUsageDataEnabled } from "./consent";
 export { events, EVENT } from "./events";

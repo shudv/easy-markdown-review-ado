@@ -1,5 +1,8 @@
-// Azure Application Insights sink — a dependency-free sender for the Breeze
-// ingestion API (the same `v2/track` endpoint the official SDK posts to).
+// Azure Application Insights sink, on the official SDK's lean distribution
+// (`applicationinsights-web-basic`: core + channel, no auto-collection). The
+// channel batches, retries throttled/failed sends, keeps unsent items in
+// sessionStorage so a reload re-sends them, and flushes with sendBeacon as the
+// page goes away.
 //
 // Events land in `customEvents` (name = the catalog event name, e.g.
 // `comment.created`; `customDimensions.table` = Engagement | Diagnostics) and
@@ -7,8 +10,10 @@
 // and the session / install ids also as the standard session and user tags so
 // the portal's Users and Sessions views work.
 //
-// Enabled only when a connection string is injected at build time (see
-// ../config.ts); the facade never constructs this sink otherwise.
+// Loaded lazily (see ../telemetry.ts) and only when a connection string is
+// injected at build time.
+
+import { ApplicationInsights, type ITelemetryItem } from "@microsoft/applicationinsights-web-basic";
 
 import { describeError } from "../errorShape";
 import { EVENT } from "../events";
@@ -21,44 +26,11 @@ import type {
     TelemetrySeverity,
     TelemetrySink,
 } from "../types";
-import { browserTransport, type Transport } from "./transport";
+import { parseConnectionString } from "./credentials";
 
-const DEFAULT_INGESTION_ENDPOINT = "https://dc.services.visualstudio.com";
-/** Send once this many items are queued… */
-const MAX_BATCH = 20;
-/** …or this long after the first one was. */
-const FLUSH_DELAY_MS = 5000;
-
-export interface AppInsightsTarget {
-    instrumentationKey: string;
-    /** Full track URL, e.g. `https://westeurope-5.in.applicationinsights.azure.com/v2/track`. */
-    trackUrl: string;
-}
-
-/**
- * Parse an Application Insights connection string
- * (`InstrumentationKey=…;IngestionEndpoint=https://…/;…`). Returns null when it
- * has no instrumentation key or the endpoint isn't https.
- */
-export function parseConnectionString(raw: string): AppInsightsTarget | null {
-    const fields = new Map<string, string>();
-
-    for (const part of raw.split(";")) {
-        const eq = part.indexOf("=");
-        if (eq > 0) fields.set(part.slice(0, eq).trim().toLowerCase(), part.slice(eq + 1).trim());
-    }
-
-    const instrumentationKey = fields.get("instrumentationkey") ?? "";
-
-    const endpoint = (fields.get("ingestionendpoint") ?? DEFAULT_INGESTION_ENDPOINT).replace(
-        /\/+$/,
-        "",
-    );
-
-    if (instrumentationKey === "" || !endpoint.startsWith("https://")) return null;
-
-    return { instrumentationKey, trackUrl: `${endpoint}/v2/track` };
-}
+const CHANNEL_ID = "AppInsightsChannelPlugin";
+/** Prefix for the channel's sessionStorage buffer keys. */
+const NAME_PREFIX = "emr";
 
 /** customDimensions are string-valued: keep strings and booleans, drop empty ones. */
 function dimensions(values: Readonly<Record<string, unknown>>): Record<string, string> {
@@ -107,7 +79,6 @@ function tags(ctx: TelemetryContext): Record<string, string> {
         "ai.user.id": ctx.installId,
         "ai.application.ver": ctx.extensionVersion ?? ctx.appVersion,
         "ai.cloud.role": ctx.appName,
-        "ai.internal.sdkVersion": "emr-breeze:1",
     });
 }
 
@@ -122,161 +93,142 @@ const SEVERITY_LEVEL: Record<TelemetrySeverity, number> = {
     critical: 4,
 };
 
-/** The envelope for one custom event. */
-export function eventEnvelope(
-    target: AppInsightsTarget,
-    event: TelemetryEvent,
-    ctx: TelemetryContext,
-    now: Date,
-): object {
+/** The telemetry item for one custom event. */
+export function eventItem(event: TelemetryEvent, ctx: TelemetryContext, now: Date): ITelemetryItem {
     return {
-        name: "Microsoft.ApplicationInsights.Event",
+        name: "Microsoft.ApplicationInsights.{0}.Event",
         time: now.toISOString(),
-        iKey: target.instrumentationKey,
         tags: tags(ctx),
-        data: {
-            baseType: "EventData",
-            baseData: {
-                ver: 2,
-                name: event.name,
-                // Context last so a stray property can't overwrite an authoritative id.
-                properties: dimensions({
-                    ...event.properties,
-                    ...contextDimensions(ctx),
-                    table: tableFor(event.name),
-                }),
-                measurements: measurements(event.properties, event.measurements),
-            },
+        baseType: "EventData",
+        baseData: {
+            name: event.name,
+            // Context last so a stray property can't overwrite an authoritative id.
+            properties: dimensions({
+                ...event.properties,
+                ...contextDimensions(ctx),
+                table: tableFor(event.name),
+            }),
+            measurements: measurements(event.properties, event.measurements),
         },
     };
 }
 
-/** The envelope for one exception, with message and stack scrubbed of paths/URLs/emails. */
-export function exceptionEnvelope(
-    target: AppInsightsTarget,
+/** The telemetry item for one exception, with message and stack scrubbed of paths/URLs/emails. */
+export function exceptionItem(
     info: TelemetryExceptionInfo,
     ctx: TelemetryContext,
     now: Date,
-): object {
+): ITelemetryItem {
     const shape = describeError(info.error);
     const severity = info.severity ?? "error";
 
     return {
-        name: "Microsoft.ApplicationInsights.Exception",
+        name: "Microsoft.ApplicationInsights.{0}.Exception",
         time: now.toISOString(),
-        iKey: target.instrumentationKey,
         tags: tags(ctx),
-        data: {
-            baseType: "ExceptionData",
-            baseData: {
-                ver: 2,
-                severityLevel: SEVERITY_LEVEL[severity],
-                exceptions: [
-                    {
-                        typeName: shape.name ?? "Error",
-                        // Ingestion drops an exception whose message is empty.
-                        message: nonEmpty(redactText(shape.message, 256)) ?? "not_specified",
-                        hasFullStack: shape.stack !== undefined,
-                        stack: redactText(shape.stack, 2048),
-                    },
-                ],
-                measurements: measurements(info.properties, { httpStatus: shape.httpStatus }),
-                properties: dimensions({
-                    ...info.properties,
-                    ...contextDimensions(ctx),
-                    adoErrorCode: shape.adoErrorCode,
-                    severity,
-                    source: info.source,
-                    handled: info.handled ?? true,
-                    name: EVENT.AppException,
-                    table: tableFor(EVENT.AppException),
-                }),
-            },
+        baseType: "ExceptionData",
+        baseData: {
+            // With `ver` the SDK takes this as prepared exception data, not a raw error.
+            ver: 2,
+            severityLevel: SEVERITY_LEVEL[severity],
+            exceptions: [
+                {
+                    typeName: shape.name ?? "Error",
+                    // Ingestion drops an exception whose message is empty.
+                    message: nonEmpty(redactText(shape.message, 256)) ?? "not_specified",
+                    hasFullStack: shape.stack !== undefined,
+                    stack: redactText(shape.stack, 2048),
+                },
+            ],
+            measurements: measurements(info.properties, { httpStatus: shape.httpStatus }),
+            properties: dimensions({
+                ...info.properties,
+                ...contextDimensions(ctx),
+                adoErrorCode: shape.adoErrorCode,
+                severity,
+                source: info.source,
+                handled: info.handled ?? true,
+                name: EVENT.AppException,
+                table: tableFor(EVENT.AppException),
+            }),
         },
     };
 }
 
+/** The channel's surface used to drop unsent data on opt-out. */
+interface Channel {
+    pause(): void;
+    _buffer?: { clear(): void };
+}
+
+/** Remove the channel's sessionStorage copies of unsent items. */
+function clearStoredBuffers(): void {
+    try {
+        for (let i = window.sessionStorage.length - 1; i >= 0; i--) {
+            const key = window.sessionStorage.key(i);
+
+            if (key?.startsWith(`${NAME_PREFIX}_AI_`) === true) {
+                window.sessionStorage.removeItem(key);
+            }
+        }
+    } catch {
+        /* storage blocked: nothing was persisted */
+    }
+}
+
 /**
  * Build the sink, or null for an unusable connection string (the facade then
- * falls back to no telemetry rather than failing).
+ * falls back to no telemetry rather than failing). `config` overrides SDK
+ * settings (tests route sends through `httpXHROverride`).
  */
 export function createAppInsightsSink(
     connectionString: string,
-    deps: Readonly<{ transport?: Transport; now?: () => Date }> = {},
+    deps: Readonly<{ now?: () => Date; config?: Readonly<Record<string, unknown>> }> = {},
 ): TelemetrySink | null {
-    const target = parseConnectionString(connectionString);
-    if (target === null) return null;
+    if (parseConnectionString(connectionString) === null) return null;
 
-    const { transport = browserTransport, now = () => new Date() } = deps;
-    const queue: object[] = [];
-    let timer: number | undefined;
-    let listening = false;
-    // Set from `pagehide` until `pageshow`: items emitted while the page goes
-    // away (e.g. by later pagehide listeners) are sent at once, not timed.
-    let unloading = false;
+    const { now = () => new Date() } = deps;
 
-    const send = (leaving: boolean) => {
-        window.clearTimeout(timer);
-        timer = undefined;
-        if (queue.length === 0) return;
-
-        const body = JSON.stringify(queue.splice(0));
-
-        if (!leaving || !transport.beacon(target.trackUrl, body)) {
-            transport.post(target.trackUrl, body, leaving);
-        }
+    const channelConfig = {
+        // Default is 15 s; a shorter wait means less is pending if the tab dies.
+        maxBatchInterval: 5000,
+        enableSessionStorageBuffer: true,
+        namePrefix: NAME_PREFIX,
+        ...deps.config,
     };
 
-    const enqueue = (item: object) => {
-        queue.push(item);
-        if (unloading) send(true);
-        else if (queue.length >= MAX_BATCH) send(false);
-        else timer ??= window.setTimeout(() => send(false), FLUSH_DELAY_MS);
-    };
-
-    const onHidden = () => {
-        if (document.visibilityState === "hidden") send(true);
-    };
-
-    const onPageHide = () => {
-        unloading = true;
-        send(true);
-    };
-
-    const onPageShow = () => {
-        unloading = false;
-    };
+    let sdk: ApplicationInsights | null = new ApplicationInsights({
+        connectionString,
+        disableCookiesUsage: true,
+        loggingLevelConsole: 0,
+        ...channelConfig,
+        extensionConfig: { [CHANNEL_ID]: channelConfig },
+    } as ConstructorParameters<typeof ApplicationInsights>[0]);
 
     return {
         name: "appinsights",
-        init() {
-            if (listening) return;
-            listening = true;
-            document.addEventListener("visibilitychange", onHidden);
-            window.addEventListener("pagehide", onPageHide);
-            window.addEventListener("pageshow", onPageShow);
-        },
+        init() {},
         setContext() {
             // Context is attached per item.
         },
         trackEvent(event, ctx) {
-            enqueue(eventEnvelope(target, event, ctx, now()));
+            sdk?.track(eventItem(event, ctx, now()));
         },
         trackException(info, ctx) {
-            enqueue(exceptionEnvelope(target, info, ctx, now()));
+            sdk?.track(exceptionItem(info, ctx, now()));
         },
         flush() {
-            send(false);
+            sdk?.flush();
         },
         discard() {
-            window.clearTimeout(timer);
-            timer = undefined;
-            queue.length = 0;
-            document.removeEventListener("visibilitychange", onHidden);
-            window.removeEventListener("pagehide", onPageHide);
-            window.removeEventListener("pageshow", onPageShow);
-            listening = false;
-            unloading = false;
+            if (sdk === null) return;
+            const channel = sdk.getPlugin(CHANNEL_ID).plugin as unknown as Channel;
+            // Stop sending and drop the queue before unload would flush it.
+            channel.pause();
+            channel._buffer?.clear();
+            void sdk.unload(false);
+            sdk = null;
+            clearStoredBuffers();
         },
     };
 }

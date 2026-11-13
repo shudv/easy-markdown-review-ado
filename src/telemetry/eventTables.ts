@@ -1,25 +1,21 @@
-// Thematic-table routing for the 1DS sink.
+// Thematic grouping of telemetry events.
 //
-// WHY THIS EXISTS
-// In 1DS/Aria the *event name* becomes the destination Kusto table, so the
-// original design — one distinct name per event (`comment.created`,
-// `app.loaded`, ...) — scattered every signal across its own table. Answering a
-// simple product question ("what did users do this week?") then required a
-// UNION across a dozen tables. This module collapses those into a small set of
-// THEMATIC tables, each row discriminated by a `name` column carrying the
-// original event name:
+// Every event carries a fixed catalog name (`comment.created`, `app.loaded`,
+// ...). Answering a product question ("what did users do this week?") shouldn't
+// need a list of a dozen names, so each event also belongs to one THEMATIC
+// table, sent with it as the `table` dimension:
 //
 //   Engagement  — deliberate user actions (comments, threads, file opens, search)
 //   Diagnostics — app/system observations (boot timing, auth failures, exceptions)
 //
-// See docs/telemetry-tables.md for the tables' contents and KQL examples.
+// In Application Insights all events land in `customEvents`; filter on
+// `customDimensions.table`. See docs/telemetry-tables.md for queries.
 //
-// This logic lives here (a pure, unit-tested module) rather than inline in the
-// coverage-excluded sink so the routing contract is actually covered by tests.
-
+// This logic lives here (a pure, unit-tested module) rather than inline in a
+// sink so the routing contract is covered by tests.
 import { EVENT } from "./events";
 
-/** The thematic destination tables. The value is the 1DS envelope event name. */
+/** The thematic tables, sent as the `table` dimension. */
 export const TELEMETRY_TABLE = {
     /** Deliberate, user-triggered actions. */
     Engagement: "Engagement",
@@ -79,26 +75,4 @@ export function tableFor(eventName: string): TelemetryTable {
     return ENGAGEMENT_EVENTS.has(eventName)
         ? TELEMETRY_TABLE.Engagement
         : TELEMETRY_TABLE.Diagnostics;
-}
-
-/** A single event ready to hand to `core.track`: envelope name + property bag. */
-export interface OneDsTableEvent {
-    /** 1DS envelope event name — this is what becomes the destination table. */
-    name: string;
-    /** Custom property bag (already sanitised + context-merged by the caller). */
-    data: Record<string, unknown>;
-}
-
-/**
- * Route one logical event to its thematic table. The caller (the sink) hands
- * over a sanitised, context-merged payload; this module owns the routing.
- *
- * The `name` discriminator is spread LAST so a stray property or context field
- * of the same name can never clobber the authoritative event name.
- */
-export function toTableEvent(
-    eventName: string,
-    data: Readonly<Record<string, unknown>>,
-): OneDsTableEvent {
-    return { name: tableFor(eventName), data: { ...data, name: eventName } };
 }

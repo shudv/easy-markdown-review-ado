@@ -18,8 +18,10 @@ import type {
     TelemetrySeverity,
     TelemetrySink,
 } from "./types";
+import { readUsageDataEnabled, writeUsageDataEnabled } from "./consent";
+import { createAppInsightsSink } from "./sinks/appInsightsSink";
 import { consoleSink } from "./sinks/consoleSink";
-import { createOneDsSink } from "./sinks/oneDsSink";
+import { createSentrySink } from "./sinks/sentrySink";
 
 // No-op sink — the safe default. Selected whenever no ingestion key is
 // configured (local dev, standalone preview, Storybook, unit tests) and used as
@@ -38,6 +40,7 @@ const NOOP_SINK: TelemetrySink = {
 let sink: TelemetrySink = NOOP_SINK;
 let context: TelemetryContext = {};
 let initialised = false;
+let buildConfig: TelemetryBuildConfig | undefined;
 
 function makeRandomId(): string {
     const cryptoObj = globalThis.crypto as Crypto | undefined;
@@ -76,26 +79,49 @@ function readInstallId(): string | undefined {
     }
 }
 
-function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
-    // The enabled branch constructs the 1DS SDK sink, which only runs in a real
-    // browser build with a provisioned key. Neither successful construction nor
-    // the SDK-init-failure fallback is reproducible under jsdom, so it is verified
-    // via manual/e2e telemetry checks. See src/telemetry/sinks/oneDsSink.ts.
-    if (cfg.enabled) {
-        const oneds = createOneDsSink(cfg);
-        if (oneds) return oneds;
-        // A key is configured but the 1DS SDK failed to initialise; fall back so
-        // the app keeps working without telemetry.
+/** One sink that forwards to several, isolating each from the others' failures. */
+function fanOut(sinks: readonly TelemetrySink[]): TelemetrySink {
+    const each = (call: (s: TelemetrySink) => void) => {
+        for (const s of sinks) {
+            try {
+                call(s);
+            } catch {
+                /* one backend failing must not starve the others */
+            }
+        }
+    };
 
+    return {
+        name: sinks.map((s) => s.name).join("+"),
+        init: (ctx) => each((s) => s.init(ctx)),
+        setContext: (ctx) => each((s) => s.setContext(ctx)),
+        trackEvent: (event, ctx) => each((s) => s.trackEvent(event, ctx)),
+        trackException: (info, ctx) => each((s) => s.trackException(info, ctx)),
+        flush: () => each((s) => void s.flush()),
+        discard: () => each((s) => s.discard?.()),
+    };
+}
+
+function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
+    const fallback = cfg.debug ? consoleSink : NOOP_SINK;
+    if (!cfg.enabled) return fallback;
+
+    // Usage events (and exceptions) go to Application Insights; exceptions also
+    // go to Sentry for symbolicated stacks. Either can be configured alone.
+    const sinks = [
+        cfg.key === "" ? null : createAppInsightsSink(cfg.key),
+        cfg.errorDsn === "" ? null : createSentrySink(cfg.errorDsn),
+    ].filter((s): s is TelemetrySink => s !== null);
+
+    if (sinks.length === 0) {
         console.warn(
-            "[telemetry] ingestion key present but 1DS sink failed to initialise; " +
-                "falling back (see src/telemetry/sinks/oneDsSink.ts).",
+            "[telemetry] the configured connection string / DSN is invalid; telemetry is off.",
         );
 
-        return cfg.debug ? consoleSink : NOOP_SINK;
+        return fallback;
     }
 
-    return cfg.debug ? consoleSink : NOOP_SINK;
+    return sinks.length === 1 ? sinks[0]! : fanOut(sinks);
 }
 
 /** Normalise raw context input — hashes the PR id so the raw value never ships. */
@@ -132,19 +158,50 @@ export function initTelemetry(opts: {
 
     try {
         const cfg = readBuildConfig();
+        // Honour "Send usage data" before anything is sent or persisted.
+        const allowed = readUsageDataEnabled();
+        buildConfig = cfg;
         context = {
             appName: opts.appName,
             appVersion: cfg.appVersion,
             extensionVersion: opts.extensionVersion,
             environment: cfg.environment,
             sessionId: makeRandomId(),
-            installId: readInstallId(),
+            installId: allowed ? readInstallId() : undefined,
         };
-        sink = selectSink(cfg);
+        sink = allowed ? selectSink(cfg) : NOOP_SINK;
         sink.init(context);
     } catch {
         // Defensive: telemetry setup must never break app boot.
         sink = NOOP_SINK;
+    }
+}
+
+/**
+ * Apply the user's "Send usage data" choice now and for future loads. Turning
+ * it off drops anything still queued unsent and forgets the install id;
+ * turning it back on resumes telemetry for this load.
+ */
+export function setUsageDataEnabled(enabled: boolean): void {
+    writeUsageDataEnabled(enabled);
+
+    try {
+        if (!enabled) {
+            sink.discard?.();
+            sink = NOOP_SINK;
+            context = { ...context, installId: undefined };
+            window.localStorage.removeItem(INSTALL_ID_STORAGE_KEY);
+
+            return;
+        }
+
+        if (!initialised || sink !== NOOP_SINK || buildConfig === undefined) return;
+
+        context = { ...context, installId: readInstallId() };
+        sink = selectSink(buildConfig);
+        sink.init(context);
+    } catch {
+        /* telemetry must never break the app */
     }
 }
 
@@ -236,7 +293,9 @@ export function flushTelemetry(): void | Promise<void> {
 
 /** Test-only: reset module singletons between cases. */
 export function __resetTelemetryForTests(replacement?: TelemetrySink): void {
+    sink.discard?.();
     initialised = false;
     context = {};
+    buildConfig = undefined;
     sink = replacement ?? NOOP_SINK;
 }

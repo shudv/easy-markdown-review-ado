@@ -817,3 +817,25 @@ export const OutlineToggleSingleFile: Story = {
         await expect(within(canvasElement).queryByRole("button", { name: "Outline" })).toBeNull();
     },
 };
+
+/**
+ * The reading-preferences popover carries the "Send usage data" opt-out. It is
+ * on by default; turning it off persists for the PR tab and the Documents hub.
+ */
+export const SendUsageDataOptOut: Story = {
+    play: async ({ canvasElement }) => {
+        window.localStorage.removeItem("emr.usageData");
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByTitle("Reading preferences"));
+        const optIn = canvas.getByRole("checkbox", { name: "Send usage data" });
+        await expect(optIn).toBeChecked();
+
+        await userEvent.click(optIn);
+        await expect(optIn).not.toBeChecked();
+        await expect(window.localStorage.getItem("emr.usageData")).toBe("off");
+
+        await userEvent.click(optIn);
+        await expect(optIn).toBeChecked();
+        await expect(window.localStorage.getItem("emr.usageData")).toBeNull();
+    },
+};

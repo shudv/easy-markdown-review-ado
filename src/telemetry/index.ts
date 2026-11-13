@@ -7,7 +7,9 @@ export {
     getTelemetryContext,
     track,
     trackUserFacingError,
+    setUsageDataEnabled,
 } from "./telemetry";
+export { readUsageDataEnabled } from "./consent";
 export { events, EVENT } from "./events";
 export type { AnchorKind, HeldWriteKind, HeldWriteOutcome, ResolveVia } from "./events";
 export {

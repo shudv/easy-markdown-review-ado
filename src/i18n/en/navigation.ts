@@ -100,6 +100,9 @@ export const navigation = {
     "navigation.readingPrefs.decreaseTextSize": "Decrease text size",
     "navigation.readingPrefs.increaseTextSize": "Increase text size",
     "navigation.readingPrefs.percent": "{value}%",
+    "navigation.readingPrefs.usageData": "Send usage data",
+    "navigation.readingPrefs.usageDataHint":
+        "Usage and error reports help improve this extension. They never include your documents, comments, names or email.",
     "navigation.iterationPicker.minutesAgo": "{minutes}m ago",
     "navigation.iterationPicker.hoursAgo": "{hours}h ago",
     "navigation.iterationPicker.daysAgo": "{days}d ago",

@@ -367,6 +367,8 @@
     "navigation.readingPrefs.decreaseTextSize": "减小文本大小",
     "navigation.readingPrefs.increaseTextSize": "增大文本大小",
     "navigation.readingPrefs.percent": "{value}%",
+    "navigation.readingPrefs.usageData": "发送使用情况数据",
+    "navigation.readingPrefs.usageDataHint": "使用情况和错误报告有助于改进此扩展。报告绝不会包含你的文档、评论、姓名或电子邮件。",
     "navigation.iterationPicker.minutesAgo": "{minutes} 分钟前",
     "navigation.iterationPicker.hoursAgo": "{hours} 小时前",
     "navigation.iterationPicker.daysAgo": "{days} 天前",

@@ -367,6 +367,8 @@
     "navigation.readingPrefs.decreaseTextSize": "テキストを小さくする",
     "navigation.readingPrefs.increaseTextSize": "テキストを大きくする",
     "navigation.readingPrefs.percent": "{value}%",
+    "navigation.readingPrefs.usageData": "使用状況データを送信する",
+    "navigation.readingPrefs.usageDataHint": "使用状況とエラーのレポートは、この拡張機能の改善に役立ちます。ドキュメント、コメント、名前、メール アドレスが含まれることはありません。",
     "navigation.iterationPicker.minutesAgo": "{minutes} 分前",
     "navigation.iterationPicker.hoursAgo": "{hours} 時間前",
     "navigation.iterationPicker.daysAgo": "{days} 日前",

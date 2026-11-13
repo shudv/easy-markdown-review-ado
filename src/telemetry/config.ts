@@ -1,6 +1,6 @@
 // Build-time telemetry configuration.
 //
-// The ingestion key/endpoint are injected at build time via webpack
+// The Application Insights connection string and Sentry DSN are injected at build time via webpack
 // `DefinePlugin` (see webpack.config.cjs), which textually substitutes the
 // global `__EMR_TELEMETRY_CONFIG__`. The name is vendor-neutral on purpose —
 // it carries whatever credentials the selected sink needs.
@@ -20,21 +20,19 @@ export function readBuildConfig(): TelemetryBuildConfig {
         typeof __EMR_TELEMETRY_CONFIG__ !== "undefined" ? __EMR_TELEMETRY_CONFIG__ : undefined;
 
     const key = typeof raw?.key === "string" ? raw.key.trim() : "";
+    const errorDsn = typeof raw?.errorDsn === "string" ? raw.errorDsn.trim() : "";
 
     return {
         key,
-        endpoint:
-            typeof raw?.endpoint === "string" && raw.endpoint.trim().length > 0
-                ? raw.endpoint.trim()
-                : undefined,
+        errorDsn,
         appVersion:
             typeof raw?.appVersion === "string" && raw.appVersion.length > 0
                 ? raw.appVersion
                 : "0.0.0",
         environment: raw?.environment === "production" ? "production" : "development",
-        // A key is the minimum required to talk to a real backend. Without one we
-        // never attempt network egress.
-        enabled: key.length > 0,
+        // A connection string or DSN is the minimum required to talk to a real
+        // backend. Without one we never attempt network egress.
+        enabled: key.length > 0 || errorDsn.length > 0,
         // Allow forcing the console sink for local diagnostics even without a key.
         debug: raw?.debug === true,
     };

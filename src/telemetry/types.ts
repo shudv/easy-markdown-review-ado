@@ -2,8 +2,8 @@
 //
 // Nothing in the application imports a concrete telemetry vendor. App code
 // talks to the facade in `telemetry.ts`, which delegates to whichever
-// `TelemetrySink` is selected at boot. This lets us swap the backend (1DS,
-// Application Insights, a custom collector, or a no-op) without touching a
+// `TelemetrySink` is selected at boot. This lets us swap the backend (Application
+// Insights, Sentry, a custom collector, or a no-op) without touching a
 // single call site.
 
 /** Scalar values permitted on an event. Objects/arrays are intentionally
@@ -87,4 +87,6 @@ export interface TelemetrySink {
     trackEvent(event: TelemetryEvent, context: TelemetryContext): void;
     trackException(info: TelemetryExceptionInfo, context: TelemetryContext): void;
     flush(): void | Promise<void>;
+    /** Drop anything queued without sending it, and stop (the user opted out). */
+    discard?(): void;
 }

@@ -5,7 +5,9 @@
 //
 // What this does:
 //   1. Validates AZDO_PUBLISHER_ID is set.
-//   2. Runs webpack (production for --mode prod, development for --mode dev).
+//   2. Runs webpack (production for --mode prod, development for --mode dev),
+//      then, for release builds with SENTRY_AUTH_TOKEN / SENTRY_ORG /
+//      SENTRY_PROJECT set, stamps Sentry debug ids and uploads source maps.
 //   3. Writes a temporary overrides JSON that injects the publisher id and
 //      (in dev mode) a baseUri pointing at https://localhost:3000/ plus a
 //      timestamped version suffix so repeated dev publishes don't collide.
@@ -72,6 +74,50 @@ if (mode !== "dev") {
         console.error("✘ dev-only fault injection found in the production build");
         process.exit(guard.status ?? 1);
     }
+}
+
+// ---------- 1b. Sentry source maps ----------
+//
+// Release builds with Sentry configured stamp debug ids into the bundles and
+// upload their source maps, so error reports from the minified build map back
+// to source (see src/telemetry/sinks/sentrySink.ts). Must run before
+// packaging: the stamp changes the shipped bundles. Skipped when not configured.
+const sentryToken = (process.env.SENTRY_AUTH_TOKEN ?? "").trim();
+const sentryOrg = (process.env.SENTRY_ORG ?? "").trim();
+const sentryProject = (process.env.SENTRY_PROJECT ?? "").trim();
+if (mode !== "dev" && sentryToken && sentryOrg && sentryProject) {
+    const pkgVersion = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).version;
+    const steps = [
+        ["sourcemaps", "inject", "dist"],
+        [
+            "sourcemaps",
+            "upload",
+            "--org",
+            sentryOrg,
+            "--project",
+            sentryProject,
+            "--release",
+            `easy-markdown-review@${pkgVersion}`,
+            "dist",
+        ],
+    ];
+    for (const step of steps) {
+        console.log(`▸ sentry-cli ${step.slice(0, 2).join(" ")}…`);
+        const result = spawnSync(isWin ? "npx.cmd" : "npx", ["--yes", "@sentry/cli@2", ...step], {
+            stdio: "inherit",
+            cwd: REPO_ROOT,
+            shell: isWin,
+            env: { ...process.env, SENTRY_AUTH_TOKEN: sentryToken },
+        });
+        if (result.status !== 0) {
+            console.error("✘ Sentry source-map step failed");
+            process.exit(result.status ?? 1);
+        }
+    }
+} else if (mode !== "dev") {
+    console.log(
+        "▸ Sentry source maps skipped (SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT unset).",
+    );
 }
 
 // ---------- 2. overrides ----------

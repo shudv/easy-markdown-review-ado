@@ -49,6 +49,15 @@ jobs:
               run: npm run icons:build
 
             - name: Package VSIX
+              env:
+                  # Telemetry credentials (all optional; unset ⇒ that channel stays off).
+                  # The connection string and DSN are write-only ingestion keys that end
+                  # up in the shipped bundle; the auth token only uploads source maps.
+                  TELEMETRY_KEY: ${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
+                  SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+                  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+                  SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+                  SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
               run: node scripts/package-extension.mjs --mode prod
 
             - name: Preserve VSIX artifact

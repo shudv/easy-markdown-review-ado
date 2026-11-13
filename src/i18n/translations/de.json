@@ -383,6 +383,8 @@
     "navigation.readingPrefs.decreaseTextSize": "Textgröße verringern",
     "navigation.readingPrefs.increaseTextSize": "Textgröße erhöhen",
     "navigation.readingPrefs.percent": "{value} %",
+    "navigation.readingPrefs.usageData": "Nutzungsdaten senden",
+    "navigation.readingPrefs.usageDataHint": "Nutzungs- und Fehlerberichte helfen, diese Erweiterung zu verbessern. Sie enthalten nie Ihre Dokumente, Kommentare, Namen oder E-Mail-Adresse.",
     "navigation.iterationPicker.minutesAgo": "vor {minutes} Min.",
     "navigation.iterationPicker.hoursAgo": "vor {hours} Std.",
     "navigation.iterationPicker.daysAgo": "vor {days} T.",

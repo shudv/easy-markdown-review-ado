@@ -2,6 +2,7 @@
 
 import { Fragment, type ReactElement } from "react";
 
+import { t } from "../../i18n";
 import { diffCharacters, diffWords, type WordDiffOp } from "../../markdown/wordDiff";
 import { WORD_ADDED_CLASS, removedRunClass } from "../../markdown/wordDiffDom";
 
@@ -30,7 +31,9 @@ export function GeneratedSourceIdentity(
                 )}
             </span>
             <span className="emr-generated-source-title">
-                {isMath ? "Equation source" : "Diagram source"}
+                {isMath
+                    ? t("document.generatedSource.equationTitle")
+                    : t("document.generatedSource.diagramTitle")}
             </span>
         </div>
     );
@@ -47,7 +50,9 @@ export function GeneratedSourceViewControls(
 ): ReactElement {
     const { beforeShown, changesShown, onToggleBefore, onToggleChanges } = props;
 
-    const changesLabel = changesShown ? "Hide source changes" : "Show source changes";
+    const changesLabel = changesShown
+        ? t("document.generatedSource.hideChanges")
+        : t("document.generatedSource.showChanges");
 
     return (
         <div className="emr-generated-source-view-controls">
@@ -71,14 +76,18 @@ export function GeneratedSourceViewControls(
                 type="button"
                 className="emr-generated-source-toggle emr-generated-source-before is-toggle"
                 aria-pressed={beforeShown}
-                title={beforeShown ? "Return to the current version" : "Show the previous version"}
+                title={
+                    beforeShown
+                        ? t("document.generatedSource.returnToCurrent")
+                        : t("document.generatedSource.showPrevious")
+                }
                 onClick={onToggleBefore}
             >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 12a9 9 0 1 0 3-6.7" />
                     <path d="M3 4v6h6" />
                 </svg>
-                <span>Before</span>
+                <span>{t("common.before")}</span>
             </button>
         </div>
     );

@@ -13,7 +13,7 @@
 // Framework-free apart from an injectable `sleep`, so the whole backoff loop is
 // deterministically unit-testable with fake timers.
 
-import { extractStatus, isRetryable, type RetryMode } from "./retryClassify";
+import { isRetryable, type RetryMode } from "./retryClassify";
 
 export interface RetryOptions {
     /** `"read"` (idempotent) or `"write"` (dedup-safe). */
@@ -222,7 +222,3 @@ export async function withRetry<T>(
     // Only reached when `attempts` < 1, so the loop never ran.
     throw lastError;
 }
-
-// Re-export classification helpers so callers import the whole resiliency
-// surface from one place.
-export { extractStatus, isRetryable, type RetryMode };

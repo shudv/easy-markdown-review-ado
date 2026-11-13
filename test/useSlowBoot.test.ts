@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { VisibilityClock } from "../src/pr-tab/prTabApp.helpers";
 import {
+    checkingForUpdatesActivity,
     isBootWaiting,
     PrTabLoadingView,
     SLOW_BOOT_MS,
@@ -56,6 +57,16 @@ async function advance(ms: number) {
         vi.advanceTimersByTime(ms);
     });
 }
+
+describe("checkingForUpdatesActivity", () => {
+    it("tells the user a cached PR is being checked for a newer version, below shell operations", () => {
+        expect(checkingForUpdatesActivity()).toEqual({
+            id: "pr-check-updates",
+            label: "Checking for updates…",
+            priority: 30,
+        });
+    });
+});
 
 describe("isBootWaiting", () => {
     it.each([

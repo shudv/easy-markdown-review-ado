@@ -3,6 +3,7 @@
 
 import type { Comment } from "../../types";
 import { formatLikeTooltip } from "../../comments/likeTooltip";
+import { getFormatLocale, t } from "../../i18n";
 
 /** Outcome of the last "Link to comment" copy, shown inline in the menu. */
 export type CommentLinkState = "idle" | "copied" | "failed";
@@ -55,10 +56,10 @@ export function summarizeLikes(
 }
 
 export function commentLinkLabel(state: CommentLinkState): string {
-    if (state === "copied") return "Link copied";
-    if (state === "failed") return "Couldn't copy link";
+    if (state === "copied") return t("common.linkCopied");
+    if (state === "failed") return t("common.copyLinkFailed");
 
-    return "Link to comment";
+    return t("comments.row.linkToComment");
 }
 
 // ---------------------------------------------------------------------------
@@ -69,16 +70,16 @@ export function formatFullTime(iso: string): string {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
 
-    const date = d.toLocaleDateString(undefined, {
+    const date = d.toLocaleDateString(getFormatLocale(), {
         month: "short",
         day: "numeric",
         year: "numeric",
     });
 
-    const time = d.toLocaleTimeString(undefined, {
+    const time = d.toLocaleTimeString(getFormatLocale(), {
         hour: "numeric",
         minute: "2-digit",
     });
 
-    return `${date} at ${time}`;
+    return t("comments.row.dateAtTime", { date, time });
 }

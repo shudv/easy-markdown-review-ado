@@ -1,5 +1,45 @@
 # OSS mirror sync ledger
 
+## 2026-11-13 Localization and resolve-animation sync (final)
+
+- Public base: `bf87ce2` (#34).
+- Previously mirrored product boundary: `585b6f0` (source merge `fefd152`).
+- New product boundary: `def5929` (source branch `feat/localization`, not yet
+  merged at the time of this sync).
+- OSS release version: `1.5.0` (package, root lockfile metadata, and Marketplace
+  manifest updated together). The source repository is not bumped in this
+  change.
+- Strategy: replay the product tree delta without importing private history.
+  The delta applied with no conflicts except `README.md`, which keeps its
+  public wording.
+
+### Mirrored changes
+
+| Source commit | Changes represented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `086e0a7`     | The UI is localized into German, Spanish, French, Japanese, Korean, Brazilian Portuguese and Simplified Chinese: a zero-dependency `src/i18n` (`t`/`tRich` with type-checked placeholders, `Intl.PluralRules` plurals, locale-aware dates and numbers), 414 English messages in per-area catalogs, translation files loaded as lazy chunks awaited before first render (English stays bundled; a failed chunk stays in English), a catalog parity test, the applied `locale` on telemetry context, a Storybook language switcher and `docs/localization.md`.                            |
+| `f6b655b`     | `e2e/locale.spec.ts` runs the browser in German (renders German) and Italian (falls back to English) against the real host; the shared e2e fixture pins every other spec to English through the `emr.locale` override. The docs record that on Azure DevOps Services `globalization.culture` follows the browser's language, not the profile's preferred-language setting.                                                                                                                                                                                                              |
+| `def5929`     | The translation parity test runs one check per locale (listing every offending key) instead of one test per message per locale, so translations no longer dominate the test count (about 2,900 tests become 7).                                                                                                                                                                                                                                                                                                                                                                         |
+| `ab23759`     | Resolving a thread here (check button, status menu, or Reply and resolve) blooms a soft green wash from the press point (or the focused control) while the border pulses green; when the comment filter then hides the thread — or the filter is switched to hide resolved threads — the card fades and its slot (height and list gap) collapses so the cards below glide up. Remote status changes, file switches and search don't animate; reduced motion and forced colors get a plain fade. `balloonMotion.ts`, `Balloon.motion.ts`, `CommentRail.exit.ts`, stories and unit tests. |
+| `0e2fa8b`     | Every knip finding is fixed: module-private symbols un-exported, unused re-exports dropped from `retry`, `theme`, `CommentRail` and the telemetry barrel, the unused `FileViewData` and `EventName` types deleted, and `taskkill`/`explorer.exe` listed as system binaries.                                                                                                                                                                                                                                                                                                             |
+
+### Public-specific adaptations retained
+
+- Keep all adaptations and exclusions from the earlier syncs below.
+- The README keeps its public wording. It gains the "Localized" feature line,
+  the spell-check note about translation files, and a pointer to the
+  localization guide (the source lists its guides in a table). The feature
+  line uses the wording corrected in source commit `3df0a8b`; the rest of that
+  commit (removing the README's Marketplace link) is source-only and not
+  mirrored.
+- `PrTabApp.tsx` and `DocumentsApp.tsx` took the source's edits with their
+  public feedback contacts unchanged.
+
+### Next sync
+
+None planned: this is the last sync from the source repository. From here on
+this repository is maintained independently.
+
 ## 2026-11-12 Review-loop, caching, back-link and telemetry sync
 
 - Public base: `c800901` (#33).

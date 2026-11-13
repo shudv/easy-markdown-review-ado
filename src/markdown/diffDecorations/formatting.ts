@@ -1,6 +1,7 @@
 // Inline formatting-change detection (bold/italic/code/link wrappers and
 // whitespace swaps) and the text-node wrapping that explains them.
 
+import { getFormatLocale, type MessageKey, t } from "../../i18n";
 import { type WordDiffOp, LINE_WHITESPACE } from "../wordDiff";
 import { applyDiffTooltip, suppressNativeTitle } from "./tooltip";
 import { DIFF_FORMAT_CLASS } from "./shared";
@@ -21,12 +22,12 @@ interface ExplainedTextRange {
 const INLINE_FORMAT_TAGS = new Set(["STRONG", "EM", "CODE", "DEL", "A"]);
 
 // Links are described by their target instead (see formatDescription).
-const FORMAT_NAME_BY_TAG: Record<string, string> = {
-    CODE: "inline code",
-    DEL: "strikethrough",
-    EM: "italic",
-    STRONG: "bold",
-};
+const FORMAT_NAME_KEY_BY_TAG = {
+    CODE: "document.format.inlineCode",
+    DEL: "document.format.strikethrough",
+    EM: "document.format.italic",
+    STRONG: "document.format.bold",
+} as const satisfies Record<string, MessageKey>;
 
 export function formattingRanges(root: Element): FormattingRange[] {
     // Stryker disable next-line ArrayDeclaration: both sides being compared start with the same placeholder entry, so it is never a difference
@@ -66,11 +67,12 @@ function formattingRangeKey(range: FormattingRange): string {
 }
 
 function formattingName(tag: string): string {
-    return FORMAT_NAME_BY_TAG[tag]!;
+    return t(FORMAT_NAME_KEY_BY_TAG[tag as keyof typeof FORMAT_NAME_KEY_BY_TAG]);
 }
 
-function capitalize(text: string): string {
-    return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+/** Upper-case the first letter of a whole translated sentence. */
+function capitalizeSentence(sentence: string): string {
+    return `${sentence.charAt(0).toLocaleUpperCase(getFormatLocale())}${sentence.slice(1)}`;
 }
 
 function compactTooltipValue(value: string, limit = 96): string {
@@ -90,12 +92,21 @@ function formatDescription(ranges: readonly FormattingRange[]): string {
     );
 
     if (link) {
-        parts.push(`link to ${compactTooltipValue(link.detail!)}`);
+        parts.push(t("document.format.linkTo", { target: compactTooltipValue(link.detail!) }));
     }
 
+    return joinList(parts);
+}
+
+/** "a", "a and b", "a, b and c" in the UI language. */
+export function joinList(parts: readonly string[]): string {
     if (parts.length < 2) return parts[0]!;
 
-    return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+    const head = parts
+        .slice(1, -1)
+        .reduce((list, item) => t("document.format.listItem", { list, item }), parts[0]!);
+
+    return t("document.format.listLastItem", { list: head, item: parts[parts.length - 1]! });
 }
 
 function describeFormattingChange(
@@ -109,19 +120,23 @@ function describeFormattingChange(
 
     if (beforeRanges.length === 0) {
         return afterLink && afterRanges.length === 1
-            ? `Link added: ${compactTooltipValue(afterLink.detail!)}`
-            : `${capitalize(after)} formatting added`;
+            ? t("document.format.linkAdded", { target: compactTooltipValue(afterLink.detail!) })
+            : capitalizeSentence(t("document.format.added", { formats: after }));
     }
 
     if (afterRanges.length === 0) {
         return beforeLink && beforeRanges.length === 1
-            ? `Link removed: ${compactTooltipValue(beforeLink.detail!)}`
-            : `${capitalize(before)} formatting removed`;
+            ? t("document.format.linkRemoved", {
+                  target: compactTooltipValue(beforeLink.detail!),
+              })
+            : capitalizeSentence(t("document.format.removed", { formats: before }));
     }
 
-    if (before === after) return `${capitalize(before)} formatting moved`;
+    if (before === after) {
+        return capitalizeSentence(t("document.format.moved", { formats: before }));
+    }
 
-    return `Formatting changed from ${before} to ${after}`;
+    return t("document.format.changed", { before, after });
 }
 
 function formattingChangeRanges(
@@ -274,15 +289,15 @@ export function applyFormattingDiff(
 
 /** "4 spaces", "1 tab", "2 spaces and 1 tab". */
 function describeWhitespace(run: string): string {
-    const tabs = run.split("\t").length - 1;
-    const spaces = run.length - tabs;
+    const tabCount = run.split("\t").length - 1;
+    const spaceCount = run.length - tabCount;
+    const spaces = t("document.whitespace.spaces", { count: spaceCount });
+    const tabs = t("document.whitespace.tabs", { count: tabCount });
 
-    return [
-        spaces > 0 ? `${spaces} space${spaces === 1 ? "" : "s"}` : "",
-        tabs > 0 ? `${tabs} tab${tabs === 1 ? "" : "s"}` : "",
-    ]
-        .filter(Boolean)
-        .join(" and ");
+    if (tabCount === 0) return spaces;
+    if (spaceCount === 0) return tabs;
+
+    return t("document.whitespace.spacesAndTabs", { spaces, tabs });
 }
 
 /**
@@ -324,7 +339,12 @@ export function explainWhitespaceSwaps(ops: readonly WordDiffOp[]): {
             ranges.push({
                 start: modified.length,
                 end: modified.length + next.value.length,
-                label: `${lineStart ? "Indentation" : "Whitespace"} changed from ${describeWhitespace(op.value)} to ${describeWhitespace(next.value)}`,
+                label: t(
+                    lineStart
+                        ? "document.whitespace.indentationChanged"
+                        : "document.whitespace.whitespaceChanged",
+                    { before: describeWhitespace(op.value), after: describeWhitespace(next.value) },
+                ),
             });
             push("equal", next.value);
             i++;

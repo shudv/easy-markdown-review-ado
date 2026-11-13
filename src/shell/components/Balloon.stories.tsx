@@ -177,6 +177,8 @@ export const ReplyAndResolve: Story = {
         await expect(args.onReply).toHaveBeenCalledWith("t1", "Fixed in the next push", {
             resolve: true,
         });
+        // Resolving as part of a reply plays the resolve wash too.
+        await expect(canvasElement.querySelector(".emr-balloon-wash-ink")).not.toBeNull();
     },
 };
 
@@ -297,5 +299,83 @@ export const NativeMedia: Story = {
         });
 
         await expect(attachment).toHaveAttribute("target", "_blank");
+    },
+};
+
+/**
+ * Resolving from the keyboard blooms the wash from the focused ✓ (there's no
+ * press point), and the wash clears itself once it has played.
+ */
+export const ResolveWashFromKeyboard: Story = {
+    play: async ({ args, canvasElement }) => {
+        const canvas = within(canvasElement);
+        const resolve = canvas.getByRole("button", { name: "Resolve thread" });
+        resolve.focus();
+        await userEvent.keyboard("{Enter}");
+        await expect(args.onResolve).toHaveBeenCalledWith("t1", "button");
+
+        const card = canvasElement.querySelector<HTMLElement>(".emr-balloon")!;
+        const ink = card.querySelector<HTMLElement>(".emr-balloon-wash-ink")!;
+        await expect(card).toHaveClass("is-washing");
+        // The ink is centred on the ✓.
+        const button = resolve.getBoundingClientRect();
+        const box = ink.getBoundingClientRect();
+        await expect(
+            Math.abs(box.left + box.width / 2 - (button.left + button.width / 2)),
+        ).toBeLessThan(2);
+
+        await waitFor(() => expect(card).not.toHaveClass("is-washing"), { timeout: 2000 });
+        await expect(card.querySelector(".emr-balloon-wash-ink")).toBeNull();
+    },
+};
+
+/** A press long before the resolve (then a keyboard resolve) isn't the origin. */
+export const ResolveWashIgnoresStalePress: Story = {
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        await userEvent.click(canvas.getByText("First comment"));
+        await new Promise((r) => setTimeout(r, 1100));
+        const resolve = canvas.getByRole("button", { name: "Resolve thread" });
+        resolve.focus();
+        await userEvent.keyboard("{Enter}");
+
+        const ink = canvasElement.querySelector<HTMLElement>(".emr-balloon-wash-ink")!;
+        const button = resolve.getBoundingClientRect();
+        const box = ink.getBoundingClientRect();
+        await expect(
+            Math.abs(box.top + box.height / 2 - (button.top + button.height / 2)),
+        ).toBeLessThan(2);
+    },
+};
+
+/** With no press or focus inside the card, the wash blooms from its top-right. */
+export const ResolveWashWithoutPressOrFocus: Story = {
+    play: async ({ canvasElement }) => {
+        within(canvasElement).getByRole("button", { name: "Resolve thread" }).click();
+
+        const card = canvasElement.querySelector<HTMLElement>(".emr-balloon")!;
+
+        const ink = await waitFor(() => {
+            const found = card.querySelector<HTMLElement>(".emr-balloon-wash-ink");
+            expect(found).not.toBeNull();
+
+            return found!;
+        });
+
+        const box = ink.getBoundingClientRect();
+        const cardBox = card.getBoundingClientRect();
+        await expect(Math.round(box.left + box.width / 2 - cardBox.left)).toBe(
+            Math.round(cardBox.width - 32),
+        );
+    },
+};
+
+/** An exiting card fades, then collapses to nothing so the list can close up. */
+export const Exiting: Story = {
+    args: { thread: thread("resolved"), isActive: false, inline: true, exiting: true },
+    play: async ({ canvasElement }) => {
+        const card = canvasElement.querySelector<HTMLElement>(".emr-balloon")!;
+        await waitFor(() => expect(card.getBoundingClientRect().height).toBe(0), { timeout: 2000 });
+        await expect(getComputedStyle(card).opacity).toBe("0");
     },
 };

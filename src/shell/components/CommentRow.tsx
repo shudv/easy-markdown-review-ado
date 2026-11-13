@@ -8,6 +8,7 @@ import type { ReactElement } from "react";
 import type { ResolveVia } from "../../telemetry";
 import type { Comment, CommentAuthor, ReactionKind, ThreadStatus } from "../../types";
 import { isResolvedLike } from "../../types";
+import { t } from "../../i18n";
 import { Avatar } from "./Avatar";
 import { CommentMarkdown } from "./CommentMarkdown";
 import { Composer } from "./Composer";
@@ -210,7 +211,7 @@ export function CommentRow(props: Readonly<CommentRowProps>): ReactElement {
                     <div onClick={(e) => e.stopPropagation()}>
                         <Composer
                             initial={comment.bodyMarkdown}
-                            submitLabel="Save"
+                            submitLabel={t("comments.row.save")}
                             // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the edit composer only mounts after the user picks "Edit comment", so focus moves to the text they asked to edit
                             autoFocus
                             onChange={edit.onChange}

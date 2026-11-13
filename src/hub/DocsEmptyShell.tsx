@@ -2,6 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 
+import { t, tRich } from "../i18n";
 import { SvgRepo } from "./hubIcons";
 
 /**
@@ -21,7 +22,7 @@ export function DocsEmptyShell({
     return (
         <div className="emr-app emr-docs-empty-shell">
             <div className="emr-grid">
-                <aside className="emr-docnav" aria-label="Document navigation">
+                <aside className="emr-docnav" aria-label={t("common.documentNavigation")}>
                     <div className="emr-docnav-header">
                         {titleSlot}
                         {headerActions}
@@ -30,15 +31,16 @@ export function DocsEmptyShell({
                 <div
                     className="emr-article-wrap emr-docs-empty"
                     role="status"
-                    aria-label={`No documents in ${repoName}`}
+                    aria-label={t("hub.docsEmpty.label", { repo: repoName })}
                 >
                     <div className="emr-docs-empty-card">
                         <SvgRepo />
-                        <h2>No documents in this repository</h2>
+                        <h2>{t("hub.docsEmpty.title")}</h2>
                         <p>
-                            <strong>{repoName}</strong> doesn&apos;t contain any Markdown (
-                            <code>.md</code>) files yet. Pick another repository from the selector
-                            above.
+                            {tRich("hub.docsEmpty.body", {
+                                repo: <strong>{repoName}</strong>,
+                                ext: <code>.md</code>,
+                            })}
                         </p>
                     </div>
                 </div>

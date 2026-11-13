@@ -4,7 +4,7 @@
 // the parser below for the prefix-decoding decision.
 
 /** Kind of ref an ADO version spec (`GB`/`GC`/`GT`) points at. */
-export type VersionSpecKind = "branch" | "commit" | "tag";
+type VersionSpecKind = "branch" | "commit" | "tag";
 
 export interface ParsedVersionSpec {
     kind: VersionSpecKind;

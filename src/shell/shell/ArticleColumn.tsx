@@ -2,6 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 
+import { t, tRich } from "../../i18n";
 import { ArticleSkeleton } from "./Skeletons";
 
 interface ArticleColumnProps {
@@ -40,11 +41,11 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
         return (
             <div className="emr-article-wrap">
                 <div className="emr-error">
-                    <h2>Couldn&rsquo;t open this document</h2>
+                    <h2>{t("shell.article.openFailed.title")}</h2>
                     <p>
-                        <code>{selectedPath}</code> couldn&rsquo;t be loaded. It may have been moved
-                        or deleted, or you may not have access to it. Pick another document from the
-                        navigation.
+                        {tRich("shell.article.openFailed.body", {
+                            path: <code>{selectedPath}</code>,
+                        })}
                     </p>
                     <pre>{props.error}</pre>
                 </div>
@@ -60,14 +61,17 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
                 <div className="emr-update-absent" role="status">
                     <h2>{absentNotice.title}</h2>
                     <p>
-                        <code>{selectedPath}</code>: {absentNotice.body}
+                        {tRich("shell.article.absent.body", {
+                            path: <code>{selectedPath}</code>,
+                            reason: absentNotice.body,
+                        })}
                     </p>
                     <button
                         type="button"
                         className="emr-update-absent-action"
                         onClick={props.onShowAllUpdates}
                     >
-                        Show all updates
+                        {t("shell.article.showAllUpdates")}
                     </button>
                 </div>
             </div>
@@ -78,10 +82,11 @@ function ArticleColumnContent(props: Readonly<ArticleColumnProps>): ReactNode {
         return (
             <div className="emr-article-wrap">
                 <div className="emr-error">
-                    <h2>Couldn&rsquo;t load this version</h2>
+                    <h2>{t("shell.article.versionFailed.title")}</h2>
                     <p>
-                        <code>{selectedPath}</code> couldn&rsquo;t be loaded at the selected
-                        revision. It may not exist at that commit, or you may not have access to it.
+                        {tRich("shell.article.versionFailed.body", {
+                            path: <code>{selectedPath}</code>,
+                        })}
                     </p>
                     <pre>{props.historicalLoadError}</pre>
                 </div>

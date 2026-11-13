@@ -8,8 +8,12 @@
 // invariant entirely (there is no HTML string to escape), rather than relying
 // on a hand-rolled `escapeHtml` that a single dropped character could weaken.
 
+import { t } from "../i18n";
+
 /** Heading shown above the error detail. */
-export const BOOT_ERROR_HEADING = "Markdown Review failed to load";
+export function bootErrorHeading(): string {
+    return t("hub.bootError.heading");
+}
 
 /**
  * Replace the contents of `root` with a readable boot-error panel whose detail
@@ -30,7 +34,7 @@ export function renderBootErrorInto(root: HTMLElement, detail: string): void {
     const heading = document.createElement("h2");
     // Stryker disable next-line StringLiteral: inline layout only — the heading reads the same without it
     heading.style.marginTop = "0";
-    heading.textContent = BOOT_ERROR_HEADING;
+    heading.textContent = bootErrorHeading();
 
     const pre = document.createElement("pre");
     // Stryker disable StringLiteral: inline layout and colour only — the detail text reads the same without them

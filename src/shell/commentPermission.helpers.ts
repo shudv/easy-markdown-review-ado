@@ -6,6 +6,8 @@
 // security token, the REST path, and the (deliberately optimistic) verdict
 // parser. The SDK-touching fetch lives in `commentPermission.ts`.
 
+import { t } from "../i18n";
+
 /** Git Repositories security namespace id (stable ADO GUID). */
 export const GIT_REPOSITORIES_NAMESPACE_ID = "2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87";
 
@@ -76,6 +78,6 @@ export function commentPermissionFromResponse(
 }
 
 /** Message shown in the rail (right panel) when commenting is permission-gated. */
-export const COMMENT_PERMISSION_DENIED_MESSAGE =
-    "You don't have permission to comment on this repository. Commenting " +
-    "requires Contribute access.";
+export function commentPermissionDeniedMessage(): string {
+    return t("comments.permission.denied");
+}

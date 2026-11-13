@@ -22,6 +22,7 @@ import {
     detectAvailableReaderFonts,
     layoutStorageKey,
     resolveReaderFont,
+    readerFontLabel,
     clampReaderPct,
     snapReaderPct,
     nudgeReaderPct,
@@ -66,6 +67,13 @@ describe("readerPrefs — curated font list", () => {
         ["verdana", "Verdana"],
     ])("resolves the font id %s to %s", (id, name) => {
         expect(resolveReaderFont(id).name).toBe(name);
+    });
+
+    it.each([
+        ["system", "System"],
+        ["georgia", "Georgia"],
+    ])("labels the font id %s as %s in the font list", (id, label) => {
+        expect(readerFontLabel(resolveReaderFont(id))).toBe(label);
     });
 
     it.each([

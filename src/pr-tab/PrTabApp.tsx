@@ -3,6 +3,8 @@
 // emr-authored threads, and feeds a PrInfo +
 // loadFileSource closure + thread CommentApi into the shared <Shell/>.
 
+/* eslint-disable max-lines -- PR tab root inside the Azure DevOps SDK: boot, session recovery and routing wiring feeding one Shell. Its logic lives in tested pr-tab modules; what remains only runs in the host. */
+
 import { type ReactElement, useCallback, useEffect, useMemo, useState } from "react";
 import * as SDK from "azure-devops-extension-sdk";
 import { PullRequestStatus } from "azure-devops-extension-api/Git";
@@ -96,7 +98,13 @@ import {
     PrDocNavTitle,
     SessionRefreshingView,
 } from "./PrTabStatusViews";
-import { CHECKING_FOR_UPDATES, isBootWaiting, PrTabLoadingView, useSlowBoot } from "./useSlowBoot";
+import {
+    checkingForUpdatesActivity,
+    isBootWaiting,
+    PrTabLoadingView,
+    useSlowBoot,
+} from "./useSlowBoot";
+import { t } from "../i18n";
 
 // Stable empty array: threads load after mount via Shell's thread sync, so
 // the shell seeds its reducer with this instead of blocking first paint on the
@@ -537,7 +545,7 @@ export function PrTabApp(): ReactElement {
 
     // `title` / `createdBy` are typed required but can be absent from the REST
     // payload.
-    const prTitle = (ctx.pr.title as string | undefined) ?? "(untitled PR)";
+    const prTitle = (ctx.pr.title as string | undefined) ?? t("hub.pr.untitled");
     const createdBy = ctx.pr.createdBy as { displayName?: string } | undefined;
 
     const pr: PrInfo = {
@@ -590,7 +598,7 @@ export function PrTabApp(): ReactElement {
                             />
                         }
                         loadFileSource={loadFileSource}
-                        hostActivity={checkingForUpdates ? CHECKING_FOR_UPDATES : undefined}
+                        hostActivity={checkingForUpdates ? checkingForUpdatesActivity() : undefined}
                         resolveDocumentImage={resolveDocumentImage}
                         diffsByFile={diffsByFile}
                         originalSourcesByFile={originalSourcesByFile}

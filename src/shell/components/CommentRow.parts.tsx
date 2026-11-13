@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode, RefObject } from "react";
 import type { Comment, ThreadStatus } from "../../types";
 import { commentLinkLabel, formatFullTime, type CommentLinkState } from "./CommentRow.helpers";
 import type { ConfirmMode } from "./CommentRow.hooks";
+import { t } from "../../i18n";
 
 export function CommentRowMeta(
     props: Readonly<{
@@ -22,9 +23,11 @@ export function CommentRowMeta(
                 {comment.updatedAt !== undefined && comment.updatedAt !== "" ? (
                     <span
                         className="emr-comment-edited"
-                        title={`Edited ${formatFullTime(comment.updatedAt)}`}
+                        title={t("comments.row.editedAt", {
+                            time: formatFullTime(comment.updatedAt),
+                        })}
                     >
-                        edited
+                        {t("comments.row.edited")}
                     </span>
                 ) : null}
             </span>
@@ -46,10 +49,10 @@ export function CommentMenuToggle(
             ref={buttonRef}
             type="button"
             className={`emr-icon-btn${open ? " is-open" : ""}`}
-            aria-label="More options"
+            aria-label={t("comments.row.moreOptions")}
             aria-haspopup="menu"
             aria-expanded={open}
-            title="More options"
+            title={t("comments.row.moreOptions")}
             onClick={(e) => {
                 e.stopPropagation();
                 onToggle();
@@ -71,7 +74,7 @@ export function CommentResolveToggle(
     }>,
 ): ReactElement {
     const { resolved, onToggle } = props;
-    const label = resolved ? "Reopen thread" : "Resolve thread";
+    const label = resolved ? t("comments.row.reopenThread") : t("comments.row.resolveThread");
 
     return (
         <button
@@ -105,9 +108,9 @@ export function CommentLikeButton(
         <button
             type="button"
             className="emr-like-pill is-empty"
-            aria-label="Like this comment"
+            aria-label={t("comments.row.likeComment")}
             aria-pressed={false}
-            title="Like this comment"
+            title={t("comments.row.likeComment")}
             onClick={(e) => {
                 e.stopPropagation();
                 onLike();
@@ -232,7 +235,11 @@ function CommentMenuItems(
                 />
             ) : null}
             {state.canEdit ? (
-                <CommentMenuItem icon={<SvgPencil />} label="Edit comment" onClick={actions.edit} />
+                <CommentMenuItem
+                    icon={<SvgPencil />}
+                    label={t("comments.row.editComment")}
+                    onClick={actions.edit}
+                />
             ) : null}
             {state.isFirst ? (
                 <CommentThreadStatusItems
@@ -269,27 +276,39 @@ function CommentThreadStatusItems(
 
     if (isTerminal) {
         return (
-            <CommentMenuItem icon={<SvgUndo />} label="Reopen thread" onClick={actions.reopen} />
+            <CommentMenuItem
+                icon={<SvgUndo />}
+                label={t("comments.row.reopenThread")}
+                onClick={actions.reopen}
+            />
         );
     }
 
     return (
         <>
-            <CommentMenuItem icon={<SvgCheck />} label="Resolve thread" onClick={actions.resolve} />
+            <CommentMenuItem
+                icon={<SvgCheck />}
+                label={t("comments.row.resolveThread")}
+                onClick={actions.resolve}
+            />
             {threadStatus === "pending" ? (
                 <CommentMenuItem
                     icon={<SvgUndo />}
-                    label="Mark as active"
+                    label={t("comments.row.markActive")}
                     onClick={actions.reopen}
                 />
             ) : (
                 <CommentMenuItem
                     icon={<SvgClock />}
-                    label="Mark as pending"
+                    label={t("comments.row.markPending")}
                     onClick={actions.markPending}
                 />
             )}
-            <CommentMenuItem icon={<SvgArchive />} label="Close thread" onClick={actions.close} />
+            <CommentMenuItem
+                icon={<SvgArchive />}
+                label={t("comments.row.closeThread")}
+                onClick={actions.close}
+            />
         </>
     );
 }
@@ -310,7 +329,7 @@ function CommentDeleteItem(
             <CommentMenuItem
                 danger
                 icon={<SvgTrash />}
-                label="Delete thread"
+                label={t("comments.row.deleteThread")}
                 onClick={() => setConfirm("thread")}
             />
         );
@@ -321,7 +340,7 @@ function CommentDeleteItem(
             <CommentMenuItem
                 danger
                 icon={<SvgTrash />}
-                label="Delete comment"
+                label={t("comments.row.deleteComment")}
                 onClick={() => setConfirm("comment")}
             />
         );
@@ -366,15 +385,15 @@ function CommentDeleteConfirm(
         <div className="emr-popover-confirm">
             <p className="emr-popover-confirm-text">
                 {confirm === "thread"
-                    ? "Delete this thread and all its comments?"
-                    : "Delete this comment?"}
+                    ? t("comments.row.confirmDeleteThread")
+                    : t("comments.row.confirmDeleteComment")}
             </p>
             <div className="emr-popover-confirm-actions">
                 <button type="button" className="emr-btn subtle" onClick={onCancel}>
-                    Cancel
+                    {t("common.cancel")}
                 </button>
                 <button type="button" className="emr-btn danger" onClick={onConfirm}>
-                    Delete
+                    {t("common.delete")}
                 </button>
             </div>
         </div>

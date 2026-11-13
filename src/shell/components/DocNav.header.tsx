@@ -2,6 +2,7 @@
 
 import type { ReactElement, ReactNode, RefObject } from "react";
 
+import { t } from "../../i18n";
 import { SearchIcon } from "./icons";
 import { SvgX } from "./DocNav.icons";
 
@@ -43,7 +44,7 @@ export function DocNavHeader(props: Readonly<DocNavHeaderProps>): ReactElement {
                     ref={searchInputRef}
                     type="search"
                     className="emr-docnav-search-inline"
-                    placeholder="Find a document or folder..."
+                    placeholder={t("navigation.docNav.searchPlaceholder")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -59,12 +60,12 @@ export function DocNavHeader(props: Readonly<DocNavHeaderProps>): ReactElement {
                         // Collapse only if the user hasn't typed anything.
                         if (!searchQuery) setSearchOpen(false);
                     }}
-                    aria-label="Search documents"
+                    aria-label={t("navigation.docNav.searchDocuments")}
                     autoComplete="off"
                     spellCheck={false}
                 />
             ) : (
-                (titleSlot ?? <span className="emr-docnav-title">Documents</span>)
+                (titleSlot ?? <span className="emr-docnav-title">{t("common.documents")}</span>)
             )}
             {headerActions}
             {showSearchToggle ? (
@@ -91,8 +92,10 @@ function SearchToggleButton(
         <button
             type="button"
             className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
-            title={searchOpen ? "Close search (Esc)" : "Search documents"}
-            aria-label={searchOpen ? "Close search" : "Search documents"}
+            title={searchOpen ? t("common.closeSearchEsc") : t("navigation.docNav.searchDocuments")}
+            aria-label={
+                searchOpen ? t("common.closeSearch") : t("navigation.docNav.searchDocuments")
+            }
             aria-pressed={searchOpen}
             onClick={searchOpen ? closeSearch : () => setSearchOpen(true)}
         >

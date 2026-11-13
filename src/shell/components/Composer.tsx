@@ -32,6 +32,7 @@ import { useIdentityStore, useUserMentionHydration } from "../../comments/identi
 import { MentionPicker } from "./MentionPicker";
 import { ComposerBusyContext } from "./composerBusy";
 import { patchIfSet } from "../shellHelpers";
+import { t } from "../../i18n";
 
 /**
  * Delay (ms) before the REST search for mention suggestions. The picker opens
@@ -117,7 +118,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
 
     const {
         initial = "",
-        placeholder = "Write a comment… Markdown supported.",
+        placeholder = t("comments.composer.placeholder"),
         submitLabel,
         autoFocus,
         onChange,
@@ -396,14 +397,14 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                     onClick={() => setTab("write")}
                     type="button"
                 >
-                    Write
+                    {t("comments.composer.writeTab")}
                 </button>
                 <button
                     className={tab === "preview" ? "is-active" : ""}
                     onClick={() => setTab("preview")}
                     type="button"
                 >
-                    Preview
+                    {t("comments.composer.previewTab")}
                 </button>
             </div>
 
@@ -504,9 +505,11 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                 <div
                     ref={previewRef}
                     className="emr-preview markdown-body"
-                    // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- previewHtml is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); the fallback is a constant
+                    // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- previewHtml is the output of renderMarkdownSync (rehypeSafeHtml drops raw HTML, rehypeSanitizeUrls scrubs href/src); the fallback is a fixed catalog string
                     dangerouslySetInnerHTML={{
-                        __html: previewHtml || "<em style='color:#888'>Nothing to preview</em>",
+                        __html:
+                            previewHtml ||
+                            `<em style='color:#888'>${t("comments.composer.nothingToPreview")}</em>`,
                     }}
                 />
             )}
@@ -514,7 +517,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
             <div className="emr-composer-actions">
                 {onCancel ? (
                     <button className="emr-btn subtle" type="button" onClick={onCancel}>
-                        Cancel
+                        {t("common.cancel")}
                     </button>
                 ) : null}
                 {secondarySubmit ? (
@@ -534,7 +537,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                     aria-busy={busy || undefined}
                     onClick={() => onSubmit(encodedValue.trim())}
                 >
-                    {busy ? "Sending…" : submitLabel}
+                    {busy ? t("comments.composer.sending") : submitLabel}
                 </button>
             </div>
 

@@ -235,7 +235,7 @@ export function useUserMentionHydration(
  * Subscribe a component to the store's version so it re-renders when identities
  * resolve. Returns the current version (or 0 when there's no store).
  */
-export function useIdentityVersion(store: IdentityStore | null): number {
+function useIdentityVersion(store: IdentityStore | null): number {
     const subscribe = useCallback(
         (cb: () => void) => (store ? store.subscribe(cb) : () => {}),
         // Stryker disable next-line ArrayDeclaration: the app creates its identity store once (useCommentApiRouting's useState) and never swaps it, so the callback never needs re-creating

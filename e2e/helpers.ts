@@ -510,3 +510,8 @@ export async function setAdoTheme(page: Page, target: RegExp): Promise<string> {
 
     return selectedLabel;
 }
+
+/** The UI language the extension applied in `frame` (`<html lang>`). */
+export async function readAppLocale(frame: FrameLocator): Promise<string | null> {
+    return frame.locator("html").getAttribute("lang", { timeout: 30_000 });
+}

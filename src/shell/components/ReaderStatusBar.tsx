@@ -12,6 +12,7 @@
 
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 
+import { t } from "../../i18n";
 import { DEFAULT_FONT_ID, detectAvailableReaderFonts, READER_FONTS } from "../readerPrefs";
 import { statusBarVisibility } from "./readerStatusBarModel";
 import {
@@ -144,7 +145,11 @@ export function ReaderStatusBar(props: Readonly<ReaderStatusBarProps>): ReactEle
     const visibleActivity = useDelayedReaderActivity(selectedActivity, activityDelayMs);
 
     return (
-        <div className="emr-statusbar" role="toolbar" aria-label="Reader status and controls">
+        <div
+            className="emr-statusbar"
+            role="toolbar"
+            aria-label={t("navigation.statusBar.toolbarLabel")}
+        >
             <StatusBarLeft props={props} visibility={visibility} />
 
             <div className="emr-statusbar-center">

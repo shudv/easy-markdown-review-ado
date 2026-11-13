@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactElement, RefObject } from "react";
 
+import { t } from "../../i18n";
 import {
     clampReaderPct,
     nudgeReaderPct,
@@ -10,6 +11,7 @@ import {
     READER_PERCENT_MIN,
     READER_SPACING_UI_MAX,
     READER_SPACING_UI_MIN,
+    readerFontLabel,
     snapReaderPct,
 } from "../readerPrefs";
 import { IconCaret, IconCheck } from "./ReaderStatusBar.icons";
@@ -21,6 +23,8 @@ function fontClass(id: string): string {
 
 interface PercentSliderProps {
     label: string;
+    decreaseLabel: string;
+    increaseLabel: string;
     value: number;
     onChange: (value: number) => void;
     fluid?: boolean;
@@ -31,6 +35,8 @@ interface PercentSliderProps {
 
 function PercentSlider({
     label,
+    decreaseLabel,
+    increaseLabel,
     value,
     onChange,
     fluid = false,
@@ -54,7 +60,7 @@ function PercentSlider({
             <button
                 className="emr-percent-adjust is-minus"
                 type="button"
-                aria-label={`Decrease ${label.toLowerCase()}`}
+                aria-label={decreaseLabel}
                 disabled={displayValue <= min}
                 onClick={() => nudge(-1)}
             />
@@ -62,7 +68,7 @@ function PercentSlider({
                 <input
                     type="range"
                     aria-label={label}
-                    aria-valuetext={`${displayValue}%`}
+                    aria-valuetext={t("navigation.readingPrefs.percent", { value: displayValue })}
                     min={min}
                     max={max}
                     step="1"
@@ -90,11 +96,13 @@ function PercentSlider({
             <button
                 className="emr-percent-adjust is-plus"
                 type="button"
-                aria-label={`Increase ${label.toLowerCase()}`}
+                aria-label={increaseLabel}
                 disabled={displayValue >= max}
                 onClick={() => nudge(1)}
             />
-            <output className="emr-percent-output">{displayValue}%</output>
+            <output className="emr-percent-output">
+                {t("navigation.readingPrefs.percent", { value: displayValue })}
+            </output>
         </div>
     );
 }
@@ -143,7 +151,7 @@ export function ReadingPreferencesControls(
                     className="emr-statusbar-btn"
                     aria-haspopup="true"
                     aria-expanded={open}
-                    title="Reading preferences"
+                    title={t("navigation.readingPrefs.title")}
                     onClick={onToggleOpen}
                 >
                     <span className="emr-statusbar-aa">Aa</span>
@@ -153,12 +161,14 @@ export function ReadingPreferencesControls(
                     ref={popoverRef}
                     className="emr-statusbar-pop"
                     role="group"
-                    aria-label="Reading preferences"
+                    aria-label={t("navigation.readingPrefs.title")}
                     aria-hidden={!open}
                 >
                     {hasAlternativeFonts ? (
                         <>
-                            <div className="emr-statusbar-pop-label">Reading font</div>
+                            <div className="emr-statusbar-pop-label">
+                                {t("navigation.readingPrefs.readingFont")}
+                            </div>
                             <div className="emr-statusbar-fontlist">
                                 {availableFonts.map((font) => (
                                     <button
@@ -168,7 +178,7 @@ export function ReadingPreferencesControls(
                                         aria-pressed={font.id === effectiveFontId}
                                         onClick={() => onFontChange(font.id)}
                                     >
-                                        <span>{font.name}</span>
+                                        <span>{readerFontLabel(font)}</span>
                                         <IconCheck />
                                     </button>
                                 ))}
@@ -180,9 +190,13 @@ export function ReadingPreferencesControls(
                             hasAlternativeFonts ? "" : " is-only"
                         }`}
                     >
-                        <div className="emr-statusbar-pop-label">Text spacing</div>
+                        <div className="emr-statusbar-pop-label">
+                            {t("navigation.readingPrefs.textSpacing")}
+                        </div>
                         <PercentSlider
-                            label="Text spacing"
+                            label={t("navigation.readingPrefs.textSpacing")}
+                            decreaseLabel={t("navigation.readingPrefs.decreaseTextSpacing")}
+                            increaseLabel={t("navigation.readingPrefs.increaseTextSpacing")}
                             value={spacingPct}
                             onChange={onSpacingChange}
                             fluid
@@ -194,7 +208,13 @@ export function ReadingPreferencesControls(
                 </div>
             </div>
 
-            <PercentSlider label="Text size" value={sizePct} onChange={onSizeChange} />
+            <PercentSlider
+                label={t("navigation.readingPrefs.textSize")}
+                decreaseLabel={t("navigation.readingPrefs.decreaseTextSize")}
+                increaseLabel={t("navigation.readingPrefs.increaseTextSize")}
+                value={sizePct}
+                onChange={onSizeChange}
+            />
         </div>
     );
 }

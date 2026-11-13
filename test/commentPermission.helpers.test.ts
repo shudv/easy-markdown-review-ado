@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    COMMENT_PERMISSION_DENIED_MESSAGE,
     GIT_CONTRIBUTE_BIT,
     GIT_REPOSITORIES_NAMESPACE_ID,
+    commentPermissionDeniedMessage,
     commentPermissionFromResponse,
     hasPermissionsPath,
     isAzureDevOpsOrgUrl,
@@ -81,14 +81,14 @@ describe("commentPermissionFromResponse", () => {
     });
 });
 
-describe("COMMENT_PERMISSION_DENIED_MESSAGE", () => {
+describe("commentPermissionDeniedMessage", () => {
     it("tells the user they can't comment here", () => {
-        expect(COMMENT_PERMISSION_DENIED_MESSAGE).toContain(
+        expect(commentPermissionDeniedMessage()).toContain(
             "You don't have permission to comment on this repository.",
         );
     });
 
     it("tells the user which access level commenting needs", () => {
-        expect(COMMENT_PERMISSION_DENIED_MESSAGE).toContain("requires Contribute access");
+        expect(commentPermissionDeniedMessage()).toContain("requires Contribute access");
     });
 });

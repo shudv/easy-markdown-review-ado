@@ -60,6 +60,14 @@ describe("renderMarkdown", () => {
         expect(html).toContain('class="markdown-alert-title">Tip</p>');
     });
 
+    it("labels footnotes and numbers repeated back links", async () => {
+        const html = await renderMarkdown("One[^a] and two[^a].\n\n[^a]: Note.\n");
+
+        expect(html).toContain(">Footnotes</h2>");
+        expect(html).toContain('aria-label="Back to reference 1"');
+        expect(html).toContain('aria-label="Back to reference 1-2"');
+    });
+
     it("does not recognize an alert marker after formatted prefix text", async () => {
         const html = await renderMarkdown("> **Prefix** [!NOTE] ordinary text.\n");
 

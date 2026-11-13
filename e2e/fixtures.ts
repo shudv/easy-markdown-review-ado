@@ -13,12 +13,30 @@ import { test as base, expect } from "@playwright/test";
 
 import { E2E } from "./env";
 
-export const test = base.extend({
+/**
+ * The extension follows the test account's Azure DevOps language, but the
+ * specs assert English text. Every spec therefore pins the extension to
+ * English through its `emr.locale` override (written into the extension
+ * frames' localStorage before any script runs), so the suite passes whatever
+ * language the account is set to. `locale.spec.ts` opts out with
+ * `test.use({ pinnedLocale: null })` to exercise the real host language.
+ */
+export const test = base.extend<{ pinnedLocale: string | null }>({
+    pinnedLocale: ["en", { option: true }],
     // (`provide` is Playwright's fixture callback, conventionally named `use`.)
-    context: async ({ context }, provide) => {
+    context: async ({ context, pinnedLocale }, provide) => {
         await context.grantPermissions(["local-network-access"], {
             origin: new URL(E2E.orgUrl).origin,
         });
+        await context.addInitScript(
+            ({ devOrigin, locale }) => {
+                if (location.origin !== devOrigin) return;
+
+                if (locale === null) localStorage.removeItem("emr.locale");
+                else localStorage.setItem("emr.locale", locale);
+            },
+            { devOrigin: new URL(E2E.devOrigin).origin, locale: pinnedLocale },
+        );
         await provide(context);
     },
 });

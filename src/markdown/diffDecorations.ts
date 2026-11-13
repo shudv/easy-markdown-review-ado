@@ -12,6 +12,7 @@
 // The implementation lives in `./diffDecorations/`, split by concern; this
 // file is the public entry point.
 
+import { t } from "../i18n";
 import type { DiffRange } from "../types";
 import {
     createDecorationPass,
@@ -102,15 +103,21 @@ export function diffLegendStats(summary: DiffSummary): DiffLegendStat[] {
     const stats: DiffLegendStat[] = [];
 
     if (summary.added > 0) {
-        stats.push({ kind: "added", label: `${summary.added} added` });
+        stats.push({ kind: "added", label: t("document.legend.added", { count: summary.added }) });
     }
 
     if (summary.modified > 0) {
-        stats.push({ kind: "modified", label: `${summary.modified} edited` });
+        stats.push({
+            kind: "modified",
+            label: t("document.legend.edited", { count: summary.modified }),
+        });
     }
 
     if (summary.deleted > 0) {
-        stats.push({ kind: "deleted", label: `${summary.deleted} removed` });
+        stats.push({
+            kind: "deleted",
+            label: t("document.legend.removed", { count: summary.deleted }),
+        });
     }
 
     return stats;

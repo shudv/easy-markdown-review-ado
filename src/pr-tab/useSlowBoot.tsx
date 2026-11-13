@@ -6,6 +6,7 @@ import { type ReactElement, useEffect, useState } from "react";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import type { ReaderActivity } from "../shell/components/readerActivity";
 import { startVisibleTimer, type VisibilityClock } from "./prTabApp.helpers";
+import { t } from "../i18n";
 
 /**
  * Visible wait after which boot says it is still loading and offers a retry.
@@ -39,19 +40,21 @@ export function useSlowBoot(
 function slowBootActivity(onRetry: () => void): ReaderActivity {
     return {
         id: "boot-slow",
-        label: "Azure DevOps is slow to respond — still loading…",
+        label: t("hub.prTab.slowBoot"),
         priority: 100,
-        action: { label: "Try again", onClick: onRetry },
+        action: { label: t("common.tryAgain"), onClick: onRetry },
     };
 }
 
 /** The status bar while a PR shown from this browser's cache waits for ADO's version. */
-export const CHECKING_FOR_UPDATES: ReaderActivity = {
-    id: "pr-check-updates",
-    label: "Checking for updates…",
-    // Below every shell operation except background comment sync.
-    priority: 30,
-};
+export function checkingForUpdatesActivity(): ReaderActivity {
+    return {
+        id: "pr-check-updates",
+        label: t("hub.prTab.checkingForUpdates"),
+        // Below every shell operation except background comment sync.
+        priority: 30,
+    };
+}
 
 /** Boot is still waiting on the PR: no context yet, no error, not reconnecting. */
 export function isBootWaiting(ctx: unknown, error: string | null, refreshing: unknown): boolean {
@@ -66,7 +69,7 @@ export function PrTabLoadingView({
     return (
         <ReaderLoadingShell
             scope="pr"
-            ariaLabel="Loading pull request"
+            ariaLabel={t("hub.prTab.loading")}
             activity={slow ? slowBootActivity(onRetry) : undefined}
         />
     );

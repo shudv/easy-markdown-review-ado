@@ -27,6 +27,7 @@ import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { buildReposFileUrl } from "../markdown/docLinks";
 import type { DocPrRef } from "../shell/shellHelpers";
 import { markAppReady, trackUserFacingError } from "../telemetry";
+import { t } from "../i18n";
 import {
     buildPrUrl,
     fetchRepoPage,
@@ -599,7 +600,9 @@ export function DocumentsHubApp(): ReactElement {
             return {
                 prId: pr.pullRequestId,
                 // `title` is typed required but can be absent from the ADO REST payload.
-                title: (pr.title as string | undefined) ?? `PR #${pr.pullRequestId}`,
+                title:
+                    (pr.title as string | undefined) ??
+                    t("hub.pr.titleFallback", { id: pr.pullRequestId }),
                 status: "completed",
                 url: rawRepo ? buildPrUrl(rawRepo, pr.pullRequestId) : undefined,
             };
@@ -658,7 +661,7 @@ export function DocumentsHubApp(): ReactElement {
     if (error !== null && error !== "") {
         return (
             <div className="emr-error">
-                <h2>Couldn't load Documents</h2>
+                <h2>{t("hub.docs.loadFailed")}</h2>
                 <pre>{error}</pre>
             </div>
         );
@@ -667,7 +670,7 @@ export function DocumentsHubApp(): ReactElement {
     if (!state || !user) {
         return (
             <div className="emr-docs-app">
-                <ReaderLoadingShell scope="hub" ariaLabel="Loading Documents" />
+                <ReaderLoadingShell scope="hub" ariaLabel={t("hub.docs.loading")} />
             </div>
         );
     }
@@ -675,8 +678,8 @@ export function DocumentsHubApp(): ReactElement {
     if (state.repos.length === 0) {
         return (
             <div className="emr-error" style={{ color: "var(--emr-muted)" }}>
-                <h2>No repositories found</h2>
-                <p>This project doesn&apos;t contain any repositories to browse.</p>
+                <h2>{t("hub.docs.noReposFound.title")}</h2>
+                <p>{t("hub.docs.noReposFound.body")}</p>
             </div>
         );
     }

@@ -21,6 +21,7 @@ import {
     useState,
 } from "react";
 
+import { type MessageKey, t } from "../../i18n";
 import {
     classifyDiffElement,
     markerFraction,
@@ -56,11 +57,11 @@ const MARKER_SELECTOR = ".emr-diff-block, .emr-diff-deleted-marker";
 // Minimum grabbable thumb, like a native scrollbar.
 const MIN_THUMB = 28;
 
-const KIND_TITLE: Record<DiffMarker["kind"], string> = {
-    added: "Added",
-    modified: "Edited",
-    deleted: "Removed",
-};
+const KIND_TITLE_KEY = {
+    added: "common.change.added",
+    modified: "common.change.edited",
+    deleted: "common.change.removed",
+} as const satisfies Record<DiffMarker["kind"], MessageKey>;
 
 interface Metrics {
     scrollTop: number;
@@ -276,7 +277,7 @@ export function DiffMinimap({
             // A visual scroll aid duplicating the scrollbar; the accessible paths to
             // content + changes are the document and the outline, so it's AT-hidden.
             aria-hidden="true"
-            title={showDiff ? "Changes in this document — drag or click to scroll" : "Scroll"}
+            title={showDiff ? t("document.minimap.changesTitle") : t("document.minimap.scroll")}
             onClick={(e) => jumpTo(e.clientY)}
         >
             {/*
@@ -302,7 +303,7 @@ export function DiffMinimap({
                     className={`emr-diff-ruler-mark emr-diff-ruler-mark--${m.kind}${
                         markerInViewport(m, viewportFrac) ? " is-active" : ""
                     }`}
-                    title={KIND_TITLE[m.kind]}
+                    title={t(KIND_TITLE_KEY[m.kind])}
                     style={{
                         top: `${m.top * 100}%`,
                         height: `${m.height * 100}%`,

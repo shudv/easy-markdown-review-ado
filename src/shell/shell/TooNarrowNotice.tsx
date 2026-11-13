@@ -2,6 +2,8 @@
 
 import type { ReactElement } from "react";
 
+import { t } from "../../i18n";
+
 /**
  * Graceful degradation notice — hidden until `.is-too-narrow` (set by the
  * frame ResizeObserver), when it replaces the reader columns so the layout
@@ -24,11 +26,8 @@ export function TooNarrowNotice(): ReactElement {
                 >
                     <path d="M9 8 5 12l4 4M15 8l4 4-4 4M5 12h14" />
                 </svg>
-                <h3>More room needed</h3>
-                <p>
-                    There isn&rsquo;t enough width to show the document comfortably. Widen the
-                    window to keep reading.
-                </p>
+                <h3>{t("shell.tooNarrow.title")}</h3>
+                <p>{t("shell.tooNarrow.body")}</p>
             </div>
         </div>
     );

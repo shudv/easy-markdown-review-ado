@@ -17,6 +17,7 @@ import {
     readPathParam,
 } from "../shell/deepLink";
 import { samePath } from "../markdown/docLinks";
+import { t } from "../i18n";
 
 interface PullRequestIterationLike {
     id?: number;
@@ -57,7 +58,7 @@ export function reviewIterationStops(
             const title =
                 trimmedText(iteration.description) ??
                 trimmedText(lastCommit?.comment) ??
-                `Iteration ${iteration.id}`;
+                t("hub.prTab.iterationFallback", { id: iteration.id! });
 
             const rawDate = iteration.createdDate;
 

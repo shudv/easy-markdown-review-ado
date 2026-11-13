@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
+import { t } from "../../i18n";
 import type { DraftScope } from "../draftStorage";
 import { ReaderActivityIndicator, type ReaderActivity } from "./readerActivity";
 import {
@@ -59,7 +60,7 @@ export function ReaderLoadingShell({
             <div className={`emr-body-frame${hideDocNav ? " emr-body-frame--no-nav" : ""}`}>
                 {hideDocNav ? null : (
                     <div className="emr-body__nav">
-                        <aside className="emr-docnav" aria-label="Document navigation">
+                        <aside className="emr-docnav" aria-label={t("common.documentNavigation")}>
                             {hasSlotContent(titleSlot) || hasSlotContent(headerActions) ? (
                                 <div className="emr-docnav-header">
                                     {titleSlot}

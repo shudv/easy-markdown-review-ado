@@ -34,17 +34,17 @@ export interface CodeSearchRequest {
     includeFacets?: boolean;
 }
 
-export interface CodeSearchResultRepository {
+interface CodeSearchResultRepository {
     id?: string;
     name?: string;
 }
 
-export interface CodeSearchResultProject {
+interface CodeSearchResultProject {
     id?: string;
     name?: string;
 }
 
-export interface CodeSearchResultItem {
+interface CodeSearchResultItem {
     fileName?: string;
     path?: string;
     contentId?: string;

@@ -7,6 +7,19 @@ import { type CSSProperties, type ReactElement, useEffect, useRef } from "react"
 
 import type { MentionKind, MentionSuggestion } from "../../comments/mentions";
 import { Avatar } from "./Avatar";
+import { t, type MessageKey } from "../../i18n";
+
+const HEADER_KEYS = {
+    user: "comments.mentionPicker.people",
+    workitem: "comments.mentionPicker.workItems",
+    pullrequest: "comments.mentionPicker.pullRequests",
+} as const satisfies Record<MentionKind, MessageKey>;
+
+const MATCHING_KEYS = {
+    user: "comments.mentionPicker.peopleMatching",
+    workitem: "comments.mentionPicker.workItemsMatching",
+    pullrequest: "comments.mentionPicker.pullRequestsMatching",
+} as const satisfies Record<MentionKind, MessageKey>;
 
 export interface MentionPickerProps {
     kind: MentionKind;
@@ -70,8 +83,7 @@ export function MentionPicker(props: Readonly<MentionPickerProps>): ReactElement
         minWidth: 240,
     };
 
-    const headerLabel =
-        kind === "user" ? "People" : kind === "workitem" ? "Work items" : "Pull requests";
+    const headerLabel = t(HEADER_KEYS[kind]);
 
     return (
         // eslint-disable-next-line jsx-a11y-x/interactive-supports-focus -- Typeahead popup: focus deliberately stays in the composer textarea (mousedown is prevented below) and the Composer drives the highlighted option through selectedIndex.
@@ -79,7 +91,7 @@ export function MentionPicker(props: Readonly<MentionPickerProps>): ReactElement
             ref={listRef}
             className={`emr-mention-picker emr-mention-picker-${kind}`}
             role="listbox"
-            aria-label={`${headerLabel} matching ${query}`}
+            aria-label={t(MATCHING_KEYS[kind], { query })}
             style={style}
             // Don't steal focus from the textarea on click — it must keep focus so
             // caret tracking keeps working.
@@ -87,9 +99,13 @@ export function MentionPicker(props: Readonly<MentionPickerProps>): ReactElement
         >
             <div className="emr-mention-picker-header">{headerLabel}</div>
             {loading && suggestions.length === 0 ? (
-                <div className="emr-mention-picker-empty">Searching…</div>
+                <div className="emr-mention-picker-empty">
+                    {t("comments.mentionPicker.searching")}
+                </div>
             ) : suggestions.length === 0 ? (
-                <div className="emr-mention-picker-empty">No matches</div>
+                <div className="emr-mention-picker-empty">
+                    {t("comments.mentionPicker.noMatches")}
+                </div>
             ) : (
                 <div className="emr-mention-picker-list" role="presentation">
                     {suggestions.map((s, i) => (
@@ -185,7 +201,7 @@ function SuggestionRow({
                         className="emr-mention-picker-type emr-mention-picker-type-pr"
                         aria-hidden="true"
                     >
-                        PR
+                        {t("comments.mentionPicker.prGlyph")}
                     </span>
                     <span className="emr-mention-picker-body">
                         <span className="emr-mention-picker-primary">
@@ -231,10 +247,10 @@ function workItemGlyph(type: string): string {
 function prStatusLabel(s: "active" | "completed" | "abandoned"): string {
     switch (s) {
         case "active":
-            return "Active";
+            return t("comments.mentionPicker.prStatus.active");
         case "completed":
-            return "Completed";
+            return t("comments.mentionPicker.prStatus.completed");
         case "abandoned":
-            return "Abandoned";
+            return t("comments.mentionPicker.prStatus.abandoned");
     }
 }

@@ -3,6 +3,7 @@
 
 import { type ReactElement, useEffect, useState } from "react";
 
+import { t } from "../i18n";
 import { OpenElsewhereIcon } from "../shell/components/icons";
 
 /**
@@ -17,10 +18,12 @@ const ETA_TICK_MS = 15_000;
 
 /** "within about 4 minutes": when the host is due to replace the dead token. */
 export function reconnectEta(recoverAtMs: number | undefined, nowMs: number): string {
-    if (recoverAtMs === undefined) return "within a few minutes";
+    if (recoverAtMs === undefined) return t("hub.prTab.eta.fewMinutes");
     const minutes = Math.ceil((recoverAtMs - nowMs) / 60_000);
 
-    return minutes <= 1 ? "within a minute" : `within about ${minutes} minutes`;
+    return minutes <= 1
+        ? t("hub.prTab.eta.oneMinute")
+        : t("hub.prTab.eta.aboutMinutes", { count: minutes });
 }
 
 function useNow(tickMs: number): number {
@@ -58,16 +61,17 @@ export function SessionRefreshingView({
 
     return (
         <div className="emr-error" role="status">
-            <h2>Reconnecting to Azure DevOps…</h2>
+            <h2>{t("hub.prTab.reconnecting.title")}</h2>
             {autoReload ? (
-                <p style={MUTED}>This only takes a moment.</p>
+                <p style={MUTED}>{t("hub.prTab.reconnecting.momentary")}</p>
             ) : (
                 <>
                     <p style={MUTED}>
                         {reloadTried
-                            ? "Azure DevOps is still giving this tab an expired sign-in, " +
-                              `so reloading won't help. It will continue by itself ${reconnectEta(recoverAtMs, now)}.`
-                            : "This usually fixes itself within a few minutes."}
+                            ? t("hub.prTab.reconnecting.expiredSignIn", {
+                                  eta: reconnectEta(recoverAtMs, now),
+                              })
+                            : t("hub.prTab.reconnecting.usuallyFixes")}
                     </p>
                     {reloadTried ? null : (
                         <button
@@ -75,7 +79,7 @@ export function SessionRefreshingView({
                             className="emr-error-retry"
                             onClick={() => onReload()}
                         >
-                            Reload page
+                            {t("common.reloadPage")}
                         </button>
                     )}
                     <p style={MUTED}>
@@ -85,7 +89,7 @@ export function SessionRefreshingView({
                             target="_blank"
                             rel="noopener noreferrer"
                         >
-                            Why this happens (known Azure DevOps issue)
+                            {t("hub.prTab.reconnecting.why")}
                         </a>
                     </p>
                 </>
@@ -103,10 +107,10 @@ export function BootErrorView({
 }>): ReactElement {
     return (
         <div className="emr-error">
-            <h2>Something went wrong</h2>
+            <h2>{t("common.somethingWentWrong")}</h2>
             <pre>{error}</pre>
             <button type="button" className="emr-error-retry" onClick={() => onRetry()}>
-                Try again
+                {t("common.tryAgain")}
             </button>
         </div>
     );
@@ -121,13 +125,10 @@ export function NoMarkdownFilesView({
 }: Readonly<{ onBrowseDocuments: () => void }>): ReactElement {
     return (
         <div className="emr-error" style={MUTED}>
-            <h2>No Markdown files changed in this PR</h2>
-            <p>
-                This tab shows the pull request&apos;s .md files. Switch to the Files tab for the
-                rest, or read this repository&apos;s documents.
-            </p>
+            <h2>{t("hub.prTab.noMarkdown.title")}</h2>
+            <p>{t("hub.prTab.noMarkdown.body")}</p>
             <button type="button" className="emr-error-retry" onClick={() => onBrowseDocuments()}>
-                Browse repository documents
+                {t("hub.prTab.noMarkdown.browse")}
             </button>
         </div>
     );
@@ -142,12 +143,12 @@ export function PrDocNavTitle({
 }: Readonly<{ onOpenDocuments: () => void }>): ReactElement {
     return (
         <>
-            <span className="emr-docnav-title">Documents</span>
+            <span className="emr-docnav-title">{t("common.documents")}</span>
             <button
                 type="button"
                 className="emr-icon-btn"
-                title="Open all of this repository's documents (new tab)"
-                aria-label="Open all of this repository's documents in a new tab"
+                title={t("hub.prTab.openAllDocuments.title")}
+                aria-label={t("hub.prTab.openAllDocuments.label")}
                 onClick={() => onOpenDocuments()}
             >
                 <OpenElsewhereIcon />

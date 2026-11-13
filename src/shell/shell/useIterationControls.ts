@@ -3,6 +3,7 @@
 import { type MutableRefObject, useCallback, useMemo } from "react";
 
 import type { TextQuoteAnchor } from "../../types";
+import { t } from "../../i18n";
 import { relocateAnchor } from "../../comments/anchor";
 import { events, track } from "../../telemetry";
 import type { ReaderIterationOption } from "../components/ReaderStatusBar";
@@ -99,9 +100,8 @@ export function useIterationControls(opts: IterationControlsOptions) {
             relocateAnchor(anchor, latestHtml)
                 ? null
                 : {
-                      message:
-                          "This text changed in a later update, so a comment can't be attached to it.",
-                      actionLabel: `Compare up to Update ${nativeUpdateCount}`,
+                      message: t("shell.commentBlocker.message"),
+                      actionLabel: t("shell.commentBlocker.action", { update: nativeUpdateCount }),
                       onAction: () =>
                           changeIterationRange({
                               fromUpdate: comparisonStart,

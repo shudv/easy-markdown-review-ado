@@ -15,8 +15,10 @@ import {
     balloonStyle,
     type ReplyOptions,
 } from "./Balloon.helpers";
+import { useResolveMotion } from "./Balloon.motion";
 import { BalloonReplyZone } from "./Balloon.parts";
 import { CommentRow } from "./CommentRow";
+import { t } from "../../i18n";
 
 interface BalloonProps {
     thread: CommentThread;
@@ -65,6 +67,14 @@ interface BalloonProps {
     onRequestReply?: (threadId: string) => void;
     /** Dismiss this thread's reply composer (discards its draft). */
     onCancelReply?: (threadId: string) => void;
+    /**
+     * The thread is leaving the rail (a filter now hides it): play the exit,
+     * after any resolve wash in progress, then call `onExited` so the parent can
+     * unmount it.
+     */
+    exiting?: boolean;
+    /** Called once the exit has played. */
+    onExited?: (threadId: string) => void;
 }
 
 // eslint-disable-next-line max-lines-per-function -- Comment thread card: header, comment list, reply composer and actions share the thread state. One self-contained card.
@@ -94,9 +104,31 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
         onReplyChange,
         onRequestReply,
         onCancelReply,
+        exiting = false,
+        onExited,
     } = props;
 
     const ref = useRef<HTMLDivElement>(null);
+
+    const { wash, startWash, notePress } = useResolveMotion({
+        ref,
+        threadId: thread.id,
+        exiting,
+        onExited,
+    });
+
+    // Every way of resolving here (✓, the status menu, Reply and resolve) plays
+    // the wash; remote status changes don't.
+    const resolveHere = (threadId: string, via?: ResolveVia) => {
+        startWash();
+        onResolve(threadId, via);
+    };
+
+    const replyHere = (...args: Parameters<typeof onReply>) => {
+        if (args[2]?.resolve === true) startWash();
+        onReply(...args);
+    };
+
     useEffect(() => {
         if (!ref.current || !onHeightChange) return;
         const el = ref.current;
@@ -117,6 +149,7 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
         resolved: isResolvedLike(thread.status),
         isOrphaned,
         general,
+        washing: wash !== null,
     });
 
     const status = isOrphaned ? "orphaned" : thread.status;
@@ -145,8 +178,23 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
             className={className}
             style={style}
             onClick={() => onClick(thread.id)}
+            onPointerDownCapture={notePress}
             data-thread-id={thread.id}
         >
+            {wash ? (
+                <span className="emr-balloon-wash" aria-hidden="true">
+                    <span
+                        key={wash.id}
+                        className="emr-balloon-wash-ink"
+                        style={{
+                            left: wash.x - wash.radius,
+                            top: wash.y - wash.radius,
+                            width: wash.radius * 2,
+                            height: wash.radius * 2,
+                        }}
+                    />
+                </span>
+            ) : null}
             {showStatusChip ? (
                 <div className="emr-balloon-header">
                     <span className={`emr-balloon-status status-${status}`}>
@@ -156,9 +204,16 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
             ) : null}
 
             {isOrphaned ? (
-                <div className="emr-balloon-orphan-quote" title="Original anchor text">
-                    <span className="emr-balloon-orphan-label">Was anchored to:</span>
-                    <span className="emr-balloon-orphan-text">“{thread.anchor.exact}”</span>
+                <div
+                    className="emr-balloon-orphan-quote"
+                    title={t("comments.balloon.originalAnchorText")}
+                >
+                    <span className="emr-balloon-orphan-label">
+                        {t("comments.balloon.wasAnchoredTo")}
+                    </span>
+                    <span className="emr-balloon-orphan-text">
+                        {t("comments.balloon.quotedAnchor", { text: thread.anchor.exact })}
+                    </span>
                 </div>
             ) : null}
 
@@ -174,7 +229,7 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
                     interactive={isInteractive}
                     onEdit={onEditComment}
                     onDelete={onDeleteComment}
-                    onResolveThread={onResolve}
+                    onResolveThread={resolveHere}
                     onReopenThread={onReopen}
                     onMarkPendingThread={onMarkPending}
                     onCloseThread={onClose}
@@ -190,7 +245,7 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
                     currentUser={currentUser}
                     replyInitial={replyInitial}
                     onReplyChange={onReplyChange}
-                    onReply={onReply}
+                    onReply={replyHere}
                     canResolve={canResolve}
                     onRequestReply={onRequestReply}
                     onCancelReply={onCancelReply}

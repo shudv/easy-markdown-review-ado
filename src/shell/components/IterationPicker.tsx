@@ -2,6 +2,7 @@
 
 import { type ReactElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { getFormatLocale, type MessageKey, t } from "../../i18n";
 import {
     allReviewIterations,
     betweenReviewUpdates,
@@ -23,15 +24,18 @@ function formatIterationAge(dateMs: number | undefined): string | null {
 
     const elapsedMinutes = Math.max(0, Math.floor((Date.now() - dateMs) / 60_000));
 
-    if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-    const elapsedHours = Math.floor(elapsedMinutes / 60);
-    if (elapsedHours < 24) return `${elapsedHours}h ago`;
+    if (elapsedMinutes < 60) {
+        return t("navigation.iterationPicker.minutesAgo", { minutes: elapsedMinutes });
+    }
 
-    return `${Math.floor(elapsedHours / 24)}d ago`;
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    if (elapsedHours < 24) return t("navigation.iterationPicker.hoursAgo", { hours: elapsedHours });
+
+    return t("navigation.iterationPicker.daysAgo", { days: Math.floor(elapsedHours / 24) });
 }
 
 function formatIterationTimestamp(dateMs: number): string {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(getFormatLocale(), {
         month: "short",
         day: "numeric",
         year: "numeric",
@@ -47,6 +51,21 @@ interface IterationPickerProps {
     onChange: (range: ReviewIterationRange) => void;
 }
 
+const STEP_KEYS = {
+    left: {
+        ariaLabel: "navigation.iterationPicker.previousComparison",
+        noneAriaLabel: "navigation.iterationPicker.noPreviousComparison",
+        title: "navigation.iterationPicker.previousTitle",
+        edgeTitle: "navigation.iterationPicker.firstComparison",
+    },
+    right: {
+        ariaLabel: "navigation.iterationPicker.nextComparison",
+        noneAriaLabel: "navigation.iterationPicker.noNextComparison",
+        title: "navigation.iterationPicker.nextTitle",
+        edgeTitle: "navigation.iterationPicker.lastComparison",
+    },
+} as const satisfies Record<"left" | "right", Record<string, MessageKey>>;
+
 /** The picker's previous (left) / next (right) comparison step. */
 function IterationStepButton({
     direction,
@@ -59,20 +78,15 @@ function IterationStepButton({
     range: ReviewIterationRange | null;
     onStep: (range: ReviewIterationRange) => void;
 }>): ReactElement {
-    const word = direction === "left" ? "Previous" : "Next";
-    const edge = direction === "left" ? "First" : "Last";
+    const keys = STEP_KEYS[direction];
 
     // `label` comes from reviewRangeLabel, which never returns "".
     return (
         <button
             type="button"
             className="emr-statusbar-iteration-step"
-            aria-label={
-                label !== null
-                    ? `${word} comparison: ${label}`
-                    : `No ${word.toLowerCase()} comparison`
-            }
-            title={label !== null ? `${word}: ${label}` : `${edge} comparison`}
+            aria-label={label !== null ? t(keys.ariaLabel, { label }) : t(keys.noneAriaLabel)}
+            title={label !== null ? t(keys.title, { label }) : t(keys.edgeTitle)}
             disabled={!range}
             onClick={range ? () => onStep(range) : undefined}
         >
@@ -170,7 +184,9 @@ export function IterationPicker({
                             <span className="emr-statusbar-iteration-base-dot" />
                         </span>
                         <span>→</span>
-                        <span>Update {options.length}</span>
+                        <span>
+                            {t("navigation.iterationPicker.update", { update: options.length })}
+                        </span>
                     </span>
                     {stableLabels.map((label) => (
                         <span
@@ -217,7 +233,9 @@ export function IterationPicker({
                                         className="emr-statusbar-iteration-text"
                                         aria-hidden="true"
                                     >
-                                        Update {resolved.range.toUpdate}
+                                        {t("navigation.iterationPicker.update", {
+                                            update: resolved.range.toUpdate,
+                                        })}
                                     </span>
                                 </>
                             ) : (
@@ -245,7 +263,7 @@ export function IterationPicker({
                     ref={listRef}
                     className="emr-statusbar-iteration-list"
                     role="listbox"
-                    aria-label="Review iterations"
+                    aria-label={t("navigation.iterationPicker.listLabel")}
                     aria-multiselectable="true"
                 >
                     {/* Newest first, like ADO's own update list: "All updates" on top,
@@ -261,7 +279,9 @@ export function IterationPicker({
                         }}
                     >
                         <span className="emr-statusbar-iteration-num" />
-                        <span className="emr-statusbar-iteration-title">All updates</span>
+                        <span className="emr-statusbar-iteration-title">
+                            {t("common.allUpdates")}
+                        </span>
                         <span />
                     </button>
                     {[...options].reverse().map((option) => {

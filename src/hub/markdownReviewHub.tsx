@@ -38,6 +38,7 @@ import { initWithHandshakeRetry } from "../shell/sdkHandshake";
 import { configureAdoSession } from "../shell/adoSessionSdk";
 import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
+import { initLocaleFromHost, t } from "../i18n";
 import { syncHostTheme } from "../theme/theme";
 import {
     ErrorBoundary,
@@ -70,7 +71,7 @@ function HubReader({
         <div className="emr-hub__reader">
             <div className="emr-hub__bar">
                 <button type="button" className="emr-hub__back" onClick={onBack}>
-                    ← Back to Files
+                    {t("hub.reader.backToFiles")}
                 </button>
                 <span className="emr-hub__path" title={config.path}>
                     {basename(config.path)}
@@ -151,6 +152,9 @@ async function boot(): Promise<void> {
     initTelemetry({ appName: "documents-hub" });
     installGlobalErrorHandlers();
     installAuthFailureCapture();
+    // Started once the host is ready (the translation chunk downloads while the
+    // rest of boot runs) and awaited just before the first render.
+    let localeReady: Promise<void> = Promise.resolve();
     await orchestrateBoot({
         init: () =>
             initWithHandshakeRetry({
@@ -162,6 +166,9 @@ async function boot(): Promise<void> {
             setTelemetryContext({
                 extensionVersion: installedExtensionVersion(),
             });
+            localeReady = initLocaleFromHost(() => SDK.getPageContext().globalization.culture).then(
+                (locale) => setTelemetryContext({ locale }),
+            );
             configureAdoSession();
             // Resolve the Git client's location and fetch a token now, overlapping
             // the rest of boot, instead of stalling the first REST call.
@@ -190,6 +197,7 @@ async function boot(): Promise<void> {
 
             const filesUrl = config ? buildFilesUrl(SDK.getHost().name, config) : null;
 
+            await localeReady;
             const rootEl = document.getElementById("root");
             if (!rootEl) throw new Error("Root element not found");
             createRoot(rootEl).render(

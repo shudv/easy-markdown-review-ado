@@ -2,8 +2,28 @@
 
 import { useCallback, useState } from "react";
 
+import { t, type MessageKey } from "../../i18n";
 import { trackUserFacingError } from "../../telemetry";
 import { friendlyWriteError } from "../shellHelpers";
+
+/**
+ * Display text for each comment write. The English label itself is the
+ * telemetry source and log name; only the toast shows the translation.
+ */
+const WRITE_ACTION_KEY = {
+    "Create comment": "shell.writeAction.createComment",
+    "Add reply": "shell.writeAction.addReply",
+    "Resolve thread": "shell.writeAction.resolveThread",
+    "Reopen thread": "shell.writeAction.reopenThread",
+    "Mark thread pending": "shell.writeAction.markThreadPending",
+    "Close thread": "shell.writeAction.closeThread",
+    "Edit comment": "shell.writeAction.editComment",
+    "Delete comment": "shell.writeAction.deleteComment",
+    "Delete thread": "shell.writeAction.deleteThread",
+    "Toggle reaction": "shell.writeAction.toggleReaction",
+} as const satisfies Record<string, MessageKey>;
+
+export type WriteAction = keyof typeof WRITE_ACTION_KEY;
 
 /**
  * Comment-write bookkeeping: the failed-write banner, the in-flight count of
@@ -32,7 +52,7 @@ export function useCommentWrites() {
 
     const persistWith = useCallback(
         async <T>(
-            label: string,
+            label: WriteAction,
             op: () => Promise<T>,
             opts?: { fromComposer?: boolean },
         ): Promise<T | null> => {
@@ -45,7 +65,7 @@ export function useCommentWrites() {
 
                 return result;
             } catch (err) {
-                setPersistError(friendlyWriteError(label, err));
+                setPersistError(friendlyWriteError(t(WRITE_ACTION_KEY[label]), err));
 
                 console.error(`[Shell] ${label} failed:`, err);
                 trackUserFacingError({

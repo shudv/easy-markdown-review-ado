@@ -227,6 +227,7 @@ out the individual assertions.
 | `reconnect.spec.ts`         | Fault-injected host failures (token dead window, slow host, dropped writes): nothing typed is lost and nothing is saved twice, checked against ADO over REST.                        |
 | `theme-sync.spec.ts`        | Switching the ADO theme updates the app's theme.                                                                                                                                     |
 | `theme-hc.spec.ts`          | Forced colors map to the high-contrast themes.                                                                                                                                       |
+| `locale.spec.ts`            | The app renders in the language ADO reports (on Services, the browser's language) and falls back to English for one it doesn't ship.                                                 |
 
 `reconnect.spec.ts` waits out real recovery timing, so run it alone with
 `npx playwright test --project=chromium reconnect`. Its telemetry assertions
@@ -247,7 +248,10 @@ Chromium, and plain 401 handling in the `adoSession` unit tests.
 Import `test` and `expect` from [`./fixtures`](./fixtures.ts), not from
 `@playwright/test` (types such as `Page` are fine). The fixture grants the ADO
 origin the scoped "local network access" permission; without it our localhost
-iframes never load. ESLint fails the build if a spec gets this wrong.
+iframes never load. ESLint fails the build if a spec gets this wrong. The
+fixture also pins the app to English (its `emr.locale` override), so specs can
+assert English text whatever the browser's or account's language;
+`locale.spec.ts` opts out with `test.use({ pinnedLocale: null })`.
 
 ADO chrome and our contribution are located differently in `helpers.ts`: our
 Documents hub iframe is matched by its dev-origin **bundle URL**

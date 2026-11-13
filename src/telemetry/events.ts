@@ -94,8 +94,6 @@ export const EVENT = {
     AppException: "app.exception",
 } as const;
 
-export type EventName = (typeof EVENT)[keyof typeof EVENT];
-
 /**
  * A comment write the token dead window rejected, held for the session to come
  * back. Telemetry names the kind only — never the comment or its target.

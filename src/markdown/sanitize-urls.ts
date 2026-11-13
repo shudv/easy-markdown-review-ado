@@ -18,6 +18,7 @@
 // than rewrite.
 
 import type { Plugin } from "unified";
+import { t } from "../i18n";
 import type { Root, Element } from "hast";
 import { visit } from "unist-util-visit";
 
@@ -123,7 +124,7 @@ function sanitizeImage(props: Properties): void {
             // Preserve accessibility: if there's no alt, advertise that an
             // image was suppressed rather than silently rendering nothing.
             if (typeof props.alt !== "string" || props.alt.length === 0) {
-                props.alt = "(blocked image)";
+                props.alt = t("document.image.blocked");
             }
         }
     }

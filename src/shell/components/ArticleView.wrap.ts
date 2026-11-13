@@ -1,6 +1,7 @@
 // Phases of `ArticleView`'s wrap pass (its main layout effect): section
 // hydration, anchor wrapping, y measurement, and rewrap focus restoration.
 
+import { t } from "../../i18n";
 import type { CommentThread, DiffRange, TextQuoteAnchor } from "../../types";
 import { isResolvedLike } from "../../types";
 import { resolveAnchor } from "../../comments/anchor";
@@ -109,7 +110,10 @@ function hydrateSection(
     const toggle = article.ownerDocument.createElement("button");
     toggle.type = "button";
     toggle.className = "emr-section-toggle";
-    toggle.setAttribute("aria-label", collapsed ? "Expand section" : "Collapse section");
+    toggle.setAttribute(
+        "aria-label",
+        collapsed ? t("common.expandSection") : t("common.collapseSection"),
+    );
     toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
     toggle.title = toggle.getAttribute("aria-label")!;
     heading.prepend(toggle);

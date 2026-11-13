@@ -1,6 +1,7 @@
 // "Before" disclosures that reveal a changed block's or table's original
 // rendering next to the current one.
 
+import { t } from "../../i18n";
 import { splitTableRow } from "./tableAlignment";
 import { renderOriginalStandalone } from "./rendering";
 import {
@@ -72,8 +73,8 @@ function createBeforeToggle(
     // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
     trigger.type = "button";
     trigger.className = "emr-diff-before-trigger";
-    trigger.textContent = "Before";
-    trigger.setAttribute("aria-label", "Show previous version");
+    trigger.textContent = t("common.before");
+    trigger.setAttribute("aria-label", t("document.before.showPreviousVersion"));
     trigger.setAttribute("aria-expanded", "false");
     const panel = document.createElement("div");
     panel.className = panelClassName;
@@ -82,17 +83,19 @@ function createBeforeToggle(
     trigger.setAttribute("aria-controls", panel.id);
     const label = document.createElement("span");
     label.className = "emr-diff-before-label";
-    label.textContent = "Before";
+    label.textContent = t("common.before");
     const content = document.createElement("div");
     content.className = "emr-diff-before-content";
     panel.append(label, content);
     trigger.addEventListener("click", () => {
         const open = panel.hidden === true;
         panel.hidden = !open;
-        trigger.textContent = open ? "Hide" : "Before";
+        trigger.textContent = open ? t("common.hide") : t("common.before");
         trigger.setAttribute(
             "aria-label",
-            open ? "Hide previous version" : "Show previous version",
+            open
+                ? t("document.before.hidePreviousVersion")
+                : t("document.before.showPreviousVersion"),
         );
         trigger.setAttribute("aria-expanded", open ? "true" : "false");
     });

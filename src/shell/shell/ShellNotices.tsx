@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 
+import { t, tRich } from "../../i18n";
 import { DraftGuardDialog } from "../components/DraftGuardDialog";
 import { SessionNotice } from "../components/SessionNotice";
 import type { DraftTarget } from "../draftStorage";
@@ -42,7 +43,7 @@ export function ShellNotices(props: Readonly<ShellNoticesProps>): ReactElement {
                         type="button"
                         className="emr-toast-dismiss"
                         onClick={props.onDismissPersistError}
-                        aria-label="Dismiss"
+                        aria-label={t("common.dismiss")}
                     >
                         ×
                     </button>
@@ -52,15 +53,16 @@ export function ShellNotices(props: Readonly<ShellNoticesProps>): ReactElement {
             {missingDoc ? (
                 <div className="emr-toast emr-toast--info" role="status">
                     <span className="emr-toast-msg">
-                        <code>{missingDoc.missing}</code> is no longer in this repository &mdash; it
-                        may have been moved or deleted. Showing <code>{missingDoc.shown}</code>{" "}
-                        instead.
+                        {tRich("shell.notices.missingDoc", {
+                            missing: <code>{missingDoc.missing}</code>,
+                            shown: <code>{missingDoc.shown}</code>,
+                        })}
                     </span>
                     <button
                         type="button"
                         className="emr-toast-dismiss"
                         onClick={props.onDismissMissingDoc}
-                        aria-label="Dismiss"
+                        aria-label={t("common.dismiss")}
                     >
                         ×
                     </button>

@@ -9,6 +9,7 @@
 
 import type { CommentThread } from "../../types";
 import { isResolvedLike } from "../../types";
+import { t, type MessageKey } from "../../i18n";
 
 /** Which slice of the thread population the rail is currently showing. */
 export type CommentFilterMode = "all" | "active" | "resolved" | "mine";
@@ -21,17 +22,17 @@ export const COMMENT_FILTER_MODES: readonly CommentFilterMode[] = [
     "mine",
 ];
 
-/** Human-readable label per mode (used by the trigger + menu items). */
-const FILTER_LABELS: Record<CommentFilterMode, string> = {
-    all: "All comments",
-    active: "Active comments",
-    resolved: "Resolved comments",
-    mine: "My comments",
-};
+/** Catalog key of the human-readable label per mode (used by the trigger + menu items). */
+const FILTER_LABEL_KEYS = {
+    all: "comments.filter.mode.all",
+    active: "comments.filter.mode.active",
+    resolved: "comments.filter.mode.resolved",
+    mine: "comments.filter.mode.mine",
+} as const satisfies Record<CommentFilterMode, MessageKey>;
 
 /** The menu/trigger label for a mode. */
 export function commentFilterLabel(mode: CommentFilterMode): string {
-    return FILTER_LABELS[mode];
+    return t(FILTER_LABEL_KEYS[mode]);
 }
 
 /** Per-bucket thread counts shown beside each filter option. */
@@ -130,7 +131,7 @@ export interface CommentFilterOption {
 export function commentFilterOptions(counts: CommentFilterCounts): CommentFilterOption[] {
     return COMMENT_FILTER_MODES.map((mode) => ({
         mode,
-        label: FILTER_LABELS[mode],
+        label: t(FILTER_LABEL_KEYS[mode]),
         count: counts[mode],
     }));
 }

@@ -6,6 +6,7 @@
 // stake.
 
 import { type ReactElement, useEffect, useRef } from "react";
+import { t, tRich } from "../../i18n";
 
 interface DraftGuardDialogProps {
     /** File the existing draft lives in (basename shown to the user). */
@@ -46,23 +47,22 @@ export function DraftGuardDialog(props: Readonly<DraftGuardDialogProps>): ReactE
             className="emr-draft-guard-overlay"
             role="dialog"
             aria-modal="true"
-            aria-label="Unsaved comment draft"
+            aria-label={t("comments.draftGuard.dialogLabel")}
             onClick={(e) => {
                 if (e.target === e.currentTarget) onKeepEditing();
             }}
         >
             <div className="emr-draft-guard">
-                <div className="emr-draft-guard-title">You already have an unsaved comment</div>
+                <div className="emr-draft-guard-title">{t("comments.draftGuard.title")}</div>
                 <div className="emr-draft-guard-body">
                     <p>
-                        There's an unsaved draft in <strong>{fileName}</strong>. Starting a new one
-                        will discard it.
+                        {tRich("comments.draftGuard.body", { file: <strong>{fileName}</strong> })}
                     </p>
                     <blockquote className="emr-draft-guard-snippet">{snippet}</blockquote>
                 </div>
                 <div className="emr-draft-guard-actions">
                     <button type="button" className="emr-btn subtle" onClick={onDiscard}>
-                        Discard draft
+                        {t("comments.draftGuard.discard")}
                     </button>
                     <button
                         ref={keepRef}
@@ -70,7 +70,7 @@ export function DraftGuardDialog(props: Readonly<DraftGuardDialogProps>): ReactE
                         className="emr-btn primary"
                         onClick={onKeepEditing}
                     >
-                        Keep editing
+                        {t("comments.draftGuard.keepEditing")}
                     </button>
                 </div>
             </div>

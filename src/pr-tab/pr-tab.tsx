@@ -18,6 +18,7 @@ import { initWithHandshakeRetry } from "../shell/sdkHandshake";
 import { configureAdoSession } from "../shell/adoSessionSdk";
 import { warmAdoClients } from "../shell/adoClients";
 import { installDevFaults } from "../dev/faults";
+import { initLocaleFromHost } from "../i18n";
 import { followsRecentAutoReload, sessionStorageOrUndefined } from "../shell/adoSession";
 import { bootErrorDetail, renderBootErrorInto } from "../shell/bootError";
 import { syncHostTheme } from "../theme/theme";
@@ -72,6 +73,10 @@ initTelemetry({ appName: "pr-tab" });
 installGlobalErrorHandlers();
 installAuthFailureCapture();
 
+// Started as soon as the host is ready (the translation chunk downloads while
+// the rest of boot runs) and awaited just before the first render.
+let localeReady: Promise<void> = Promise.resolve();
+
 void orchestrateBoot({
     // loaded: false means the host frame keeps showing the loading spinner until
     // we call notifyLoadSucceeded() ourselves. This gives us a chance to render
@@ -90,6 +95,9 @@ void orchestrateBoot({
         await SDK.ready();
         markBootPhase("sdk-ready");
         setTelemetryContext({ extensionVersion: installedExtensionVersion() });
+        localeReady = initLocaleFromHost(() => SDK.getPageContext().globalization.culture).then(
+            (locale) => setTelemetryContext({ locale }),
+        );
         configureAdoSession();
         // Resolve the Git client's location and fetch a token now, overlapping
         // React mounting, instead of stalling the first REST call.
@@ -97,6 +105,7 @@ void orchestrateBoot({
     },
     run: async () => {
         syncHostTheme();
+        await localeReady;
 
         const rootEl = document.getElementById("root");
         if (!rootEl) throw new Error("Root element not found");

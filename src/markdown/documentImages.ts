@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { trackUserFacingError } from "../telemetry";
 import { adoErrorCodeOf, httpStatusOf } from "../telemetry/errorShape";
 import { EXCALIDRAW_CLASS, ExcalidrawSceneError, isExcalidrawPath } from "./excalidraw";
@@ -75,6 +76,9 @@ export function hydrateDocumentImages(
 
         const frame = document.createElement("span");
         frame.className = "emr-repo-image-frame is-loading";
+        // Shown by the frame's ::after while loading / after a failure (styles.scss).
+        frame.dataset.loadingLabel = t("common.loadingImage");
+        frame.dataset.errorLabel = t("common.imageUnavailable");
         image.replaceWith(frame);
         frame.append(image);
         image.removeAttribute("src");

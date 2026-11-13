@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 
+import { type MessageKey, t } from "../../i18n";
 import { type NavHeading, type DirNavNode, basename } from "./DocNav.model";
 import { SvgCaret, SvgFolder, SvgSpinner } from "./DocNav.icons";
 
@@ -22,9 +23,9 @@ export function HeadingTwist(
                 e.stopPropagation();
                 onToggle();
             }}
-            aria-label={collapsed ? "Expand section" : "Collapse section"}
+            aria-label={collapsed ? t("common.expandSection") : t("common.collapseSection")}
             aria-expanded={!collapsed}
-            title={collapsed ? "Expand section" : "Collapse section"}
+            title={collapsed ? t("common.expandSection") : t("common.collapseSection")}
             data-collapsed={collapsed ? "true" : undefined}
         >
             <SvgCaret />
@@ -44,7 +45,9 @@ export function HeadingCommentBadge(
         return (
             <span
                 className="emr-docnav-badge is-open"
-                aria-label={`${heading.openComments} open comments`}
+                aria-label={t("navigation.docNav.openCommentsBadge", {
+                    count: heading.openComments,
+                })}
             >
                 {heading.openComments}
             </span>
@@ -55,7 +58,9 @@ export function HeadingCommentBadge(
         return (
             <span
                 className="emr-docnav-badge is-resolved"
-                aria-label={`${heading.totalComments} resolved comments`}
+                aria-label={t("navigation.docNav.resolvedCommentsBadge", {
+                    count: heading.totalComments,
+                })}
             >
                 {heading.totalComments}
             </span>
@@ -65,18 +70,34 @@ export function HeadingCommentBadge(
     return null;
 }
 
+const DIR_TWIST_KEY = {
+    folder: {
+        expand: "navigation.docNav.expandFolder",
+        collapse: "navigation.docNav.collapseFolder",
+    },
+    subpages: {
+        expand: "navigation.docNav.expandSubpages",
+        collapse: "navigation.docNav.collapseSubpages",
+    },
+} as const satisfies Record<"folder" | "subpages", Record<"expand" | "collapse", MessageKey>>;
+
 /** Accessible name + tooltip for a folder row's chevron. */
 export function dirTwistText(
     state: { lazy: boolean; loading: boolean; collapsed: boolean },
     noun: "folder" | "subpages",
 ): { label: string; title: string } {
-    if (state.loading) return { label: "Loading folder...", title: "Loading…" };
-
-    if (state.lazy) {
-        return { label: "Load folder", title: "Click to load contents" };
+    if (state.loading) {
+        return { label: t("navigation.docNav.loadingFolderLabel"), title: t("common.loading") };
     }
 
-    const text = `${state.collapsed ? "Expand" : "Collapse"} ${noun}`;
+    if (state.lazy) {
+        return {
+            label: t("navigation.docNav.loadFolder"),
+            title: t("navigation.docNav.loadFolderTitle"),
+        };
+    }
+
+    const text = t(DIR_TWIST_KEY[noun][state.collapsed ? "expand" : "collapse"]);
 
     return { label: text, title: text };
 }
@@ -138,7 +159,9 @@ export function DirFolderLabel(
             type="button"
             className="emr-docnav-label emr-docnav-dir-label"
             onClick={onToggle}
-            title={isEmpty ? `No Markdown documents in ${node.path}` : node.path}
+            title={
+                isEmpty ? t("navigation.docNav.emptyFolderTitle", { path: node.path }) : node.path
+            }
             disabled={isLoading || isEmpty}
         >
             <span className="emr-docnav-file-icon emr-docnav-folder-icon" aria-hidden>
@@ -174,7 +197,9 @@ export function WikiPageLabel(
             {page.openComments > 0 ? (
                 <span
                     className="emr-docnav-badge is-open"
-                    aria-label={`${page.openComments} open comments`}
+                    aria-label={t("navigation.docNav.openCommentsBadge", {
+                        count: page.openComments,
+                    })}
                 >
                     {page.openComments}
                 </span>

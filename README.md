@@ -15,6 +15,7 @@ documents and see exactly what changed.
 - **Document Hub:** Central place for all your Markdown documents with all the same reading and commenting capabilities. Understands Azure DevOps wiki syntax (`[[_TOC_]]`, `[[_TOSP_]]`, `.order`).
 - **Equations and diagrams:** Render KaTeX math and Mermaid diagrams with source inspection.
 - **Shareable review links:** Link to comments, headings, selected text, and a chosen PR update comparison.
+- **Localized:** Follows the language Azure DevOps reports for you (your browser's language on Azure DevOps Services): English, German, Spanish, French, Japanese, Korean, Brazilian Portuguese, and Simplified Chinese.
 
 > Requires only read scope for the repository and write scope for pull-request threads.
 
@@ -126,7 +127,8 @@ above 3%. Extract a shared helper or fixture rather than raising a threshold.
 and in the editor through the recommended Code Spell Checker extensions. US and
 British English are both accepted. Fix a misspelling rather than accepting it.
 Add a genuine project term (a product name, an API identifier) to `words`, and
-test-only strings to the `test/**` override.
+test-only strings to the `test/**` override. Translation files
+(`src/i18n/translations/`) aren't spell-checked.
 
 Code that genuinely can't be reached or tested may be left out of coverage with
 `/* v8 ignore next -- <why it can't be reached or tested> */` (or a
@@ -136,6 +138,9 @@ than four words, or if a `start` has no matching `stop`.
 The visual suite requires Docker. Azure DevOps integration tests require your
 own sandbox and installed dev extension; see the [sandbox setup](sandbox/README.md),
 [end-to-end test guide](e2e/README.md), and [visual regression guide](visual/README.md).
+
+To add or change UI strings, translations, or languages, see the
+[localization guide](docs/localization.md).
 
 The [OSS sync ledger](docs/oss-sync.md) records the mirrored product boundary and
 the configuration intentionally kept public-specific.

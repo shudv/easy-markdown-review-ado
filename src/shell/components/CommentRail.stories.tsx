@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import type { Comment, CommentThread, ThreadStatus } from "../../types";
+import { isResolvedLike, type Comment, type CommentThread, type ThreadStatus } from "../../types";
 import { CommentApiProvider } from "../../comments/api";
 import { FixtureCommentApi } from "../../comments/fixtureCommentApi";
 import { FIXTURE_AUTHORS } from "../../comments/fixtures";
@@ -578,5 +578,105 @@ export const GeneralTrayHidesResolved: Story = {
         await expect(canvas.queryByText("Comment on Closed overview note")).toBeNull();
         // The filter menu stays available so the hidden thread can be revealed.
         await expect(canvas.getByRole("button", { name: /Filter comments/ })).toBeTruthy();
+    },
+};
+
+/**
+ * A rail that owns its threads' statuses and the Active/All filter, the way the
+ * shell does, so resolving and filtering play the real motion end to end.
+ */
+function LiveFilterRail({ initialMode }: Readonly<{ initialMode: "all" | "active" }>) {
+    const [threads, setThreads] = useState(() => [
+        thread("t1", "active", "First anchor"),
+        thread("t2", "active", "Second anchor"),
+        thread("t3", "resolved", "Third anchor"),
+        thread("t4", "resolved", "Fourth anchor"),
+    ]);
+
+    const [mode, setMode] = useState(initialMode);
+
+    const hidden = new Set(
+        mode === "active" ? threads.filter((t) => isResolvedLike(t.status)).map((t) => t.id) : [],
+    );
+
+    return (
+        <>
+            <button type="button" onClick={() => setMode((m) => (m === "all" ? "active" : "all"))}>
+                Toggle filter
+            </button>
+            <CommentRail
+                {...baseArgs}
+                currentThreads={threads}
+                generalThreads={[]}
+                orphanedThreadIds={new Set()}
+                hiddenThreadIds={hidden}
+                yByThreadId={
+                    new Map([
+                        ["t1", 40],
+                        ["t2", 160],
+                        ["t3", 320],
+                        ["t4", 420],
+                    ])
+                }
+                filterMode={mode}
+                onResolve={(id) =>
+                    setThreads((ts) =>
+                        ts.map((t) => (t.id === id ? { ...t, status: "resolved" } : t)),
+                    )
+                }
+            />
+        </>
+    );
+}
+
+const card = (root: HTMLElement, id: string) =>
+    root.querySelector<HTMLElement>(`.emr-balloon[data-thread-id="${id}"]`);
+
+/**
+ * Resolving under "Active comments": the card plays the green wash where it
+ * was resolved, stays until the wash ends, then fades and its slot collapses so
+ * the cards below close the gap.
+ */
+export const ResolvedThreadWashesThenLeaves: Story = {
+    render: () => <LiveFilterRail initialMode="active" />,
+    play: async ({ canvasElement }) => {
+        const t2 = card(canvasElement, "t2")!;
+        await userEvent.click(within(t2).getByRole("button", { name: "Resolve thread" }));
+
+        // Still on screen, now resolved, with the wash playing.
+        await expect(card(canvasElement, "t2")).toHaveClass("is-washing", "is-resolved");
+        await expect(t2.querySelector(".emr-balloon-wash-ink")).not.toBeNull();
+
+        await new Promise((r) => setTimeout(r, 700));
+        await expect(card(canvasElement, "t2")).not.toBeNull();
+
+        await waitFor(() => expect(card(canvasElement, "t2")).toBeNull(), { timeout: 3000 });
+        await expect(card(canvasElement, "t1")).not.toBeNull();
+    },
+};
+
+/**
+ * Switching the filter to Active lets every resolved thread leave with the same
+ * exit; switching back mid-exit keeps the cards, at full height.
+ */
+export const FilterSwitchLetsResolvedThreadsLeave: Story = {
+    render: () => <LiveFilterRail initialMode="all" />,
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const toggle = canvas.getByRole("button", { name: "Toggle filter" });
+        const fullHeight = card(canvasElement, "t3")!.offsetHeight;
+
+        // Hide, then change our mind before the exit ends: it's cancelled.
+        await userEvent.click(toggle);
+        await expect(card(canvasElement, "t3")).not.toBeNull();
+        await userEvent.click(toggle);
+        await new Promise((r) => setTimeout(r, 700));
+        await expect(card(canvasElement, "t3")?.offsetHeight).toBe(fullHeight);
+
+        // Hide for real: both resolved cards fade and collapse, then unmount.
+        await userEvent.click(toggle);
+        await waitFor(() => expect(card(canvasElement, "t3")).toBeNull(), { timeout: 3000 });
+        await waitFor(() => expect(card(canvasElement, "t4")).toBeNull(), { timeout: 3000 });
+        await expect(card(canvasElement, "t2")).not.toBeNull();
     },
 };

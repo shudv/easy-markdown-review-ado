@@ -19,7 +19,7 @@ export interface HubTarget {
  * so the hub can never drift from the contract — a drift would silently land the
  * hub on its empty state.
  */
-export const HUB_QUERY_KEYS = {
+const HUB_QUERY_KEYS = {
     repositoryId: "emrRepo",
     repositoryName: "emrRepoName",
     project: "emrProj",

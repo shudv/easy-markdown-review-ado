@@ -1,5 +1,7 @@
 // Pure derivations for the SelectionBubble's "Copy link to selection" control.
 
+import { t } from "../../i18n";
+
 /** How long the copy outcome stays visible before the bubble closes. */
 export const LINK_RESULT_MS = { copied: 1200, failed: 2400 } as const;
 
@@ -7,8 +9,8 @@ export type SelectionLinkState = "idle" | "pending" | keyof typeof LINK_RESULT_M
 
 /** The visible/announced copy outcome, or null while idle / pending. */
 export function selectionLinkResultLabel(state: SelectionLinkState): string | null {
-    if (state === "copied") return "Link copied";
-    if (state === "failed") return "Couldn't copy link";
+    if (state === "copied") return t("common.linkCopied");
+    if (state === "failed") return t("common.copyLinkFailed");
 
     return null;
 }

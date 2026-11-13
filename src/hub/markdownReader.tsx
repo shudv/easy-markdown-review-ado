@@ -34,6 +34,7 @@ import type { CommentApi } from "../comments/api";
 import type { CommentAuthor, CommentThread, PrInfo } from "../types";
 import { markAppReady, trackUserFacingError } from "../telemetry";
 import { sharedGitClient } from "../shell/adoClients";
+import { t } from "../i18n";
 
 /** Target descriptor handed to the reader by the launching surface. */
 export interface ReaderConfig {
@@ -292,14 +293,16 @@ export function MarkdownReader({
     if (error !== null && error !== "") {
         return (
             <div className="emr-error" role="alert">
-                <h2>Couldn’t open Markdown Review</h2>
+                <h2>{t("hub.reader.openFailed")}</h2>
                 <pre>{error}</pre>
             </div>
         );
     }
 
     if (!resolved || !user) {
-        return <ReaderLoadingShell scope="hub" ariaLabel="Loading document" hideDocNav />;
+        return (
+            <ReaderLoadingShell scope="hub" ariaLabel={t("common.loadingDocument")} hideDocNav />
+        );
     }
 
     const fileName = basename(resolved.config.path);
@@ -320,8 +323,12 @@ export function MarkdownReader({
 
     const readOnly = !resolved.pr;
 
+    const repoName = resolved.config.repositoryName;
+
     const readOnlyMessage = readOnly
-        ? `${resolved.config.repositoryName ?? "This repository"} has no completed pull request — commenting is disabled until one is completed.`
+        ? repoName === undefined
+            ? t("hub.reader.noCompletedPrThisRepo")
+            : t("hub.docs.noCompletedPr", { repo: repoName })
         : undefined;
 
     return (

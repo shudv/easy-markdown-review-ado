@@ -8,6 +8,7 @@
 // accessor swallows errors (private mode, quota, disabled storage, corrupt
 // JSON) and degrades to the defaults rather than surfacing.
 
+import { t } from "../i18n";
 import type { DraftScope } from "./draftStorage";
 
 /** A curated reading font: a stable id, a display name, and its CSS stack. */
@@ -67,8 +68,8 @@ export const READER_PERCENT_MAX = 150;
 /** Current coupled spacing UI only expands from the readable default. */
 export const READER_SPACING_UI_MIN = 100;
 export const READER_SPACING_UI_MAX = 200;
-export const READER_PERCENT_NUDGE = 5;
-export const READER_PERCENT_SNAP_RADIUS = 3;
+const READER_PERCENT_NUDGE = 5;
+const READER_PERCENT_SNAP_RADIUS = 3;
 
 /** The out-of-the-box text size (100% = the reader's base size). */
 export const DEFAULT_SIZE_PCT = 100;
@@ -160,6 +161,14 @@ export function resolveReaderFont(id: string): ReaderFont {
     // `READER_FONTS[0]` IS the default (system) font, so an unknown id falls back
     // to it. The non-null assertion is safe: the list is a non-empty literal.
     return READER_FONTS.find((f) => f.id === id) ?? READER_FONTS[0]!;
+}
+
+/**
+ * The name the font list shows: the system font is described in the UI
+ * language; the others are font-family names, shown as-is.
+ */
+export function readerFontLabel(font: ReaderFont): string {
+    return font.id === DEFAULT_FONT_ID ? t("navigation.readingPrefs.systemFont") : font.name;
 }
 
 /** Resolve the curated registry against an asynchronous local-font probe. */

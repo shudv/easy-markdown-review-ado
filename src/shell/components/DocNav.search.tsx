@@ -2,13 +2,16 @@
 
 import { type ReactElement, useContext } from "react";
 
+import { t } from "../../i18n";
 import type { FileInfo } from "../../types";
 import {
     ChangeIndicatorContext,
     RangeChangesContext,
     fileChangeView,
     basename,
+    changeNoteSuffix,
     changeTypeGlyph,
+    withChangeNote,
 } from "./DocNav.model";
 import { SvgInfo } from "./DocNav.icons";
 
@@ -19,17 +22,17 @@ import { SvgInfo } from "./DocNav.icons";
 function unavailableMessage(reason: string): string {
     switch (reason) {
         case "extension-missing":
-            return "Code Search isn't installed in this org. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.extensionMissing");
         case "auth":
-            return "Couldn't authenticate to Code Search. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.auth");
         case "network":
-            return "Couldn't reach Code Search. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.network");
         case "bad-request":
-            return "Code Search rejected this query. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.badRequest");
         case "no-config":
-            return "Code Search isn't available here. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.noConfig");
         default:
-            return "Code Search is unavailable right now. Showing local matches only.";
+            return t("navigation.docNav.searchUnavailable.other");
     }
 }
 
@@ -80,10 +83,10 @@ export function SearchResultsList(props: Readonly<SearchResultsListProps>): Reac
                 {banner}
                 <div className="emr-docnav-search-empty">
                     {loading
-                        ? `Searching for "${query}"…`
+                        ? t("navigation.docNav.searchingQuery", { query })
                         : query.length < 2
-                          ? "Type at least 2 characters to search."
-                          : `No files match "${query}".`}
+                          ? t("navigation.docNav.queryTooShort")
+                          : t("navigation.docNav.noFilesMatch", { query })}
                 </div>
             </>
         );
@@ -94,7 +97,7 @@ export function SearchResultsList(props: Readonly<SearchResultsListProps>): Reac
             {banner}
             {loading ? (
                 <div className="emr-docnav-search-status" aria-live="polite">
-                    Searching the repo for more matches…
+                    {t("navigation.docNav.searchingRepo")}
                 </div>
             ) : null}
             {results.map((file) => {
@@ -119,7 +122,7 @@ export function SearchResultsList(props: Readonly<SearchResultsListProps>): Reac
                             type="button"
                             className="emr-docnav-label emr-docnav-search-label"
                             onClick={() => onSelectFile(file.path)}
-                            title={file.path + (note !== "" ? ` \u2014 ${note}` : "")}
+                            title={withChangeNote(file.path, note)}
                         >
                             {showChangeIndicators ? (
                                 <span
@@ -131,7 +134,7 @@ export function SearchResultsList(props: Readonly<SearchResultsListProps>): Reac
                             ) : null}
                             <span className="emr-docnav-search-name">{fileName}</span>
                             {note !== "" ? (
-                                <span className="emr-sr-only">{` (${note})`}</span>
+                                <span className="emr-sr-only">{changeNoteSuffix(note)}</span>
                             ) : null}
                             {parentPath ? (
                                 <span className="emr-docnav-search-path" title={parentPath}>
@@ -141,7 +144,9 @@ export function SearchResultsList(props: Readonly<SearchResultsListProps>): Reac
                             {openComments > 0 ? (
                                 <span
                                     className="emr-docnav-badge is-open"
-                                    aria-label={`${openComments} open comments`}
+                                    aria-label={t("navigation.docNav.openCommentsBadge", {
+                                        count: openComments,
+                                    })}
                                 >
                                     {openComments}
                                 </span>

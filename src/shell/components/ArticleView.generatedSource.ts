@@ -1,5 +1,7 @@
 // The "</> Source" affordance on generated blocks (Mermaid diagrams, math).
 
+import { t } from "../../i18n";
+
 /** Generated block whose Source action was clicked (see `GeneratedSourceModal`). */
 export interface GeneratedSourceView {
     kind: "mermaid" | "math";
@@ -19,7 +21,7 @@ export const GENERATED_SOURCE_KINDS = [
         buttonClass: "emr-mermaid-source-btn",
         sourceAttribute: "data-mermaid-src",
         errorAttribute: "data-mermaid-error",
-        buttonTitle: "View diagram source",
+        buttonTitleKey: "document.generatedSource.viewDiagramSource",
     },
     {
         kind: "math",
@@ -28,7 +30,7 @@ export const GENERATED_SOURCE_KINDS = [
         buttonClass: "emr-math-source-btn",
         sourceAttribute: "data-math-src",
         errorAttribute: "data-math-error",
-        buttonTitle: "View equation source",
+        buttonTitleKey: "document.generatedSource.viewEquationSource",
     },
 ] as const;
 
@@ -61,8 +63,8 @@ export function addGeneratedSourceButtons(root: HTMLElement): void {
             const button = document.createElement("button");
             button.type = "button";
             button.className = spec.buttonClass;
-            button.title = spec.buttonTitle;
-            button.textContent = "</> Source";
+            button.title = t(spec.buttonTitleKey);
+            button.textContent = t("document.generatedSource.button");
             block.appendChild(button);
         });
     }

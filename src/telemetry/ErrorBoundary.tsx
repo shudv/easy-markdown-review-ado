@@ -4,6 +4,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { t } from "../i18n";
 import { markAppReady } from "./bootTiming";
 import { trackException } from "./telemetry";
 
@@ -54,11 +55,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     color: "#cd3030",
                 }}
             >
-                <h2 style={{ marginTop: 0 }}>Something went wrong</h2>
-                <p style={{ color: "#333" }}>
-                    This view hit an unexpected error. Try reloading; if it persists, the issue has
-                    been reported automatically.
-                </p>
+                <h2 style={{ marginTop: 0 }}>{t("common.somethingWentWrong")}</h2>
+                <p style={{ color: "#333" }}>{t("hub.errorBoundary.body")}</p>
             </div>
         );
     }

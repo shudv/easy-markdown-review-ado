@@ -1,6 +1,8 @@
 // Comment-highlight state shared by `ArticleView`'s wrap pass and its
 // pointer/keyboard handlers: active/hover classes and keyboard targets.
 
+import { t } from "../../i18n";
+
 export const DRAFT_THREAD_ID = "__draft__";
 
 export function syncActiveHighlights(
@@ -74,12 +76,14 @@ export function addHighlightKeyboardTargets(article: HTMLElement): void {
         const anchorText = root.innerText.replace(/\s+/g, " ").trim();
         root.tabIndex = 0;
         root.setAttribute("role", "button");
-        let label = "Open comment thread";
-
-        if (threadIds.length > 1) {
-            label = `Open ${threadIds.length} overlapping comment threads`;
-        }
-
-        root.setAttribute("aria-label", `${label}: ${anchorText}`);
+        root.setAttribute(
+            "aria-label",
+            threadIds.length > 1
+                ? t("document.highlight.openOverlappingThreads", {
+                      count: threadIds.length,
+                      text: anchorText,
+                  })
+                : t("document.highlight.openThread", { text: anchorText }),
+        );
     });
 }

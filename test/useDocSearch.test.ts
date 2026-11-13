@@ -10,7 +10,7 @@ import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useDocSearch } from "../src/shell/components/useDocSearch";
+import { pathMatchesQuery, useDocSearch } from "../src/shell/components/useDocSearch";
 import type { FileInfo } from "../src/types";
 import type { FileSearchOutcome } from "../src/shell/almSearch";
 import { recordTelemetryEachTest } from "./telemetrySink";
@@ -103,6 +103,27 @@ describe("useDocSearch — local filtering", () => {
         act(() => h.current!.setSearchQuery("   "));
         expect(h.current!.isSearching).toBe(false);
         expect(h.current!.searchResults).toEqual([]);
+    });
+
+    // Production: half of hub searches found nothing; "release notes" missed
+    // Release-Notes.md because it isn't a substring.
+    it("finds a file by its words in any order, across separators", () => {
+        const h = mount({ files: [...files, file("docs/Release-Notes.md")] });
+        act(() => h.current!.setSearchQuery("notes release"));
+        expect(h.current!.searchResults.map((f) => f.path)).toEqual(["docs/Release-Notes.md"]);
+    });
+});
+
+describe("pathMatchesQuery", () => {
+    it.each([
+        { path: "docs/Release-Notes.md", query: "release notes", matches: true },
+        { path: "docs/Release-Notes.md", query: "docs/release", matches: true },
+        { path: "docs/architecture/overview.md", query: "arch over", matches: true },
+        { path: "docs/guide.md", query: "guide intro", matches: false },
+        { path: "docs/a-b.md", query: "-", matches: true },
+        { path: "docs/ab.md", query: "-", matches: false },
+    ])("'$query' in $path: $matches", ({ path, query, matches }) => {
+        expect(pathMatchesQuery(path, query)).toBe(matches);
     });
 });
 

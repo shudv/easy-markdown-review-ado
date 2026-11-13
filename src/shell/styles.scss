@@ -1680,9 +1680,35 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 10px;
     min-width: 0;
     color: var(--emr-fg);
+}
+.emr-statusbar-activity-message {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.emr-statusbar-activity-action {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--emr-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--emr-accent);
+        outline-offset: 1px;
+    }
 }
 .emr-statusbar-activity-label {
     min-width: 0;
@@ -3101,7 +3127,8 @@ button {
 }
 
 // Top-right tool cluster. The like pill (when count>0) is always visible;
-// the hover-only inner wrapper carries the ⋯ / 1-click 👍 affordances.
+// the hover-only inner wrapper carries the ⋯ / ✓ affordances, and the empty
+// like pill (nobody has reacted yet) is hover-only too.
 .emr-comment-tools {
     position: relative;
     display: inline-flex;
@@ -3111,18 +3138,25 @@ button {
     flex: 0 0 auto;
 }
 
-.emr-comment-tools-hover {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
+.emr-comment-tools-hover,
+.emr-like-pill.is-empty {
     opacity: 0;
     transition: opacity 120ms ease;
 }
 
+.emr-comment-tools-hover {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
 .emr-comment:hover .emr-comment-tools-hover,
 .emr-comment-tools-hover:focus-within,
+.emr-comment:hover .emr-like-pill.is-empty,
+.emr-like-pill.is-empty:focus-visible,
 // Keep affordances visible while the menu (popover) is open.
-.emr-comment-tools:has(.emr-popover) .emr-comment-tools-hover {
+.emr-comment-tools:has(.emr-popover) .emr-comment-tools-hover,
+.emr-comment-tools:has(.emr-popover) .emr-like-pill.is-empty {
     opacity: 1;
 }
 
@@ -3419,6 +3453,9 @@ button {
     }
 
     .emr-like-pill-count {
+        // One digit's width even when empty, so the first like doesn't widen
+        // the pill and push the tools beside it.
+        min-width: 1ch;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
@@ -4875,6 +4912,19 @@ $emr-check-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/
         color: var(--emr-muted);
         opacity: 0.7;
         padding-right: 4px;
+    }
+}
+
+// A folder listed with nothing to show (no Markdown, no subfolders): a quiet
+// row with no chevron, so it can't be "opened" again and again.
+.emr-docnav-item.is-empty {
+    &:hover {
+        background: transparent;
+    }
+
+    .emr-docnav-dir-label {
+        color: var(--emr-muted);
+        cursor: default;
     }
 }
 

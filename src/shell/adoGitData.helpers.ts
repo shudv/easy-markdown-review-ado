@@ -103,6 +103,8 @@ export function editPrDescription(path: string): string {
 export interface GitItemLike {
     path?: string;
     isFolder?: boolean;
+    /** The item's git object id (a file's blob). */
+    objectId?: string;
 }
 
 /** Minimal shape of a repository the name filter reads. */
@@ -135,8 +137,9 @@ export function filterReposByName<R extends NamedRepoLike>(
 /**
  * Project an ADO OneLevel `getItems` listing into `{ files, folders }`:
  *   - the scope folder itself (ADO returns it as the first item) is skipped so
- *     e.g. `/` never lists itself as a subfolder of `/` (which would cause a
- *     re-fetch loop / duplicate node);
+ *     a folder never lists itself as its own subfolder — whether it was asked
+ *     for as `docs` or `/docs` — which would leave it unloaded, re-fetched on
+ *     every open;
  *   - subfolders are collected as-is;
  *   - files are kept only when they end in `.md` (case-INSENSITIVE, so `.MD` /
  *     `.Md` survive), projected onto the neutral `FileInfo` shape;
@@ -150,12 +153,13 @@ export function projectMarkdownLevel(
 ): FolderListing {
     const files: FileInfo[] = [];
     const folders: string[] = [];
-    const normalizedScope = normalizePath(scopePath);
+    // The tree asks for `docs`, ADO lists the folder as `/docs`: compare bare.
+    const scope = barePath(scopePath);
 
     for (const item of items) {
         const path = item.path ?? "";
         if (!path) continue;
-        if (normalizePath(path) === normalizedScope) continue;
+        if (barePath(path) === scope) continue;
 
         if (item.isFolder) {
             folders.push(path);
@@ -165,6 +169,9 @@ export function projectMarkdownLevel(
                 changeType: "modified",
                 linesAdded: 0,
                 linesDeleted: 0,
+                ...(item.objectId !== undefined && item.objectId !== ""
+                    ? { objectId: item.objectId }
+                    : {}),
             });
         }
     }
@@ -173,6 +180,15 @@ export function projectMarkdownLevel(
     folders.sort((a, b) => a.localeCompare(b));
 
     return { files, folders };
+}
+
+/**
+ * A repo path without its leading or trailing slashes ("" for the root). Scope
+ * paths arrive with or without a leading slash; ADO item paths have one.
+ */
+function barePath(p: string): string {
+    // Stryker disable next-line Regex: scope and ADO item paths never carry doubled slashes, so trimming one or a run of them is the same
+    return p.replace(/^\/+|\/+$/g, "");
 }
 
 /** What a failed folder listing becomes; see `listingFailureOutcome`. */
@@ -202,14 +218,11 @@ export function findOrderFile(
     items: readonly GitItemLike[],
     scopePath: string,
 ): string | undefined {
-    // Scope paths arrive with or without a leading slash; ADO item paths have one.
-    // Stryker disable next-line Regex: scope and ADO item paths never carry doubled slashes, so trimming one or a run of them is the same
-    const bare = (p: string) => p.replace(/^\/+|\/+$/g, "");
-    const scope = bare(scopePath);
+    const scope = barePath(scopePath);
     const expected = scope ? `${scope}/${ORDER_FILE_NAME}` : ORDER_FILE_NAME;
 
     // Stryker disable next-line StringLiteral: an item without a path compares a placeholder that is never a real `.order` path, so it never matches either way
-    return items.find((item) => !item.isFolder && bare(item.path ?? "") === expected)?.path;
+    return items.find((item) => !item.isFolder && barePath(item.path ?? "") === expected)?.path;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +236,72 @@ export function findOrderFile(
  */
 export function escapeSearchQuery(s: string): string {
     return s.replace(/[\\:"*?(){}[\]^~]/g, " ").trim();
+}
+
+/**
+ * The words of a document search, as ALM Search terms. Upper-case `AND`/`OR`/
+ * `NOT` are operators there, so they're lowered to stay plain words.
+ */
+export function searchWords(query: string): string[] {
+    return escapeSearchQuery(query)
+        .split(/\s+/)
+        .filter((word) => word !== "")
+        .map((word) => (/^(?:AND|OR|NOT)$/.test(word) ? word.toLowerCase() : word));
+}
+
+/** `file:*word*`: a file name containing `word`. */
+function fileNameTerm(word: string): string {
+    return `file:*${word}*`;
+}
+
+/**
+ * Code Search text matching Markdown files whose NAME contains every word, in
+ * any order. One wildcard per word: `file:*release notes*` matches nothing,
+ * while `file:*release* file:*notes*` finds `Release-Notes.md`.
+ */
+export function fileNameSearchText(words: readonly string[]): string {
+    const nameTerms = words.map(fileNameTerm).join(" ");
+
+    return `${nameTerms} ext:md`;
+}
+
+/**
+ * Code Search text matching Markdown files whose TEXT contains every word. A
+ * name-only search missed documents found by what they say — `architecture`
+ * matched 1 file name but 9 documents in the sandbox, including
+ * `docs/architecture/overview.md`. Text search matches whole words, so words
+ * of three or more letters get a trailing wildcard to match as they're typed
+ * (a prefix wildcard found 5 documents where the whole word found 4).
+ */
+export function contentSearchText(words: readonly string[]): string {
+    const textTerms = words.map((word) => (word.length >= 3 ? `${word}*` : word)).join(" ");
+
+    return `${textTerms} ext:md`;
+}
+
+/** A Code Search result row (only the fields we read). */
+export interface CodeSearchHit {
+    path?: string;
+}
+
+/**
+ * The Markdown files among Code Search results, in order, deduped across
+ * result lists — earlier lists first (file-name matches before text matches).
+ */
+export function markdownHitsToFiles(hitLists: readonly (readonly CodeSearchHit[])[]): FileInfo[] {
+    const out: FileInfo[] = [];
+    const seen = new Set<string>();
+
+    for (const hits of hitLists) {
+        for (const hit of hits) {
+            const path = hit.path ?? "";
+            if (!path.toLowerCase().endsWith(".md") || seen.has(path)) continue;
+            seen.add(path);
+            out.push({ path, changeType: "modified", linesAdded: 0, linesDeleted: 0 });
+        }
+    }
+
+    return out;
 }
 
 // ---------------------------------------------------------------------------

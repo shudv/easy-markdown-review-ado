@@ -29,6 +29,12 @@ your device. You can remove it by clearing your browser data.
 Images or links in Markdown files can point to external sites. Your browser
 contacts those sites directly when it loads those images or opens those links.
 
+Comment threads started in the extension end with a small "Markdown Review" badge
+linking back to the comment. The badge image is served by shields.io: when Azure
+DevOps shows the comment, your browser loads it from `img.shields.io`, which sees
+your IP address and `https://dev.azure.com/` as the referrer, not the
+organization, project, pull request, or comment.
+
 ## Microsoft services
 
 Azure DevOps and Visual Studio Marketplace data is handled by Microsoft under

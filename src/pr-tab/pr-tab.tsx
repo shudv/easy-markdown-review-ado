@@ -41,10 +41,10 @@ if (typeof __EMR_DEV_FAULTS__ !== "undefined" && __EMR_DEV_FAULTS__) {
     installDevFaults();
 }
 
-// Start the boot-time clock as early as possible so the measurement spans the
-// whole path to first rendered Markdown (SDK handshake + fetches + render), not
-// just the time to kick off React. `markAppReady()` fires later — from Shell
-// when the first document renders, or from PrTabApp for empty/error states.
+// Mark when our code started, as early as possible. Boot is timed from the host
+// starting to load this iframe (see telemetry/bootTiming.ts), so this ends the
+// page-and-bundle load phase. `markAppReady()` fires later — from Shell when
+// the first document renders, or from PrTabApp for empty/error states.
 markBootStart();
 
 // Tag this boot if it is the reload we triggered to escape the token dead

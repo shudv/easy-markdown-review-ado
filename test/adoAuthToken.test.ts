@@ -19,6 +19,7 @@ import {
     withAdoSessionRefreshDetection,
 } from "../src/shell/adoAuthToken";
 import { withRetry } from "../src/shell/retry";
+import { errorTagsOf } from "../src/telemetry/errorTags";
 
 /** base64url-encode a UTF-8 string (no padding), the JWT segment encoding. */
 function b64url(input: string): string {
@@ -404,6 +405,58 @@ describe("detectSessionRefreshing", () => {
     it("returns null when the token can't be read (classifies unknown)", async () => {
         const getToken = vi.fn().mockRejectedValue(new Error("no token"));
         await expect(detectSessionRefreshing(auth401, getToken, deadNow)).resolves.toBeNull();
+    });
+
+    describe("tags what the grant check found onto the reported error", () => {
+        it("tags the converted error with the lapsed grant's timing", async () => {
+            const getToken = vi.fn().mockResolvedValue(deadToken);
+            const result = await detectSessionRefreshing(auth401, getToken, deadNow);
+            expect(errorTagsOf(result)).toEqual({
+                grantState: "refreshing",
+                grantRead: "ok",
+                secsUntilExp: 8 * 60,
+                secsUntilAdoExp: -2 * 60,
+            });
+        });
+
+        // Production: two poll 401s a week were not the dead window, with no clue why.
+        it("tags a genuine 401 with its live grant", async () => {
+            const err = Object.assign(new Error("Unauthorized"), { status: 401 });
+            const getToken = vi.fn().mockResolvedValue(deadToken);
+            await detectSessionRefreshing(err, getToken, liveNow);
+            expect(errorTagsOf(err)).toEqual({
+                grantState: "live",
+                grantRead: "ok",
+                secsUntilExp: 15 * 60,
+                secsUntilAdoExp: 5 * 60,
+            });
+        });
+
+        it.each([
+            ["failed", () => Promise.reject(new Error("no host"))],
+            ["empty", () => Promise.resolve("")],
+        ] as const)("tags a token that %s to read as unknown", async (grantRead, getToken) => {
+            const err = { status: 401 };
+            await detectSessionRefreshing(err, getToken, deadNow);
+            expect(errorTagsOf(err)).toEqual({ grantState: "unknown", grantRead });
+        });
+
+        it("omits the ADO grant timing when the token carries none", async () => {
+            const err = { status: 401 };
+            const getToken = vi.fn().mockResolvedValue(makeJwt({ exp: 1_000 }));
+            await detectSessionRefreshing(err, getToken, 400_000);
+            expect(errorTagsOf(err)).toEqual({
+                grantState: "live",
+                grantRead: "ok",
+                secsUntilExp: 600,
+            });
+        });
+
+        it("leaves a non-auth error untagged", async () => {
+            const err = Object.assign(new Error("server blew up"), { status: 500 });
+            await detectSessionRefreshing(err, vi.fn(), deadNow);
+            expect(errorTagsOf(err)).toBeUndefined();
+        });
     });
 });
 

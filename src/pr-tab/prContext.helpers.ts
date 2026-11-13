@@ -33,30 +33,30 @@ export interface PrContext {
  */
 export function changedMarkdownFiles(
     changes: readonly {
-        item?: { path?: string };
+        item?: { path?: string; objectId?: string; originalObjectId?: string };
         originalPath?: string;
         changeType?: unknown;
     }[],
 ): FileInfo[] {
-    const mdEntries: Pick<FileInfo, "path" | "changeType">[] = [];
+    const files: FileInfo[] = [];
 
     for (const e of changes) {
         const path = markdownChangePath(e);
         if (path === undefined) continue;
-        mdEntries.push({ path, changeType: mapChangeType(e.changeType) });
+        const changeType = mapChangeType(e.changeType);
+        // The blob the tab shows: a deleted file's last version, else the new one.
+        const objectId = changeType === "deleted" ? e.item?.originalObjectId : e.item?.objectId;
+
+        files.push({
+            path,
+            changeType,
+            linesAdded: 0,
+            linesDeleted: 0,
+            ...(objectId !== undefined && objectId !== "" ? { objectId } : {}),
+        });
     }
 
-    return mdEntries
-        .map(
-            (e) =>
-                ({
-                    path: e.path,
-                    changeType: e.changeType,
-                    linesAdded: 0,
-                    linesDeleted: 0,
-                }) satisfies FileInfo,
-        )
-        .sort((a, b) => a.path.localeCompare(b.path));
+    return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**

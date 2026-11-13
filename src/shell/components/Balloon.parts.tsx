@@ -1,8 +1,10 @@
 // Reply area at the foot of a Balloon: a compact "@mention or reply" trigger
-// that expands into the full reply Composer.
+// that expands into the full reply Composer, which on open threads also offers
+// "Reply and resolve".
 
 import type { ReactElement } from "react";
 import type { CommentAuthor } from "../../types";
+import type { ReplyOptions } from "./Balloon.helpers";
 import { Composer } from "./Composer";
 
 export function BalloonReplyZone(
@@ -12,7 +14,9 @@ export function BalloonReplyZone(
         currentUser: CommentAuthor;
         replyInitial?: string;
         onReplyChange?: (body: string) => void;
-        onReply: (threadId: string, body: string) => void;
+        onReply: (threadId: string, body: string, opts?: ReplyOptions) => void;
+        /** The thread is open, so the composer offers "Reply and resolve". */
+        canResolve: boolean;
         onRequestReply?: (threadId: string) => void;
         onCancelReply?: (threadId: string) => void;
     }>,
@@ -24,6 +28,7 @@ export function BalloonReplyZone(
         replyInitial,
         onReplyChange,
         onReply,
+        canResolve,
         onRequestReply,
         onCancelReply,
     } = props;
@@ -42,6 +47,14 @@ export function BalloonReplyZone(
                     onSubmit={(body) => {
                         onReply(threadId, body);
                     }}
+                    secondarySubmit={
+                        canResolve
+                            ? {
+                                  label: "Reply and resolve",
+                                  onSubmit: (body) => onReply(threadId, body, { resolve: true }),
+                              }
+                            : undefined
+                    }
                     onCancel={() => onCancelReply?.(threadId)}
                 />
             </div>

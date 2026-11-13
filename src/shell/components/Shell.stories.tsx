@@ -17,7 +17,7 @@ import { adoSession } from "../adoSession";
 import { SessionRefreshingError } from "../adoAuthToken";
 import { DeepLinkContext, type DeepLinkBuilder } from "../deepLink";
 import { writeReaderPrefs, DEFAULT_READER_PREFS } from "../readerPrefs";
-import { EVENT } from "../../telemetry/events";
+import { EVENT, type HeldWriteKind } from "../../telemetry/events";
 import { __resetTelemetryForTests } from "../../telemetry/telemetry";
 const alex = FIXTURE_AUTHORS.alex!;
 const shubhd = FIXTURE_AUTHORS.shubhd!;
@@ -1393,6 +1393,52 @@ export const DeepLinkComment: Story = {
 };
 
 /**
+ * A back-link badge names its thread by the key saved on it
+ * (written before ADO assigned the id): it opens with that thread selected,
+ * and is recorded as a back link rather than a shared comment link.
+ */
+export const DeepLinkCommentByLinkKey: Story = {
+    args: {
+        initialThreads: threads().map((t) =>
+            t.id === "t-active2" ? { ...t, linkKey: "k-0123456789ab" } : t,
+        ),
+        initialActiveThreadId: "k-0123456789ab",
+    },
+    beforeEach: recordLinksOpened,
+    play: async ({ canvasElement }) => {
+        await waitFor(
+            () =>
+                expect(
+                    canvasElement.querySelector(
+                        '.emr-highlight.is-active[data-thread-id="t-active2"]',
+                    ),
+                ).not.toBeNull(),
+            { timeout: 5000 },
+        );
+        await waitFor(() =>
+            expect(
+                canvasElement.querySelector('.emr-balloon.is-active[data-thread-id="t-active2"]'),
+            ).not.toBeNull(),
+        );
+        await expect(linksOpened).toEqual([{ target: "backLink", found: true }]);
+    },
+};
+
+/** A back link whose thread was deleted is recorded once, as a back link not found. */
+export const DeepLinkCommentByLinkKeyMissing: Story = {
+    args: {
+        initialActiveThreadId: "k-0123456789ab",
+        fetchRemoteThreads: async () => threads(),
+    },
+    beforeEach: recordLinksOpened,
+    play: async ({ canvasElement }) => {
+        await waitForHighlight(canvasElement, "t-active");
+        await waitFor(() => expect(linksOpened).toEqual([{ target: "backLink", found: false }]));
+        await expect(canvasElement.querySelector(".emr-balloon.is-active")).toBeNull();
+    },
+};
+
+/**
  * Per-document threads (the Documents hub) only cover the open file, so a
  * snapshot without the linked thread proves nothing: the link keeps waiting,
  * and activates when a later snapshot brings the thread.
@@ -1573,6 +1619,54 @@ class HeldReplyCommentApi extends LocalOnlyCommentApi {
 }
 const heldReplyApi = new HeldReplyCommentApi();
 
+/** Holds every like (a `toggleReaction` call) until the test releases it. */
+class HeldReactionCommentApi extends LocalOnlyCommentApi {
+    release: (() => void) | null = null;
+    override toggleReaction(...args: Parameters<LocalOnlyCommentApi["toggleReaction"]>) {
+        return new Promise<void>((resolve, reject) => {
+            this.release = () => {
+                super.toggleReaction(...args).then(resolve, reject);
+            };
+        });
+    }
+}
+const heldReactionApi = new HeldReactionCommentApi();
+
+/**
+ * Liking a comment while writing a reply doesn't touch the reply: only a
+ * composer's own writes (posts, replies, edits) can be sent twice, so only
+ * they turn its submit into "Sending…".
+ */
+export const LikeWhileReplyingKeepsReplyReady: Story = {
+    args: { commentApi: heldReactionApi },
+    beforeEach: () => {
+        heldReactionApi.release = null;
+    },
+    play: async ({ canvasElement }) => {
+        await userEvent.click(await waitForHighlight(canvasElement, "t-active"));
+        const balloon = await waitFor(() => balloonFor(canvasElement, "t-active"));
+        const bal = within(balloon);
+        await userEvent.click(bal.getByText("@mention or reply"));
+        await userEvent.type(await waitFor(() => bal.getByRole("textbox")), "On it");
+
+        // The like is in flight (held) while the reply is open.
+        await userEvent.click(balloon.querySelector<HTMLButtonElement>(".emr-like-pill")!);
+        await waitFor(() => expect(heldReactionApi.release).not.toBeNull());
+
+        await expect(bal.queryByRole("button", { name: "Sending…" })).toBeNull();
+        await expect(
+            (bal.getByRole("button", { name: "Reply" }) as HTMLButtonElement).disabled,
+        ).toBe(false);
+
+        heldReactionApi.release!();
+        await waitFor(() =>
+            expect(
+                balloonFor(canvasElement, "t-active").querySelector(".emr-like-pill.is-mine"),
+            ).toBeTruthy(),
+        );
+    },
+};
+
 /**
  * While a reply is being sent, every composer's submit is disabled (no double
  * post). If the user abandons that composer and starts a new draft, the held
@@ -1684,8 +1778,8 @@ class ReconnectingCommentApi extends LocalOnlyCommentApi {
     reconnecting = true;
     replies: string[] = [];
     edits: string[] = [];
-    private gate<T>(write: () => Promise<T>): Promise<T> {
-        return adoSession.holdWrite(() =>
+    private gate<T>(kind: HeldWriteKind, write: () => Promise<T>): Promise<T> {
+        return adoSession.holdWrite(kind, () =>
             this.reconnecting
                 ? Promise.reject(new SessionRefreshingError("refreshing", Date.now() + 60_000))
                 : write(),
@@ -1695,7 +1789,7 @@ class ReconnectingCommentApi extends LocalOnlyCommentApi {
         threadId: string,
         body: string,
     ): Promise<{ commentId: string; createdAt: string }> {
-        return this.gate(() => {
+        return this.gate("reply", () => {
             this.replies.push(body);
 
             return super.addReply(threadId, body);
@@ -1706,7 +1800,7 @@ class ReconnectingCommentApi extends LocalOnlyCommentApi {
         commentId: string,
         body: string,
     ): Promise<{ updatedAt: string }> {
-        return this.gate(() => {
+        return this.gate("edit", () => {
             this.edits.push(body);
 
             return super.editComment(threadId, commentId, body);
@@ -1818,7 +1912,7 @@ class PlainUnauthorizedCommentApi extends LocalOnlyCommentApi {
     override createThread(
         input: Parameters<LocalOnlyCommentApi["createThread"]>[0],
     ): Promise<CreatedThreadIds> {
-        return adoSession.holdWrite(() => {
+        return adoSession.holdWrite("create", () => {
             this.attempts += 1;
 
             if (this.failNext) {

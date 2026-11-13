@@ -49,6 +49,11 @@ interface ComposerProps {
     /** Notified with the raw editor text on every change (for draft persistence). */
     onChange?: (value: string) => void;
     onSubmit: (body: string) => void;
+    /**
+     * A second way to submit, shown beside the primary button (e.g. "Reply and
+     * resolve"). Ctrl/⌘+Enter stays the primary action.
+     */
+    secondarySubmit?: { label: string; onSubmit: (body: string) => void };
     onCancel?: () => void;
 }
 
@@ -117,6 +122,7 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
         autoFocus,
         onChange,
         onSubmit,
+        secondarySubmit,
         onCancel,
     } = props;
 
@@ -509,6 +515,16 @@ export function Composer(props: Readonly<ComposerProps>): ReactElement {
                 {onCancel ? (
                     <button className="emr-btn subtle" type="button" onClick={onCancel}>
                         Cancel
+                    </button>
+                ) : null}
+                {secondarySubmit ? (
+                    <button
+                        className="emr-btn"
+                        type="button"
+                        disabled={!canSubmit}
+                        onClick={() => secondarySubmit.onSubmit(encodedValue.trim())}
+                    >
+                        {secondarySubmit.label}
                     </button>
                 ) : null}
                 <button

@@ -1,7 +1,15 @@
 // Shell: persisted reader preferences and their setters.
 
-import { useCallback, useEffect, useState } from "react";
+import {
+    type Dispatch,
+    type SetStateAction,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 
+import { events, track } from "../../telemetry";
 import type { DraftScope } from "../draftStorage";
 import {
     readReaderPrefs,
@@ -10,6 +18,11 @@ import {
     DEFAULT_COMMENT_WIDTH_PCT,
     type ReaderPrefs,
 } from "../readerPrefs";
+
+type PrefSetting = "font" | "size" | "spacing";
+
+/** Quiet period that folds a slider drag into one `reader.prefChanged`. */
+export const PREF_EVENT_COOLDOWN_MS = 3_000;
 
 /**
  * Reader preferences, restored from + persisted to localStorage. Typography
@@ -27,41 +40,37 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
         writeReaderPrefs(prefsScope, readerPrefs);
     }, [prefsScope, readerPrefs]);
 
-    const toggleReaderNav = useCallback(
-        () => setReaderPrefs((p) => ({ ...p, showNav: !p.showNav })),
-        [],
-    );
-
-    const toggleReaderOutline = useCallback(
-        () => setReaderPrefs((p) => ({ ...p, showOutline: !p.showOutline })),
-        [],
-    );
-
-    const toggleReaderComments = useCallback(
-        () => setReaderPrefs((p) => ({ ...p, showComments: !p.showComments })),
-        [],
-    );
+    const reportPrefChange = usePrefChangeReporter();
+    const panels = usePanelToggles(readerPrefs, setReaderPrefs);
 
     const setReaderFont = useCallback(
-        (fontId: string) => setReaderPrefs((p) => ({ ...p, fontId })),
-        [],
+        (fontId: string) => {
+            reportPrefChange("font");
+            setReaderPrefs((p) => ({ ...p, fontId }));
+        },
+        [reportPrefChange],
     );
 
     const setReaderSize = useCallback(
-        (sizePct: number) => setReaderPrefs((p) => ({ ...p, sizePct })),
-        [],
+        (sizePct: number) => {
+            reportPrefChange("size");
+            setReaderPrefs((p) => ({ ...p, sizePct }));
+        },
+        [reportPrefChange],
     );
 
     const setReaderSpacing = useCallback(
-        (spacingPct: number) =>
+        (spacingPct: number) => {
+            reportPrefChange("spacing");
             setReaderPrefs((p) => ({
                 ...p,
                 lineSpacingPct: spacingPct,
                 paragraphSpacingPct: spacingPct,
                 letterSpacingPct: spacingPct,
                 wordSpacingPct: spacingPct,
-            })),
-        [],
+            }));
+        },
+        [reportPrefChange],
     );
 
     const resetNavWidth = useCallback(
@@ -93,9 +102,7 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
     return {
         readerPrefs,
         setReaderPrefs,
-        toggleReaderNav,
-        toggleReaderOutline,
-        toggleReaderComments,
+        ...panels,
         setReaderFont,
         setReaderSize,
         setReaderSpacing,
@@ -103,4 +110,46 @@ export function useReaderPrefs(draftScope: DraftScope | undefined) {
         resetCommentWidth,
         revealComments,
     };
+}
+
+/**
+ * Reports a reading-preference change. A slider reports every step it passes,
+ * so changes to one setting within {@link PREF_EVENT_COOLDOWN_MS} of each other
+ * count once.
+ */
+function usePrefChangeReporter(): (setting: PrefSetting) => void {
+    const lastPrefEventAtRef = useRef(new Map<PrefSetting, number>());
+
+    return useCallback((setting: PrefSetting) => {
+        const now = Date.now();
+        const last = lastPrefEventAtRef.current.get(setting);
+        lastPrefEventAtRef.current.set(setting, now);
+        if (last !== undefined && now - last < PREF_EVENT_COOLDOWN_MS) return;
+        track(events.readerPrefChanged({ setting }));
+    }, []);
+}
+
+/** Show/hide the file list, outline and comments panes, reporting each toggle. */
+function usePanelToggles(
+    readerPrefs: ReaderPrefs,
+    setReaderPrefs: Dispatch<SetStateAction<ReaderPrefs>>,
+) {
+    const { showNav, showOutline, showComments } = readerPrefs;
+
+    const toggleReaderNav = useCallback(() => {
+        track(events.panelToggled({ panel: "nav", visible: !showNav }));
+        setReaderPrefs((p) => ({ ...p, showNav: !p.showNav }));
+    }, [showNav, setReaderPrefs]);
+
+    const toggleReaderOutline = useCallback(() => {
+        track(events.panelToggled({ panel: "outline", visible: !showOutline }));
+        setReaderPrefs((p) => ({ ...p, showOutline: !p.showOutline }));
+    }, [showOutline, setReaderPrefs]);
+
+    const toggleReaderComments = useCallback(() => {
+        track(events.panelToggled({ panel: "comments", visible: !showComments }));
+        setReaderPrefs((p) => ({ ...p, showComments: !p.showComments }));
+    }, [showComments, setReaderPrefs]);
+
+    return { toggleReaderNav, toggleReaderOutline, toggleReaderComments };
 }

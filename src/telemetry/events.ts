@@ -47,8 +47,28 @@ export const EVENT = {
     LinkCopied: "link.copied",
     /** A shared `?comment=` / `?anchor=` / `?text=` link was opened and resolved (or not). */
     LinkOpened: "link.opened",
+    /** User changed which PR updates are compared (picker, steps, "all updates"). */
+    UpdatesCompared: "updates.compared",
+    /** User jumped (click) or dragged through the document via the change minimap. */
+    MinimapUsed: "minimap.used",
+    /** User showed or hid a reader panel (file list, outline, comments). */
+    PanelToggled: "panel.toggled",
+    /** User changed a reading preference (font, text size, spacing). */
+    ReaderPrefChanged: "reader.prefChanged",
+    /** User opened the repository's documents in the Documents hub from the PR tab. */
+    DocumentsHubOpened: "hub.opened",
     /** An ADO API call was rejected with an auth status (401/403). */
     AuthFailure: "auth.failure",
+    /**
+     * A rendered document uses rich features (diagrams, equations, drawings,
+     * wiki macros) — counts only, once per document per page load.
+     */
+    DocumentFeatures: "document.features",
+    /**
+     * The PR's thread statuses on the first comment load of a page: open vs
+     * done, split by whether Markdown Review started the thread. Counts only.
+     */
+    ThreadsSnapshot: "threads.snapshot",
     /**
      * An author's Mermaid diagram didn't parse as written — content health, not
      * an extension failure: either it was auto-repaired and rendered, or it has
@@ -61,6 +81,11 @@ export const EVENT = {
      */
     AuthSessionRefresh: "auth.sessionRefresh",
     /**
+     * One comment write held through a dead-window spell, emitted once when it
+     * settles (or the page goes away): its kind, outcome, and time held.
+     */
+    AuthHeldWrite: "auth.heldWrite",
+    /**
      * A handled or uncaught exception. Not user-triggered and not emitted via an
      * `events.*` builder — it is produced by `trackException` (see
      * `errorHandlers.ts` / `ErrorBoundary.tsx`). Listed here so every emitted
@@ -71,6 +96,25 @@ export const EVENT = {
 
 export type EventName = (typeof EVENT)[keyof typeof EVENT];
 
+/**
+ * A comment write the token dead window rejected, held for the session to come
+ * back. Telemetry names the kind only — never the comment or its target.
+ */
+export type HeldWriteKind = "create" | "reply" | "edit" | "delete" | "status" | "reaction";
+
+/**
+ * How a held write ended: `posted` (the retry succeeded), `failed` (the retry
+ * was rejected), `timed-out` (the session didn't come back in time), or `left`
+ * (the page went away while it was still held).
+ */
+export type HeldWriteOutcome = "posted" | "failed" | "timed-out" | "left";
+
+/**
+ * How a thread was resolved: the comment's ⋯ menu, the thread's one-click
+ * Resolve button, or "Reply and resolve" in the reply composer.
+ */
+export type ResolveVia = "menu" | "button" | "reply";
+
 /** Kind of anchor a comment is attached to — never the anchored text itself. */
 export type AnchorKind = "text-quote" | "file-level" | "line";
 
@@ -79,6 +123,12 @@ export type FileOpenSource = "nav-click" | "search-result" | "deep-link";
 
 /** What a shareable deep link points at — never the thread id or heading text. */
 export type LinkTarget = "comment" | "heading" | "text";
+
+/**
+ * What an opened link pointed at: a shareable link's target, or `backLink` for
+ * a thread's back-link badge followed from ADO's own comment UI.
+ */
+export type OpenedLinkTarget = LinkTarget | "backLink";
 
 /**
  * How a diagram that didn't parse as written ended up: `repaired` (rendered
@@ -97,12 +147,21 @@ export type DiagramRenderOutcome = "repaired" | "syntax-error";
  */
 export type AppReadyReason = "content" | "empty" | "error";
 
+/**
+ * Which of this browser's caches the first view came from: `pr` — the PR's
+ * details (PR tab), so it showed without waiting for ADO to load the PR;
+ * `doc` — the first document's text (PR tab and Documents hub); `pr+doc`;
+ * `none`. Any cache hit is `cache != "none"`.
+ */
+export type BootCache = "none" | "pr" | "doc" | "pr+doc";
+
 /** Boot-time payload for {@link events.appLoaded}. */
 interface AppLoadedPayload {
     bootTimeMs: number;
     activeBootTimeMs?: number;
     hiddenTimeMs?: number;
     authRefreshWaitMs?: number;
+    bundleLoadMs?: number;
     sdkReadyMs?: number;
     contextReadyMs?: number;
     renderReadyMs?: number;
@@ -110,6 +169,11 @@ interface AppLoadedPayload {
     bootHadHiddenInterval?: boolean;
     /** This load followed an automatic host reload (dead-window recovery). */
     afterAutoReload?: boolean;
+    /** Markdown files the PR changes. */
+    mdFileCount?: number;
+    /** Characters of Markdown in the first rendered document. */
+    docChars?: number;
+    cache?: BootCache;
 }
 
 /** Optional `app.loaded` measurements, in the order they're emitted. */
@@ -117,9 +181,12 @@ const OPTIONAL_BOOT_MEASUREMENTS = [
     "activeBootTimeMs",
     "hiddenTimeMs",
     "authRefreshWaitMs",
+    "bundleLoadMs",
     "sdkReadyMs",
     "contextReadyMs",
     "renderReadyMs",
+    "mdFileCount",
+    "docChars",
 ] as const;
 
 function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
@@ -129,6 +196,7 @@ function appLoadedProperties(p: AppLoadedPayload): TelemetryProperties {
             ? { bootHadHiddenInterval: p.bootHadHiddenInterval }
             : {}),
         ...(p.afterAutoReload ? { afterAutoReload: true } : {}),
+        ...(p.cache ? { cache: p.cache } : {}),
     };
 }
 
@@ -161,10 +229,14 @@ export const events = {
         };
     },
 
-    commentReplied(p: { bodyLength: number }): TelemetryEvent {
+    /**
+     * @param threadOrdinal Per-page-load ordinal of the thread replied to (1 =
+     *        first thread replied to in this load) — never the thread id.
+     */
+    commentReplied(p: { bodyLength: number; threadOrdinal: number }): TelemetryEvent {
         return {
             name: EVENT.CommentReplied,
-            measurements: { bodyLength: p.bodyLength },
+            measurements: { bodyLength: p.bodyLength, threadOrdinal: p.threadOrdinal },
         };
     },
 
@@ -176,10 +248,11 @@ export const events = {
         return { name: EVENT.CommentDeleted };
     },
 
-    threadResolved(p?: { durationMs?: number }): TelemetryEvent {
+    threadResolved(p: { durationMs?: number; via: ResolveVia }): TelemetryEvent {
         return {
             name: EVENT.ThreadResolved,
-            measurements: p?.durationMs !== undefined ? { durationMs: p.durationMs } : undefined,
+            properties: { via: p.via },
+            measurements: p.durationMs !== undefined ? { durationMs: p.durationMs } : undefined,
         };
     },
 
@@ -313,6 +386,22 @@ export const events = {
         };
     },
 
+    /**
+     * One held comment write settled (see {@link HeldWriteOutcome}). Emitted
+     * once per write; `heldSec` is the time from the rejection to the outcome.
+     */
+    authHeldWrite(p: {
+        kind: HeldWriteKind;
+        outcome: HeldWriteOutcome;
+        heldSec: number;
+    }): TelemetryEvent {
+        return {
+            name: EVENT.AuthHeldWrite,
+            properties: { kind: p.kind, outcome: p.outcome },
+            measurements: { heldSec: Math.round(p.heldSec) },
+        };
+    },
+
     commentReacted(p: { active: boolean; kind: string }): TelemetryEvent {
         return {
             name: EVENT.CommentReacted,
@@ -384,7 +473,7 @@ export const events = {
      * @param found Whether the linked thread/heading was located in the opened
      *              document (a renamed heading or deleted thread can't be).
      */
-    linkOpened(p: { target: LinkTarget; found: boolean }): TelemetryEvent {
+    linkOpened(p: { target: OpenedLinkTarget; found: boolean }): TelemetryEvent {
         return {
             name: EVENT.LinkOpened,
             properties: { target: p.target, found: p.found },
@@ -395,6 +484,67 @@ export const events = {
         return {
             name: EVENT.DiagramRenderIssue,
             properties: { outcome: p.outcome },
+        };
+    },
+
+    /** `scope`: all updates, one update, or a span of several. */
+    updatesCompared(p: { scope: "all" | "single" | "range" }): TelemetryEvent {
+        return { name: EVENT.UpdatesCompared, properties: { scope: p.scope } };
+    },
+
+    minimapUsed(p: { via: "click" | "drag" }): TelemetryEvent {
+        return { name: EVENT.MinimapUsed, properties: { via: p.via } };
+    },
+
+    panelToggled(p: { panel: "nav" | "outline" | "comments"; visible: boolean }): TelemetryEvent {
+        return {
+            name: EVENT.PanelToggled,
+            properties: { panel: p.panel, visible: p.visible },
+        };
+    },
+
+    readerPrefChanged(p: { setting: "font" | "size" | "spacing" }): TelemetryEvent {
+        return { name: EVENT.ReaderPrefChanged, properties: { setting: p.setting } };
+    },
+
+    /** `from`: the file-list header link (`nav`) or the no-Markdown PR page. */
+    documentsHubOpened(p: { from: "nav" | "empty-pr" }): TelemetryEvent {
+        return { name: EVENT.DocumentsHubOpened, properties: { from: p.from } };
+    },
+
+    /** Counts of each rich feature in one rendered document. */
+    documentFeatures(p: {
+        diagrams: number;
+        equations: number;
+        drawings: number;
+        wikiMacros: number;
+    }): TelemetryEvent {
+        return {
+            name: EVENT.DocumentFeatures,
+            measurements: {
+                diagrams: p.diagrams,
+                equations: p.equations,
+                drawings: p.drawings,
+                wikiMacros: p.wikiMacros,
+            },
+        };
+    },
+
+    /** Open vs done threads in the PR, ours (started here) vs others. */
+    threadsSnapshot(p: {
+        ourOpen: number;
+        ourDone: number;
+        otherOpen: number;
+        otherDone: number;
+    }): TelemetryEvent {
+        return {
+            name: EVENT.ThreadsSnapshot,
+            measurements: {
+                ourOpen: p.ourOpen,
+                ourDone: p.ourDone,
+                otherOpen: p.otherOpen,
+                otherDone: p.otherDone,
+            },
         };
     },
 } as const;

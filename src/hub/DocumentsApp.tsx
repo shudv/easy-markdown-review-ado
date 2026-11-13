@@ -411,6 +411,7 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
                             routedPr={routing.routedPr}
                             fetchRemoteThreads={routing.fetchRemoteThreads}
                             unloadedFolders={shellTree.unloadedFolders}
+                            emptyFolders={lazyTree?.emptyFolders}
                             onExpandFolder={onExpandFolder ? handleExpandFolder : undefined}
                             folderOrders={lazyTree?.folderOrders}
                             listFolder={bindings.listSubpageFolderBound}

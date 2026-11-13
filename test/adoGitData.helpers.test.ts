@@ -9,13 +9,16 @@ import {
     buildPrUrl,
     changedPathsFromEntries,
     commitIds,
+    contentSearchText,
     docPrRefsFromHistory,
     editBranchName,
     editPrDescription,
     escapeSearchQuery,
+    fileNameSearchText,
     filterReposByName,
     firstCommitId,
     identityAvatarUrl,
+    markdownHitsToFiles,
     normalizePath,
     prDate,
     projectMarkdownLevel,
@@ -23,6 +26,7 @@ import {
     listingFailureOutcome,
     prsTouchingPath,
     runWithConcurrency,
+    searchWords,
     selectRoutingPr,
     selectRoutingPrFromQuery,
     selectRoutingPrsFromQuery,
@@ -135,6 +139,33 @@ describe("findOrderFile", () => {
 });
 
 describe("projectMarkdownLevel", () => {
+    // Regression: the tree asks for `diagrams`, ADO lists the folder as
+    // `/diagrams`. Unmatched, the folder listed itself as its own subfolder, so
+    // it stayed unloaded and every open fetched it again.
+    it.each(["diagrams", "/diagrams", "/diagrams/"])(
+        "doesn't list the folder asked for (%j) as its own subfolder",
+        (scope) => {
+            const items = [
+                { path: "/diagrams", isFolder: true },
+                { path: "/diagrams/flow.excalidraw", isFolder: false },
+            ];
+
+            expect(projectMarkdownLevel(items, scope)).toEqual({ files: [], folders: [] });
+        },
+    );
+    it("keeps each file's blob, when listed", () => {
+        const { files } = projectMarkdownLevel(
+            [
+                { path: "/a.md", isFolder: false, objectId: "e5492baf" },
+                { path: "/b.md", isFolder: false, objectId: "" },
+                { path: "/c.md", isFolder: false },
+            ],
+            "/",
+        );
+
+        expect(files.map((f) => f.objectId)).toEqual(["e5492baf", undefined, undefined]);
+        expect(files[1]).not.toHaveProperty("objectId");
+    });
     it("skips the scope folder returned as its own first item", () => {
         const items = [
             { path: "/docs", isFolder: true },
@@ -302,6 +333,40 @@ describe("escapeSearchQuery", () => {
 
     it("passes through ordinary path characters", () => {
         expect(escapeSearchQuery("docs/api/v2.md")).toBe("docs/api/v2.md");
+    });
+});
+
+describe("document search queries", () => {
+    it("splits a query into plain words, keeping operator words as words", () => {
+        expect(searchWords("  release  notes ")).toEqual(["release", "notes"]);
+        expect(searchWords("pros AND cons OR NOT")).toEqual(["pros", "and", "cons", "or", "not"]);
+        expect(searchWords("foo:bar")).toEqual(["foo", "bar"]);
+        expect(searchWords("*?")).toEqual([]);
+    });
+
+    // Verified against Code Search: `file:*release notes*` matched nothing,
+    // `file:*release* file:*notes*` found Release-Notes.md.
+    it("searches file names with one wildcard per word", () => {
+        expect(fileNameSearchText(["release", "notes"])).toBe("file:*release* file:*notes* ext:md");
+    });
+
+    it("searches document text for every word, as typed so far", () => {
+        expect(contentSearchText(["release", "no", "v2"])).toBe("release* no v2 ext:md");
+    });
+
+    it("keeps Markdown hits once, file-name matches first", () => {
+        const files = markdownHitsToFiles([
+            [{ path: "/docs/Release-Notes.md" }, { path: "/img/notes.png" }, {}],
+            [{ path: "/docs/overview.MD" }, { path: "/docs/Release-Notes.md" }],
+        ]);
+
+        expect(files.map((f) => f.path)).toEqual(["/docs/Release-Notes.md", "/docs/overview.MD"]);
+        expect(files[0]).toEqual({
+            path: "/docs/Release-Notes.md",
+            changeType: "modified",
+            linesAdded: 0,
+            linesDeleted: 0,
+        });
     });
 });
 

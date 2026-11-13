@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createRef, type ReactElement, useEffect, useRef, useState } from "react";
-import { expect, waitFor, within } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import { DiffMinimap } from "./DiffMinimap";
 
@@ -44,6 +44,7 @@ function Reader({
     short = false,
     spec,
     contentHeight = 1600,
+    onUse = () => {},
 }: {
     withWrap?: boolean;
     withDiffs?: boolean;
@@ -53,6 +54,7 @@ function Reader({
     spec?: BlockSpec[];
     /** Height of the scrollable content the blocks are positioned within. */
     contentHeight?: number;
+    onUse?: (via: "click" | "drag") => void;
 }): ReactElement {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [version, setVersion] = useState(0);
@@ -162,7 +164,12 @@ function Reader({
             >
                 {content}
             </div>
-            <DiffMinimap scrollRef={scrollRef} version={version} showDiff={showDiff} />
+            <DiffMinimap
+                scrollRef={scrollRef}
+                version={version}
+                showDiff={showDiff}
+                onUse={onUse}
+            />
         </div>
     );
 }
@@ -177,6 +184,7 @@ const meta = {
         scrollRef: createRef<HTMLElement>(),
         version: 0,
         showDiff: true,
+        onUse: fn(),
     },
     render: () => <Reader />,
 } satisfies Meta<typeof DiffMinimap>;
@@ -187,7 +195,9 @@ type Story = StoryObj<typeof meta>;
 
 /** Charts every change kind, tracks the viewport, and scrolls via click + drag. */
 export const Default: Story = {
-    play: async ({ canvasElement }) => {
+    args: { onUse: fn() },
+    render: (args) => <Reader onUse={args.onUse} />,
+    play: async ({ args, canvasElement }) => {
         const canvas = within(canvasElement);
 
         const ruler = await waitFor(() => {
@@ -248,6 +258,12 @@ export const Default: Story = {
         document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
         await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(50));
 
+        // Each way of using the change chart is reported once, not per scroll.
+        ruler.dispatchEvent(new MouseEvent("click", { bubbles: true, clientY: rect.top + 10 }));
+        await expect(args.onUse).toHaveBeenCalledTimes(2);
+        await expect(args.onUse).toHaveBeenNthCalledWith(1, "click");
+        await expect(args.onUse).toHaveBeenNthCalledWith(2, "drag");
+
         // Clicking the thumb itself must NOT page the reader (stopPropagation).
         const held = scroller.scrollTop;
         thumb.dispatchEvent(
@@ -262,12 +278,18 @@ export const Default: Story = {
 
 /** "View changes" off: the bar is a plain custom scrollbar with no diff ticks. */
 export const ScrollbarWithoutDiffs: Story = {
-    render: () => <Reader showDiff={false} />,
-    play: async ({ canvasElement }) => {
+    args: { onUse: fn() },
+    render: (args) => <Reader showDiff={false} onUse={args.onUse} />,
+    play: async ({ args, canvasElement }) => {
         await waitFor(() => expect(canvasElement.querySelector(".emr-diff-ruler")).toBeTruthy());
         // The thumb exists (it IS the scrollbar) but no change ticks are drawn.
         await expect(canvasElement.querySelector(".emr-diff-ruler-thumb")).toBeTruthy();
         await expect(canvasElement.querySelector(".emr-diff-ruler-mark")).toBeNull();
+        // Plain scrolling isn't use of the change chart.
+        canvasElement
+            .querySelector(".emr-diff-ruler")!
+            .dispatchEvent(new MouseEvent("click", { bubbles: true, clientY: 100 }));
+        await expect(args.onUse).not.toHaveBeenCalled();
     },
 };
 
@@ -453,7 +475,7 @@ function DetachableReader({ initiallyMounted }: { initiallyMounted: boolean }): 
                     <div style={{ height: 1600 }} />
                 </div>
             ) : null}
-            <DiffMinimap scrollRef={scrollRef} version={0} showDiff />
+            <DiffMinimap scrollRef={scrollRef} version={0} showDiff onUse={() => {}} />
             <button type="button" onClick={() => setMounted(false)}>
                 Remove scroller
             </button>

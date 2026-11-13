@@ -15,14 +15,19 @@ import type { CommentApi } from "../../comments/api";
 import type { DocumentImageResolver } from "../../markdown/documentImages";
 import type { FileSearchOutcome } from "../almSearch";
 import type { DraftScope } from "../draftStorage";
-import type { DocPrRef, HistoryStop, ReviewIterationRange } from "../shellHelpers";
+import type { DocPrRef, HistoryStop, ReaderActivity, ReviewIterationRange } from "../shellHelpers";
 import type { FolderLister } from "../wikiOrder";
 import type { DocLinkNavigation, RoutedPrInfo } from "./types";
 
 export interface ShellProps {
     pr: PrInfo;
-    /** Async loader for the Markdown source of a given file path. */
-    loadFileSource: (path: string) => Promise<string>;
+    /**
+     * Async loader for the Markdown source of a given file path. When the
+     * file was listed with its git blob (`FileInfo.objectId`), that id is
+     * passed too: read exactly that blob, since the result is cached under it
+     * in this browser (see `documentCache.ts`).
+     */
+    loadFileSource: (path: string, objectId?: string) => Promise<string>;
     diffsByFile: Record<string, DiffRange[]>;
     /** Complete base-commit Markdown by file, used for trustworthy old-block reconstruction. */
     originalSourcesByFile?: Record<string, string>;
@@ -50,6 +55,8 @@ export interface ShellProps {
     routedPrForPath?: (path: string) => RoutedPrInfo | null | undefined;
     /** Folder paths known to exist but not yet enumerated; forwarded to DocNav. */
     unloadedFolders?: ReadonlyArray<string>;
+    /** Folders already listed with nothing to show; forwarded to DocNav. */
+    emptyFolders?: ReadonlyArray<string>;
     /** Lazy folder expansion; undefined when every file is already loaded. */
     onExpandFolder?: (path: string) => Promise<{ files: FileInfo[]; folders: string[] } | null>;
     /**
@@ -78,6 +85,12 @@ export interface ShellProps {
      * to the bottom-right of the reader. When omitted the pill is hidden.
      */
     feedbackEmail?: string;
+    /**
+     * Work the host is doing for the reader, shown in the status bar with the
+     * shell's own (the highest priority wins), e.g. the PR tab checking ADO for
+     * a newer version of the PR it shows from this browser's cache.
+     */
+    hostActivity?: ReaderActivity;
     /**
      * Loader for a fresh snapshot of remote threads. When set, the shell polls it
      * on a visibility-aware cadence and merges each snapshot via MERGE_REMOTE_THREADS

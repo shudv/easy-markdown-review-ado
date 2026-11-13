@@ -5,6 +5,7 @@ import {
     ITERATION_CHANGES_PAGE,
     ITERATION_LINK_PARAM,
     buildPrTabDocUrl,
+    firstFilePath,
     fetchAllIterationChanges,
     iterationParamsForRange,
     rangeChangeTypes,
@@ -21,9 +22,7 @@ import {
     resolvePrTabRouteSeed,
     reviewIterationStops,
     selectDiffCommits,
-    withTimeout,
-    retryOnTimeout,
-    TimeoutError,
+    startVisibleTimer,
     type VisibilityClock,
 } from "../src/pr-tab/prTabApp.helpers";
 
@@ -561,6 +560,16 @@ describe("buildPrTabDocUrl", () => {
     });
 });
 
+describe("firstFilePath", () => {
+    it("is the first changed file", () => {
+        expect(firstFilePath([{ path: "/a.md" }, { path: "/b.md" }])).toBe("/a.md");
+    });
+
+    it("is empty for a PR without Markdown changes", () => {
+        expect(firstFilePath([])).toBe("");
+    });
+});
+
 describe("prTabRoutePath", () => {
     it.each([
         { name: "adds the leading slash ADO uses", path: "docs/a.md", expected: "/docs/a.md" },
@@ -630,340 +639,106 @@ describe("resolvePrTabRouteSeed", () => {
     });
 });
 
-describe("withTimeout", () => {
-    it("resolves with the promise value when it settles in time", async () => {
-        await expect(withTimeout(Promise.resolve("ok"), 1000, "x")).resolves.toBe("ok");
+describe("startVisibleTimer", () => {
+    function fakeVisibility(initiallyVisible: boolean) {
+        let visible = initiallyVisible;
+        const listeners = new Set<() => void>();
+
+        const clock: VisibilityClock = {
+            now: () => Date.now(),
+            isVisible: () => visible,
+            subscribeVisibilityChange(listener) {
+                listeners.add(listener);
+
+                return () => listeners.delete(listener);
+            },
+        };
+
+        return {
+            clock,
+            listeners,
+            set(next: boolean) {
+                visible = next;
+                for (const l of [...listeners]) l();
+            },
+        };
+    }
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("fires once the time has passed while visible", () => {
+        const onElapsed = vi.fn();
+        startVisibleTimer(1_000, onElapsed, fakeVisibility(true).clock);
+
+        vi.advanceTimersByTime(999);
+        expect(onElapsed).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
+        expect(onElapsed).toHaveBeenCalledOnce();
     });
 
-    it("rejects with the underlying error when the promise rejects", async () => {
-        await expect(withTimeout(Promise.reject(new Error("boom")), 1000, "x")).rejects.toThrow(
-            "boom",
-        );
+    // Production regression: a PR opened in a background tab burned its whole
+    // wait while hidden and greeted the user with a false error on arrival.
+    it("doesn't count time while hidden: a hidden boot waits for reveal", () => {
+        const vis = fakeVisibility(false);
+        const onElapsed = vi.fn();
+        startVisibleTimer(1_000, onElapsed, vis.clock);
+
+        vi.advanceTimersByTime(30_000);
+        expect(onElapsed).not.toHaveBeenCalled();
+
+        vis.set(true);
+        vi.advanceTimersByTime(1_000);
+        expect(onElapsed).toHaveBeenCalledOnce();
     });
 
-    it("rejects with a labelled timeout error when the promise is too slow", async () => {
-        const never = new Promise<string>(() => {});
-        const result = withTimeout(never, 5, "loading PR");
-        await expect(result).rejects.toThrow(/Timeout after 5ms while waiting for loading PR/);
-        await expect(result).rejects.toBeInstanceOf(TimeoutError);
-        await expect(result).rejects.toMatchObject({ name: "TimeoutError" });
+    it("keeps the visible time already counted across a hidden interval", () => {
+        const vis = fakeVisibility(true);
+        const onElapsed = vi.fn();
+        startVisibleTimer(1_000, onElapsed, vis.clock);
+
+        vi.advanceTimersByTime(600);
+        vis.set(false);
+        vi.advanceTimersByTime(10_000);
+        vis.set(true);
+        vi.advanceTimersByTime(399);
+        expect(onElapsed).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
+        expect(onElapsed).toHaveBeenCalledOnce();
     });
 
-    describe("only counts visible time", () => {
-        function fakeVisibility(initiallyVisible: boolean) {
-            let visible = initiallyVisible;
-            const listeners = new Set<() => void>();
+    it("isn't restarted by a repeated visible event", () => {
+        const vis = fakeVisibility(true);
+        const onElapsed = vi.fn();
+        startVisibleTimer(1_000, onElapsed, vis.clock);
 
-            const clock: VisibilityClock = {
-                now: () => Date.now(),
-                isVisible: () => visible,
-                subscribeVisibilityChange(listener) {
-                    listeners.add(listener);
-
-                    return () => listeners.delete(listener);
-                },
-            };
-
-            return {
-                clock,
-                listeners,
-                set(next: boolean) {
-                    visible = next;
-                    for (const l of [...listeners]) l();
-                },
-            };
-        }
-
-        function deferred<T>() {
-            let resolve!: (v: T) => void;
-            const promise = new Promise<T>((r) => (resolve = r));
-
-            return { promise, resolve };
-        }
-
-        beforeEach(() => vi.useFakeTimers());
-        afterEach(() => vi.useRealTimers());
-
-        // Production regression: a PR opened in a background tab burned the whole
-        // budget while hidden (median 33s) and showed a false blocking timeout.
-        it("does not time out while the tab boots hidden, and resolves after reveal", async () => {
-            const vis = fakeVisibility(false);
-            const req = deferred<string>();
-
-            const result = withTimeout(req.promise, 15_000, "getPullRequestById", vis.clock);
-
-            let outcome: string | undefined;
-            result.then(
-                (v) => (outcome = `ok:${v}`),
-                (e: Error) => (outcome = `err:${e.message}`),
-            );
-
-            await vi.advanceTimersByTimeAsync(33_000);
-            expect(outcome).toBeUndefined();
-
-            vis.set(true);
-            await vi.advanceTimersByTimeAsync(2_000);
-            req.resolve("pr");
-            await vi.advanceTimersByTimeAsync(0);
-            expect(outcome).toBe("ok:pr");
-        });
-
-        it("pauses the budget while hidden and resumes with what was left", async () => {
-            const vis = fakeVisibility(true);
-
-            const result = withTimeout(new Promise<string>(() => {}), 10_000, "x", vis.clock);
-
-            let rejected = false;
-            result.catch(() => (rejected = true));
-
-            await vi.advanceTimersByTimeAsync(6_000);
-            vis.set(false);
-            await vi.advanceTimersByTimeAsync(60_000);
-            expect(rejected).toBe(false);
-
-            vis.set(true);
-            await vi.advanceTimersByTimeAsync(3_999);
-            expect(rejected).toBe(false);
-            await vi.advanceTimersByTimeAsync(1);
-            expect(rejected).toBe(true);
-        });
-
-        it("still times out a genuinely hung call once enough visible time passes", async () => {
-            const vis = fakeVisibility(false);
-
-            const result = withTimeout(new Promise<string>(() => {}), 15_000, "x", vis.clock);
-
-            await Promise.all([
-                expect(result).rejects.toThrow(/Timeout after 15000ms/),
-                (async () => {
-                    vis.set(true);
-                    await vi.advanceTimersByTimeAsync(15_000);
-                })(),
-            ]);
-        });
-
-        it("ignores repeated visible signals without restarting the budget", async () => {
-            const vis = fakeVisibility(true);
-
-            const result = withTimeout(new Promise<string>(() => {}), 1_000, "x", vis.clock);
-
-            let rejected = false;
-            result.catch(() => (rejected = true));
-            await vi.advanceTimersByTimeAsync(600);
-            vis.set(true);
-            await vi.advanceTimersByTimeAsync(400);
-            expect(rejected).toBe(true);
-        });
-
-        it("still pauses the budget when the tab hides after a repeated visible signal", async () => {
-            const vis = fakeVisibility(true);
-
-            const result = withTimeout(new Promise<string>(() => {}), 1_000, "x", vis.clock);
-
-            let rejected = false;
-            result.catch(() => (rejected = true));
-            await vi.advanceTimersByTimeAsync(600);
-            vis.set(true);
-            vis.set(false);
-            await vi.advanceTimersByTimeAsync(60_000);
-            expect(rejected).toBe(false);
-        });
-
-        it("ignores repeated hidden signals without spending the budget", async () => {
-            const vis = fakeVisibility(false);
-
-            const result = withTimeout(new Promise<string>(() => {}), 1_000, "x", vis.clock);
-
-            let rejected = false;
-            result.catch(() => (rejected = true));
-            vis.set(false);
-            await vi.advanceTimersByTimeAsync(5_000);
-            vis.set(true);
-            await vi.advanceTimersByTimeAsync(999);
-            expect(rejected).toBe(false);
-            await vi.advanceTimersByTimeAsync(1);
-            expect(rejected).toBe(true);
-        });
-
-        it("stops listening for visibility changes once the call succeeds", async () => {
-            const vis = fakeVisibility(true);
-
-            await withTimeout(Promise.resolve(1), 1_000, "x", vis.clock);
-
-            expect(vis.listeners.size).toBe(0);
-            expect(vi.getTimerCount()).toBe(0);
-        });
-
-        it("stops listening for visibility changes once the call fails", async () => {
-            const vis = fakeVisibility(true);
-
-            await expect(
-                withTimeout(Promise.reject(new Error("boom")), 1_000, "x", vis.clock),
-            ).rejects.toThrow("boom");
-
-            expect(vis.listeners.size).toBe(0);
-            expect(vi.getTimerCount()).toBe(0);
-        });
-
-        it("settles while hidden without a pending timer", async () => {
-            const vis = fakeVisibility(false);
-            const req = deferred<string>();
-            const result = withTimeout(req.promise, 1_000, "x", vis.clock);
-            vis.set(false);
-            req.resolve("done");
-            await expect(result).resolves.toBe("done");
-            expect(vi.getTimerCount()).toBe(0);
-        });
-
-        it("keeps the timeout when the call succeeds too late", async () => {
-            const vis = fakeVisibility(true);
-            const late = deferred<string>();
-            const result = withTimeout(late.promise, 100, "x", vis.clock);
-
-            await Promise.all([
-                expect(result).rejects.toThrow(/Timeout/),
-                (async () => {
-                    await vi.advanceTimersByTimeAsync(100);
-                    late.resolve("too late");
-                })(),
-            ]);
-        });
-
-        it("keeps the timeout when the call fails too late", async () => {
-            const vis = fakeVisibility(true);
-            let rejectLate!: (e: unknown) => void;
-
-            const result = withTimeout(
-                new Promise<string>((_, rej) => (rejectLate = rej)),
-                100,
-                "y",
-                vis.clock,
-            );
-
-            await Promise.all([
-                expect(result).rejects.toThrow(/Timeout/),
-                (async () => {
-                    await vi.advanceTimersByTimeAsync(100);
-                    rejectLate(new Error("too late"));
-                })(),
-            ]);
-        });
-
-        it("uses the document's visibility by default", async () => {
-            Object.defineProperty(document, "visibilityState", {
-                configurable: true,
-                get: () => "hidden",
-            });
-
-            try {
-                const result = withTimeout(new Promise<string>(() => {}), 1_000, "x");
-
-                let rejected = false;
-                result.catch(() => (rejected = true));
-                await vi.advanceTimersByTimeAsync(5_000);
-                expect(rejected).toBe(false);
-
-                Object.defineProperty(document, "visibilityState", {
-                    configurable: true,
-                    get: () => "visible",
-                });
-                document.dispatchEvent(new Event("visibilitychange"));
-                await vi.advanceTimersByTimeAsync(1_000);
-                expect(rejected).toBe(true);
-            } finally {
-                Object.defineProperty(document, "visibilityState", {
-                    configurable: true,
-                    get: () => "visible",
-                });
-            }
-        });
-
-        describe("with the document's own visibility", () => {
-            function setDocumentVisibility(state: DocumentVisibilityState) {
-                Object.defineProperty(document, "visibilityState", {
-                    configurable: true,
-                    get: () => state,
-                });
-                document.dispatchEvent(new Event("visibilitychange"));
-            }
-
-            afterEach(() => setDocumentVisibility("visible"));
-
-            it("pauses the budget while the tab is in the background", async () => {
-                const result = withTimeout(new Promise<string>(() => {}), 1_000, "x");
-
-                let rejected = false;
-                result.catch(() => (rejected = true));
-                await vi.advanceTimersByTimeAsync(600);
-                setDocumentVisibility("hidden");
-                await vi.advanceTimersByTimeAsync(5_000);
-                setDocumentVisibility("visible");
-                await vi.advanceTimersByTimeAsync(399);
-                expect(rejected).toBe(false);
-                await vi.advanceTimersByTimeAsync(1);
-                expect(rejected).toBe(true);
-            });
-
-            it("stops following tab switches once the call has succeeded", async () => {
-                await withTimeout(Promise.resolve("pr"), 1_000, "x");
-
-                setDocumentVisibility("hidden");
-                setDocumentVisibility("visible");
-
-                expect(vi.getTimerCount()).toBe(0);
-            });
-        });
-    });
-});
-
-describe("retryOnTimeout", () => {
-    const timeout = () =>
-        new TimeoutError("Timeout after 15000ms while waiting for getPullRequestById");
-
-    it("returns the first attempt's result without retrying", async () => {
-        const attempt = vi.fn(async () => "pr");
-        await expect(retryOnTimeout(attempt)).resolves.toBe("pr");
-        expect(attempt).toHaveBeenCalledOnce();
+        vi.advanceTimersByTime(600);
+        vis.set(true);
+        vi.advanceTimersByTime(400);
+        expect(onElapsed).toHaveBeenCalledOnce();
     });
 
-    // Production: the boot PR lookup hung past 15s with nothing else wrong and
-    // blocked the tab (9 sessions a week).
-    it("re-issues a hung call once and returns the second result", async () => {
-        const attempt = vi
-            .fn<() => Promise<string>>()
-            .mockRejectedValueOnce(timeout())
-            .mockResolvedValueOnce("pr");
+    it("stops listening once it fires or is cancelled", () => {
+        const fired = fakeVisibility(true);
+        startVisibleTimer(10, vi.fn(), fired.clock);
+        vi.advanceTimersByTime(10);
+        expect(fired.listeners.size).toBe(0);
 
-        await expect(retryOnTimeout(attempt)).resolves.toBe("pr");
-        expect(attempt).toHaveBeenCalledTimes(2);
+        const onElapsed = vi.fn();
+        const cancelled = fakeVisibility(true);
+        const cancel = startVisibleTimer(1_000, onElapsed, cancelled.clock);
+        cancel();
+        vi.advanceTimersByTime(5_000);
+        expect(onElapsed).not.toHaveBeenCalled();
+        expect(cancelled.listeners.size).toBe(0);
     });
 
-    it("gives up after the second timeout", async () => {
-        const second = timeout();
+    it("follows the page's own visibility by default", () => {
+        const onElapsed = vi.fn();
+        startVisibleTimer(1_000, onElapsed);
 
-        const attempt = vi
-            .fn<() => Promise<string>>()
-            .mockRejectedValueOnce(timeout())
-            .mockRejectedValueOnce(second);
-
-        await expect(retryOnTimeout(attempt)).rejects.toBe(second);
-        expect(attempt).toHaveBeenCalledTimes(2);
-    });
-
-    it("does not retry any other failure", async () => {
-        const notFound = Object.assign(new Error("TF401180"), { status: 404 });
-        const attempt = vi.fn(() => Promise.reject(notFound));
-        await expect(retryOnTimeout(attempt)).rejects.toBe(notFound);
-        expect(attempt).toHaveBeenCalledOnce();
-    });
-
-    it("retries a call that timed out in withTimeout", async () => {
-        const attempt = vi
-            .fn<() => Promise<string>>()
-            .mockReturnValueOnce(withTimeout(new Promise<string>(() => {}), 1, "x"))
-            .mockResolvedValueOnce("ok");
-
-        await expect(retryOnTimeout(attempt)).resolves.toBe("ok");
+        vi.advanceTimersByTime(1_000);
+        expect(onElapsed).toHaveBeenCalledOnce();
     });
 });
 

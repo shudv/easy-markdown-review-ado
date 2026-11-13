@@ -3,6 +3,8 @@
 
 import { type ReactElement, useEffect, useState } from "react";
 
+import { OpenElsewhereIcon } from "../shell/components/icons";
+
 /**
  * Public evidence for the dead window: the extension SDK change that would let
  * extensions ask the host for a fresh token, with a write-up of the root cause
@@ -110,11 +112,46 @@ export function BootErrorView({
     );
 }
 
-export function NoMarkdownFilesView(): ReactElement {
+/**
+ * A PR whose changes include no Markdown files (about 2% of PR-tab opens): say
+ * so, and offer the rest of the repository's documents instead of a dead end.
+ */
+export function NoMarkdownFilesView({
+    onBrowseDocuments,
+}: Readonly<{ onBrowseDocuments: () => void }>): ReactElement {
     return (
-        <div className="emr-error" style={{ color: "var(--emr-muted)" }}>
+        <div className="emr-error" style={MUTED}>
             <h2>No Markdown files changed in this PR</h2>
-            <p>This tab only shows .md files. Switch to the Files tab for the rest.</p>
+            <p>
+                This tab shows the pull request&apos;s .md files. Switch to the Files tab for the
+                rest, or read this repository&apos;s documents.
+            </p>
+            <button type="button" className="emr-error-retry" onClick={() => onBrowseDocuments()}>
+                Browse repository documents
+            </button>
         </div>
+    );
+}
+
+/**
+ * The PR tab's file-list title, with a quiet way into the Documents hub for
+ * every other document in the repository.
+ */
+export function PrDocNavTitle({
+    onOpenDocuments,
+}: Readonly<{ onOpenDocuments: () => void }>): ReactElement {
+    return (
+        <>
+            <span className="emr-docnav-title">Documents</span>
+            <button
+                type="button"
+                className="emr-icon-btn"
+                title="Open all of this repository's documents (new tab)"
+                aria-label="Open all of this repository's documents in a new tab"
+                onClick={() => onOpenDocuments()}
+            >
+                <OpenElsewhereIcon />
+            </button>
+        </>
     );
 }

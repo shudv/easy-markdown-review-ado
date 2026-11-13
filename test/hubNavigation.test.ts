@@ -16,13 +16,15 @@ vi.mock("azure-devops-extension-api", () => ({
 
 import {
     buildHubDeepLinkUrl,
+    hubBackLinkFor,
     openInNewTab,
     readCurrentUser,
     readRouteParams,
     resolveOrgUrl,
     setRouteQuery,
 } from "../src/hub/hubNavigation";
-import { assembleHubDeepLinkUrl } from "../src/hub/documentsHub.helpers";
+import { assembleHubDeepLinkUrl, buildHubDocUrl } from "../src/hub/documentsHub.helpers";
+import { backLinkUrl } from "../src/shell/backLink";
 
 function navService(params: Record<string, string> | undefined) {
     return {
@@ -119,6 +121,40 @@ describe("buildHubDeepLinkUrl", () => {
             throw new Error("not initialized");
         });
         expect(buildHubDeepLinkUrl(doc, target)).toBeUndefined();
+    });
+});
+
+describe("hubBackLinkFor", () => {
+    const thread = { filePath: "/docs/a.md", linkKey: "k-0123456789ab" };
+
+    it("links a thread to its hub document in this org and project, selected", () => {
+        const ext = { publisherId: "pub", extensionId: "ext" };
+        sdk.getExtensionContext.mockReturnValue(ext);
+        sdk.getHost.mockReturnValue({ name: "contoso" });
+
+        const doc = buildHubDocUrl(
+            {
+                orgUrl: "https://dev.azure.com/contoso",
+                projectName: "Proj",
+                repoId: "r1",
+                path: "/docs/a.md",
+            },
+            ext,
+        );
+
+        expect(hubBackLinkFor("Proj", "r1")(thread)).toBe(backLinkUrl(doc, thread.linkKey));
+        expect(new URL(hubBackLinkFor("Proj", "r1")(thread)!).searchParams.get("comment")).toBe(
+            "k-0123456789ab",
+        );
+    });
+
+    it("has no link when the extension context is unavailable", () => {
+        sdk.getExtensionContext.mockImplementation(() => {
+            throw new Error("not initialized");
+        });
+        sdk.getHost.mockReturnValue({ name: "contoso" });
+
+        expect(hubBackLinkFor("Proj", "r1")(thread)).toBeUndefined();
     });
 });
 

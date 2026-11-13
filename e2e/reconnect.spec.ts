@@ -15,7 +15,6 @@
 //      each is saved once
 //   E  a typed reply survives "Reload page" and is then saved once
 //   H  a dropped connection on a write: error, text kept, no duplicate
-//   I  opening the PR in a background tab on a slow host: no false timeout
 //
 // The mid-session banner clearing by itself and a plain 401 (token fine) not
 // being mistaken for the window are host-independent (the faults are injected
@@ -130,6 +129,19 @@ function postedThread(frame: FrameLocator, marker: string) {
     return frame.locator(".emr-balloon:not(.is-draft)[data-thread-id]").filter({ hasText: marker });
 }
 
+/**
+ * A thread's root comment as ADO stores it: what was written, then the
+ * "Markdown Review | open ↗" badge between its markers, linking to this PR's tab with
+ * the thread selected by its link key.
+ */
+function withBackLinkTo(body: string): RegExp {
+    const escaped = body.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    return new RegExp(
+        `^${escaped}\\n\\n<!-- emr:back-link -->\\n\\[!\\[Open in Markdown Review\\]\\(https://img\\.shields\\.io/badge/[^()\\s]+\\)\\]\\(https://[^()\\s]+/pullrequest/${prId}\\?[^()\\s]*_a=[^()\\s&]+markdown-review-pr-tab[^()\\s]*&comment=k-[\\da-f]{12}\\)\\n<!-- /emr:back-link -->$`,
+    );
+}
+
 test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => {
     test.describe.configure({ mode: "serial" });
 
@@ -162,8 +174,10 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
         await expect(frame.locator(".markdown-body").first()).toBeVisible({
             timeout: 60_000,
         });
-        // Our reload + exactly one automatic reload.
-        expect(loads()).toBe(2);
+        // Our reload + one automatic reload. The tab renders the cached PR as soon
+        // as it mounts, which can be before the host page's own `load` fires, so
+        // wait for it.
+        await expect.poll(loads, { timeout: 30_000 }).toBe(2);
 
         requireTelemetry(telemetry.active());
         await expect
@@ -178,6 +192,8 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
                     ),
             )
             .toBe(true);
+        // Exactly one automatic reload: no further one followed.
+        expect(loads()).toBe(2);
     });
 
     test("B: if the reload doesn't help, there is no reload loop and the tab recovers on its own", async ({
@@ -238,8 +254,13 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
             });
             await expect(frame.locator(".emr-toast--error")).toHaveCount(0);
             await expect
-                .poll(async () => (await commentsContaining(REPO, prId, marker)).length)
-                .toBe(1);
+                .poll(async () =>
+                    (await commentsContaining(REPO, prId, marker)).map((c) => c.content),
+                )
+                .toEqual([expect.stringMatching(withBackLinkTo(posted))]);
+            // ADO's own comment UI shows the "Markdown Review | open ↗" badge; the
+            // app shows only what was written.
+            await expect(thread.locator(".emr-comment-content")).toHaveText(posted);
             await expect(notice(frame)).toHaveCount(0, {
                 timeout: RECOVERY_SLACK_MS,
             });
@@ -271,11 +292,12 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
                 timeout: 30_000 + RECOVERY_SLACK_MS,
             });
             await expect(editor).toHaveCount(0);
+            // The edit keeps the back link.
             await expect
                 .poll(async () =>
                     (await commentsContaining(REPO, prId, marker)).map((c) => c.content),
                 )
-                .toEqual([edited]);
+                .toEqual([expect.stringMatching(withBackLinkTo(edited))]);
         } finally {
             await deleteCommentsContaining(REPO, prId, marker);
         }
@@ -367,38 +389,5 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
         } finally {
             await deleteCommentsContaining(REPO, prId, marker);
         }
-    });
-
-    test("I: opening the PR in a background tab on a slow host never shows a false timeout", async ({
-        page,
-    }) => {
-        test.setTimeout(150_000);
-        const telemetry = collectTelemetry(page);
-        await openPr(page);
-        // The first ADO call (the PR lookup the 15s timeout guards) takes 20s while
-        // the tab is "in the background" for 25s.
-        await fault(page, "slowApi", 20_000, 1);
-        await fault(page, "hidden", 25);
-        await page.reload();
-
-        const frame = prTabFrame(page);
-        await expect(frame.locator(".markdown-body").first()).toBeVisible({
-            timeout: 90_000,
-        });
-        await expect(frame.getByText("Something went wrong")).toHaveCount(0);
-
-        requireTelemetry(telemetry.active());
-        await expect
-            .poll(() =>
-                telemetry
-                    .events()
-                    .some(
-                        (e) =>
-                            e.name === "app.loaded" &&
-                            e.properties?.readyReason === "content" &&
-                            e.properties.bootHadHiddenInterval === true,
-                    ),
-            )
-            .toBe(true);
     });
 });

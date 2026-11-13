@@ -17,6 +17,8 @@ export interface ReaderActivity {
     label: string;
     /** Larger values take precedence when operations overlap. */
     priority: number;
+    /** One action offered next to the message, e.g. "Try again". */
+    action?: { label: string; onClick: () => void };
 }
 
 export function buildReaderActivities(input: {
@@ -25,8 +27,11 @@ export function buildReaderActivities(input: {
     fileRefreshing: boolean;
     historicalLoading: boolean;
     documentLoading: boolean;
+    hostActivity?: ReaderActivity;
 }): ReaderActivity[] {
     const activities = [...input.navigationActivities];
+
+    if (input.hostActivity) activities.push(input.hostActivity);
 
     if (input.commentSyncing) {
         activities.push({

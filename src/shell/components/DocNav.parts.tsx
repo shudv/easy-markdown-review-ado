@@ -81,16 +81,21 @@ export function dirTwistText(
     return { label: text, title: text };
 }
 
-/** A folder row's chevron: expands/collapses (or loads) the folder. */
+/**
+ * A folder row's chevron: expands/collapses (or loads) the folder. An empty
+ * folder has nothing to open, so it gets the chevron's space and no chevron.
+ */
 export function DirTwistButton(
     props: Readonly<{
         twist: { label: string; title: string };
+        isEmpty: boolean;
         isCollapsed: boolean;
         isLoading: boolean;
         onToggle: () => void;
     }>,
 ): ReactElement {
-    const { twist, isCollapsed, isLoading, onToggle } = props;
+    const { twist, isEmpty, isCollapsed, isLoading, onToggle } = props;
+    if (isEmpty) return <span className="emr-docnav-twist-spacer" aria-hidden />;
 
     return (
         <button
@@ -112,25 +117,29 @@ export function DirTwistButton(
     );
 }
 
-/** Label of a plain folder row: expands/collapses (or loads) the folder. */
+/**
+ * Label of a plain folder row: expands/collapses (or loads) the folder. An
+ * empty folder's label opens nothing, and says so.
+ */
 export function DirFolderLabel(
     props: Readonly<{
         node: DirNavNode;
+        isEmpty: boolean;
         isLazy: boolean;
         isLoading: boolean;
         isCollapsed: boolean;
         onToggle: () => void;
     }>,
 ): ReactElement {
-    const { node, isLazy, isLoading, isCollapsed, onToggle } = props;
+    const { node, isEmpty, isLazy, isLoading, isCollapsed, onToggle } = props;
 
     return (
         <button
             type="button"
             className="emr-docnav-label emr-docnav-dir-label"
             onClick={onToggle}
-            title={node.path}
-            disabled={isLoading}
+            title={isEmpty ? `No Markdown documents in ${node.path}` : node.path}
+            disabled={isLoading || isEmpty}
         >
             <span className="emr-docnav-file-icon emr-docnav-folder-icon" aria-hidden>
                 <SvgFolder open={!isCollapsed} />

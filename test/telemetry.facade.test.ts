@@ -8,6 +8,7 @@ import {
     flushTelemetry,
     getTelemetryContext,
     initTelemetry,
+    INSTALL_ID_STORAGE_KEY,
     setTelemetryContext,
     track,
     trackException,
@@ -215,6 +216,40 @@ describe("telemetry facade", () => {
         initTelemetry({ appName: "pr-tab" });
         initTelemetry({ appName: "documents-hub" });
         expect(getTelemetryContext().appName).toBe("pr-tab");
+    });
+
+    describe("install id", () => {
+        afterEach(() => {
+            window.localStorage.removeItem(INSTALL_ID_STORAGE_KEY);
+            vi.restoreAllMocks();
+        });
+
+        it("persists one id per browser and reuses it on later loads", () => {
+            initTelemetry({ appName: "pr-tab" });
+            const first = getTelemetryContext().installId;
+            expect(first).toMatch(/^[\w-]+$/);
+            expect(window.localStorage.getItem(INSTALL_ID_STORAGE_KEY)).toBe(first);
+
+            __resetTelemetryForTests();
+            initTelemetry({ appName: "pr-tab" });
+            expect(getTelemetryContext().installId).toBe(first);
+            expect(getTelemetryContext().sessionId).not.toBe(first);
+        });
+
+        it("replaces a stored value that isn't a valid id", () => {
+            window.localStorage.setItem(INSTALL_ID_STORAGE_KEY, "not an id");
+            initTelemetry({ appName: "pr-tab" });
+            expect(getTelemetryContext().installId).toMatch(/^[\w-]+$/);
+        });
+
+        it("is absent when the browser blocks storage", () => {
+            vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+                throw new Error("SecurityError");
+            });
+            initTelemetry({ appName: "pr-tab" });
+            expect(getTelemetryContext().installId).toBeUndefined();
+            expect(getTelemetryContext().sessionId).toEqual(expect.any(String));
+        });
     });
 
     it.each([

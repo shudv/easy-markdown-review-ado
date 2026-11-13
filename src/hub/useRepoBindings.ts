@@ -47,12 +47,12 @@ function useRepoScopedBindings(props: DocumentsAppProps, selectedRepo: DocRepo |
     // Curry the per-repo source loader so Shell's `loadFileSource(path)`
     // contract is satisfied without leaking the repo id.
     const repoScopedLoader = useCallback(
-        (path: string): Promise<string> => {
+        (path: string, objectId?: string): Promise<string> => {
             if (!selectedRepo) {
                 return Promise.reject(new Error("No repo selected"));
             }
 
-            return loadFileSource(selectedRepo.id, path);
+            return loadFileSource(selectedRepo.id, path, objectId);
         },
         [selectedRepo, loadFileSource],
     );

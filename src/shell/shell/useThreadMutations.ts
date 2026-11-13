@@ -5,7 +5,7 @@ import { type Dispatch, type SetStateAction, useCallback } from "react";
 import type { CommentAuthor, ReactionKind } from "../../types";
 import type { CommentApi } from "../../comments/api";
 import type { ThreadAction, ThreadState } from "../../comments/store";
-import { events, track } from "../../telemetry";
+import { events, track, type ResolveVia } from "../../telemetry";
 import { clearIfEquals } from "../shellHelpers";
 import type { PersistWith } from "./useCommentWrites";
 
@@ -31,12 +31,28 @@ export function useThreadMutations(opts: ThreadMutationsOptions) {
     return { ...statusMutations, ...commentMutations, ...threadMutations };
 }
 
+/**
+ * Time since the thread's first comment was posted, for resolution-time
+ * telemetry. `undefined` when the thread isn't loaded or its timestamp is
+ * unreadable — the event is still sent, just without a duration.
+ */
+export function threadAgeMs(
+    thread: ThreadState["threadsById"][string] | undefined,
+    nowMs: number = Date.now(),
+): number | undefined {
+    const createdAt = thread?.comments[0]?.createdAt;
+    if (createdAt === undefined) return undefined;
+    const age = nowMs - Date.parse(createdAt);
+
+    return Number.isFinite(age) && age >= 0 ? age : undefined;
+}
+
 /** Thread status changes: resolve, reopen, mark pending and close. */
 function useStatusMutations(opts: ThreadMutationsOptions) {
-    const { commentApi, persistWith, dispatch } = opts;
+    const { commentApi, persistWith, dispatch, threadsById } = opts;
 
     const onResolve = useCallback(
-        (tid: string) => {
+        (tid: string, via?: ResolveVia) => {
             void (async () => {
                 const ok = await persistWith("Resolve thread", () =>
                     commentApi.setStatus(tid, "resolved"),
@@ -48,10 +64,15 @@ function useStatusMutations(opts: ThreadMutationsOptions) {
                     threadId: tid,
                     status: "resolved",
                 });
-                track(events.threadResolved());
+                track(
+                    events.threadResolved({
+                        durationMs: threadAgeMs(threadsById[tid]),
+                        via: via ?? "menu",
+                    }),
+                );
             })();
         },
-        [commentApi, persistWith, dispatch],
+        [commentApi, persistWith, dispatch, threadsById],
     );
 
     const onReopen = useCallback(
@@ -124,8 +145,10 @@ function useCommentMutations(opts: ThreadMutationsOptions) {
 
     const onEditComment = useCallback(
         async (threadId: string, commentId: string, newBodyMarkdown: string): Promise<boolean> => {
-            const result = await persistWith("Edit comment", () =>
-                commentApi.editComment(threadId, commentId, newBodyMarkdown),
+            const result = await persistWith(
+                "Edit comment",
+                () => commentApi.editComment(threadId, commentId, newBodyMarkdown),
+                { fromComposer: true },
             );
 
             // A failed save leaves the editor open with the user's text (CommentRow).

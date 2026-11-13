@@ -8,7 +8,13 @@
 import { type ReactElement, useEffect, useRef } from "react";
 import type { CommentThread, CommentAuthor, ReactionKind } from "../../types";
 import { isResolvedLike } from "../../types";
-import { balloonClassName, balloonStatusLabel, balloonStyle } from "./Balloon.helpers";
+import type { ResolveVia } from "../../telemetry";
+import {
+    balloonClassName,
+    balloonStatusLabel,
+    balloonStyle,
+    type ReplyOptions,
+} from "./Balloon.helpers";
 import { BalloonReplyZone } from "./Balloon.parts";
 import { CommentRow } from "./CommentRow";
 
@@ -28,8 +34,8 @@ interface BalloonProps {
     general?: boolean;
     currentUser: CommentAuthor;
     onClick: (threadId: string) => void;
-    onReply: (threadId: string, body: string) => void;
-    onResolve: (threadId: string) => void;
+    onReply: (threadId: string, body: string, opts?: ReplyOptions) => void;
+    onResolve: (threadId: string, via?: ResolveVia) => void;
     onReopen: (threadId: string) => void;
     onMarkPending: (threadId: string) => void;
     onClose: (threadId: string) => void;
@@ -128,6 +134,10 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
     const canDeleteThread =
         isInteractive && thread.comments.every((comment) => comment.author.id === currentUser.id);
 
+    // An open thread (active / pending) can be resolved as part of a reply.
+    // One-click Resolve / Reopen sits in the first comment's hover tools.
+    const canResolve = isInteractive && !isResolvedLike(thread.status);
+
     return (
         // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- pointer shortcut only: the card hosts its own buttons and composer (a role="button" here would nest interactive controls), and keyboard users select an anchored thread via its role="button" highlight in the article
         <div
@@ -181,6 +191,7 @@ export function Balloon(props: Readonly<BalloonProps>): ReactElement {
                     replyInitial={replyInitial}
                     onReplyChange={onReplyChange}
                     onReply={onReply}
+                    canResolve={canResolve}
                     onRequestReply={onRequestReply}
                     onCancelReply={onCancelReply}
                 />

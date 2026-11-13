@@ -13,6 +13,7 @@
 // The PR id is discovered at runtime (filtered by a known source branch) rather
 // than hard-coded, because sandbox PR ids depend on provisioning order.
 
+import type { FrameLocator, Locator } from "@playwright/test";
 import { test, expect } from "./fixtures";
 
 import { E2E } from "./env";
@@ -25,11 +26,27 @@ import {
     recordAdoRequests,
     waitForFrameRoot,
 } from "./helpers";
-import { collectTelemetry } from "./reconnect.helpers";
+import {
+    collectTelemetry,
+    commentsContaining,
+    deleteCommentsContaining,
+    fault,
+    prTabWindow,
+} from "./reconnect.helpers";
 
 // Boot's REST calls, as seen from the iframe.
 const PR_BY_ID = /\/_apis\/git\/pullRequests\/\d+(?:\?|$)/;
 const PR_ITERATIONS = /\/pullRequests\/\d+\/iterations(?:\?|$)/;
+// A document read by its git blob (what the document cache keys on).
+const BLOB_READ = /\/_apis\/git\/repositories\/[^/]+\/blobs\//i;
+// A blob id no real document has, holding a version of it from before a push.
+const STALE_BLOB = "5ca1ab1e".repeat(5);
+const STALE_TEXT = "Cached before the PR was pushed to";
+
+/** The posted (not draft) thread whose text includes `marker`. */
+function postedThread(frame: FrameLocator, marker: string): Locator {
+    return frame.locator(".emr-balloon:not(.is-draft)[data-thread-id]").filter({ hasText: marker });
+}
 
 test.describe("Markdown Review PR tab (real ADO host)", () => {
     test("mounts the contribution iframe and renders the PR's changed Markdown and seeded thread", async ({
@@ -96,19 +113,147 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         ).toBeLessThan(prEnd);
         expect(requests[iterationsStart]!.url).not.toMatch(/includeCommits=true/i);
 
-        // Boot timing from the dev build's telemetry, recorded in the report (not
-        // asserted — a shared real host is too noisy for a budget).
-        if (telemetry.active()) {
-            await expect
-                .poll(() => telemetry.events().some((e) => e.name === "app.loaded"))
-                .toBe(true);
+        // Boot timing from the dev build's telemetry: the phases must add up to the
+        // total, timed from the host starting our iframe. The values themselves are
+        // only recorded in the report — a shared real host is too noisy for a budget.
+        expect(telemetry.active(), "the dev build must log telemetry").toBe(true);
+        await expect.poll(() => telemetry.events().some((e) => e.name === "app.loaded")).toBe(true);
 
-            const m = telemetry.events().find((e) => e.name === "app.loaded")!.measurements;
+        const loaded = telemetry.events().find((e) => e.name === "app.loaded")!;
+        const m = loaded.measurements!;
+        const phases = m.bundleLoadMs! + m.sdkReadyMs! + m.contextReadyMs! + m.renderReadyMs!;
 
-            test.info().annotations.push({
-                type: "boot timing (dev build)",
-                description: `visible ${m?.activeBootTimeMs}ms · context ${m?.contextReadyMs}ms · render ${m?.renderReadyMs}ms`,
+        expect(m.bundleLoadMs).toBeGreaterThan(0);
+        // Each phase is rounded on its own.
+        expect(Math.abs(phases - m.bootTimeMs!)).toBeLessThanOrEqual(2);
+        expect(loaded.properties?.cache).toBe("none");
+        test.info().annotations.push({
+            type: "boot timing (dev build)",
+            description: `total ${m.bootTimeMs}ms = bundle ${m.bundleLoadMs} + sdk ${m.sdkReadyMs} + context ${m.contextReadyMs} + render ${m.renderReadyMs}`,
+        });
+    });
+
+    test("reopening a PR shows it at once from this browser's cache", async ({ page }) => {
+        test.setTimeout(150_000);
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        const requests = recordAdoRequests(page);
+        const telemetry = collectTelemetry(page);
+        await gotoPrTab(page, E2E.prRepo, prId);
+        const frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        const article = frame.locator(".markdown-body").first();
+        await expect
+            .poll(async () => (await article.innerText()).trim().length, { timeout: 45_000 })
+            .toBeGreaterThan(0);
+        // First open: the document is read by its git blob (and cached).
+        expect(requests.some((e) => e.phase === "end" && BLOB_READ.test(e.url))).toBe(true);
+        const heading = (await article.innerText()).trim().split("\n")[0]!;
+        const before = requests.length;
+
+        try {
+            // Every ADO request of the reopen takes 20s, so only this browser's
+            // caches (the PR's details and its document) can show it sooner.
+            await fault(page, "slowApi", 20_000);
+            await page.reload();
+            const reopened = prTabFrame(page);
+            await waitForFrameRoot(reopened);
+            await expect(reopened.locator(".markdown-body").first()).toContainText(heading, {
+                timeout: 15_000,
             });
+            await expect(reopened.locator(".emr-error")).toHaveCount(0);
+            const status = reopened.locator(".emr-statusbar-activity-label");
+            await expect(status).toHaveText("Checking for updates…");
+            expect(
+                requests.slice(before).filter((e) => BLOB_READ.test(e.url)),
+                "the reopened document must come from the cache",
+            ).toEqual([]);
+            // app.loaded tells the two opens apart.
+            await expect
+                .poll(() =>
+                    telemetry
+                        .events()
+                        .filter((e) => e.name === "app.loaded")
+                        .map((e) => e.properties?.cache),
+                )
+                .toEqual(["none", "pr+doc"]);
+            // ADO confirms the PR is unchanged: the indicator clears.
+            await expect(status).not.toHaveText("Checking for updates…", { timeout: 90_000 });
+        } finally {
+            await fault(page, "clear");
+        }
+    });
+
+    test("a PR pushed to since it was cached reopens on ADO's version", async ({ page }) => {
+        test.setTimeout(150_000);
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        await gotoPrTab(page, E2E.prRepo, prId);
+        const frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        const article = frame.locator(".markdown-body").first();
+        await expect
+            .poll(async () => (await article.innerText()).trim().length, { timeout: 45_000 })
+            .toBeGreaterThan(0);
+        const heading = (await article.innerText()).trim().split("\n")[0]!;
+
+        // Leave this browser's caches as a visit before a push would have: the PR
+        // at an older revision, its documents at an older blob, cached too.
+        const liveTarget = await (
+            await prTabWindow(page)
+        ).evaluate(
+            ({ pullRequestId, staleBlob, staleText }) => {
+                const prs = JSON.parse(localStorage.getItem("emr.prs.v1") ?? "[]") as {
+                    key: string;
+                    ctx: { targetCommit?: string; changedMdFiles: { objectId?: string }[] };
+                }[];
+
+                const entry = prs.find((pr) => pr.key.endsWith(`/${pullRequestId}`))!;
+                const target = entry.ctx.targetCommit;
+                entry.ctx.targetCommit = "0".repeat(40);
+                for (const file of entry.ctx.changedMdFiles) file.objectId = staleBlob;
+                localStorage.setItem("emr.prs.v1", JSON.stringify(prs));
+                const docs = JSON.parse(localStorage.getItem("emr.docs.v1") ?? "[]") as unknown[];
+                const stale = { id: staleBlob, content: `# ${staleText}\n` };
+                localStorage.setItem("emr.docs.v1", JSON.stringify([stale, ...docs]));
+
+                return target;
+            },
+            { pullRequestId: prId, staleBlob: STALE_BLOB, staleText: STALE_TEXT },
+        );
+
+        expect(liveTarget, "the PR was cached without its revision").toBeTruthy();
+
+        try {
+            // ADO is slow, so the cached (stale) version shows first.
+            await fault(page, "slowApi", 8_000);
+            await page.reload();
+            const reopened = prTabFrame(page);
+            await waitForFrameRoot(reopened);
+            const shown = reopened.locator(".markdown-body").first();
+            await expect(shown).toContainText(STALE_TEXT, { timeout: 15_000 });
+            // The status bar says the shown PR is being checked against ADO.
+            const status = reopened.locator(".emr-statusbar-activity-label");
+            await expect(status).toHaveText("Checking for updates…");
+
+            // ADO's version replaces it, and becomes what this browser keeps.
+            await expect(shown).toContainText(heading, { timeout: 90_000 });
+            await expect(shown).not.toContainText(STALE_TEXT);
+            await expect(status).not.toHaveText("Checking for updates…");
+            await expect(reopened.locator(".emr-error")).toHaveCount(0);
+
+            const cachedTarget = await (
+                await prTabWindow(page)
+            ).evaluate((pullRequestId) => {
+                const prs = JSON.parse(localStorage.getItem("emr.prs.v1") ?? "[]") as {
+                    key: string;
+                    ctx: { targetCommit?: string };
+                }[];
+
+                return prs.find((pr) => pr.key.endsWith(`/${pullRequestId}`))?.ctx.targetCommit;
+            }, prId);
+
+            expect(cachedTarget).toBe(liveTarget);
+        } finally {
+            await fault(page, "clear");
         }
     });
 
@@ -411,6 +556,170 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
                         .filter({ hasText: marker }),
                 ).toHaveCount(0, { timeout: 20_000 });
             }
+        }
+    });
+
+    test("resolves and reopens a thread from the ✓ that shows on hovering its first comment", async ({
+        page,
+    }) => {
+        // Post a throwaway thread, resolve it with one click, prove the status
+        // persisted to ADO (survives a full reload), reopen it the same way, then
+        // delete it so the shared sandbox PR stays pristine.
+        const marker = `emr-e2e-resolve-${Date.now()}`;
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        await gotoPrTab(page, E2E.prRepo, prId);
+
+        let frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+
+        // The rail lists active comments by default, so a resolved thread would
+        // drop out of view: list them all.
+        const showAllComments = async () => {
+            await frame.getByRole("button", { name: /^Filter comments/ }).click();
+            await frame.getByRole("menuitemradio", { name: /All comments/ }).click();
+        };
+
+        await showAllComments();
+
+        await openDraftComposerBySelection(frame, {
+            para: frame
+                .locator(".emr-rendered p")
+                .filter({ hasNot: frame.locator(".emr-highlight") })
+                .first(),
+            minNodeLen: 4,
+            selLen: 12,
+        });
+        const draft = frame.locator(".emr-balloon.is-draft");
+        await draft.locator("textarea.emr-textarea").fill(marker);
+        await draft.getByRole("button", { name: /^comment$/i }).click();
+
+        const ours = () => postedThread(frame, marker);
+
+        await expect(ours()).toBeVisible({ timeout: 20_000 });
+
+        try {
+            const first = ours().locator(".emr-comment").first();
+            const tools = first.locator(".emr-comment-tools-hover");
+
+            // Hidden until the comment is hovered, and hidden again once the
+            // pointer leaves; the reply box keeps the card's full width.
+            await page.mouse.move(0, 0);
+            await expect(tools).toHaveCSS("opacity", "0");
+            await first.hover();
+            await expect(tools).toHaveCSS("opacity", "1");
+            await page.mouse.move(0, 0);
+            await expect(tools).toHaveCSS("opacity", "0");
+
+            await first.hover();
+            await first.getByRole("button", { name: "Resolve thread" }).click();
+            await expect(ours().locator(".emr-balloon-status")).toHaveText("Resolved", {
+                timeout: 20_000,
+            });
+            await expect(frame.locator(".emr-toast--error")).toHaveCount(0);
+
+            await gotoPrTab(page, E2E.prRepo, prId);
+            frame = prTabFrame(page);
+            await waitForFrameRoot(frame);
+            await showAllComments();
+            await expect(ours().locator(".emr-balloon-status")).toHaveText("Resolved", {
+                timeout: 45_000,
+            });
+
+            const reloaded = ours().locator(".emr-comment").first();
+            await reloaded.hover();
+            await reloaded.getByRole("button", { name: "Reopen thread" }).click();
+            await expect(ours().locator(".emr-balloon-status")).toHaveCount(0, {
+                timeout: 20_000,
+            });
+        } finally {
+            if (await ours().count()) {
+                await ours()
+                    .getByRole("button", { name: /more options/i })
+                    .first()
+                    .click();
+                await frame.getByRole("menuitem", { name: /delete thread/i }).click();
+                await frame.getByRole("button", { name: /^delete$/i }).click();
+                await expect(ours()).toHaveCount(0, { timeout: 20_000 });
+            }
+        }
+    });
+
+    test('a thread\'s "Markdown Review" badge in ADO opens the PR tab with that thread selected', async ({
+        page,
+    }) => {
+        // ADO's own comment UI shows each thread started here with a badge linking back.
+        // Post a thread, read the link ADO stored, open it as a reader in ADO
+        // would, and check it lands on that thread: selected, in view.
+        const marker = `emr-e2e-backlink-${Date.now()}`;
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        const telemetry = collectTelemetry(page);
+
+        try {
+            await gotoPrTab(page, E2E.prRepo, prId);
+            let frame = prTabFrame(page);
+            await waitForFrameRoot(frame);
+
+            await openDraftComposerBySelection(frame, {
+                para: frame
+                    .locator(".emr-rendered p")
+                    .filter({ hasNot: frame.locator(".emr-highlight") })
+                    .first(),
+                minNodeLen: 4,
+                selLen: 12,
+            });
+            const draft = frame.locator(".emr-balloon.is-draft");
+            await draft.locator("textarea.emr-textarea").fill(marker);
+            await draft.getByRole("button", { name: /^comment$/i }).click();
+
+            const ours = () => postedThread(frame, marker);
+
+            await expect(ours()).toBeVisible({ timeout: 20_000 });
+            const threadId = (await ours().getAttribute("data-thread-id"))!;
+
+            // The link is stored between its markers, naming the thread by key.
+            let stored = "";
+            await expect
+                .poll(async () => {
+                    stored = (await commentsContaining(E2E.prRepo, prId, marker))[0]?.content ?? "";
+
+                    return stored;
+                })
+                .toContain("<!-- /emr:back-link -->");
+
+            // `[![alt](badge)](link)`: the link follows the badge image.
+            const link = /<!-- emr:back-link -->[\s\S]*?\)\]\((https:\/\/[^()\s]+)\)/.exec(
+                stored,
+            )?.[1];
+
+            expect(link, "no link inside the back-link markers").toBeDefined();
+            expect(new URL(link!).searchParams.get("comment")).toMatch(/^k-[\da-f]{12}$/);
+
+            // Open it fresh, as someone following it from ADO's comment UI.
+            await page.goto(link!, { waitUntil: "domcontentloaded" });
+            frame = prTabFrame(page);
+            await waitForFrameRoot(frame);
+
+            const balloon = frame.locator(`.emr-balloon.is-active[data-thread-id="${threadId}"]`);
+            await expect(balloon).toBeVisible({ timeout: 45_000 });
+            await expect(balloon).toContainText(marker);
+            await expect(balloon).toBeInViewport();
+            await expect(
+                frame.locator(`.emr-highlight.is-active[data-thread-id="${threadId}"]`),
+            ).toBeVisible();
+            // The link isn't shown here: only what was written.
+            await expect(balloon.locator(".emr-comment-content")).toHaveText(marker);
+            // Recorded as a back link (its `k-` key), not a shared comment link.
+            expect(telemetry.active(), "the dev build must log telemetry").toBe(true);
+            await expect
+                .poll(() =>
+                    telemetry
+                        .events()
+                        .filter((e) => e.name === "link.opened")
+                        .map((e) => e.properties),
+                )
+                .toEqual([{ target: "backLink", found: true }]);
+        } finally {
+            await deleteCommentsContaining(E2E.prRepo, prId, marker);
         }
     });
 });

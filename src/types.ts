@@ -11,6 +11,12 @@ export interface FileInfo {
     linesAdded: number;
     /** Total lines deleted in this PR for this file. */
     linesDeleted: number;
+    /**
+     * The git blob holding the content shown for this file, when the host
+     * listed it (a PR's changes, or a Documents-hub folder). A blob id names
+     * its content exactly, so the reader reads (and caches) that blob.
+     */
+    objectId?: string;
 }
 
 export interface PrInfo {
@@ -149,6 +155,11 @@ export interface CommentThread {
      * on load with zero extra network calls.
      */
     mentionedIdentities?: MentionedIdentity[];
+    /**
+     * Key in this thread's back-link badge (`?comment=<key>`), set on
+     * threads started here; the link is written before ADO assigns the id.
+     */
+    linkKey?: string;
 }
 
 /** A person @-mentioned in a thread, resolved by ADO for the identity store. */

@@ -61,6 +61,11 @@ export const E2E = {
         "AZDO_E2E_DOCLINKS_LFS_PR_TITLE",
         "Render an LFS image added in a pull request",
     ),
+    /**
+     * Repo with a folder that holds drawings but no Markdown (`/diagrams` in
+     * `sandbox/repos/excalidraw-showcase`), next to a root `design.md`.
+     */
+    drawingsRepo: env("AZDO_E2E_DRAWINGS_REPO", "excalidraw-showcase"),
     /** Origin the dev extension bundles are served from (`npm run dev:verify`). */
     devOrigin: env("AZDO_E2E_DEV_ORIGIN", "https://localhost:3000"),
     /**

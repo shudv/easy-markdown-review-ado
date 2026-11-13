@@ -19,7 +19,9 @@
 //     session to come back and is retried once, instead of failing. Safe: a
 //     401 is rejected at the auth layer before any handler runs.
 //   - Diagnostics: one `auth.sessionRefresh` start/end pair per spell with the
-//     token timing, so the re-mint behaviour is measurable.
+//     token timing, so the re-mint behaviour is measurable, and one
+//     `auth.heldWrite` per held write with its kind and outcome — including
+//     `left`, so a write abandoned by leaving the page is visible.
 //   - Quiet until it matters: a spell found by the background comment poll
 //     stays invisible (in production ~97% of them ended with no user action
 //     at all). It is `surfaced` — the notice shows and ONE user-facing error is
@@ -32,6 +34,7 @@
 import { useSyncExternalStore } from "react";
 
 import { events, track, trackUserFacingError } from "../telemetry";
+import type { HeldWriteKind, HeldWriteOutcome } from "../telemetry";
 import { classifyAdoGrant, isSessionRefreshingError, readAdoTokenExpiry } from "./adoAuthToken";
 
 type AdoSessionState = "live" | "refreshing";
@@ -98,6 +101,12 @@ interface Spell {
     endReported?: boolean;
 }
 
+/** A write held for the session, until its outcome is reported. */
+interface HeldWrite {
+    kind: HeldWriteKind;
+    heldAtMs: number;
+}
+
 const LIVE: AdoSessionSnapshot = {
     state: "live",
     surfaced: false,
@@ -110,6 +119,7 @@ export class AdoSessionMonitor {
     private readonly listeners = new Set<() => void>();
     private readonly recoveredListeners = new Set<() => void>();
     private readonly waiters = new Set<() => void>();
+    private readonly held = new Set<HeldWrite>();
     private spell: Spell | null = null;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private getToken?: () => Promise<string>;
@@ -251,10 +261,12 @@ export class AdoSessionMonitor {
      *     | order by sessionId asc, EventInfo_Time asc
      *     | where sessionId == prev(sessionId) and name == prev(name)
      *         and bodyLength == prev(bodyLength)
+     *         and (name == "comment.created" or threadOrdinal == prev(threadOrdinal))
      *         and datetime_diff('second', EventInfo_Time, prev(EventInfo_Time)) <= 30
      *     | summarize likelyDuplicates = count(), sessions = dcount(sessionId)
      */
     async holdWrite<T>(
+        kind: HeldWriteKind,
         attempt: () => Promise<T>,
         maxWaitMs: number = HELD_WRITE_MAX_WAIT_MS,
     ): Promise<T> {
@@ -267,6 +279,8 @@ export class AdoSessionMonitor {
         } catch (err) {
             if (!this.report(err, "write")) throw err;
             this.surface("write");
+            const hold: HeldWrite = { kind, heldAtMs: this.now() };
+            this.held.add(hold);
             this.update({ heldWrites: this.snapshot.heldWrites + 1 });
             let live: boolean;
 
@@ -276,15 +290,20 @@ export class AdoSessionMonitor {
                 this.update({ heldWrites: this.snapshot.heldWrites - 1 });
             }
 
-            if (!live) throw err;
+            if (!live) {
+                this.settleHold(hold, "timed-out");
+                throw err;
+            }
 
             try {
                 const startedAt = this.now();
                 const result = await attempt();
                 this.noteSuccess(startedAt);
+                this.settleHold(hold, "posted");
 
                 return result;
             } catch (retryErr) {
+                this.settleHold(hold, "failed");
                 this.report(retryErr, "write");
                 throw retryErr;
             }
@@ -328,6 +347,23 @@ export class AdoSessionMonitor {
      */
     notePageHide(): void {
         this.reportEnd("left");
+        for (const hold of [...this.held]) this.settleHold(hold, "left");
+    }
+
+    /**
+     * Report a held write's outcome once. After `left` (the page went away) a
+     * later outcome — the page resuming from the back/forward cache — is not
+     * re-reported, matching the spell's own once-only `end`.
+     */
+    private settleHold(hold: HeldWrite, outcome: HeldWriteOutcome): void {
+        if (!this.held.delete(hold)) return;
+        track(
+            events.authHeldWrite({
+                kind: hold.kind,
+                outcome,
+                heldSec: (this.now() - hold.heldAtMs) / 1000,
+            }),
+        );
     }
 
     private schedule(delayMs: number): void {

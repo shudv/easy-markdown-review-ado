@@ -12,7 +12,15 @@ export {
 } from "./telemetry";
 export type { UserFacingErrorImpact } from "./telemetry";
 export { events, EVENT } from "./events";
-export type { AnchorKind, FileOpenSource, EventName, AppReadyReason } from "./events";
+export type {
+    AnchorKind,
+    FileOpenSource,
+    EventName,
+    AppReadyReason,
+    HeldWriteKind,
+    HeldWriteOutcome,
+    ResolveVia,
+} from "./events";
 export {
     markBootStart,
     markBootPhase,
@@ -20,6 +28,8 @@ export {
     markBootAuthWaitEnd,
     markBootAfterAutoReload,
     markAppReady,
+    noteBootCache,
+    noteBootShape,
 } from "./bootTiming";
 export type { BootPhase, BootTimingEnvironment } from "./bootTiming";
 export { claimUnhandledRejections, installGlobalErrorHandlers } from "./errorHandlers";

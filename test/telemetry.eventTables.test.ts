@@ -30,13 +30,21 @@ const ENGAGEMENT_EVENTS = [
     EVENT.MathSourceCopied,
     EVENT.LinkCopied,
     EVENT.LinkOpened,
+    EVENT.UpdatesCompared,
+    EVENT.MinimapUsed,
+    EVENT.PanelToggled,
+    EVENT.ReaderPrefChanged,
+    EVENT.DocumentsHubOpened,
 ];
 
 const DIAGNOSTIC_EVENTS = [
     EVENT.AppLoaded,
     EVENT.AuthFailure,
     EVENT.AuthSessionRefresh,
+    EVENT.AuthHeldWrite,
     EVENT.DiagramRenderIssue,
+    EVENT.DocumentFeatures,
+    EVENT.ThreadsSnapshot,
     EVENT.AppException,
 ];
 
@@ -49,10 +57,10 @@ describe("tableFor", () => {
         expect(tableFor(name)).toBe(TELEMETRY_TABLE.Diagnostics);
     });
 
-    it("defaults an unknown/new event to Engagement", () => {
-        // New user-action events should route to Engagement without needing to be
-        // registered; only diagnostics are listed explicitly.
-        expect(tableFor("something.new")).toBe(TELEMETRY_TABLE.Engagement);
+    it("defaults an unknown/new event to Diagnostics", () => {
+        // Engagement only takes listed user actions, so an event nobody
+        // classified can never pollute the product table.
+        expect(tableFor("something.new")).toBe(TELEMETRY_TABLE.Diagnostics);
     });
 
     // A new event must be given an expected table here, so its routing is a

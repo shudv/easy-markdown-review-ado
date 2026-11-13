@@ -9,6 +9,7 @@
 
 import { readBuildConfig } from "./config";
 import type { TelemetryBuildConfig } from "./buildConfig";
+import { errorTagsOf } from "./errorTags";
 import { hashId, sanitizeMeasurements, sanitizeProperties } from "./sanitize";
 import type {
     TelemetryContext,
@@ -38,7 +39,7 @@ let sink: TelemetrySink = NOOP_SINK;
 let context: TelemetryContext = {};
 let initialised = false;
 
-function makeSessionId(): string {
+function makeRandomId(): string {
     const cryptoObj = globalThis.crypto as Crypto | undefined;
 
     if (typeof cryptoObj?.randomUUID === "function") return cryptoObj.randomUUID();
@@ -52,6 +53,27 @@ function makeSessionId(): string {
 
     // No Web Crypto at all: the id only groups this load's events.
     return `s-${Date.now().toString(36)}`;
+}
+
+export const INSTALL_ID_STORAGE_KEY = "emr.installId";
+const INSTALL_ID_RE = /^[\w-]{1,64}$/;
+
+/**
+ * This browser's persisted install id, created on first use. `undefined` when
+ * localStorage is unavailable (private mode, blocked storage): a per-load id
+ * would masquerade as a new install on every visit and skew return usage.
+ */
+function readInstallId(): string | undefined {
+    try {
+        const stored = window.localStorage.getItem(INSTALL_ID_STORAGE_KEY);
+        if (stored !== null && INSTALL_ID_RE.test(stored)) return stored;
+        const created = makeRandomId();
+        window.localStorage.setItem(INSTALL_ID_STORAGE_KEY, created);
+
+        return created;
+    } catch {
+        return undefined;
+    }
 }
 
 function selectSink(cfg: TelemetryBuildConfig): TelemetrySink {
@@ -115,7 +137,8 @@ export function initTelemetry(opts: {
             appVersion: cfg.appVersion,
             extensionVersion: opts.extensionVersion,
             environment: cfg.environment,
-            sessionId: makeSessionId(),
+            sessionId: makeRandomId(),
+            installId: readInstallId(),
         };
         sink = selectSink(cfg);
         sink.init(context);
@@ -166,7 +189,11 @@ export function track(event: TelemetryEvent): void {
 /** Report an error/exception (handled or uncaught). */
 export function trackException(info: TelemetryExceptionInfo): void {
     try {
-        const { clean } = sanitizeProperties(info.properties);
+        const { clean } = sanitizeProperties({
+            ...errorTagsOf(info.error),
+            ...info.properties,
+        });
+
         sink.trackException({ ...info, properties: clean }, context);
     } catch {
         /* swallow */

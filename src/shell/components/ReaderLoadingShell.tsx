@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import type { DraftScope } from "../draftStorage";
-import { ReaderActivityIndicator } from "./readerActivity";
+import { ReaderActivityIndicator, type ReaderActivity } from "./readerActivity";
 import {
     readReaderPrefs,
     readerSpacingValues,
@@ -15,6 +15,11 @@ interface ReaderLoadingShellProps {
     hideDocNav?: boolean;
     titleSlot?: ReactNode;
     headerActions?: ReactNode;
+    /**
+     * What the status bar says while loading; defaults to `ariaLabel` with a
+     * spinner. A slow boot passes "Still loading…" with a "Try again" action.
+     */
+    activity?: ReaderActivity;
 }
 
 /** The settled reader geometry, filled with quiet placeholders during boot. */
@@ -25,6 +30,7 @@ export function ReaderLoadingShell({
     hideDocNav = false,
     titleSlot,
     headerActions,
+    activity = { id: "boot", label: ariaLabel, priority: 100 },
 }: Readonly<ReaderLoadingShellProps>): ReactElement {
     const prefs = readReaderPrefs(scope);
     const readerFont = resolveReaderFont(prefs.fontId);
@@ -103,9 +109,7 @@ export function ReaderLoadingShell({
                 </div>
             </div>
             <div className="emr-loading-statusbar">
-                <ReaderActivityIndicator
-                    activity={{ id: "boot", label: ariaLabel, priority: 100 }}
-                />
+                <ReaderActivityIndicator activity={activity} />
             </div>
         </div>
     );

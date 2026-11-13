@@ -4,7 +4,9 @@
 
 import { type ReactElement, type ReactNode, useState } from "react";
 import type { CommentAuthor, CommentThread, ReactionKind, TextQuoteAnchor } from "../../types";
+import type { ResolveVia } from "../../telemetry";
 import { Balloon } from "./Balloon";
+import type { ReplyOptions } from "./Balloon.helpers";
 import { RailToolbar, type HistoryNav } from "./RailToolbar";
 import { buildRailModel, DRAFT_ID } from "./CommentRail.helpers";
 import {
@@ -39,8 +41,8 @@ interface RailProps {
     activeThreadId: string | null;
     currentUser: CommentAuthor;
     onSelectThread: (id: string) => void;
-    onReply: (id: string, body: string) => void;
-    onResolve: (id: string) => void;
+    onReply: (id: string, body: string, opts?: ReplyOptions) => void;
+    onResolve: (id: string, via?: ResolveVia) => void;
     onReopen: (id: string) => void;
     onMarkPending: (id: string) => void;
     onClose: (id: string) => void;

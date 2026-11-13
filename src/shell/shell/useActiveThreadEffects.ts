@@ -11,6 +11,7 @@ import {
 import type { ThreadState } from "../../comments/store";
 import { events, track } from "../../telemetry";
 import type { AnchorLayout } from "../components/ArticleView";
+import { isLinkKey, threadIdForLink } from "../backLink";
 import { clearIfSet, isCommentUiClickTarget } from "../shellHelpers";
 
 type SetActiveThreadId = Dispatch<SetStateAction<string | null>>;
@@ -145,8 +146,11 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
         }
     }, [initialActiveThreadId]);
     useEffect(() => {
-        const tid = pendingActiveThreadIdRef.current;
-        if (tid === undefined || tid === "") return;
+        const linked = pendingActiveThreadIdRef.current;
+        if (linked === undefined || linked === "") return;
+        // A back link from ADO's comment UI names its thread by key (`backLink.ts`).
+        const tid = threadIdForLink(linked, threadState.threadsById);
+        const linkTarget = isLinkKey(linked) ? "backLink" : "comment";
 
         // One rAF lets React commit the current document + the highlight-wrapping
         // layout effect run, so the anchor (or balloon) is queryable. Cleanup
@@ -173,7 +177,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
             if (!target) {
                 if (prThreadSnapshots > 0 && !(tid in threadState.threadsById)) {
                     pendingActiveThreadIdRef.current = undefined;
-                    track(events.linkOpened({ target: "comment", found: false }));
+                    track(events.linkOpened({ target: linkTarget, found: false }));
                 }
 
                 return;
@@ -181,7 +185,7 @@ function useCommentDeepLink(opts: ActiveThreadEffectsOptions): void {
 
             pendingActiveThreadIdRef.current = undefined;
             setActiveThreadId(tid);
-            track(events.linkOpened({ target: "comment", found: true }));
+            track(events.linkOpened({ target: linkTarget, found: true }));
             target.scrollIntoView({ behavior: "smooth", block: "center" });
         });
 

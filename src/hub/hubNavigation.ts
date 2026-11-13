@@ -8,8 +8,10 @@ import { CommonServiceIds, type IHostNavigationService } from "azure-devops-exte
 import type { CommentAuthor } from "../types";
 import { identityAvatarUrl } from "../shell/adoGitData.helpers";
 import type { DeepLinkTarget } from "../shell/deepLink";
+import { backLinkUrl } from "../shell/backLink";
 import {
     assembleHubDeepLinkUrl,
+    buildHubDocUrl,
     initialsOf,
     orgUrlFromReferrer,
     type HubDocLocation,
@@ -93,15 +95,41 @@ export function buildHubDeepLinkUrl(
     doc: HubDocLocation,
     target: DeepLinkTarget,
 ): string | undefined {
-    let ext: { publisherId: string; extensionId: string };
+    const ext = extensionIdentity();
 
+    return ext ? assembleHubDeepLinkUrl(doc, ext, target) : undefined;
+}
+
+/**
+ * `AdoCommentApi`'s `backLinkFor` for threads written from the hub on
+ * `repoId` in `project` (a name or id — ADO routes either): the hub document
+ * with the thread selected (see `backLink.ts`).
+ */
+export function hubBackLinkFor(
+    project: string,
+    repoId: string,
+): (thread: { filePath: string; linkKey: string }) => string | undefined {
+    return (thread) => {
+        const ext = extensionIdentity();
+
+        const doc = {
+            orgUrl: resolveOrgUrl(),
+            projectName: project,
+            repoId,
+            path: thread.filePath,
+        };
+
+        return backLinkUrl(ext && buildHubDocUrl(doc, ext), thread.linkKey);
+    };
+}
+
+/** The extension's publisher/extension ids, or `undefined` outside the host. */
+function extensionIdentity(): { publisherId: string; extensionId: string } | undefined {
     try {
-        ext = SDK.getExtensionContext();
+        return SDK.getExtensionContext();
     } catch {
         return undefined;
     }
-
-    return assembleHubDeepLinkUrl(doc, ext, target);
 }
 
 /**

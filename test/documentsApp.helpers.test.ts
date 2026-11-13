@@ -53,6 +53,7 @@ describe("seedLazyTree", () => {
             repoId: "r1",
             files: [file("a.md")],
             unloadedFolders: ["docs"],
+            emptyFolders: [],
             folderOrders: { "": ["a"] },
         });
     });
@@ -62,6 +63,7 @@ describe("seedLazyTree", () => {
             repoId: "r1",
             files: [],
             unloadedFolders: [],
+            emptyFolders: [],
             folderOrders: {},
         });
     });
@@ -72,6 +74,7 @@ describe("mergeFolderListing", () => {
         repoId: "r1",
         files: [file("z.md"), file("docs/b.md")],
         unloadedFolders: ["/docs", "other"],
+        emptyFolders: [],
         folderOrders: { "": ["z"] },
     };
 
@@ -97,6 +100,23 @@ describe("mergeFolderListing", () => {
         });
 
         expect(next.folderOrders).toEqual({ "": ["z"], docs: ["b", "a"] });
+    });
+
+    it("keeps a folder listed with nothing to show as empty, no longer to load", () => {
+        const next = mergeFolderListing(entry, "r1", "/docs", { files: [], folders: [] });
+
+        expect(next.unloadedFolders).toEqual(["other"]);
+        expect(next.emptyFolders).toEqual(["docs"]);
+        expect(
+            mergeFolderListing(next, "r1", "other", { files: [], folders: [] }).emptyFolders,
+        ).toEqual(["docs", "other"]);
+    });
+
+    it.each([
+        { name: "Markdown", listing: { files: [file("docs/a.md")], folders: [] } },
+        { name: "a subfolder", listing: { files: [], folders: ["docs/sub"] } },
+    ])("doesn't call a folder with $name empty", ({ listing }) => {
+        expect(mergeFolderListing(entry, "r1", "/docs", listing).emptyFolders).toEqual([]);
     });
 });
 
@@ -132,6 +152,7 @@ describe("buildSyntheticPr", () => {
             repoId: "r1",
             files: [file("b.md"), file("a.md")],
             unloadedFolders: [],
+            emptyFolders: [],
             folderOrders: {},
         });
 
@@ -243,6 +264,7 @@ describe("resolveShellTree", () => {
         repoId: "r1",
         files: [],
         unloadedFolders: ["docs"],
+        emptyFolders: [],
         folderOrders: {},
     };
 

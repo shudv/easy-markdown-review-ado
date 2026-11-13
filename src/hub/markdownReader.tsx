@@ -22,6 +22,7 @@ import { Shell, type RoutedPrInfo } from "../shell/Shell";
 import { AvatarImageContext } from "../shell/components/Avatar";
 import { ReaderLoadingShell } from "../shell/components/ReaderLoadingShell";
 import { AdoCommentApi } from "../shell/adoCommentApi";
+import { hubBackLinkFor } from "./hubNavigation";
 import {
     loadRepoPrRouting,
     loadThreadsForRepo,
@@ -252,6 +253,7 @@ export function MarkdownReader({
             repositoryId: resolved.config.repositoryId,
             pullRequestId: resolved.pr.pullRequestId,
             project: resolved.config.project,
+            backLinkFor: hubBackLinkFor(resolved.config.project, resolved.config.repositoryId),
         });
     }, [resolved]);
 

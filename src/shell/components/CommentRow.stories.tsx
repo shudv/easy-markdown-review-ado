@@ -186,6 +186,44 @@ export const Like: Story = {
 };
 
 /**
+ * The first like only fills in the count: the empty 👍 already holds the
+ * count's space, so ⋯ and ✓ beside it don't shift when it's clicked.
+ */
+export const FirstLikeKeepsToolsInPlace: Story = {
+    render: (args) => (
+        <>
+            <CommentRow {...args} />
+            <CommentRow
+                {...args}
+                comment={{
+                    ...ownComment,
+                    id: "c2",
+                    reactions: [{ kind: "like", users: [{ id: alex.id, displayName: "Alex" }] }],
+                }}
+            />
+        </>
+    ),
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const [notLiked, liked] = canvas.getAllByRole("button", { name: "More options" });
+        const pills = canvasElement.querySelectorAll<HTMLElement>(".emr-like-pill");
+
+        await expect(pills).toHaveLength(2);
+        await expect(pills[0]!.classList.contains("is-empty")).toBe(true);
+        // Within half a pixel: the reserved slot is `1ch`, which a digit matches
+        // up to sub-pixel rounding.
+        await expect(pills[0]!.getBoundingClientRect().width).toBeCloseTo(
+            pills[1]!.getBoundingClientRect().width,
+            0,
+        );
+        await expect(notLiked!.getBoundingClientRect().left).toBeCloseTo(
+            liked!.getBoundingClientRect().left,
+            0,
+        );
+    },
+};
+
+/**
  * A comment I liked along with others: the pill shows as pressed, names me
  * first as "You", and clicking it takes my like back.
  */

@@ -60,7 +60,40 @@ export function CommentMenuToggle(
     );
 }
 
-/** Hover-revealed like button, shown while nobody has reacted yet. */
+/**
+ * Hover-revealed one-click Resolve (open thread) or Reopen (finished thread),
+ * on the first comment beside 👍.
+ */
+export function CommentResolveToggle(
+    props: Readonly<{
+        resolved: boolean;
+        onToggle: () => void;
+    }>,
+): ReactElement {
+    const { resolved, onToggle } = props;
+    const label = resolved ? "Reopen thread" : "Resolve thread";
+
+    return (
+        <button
+            type="button"
+            className="emr-icon-btn"
+            aria-label={label}
+            title={label}
+            onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+            }}
+        >
+            {resolved ? <SvgUndo /> : <SvgCheck />}
+        </button>
+    );
+}
+
+/**
+ * Like button while nobody has reacted yet: the like pill's shape, with its
+ * count slot kept empty, so liking only fills in the count instead of
+ * shifting the tools beside it. Hover-revealed like ⋯ and ✓.
+ */
 export function CommentLikeButton(
     props: Readonly<{
         onLike: () => void;
@@ -71,7 +104,7 @@ export function CommentLikeButton(
     return (
         <button
             type="button"
-            className="emr-icon-btn"
+            className="emr-like-pill is-empty"
             aria-label="Like this comment"
             aria-pressed={false}
             title="Like this comment"
@@ -83,6 +116,7 @@ export function CommentLikeButton(
             <span className="emr-thumb" aria-hidden="true">
                 👍
             </span>
+            <span className="emr-like-pill-count" aria-hidden="true" />
         </button>
     );
 }

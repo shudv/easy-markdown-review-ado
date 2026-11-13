@@ -198,6 +198,28 @@ function useRemoteSearch(trimmedQuery: string, onSearchFiles?: SearchFiles) {
     return { remoteHits, remoteLoading, searchUnavailable };
 }
 
+/**
+ * Whether `path` matches a typed document search: every word of the query
+ * appears in the path, in any order, with `-`, `_`, `.` and `/` read as spaces
+ * — so "release notes" finds `docs/Release-Notes.md`, which a plain substring
+ * check missed.
+ */
+export function pathMatchesQuery(path: string, query: string): boolean {
+    const words = (s: string) =>
+        s
+            .toLowerCase()
+            .split(/[\s\-_./\\]+/)
+            .filter((word) => word !== "");
+
+    const haystack = words(path).join(" ");
+    const needles = words(query);
+
+    // Only separators typed (e.g. "/"): fall back to a plain substring check.
+    if (needles.length === 0) return path.toLowerCase().includes(query.toLowerCase());
+
+    return needles.every((word) => haystack.includes(word));
+}
+
 export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
     const [searchQuery, setSearchQuery] = useState<string>("");
     const trimmedQuery = searchQuery.trim();
@@ -213,13 +235,12 @@ export function useDocSearch(files: FileInfo[], onSearchFiles?: SearchFiles) {
         onSearchFiles,
     );
 
-    /** Local substring filter — runs synchronously every keystroke. */
+    /** Local word filter over the loaded file list — runs every keystroke. */
     const localHits = useMemo<FileInfo[]>(() => {
         // Stryker disable next-line ConditionalExpression,ArrayDeclaration: dead code: not searching, the results below are gated to [] anyway and these local hits are never shown; candidate for removal
         if (!isSearching) return [];
-        const q = trimmedQuery.toLowerCase();
 
-        return files.filter((f) => f.path.toLowerCase().includes(q));
+        return files.filter((f) => pathMatchesQuery(f.path, trimmedQuery));
     }, [files, isSearching, trimmedQuery]);
 
     /** Combined search results: local hits first (instant), then unique remote

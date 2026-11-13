@@ -48,6 +48,25 @@ describe("changedMarkdownFiles", () => {
     it("returns an empty list when nothing changed", () => {
         expect(changedMarkdownFiles([])).toEqual([]);
     });
+
+    it("keeps the blob each file shows: the new one, or a deleted file's last one", () => {
+        const files = changedMarkdownFiles([
+            { item: { path: "/a.md", objectId: "NEW1", originalObjectId: "OLD1" }, changeType: 2 },
+            {
+                item: { path: "", originalObjectId: "OLD2" },
+                originalPath: "/gone.md",
+                changeType: 16,
+            },
+            { item: { path: "/c.md", objectId: "" }, changeType: 1 },
+        ]);
+
+        expect(files.map((f) => [f.path, f.objectId])).toEqual([
+            ["/a.md", "NEW1"],
+            ["/c.md", undefined],
+            ["/gone.md", "OLD2"],
+        ]);
+        expect(files[1]).not.toHaveProperty("objectId");
+    });
 });
 
 describe("contentCommitForPath", () => {

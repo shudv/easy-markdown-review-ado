@@ -37,6 +37,7 @@ function contextData(ctx: TelemetryContext): Record<string, unknown> {
         repositoryId: ctx.repositoryId,
         pullRequestId: ctx.pullRequestId,
         sessionId: ctx.sessionId,
+        installId: ctx.installId,
     };
 }
 

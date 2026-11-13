@@ -21,6 +21,9 @@ import {
     stubCommentApi,
     unmountAll,
 } from "./shellHarness";
+import { recordTelemetryEachTest } from "./telemetrySink";
+
+const telemetry = recordTelemetryEachTest();
 
 const GUID = "6f2c3a1e-1234-4abc-9def-0123456789ab";
 afterEach(unmountAll);
@@ -177,6 +180,48 @@ describe("useThreadStore", () => {
         first.resolve([thread("t1", "docs/a.md")]);
         await settle();
         expect(hook.current.threadState.order).toEqual([]);
+    });
+
+    // Production: only 19% of PRs with comments started here saw one resolved
+    // here; the snapshot shows whether the rest are finished in ADO's own UI.
+    it("reports the PR's thread statuses once, on the first PR-wide load", async () => {
+        const ours = (id: string, status: CommentThread["status"]): CommentThread => ({
+            ...thread(id, "docs/a.md"),
+            origin: "extension",
+            status,
+        });
+
+        const fetchRemoteThreads = vi.fn(async () => [
+            ours("t1", "active"),
+            ours("t2", "resolved"),
+            ours("t3", "closed"),
+            { ...thread("t4", "docs/a.md"), origin: "ado" as const, status: "pending" as const },
+            { ...thread("t5", "docs/a.md"), status: "wontFix" as const },
+        ]);
+
+        const hook = await mount(useThreadStore, {
+            initialThreads: [],
+            currentUser: { id: "me", displayName: "Me", initials: "ME" },
+            identityStore: new IdentityStore(),
+            selectedPath: "docs/a.md",
+            selectedPathRef: { current: "docs/a.md" },
+            fetchRemoteThreads,
+            loadThreadsForPath: undefined,
+            threadSyncIntervalMs: undefined,
+            onRefreshFiles: undefined,
+        });
+
+        await settle();
+        await act(async () => hook.current.handleRefresh());
+        await settle();
+
+        const snapshots = telemetry.current.events.filter((e) => e.name === "threads.snapshot");
+        expect(fetchRemoteThreads.mock.calls.length).toBeGreaterThan(1);
+        expect(snapshots).toEqual([
+            expect.objectContaining({
+                measurements: { ourOpen: 1, ourDone: 2, otherOpen: 1, otherDone: 1 },
+            }),
+        ]);
     });
 });
 

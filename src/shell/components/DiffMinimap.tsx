@@ -44,6 +44,11 @@ interface DiffMinimapProps {
      * scrollbar (thumb only).
      */
     showDiff: boolean;
+    /**
+     * Told the first time (per mount) the reader clicks or drags the bar while
+     * it charts changes — plain scrolling of a change-free bar isn't reported.
+     */
+    onUse: (via: "click" | "drag") => void;
 }
 
 const MERGE_GAP = 0.012;
@@ -76,8 +81,16 @@ export function DiffMinimap({
     scrollRef,
     version,
     showDiff,
+    onUse,
 }: Readonly<DiffMinimapProps>): ReactElement | null {
     const [markers, setMarkers] = useState<DiffMarker[]>([]);
+    const reportedUseRef = useRef(new Set<"click" | "drag">());
+
+    const reportUse = (via: "click" | "drag") => {
+        if (markers.length === 0 || reportedUseRef.current.has(via)) return;
+        reportedUseRef.current.add(via);
+        onUse(via);
+    };
 
     const [metrics, setMetrics] = useState<Metrics>({
         scrollTop: 0,
@@ -205,6 +218,7 @@ export function DiffMinimap({
         if (!track || !scroller) return;
         const rect = track.getBoundingClientRect();
         const fraction = (clientY - rect.top) / rect.height;
+        reportUse("click");
         scroller.scrollTo({
             top: scrollTargetForFraction(fraction, scroller.scrollHeight, scroller.clientHeight),
             behavior: "smooth",
@@ -219,6 +233,7 @@ export function DiffMinimap({
         dragCleanupRef.current?.();
         e.preventDefault();
         e.stopPropagation(); // don't let the track's click-to-page fire
+        reportUse("drag");
         const startY = e.clientY;
         const startScroll = scroller.scrollTop;
         const ch = scroller.clientHeight;

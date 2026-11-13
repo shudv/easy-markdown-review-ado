@@ -174,8 +174,10 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
         await expect(frame.locator(".markdown-body").first()).toBeVisible({
             timeout: 60_000,
         });
-        // Our reload + exactly one automatic reload.
-        expect(loads()).toBe(2);
+        // Our reload + one automatic reload. The tab renders the cached PR as soon
+        // as it mounts, which can be before the host page's own `load` fires, so
+        // wait for it.
+        await expect.poll(loads, { timeout: 30_000 }).toBe(2);
 
         requireTelemetry(telemetry.active());
         await expect
@@ -190,6 +192,8 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
                     ),
             )
             .toBe(true);
+        // Exactly one automatic reload: no further one followed.
+        expect(loads()).toBe(2);
     });
 
     test("B: if the reload doesn't help, there is no reload loop and the tab recovers on its own", async ({

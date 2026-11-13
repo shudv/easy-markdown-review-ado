@@ -1393,7 +1393,7 @@ export const DeepLinkComment: Story = {
 };
 
 /**
- * A "Open in Markdown Review ↗" back link names its thread by the key saved on it
+ * A back-link badge names its thread by the key saved on it
  * (written before ADO assigned the id): it opens with that thread selected,
  * and is recorded as a back link rather than a shared comment link.
  */

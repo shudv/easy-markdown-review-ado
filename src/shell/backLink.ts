@@ -1,17 +1,17 @@
-// The "Open in Markdown Review ↗" link on threads started here.
+// The "Markdown Review | open ↗" badge on threads started here.
 //
 // Comments posted here appear in Azure DevOps' own PR comment UI too, where
 // nothing told a reader they came from — or could be read in — Markdown
 // Review. Growth had stalled at a few new projects a week, so each thread
-// started here ends with one small link back to the thread in the document.
-// The link is for ADO's UI only: it's stripped wherever the app reads a comment
-// (so it never shows, is never searched or quoted here), and kept when the
-// comment is edited here.
+// started here ends with a small badge linking back to the thread in the
+// document. The badge is for ADO's UI only: it's stripped wherever the app
+// reads a comment (so it never shows, is never searched or quoted here), and
+// kept when the comment is edited here.
 //
-// The link sits between two HTML-comment markers, which ADO keeps in the
-// stored comment but doesn't show. Finding the link relies only on those
-// markers, so what's between them (`footerContent`) can be restyled freely:
-// comments written with an older design are still recognised.
+// The badge sits between two HTML-comment markers, which ADO keeps in the
+// stored comment but doesn't show. Finding it relies only on those markers,
+// so what's between them (`footerContent`) can be redesigned freely: comments
+// written with an older design are still recognised.
 
 import { withDeepLinkTarget } from "./deepLink";
 
@@ -27,21 +27,22 @@ const END = "<!-- /emr:back-link -->";
 const MAX_FOOTER_CHARS = 1000;
 
 /**
- * What ADO's comment UI shows between the markers: a small tinted chip.
- * ADO keeps these inline styles but strips `border-radius`; its own
- * stylesheet rounds `<code>` (2px), so the label is a `<code>` in the
- * comment's font. 1px more padding below than above centres Segoe UI's
- * label; the label takes ADO's link colour, so it suits light and dark.
+ * The badge image: a shields.io static badge ("Markdown Review" on grey,
+ * "open ↗" on blue), the kind GitHub READMEs use. ADO fetches it when it shows
+ * the comment; shields.io sees the reader's IP and only `https://dev.azure.com/`
+ * as referrer. Where images are blocked, ADO shows `BADGE_ALT` as the link.
  */
+const BADGE_SRC = "https://img.shields.io/badge/Markdown_Review-open_%E2%86%97-0078d4?style=flat";
+const BADGE_ALT = "Open in Markdown Review";
+
+/** Characters that would end a Markdown link's URL early, percent-encoded. */
+const URL_BREAKERS: Readonly<Record<string, string>> = { " ": "%20", "(": "%28", ")": "%29" };
+
+/** What ADO's comment UI shows between the markers: the badge, linking to `url`. */
 function footerContent(url: string): string {
-    // `URL` percent-encodes quotes; this keeps the attribute closed regardless.
-    const href = url.replace(/"/g, "%22");
+    const href = url.replace(/[ ()]/g, (c) => URL_BREAKERS[c]!);
 
-    const chip =
-        "font-family:inherit;font-size:12px;padding:1px 8px 3px;" +
-        "background:rgba(0,120,212,0.12);color:inherit;border:1px solid rgba(0,120,212,0.3)";
-
-    return `<a href="${href}" style="text-decoration:none"><code style="${chip}">Open in Markdown Review ↗</code></a>`;
+    return `[![${BADGE_ALT}](${BADGE_SRC})](${href})`;
 }
 
 /**

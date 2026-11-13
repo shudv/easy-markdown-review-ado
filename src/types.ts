@@ -156,7 +156,7 @@ export interface CommentThread {
      */
     mentionedIdentities?: MentionedIdentity[];
     /**
-     * Key in this thread's "Open in Markdown Review ↗" link (`?comment=<key>`), set on
+     * Key in this thread's back-link badge (`?comment=<key>`), set on
      * threads started here; the link is written before ADO assigns the id.
      */
     linkKey?: string;

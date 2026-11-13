@@ -43,7 +43,7 @@ table; `name` inside the payload is the specific event.
 - `diff.toggled` (`visible`)
 - `mermaid.sourceViewed` (`changed`) · `mermaid.sourceCopied`
 - `link.copied` (`target`: `comment` | `heading` | `text`) · `link.opened` (`target`, `found`;
-  `target` is also `backLink` for a thread's "Open in Markdown Review ↗" link followed from
+  `target` is also `backLink` for a thread's back-link badge followed from
   ADO's comment UI, told apart from a shared comment link by its `k-` key)
 - `updates.compared` (`scope`: `all` | `single` | `range`) — the PR-update picker,
   its steps, or "show all updates"

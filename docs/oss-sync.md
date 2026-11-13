@@ -4,7 +4,7 @@
 
 - Public base: `c800901` (#33).
 - Previously mirrored product boundary: `5868ac9` (source merge `64be41c`).
-- New product boundary: `72fa0ef` (source branch `feat/auth-telemetry-gaps`;
+- New product boundary: `c37e4dc` (source branch `feat/auth-telemetry-gaps`;
   not yet merged, record the source merge commit here once it lands).
 - OSS release version: `1.4.0` (package, root lockfile metadata, and Marketplace
   manifest updated together). The source's own bump (`70002c9`) is not mirrored.
@@ -20,7 +20,7 @@
 | `0862663`, `5776ac5`, `74b464e`, `8f2de03`                                  | #work-item search is scoped to this project's recent items; a slow PR lookup keeps waiting with "Still loading… Try again"; a way from the PR tab into the Documents hub and no dead end on PRs without Markdown; hub search matches words in any order and searches document text.                                                                                                                                                                    |
 | `5defce9`, `97963f4`, `aaba5b2`, `e4d30f8`                                  | One-click ✓ Resolve / ↺ Reopen beside the first comment's 👍 (hover-revealed) and "Reply and resolve"; liking reserves the count's space so the tools don't shift; a like no longer shows "Sending…" on an open composer (only composer writes count as in flight).                                                                                                                                                                                    |
 | `9221140` – `80fb57a`                                                       | Caching: the 20 most recently opened PRs' details and the 10 most recently fetched documents (by git blob id) are kept in this browser, each under one localStorage key with size caps; a cached PR shows at once while ADO loads it; malformed entries read as misses; e2e for storage at its limits. Intermediate designs (`858ceff`, `8b827c6`, `0e85005`, `72eb647`) are superseded within the range.                                              |
-| `433e11b`, `d6bf6c1`, `4c226fa`, `10eeb3f`, `63edb3a`, `72fa0ef`            | Threads started here end with an "Open in Markdown Review ↗" chip for ADO's own comment UI, between `<!-- emr:back-link -->` markers (hidden and kept on edit here); it opens the thread via a random `emrLinkKey` thread property, counted as `link.opened` `target: backLink`. The README/overview lines about it are dropped again.                                                                                                                 |
+| `433e11b`, `d6bf6c1`, `4c226fa`, `10eeb3f`, `63edb3a`, `72fa0ef`, `c37e4dc` | Threads started here end with a "Markdown Review \| open ↗" shields.io badge for ADO's own comment UI, between `<!-- emr:back-link -->` markers (hidden and kept on edit here); it opens the thread via a random `emrLinkKey` thread property, counted as `link.opened` `target: backLink`. `PRIVACY.md` (public-only) notes the badge image request. The README/overview lines about it are dropped again.                                            |
 | `fa74466`                                                                   | `app.loaded` times the user's wait from the iframe's navigation start with a `bundleLoadMs` phase (phases add up to `bootTimeMs`) and reports one `cache` field (`none`/`pr`/`doc`/`pr+doc`).                                                                                                                                                                                                                                                          |
 | `9c1a498`, `1b2ed89`, `d220828`, `44d5a63`                                  | Module-private helpers un-exported; visual baselines; simplification pass; an empty folder in the hub loses its chevron instead of refetching.                                                                                                                                                                                                                                                                                                         |
 
@@ -35,7 +35,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `72fa0ef` and
+Compare the next source product tree against the merged form of `c37e4dc` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

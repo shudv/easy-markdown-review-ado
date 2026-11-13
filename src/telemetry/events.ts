@@ -126,7 +126,7 @@ export type LinkTarget = "comment" | "heading" | "text";
 
 /**
  * What an opened link pointed at: a shareable link's target, or `backLink` for
- * a thread's "Open in Markdown Review ↗" link followed from ADO's own comment UI.
+ * a thread's back-link badge followed from ADO's own comment UI.
  */
 export type OpenedLinkTarget = LinkTarget | "backLink";
 

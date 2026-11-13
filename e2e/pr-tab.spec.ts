@@ -562,10 +562,10 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
         }
     });
 
-    test('a thread\'s "Open in Markdown Review ↗" link in ADO opens the PR tab with that thread selected', async ({
+    test('a thread\'s "Markdown Review" badge in ADO opens the PR tab with that thread selected', async ({
         page,
     }) => {
-        // ADO's own comment UI shows each thread started here with a link back.
+        // ADO's own comment UI shows each thread started here with a badge linking back.
         // Post a thread, read the link ADO stored, open it as a reader in ADO
         // would, and check it lands on that thread: selected, in view.
         const marker = `emr-e2e-backlink-${Date.now()}`;
@@ -604,7 +604,8 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
                 })
                 .toContain("<!-- /emr:back-link -->");
 
-            const link = /<!-- emr:back-link -->[\s\S]*?href="(https:\/\/[^"\s]+)"/.exec(
+            // `[![alt](badge)](link)`: the link follows the badge image.
+            const link = /<!-- emr:back-link -->[\s\S]*?\)\]\((https:\/\/[^()\s]+)\)/.exec(
                 stored,
             )?.[1];
 

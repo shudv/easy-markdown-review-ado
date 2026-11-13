@@ -131,14 +131,14 @@ function postedThread(frame: FrameLocator, marker: string) {
 
 /**
  * A thread's root comment as ADO stores it: what was written, then the
- * "Open in Markdown Review ↗" link between its markers, opening this PR's tab with
+ * "Markdown Review | open ↗" badge between its markers, linking to this PR's tab with
  * the thread selected by its link key.
  */
 function withBackLinkTo(body: string): RegExp {
     const escaped = body.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     return new RegExp(
-        `^${escaped}\\n\\n<!-- emr:back-link -->\\n<a href="https://[^"\\s]+/pullrequest/${prId}\\?[^"\\s]*_a=[^"\\s&]+markdown-review-pr-tab[^"\\s]*&comment=k-[\\da-f]{12}"[^>]*><code[^>]*>Open in Markdown Review ↗</code></a>\\n<!-- /emr:back-link -->$`,
+        `^${escaped}\\n\\n<!-- emr:back-link -->\\n\\[!\\[Open in Markdown Review\\]\\(https://img\\.shields\\.io/badge/[^()\\s]+\\)\\]\\(https://[^()\\s]+/pullrequest/${prId}\\?[^()\\s]*_a=[^()\\s&]+markdown-review-pr-tab[^()\\s]*&comment=k-[\\da-f]{12}\\)\\n<!-- /emr:back-link -->$`,
     );
 }
 
@@ -254,7 +254,7 @@ test.describe("When Azure DevOps misbehaves (fault-injected, real host)", () => 
                     (await commentsContaining(REPO, prId, marker)).map((c) => c.content),
                 )
                 .toEqual([expect.stringMatching(withBackLinkTo(posted))]);
-            // ADO's own comment UI shows the "Open in Markdown Review ↗" link; the
+            // ADO's own comment UI shows the "Markdown Review | open ↗" badge; the
             // app shows only what was written.
             await expect(thread.locator(".emr-comment-content")).toHaveText(posted);
             await expect(notice(frame)).toHaveCount(0, {

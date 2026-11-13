@@ -1,4 +1,4 @@
-// Unit tests for the "Markdown Review ↗" link on threads started here
+// Unit tests for the "Markdown Review | open ↗" badge on threads started here
 // (src/shell/backLink.ts): appended between markers for ADO's own comment UI,
 // stripped wherever the app reads a comment, kept across edits, and naming
 // its thread by a key written before ADO assigns the thread's id.
@@ -18,6 +18,7 @@ import {
 const DOC = "https://dev.azure.com/org/Proj/_apps/hub/pub.ext.documents-hub?repo=r&path=a.md";
 const START = "<!-- emr:back-link -->";
 const END = "<!-- /emr:back-link -->";
+const BADGE = "https://img.shields.io/badge/Markdown_Review-open_%E2%86%97-0078d4?style=flat";
 
 /** A marked block holding any design, as a later version might write it. */
 function marked(inner: string): string {
@@ -25,16 +26,15 @@ function marked(inner: string): string {
 }
 
 describe("withBackLink", () => {
-    it("ends the comment with the link chip between the markers", () => {
-        const stored = withBackLink("Looks good.\n", DOC);
+    it("ends the comment with the badge, linking to the document, between the markers", () => {
+        const badge = `[![Open in Markdown Review](${BADGE})](${DOC})`;
 
-        expect(stored.startsWith(`Looks good.\n\n${START}\n<a href="${DOC}" `)).toBe(true);
-        expect(stored.endsWith(`>Open in Markdown Review ↗</code></a>\n${END}`)).toBe(true);
+        expect(withBackLink("Looks good.\n", DOC)).toBe(`Looks good.\n\n${marked(badge)}`);
     });
 
-    it("keeps the link's attribute closed whatever the URL holds", () => {
-        expect(withBackLink("Hi", 'https://x.example/?q="a"')).toContain(
-            'href="https://x.example/?q=%22a%22"',
+    it("keeps the link whole when the URL holds spaces or parentheses", () => {
+        expect(withBackLink("Hi", "https://x.example/a (b)?q=c d")).toContain(
+            "](https://x.example/a%20%28b%29?q=c%20d)",
         );
     });
 
@@ -99,8 +99,8 @@ describe("splitBackLink", () => {
         { name: "markers in the wrong order", content: `Hi\n\n${END}\nlink\n${START}` },
         { name: "a block over the size limit", content: `Hi\n\n${marked("x".repeat(1000))}` },
         {
-            name: "the link without markers",
-            content: `Hi\n\n<sub>[Markdown Review ↗](${DOC})</sub>`,
+            name: "the badge without markers",
+            content: `Hi\n\n[![Open in Markdown Review](${BADGE})](${DOC})`,
         },
     ])("shows $name whole", ({ content }) => {
         expect(splitBackLink(content)).toEqual({ body: content, footer: "" });

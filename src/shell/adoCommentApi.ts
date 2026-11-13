@@ -193,9 +193,9 @@ export interface AdoCommentApiContext {
     project: string;
     /**
      * Where a thread started here can be read in Markdown Review, with that
-     * thread selected via its `linkKey` — appended as a "Open in Markdown Review ↗"
-     * line that only ADO's own comment UI shows (see `backLink.ts`). Omitted:
-     * no link.
+     * thread selected via its `linkKey` — appended as a "Markdown Review | open ↗"
+     * badge that only ADO's own comment UI shows (see `backLink.ts`). Omitted:
+     * no badge.
      */
     backLinkFor?: (thread: { filePath: string; linkKey: string }) => string | undefined;
 }
@@ -340,7 +340,7 @@ export class AdoCommentApi implements CommentApi {
     }
 
     /**
-     * The back-link line a thread's root comment carries in ADO, or "". Only
+     * The back-link badge a thread's root comment carries in ADO, or "". Only
      * root comments of threads started here have one.
      */
     private async backLinkFooter(threadId: string, commentId: string): Promise<string> {

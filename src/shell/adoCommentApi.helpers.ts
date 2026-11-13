@@ -544,7 +544,7 @@ function adoCommentToLocal(c: AdoCommentWire): Comment {
     return {
         id,
         author: authorFromAdo(c.author),
-        // The "Open in Markdown Review ↗" link is for ADO's own UI only.
+        // The back-link badge is for ADO's own UI only.
         bodyMarkdown: stripBackLink(c.content ?? ""),
         createdAt: new Date(createdAt).toISOString(),
         updatedAt,

@@ -3723,7 +3723,7 @@ export const CommentHistoryStepperNoMergeCommit: Story = {
  * mailto.
  */
 export const WordCountAndFeedback: Story = {
-    args: { feedbackEmail: "x@microsoft.com" },
+    args: { feedbackEmail: "x@example.com" },
     play: async ({ canvasElement }) => {
         // Word count now lives in the status bar (Word's model).
         await waitFor(() => {
@@ -3736,7 +3736,7 @@ export const WordCountAndFeedback: Story = {
         const feedback = canvasElement.querySelector<HTMLAnchorElement>("a.emr-statusbar-feedback");
 
         expect(feedback).toBeTruthy();
-        expect(feedback!.getAttribute("href")).toContain("mailto:x@microsoft.com");
+        expect(feedback!.getAttribute("href")).toContain("mailto:x@example.com");
     },
 };
 

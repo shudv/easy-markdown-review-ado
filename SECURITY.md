@@ -28,7 +28,7 @@ We'll coordinate disclosure with you and credit you in the release notes unless 
 
 - The packaged extension code under `src/`.
 - The build, package, and publish scripts under `scripts/`.
-- The pipeline definitions under `.azure-pipelines/`.
+- The GitHub Actions workflows under `.github/workflows/`.
 - The dependency closure declared in `package.json` / `package-lock.json`.
 
 ## What's out of scope

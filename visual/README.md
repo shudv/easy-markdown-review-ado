@@ -23,8 +23,8 @@ npm run test:visual:report   # open the HTML diff report after a failure
 Both wrap [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs): it builds
 the static Storybook on the host, then runs Playwright inside the pinned
 container (see [Why one baseline set](#why-one-baseline-set-in-a-container)).
-`npm run test:visual` is the raw in-container compare that CI invokes; run bare
-on Windows or macOS it will mismatch.
+`npm run test:visual` is the raw compare the wrapper runs inside the container;
+run bare on Windows or macOS it will mismatch.
 
 > **Why `--update-snapshots=all`:** Playwright's default update mode is
 > `changed`, which only rewrites a baseline when the new render diffs **beyond**
@@ -75,17 +75,16 @@ array in [`curated.visual.spec.ts`](./curated.visual.spec.ts).
 Playwright pins the Chromium **build**, but Chromium does **not** rasterize
 pixel-identically across operating systems: text anti-aliasing is done by the OS
 font stack (DirectWrite on Windows, FreeType on Linux, CoreText on macOS), and
-even the Linux CI pool's fonts differ from a stock image. Rather than juggle a
+even two Linux machines' fonts can differ. Rather than juggle a
 baseline per platform (which can't be regenerated off the machine that renders
 it), the suite pins **one** rendering environment — the
-`mcr.microsoft.com/playwright:v1.61.1-jammy` container — and uses it **both** in
-CI and locally. Renders are byte-identical, so a **single** committed set
+`mcr.microsoft.com/playwright:v1.62.1-jammy` container — and renders every run
+there. Renders are byte-identical, so a **single** committed set
 (`<name>-chromium.png`) is authoritative everywhere.
 
 ## When a visual test fails
 
-1. Open the report: `npm run test:visual:report` (locally) or download the
-   `visual-report` pipeline artifact (CI).
+1. Open the report: `npm run test:visual:report`.
 2. If the change is an **intended** visual update, regenerate the baselines with
    `npm run test:visual:update` (Docker) and commit the `*-chromium.png` files.
 3. If it's a **regression**, fix the CSS/layout — do not update the baseline.
@@ -93,4 +92,4 @@ CI and locally. Renders are byte-identical, so a **single** committed set
 > **Bumping Playwright:** update the tag in **two** places together — the
 > `@playwright/test` dependency and `IMAGE` in
 > [`scripts/visual-docker.mjs`](../scripts/visual-docker.mjs) — then regenerate
-> the baselines. CI reads the image from the wrapper.
+> the baselines.

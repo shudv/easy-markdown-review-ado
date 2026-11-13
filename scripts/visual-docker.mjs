@@ -20,9 +20,8 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
-// Keep this tag in lockstep with the @playwright/test dependency AND the
-// `resources.containers` image in .azure-pipelines/pr-validation.yml.
-const IMAGE = "mcr.microsoft.com/playwright:v1.61.1-jammy";
+// Keep this tag in lockstep with the @playwright/test dependency.
+const IMAGE = "mcr.microsoft.com/playwright:v1.62.1-jammy";
 const update = process.argv.includes("--update");
 const cwd = process.cwd();
 

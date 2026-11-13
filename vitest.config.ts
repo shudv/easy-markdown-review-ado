@@ -24,8 +24,7 @@ export default defineConfig({
         reporters: ["default"],
         coverage: {
             provider: "v8",
-            // `cobertura` is consumed by the Azure DevOps
-            // `PublishCodeCoverageResults@2` task; `lcov` powers the VS Code
+            // `cobertura` suits CI coverage publishers; `lcov` powers the VS Code
             // coverage gutter; `html` is for local triage. `text-summary` prints
             // the compact totals block, and the custom reporter below lists the
             // exact uncovered lines/branches — replacing the wide per-file

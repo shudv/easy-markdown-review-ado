@@ -30,11 +30,8 @@ Changes show up in place. A link that moved. A row that was added. A row that's 
 00:01:05.300 --> 00:01:08.564
 And every file and every heading is one click away.
 
-00:01:09.667 --> 00:01:20.059
-Here's why that matters. Reviewers stop skipping the docs. Feedback gets specific. And the teams who've moved over tell us they won't go back to reviewing prose in a diff.
+00:01:09.667 --> 00:01:18.019
+Here's why that matters. Reviewers stop skipping the docs. Feedback gets specific, and it stays attached to the words it was written about.
 
-00:01:21.133 --> 00:01:30.157
-This isn't a prototype. It's shipped, and it's running across fifteen Azure DevOps organizations at Microsoft, with hundreds of engineers on it every day.
-
-00:01:31.433 --> 00:01:36.809
+00:01:19.233 --> 00:01:24.609
 Easy Markdown Review. Review Markdown like a document, inside Azure DevOps.

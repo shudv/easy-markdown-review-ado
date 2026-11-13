@@ -94,4 +94,3 @@ npm run test:mutation:full      # whole codebase from scratch (takes a while to 
 | Change the sandbox repos, PRs, and comment threads   | [sandbox/README.md](sandbox/README.md)       |
 | Update or debug screenshot (visual regression) tests | [visual/README.md](visual/README.md)         |
 | Add or change UI strings, translations, or languages | [docs/localization.md](docs/localization.md) |
-| See what was synced from the source repository       | [docs/oss-sync.md](docs/oss-sync.md)         |

@@ -114,13 +114,7 @@ export const SCRIPT = [
         id: "value",
         lead: 0.4,
         tail: 0.7,
-        say: "Here's why that matters. Reviewers stop skipping the docs. Feedback gets specific. And the teams who've moved over tell us they won't go back to reviewing prose in a diff.",
-    },
-    {
-        id: "traction",
-        lead: 0.4,
-        tail: 0.8,
-        say: "This isn't a prototype. It's shipped, and it's running across fifteen Azure DevOps organizations at Microsoft, with hundreds of engineers on it every day.",
+        say: "Here's why that matters. Reviewers stop skipping the docs. Feedback gets specific, and it stays attached to the words it was written about.",
     },
     {
         id: "outro",

@@ -20,6 +20,7 @@ import {
 import type { IdentityStore } from "../../comments/identityStore";
 import { collectUserMentionIds } from "../../comments/mentions";
 import { useThreadSync } from "../../comments/useThreadSync";
+import { t } from "../../i18n";
 import { events, track, trackUserFacingError } from "../../telemetry";
 import { adoSession } from "../adoSession";
 import { reportThreadSnapshot } from "./threadSnapshot";
@@ -149,14 +150,14 @@ function useIdentitySeeding(
         const mentionIds: string[] = [];
 
         for (const id of threadState.order) {
-            const t = threadState.threadsById[id];
+            const thread = threadState.threadsById[id];
             // Seed names ADO already resolved for this thread's @mentions. This is
             // the authoritative source (works even in personal-MSA orgs where the
             // by-id identities endpoint returns null), so mentions render as names on
             // load with no network call.
-            if (t.mentionedIdentities) people.push(...t.mentionedIdentities);
+            if (thread.mentionedIdentities) people.push(...thread.mentionedIdentities);
 
-            for (const c of t.comments) {
+            for (const c of thread.comments) {
                 people.push(c.author);
                 mentionIds.push(...collectUserMentionIds(c.bodyMarkdown));
             }
@@ -200,7 +201,9 @@ function useUnifiedRefresh(
             .finally(() => setFileRefreshInFlight(false));
     }, [threadSync, onRefreshFiles]);
 
-    const refreshLabel = onRefreshFiles ? "Refresh files and comments" : "Refresh comments";
+    const refreshLabel = onRefreshFiles
+        ? t("shell.refresh.filesAndComments")
+        : t("shell.refresh.comments");
 
     return { fileRefreshInFlight, handleRefresh, refreshLabel };
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { BOOT_ERROR_HEADING, bootErrorDetail, renderBootErrorInto } from "../src/shell/bootError";
+import { bootErrorHeading, bootErrorDetail, renderBootErrorInto } from "../src/shell/bootError";
 
 function errorWithStack(message: string, stack: string | undefined): Error {
     const error = new Error(message);
@@ -64,6 +64,7 @@ describe("renderBootErrorInto", () => {
 
         renderBootErrorInto(root, "fresh error");
 
-        expect(root.textContent).toBe(`${BOOT_ERROR_HEADING}fresh error`);
+        expect(bootErrorHeading()).toBe("Markdown Review failed to load");
+        expect(root.textContent).toBe(`${bootErrorHeading()}fresh error`);
     });
 });

@@ -16,6 +16,7 @@ import {
     type CommentFilterCounts,
     type CommentFilterMode,
 } from "./commentFilter";
+import { formatNumber, t } from "../../i18n";
 
 interface CommentFilterMenuProps {
     /** The active status filter mode. */
@@ -83,10 +84,12 @@ export function CommentFilterMenu(props: Readonly<CommentFilterMenuProps>): Reac
                 className={`emr-rail-filter-trigger${open ? " is-open" : ""}`}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                aria-label={`Filter comments — ${activeLabel}${
-                    onlyThisFile ? ", hiding comments not on this file" : ""
-                }`}
-                title="Filter comments"
+                aria-label={
+                    onlyThisFile
+                        ? t("comments.filter.triggerLabelThisFileOnly", { filter: activeLabel })
+                        : t("comments.filter.triggerLabel", { filter: activeLabel })
+                }
+                title={t("comments.filter.title")}
                 onClick={() => setOpen((o) => !o)}
             >
                 <span className="emr-rail-filter-label">{activeLabel}</span>
@@ -97,12 +100,12 @@ export function CommentFilterMenu(props: Readonly<CommentFilterMenuProps>): Reac
                     ref={menuRef}
                     className="emr-popover emr-comment-filter-menu"
                     role="menu"
-                    aria-label="Filter comments"
+                    aria-label={t("comments.filter.title")}
                 >
                     <div
                         className="emr-comment-filter-group"
                         role="group"
-                        aria-label="Which comments"
+                        aria-label={t("comments.filter.whichComments")}
                     >
                         {options.map((opt) => (
                             <button
@@ -122,12 +125,18 @@ export function CommentFilterMenu(props: Readonly<CommentFilterMenuProps>): Reac
                                     {opt.mode === mode ? <SvgCheck /> : null}
                                 </span>
                                 <span className="emr-comment-filter-option-label">{opt.label}</span>
-                                <span className="emr-comment-filter-option-count">{opt.count}</span>
+                                <span className="emr-comment-filter-option-count">
+                                    {formatNumber(opt.count)}
+                                </span>
                             </button>
                         ))}
                     </div>
                     <div className="emr-comment-filter-sep" role="separator" />
-                    <div className="emr-comment-filter-group" role="group" aria-label="Scope">
+                    <div
+                        className="emr-comment-filter-group"
+                        role="group"
+                        aria-label={t("comments.filter.scope")}
+                    >
                         <button
                             type="button"
                             role="menuitemcheckbox"
@@ -141,7 +150,7 @@ export function CommentFilterMenu(props: Readonly<CommentFilterMenuProps>): Reac
                                 {onlyThisFile ? <SvgCheck /> : null}
                             </span>
                             <span className="emr-comment-filter-option-label">
-                                Hide comments not on this file
+                                {t("comments.filter.hideOtherFiles")}
                             </span>
                         </button>
                     </div>

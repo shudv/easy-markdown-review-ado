@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { trackUserFacingError } from "../telemetry";
 
 export type ResolveCommentImage = (url: string) => Promise<string | undefined>;
@@ -47,6 +48,9 @@ function decorateImage(
     const originalSrc = image.src;
     image.classList.add("emr-comment-image");
     const frame = ensureMediaFrame(image);
+    // Shown by the frame's ::after while loading / after a failure (styles.scss).
+    frame.dataset.loadingLabel = t("common.loadingImage");
+    frame.dataset.errorLabel = t("common.imageUnavailable");
 
     const isNativeAttachment =
         resolveImage !== undefined && isAdoPullRequestAttachmentUrl(originalSrc);
@@ -124,9 +128,9 @@ function decorateAttachmentLinks(root: HTMLElement): void {
         link.classList.add("emr-comment-attachment");
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        const label = link.textContent.trim() || "Attachment";
-        link.setAttribute("aria-label", `${label} (attachment, opens in new tab)`);
-        link.title = "Open attachment in a new tab";
+        const label = link.textContent.trim() || t("comments.media.attachment");
+        link.setAttribute("aria-label", t("comments.media.attachmentLabel", { label }));
+        link.title = t("comments.media.openAttachment");
     }
 }
 

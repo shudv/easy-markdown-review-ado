@@ -7,6 +7,7 @@ import { isSessionRefreshingError } from "./adoAuthToken";
 import { diff_match_patch } from "diff-match-patch";
 
 import { diffWords } from "../markdown/wordDiff";
+import { formatNumber, t } from "../i18n";
 import type { ChangeType, DiffRange } from "../types";
 import type { DocumentImageResolver, RepositoryImageResolver } from "../markdown/documentImages";
 
@@ -36,13 +37,15 @@ export function buildReaderActivities(input: {
     if (input.commentSyncing) {
         activities.push({
             id: "comment-sync",
-            label: input.fileRefreshing ? "Refreshing files and comments…" : "Syncing comments…",
+            label: input.fileRefreshing
+                ? t("shell.activity.refreshingFilesAndComments")
+                : t("shell.activity.syncingComments"),
             priority: input.fileRefreshing ? 60 : 20,
         });
     } else if (input.fileRefreshing) {
         activities.push({
             id: "file-refresh",
-            label: "Refreshing files…",
+            label: t("shell.activity.refreshingFiles"),
             priority: 60,
         });
     }
@@ -50,13 +53,13 @@ export function buildReaderActivities(input: {
     if (input.historicalLoading) {
         activities.push({
             id: "history",
-            label: "Loading document version…",
+            label: t("shell.activity.loadingDocumentVersion"),
             priority: 100,
         });
     } else if (input.documentLoading) {
         activities.push({
             id: "document",
-            label: "Loading document…",
+            label: t("shell.activity.loadingDocument"),
             priority: 100,
         });
     }
@@ -100,21 +103,21 @@ export function absentAtUpdateMessage(
 ): { title: string; body: string } {
     if (changeType === "deleted") {
         return {
-            title: `Deleted by Update ${update}`,
-            body: `This file was deleted in this pull request by Update ${update}, so there's nothing to show for the selected updates.`,
+            title: t("shell.absent.deleted.title", { update }),
+            body: t("shell.absent.deleted.body", { update }),
         };
     }
 
     if (changeType === "added") {
         return {
-            title: `Not added yet at Update ${update}`,
-            body: `This pull request adds this file in a later update, so it doesn't exist yet at Update ${update}.`,
+            title: t("shell.absent.added.title", { update }),
+            body: t("shell.absent.added.body", { update }),
         };
     }
 
     return {
-        title: `Not present at Update ${update}`,
-        body: `This file doesn't exist at Update ${update} of this pull request (it may have been moved or renamed).`,
+        title: t("shell.absent.missing.title", { update }),
+        body: t("shell.absent.missing.body", { update }),
     };
 }
 
@@ -126,10 +129,11 @@ export function absentAtUpdateMessage(
  * as "try again" (the composer keeps the user's draft either way), while a
  * server-provided business rule (e.g. a permission message) is passed through
  * so it stays actionable. Never surfaces a raw `TF` code or identity GUID.
+ * `label` is the action as shown to the user (already translated).
  */
 export function friendlyWriteError(label: string, err: unknown): string {
     if (isSessionRefreshingError(err)) {
-        return `${label} didn't go through — your Azure DevOps session is refreshing. Reload the page, then try again; your draft is saved.`;
+        return t("shell.writeError.sessionRefreshing", { action: label });
     }
 
     const status = extractStatus(err);
@@ -137,19 +141,21 @@ export function friendlyWriteError(label: string, err: unknown): string {
 
     // Transient auth blip — token refresh race / SPS auth blip.
     if (status === 401 || /\bTF400813\b/.test(raw)) {
-        return `${label} didn't go through — your session refreshed. Please try again.`;
+        return t("shell.writeError.sessionRefreshed", { action: label });
     }
 
     // No HTTP status reached us — a dropped connection.
     if (status === undefined) {
-        return `${label} didn't go through — check your connection and try again.`;
+        return t("shell.writeError.connection", { action: label });
     }
 
     // A server-provided, human-readable reason (permission rules, etc.) — keep it,
     // but only when it isn't an opaque TF code.
     const clean = raw && !/\bTF\d{5,6}\b/.test(raw) ? raw.trim() : "";
 
-    return clean ? `${label} failed: ${clean}` : `${label} didn't go through. Please try again.`;
+    return clean
+        ? t("shell.writeError.serverReason", { action: label, reason: clean })
+        : t("shell.writeError.generic", { action: label });
 }
 
 /**
@@ -285,16 +291,16 @@ export function formatWordDelta(delta: WordCountDelta): WordDeltaPart[] {
     if (delta.added > 0) {
         parts.push({
             kind: "added",
-            label: `+${delta.added.toLocaleString()}`,
-            a11y: `${delta.added} words added`,
+            label: `+${formatNumber(delta.added)}`,
+            a11y: t("shell.wordDelta.added", { count: delta.added }),
         });
     }
 
     if (delta.removed > 0) {
         parts.push({
             kind: "removed",
-            label: `\u2212${delta.removed.toLocaleString()}`,
-            a11y: `${delta.removed} words removed`,
+            label: `\u2212${formatNumber(delta.removed)}`,
+            a11y: t("shell.wordDelta.removed", { count: delta.removed }),
         });
     }
 
@@ -408,13 +414,16 @@ export function resolveReviewIterationRange(
  */
 export function reviewRangeLabel(range: ReviewIterationRange, updateCount: number): string {
     const resolved = resolveReviewIterationRange(range, updateCount);
-    if (resolved.isAllChanges) return "All updates";
+    if (resolved.isAllChanges) return t("common.allUpdates");
 
     if (resolved.range.fromUpdate === 0) {
-        return `Base → Update ${resolved.range.toUpdate}`;
+        return t("shell.range.baseToUpdate", { to: resolved.range.toUpdate });
     }
 
-    return `Update ${resolved.range.fromUpdate} → ${resolved.range.toUpdate}`;
+    return t("shell.range.updateToUpdate", {
+        from: resolved.range.fromUpdate,
+        to: resolved.range.toUpdate,
+    });
 }
 
 /**
@@ -610,19 +619,28 @@ export function historyChevronTooltip(
     target: HistoryStop | undefined,
 ): string {
     if (!target) {
-        return direction === "older" ? "No earlier versions" : "Already at the current version";
+        return direction === "older"
+            ? t("shell.history.noEarlierVersions")
+            : t("shell.history.alreadyCurrent");
     }
 
-    const titleSuffix =
-        target.title !== undefined && target.title !== "" ? `: ${target.title}` : "";
+    const where = historyTargetLabel(target);
 
-    const where = target.isCurrent
-        ? target.prId != null
-            ? `current version (PR #${target.prId})`
-            : "current version"
-        : `PR #${target.prId}${titleSuffix}`;
+    return direction === "older"
+        ? t("shell.history.olderVersion", { target: where })
+        : t("shell.history.newerVersion", { target: where });
+}
 
-    const verb = direction === "older" ? "Older" : "Newer";
+function historyTargetLabel(target: HistoryStop): string {
+    if (target.isCurrent) {
+        return target.prId != null
+            ? t("shell.history.target.currentWithPr", { prId: target.prId })
+            : t("shell.history.target.current");
+    }
 
-    return `${verb} version — ${where}`;
+    const prId = String(target.prId);
+
+    return target.title !== undefined && target.title !== ""
+        ? t("shell.history.target.prWithTitle", { prId, title: target.title })
+        : t("shell.history.target.pr", { prId });
 }

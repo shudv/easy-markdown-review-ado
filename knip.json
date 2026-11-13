@@ -16,7 +16,7 @@
         "tfx-cli",
         "@vitejs/plugin-react"
     ],
-    "ignoreBinaries": ["pwsh"],
+    "ignoreBinaries": ["pwsh", "taskkill", "explorer.exe"],
     "vitest": {
         "config": ["vitest.config.ts"]
     },

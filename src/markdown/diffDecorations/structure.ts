@@ -1,5 +1,6 @@
 // List-marker, checklist-state, and block-structure change explanations.
 
+import { type MessageKey, t } from "../../i18n";
 import { wrapFormattingRanges } from "./formatting";
 import { applyDiffTooltip } from "./tooltip";
 import {
@@ -42,19 +43,18 @@ export function explainLeadText(item: HTMLElement, label: string): void {
 export function applyLeafStructureDiff(original: HTMLElement, target: HTMLElement): boolean {
     if (target.tagName !== "LI") return false;
     if (original.tagName !== "LI") return false;
-    const markerLabel = listMarkerChangeLabel(original, target);
+    const markerChange = listMarkerChange(original, target);
     const stateChange = checklistStateChange(original, target);
     const taskChange = stateChange ?? checklistToggled(original, target);
-    if (markerLabel !== null) target.classList.add(DIFF_LIST_MARKER_CLASS);
+    if (markerChange !== null) target.classList.add(DIFF_LIST_MARKER_CLASS);
     // A newly added checkbox is explained, but its (default) state didn't change.
     if (stateChange) stateChange.input.classList.add(DIFF_TASK_STATE_CLASS);
 
-    if (markerLabel !== null) {
+    if (markerChange !== null) {
+        const keys = MARKER_CHANGE_KEYS[markerChange];
         applyDiffTooltip(
             target,
-            taskChange
-                ? `List item changed: ${markerLabel}; ${taskChange.label}`
-                : `List marker changed from ${markerLabel.slice("marker ".length)}`,
+            taskChange ? t(keys.withTask, { change: taskChange.label }) : t(keys.alone),
         );
 
         return true;
@@ -91,12 +91,21 @@ function isListTag(tag: string | undefined): boolean {
     return tag === "UL" || tag === "OL";
 }
 
-function listKindName(tag: string | undefined): string {
-    return tag === "OL" ? "numbered" : "bulleted";
-}
+type ListMarkerChange = "toNumbered" | "toBulleted";
 
-/** Label for a bullet <-> number switch of a list item, or null. */
-function listMarkerChangeLabel(original: HTMLElement, target: HTMLElement): string | null {
+const MARKER_CHANGE_KEYS = {
+    toNumbered: {
+        alone: "document.list.markerToNumbered",
+        withTask: "document.list.itemChangedToNumbered",
+    },
+    toBulleted: {
+        alone: "document.list.markerToBulleted",
+        withTask: "document.list.itemChangedToBulleted",
+    },
+} as const satisfies Record<ListMarkerChange, { alone: MessageKey; withTask: MessageKey }>;
+
+/** The direction of a bullet <-> number switch of a list item, or null. */
+function listMarkerChange(original: HTMLElement, target: HTMLElement): ListMarkerChange | null {
     // Stryker disable next-line OptionalChaining: a list item always sits in a list
     const originalList = original.parentElement?.tagName;
     // Stryker disable next-line OptionalChaining: a list item always sits in a list
@@ -106,13 +115,9 @@ function listMarkerChangeLabel(original: HTMLElement, target: HTMLElement): stri
         // Stryker disable next-line ConditionalExpression,LogicalOperator: both parents are always lists (UL or OL), so only the tag comparison decides
         isListTag(originalList) && isListTag(currentList) && originalList !== currentList;
 
-    return markerChanged
-        ? `marker ${listKindName(originalList)} to ${listKindName(currentList)}`
-        : null;
-}
+    if (!markerChanged) return null;
 
-function checkedName(task: HTMLInputElement): string {
-    return task.checked ? "checked" : "unchecked";
+    return currentList === "OL" ? "toNumbered" : "toBulleted";
 }
 
 interface ChecklistChange {
@@ -141,12 +146,17 @@ function checklistStateChange(
         return null;
     }
 
-    const change = `${checkedName(originalTask)} to ${checkedName(currentTask)}`;
-
     return {
         input: currentTask,
-        label: `checklist item ${change}`,
-        callout: `Checklist item changed from ${change}`,
+        ...(currentTask.checked
+            ? {
+                  label: t("document.checklist.checkedLabel"),
+                  callout: t("document.checklist.checkedCallout"),
+              }
+            : {
+                  label: t("document.checklist.uncheckedLabel"),
+                  callout: t("document.checklist.uncheckedCallout"),
+              }),
     };
 }
 
@@ -163,22 +173,33 @@ function checklistToggled(original: HTMLElement, target: HTMLElement): Checklist
     const currentTask = ownCheckbox(target);
 
     if (currentTask != null && originalTask == null) {
-        const kind = `${checkedName(currentTask)} checklist item`;
-
         return {
             input: currentTask,
-            label: `plain item to ${kind}`,
-            callout: `List item changed to ${kind}`,
+            ...(currentTask.checked
+                ? {
+                      label: t("document.checklist.addedCheckedLabel"),
+                      callout: t("document.checklist.addedCheckedCallout"),
+                  }
+                : {
+                      label: t("document.checklist.addedUncheckedLabel"),
+                      callout: t("document.checklist.addedUncheckedCallout"),
+                  }),
         };
     }
 
     if (originalTask == null || currentTask != null) return null;
-    const kind = `${checkedName(originalTask)} checklist item`;
 
     return {
         input: null,
-        label: `${kind} to plain item`,
-        callout: `List item changed from ${kind} to plain item`,
+        ...(originalTask.checked
+            ? {
+                  label: t("document.checklist.removedCheckedLabel"),
+                  callout: t("document.checklist.removedCheckedCallout"),
+              }
+            : {
+                  label: t("document.checklist.removedUncheckedLabel"),
+                  callout: t("document.checklist.removedUncheckedCallout"),
+              }),
     };
 }
 
@@ -209,20 +230,27 @@ export function applyBlockStructureDiff(
     const describeBlock = (tag: string): string => {
         // Stryker disable next-line Regex: it only sees block tag names (P, LI, BLOCKQUOTE, H1-H6), none of which contain H plus a digit except the headings themselves
         const heading = /^H([1-6])$/.exec(tag);
-        if (heading) return `heading level ${heading[1]}`;
+        if (heading) return t("document.block.heading", { level: heading[1]! });
 
-        return {
-            BLOCKQUOTE: "quote",
-            LI: "list item",
-            P: "paragraph",
-        }[tag]!;
+        return t(
+            (
+                {
+                    BLOCKQUOTE: "document.block.quote",
+                    LI: "document.block.listItem",
+                    P: "document.block.paragraph",
+                } as const satisfies Record<string, MessageKey>
+            )[tag as "BLOCKQUOTE" | "LI" | "P"],
+        );
     };
 
     wrapFormattingRanges(inlineProseTarget(target), [
         {
             start: text.length - text.trimStart().length,
             end: text.trimEnd().length,
-            label: `Block changed from ${describeBlock(original.tagName)} to ${describeBlock(target.tagName)}`,
+            label: t("document.block.changed", {
+                before: describeBlock(original.tagName),
+                after: describeBlock(target.tagName),
+            }),
         },
     ]);
 

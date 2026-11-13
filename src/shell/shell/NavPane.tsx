@@ -2,6 +2,8 @@
 
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 
+import { t } from "../../i18n";
+
 type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface NavPaneProps {
@@ -34,7 +36,7 @@ export function NavPane(props: Readonly<NavPaneProps>): ReactElement | null {
           the keyboard-accessible equivalent. */}
             <div
                 className="emr-nav-resize"
-                title="Drag to resize navigation (double-click to reset)"
+                title={t("shell.panes.resizeNavigation")}
                 aria-hidden="true"
                 onPointerDown={props.onResizeStart}
                 onPointerMove={props.onResizeMove}

@@ -8,7 +8,8 @@ import type { DocRepo, FolderListing } from "../shell/types";
 import type { MentionLinkResolution } from "../comments/mentionLinks";
 import { normalizeFolderPath } from "../shell/components/folderTree";
 import { withFirstPageFirst } from "../shell/wikiOrder";
-import { COMMENT_PERMISSION_DENIED_MESSAGE } from "../shell/commentPermission.helpers";
+import { commentPermissionDeniedMessage } from "../shell/commentPermission.helpers";
+import { t } from "../i18n";
 
 /**
  * Lazy tree state per active repo. Seeded from `selectedRepo.files` +
@@ -158,9 +159,7 @@ export function resolveCommentGating(
             readOnly,
             shellReadOnly: readOnly,
             shellReadOnlyMessage:
-                readOnly && repo
-                    ? `${repo.name} has no completed pull request — commenting is disabled until one is completed.`
-                    : undefined,
+                readOnly && repo ? t("hub.docs.noCompletedPr", { repo: repo.name }) : undefined,
         };
     }
 
@@ -172,7 +171,7 @@ export function resolveCommentGating(
     return {
         readOnly,
         shellReadOnly: denied,
-        shellReadOnlyMessage: denied ? COMMENT_PERMISSION_DENIED_MESSAGE : undefined,
+        shellReadOnlyMessage: denied ? commentPermissionDeniedMessage() : undefined,
     };
 }
 

@@ -544,11 +544,11 @@ button {
         }
 
         &.is-loading::after {
-            content: "Loading image";
+            content: attr(data-loading-label);
         }
 
         &.is-error::after {
-            content: "Image unavailable";
+            content: attr(data-error-label);
         }
     }
 
@@ -2661,6 +2661,73 @@ button {
     }
 }
 
+// Resolve moment: a soft green wash blooms from where the thread was resolved
+// (Balloon.motion.ts sizes and places the ink) while the border pulses green,
+// then both recede into the resolved card. Paint-only — nothing reflows.
+.emr-balloon.is-washing {
+    animation: emr-resolve-border 1000ms ease-out;
+
+    &.inline {
+        // Anchor the wash layer to the card (inline cards are otherwise static),
+        // and outrank the inline entrance animation declared further down.
+        position: relative;
+        animation: emr-resolve-border 1000ms ease-out;
+    }
+}
+
+.emr-balloon-wash {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.emr-balloon-wash-ink {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle closest-side,
+        color-mix(in srgb, var(--emr-diff-added) 14%, transparent) 0%,
+        color-mix(in srgb, var(--emr-diff-added) 7%, transparent) 60%,
+        transparent 100%
+    );
+    animation: emr-resolve-wash 1000ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes emr-resolve-wash {
+    0% {
+        transform: scale(0);
+        opacity: 1;
+    }
+    45% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+@keyframes emr-resolve-border {
+    20%,
+    50% {
+        border-color: var(--emr-diff-added);
+    }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+    .emr-balloon.is-washing,
+    .emr-balloon.is-washing.inline {
+        animation: none;
+    }
+
+    .emr-balloon-wash {
+        display: none;
+    }
+}
+
 .emr-balloon-header {
     display: flex;
     align-items: center;
@@ -2882,14 +2949,14 @@ button {
             }
 
             &.is-error::after {
-                content: "Image unavailable";
+                content: attr(data-error-label);
             }
 
             &.is-loading {
                 cursor: progress;
 
                 &::after {
-                    content: "Loading image";
+                    content: attr(data-loading-label);
                 }
             }
         }

@@ -4,14 +4,15 @@
 //
 // The list is deliberately bounded: we show at most `MAX_NAMES` names and
 // collapse the rest into "and N others", and we further shrink the shown count
-// if the joined names would exceed `MAX_CHARS` — so a comment liked by a large
-// team never produces a runaway tooltip.
+// if the tooltip would exceed `MAX_CHARS` — so a comment liked by a large team
+// never produces a runaway tooltip.
 
+import { t } from "../i18n";
 import type { ReactionUser } from "../types";
 
 const MAX_NAMES = 5;
-const MAX_CHARS = 120;
-const SUFFIX = " liked this";
+// 120 characters of names plus the English " liked this" (11).
+const MAX_CHARS = 131;
 
 /**
  * Order likers with the current user first (rendered as "You"), preserving the
@@ -22,28 +23,32 @@ function orderedNames(users: readonly ReactionUser[], currentUserId: string): st
     const others: string[] = [];
 
     for (const u of users) {
-        if (u.id === currentUserId) me.push("You");
+        if (u.id === currentUserId) me.push(t("comments.like.you"));
         else others.push(u.displayName);
     }
 
     return [...me, ...others];
 }
 
-/** Join up to `shown` names, collapsing the remainder into "and N others". */
-function joinNames(names: string[], shown: number): string {
+/** The sentence naming up to `shown` likers, collapsing the remainder into "and N others". */
+function likeSentence(names: string[], shown: number): string {
     const visible = names.slice(0, shown);
     const hidden = names.length - visible.length;
+    const separator = t("comments.like.separator");
 
     if (hidden > 0) {
-        return `${visible.join(", ")} and ${hidden} other${hidden === 1 ? "" : "s"}`;
+        return t("comments.like.namesAndOthers", {
+            names: visible.join(separator),
+            count: hidden,
+        });
     }
 
-    if (visible.length === 1) return visible[0]!;
-    // Stryker disable next-line ConditionalExpression: dead code: for two names the general "head and last" join below produces the identical "A and B", candidate for removal
-    if (visible.length === 2) return `${visible[0]} and ${visible[1]}`;
-    const head = visible.slice(0, -1).join(", ");
+    if (visible.length === 1) return t("comments.like.single", { name: visible[0]! });
 
-    return `${head} and ${visible[visible.length - 1]}`;
+    return t("comments.like.namesAndLast", {
+        names: visible.slice(0, -1).join(separator),
+        last: visible[visible.length - 1]!,
+    });
 }
 
 /**
@@ -53,15 +58,15 @@ function joinNames(names: string[], shown: number): string {
 export function formatLikeTooltip(users: readonly ReactionUser[], currentUserId: string): string {
     const names = orderedNames(users, currentUserId);
     if (names.length === 0) return "";
-    // Start from the display cap, then shrink until the joined body fits the
+    // Start from the display cap, then shrink until the sentence fits the
     // character budget (always show at least one name).
     let shown = Math.min(MAX_NAMES, names.length);
-    let body = joinNames(names, shown);
+    let sentence = likeSentence(names, shown);
 
-    while (shown > 1 && body.length > MAX_CHARS) {
+    while (shown > 1 && sentence.length > MAX_CHARS) {
         shown -= 1;
-        body = joinNames(names, shown);
+        sentence = likeSentence(names, shown);
     }
 
-    return `${body}${SUFFIX}`;
+    return sentence;
 }

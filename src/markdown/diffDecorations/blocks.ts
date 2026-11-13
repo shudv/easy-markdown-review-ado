@@ -1,6 +1,7 @@
 // Per-block decoration: classify a source-mapped block, then pick the richest
 // presentation for its change (inline word diff, cell diff, metadata, wash).
 
+import { t } from "../../i18n";
 import {
     applyLineWash,
     type ChangedBlock,
@@ -73,7 +74,7 @@ export function decorateBlock(pass: DecorationPass, el: HTMLElement): void {
     }
 
     if (kind === "modified" && needsUnavailableTooltip(el)) {
-        applyDiffTooltip(el, "Previous content unavailable; exact comparison cannot be shown");
+        applyDiffTooltip(el, t("document.diff.previousContentUnavailable"));
     }
 
     if (canLineWash(el)) applyLineWash(el);
@@ -211,7 +212,10 @@ function decorateModifiedProse(
         el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
         explainLeadText(
             el,
-            `List nesting changed from level ${rendering.before} to level ${rendering.after}`,
+            t("document.diff.listNestingChanged", {
+                before: rendering.before,
+                after: rendering.after,
+            }),
         );
         markInlined(pass, el);
     } else if (rendering?.kind === "numbering") {
@@ -219,7 +223,10 @@ function decorateModifiedProse(
         el.classList.add(DIFF_LIST_MARKER_CLASS, DIFF_INLINE_CLASS);
         applyDiffTooltip(
             el,
-            `List numbering changed from ${rendering.before} to ${rendering.after}`,
+            t("document.diff.listNumberingChanged", {
+                before: rendering.before,
+                after: rendering.after,
+            }),
         );
         markInlined(pass, el);
     } else if (originalMarkdown != null && tryInlineWordDiff(el, originalMarkdown, renderInline)) {

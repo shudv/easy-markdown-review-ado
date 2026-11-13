@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import type { CommentAuthor } from "../../types";
 import type { ReplyOptions } from "./Balloon.helpers";
 import { Composer } from "./Composer";
+import { t } from "../../i18n";
 
 export function BalloonReplyZone(
     props: Readonly<{
@@ -38,8 +39,10 @@ export function BalloonReplyZone(
             // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- event stopper only: keeps clicks in the reply composer from bubbling to the balloon's select-thread handler; it has no action of its own
             <div className="emr-reply-zone" onClick={(e) => e.stopPropagation()}>
                 <Composer
-                    submitLabel="Reply"
-                    placeholder={`Replying as ${currentUser.displayName}…`}
+                    submitLabel={t("comments.balloon.reply")}
+                    placeholder={t("comments.balloon.replyingAs", {
+                        name: currentUser.displayName,
+                    })}
                     // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the reply composer only mounts after the user asked to reply (reply trigger), so focus moves to where they are about to type
                     autoFocus
                     initial={replyInitial}
@@ -50,7 +53,7 @@ export function BalloonReplyZone(
                     secondarySubmit={
                         canResolve
                             ? {
-                                  label: "Reply and resolve",
+                                  label: t("comments.balloon.replyAndResolve"),
                                   onSubmit: (body) => onReply(threadId, body, { resolve: true }),
                               }
                             : undefined
@@ -70,7 +73,9 @@ export function BalloonReplyZone(
                 onRequestReply?.(threadId);
             }}
         >
-            <span className="emr-reply-trigger-placeholder">@mention or reply</span>
+            <span className="emr-reply-trigger-placeholder">
+                {t("comments.balloon.replyTrigger")}
+            </span>
         </button>
     );
 }

@@ -1,6 +1,7 @@
 // Deletion and source-only markers inserted between rendered blocks, plus the
 // selection guard that withholds commenting over removed content.
 
+import { t } from "../../i18n";
 import type { DiffRange } from "../../types";
 import type { DecorationPass } from "./pass";
 import { splitTableRow } from "./tableAlignment";
@@ -112,7 +113,8 @@ function buildSourceOnlyMarker(
 
     const label = doc.createElement("span");
     label.className = "emr-diff-source-only-label";
-    label.textContent = range.kind === "added" ? "Source added" : "Source changed";
+    label.textContent =
+        range.kind === "added" ? t("document.source.added") : t("document.source.changed");
     const source = doc.createElement("pre");
     source.className = "emr-diff-source-only-current";
     const code = doc.createElement("code");
@@ -126,8 +128,8 @@ function buildSourceOnlyMarker(
         // Stryker disable next-line StringLiteral: the rendered article holds no form, so the button type changes nothing
         trigger.type = "button";
         trigger.className = "emr-diff-before-trigger";
-        trigger.textContent = "Before";
-        trigger.setAttribute("aria-label", "Show previous source");
+        trigger.textContent = t("common.before");
+        trigger.setAttribute("aria-label", t("document.source.showPrevious"));
         trigger.setAttribute("aria-expanded", "false");
         const panel = doc.createElement("div");
         panel.className = "emr-diff-before-panel emr-diff-before-panel--source markdown-body";
@@ -142,10 +144,10 @@ function buildSourceOnlyMarker(
         trigger.addEventListener("click", () => {
             const open = panel.hidden;
             panel.hidden = !open;
-            trigger.textContent = open ? "Hide" : "Before";
+            trigger.textContent = open ? t("common.hide") : t("common.before");
             trigger.setAttribute(
                 "aria-label",
-                open ? "Hide previous source" : "Show previous source",
+                open ? t("document.source.hidePrevious") : t("document.source.showPrevious"),
             );
             trigger.setAttribute("aria-expanded", open ? "true" : "false");
         });
@@ -174,7 +176,7 @@ function buildDeletedMarker(r: DiffRange, renderInline?: (md: string) => string)
     const marker = document.createElement("div");
     marker.className = DIFF_DELETED_MARKER_CLASS;
     marker.setAttribute("role", "note");
-    const label = `${count} line${count === 1 ? "" : "s"} removed`;
+    const label = t("document.diff.linesRemoved", { count });
     marker.setAttribute("aria-label", label);
 
     const rail = document.createElement("span");
@@ -345,7 +347,7 @@ function renderDeletedTableRows(
     for (const row of removedRows) {
         row.className = `${DIFF_DELETED_MARKER_CLASS} emr-diff-deleted-table-row`;
         row.setAttribute("role", "note");
-        row.setAttribute("aria-label", "Removed table row");
+        row.setAttribute("aria-label", t("document.diff.removedTableRow"));
         stripSourceLines(row);
     }
 

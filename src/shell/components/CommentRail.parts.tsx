@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from "react";
 import type { CommentAuthor, TextQuoteAnchor } from "../../types";
 import { Composer } from "./Composer";
 import { DRAFT_ID } from "./CommentRail.helpers";
+import { t, tRich } from "../../i18n";
 
 export function RailReadOnlyBanner(
     props: Readonly<{
@@ -13,8 +14,7 @@ export function RailReadOnlyBanner(
 ): ReactElement {
     return (
         <div className="emr-rail-readonly-banner" role="status">
-            {props.message ??
-                "Commenting is disabled because this document has no completed pull request."}
+            {props.message ?? t("comments.rail.readOnlyNoPullRequest")}
         </div>
     );
 }
@@ -42,16 +42,20 @@ export function RailDraftBalloon(
     return (
         <div className="emr-balloon inline is-active is-draft" data-thread-id={DRAFT_ID}>
             <div className="emr-balloon-header">
-                <span className="emr-balloon-status status-active">New</span>
+                <span className="emr-balloon-status status-active">
+                    {t("comments.rail.newDraft")}
+                </span>
                 {draftAnchor.implicit ? null : (
                     <span className="emr-balloon-meta">
-                        Anchored to: <em>“{truncate(draftAnchor.exact, 40)}”</em>
+                        {tRich("comments.rail.anchoredTo", {
+                            quote: <em>“{truncate(draftAnchor.exact, 40)}”</em>,
+                        })}
                     </span>
                 )}
             </div>
             <Composer
-                submitLabel="Comment"
-                placeholder={`Comment as ${currentUser.displayName}…`}
+                submitLabel={t("comments.rail.submitComment")}
+                placeholder={t("comments.rail.commentAs", { name: currentUser.displayName })}
                 // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the draft balloon only mounts once the user starts a comment (Add comment / selection bubble), so focus moves to where they are about to type
                 autoFocus
                 initial={draftInitialBody}

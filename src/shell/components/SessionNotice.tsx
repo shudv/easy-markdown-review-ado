@@ -9,6 +9,7 @@
 
 import type { ReactElement } from "react";
 
+import { t } from "../../i18n";
 import { adoSession, useAdoSession, type AdoSessionMonitor } from "../adoSession";
 
 export function SessionNotice({
@@ -30,8 +31,8 @@ export function SessionNotice({
         <div className="emr-toast emr-toast--info" role="status">
             <span className="emr-toast-msg">
                 {session.heldWrites > 0
-                    ? "Reconnecting to Azure DevOps — your changes will be saved automatically."
-                    : "Reconnecting to Azure DevOps — this usually fixes itself within a few minutes."}
+                    ? t("hub.sessionNotice.changesSaved")
+                    : t("hub.sessionNotice.usuallyFixes")}
             </span>
             {session.canReload && session.heldWrites === 0 && reloadAllowed ? (
                 <button
@@ -39,7 +40,7 @@ export function SessionNotice({
                     className="emr-toast-link"
                     onClick={() => void monitor.reloadHost("user")}
                 >
-                    Reload page
+                    {t("common.reloadPage")}
                 </button>
             ) : null}
         </div>

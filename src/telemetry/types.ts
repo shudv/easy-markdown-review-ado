@@ -8,7 +8,7 @@
 
 /** Scalar values permitted on an event. Objects/arrays are intentionally
  * excluded so structured PII cannot be smuggled into a property bag. */
-export type TelemetryValue = string | number | boolean | null | undefined;
+type TelemetryValue = string | number | boolean | null | undefined;
 
 /** Free-form, sanitised string/scalar properties attached to an event. */
 export type TelemetryProperties = Record<string, TelemetryValue>;
@@ -41,6 +41,8 @@ export interface TelemetryContext {
     environment?: string;
     /** ADO project GUID. Never the project name. */
     projectId?: string;
+    /** UI language actually applied (`en`, `de`, `zh-CN`…), for slicing by locale. */
+    locale?: string;
     /** ADO repository GUID. Never the repo name. */
     repositoryId?: string;
     /** Pseudonymised pull-request id (hashed, not the raw integer). */

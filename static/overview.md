@@ -24,6 +24,7 @@ A **Markdown Review** tab appears on every pull request that touches a `.md` fil
 - **Azure DevOps wiki syntax**: `[[_TOC_]]` renders a table of contents, `[[_TOSP_]]` lists a page's subpages, and each folder's `.order` file sets the page order in the Documents hub.
 - **@mentions, #work-items, and !pull-requests** become real, clickable links.
 - Fully **theme-aware** — light and dark follow your Azure DevOps theme.
+- **Speaks your language** — the UI follows your browser's language: English, Deutsch, Español, Français, 日本語, 한국어, Português (Brasil), and 简体中文.
 
 ## 🔍 See exactly what changed
 

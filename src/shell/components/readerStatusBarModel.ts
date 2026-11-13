@@ -1,6 +1,7 @@
 // Pure view-model helpers for ReaderStatusBar: which status-bar regions show,
 // and the derived labels / adjacent comparisons of the PR update picker.
 
+import { t } from "../../i18n";
 import {
     allReviewIterations,
     formatWordDelta,
@@ -109,7 +110,7 @@ interface IterationOptionLike {
 function stableIterationLabels(options: readonly IterationOptionLike[]): string[] {
     // Stryker disable next-line MethodExpression: options are numbered 1..N, so each update after the first yields a distinct "Update n-1 → n" label and the de-duplication never drops one
     return [
-        "All updates",
+        t("common.allUpdates"),
         ...options
             .filter((option) => option.number > 1)
             .map((option) =>
@@ -162,7 +163,7 @@ export function iterationPickerModel(
 
     const fromTitle =
         resolved.range.fromUpdate === 0
-            ? "Pull request base"
+            ? t("navigation.iterationPicker.pullRequestBase")
             : iterationTitle(options, resolved.range.fromUpdate);
 
     const toTitle = iterationTitle(options, resolved.range.toUpdate);
@@ -179,16 +180,19 @@ export function iterationPickerModel(
         previousLabel: rangeLabelOrNull(previousRange, count),
         nextLabel: rangeLabelOrNull(nextRange, count),
         triggerTitle: allChangesSelected
-            ? "All updates from the pull request base to the newest update"
-            : `${fromTitle} to ${toTitle}`,
+            ? t("navigation.iterationPicker.allUpdatesTitle")
+            : t("navigation.iterationPicker.rangeTitle", {
+                  from: String(fromTitle),
+                  to: String(toTitle),
+              }),
     };
 }
 
 /** Tooltip of the base-commit glyph. */
 export function baseCommitTitle(baseCommit: string | undefined): string {
     return baseCommit !== undefined && baseCommit !== ""
-        ? `Base commit ${baseCommit.slice(0, 7)}`
-        : "Base commit";
+        ? t("navigation.iterationPicker.baseCommitId", { commit: baseCommit.slice(0, 7) })
+        : t("navigation.iterationPicker.baseCommit");
 }
 
 /** Range-edge modifier classes for an update row in the picker list. */

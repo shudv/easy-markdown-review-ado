@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 
+import { formatNumber, t, tRich } from "../../i18n";
 import type { ReviewIterationRange, WordDeltaPart } from "../shellHelpers";
 import type { StatusBarVisibility } from "./readerStatusBarModel";
 import type { ReaderStatusBarProps } from "./ReaderStatusBar.types";
@@ -40,13 +41,13 @@ function OutlineToggle(
             aria-pressed={shown}
             title={
                 shown
-                    ? "Hide the document outline in the navigation"
-                    : "Show the document outline in the navigation"
+                    ? t("navigation.statusBar.hideOutline")
+                    : t("navigation.statusBar.showOutline")
             }
             onClick={onToggle}
         >
             <IconOutline />
-            <span className="emr-sr-only">Outline</span>
+            <span className="emr-sr-only">{t("navigation.statusBar.outline")}</span>
         </button>
     );
 }
@@ -78,12 +79,15 @@ function CommentStepper({
     };
 
     return (
-        <div className="emr-statusbar-comment-stepper" aria-label="Comment navigation">
+        <div
+            className="emr-statusbar-comment-stepper"
+            aria-label={t("navigation.statusBar.commentNavigation")}
+        >
             <button
                 type="button"
                 className="emr-statusbar-comment-step"
-                title="Previous comment"
-                aria-label="Previous comment"
+                title={t("navigation.statusBar.previousComment")}
+                aria-label={t("navigation.statusBar.previousComment")}
                 onClick={() => cycle(-1)}
             >
                 <IconChevron direction="left" />
@@ -93,8 +97,11 @@ function CommentStepper({
                 aria-live="polite"
                 aria-label={
                     activeIndex >= 0
-                        ? `Comment ${activeIndex + 1} of ${total}`
-                        : `${total} comments`
+                        ? t("navigation.statusBar.commentOf", {
+                              index: activeIndex + 1,
+                              total,
+                          })
+                        : t("navigation.statusBar.commentCount", { count: total })
                 }
             >
                 <span className="emr-statusbar-comment-count-sizer" aria-hidden="true">
@@ -107,8 +114,8 @@ function CommentStepper({
             <button
                 type="button"
                 className="emr-statusbar-comment-step"
-                title="Next comment"
-                aria-label="Next comment"
+                title={t("navigation.statusBar.nextComment")}
+                aria-label={t("navigation.statusBar.nextComment")}
                 onClick={() => cycle(1)}
             >
                 <IconChevron direction="right" />
@@ -131,7 +138,10 @@ function WordStatus({
         <div className="emr-statusbar-status">
             {hasCount ? (
                 <span className="emr-statusbar-words">
-                    <b>{wordCount!.toLocaleString()}</b> words
+                    {tRich("navigation.statusBar.wordCount", {
+                        count: wordCount!,
+                        words: <b>{formatNumber(wordCount!)}</b>,
+                    })}
                 </span>
             ) : null}
             {deltaParts.length > 0 ? (
@@ -187,13 +197,13 @@ function ContextControls(
                     aria-pressed={changesShown}
                     title={
                         changesShown
-                            ? "Hide the change highlights"
-                            : "Show what changed in this pull request"
+                            ? t("navigation.statusBar.hideChanges")
+                            : t("navigation.statusBar.showChanges")
                     }
                     onClick={onToggleChanges}
                 >
                     <IconChanges />
-                    <span className="emr-sr-only">Changes</span>
+                    <span className="emr-sr-only">{t("navigation.statusBar.changes")}</span>
                 </button>
             ) : null}
         </div>
@@ -221,11 +231,17 @@ export function StatusBarLeft({
                     type="button"
                     className="emr-statusbar-btn is-toggle"
                     aria-pressed={showNav}
-                    title={showNav ? "Hide navigation" : "Show navigation"}
+                    title={
+                        showNav
+                            ? t("navigation.statusBar.hideNavigation")
+                            : t("navigation.statusBar.showNavigation")
+                    }
                     onClick={props.onToggleNav}
                 >
                     <IconNav />
-                    <span className="emr-statusbar-btn-label">Navigation</span>
+                    <span className="emr-statusbar-btn-label">
+                        {t("navigation.statusBar.navigation")}
+                    </span>
                 </button>
             ) : null}
             <OutlineToggle
@@ -261,12 +277,16 @@ function ResolvedPullRequestBadge({
     pullRequest: ReaderStatusBarProps["resolvedPullRequest"];
 }): ReactElement | null {
     if (!pullRequest) return null;
-    const label = `Latest completed PR for this file: #${pullRequest.prId} ${pullRequest.title}`;
+
+    const label = t("navigation.statusBar.latestCompletedPr", {
+        prId: pullRequest.prId,
+        title: pullRequest.title,
+    });
 
     const content = (
         <>
             <IconPullRequest />
-            <span>PR #{pullRequest.prId}</span>
+            <span>{t("navigation.pr.number", { prId: pullRequest.prId })}</span>
         </>
     );
 
@@ -312,11 +332,15 @@ export function CommentControls({
                     type="button"
                     className="emr-statusbar-btn is-toggle"
                     aria-pressed={showComments}
-                    title={showComments ? "Hide comments" : "Show comments"}
+                    title={
+                        showComments
+                            ? t("navigation.statusBar.hideComments")
+                            : t("navigation.statusBar.showComments")
+                    }
                     onClick={props.onToggleComments}
                 >
                     <IconComments />
-                    <span className="emr-statusbar-btn-label">Comments</span>
+                    <span className="emr-statusbar-btn-label">{t("common.comments")}</span>
                 </button>
                 <ResolvedPullRequestBadge pullRequest={props.resolvedPullRequest} />
             </div>
@@ -335,7 +359,7 @@ export function RefreshFeedbackControls({
     Pick<ReaderStatusBarProps, "onRefresh" | "refreshing" | "refreshLabel" | "feedbackHref">
 >): ReactElement | null {
     if (!onRefresh && !hasText(feedbackHref)) return null;
-    const label = refreshLabel ?? "Refresh";
+    const label = refreshLabel ?? t("common.refresh");
 
     return (
         <>
@@ -362,8 +386,8 @@ export function RefreshFeedbackControls({
                         // so the OS mail handler launches.
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Share feedback or report a bug"
-                        aria-label="Share feedback or report a bug"
+                        title={t("navigation.statusBar.feedback")}
+                        aria-label={t("navigation.statusBar.feedback")}
                     >
                         <IconFeedback />
                     </a>

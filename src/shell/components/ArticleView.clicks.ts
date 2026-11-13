@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
+import { t } from "../../i18n";
 import { persistSectionState } from "./navStorage";
 import { events, track } from "../../telemetry";
 import { HEADING_LINK_CLASS, showHeadingLinkResult } from "./ArticleView.headingLinks";
@@ -84,7 +85,7 @@ export function handleHeadingLinkClick(
     if (!onCopyHeadingLink) return true;
     void onCopyHeadingLink(headingId).then((ok) => {
         showHeadingLinkResult(headingLink, ok);
-        setLinkAnnouncement(ok ? "Link copied" : "Couldn't copy link");
+        setLinkAnnouncement(ok ? t("common.linkCopied") : t("common.copyLinkFailed"));
     });
 
     return true;
@@ -108,7 +109,10 @@ export function handleSectionToggleClick(
     const wasCollapsed = section.getAttribute("data-collapsed") === "true";
     if (wasCollapsed) section.removeAttribute("data-collapsed");
     else section.setAttribute("data-collapsed", "true");
-    sectionToggle.setAttribute("aria-label", wasCollapsed ? "Collapse section" : "Expand section");
+    sectionToggle.setAttribute(
+        "aria-label",
+        wasCollapsed ? t("common.collapseSection") : t("common.expandSection"),
+    );
     sectionToggle.setAttribute("aria-expanded", wasCollapsed ? "true" : "false");
     sectionToggle.title = sectionToggle.getAttribute("aria-label")!;
     if (sid) persistSectionState(storageKey, sid, !wasCollapsed);

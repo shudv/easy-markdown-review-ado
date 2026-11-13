@@ -523,7 +523,7 @@ function lastAutoReloadAt(storage: StorageLike): number | null {
 export const AUTO_RELOAD_RESULT_WINDOW_MS = 2 * 60_000;
 /** Which automatic reload (by claim time) a page load has already been tagged for. */
 // Stryker disable next-line StringLiteral: reader and writer share this constant, so any distinct key name tags the reload the same
-export const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
+const AUTO_RELOAD_SEEN_STORAGE_KEY = "emr.sessionAutoReloadSeen";
 
 /**
  * Is this page load the result of an automatic host reload we triggered (one

@@ -4,6 +4,7 @@
 
 import { type ReactElement, useEffect, useRef, useState } from "react";
 
+import { t } from "../../i18n";
 import { hydrateMath } from "../../markdown/mathHydrate";
 import { hydrateMermaid } from "../../markdown/mermaidHydrate";
 import { events, track } from "../../telemetry";
@@ -121,7 +122,11 @@ export function GeneratedSourceModal(
             className="emr-generated-source-overlay"
             role="dialog"
             aria-modal="true"
-            aria-label={kind === "math" ? "Equation source" : "Mermaid diagram source"}
+            aria-label={
+                kind === "math"
+                    ? t("document.generatedSource.equationTitle")
+                    : t("document.generatedSource.mermaidDialogLabel")
+            }
             onClick={(e) => {
                 if (e.target === e.currentTarget) onClose();
             }}
@@ -148,14 +153,18 @@ export function GeneratedSourceModal(
                                 <rect x="8" y="8" width="11" height="11" rx="1.5" />
                                 <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-10A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17H8" />
                             </svg>
-                            <span>{copied ? "Copied" : "Copy source"}</span>
+                            <span>
+                                {copied
+                                    ? t("document.generatedSource.copied")
+                                    : t("document.generatedSource.copySource")}
+                            </span>
                         </button>
                         <button
                             type="button"
                             className="emr-generated-source-command emr-generated-source-close"
                             onClick={onClose}
-                            aria-label="Close"
-                            title="Close"
+                            aria-label={t("common.close")}
+                            title={t("common.close")}
                         >
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M6 6l12 12M18 6 6 18" />

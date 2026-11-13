@@ -294,8 +294,7 @@ export function parseMentionUrl(url: string): ParsedMentionUrl | null {
  * token survive the Markdown parser (a bare `<GUID>` starting with a hex letter
  * would otherwise be treated as raw HTML and dropped by our sanitizer).
  */
-export const USER_MENTION_RE =
-    /@<([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/gi;
+const USER_MENTION_RE = /@<([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/gi;
 
 /**
  * Rewrite native `@<GUID>` user mentions in raw Markdown into our existing

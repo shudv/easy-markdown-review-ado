@@ -2,6 +2,7 @@
 
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 
+import { t } from "../../i18n";
 import { RailSkeleton } from "./Skeletons";
 
 type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
@@ -40,7 +41,7 @@ export function RailPane(props: Readonly<RailPaneProps>): ReactElement {
             {props.resizable ? (
                 <div
                     className="emr-rail-resize"
-                    title="Drag to resize comments (double-click to reset)"
+                    title={t("shell.panes.resizeComments")}
                     aria-hidden="true"
                     onPointerDown={props.onResizeStart}
                     onPointerMove={props.onResizeMove}

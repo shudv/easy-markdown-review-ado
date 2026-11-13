@@ -1,4 +1,5 @@
 import { type ReactElement, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { t } from "../../i18n";
 import type { ReaderActivity } from "../shellHelpers";
 
 export type { ReaderActivity } from "../shellHelpers";
@@ -59,7 +60,12 @@ export function ReaderActivityIndicator({
     activeCount?: number;
 }>): ReactElement {
     const title =
-        activeCount > 1 ? `${activity.label} (${activeCount} operations running)` : activity.label;
+        activeCount > 1
+            ? t("navigation.activity.withRunningCount", {
+                  activity: activity.label,
+                  count: activeCount,
+              })
+            : activity.label;
 
     const { action } = activity;
 

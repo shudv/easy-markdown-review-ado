@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type ReactElement, useContext } from "react";
 
+import { t } from "../../i18n";
 import type { FileInfo } from "../../types";
 import {
     ChangeIndicatorContext,
@@ -10,8 +11,10 @@ import {
     type NavNode,
     type DirNavNode,
     basename,
+    changeNoteSuffix,
     changeTypeGlyph,
     navNodeKey,
+    withChangeNote,
 } from "./DocNav.model";
 import {
     HeadingTwist,
@@ -107,7 +110,10 @@ function HeadingNavRow(props: NavTreeItemProps & { node: HeadingNavNode }): Reac
                     onClick={() => onSelectHeading(h.id)}
                     title={
                         h.openComments > 0
-                            ? `${h.text} \u2014 ${h.openComments} open comment${h.openComments === 1 ? "" : "s"}`
+                            ? t("navigation.docNav.headingTitleWithComments", {
+                                  heading: h.text,
+                                  count: h.openComments,
+                              })
                             : h.text
                     }
                 >
@@ -287,10 +293,12 @@ function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
     const renamedFromName = renamedFrom !== "" ? basename(renamedFrom) : "";
     const note = change.note ?? "";
 
-    const titleText =
-        (file.changeType === "renamed" && renamedFromName !== ""
-            ? `${renamedFromName} \u2192 ${fileName}`
-            : file.path) + (note !== "" ? ` \u2014 ${note}` : "");
+    const titleText = withChangeNote(
+        file.changeType === "renamed" && renamedFromName !== ""
+            ? t("navigation.docNav.renamedTitle", { from: renamedFromName, to: fileName })
+            : file.path,
+        note,
+    );
 
     return (
         <div className="emr-docnav-branch emr-docnav-file-branch">
@@ -327,11 +335,15 @@ function FileNavRow(props: Readonly<FileNavRowProps>): ReactElement {
                         </span>
                     ) : null}
                     <span className="emr-docnav-file-name">{fileName}</span>
-                    {note !== "" ? <span className="emr-sr-only">{` (${note})`}</span> : null}
+                    {note !== "" ? (
+                        <span className="emr-sr-only">{changeNoteSuffix(note)}</span>
+                    ) : null}
                     {openComments > 0 ? (
                         <span
                             className="emr-docnav-badge is-open"
-                            aria-label={`${openComments} open comments`}
+                            aria-label={t("navigation.docNav.openCommentsBadge", {
+                                count: openComments,
+                            })}
                         >
                             {openComments}
                         </span>

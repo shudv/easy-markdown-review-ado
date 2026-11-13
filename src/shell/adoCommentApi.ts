@@ -45,6 +45,7 @@ import type {
     UserSuggestion,
     WorkItemSuggestion,
 } from "../comments/mentions";
+import { t } from "../i18n";
 import { withRetry } from "./retry";
 import { withAdoSessionRefreshDetection } from "./adoAuthToken";
 import { newLinkKey, splitBackLink, withBackLink } from "./backLink";
@@ -657,7 +658,8 @@ interface IdentityRuntime extends IIdentity {
 function toUserSuggestion(raw: IIdentity, selfImageUrl?: string): UserSuggestion {
     const i = raw as IdentityRuntime;
 
-    const displayName = i.displayName ?? i.signInAddress ?? i.mail ?? "(unknown user)";
+    const displayName =
+        i.displayName ?? i.signInAddress ?? i.mail ?? t("comments.author.unknownUser");
 
     // ADO's native `@<GUID>` mention token — and comment authors — key off the
     // dashed identity GUID, but `entityId` is the storage-key form

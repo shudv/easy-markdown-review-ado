@@ -1,6 +1,7 @@
 // The mutable decoration pass plus the block-level marking primitives: change
 // classification, span ownership, line washes, and contiguous grouping.
 
+import { type MessageKey, t } from "../../i18n";
 import type { DiffRange } from "../../types";
 import { type InteriorEdit, reconstructEditedBlock, reconstructOriginalBlock } from "./reconstruct";
 import {
@@ -61,10 +62,10 @@ export interface DiffDecorationOptions {
 }
 
 /** Human-readable corner tag shown on a changed block. */
-const KIND_LABEL: Record<"added" | "modified", string> = {
-    added: "Added",
-    modified: "Edited",
-};
+const KIND_LABEL_KEY = {
+    added: "common.change.added",
+    modified: "common.change.edited",
+} as const satisfies Record<"added" | "modified", MessageKey>;
 
 /**
  * The last source line a block "owns" for change-classification. Ownership is
@@ -355,7 +356,7 @@ export function markChangedBlock(
         kind === "added" ? "emr-diff-block--added" : "emr-diff-block--modified",
     );
     el.dataset.diffKind = kind;
-    el.dataset.diffLabel = KIND_LABEL[kind];
+    el.dataset.diffLabel = t(KIND_LABEL_KEY[kind]);
     if (isImageOnlyBlock(el)) el.classList.add(DIFF_IMAGE_CLASS);
     if (el.classList.contains("emr-math")) el.classList.add(DIFF_MATH_CLASS);
     pass.decorated++;

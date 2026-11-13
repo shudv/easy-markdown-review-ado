@@ -20,16 +20,9 @@ import {
     type EmrTheme,
 } from "./theme.helpers";
 
-// Re-export the pure logic so existing importers (and tests) keep a single
-// `./theme` entry point. The pure implementations live in `theme.helpers.ts`
-// (no `?raw` CSS deps) so they can be unit- and mutation-tested cleanly.
-export {
-    ALL_THEMES,
-    isEmrTheme,
-    parseLuminance,
-    type EmrTheme,
-    type EmrThemeInfo,
-} from "./theme.helpers";
+// The pure logic lives in `theme.helpers.ts` (no `?raw` CSS deps) so it can be
+// unit- and mutation-tested cleanly.
+export type { EmrTheme } from "./theme.helpers";
 
 /**
  * Apply a specific theme by name: sets `data-emr-theme` (drives the `--emr-*`

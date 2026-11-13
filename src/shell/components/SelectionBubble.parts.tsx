@@ -7,8 +7,7 @@ import {
     selectionLinkButtonClass,
     type SelectionLinkState,
 } from "./SelectionBubble.helpers";
-
-const COPY_LINK_LABEL = "Copy link to selection";
+import { t } from "../../i18n";
 
 /**
  * Copy-link state machine: idle → pending → copied/failed, then (after the
@@ -87,14 +86,15 @@ export function SelectionLinkButton(
     }>,
 ): ReactElement {
     const { linkState, linkResult, alone, onClick } = props;
-    const linkText = linkResult ?? (alone ? "Copy link" : null);
+    const linkText = linkResult ?? (alone ? t("comments.selection.copyLink") : null);
+    const linkLabel = linkResult ?? t("comments.selection.copyLinkToSelection");
 
     return (
         <button
             type="button"
             className={selectionLinkButtonClass(linkState)}
-            aria-label={linkResult ?? COPY_LINK_LABEL}
-            title={linkResult ?? COPY_LINK_LABEL}
+            aria-label={linkLabel}
+            title={linkLabel}
             onClick={onClick}
         >
             <span className="emr-selection-bubble-link-icon" aria-hidden="true" />

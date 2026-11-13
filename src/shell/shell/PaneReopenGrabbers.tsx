@@ -2,6 +2,8 @@
 
 import type { ReactElement, PointerEvent as ReactPointerEvent } from "react";
 
+import { t } from "../../i18n";
+
 type PointerHandler = (e: ReactPointerEvent<HTMLDivElement>) => void;
 
 interface PaneReopenGrabbersProps {
@@ -26,7 +28,7 @@ export function PaneReopenGrabbers(props: Readonly<PaneReopenGrabbersProps>): Re
             {props.navShown ? (
                 <div
                     className="emr-nav-reopen"
-                    title="Drag to reopen navigation"
+                    title={t("shell.panes.reopenNavigation")}
                     aria-hidden="true"
                     onPointerDown={props.onNavReopenStart}
                     onPointerMove={props.onNavReopenMove}
@@ -37,7 +39,7 @@ export function PaneReopenGrabbers(props: Readonly<PaneReopenGrabbersProps>): Re
             {props.commentsShown ? (
                 <div
                     className="emr-rail-reopen"
-                    title="Drag to reopen comments"
+                    title={t("shell.panes.reopenComments")}
                     aria-hidden="true"
                     onPointerDown={props.onCommentReopenStart}
                     onPointerMove={props.onCommentReopenMove}

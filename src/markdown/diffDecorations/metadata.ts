@@ -1,6 +1,7 @@
 // Indicators for non-visible metadata changes: link targets, image
 // descriptions, and code-block info strings.
 
+import { t } from "../../i18n";
 import { diffWords } from "../wordDiff";
 import { applyInlineWordDiff } from "../wordDiffDom";
 import { renderOriginalStandalone } from "./rendering";
@@ -70,7 +71,9 @@ export function applyLinkTargetIndicators(
         trigger.className = "emr-diff-metadata-trigger";
         trigger.setAttribute(
             "aria-label",
-            change.hostChanged ? "Show link hostname change" : "Show link target change",
+            change.hostChanged
+                ? t("document.metadata.showLinkHostnameChange")
+                : t("document.metadata.showLinkTargetChange"),
         );
         trigger.title = trigger.getAttribute("aria-label")!;
         trigger.appendChild(buildLinkChangeIcon());
@@ -82,7 +85,7 @@ export function applyLinkTargetIndicators(
         // Stryker disable next-line StringLiteral: an empty popover attribute is the auto state in HTML, the same as "auto"
         panel.setAttribute("popover", "auto");
         panel.setAttribute("role", "dialog");
-        panel.setAttribute("aria-label", "Link target change");
+        panel.setAttribute("aria-label", t("document.metadata.linkTargetChange"));
         trigger.setAttribute("aria-controls", panel.id);
         const targetDiff = document.createElement("span");
         targetDiff.className = "emr-diff-metadata-target-diff";
@@ -205,10 +208,10 @@ export function applySimpleMetadataIndicator(
     panel.setAttribute("role", "tooltip");
     const before = document.createElement("span");
     before.className = "emr-diff-metadata-row emr-diff-metadata-row--before";
-    appendMetadataRow(before, "Before", beforeValue);
+    appendMetadataRow(before, t("common.before"), beforeValue);
     const after = document.createElement("span");
     after.className = "emr-diff-metadata-row emr-diff-metadata-row--after";
-    appendMetadataRow(after, "After", afterValue);
+    appendMetadataRow(after, t("common.after"), afterValue);
     panel.append(before, after);
     trigger.addEventListener("click", (event) => {
         event.preventDefault();
@@ -240,7 +243,9 @@ function codeMetadata(pre: Element): RenderedCodeMetadata | null {
     return {
         language:
             // Stryker disable next-line ConditionalExpression,StringLiteral: the renderer never emits a bare `language-` class, so the language is never empty
-            languageClass === undefined || languageClass === "" ? "plain text" : languageClass,
+            languageClass === undefined || languageClass === ""
+                ? t("document.metadata.plainText")
+                : languageClass,
         // Stryker disable next-line StringLiteral: the renderer stamps fence options on the code element, so reading the pre's attribute (or none) falls through to the same value
         options: pre.getAttribute("data-code-meta") ?? code.getAttribute("data-code-meta") ?? "",
     };
@@ -248,13 +253,13 @@ function codeMetadata(pre: Element): RenderedCodeMetadata | null {
 
 function imageDescription(image: Element): string {
     // Stryker disable next-line StringLiteral: rendered images (Markdown or sanitized HTML) always carry a src, so the fallback is never shown
-    const src = image.getAttribute("src") ?? "no source";
-    const alt = image.getAttribute("alt") ?? "no alt text";
+    const src = image.getAttribute("src") ?? t("document.metadata.noSource");
+    const alt = image.getAttribute("alt") ?? t("document.metadata.noAltText");
     const title = image.getAttribute("title");
 
     return title !== null && title !== ""
-        ? `${src} (alt: ${alt}; title: ${title})`
-        : `${src} (alt: ${alt})`;
+        ? t("document.metadata.imageWithTitle", { src, alt, title })
+        : t("document.metadata.image", { src, alt });
 }
 
 interface ImageMetadataChange {
@@ -310,7 +315,12 @@ export function applyImageMetadataIndicators(
 
     for (const change of changes) {
         const image = images[change.index]!;
-        applySimpleMetadataIndicator(image, "Image changed", change.before, change.after);
+        applySimpleMetadataIndicator(
+            image,
+            t("document.metadata.imageChanged"),
+            change.before,
+            change.after,
+        );
     }
 }
 
@@ -344,10 +354,10 @@ export function readCodeMetadataChange(
     return {
         label:
             languageChanged && optionsChanged
-                ? "Code fence changed"
+                ? t("document.metadata.codeFenceChanged")
                 : languageChanged
-                  ? "Language changed"
-                  : "Code options changed",
+                  ? t("document.metadata.languageChanged")
+                  : t("document.metadata.codeOptionsChanged"),
         before: describeCodeMetadata(before, languageChanged, optionsChanged),
         after: describeCodeMetadata(after, languageChanged, optionsChanged),
         contentUnchanged: original.textContent === block.textContent,
@@ -360,7 +370,13 @@ function describeCodeMetadata(
     languageChanged: boolean,
     optionsChanged: boolean,
 ): string {
-    if (!languageChanged) return meta.options || "none";
+    const none = t("document.metadata.none");
+    if (!languageChanged) return meta.options || none;
 
-    return optionsChanged ? `${meta.language}; options: ${meta.options || "none"}` : meta.language;
+    return optionsChanged
+        ? t("document.metadata.languageAndOptions", {
+              language: meta.language,
+              options: meta.options || none,
+          })
+        : meta.language;
 }

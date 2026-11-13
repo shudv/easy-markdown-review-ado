@@ -4,6 +4,7 @@
 // Pure DOM helpers (no React) so the lookup rules are unit-testable in jsdom;
 // Shell owns when they run.
 
+import { t } from "../i18n";
 import { slugifyHeading } from "../markdown/render";
 import { wrapRangeTextNodes } from "../comments/highlight";
 import { persistSectionState } from "./components/navStorage";
@@ -88,9 +89,10 @@ export function revealAnchorTarget(target: HTMLElement, storageKey: string): boo
             );
 
             if (toggle) {
-                toggle.setAttribute("aria-label", "Collapse section");
+                const label = t("common.collapseSection");
+                toggle.setAttribute("aria-label", label);
                 toggle.setAttribute("aria-expanded", "true");
-                toggle.title = "Collapse section";
+                toggle.title = label;
             }
 
             const sid = section.dataset.sectionId;

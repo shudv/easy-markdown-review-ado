@@ -193,12 +193,3 @@ export interface DiffRange {
     linesAdded?: number;
     linesDeleted?: number;
 }
-
-/** All data needed to render a single file's view. */
-export interface FileViewData {
-    path: string;
-    source: string;
-    renderedHtml: string;
-    diff: DiffRange[];
-    threads: CommentThread[];
-}

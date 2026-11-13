@@ -15,6 +15,7 @@ import type { DocRepo } from "../shell/types";
 import { SearchIcon } from "../shell/components/icons";
 import { menuFocusTarget } from "./documentsApp.helpers";
 import { SvgRepo } from "./hubIcons";
+import { t } from "../i18n";
 
 /**
  * Inline repo picker for the DocNav header. The repo name is the trigger —
@@ -251,7 +252,7 @@ export function RepoPicker({
                 <div
                     ref={menuRef}
                     className={`emr-docnav-repo-menu${paginated ? " is-paginated" : ""}`}
-                    aria-label="Repository"
+                    aria-label={t("hub.repoPicker.label")}
                     style={menuStyle}
                     onKeyDown={onMenuKeyDown}
                 >
@@ -266,7 +267,7 @@ export function RepoPicker({
                         ref={listRef}
                         className="emr-docnav-repo-list"
                         role="listbox"
-                        aria-label="Repository"
+                        aria-label={t("hub.repoPicker.label")}
                         onScroll={paginated ? onListScroll : undefined}
                     >
                         {repos.map((r, i) => {
@@ -322,8 +323,8 @@ function RepoFilter({
                 ref={inputRef}
                 type="text"
                 className="emr-docnav-repo-filter-input"
-                placeholder="Filter repositories"
-                aria-label="Filter repositories"
+                placeholder={t("hub.repoPicker.filter")}
+                aria-label={t("hub.repoPicker.filter")}
                 value={filterText}
                 spellCheck={false}
                 autoComplete="off"
@@ -343,7 +344,9 @@ function renderRepoListStatus(
     if (paginated) return renderRepoPageStatus(loading, count, filterText);
 
     return count === 0 ? (
-        <div className="emr-docnav-repo-status">No repositories match “{filterText.trim()}”.</div>
+        <div className="emr-docnav-repo-status">
+            {t("hub.repoPicker.noMatch", { filter: filterText.trim() })}
+        </div>
     ) : null;
 }
 
@@ -357,10 +360,10 @@ function renderRepoPageStatus(loading: boolean, count: number, filterText: strin
             {loading ? (
                 <>
                     <span className="emr-docnav-repo-spinner" aria-hidden="true" />
-                    Loading repositories…
+                    {t("hub.repoPicker.loading")}
                 </>
             ) : count === 0 ? (
-                <>No repositories match “{filterText.trim()}”.</>
+                t("hub.repoPicker.noMatch", { filter: filterText.trim() })
             ) : null}
         </div>
     );

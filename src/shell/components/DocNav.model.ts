@@ -2,6 +2,7 @@
 
 import { createContext } from "react";
 
+import { t } from "../../i18n";
 import type { ChangeType, FileInfo } from "../../types";
 
 /**
@@ -39,8 +40,18 @@ export function fileChangeView(
         : {
               changeType: file.changeType,
               unchanged: true,
-              note: `No changes in ${rangeChanges.label}`,
+              note: t("navigation.docNav.noChangesIn", { range: rangeChanges.label }),
           };
+}
+
+/** A row tooltip, followed by the row's range note when it has one. */
+export function withChangeNote(title: string, note: string): string {
+    return note !== "" ? t("navigation.docNav.titleWithNote", { title, note }) : title;
+}
+
+/** Screen-reader suffix announcing a row's range note. */
+export function changeNoteSuffix(note: string): string {
+    return ` ${t("navigation.docNav.changeNote", { note })}`;
 }
 
 export interface NavHeading {

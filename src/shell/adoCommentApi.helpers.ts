@@ -19,6 +19,7 @@ import type {
     TextQuoteAnchor,
     ThreadStatus,
 } from "../types";
+import { t } from "../i18n";
 import { identityAvatarUrl } from "./adoGitData.helpers";
 import { stripBackLink } from "./backLink";
 import {
@@ -477,7 +478,7 @@ export type AdoThreadWire = Omit<GitPullRequestCommentThread, "comments" | "thre
 };
 
 function authorFromAdo(a: AdoComment["author"] | undefined): CommentAuthor {
-    const displayName = a?.displayName ?? "Unknown";
+    const displayName = a?.displayName ?? t("comments.author.unknown");
     const id = a?.id ?? "unknown";
 
     return {

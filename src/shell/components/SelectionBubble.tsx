@@ -11,6 +11,7 @@ import {
     SelectionLinkButton,
     useSelectionCopyLink,
 } from "./SelectionBubble.parts";
+import { t } from "../../i18n";
 
 interface SelectionBubbleProps {
     /** Top in px relative to article-wrap. */
@@ -56,7 +57,7 @@ export function SelectionBubble(props: Readonly<SelectionBubbleProps>): ReactEle
             {onAddComment ? (
                 <button type="button" onClick={onAddComment}>
                     <span style={{ fontSize: 13 }}>💬</span>
-                    Add comment
+                    {t("comments.selection.addComment")}
                 </button>
             ) : null}
             {onAddComment && copyLink ? (

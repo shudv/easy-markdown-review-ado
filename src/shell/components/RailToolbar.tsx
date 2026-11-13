@@ -9,6 +9,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 
+import { t } from "../../i18n";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
 import { PlusIcon } from "./icons";
 import {
@@ -139,8 +140,8 @@ export function RailToolbar(props: RailToolbarProps): ReactElement {
                         <button
                             type="button"
                             className="emr-icon-btn"
-                            title="New comment"
-                            aria-label="New comment"
+                            title={t("navigation.railToolbar.newComment")}
+                            aria-label={t("navigation.railToolbar.newComment")}
                             onClick={onAddComment}
                         >
                             <PlusIcon />

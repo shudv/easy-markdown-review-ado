@@ -3,6 +3,7 @@
 // are unit-tested directly instead of only through the rendered shell.
 
 import type { ChangeType, DiffRange, FileInfo, TextQuoteAnchor } from "../../types";
+import { t } from "../../i18n";
 import type { HistoryNav } from "../components/RailToolbar";
 import { NEW_DRAFT_THREAD_ID, type DraftTarget } from "../draftStorage";
 import {
@@ -47,9 +48,7 @@ export function documentReadOnly(
     return {
         effectiveReadOnly: !!readOnly || perDocNoWriteTarget,
         effectiveReadOnlyMessage:
-            readOnly || !perDocNoWriteTarget
-                ? readOnlyMessage
-                : "Comments are read-only here — this document isn't part of a completed pull request yet.",
+            readOnly || !perDocNoWriteTarget ? readOnlyMessage : t("shell.readOnly.noCompletedPr"),
     };
 }
 
@@ -482,7 +481,9 @@ function activeRoutedPrFor(
 
     return {
         prId: activeStop.prId ?? 0,
-        title: activeStop.title ?? `PR #${activeStop.prId}`,
+        title:
+            activeStop.title ??
+            t("shell.history.pastPrFallbackTitle", { prId: String(activeStop.prId) }),
         status: "completed",
         url: activeStop.url,
     };
@@ -516,23 +517,23 @@ function activeReadOnlyState(opts: {
     if (opts.viewingPastPr) {
         return {
             activeReadOnly,
-            activeReadOnlyMessage: `Viewing this document as it was at pull request #${opts.activeStopPrId}. Comments here are read-only — open the pull request to reply.`,
+            activeReadOnlyMessage: t("shell.readOnly.pastPr", {
+                prId: String(opts.activeStopPrId),
+            }),
         };
     }
 
     if (opts.viewingDeletedFile) {
         return {
             activeReadOnly,
-            activeReadOnlyMessage:
-                "This document was deleted in this pull request. Its previous version is read-only.",
+            activeReadOnlyMessage: t("shell.readOnly.deletedFile"),
         };
     }
 
     if (!opts.commentsAvailable) {
         return {
             activeReadOnly,
-            activeReadOnlyMessage:
-                "Comments are unavailable until this document is part of a completed pull request.",
+            activeReadOnlyMessage: t("shell.readOnly.commentsUnavailable"),
         };
     }
 

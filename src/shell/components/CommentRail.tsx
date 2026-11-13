@@ -9,6 +9,7 @@ import { Balloon } from "./Balloon";
 import type { ReplyOptions } from "./Balloon.helpers";
 import { RailToolbar, type HistoryNav } from "./RailToolbar";
 import { buildRailModel, DRAFT_ID } from "./CommentRail.helpers";
+import { useExitingThreads } from "./CommentRail.exit";
 import {
     isRailTrayExpanded,
     railDraftY,
@@ -17,8 +18,7 @@ import {
 } from "./CommentRail.layout";
 import { RailCollapsibleTray, RailDraftBalloon, RailReadOnlyBanner } from "./CommentRail.parts";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
-
-export { chooseRailEmptyMessage } from "./CommentRail.helpers";
+import { t } from "../../i18n";
 
 interface RailProps {
     currentThreads: CommentThread[];
@@ -184,11 +184,18 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
     // Shape the threads into the rail's ordered, grouped view model (anchored
     // comments by document position, then the unanchored trays). Pure + tested in
     // CommentRail.helpers so the rail component stays a thin renderer.
+    // Threads a filter just hid stay on screen while they play their exit.
+    const { exiting, finishExit } = useExitingThreads(hiddenThreadIds, [
+        currentThreads,
+        generalThreads,
+        orphanedFileThreads,
+    ]);
+
     const model = buildRailModel({
         currentThreads,
         generalThreads,
         orphanedFileThreads,
-        hiddenThreadIds,
+        hiddenThreadIds: withoutExiting(hiddenThreadIds, exiting),
         orphanedThreadIds,
         yByThreadId,
         draftY: railDraftY(readOnly, draftAnchor, draftY),
@@ -256,10 +263,11 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
         onReplyChange: onDraftChange,
         onRequestReply,
         onCancelReply,
+        onExited: finishExit,
     };
 
     return (
-        <aside className="emr-rail-col" aria-label="Comments">
+        <aside className="emr-rail-col" aria-label={t("common.comments")}>
             {readOnly && showReadOnlyBanner ? (
                 <RailReadOnlyBanner message={readOnlyMessage} />
             ) : null}
@@ -313,6 +321,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
                             isActive={t.id === activeThreadId}
                             {...balloonProps}
                             replyOpen={t.id === activeReplyThreadId}
+                            exiting={exiting.has(t.id)}
                         />
                     );
                 })}
@@ -323,7 +332,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
             {orphanedThreads.length > 0 ? (
                 <div className="emr-rail-section">
                     <div className="emr-rail-section-header is-static">
-                        <span>Comments with no anchor</span>
+                        <span>{t("comments.rail.noAnchorTray")}</span>
                         <span className="emr-rail-section-count">{orphanedThreads.length}</span>
                     </div>
                     <div className="emr-rail-section-body">
@@ -336,6 +345,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
                                 isActive={t.id === activeThreadId}
                                 {...balloonProps}
                                 replyOpen={t.id === activeReplyThreadId}
+                                exiting={exiting.has(t.id)}
                             />
                         ))}
                     </div>
@@ -348,7 +358,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
           discussion. */}
             {visibleGeneralThreads.length > 0 ? (
                 <RailCollapsibleTray
-                    title="General comments"
+                    title={t("comments.rail.generalTray")}
                     count={visibleGeneralThreads.length}
                     expanded={generalExpanded}
                     onToggle={() => setGeneralCollapsed((v) => !v)}
@@ -362,6 +372,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
                             isActive={t.id === activeThreadId}
                             {...balloonProps}
                             replyOpen={t.id === activeReplyThreadId}
+                            exiting={exiting.has(t.id)}
                         />
                     ))}
                 </RailCollapsibleTray>
@@ -371,7 +382,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
           Collapsible, collapsed by default. */}
             {visibleOrphanedFileThreads.length > 0 ? (
                 <RailCollapsibleTray
-                    title="Comments on files no longer in this PR"
+                    title={t("comments.rail.removedFilesTray")}
                     count={visibleOrphanedFileThreads.length}
                     expanded={orphanedFilesExpanded}
                     onToggle={() => setOrphanedFilesCollapsed((v) => !v)}
@@ -388,6 +399,7 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
                                 isActive={t.id === activeThreadId}
                                 {...balloonProps}
                                 replyOpen={t.id === activeReplyThreadId}
+                                exiting={exiting.has(t.id)}
                             />
                         </div>
                     ))}
@@ -395,6 +407,11 @@ export function CommentRail(props: Readonly<RailProps>): ReactElement {
             ) : null}
         </aside>
     );
+}
+
+/** The hidden set, minus threads still playing their exit. */
+function withoutExiting(hidden: Set<string>, exiting: ReadonlySet<string>): Set<string> {
+    return exiting.size === 0 ? hidden : new Set([...hidden].filter((id) => !exiting.has(id)));
 }
 
 /** Filename (last path segment) for the orphaned-file label. */

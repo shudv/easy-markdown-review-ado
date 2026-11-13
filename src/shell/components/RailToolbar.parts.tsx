@@ -11,6 +11,7 @@ import {
     useState,
 } from "react";
 
+import { t } from "../../i18n";
 import { CommentFilterMenu } from "./CommentFilterMenu";
 import type { CommentFilterCounts, CommentFilterMode } from "./commentFilter";
 import { SearchIcon } from "./icons";
@@ -83,7 +84,7 @@ export function RailSearchInput(
             ref={inputRef}
             type="search"
             className="emr-rail-search-inline"
-            placeholder="Search comments…"
+            placeholder={t("navigation.railToolbar.searchPlaceholder")}
             value={commentQuery}
             onChange={(e) => onCommentQueryChange(e.target.value)}
             onKeyDown={(e) => {
@@ -98,7 +99,7 @@ export function RailSearchInput(
                 // Collapse only if nothing is typed.
                 if (!commentQuery) setSearchOpen(false);
             }}
-            aria-label="Search comments"
+            aria-label={t("navigation.railToolbar.searchComments")}
         />
     );
 }
@@ -137,7 +138,7 @@ export function RailToolbarTitle(
                     onOnlyThisFileChange={onOnlyThisFileChange}
                 />
             ) : (
-                <span className="emr-rail-title">Comments</span>
+                <span className="emr-rail-title">{t("common.comments")}</span>
             )}
             {allResolved ? (
                 <span
@@ -145,8 +146,8 @@ export function RailToolbarTitle(
                     className="emr-rail-resolved"
                     role="status"
                     aria-live="polite"
-                    title="All comments resolved"
-                    aria-label="All comments resolved"
+                    title={t("navigation.railToolbar.allResolved")}
+                    aria-label={t("navigation.railToolbar.allResolved")}
                 >
                     <SvgCheckCircle />
                 </span>
@@ -168,8 +169,12 @@ export function RailSearchToggle(
         <button
             type="button"
             className={`emr-icon-btn${searchOpen ? " is-open" : ""}`}
-            title={searchOpen ? "Close search (Esc)" : "Search comments"}
-            aria-label={searchOpen ? "Close search" : "Search comments"}
+            title={
+                searchOpen ? t("common.closeSearchEsc") : t("navigation.railToolbar.searchComments")
+            }
+            aria-label={
+                searchOpen ? t("common.closeSearch") : t("navigation.railToolbar.searchComments")
+            }
             aria-pressed={searchOpen}
             onClick={onClick}
         >
@@ -194,14 +199,14 @@ export function RailVersionRow(
     return (
         <div
             className={`emr-rail-version ${modifier}`}
-            aria-label={pr ? undefined : "Comment history"}
+            aria-label={pr ? undefined : t("navigation.railToolbar.commentHistory")}
         >
             {historyNav ? (
                 <button
                     type="button"
                     className="emr-icon-btn emr-history-chevron"
                     title={historyNav.olderLabel}
-                    aria-label="Older version"
+                    aria-label={t("navigation.railToolbar.olderVersion")}
                     disabled={!historyNav.canOlder}
                     onClick={historyNav.onOlder}
                 >
@@ -214,7 +219,7 @@ export function RailVersionRow(
                     type="button"
                     className="emr-icon-btn emr-history-chevron"
                     title={historyNav.newerLabel}
-                    aria-label="Newer version"
+                    aria-label={t("navigation.railToolbar.newerVersion")}
                     disabled={!historyNav.canNewer}
                     onClick={historyNav.onNewer}
                 >
@@ -229,7 +234,10 @@ function RailVersionPr(props: Readonly<{ pr: RoutedPrLabel }>): ReactElement {
     const { pr } = props;
 
     return (
-        <span className="emr-rail-version-pr" title={`Routes to PR #${pr.prId}: ${pr.title}`}>
+        <span
+            className="emr-rail-version-pr"
+            title={t("navigation.railToolbar.routesToPr", { prId: pr.prId, title: pr.title })}
+        >
             {pr.url !== undefined && pr.url !== "" ? (
                 <a
                     className="emr-rail-title-pr-link emr-rail-version-num"
@@ -237,10 +245,12 @@ function RailVersionPr(props: Readonly<{ pr: RoutedPrLabel }>): ReactElement {
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    PR #{pr.prId}
+                    {t("navigation.pr.number", { prId: pr.prId })}
                 </a>
             ) : (
-                <span className="emr-rail-title-pr-link emr-rail-version-num">PR #{pr.prId}</span>
+                <span className="emr-rail-title-pr-link emr-rail-version-num">
+                    {t("navigation.pr.number", { prId: pr.prId })}
+                </span>
             )}
             <span className="emr-rail-version-title">{pr.title}</span>
         </span>

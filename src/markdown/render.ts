@@ -15,6 +15,8 @@ import { visit } from "unist-util-visit";
 import type { Plugin } from "unified";
 import type { Root, Element, ElementContent } from "hast";
 
+import { t } from "../i18n";
+
 import {
     parseMentionUrl,
     preprocessUserMentions,
@@ -148,7 +150,15 @@ const rehypeMentions: Plugin<[], Root> = () => (tree) => {
 
 const ALERT_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/;
 
-function stripAlertMarker(node: Element): string | null {
+const ALERT_TITLE_KEYS = {
+    note: "document.alert.note",
+    tip: "document.alert.tip",
+    important: "document.alert.important",
+    warning: "document.alert.warning",
+    caution: "document.alert.caution",
+} as const;
+
+function stripAlertMarker(node: Element): keyof typeof ALERT_TITLE_KEYS | null {
     // Stryker disable next-line UpdateOperator: dead code: every iteration returns, so the loop never advances past its first child; candidate for removal (it is an `if` on the first child).
     for (let index = 0; index < node.children.length; index++) {
         const child = node.children[index]!;
@@ -160,7 +170,7 @@ function stripAlertMarker(node: Element): string | null {
             // Stryker disable next-line ConditionalExpression: dead code: an empty text node serialises to nothing, so removing it never changes the rendered markup; candidate for removal.
             if (child.value.length === 0) node.children.splice(index, 1);
 
-            return match[1]!.toLowerCase();
+            return match[1]!.toLowerCase() as keyof typeof ALERT_TITLE_KEYS;
         }
 
         return stripAlertMarker(child as Element);
@@ -189,7 +199,7 @@ const rehypeAlerts: Plugin<[], Root> = () => (tree) => {
             type: "element",
             tagName: "p",
             properties: { className: ["markdown-alert-title"] },
-            children: [{ type: "text", value: kind[0]!.toUpperCase() + kind.slice(1) }],
+            children: [{ type: "text", value: t(ALERT_TITLE_KEYS[kind]) }],
         };
 
         node.children.unshift(title);
@@ -353,31 +363,54 @@ const rehypeCollapsibleSections: Plugin<[], Root> = () => (tree) => {
     }
 };
 
-const processor = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .use(
-        remarkMath,
-        // Stryker disable next-line ObjectLiteral: `singleDollarTextMath: true` is remark-math's default; spelling it out only documents the choice.
-        { singleDollarTextMath: true },
-    )
-    .use(remarkCodeMetadata)
-    .use(remarkEmoji)
-    .use(remarkWikiMacros)
-    .use(remarkRehype, { allowDangerousHtml: true })
-    .use(rehypeSafeHtml)
-    .use(rehypeSourcePositions)
-    .use(rehypeMathPlaceholder)
-    .use(rehypeMermaidPlaceholder)
-    .use(rehypeMentions)
-    .use(rehypeAlerts)
-    .use(rehypeCollapsibleSections)
-    // After sections mint the heading ids the table of contents links to.
-    .use(rehypeWikiMacros)
-    // Must run after every plugin that touches `href`/`src` and before
-    // stringify. See `sanitize-urls.ts` for policy.
-    .use(rehypeSanitizeUrls)
-    .use(rehypeStringify);
+/** remark-rehype's footnote back-link label, in the UI language. */
+function footnoteBackLabel(referenceIndex: number, repeatIndex: number): string {
+    const reference =
+        repeatIndex > 1 ? `${referenceIndex + 1}-${repeatIndex}` : String(referenceIndex + 1);
+
+    return t("document.footnote.backLabel", { reference });
+}
+
+// Built on first render, once the UI language has loaded: the footnote label
+// is fixed when the processor is created.
+const createProcessor = () =>
+    unified()
+        .use(remarkParse)
+        .use(remarkGfm)
+        .use(
+            remarkMath,
+            // Stryker disable next-line ObjectLiteral: `singleDollarTextMath: true` is remark-math's default; spelling it out only documents the choice.
+            { singleDollarTextMath: true },
+        )
+        .use(remarkCodeMetadata)
+        .use(remarkEmoji)
+        .use(remarkWikiMacros)
+        .use(remarkRehype, {
+            allowDangerousHtml: true,
+            footnoteLabel: t("document.footnote.label"),
+            footnoteBackLabel,
+        })
+        .use(rehypeSafeHtml)
+        .use(rehypeSourcePositions)
+        .use(rehypeMathPlaceholder)
+        .use(rehypeMermaidPlaceholder)
+        .use(rehypeMentions)
+        .use(rehypeAlerts)
+        .use(rehypeCollapsibleSections)
+        // After sections mint the heading ids the table of contents links to.
+        .use(rehypeWikiMacros)
+        // Must run after every plugin that touches `href`/`src` and before
+        // stringify. See `sanitize-urls.ts` for policy.
+        .use(rehypeSanitizeUrls)
+        .use(rehypeStringify);
+
+let processor: ReturnType<typeof createProcessor> | undefined;
+
+function markdownProcessor(): ReturnType<typeof createProcessor> {
+    processor ??= createProcessor();
+
+    return processor;
+}
 
 /**
  * Render Markdown source to an HTML string. Safe-by-default: `remark-rehype`
@@ -389,7 +422,9 @@ const processor = unified()
 export async function renderMarkdown(md: string): Promise<string> {
     const { body, entries, sourceRange } = extractFrontmatter(md);
 
-    const file = await processor.process(preprocessUserMentions(preprocessMermaidBlocks(body)));
+    const file = await markdownProcessor().process(
+        preprocessUserMentions(preprocessMermaidBlocks(body)),
+    );
 
     return entries ? renderFrontmatterHtml(entries, sourceRange) + String(file) : String(file);
 }
@@ -401,7 +436,9 @@ export async function renderMarkdown(md: string): Promise<string> {
 export function renderMarkdownSync(md: string): string {
     const { body, entries, sourceRange } = extractFrontmatter(md);
 
-    const file = processor.processSync(preprocessUserMentions(preprocessMermaidBlocks(body)));
+    const file = markdownProcessor().processSync(
+        preprocessUserMentions(preprocessMermaidBlocks(body)),
+    );
 
     return entries ? renderFrontmatterHtml(entries, sourceRange) + String(file) : String(file);
 }

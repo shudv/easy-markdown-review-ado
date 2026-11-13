@@ -19,6 +19,7 @@ import {
 
 import type { CommentThread, FileInfo } from "../types";
 import { trackUserFacingError } from "../telemetry";
+import { t } from "../i18n";
 import { adoThreadToLocal, readPrThreads } from "./adoCommentApi";
 import { withRetry } from "./retry";
 import type { DocPrRef } from "./shellHelpers";
@@ -240,7 +241,7 @@ function prMetaFromGitPr(repo: GitRepository, pr: GitPullRequestWire | null): Do
 
     return {
         id: pr.pullRequestId,
-        title: pr.title ?? "(untitled PR)",
+        title: pr.title ?? t("hub.pr.untitled"),
         author: pr.createdBy?.displayName ?? "unknown",
         status: pr.status === PullRequestStatus.Completed ? "completed" : "active",
         url: buildPrUrl(repo, pr.pullRequestId),

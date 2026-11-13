@@ -1,5 +1,6 @@
 // Per-cell decoration of a modified table row against its original source.
 
+import { type MessageKey, t } from "../../i18n";
 import { diffWords } from "../wordDiff";
 import { WORD_REMOVED_CLASS, applyInlineWordDiff } from "../wordDiffDom";
 import {
@@ -9,6 +10,7 @@ import {
     type TableCellAlignment,
 } from "./tableAlignment";
 import { applyDiffTooltip } from "./tooltip";
+import { joinList } from "./formatting";
 import { diffInlineContent } from "./inlineDiff";
 import {
     type ChangeRange,
@@ -294,28 +296,39 @@ function tableCellStructureSignature(root: Element): string {
     return parts.join("");
 }
 
-const STRUCTURE_NAME_BY_TAG: Record<string, string> = {
-    A: "link",
-    CODE: "inline code",
-    DEL: "strikethrough",
-    EM: "italic",
-    IMG: "image",
-    SPAN: "span",
-    STRONG: "bold",
-};
+const STRUCTURE_NAME_KEY_BY_TAG = {
+    A: "document.structure.link",
+    CODE: "document.format.inlineCode",
+    DEL: "document.format.strikethrough",
+    EM: "document.format.italic",
+    IMG: "document.structure.image",
+    SPAN: "document.structure.span",
+    STRONG: "document.format.bold",
+} as const satisfies Record<string, MessageKey>;
+
+type StructureTag = keyof typeof STRUCTURE_NAME_KEY_BY_TAG;
+
+const TITLE_CHANGED_KEY_BY_TAG = {
+    A: "document.structure.linkTitleChanged",
+    CODE: "document.structure.inlineCodeTitleChanged",
+    DEL: "document.structure.strikethroughTitleChanged",
+    EM: "document.structure.italicTitleChanged",
+    IMG: "document.structure.imageTitleChanged",
+    SPAN: "document.structure.spanTitleChanged",
+    STRONG: "document.structure.boldTitleChanged",
+} as const satisfies Record<StructureTag, MessageKey>;
 
 const STRUCTURE_SELECTOR = "strong, em, code, del, a, img, span";
 
 function describeRenderedStructure(root: Element): string {
-    const names = Array.from(root.querySelectorAll(STRUCTURE_SELECTOR)).map(
-        (element) => STRUCTURE_NAME_BY_TAG[element.tagName]!,
+    const names = Array.from(root.querySelectorAll(STRUCTURE_SELECTOR)).map((element) =>
+        t(STRUCTURE_NAME_KEY_BY_TAG[element.tagName as StructureTag]),
     );
 
     const unique = Array.from(new Set(names));
-    if (unique.length === 0) return "plain text";
-    if (unique.length === 1) return unique[0]!;
+    if (unique.length === 0) return t("document.metadata.plainText");
 
-    return `${unique.slice(0, -1).join(", ")} and ${unique[unique.length - 1]}`;
+    return joinList(unique);
 }
 
 /** Explain how a cell's rendered structure differs from its original's. */
@@ -323,9 +336,12 @@ function describeStructureChange(original: Element, current: Element): string {
     const before = describeRenderedStructure(original);
     const after = describeRenderedStructure(current);
 
-    if (before !== after) return `Rendered structure changed from ${before} to ${after}`;
+    if (before !== after) return t("document.structure.changed", { before, after });
 
-    return describeTitleChange(original, current) ?? `Rendered ${before} structure changed`;
+    return (
+        describeTitleChange(original, current) ??
+        t("document.structure.changedSame", { structure: before })
+    );
 }
 
 /** "Link title changed from A to B" for the first element whose title differs. */
@@ -339,9 +355,9 @@ function describeTitleChange(original: Element, current: Element): string | null
     );
 
     if (index < 0) return null;
-    const name = STRUCTURE_NAME_BY_TAG[currents[index]!.tagName]!;
-    const before = originals[index]!.getAttribute("title") ?? "none";
-    const after = currents[index]!.getAttribute("title") ?? "none";
+    const none = t("document.metadata.none");
+    const before = originals[index]!.getAttribute("title") ?? none;
+    const after = currents[index]!.getAttribute("title") ?? none;
 
-    return `${name.charAt(0).toUpperCase()}${name.slice(1)} title changed from ${before} to ${after}`;
+    return t(TITLE_CHANGED_KEY_BY_TAG[currents[index]!.tagName as StructureTag], { before, after });
 }

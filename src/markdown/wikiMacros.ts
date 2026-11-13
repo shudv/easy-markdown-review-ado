@@ -19,6 +19,7 @@ import type { Plugin } from "unified";
 import type { Root as MdastRoot, Paragraph } from "mdast";
 import type { Element, ElementContent, Root } from "hast";
 
+import { type MessageKey, t } from "../i18n";
 import { extractHastText } from "./hast-text";
 
 /** A subpage of a wiki page: a document in the page's same-named folder. */
@@ -36,10 +37,10 @@ const MACROS: ReadonlyMap<string, WikiMacroKind> = new Map([
     ["[[_TOSP_]]", "tosp"],
 ]);
 
-const MACRO_LABELS: Readonly<Record<WikiMacroKind, string>> = {
-    toc: "Contents",
-    tosp: "Subpages",
-};
+const MACRO_LABEL_KEYS = {
+    toc: "document.wiki.contents",
+    tosp: "document.wiki.subpages",
+} as const satisfies Record<WikiMacroKind, MessageKey>;
 
 export const remarkWikiMacros: Plugin<[], MdastRoot> = () => (tree, file) => {
     const source = String(file.value);
@@ -53,7 +54,7 @@ export const remarkWikiMacros: Plugin<[], MdastRoot> = () => (tree, file) => {
             hName: "nav",
             hProperties: {
                 className: ["emr-wiki-macro", `emr-wiki-${kind}`],
-                ariaLabel: MACRO_LABELS[kind],
+                ariaLabel: t(MACRO_LABEL_KEYS[kind]),
                 dataWikiMacro: kind,
             },
         };
@@ -141,8 +142,6 @@ function note(text: string): Element {
     return element("p", "emr-wiki-macro-note", [{ type: "text", value: text }]);
 }
 
-const SUBPAGES_UNAVAILABLE = "Subpages aren't available here.";
-
 /**
  * A repo path as an href: each segment percent-encoded, so `#`, `?` and `%`
  * in a wiki file name stay part of the path instead of starting a fragment or
@@ -169,17 +168,17 @@ export const rehypeWikiMacros: Plugin<[], Root> = () => (tree) => {
         const kind = nav.properties.dataWikiMacro as WikiMacroKind;
 
         const title = element("p", "emr-wiki-macro-title", [
-            { type: "text", value: MACRO_LABELS[kind] },
+            { type: "text", value: t(MACRO_LABEL_KEYS[kind]) },
         ]);
 
         if (kind === "toc") {
             headings ??= collectHeadings(tree);
             nav.children = [
                 title,
-                headings.length > 0 ? tocList(headings) : note("This page has no headings."),
+                headings.length > 0 ? tocList(headings) : note(t("document.wiki.noHeadings")),
             ];
         } else {
-            nav.children = [title, note(SUBPAGES_UNAVAILABLE)];
+            nav.children = [title, note(t("document.wiki.subpagesUnavailable"))];
         }
     }
 };
@@ -189,10 +188,10 @@ export type SubpagesState = readonly WikiSubpage[] | "loading" | "unavailable";
 
 const SUBPAGES_SELECTOR = 'nav[data-wiki-macro="tosp"]';
 
-const SUBPAGES_NOTES: Readonly<Record<"loading" | "unavailable", string>> = {
-    loading: "Loading subpages…",
-    unavailable: SUBPAGES_UNAVAILABLE,
-};
+const SUBPAGES_NOTE_KEYS = {
+    loading: "document.wiki.loadingSubpages",
+    unavailable: "document.wiki.subpagesUnavailable",
+} as const satisfies Record<"loading" | "unavailable", MessageKey>;
 
 /** True when rendered HTML contains a `[[_TOSP_]]` subpages box. */
 export function hasSubpagesMacro(html: string): boolean {
@@ -224,7 +223,9 @@ function subpagesContent(doc: Document, state: SubpagesState): HTMLElement {
         const text = doc.createElement("p");
         text.className = "emr-wiki-macro-note";
         text.textContent =
-            typeof state === "string" ? SUBPAGES_NOTES[state] : "This page has no subpages.";
+            typeof state === "string"
+                ? t(SUBPAGES_NOTE_KEYS[state])
+                : t("document.wiki.noSubpages");
 
         return text;
     }

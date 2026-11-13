@@ -1,12 +1,13 @@
 import type { CommentThread } from "../../types";
 import type { CommentFilterMode } from "./commentFilter";
 import { orderComments } from "./commentOrder";
+import { t } from "../../i18n";
 
 /** Sentinel id for the in-progress draft balloon in the anchored list. */
 export const DRAFT_ID = "__draft__";
 
 /** Epoch ms of a thread's creation (its root comment's timestamp). */
-export function threadCreatedAt(t: CommentThread): number {
+function threadCreatedAt(t: CommentThread): number {
     // Stryker disable next-line OptionalChaining: dead code: every thread has a root comment (the ADO adapter drops threads with none), so comments[0] always exists, candidate for removal
     const iso = t.comments[0]?.createdAt;
     const ms = iso ? Date.parse(iso) : NaN;
@@ -164,11 +165,9 @@ export function chooseRailEmptyMessage(opts: {
 }): string | null {
     const { commentQuery, filterMode, fileThreadCount, hasOtherSections, readOnly } = opts;
 
-    if (commentQuery) return `No comments match “${commentQuery}”.`;
+    if (commentQuery) return t("comments.rail.noMatches", { query: commentQuery });
     if (fileThreadCount > 0 && filterMode !== "all") return null;
     if (hasOtherSections) return null;
 
-    return readOnly
-        ? "No comments on this file."
-        : "No comments on this file yet. Select any text to start a thread.";
+    return readOnly ? t("comments.rail.emptyReadOnly") : t("comments.rail.emptyInvite");
 }

@@ -33,6 +33,7 @@ function contextData(ctx: TelemetryContext): Record<string, unknown> {
         appVersion: ctx.appVersion,
         extensionVersion: ctx.extensionVersion,
         environment: ctx.environment,
+        locale: ctx.locale,
         projectId: ctx.projectId,
         repositoryId: ctx.repositoryId,
         pullRequestId: ctx.pullRequestId,

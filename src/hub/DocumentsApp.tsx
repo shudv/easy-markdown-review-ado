@@ -15,6 +15,7 @@ import { MentionLinkContext } from "../comments/mentionLinks";
 import { DeepLinkContext, type DeepLinkBuilder, type DeepLinkTarget } from "../shell/deepLink";
 import { refreshHostTheme } from "../theme/theme";
 import { markAppReady } from "../telemetry";
+import { t } from "../i18n";
 
 import type { DocRepo } from "../shell/types";
 import type { FileSearchOutcome } from "../shell/almSearch";
@@ -92,8 +93,8 @@ function renderRefreshButton(refreshing: boolean, onRefresh: () => Promise<void>
                 void onRefresh();
             }}
             disabled={refreshing}
-            aria-label="Refresh repository contents and PR routing"
-            title="Refresh repository contents and PR routing"
+            aria-label={t("hub.docs.refresh")}
+            title={t("hub.docs.refresh")}
         >
             <SvgRefresh spinning={refreshing} />
         </button>
@@ -103,8 +104,8 @@ function renderRefreshButton(refreshing: boolean, onRefresh: () => Promise<void>
 function renderNoRepositories(): ReactElement {
     return (
         <div className="emr-error">
-            <h2>No repositories</h2>
-            <p>This project has no Markdown documents to review.</p>
+            <h2>{t("hub.docs.noRepos.title")}</h2>
+            <p>{t("hub.docs.noRepos.body")}</p>
         </div>
     );
 }
@@ -376,7 +377,7 @@ function DocumentsAppBody(body: Readonly<DocumentsAppBodyProps>): ReactElement {
                         // resolve.
                         <ReaderLoadingShell
                             scope="hub"
-                            ariaLabel="Loading document"
+                            ariaLabel={t("common.loadingDocument")}
                             titleSlot={docNavTitleSlot}
                             headerActions={docNavHeaderActions}
                         />

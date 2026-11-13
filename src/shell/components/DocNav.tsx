@@ -27,6 +27,7 @@ import {
     useState,
 } from "react";
 
+import { t } from "../../i18n";
 import type { FileInfo } from "../../types";
 import type { FileSearchOutcome } from "../almSearch";
 import type { ReaderActivity } from "./readerActivity";
@@ -261,8 +262,8 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
                 id: "folder",
                 label:
                     loadingDirs.size === 1
-                        ? `Loading ${[...loadingDirs][0]}…`
-                        : `Loading ${loadingDirs.size} folders…`,
+                        ? t("navigation.docNav.loadingFolder", { folder: [...loadingDirs][0]! })
+                        : t("navigation.docNav.loadingFolders", { count: loadingDirs.size }),
                 priority: 45,
             });
         }
@@ -270,7 +271,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
         if (remoteLoading) {
             activities.push({
                 id: "document-search",
-                label: `Searching for “${trimmedQuery}”…`,
+                label: t("navigation.docNav.searchingFor", { query: trimmedQuery }),
                 priority: 40,
             });
         }
@@ -660,7 +661,7 @@ export function DocNav(props: Readonly<DocNavProps>): ReactElement | null {
     return (
         <ChangeIndicatorContext.Provider value={showChangeIndicators}>
             <RangeChangesContext.Provider value={rangeChanges}>
-                <aside className="emr-docnav" aria-label="Document navigation">
+                <aside className="emr-docnav" aria-label={t("common.documentNavigation")}>
                     <DocNavHeader
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}

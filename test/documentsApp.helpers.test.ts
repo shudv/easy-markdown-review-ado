@@ -13,7 +13,7 @@ import {
     seedLazyTree,
     type LazyTreeState,
 } from "../src/hub/documentsApp.helpers";
-import { COMMENT_PERMISSION_DENIED_MESSAGE } from "../src/shell/commentPermission.helpers";
+import { commentPermissionDeniedMessage } from "../src/shell/commentPermission.helpers";
 import type { DocRepo } from "../src/shell/types";
 import type { FileInfo } from "../src/types";
 
@@ -224,7 +224,7 @@ describe("resolveCommentGating", () => {
         expect(resolveCommentGating(true, repo({ canComment: false }))).toEqual({
             readOnly: true,
             shellReadOnly: true,
-            shellReadOnlyMessage: COMMENT_PERMISSION_DENIED_MESSAGE,
+            shellReadOnlyMessage: commentPermissionDeniedMessage(),
         });
     });
 

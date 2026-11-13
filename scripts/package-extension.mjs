@@ -81,7 +81,9 @@ if (mode !== "dev") {
 // Release builds with Sentry configured stamp debug ids into the bundles and
 // upload their source maps, so error reports from the minified build map back
 // to source (see src/telemetry/sinks/sentrySink.ts). Must run before
-// packaging: the stamp changes the shipped bundles. Skipped when not configured.
+// packaging: the stamp changes the shipped bundles. Skipped when not
+// configured. Uses the `@sentry/cli` pinned in devDependencies. A failure only
+// costs readable stacks, so it warns rather than blocking the release.
 const sentryToken = (process.env.SENTRY_AUTH_TOKEN ?? "").trim();
 const sentryOrg = (process.env.SENTRY_ORG ?? "").trim();
 const sentryProject = (process.env.SENTRY_PROJECT ?? "").trim();
@@ -102,16 +104,24 @@ if (mode !== "dev" && sentryToken && sentryOrg && sentryProject) {
         ],
     ];
     for (const step of steps) {
-        console.log(`▸ sentry-cli ${step.slice(0, 2).join(" ")}…`);
-        const result = spawnSync(isWin ? "npx.cmd" : "npx", ["--yes", "@sentry/cli@2", ...step], {
-            stdio: "inherit",
-            cwd: REPO_ROOT,
-            shell: isWin,
-            env: { ...process.env, SENTRY_AUTH_TOKEN: sentryToken },
-        });
+        const label = `sentry-cli ${step.slice(0, 2).join(" ")}`;
+        console.log(`▸ ${label}…`);
+        const result = spawnSync(
+            isWin ? "npx.cmd" : "npx",
+            ["--no-install", "sentry-cli", ...step],
+            {
+                stdio: "inherit",
+                cwd: REPO_ROOT,
+                shell: isWin,
+                env: { ...process.env, SENTRY_AUTH_TOKEN: sentryToken },
+            },
+        );
         if (result.status !== 0) {
-            console.error("✘ Sentry source-map step failed");
-            process.exit(result.status ?? 1);
+            // `::warning::` surfaces as an annotation on the GitHub Actions run.
+            console.warn(
+                `::warning::${label} failed; Sentry stacks for this release stay minified.`,
+            );
+            break;
         }
     }
 } else if (mode !== "dev") {

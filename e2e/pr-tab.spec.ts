@@ -31,6 +31,7 @@ import {
     commentsContaining,
     deleteCommentsContaining,
     fault,
+    prTabWindow,
 } from "./reconnect.helpers";
 
 // Boot's REST calls, as seen from the iframe.
@@ -38,6 +39,9 @@ const PR_BY_ID = /\/_apis\/git\/pullRequests\/\d+(?:\?|$)/;
 const PR_ITERATIONS = /\/pullRequests\/\d+\/iterations(?:\?|$)/;
 // A document read by its git blob (what the document cache keys on).
 const BLOB_READ = /\/_apis\/git\/repositories\/[^/]+\/blobs\//i;
+// A blob id no real document has, holding a version of it from before a push.
+const STALE_BLOB = "5ca1ab1e".repeat(5);
+const STALE_TEXT = "Cached before the PR was pushed to";
 
 /** The posted (not draft) thread whose text includes `marker`. */
 function postedThread(frame: FrameLocator, marker: string): Locator {
@@ -157,6 +161,8 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
                 timeout: 15_000,
             });
             await expect(reopened.locator(".emr-error")).toHaveCount(0);
+            const status = reopened.locator(".emr-statusbar-activity-label");
+            await expect(status).toHaveText("Checking for updates…");
             expect(
                 requests.slice(before).filter((e) => BLOB_READ.test(e.url)),
                 "the reopened document must come from the cache",
@@ -170,6 +176,82 @@ test.describe("Markdown Review PR tab (real ADO host)", () => {
                         .map((e) => e.properties?.cache),
                 )
                 .toEqual(["none", "pr+doc"]);
+            // ADO confirms the PR is unchanged: the indicator clears.
+            await expect(status).not.toHaveText("Checking for updates…", { timeout: 90_000 });
+        } finally {
+            await fault(page, "clear");
+        }
+    });
+
+    test("a PR pushed to since it was cached reopens on ADO's version", async ({ page }) => {
+        test.setTimeout(150_000);
+        const prId = await discoverPullRequestId(page, E2E.prRepo, E2E.prTitle);
+        await gotoPrTab(page, E2E.prRepo, prId);
+        const frame = prTabFrame(page);
+        await waitForFrameRoot(frame);
+        const article = frame.locator(".markdown-body").first();
+        await expect
+            .poll(async () => (await article.innerText()).trim().length, { timeout: 45_000 })
+            .toBeGreaterThan(0);
+        const heading = (await article.innerText()).trim().split("\n")[0]!;
+
+        // Leave this browser's caches as a visit before a push would have: the PR
+        // at an older revision, its documents at an older blob, cached too.
+        const liveTarget = await (
+            await prTabWindow(page)
+        ).evaluate(
+            ({ pullRequestId, staleBlob, staleText }) => {
+                const prs = JSON.parse(localStorage.getItem("emr.prs.v1") ?? "[]") as {
+                    key: string;
+                    ctx: { targetCommit?: string; changedMdFiles: { objectId?: string }[] };
+                }[];
+
+                const entry = prs.find((pr) => pr.key.endsWith(`/${pullRequestId}`))!;
+                const target = entry.ctx.targetCommit;
+                entry.ctx.targetCommit = "0".repeat(40);
+                for (const file of entry.ctx.changedMdFiles) file.objectId = staleBlob;
+                localStorage.setItem("emr.prs.v1", JSON.stringify(prs));
+                const docs = JSON.parse(localStorage.getItem("emr.docs.v1") ?? "[]") as unknown[];
+                const stale = { id: staleBlob, content: `# ${staleText}\n` };
+                localStorage.setItem("emr.docs.v1", JSON.stringify([stale, ...docs]));
+
+                return target;
+            },
+            { pullRequestId: prId, staleBlob: STALE_BLOB, staleText: STALE_TEXT },
+        );
+
+        expect(liveTarget, "the PR was cached without its revision").toBeTruthy();
+
+        try {
+            // ADO is slow, so the cached (stale) version shows first.
+            await fault(page, "slowApi", 8_000);
+            await page.reload();
+            const reopened = prTabFrame(page);
+            await waitForFrameRoot(reopened);
+            const shown = reopened.locator(".markdown-body").first();
+            await expect(shown).toContainText(STALE_TEXT, { timeout: 15_000 });
+            // The status bar says the shown PR is being checked against ADO.
+            const status = reopened.locator(".emr-statusbar-activity-label");
+            await expect(status).toHaveText("Checking for updates…");
+
+            // ADO's version replaces it, and becomes what this browser keeps.
+            await expect(shown).toContainText(heading, { timeout: 90_000 });
+            await expect(shown).not.toContainText(STALE_TEXT);
+            await expect(status).not.toHaveText("Checking for updates…");
+            await expect(reopened.locator(".emr-error")).toHaveCount(0);
+
+            const cachedTarget = await (
+                await prTabWindow(page)
+            ).evaluate((pullRequestId) => {
+                const prs = JSON.parse(localStorage.getItem("emr.prs.v1") ?? "[]") as {
+                    key: string;
+                    ctx: { targetCommit?: string };
+                }[];
+
+                return prs.find((pr) => pr.key.endsWith(`/${pullRequestId}`))?.ctx.targetCommit;
+            }, prId);
+
+            expect(cachedTarget).toBe(liveTarget);
         } finally {
             await fault(page, "clear");
         }

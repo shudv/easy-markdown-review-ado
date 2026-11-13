@@ -4,7 +4,7 @@
 
 - Public base: `c800901` (#33).
 - Previously mirrored product boundary: `5868ac9` (source merge `64be41c`).
-- New product boundary: `5fd7480` (source branch `feat/auth-telemetry-gaps`;
+- New product boundary: `3da6b48` (source branch `feat/auth-telemetry-gaps`;
   not yet merged, record the source merge commit here once it lands).
 - OSS release version: `1.4.0` (package, root lockfile metadata, and Marketplace
   manifest updated together). The source's own bump (`70002c9`) is not mirrored.
@@ -24,6 +24,7 @@
 | `fa74466`                                                                   | `app.loaded` times the user's wait from the iframe's navigation start with a `bundleLoadMs` phase (phases add up to `bootTimeMs`) and reports one `cache` field (`none`/`pr`/`doc`/`pr+doc`).                                                                                                                                                                                                                                                          |
 | `9c1a498`, `1b2ed89`, `d220828`, `44d5a63`                                  | Module-private helpers un-exported; visual baselines; simplification pass; an empty folder in the hub loses its chevron instead of refetching.                                                                                                                                                                                                                                                                                                         |
 | `5fd7480`                                                                   | The dead-window reconnect e2e waits for the automatic reload's host-page `load` (a cached PR can render before it fires), then confirms no further reload followed.                                                                                                                                                                                                                                                                                    |
+| `3da6b48`                                                                   | While a PR shown from this browser's cache waits for ADO's version, the status bar says "Checking for updates…" (Shell's new `hostActivity` prop); it clears when ADO confirms the PR, a push replaces it, or boot fails. e2e: a PR pushed to since it was cached shows the cached copy, then ADO's version, and the cache is updated.                                                                                                                 |
 
 ### Public-specific adaptations retained
 
@@ -36,7 +37,7 @@
 
 ### Next sync
 
-Compare the next source product tree against the merged form of `5fd7480` and
+Compare the next source product tree against the merged form of `3da6b48` and
 integrate the delta on the latest public `main`. Preserve the adaptations and
 exclusions below, and record validation in the sync PR.
 

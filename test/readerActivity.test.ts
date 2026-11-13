@@ -101,6 +101,21 @@ describe("buildReaderActivities", () => {
             state: { commentSyncing: true },
             expected: [{ id: "comment-sync", label: "Syncing comments…", priority: 20 }],
         },
+        {
+            name: "reports the host's work alongside the shell's",
+            state: {
+                commentSyncing: true,
+                hostActivity: {
+                    id: "pr-check-updates",
+                    label: "Checking for updates…",
+                    priority: 30,
+                },
+            },
+            expected: [
+                { id: "pr-check-updates", label: "Checking for updates…", priority: 30 },
+                { id: "comment-sync", label: "Syncing comments…", priority: 20 },
+            ],
+        },
         { name: "reports no activity when the reader is settled", state: {}, expected: [] },
     ])("$name", ({ state, expected }) => {
         expect(buildReaderActivities({ ...settled, ...state })).toEqual(expected);

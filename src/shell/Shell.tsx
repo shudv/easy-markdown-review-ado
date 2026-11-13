@@ -336,6 +336,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
                 fileRefreshing: store.fileRefreshInFlight,
                 historicalLoading,
                 documentLoading: doc.loading,
+                hostActivity: props.hostActivity,
             }),
         [
             navigationActivities,
@@ -343,6 +344,7 @@ export function Shell(props: Readonly<ShellProps>): ReactElement {
             store.fileRefreshInFlight,
             historicalLoading,
             doc.loading,
+            props.hostActivity,
         ],
     );
 

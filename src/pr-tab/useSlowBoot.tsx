@@ -1,4 +1,5 @@
-// The PR tab's "still loading" signal for a slow boot, and its loading view.
+// The PR tab's "still loading" signals — a slow boot, and a PR shown from this
+// browser's cache while ADO's version loads — and its loading view.
 
 import { type ReactElement, useEffect, useState } from "react";
 
@@ -43,6 +44,14 @@ function slowBootActivity(onRetry: () => void): ReaderActivity {
         action: { label: "Try again", onClick: onRetry },
     };
 }
+
+/** The status bar while a PR shown from this browser's cache waits for ADO's version. */
+export const CHECKING_FOR_UPDATES: ReaderActivity = {
+    id: "pr-check-updates",
+    label: "Checking for updates…",
+    // Below every shell operation except background comment sync.
+    priority: 30,
+};
 
 /** Boot is still waiting on the PR: no context yet, no error, not reconnecting. */
 export function isBootWaiting(ctx: unknown, error: string | null, refreshing: unknown): boolean {

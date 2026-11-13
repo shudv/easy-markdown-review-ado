@@ -96,7 +96,7 @@ import {
     PrDocNavTitle,
     SessionRefreshingView,
 } from "./PrTabStatusViews";
-import { isBootWaiting, PrTabLoadingView, useSlowBoot } from "./useSlowBoot";
+import { CHECKING_FOR_UPDATES, isBootWaiting, PrTabLoadingView, useSlowBoot } from "./useSlowBoot";
 
 // Stable empty array: threads load after mount via Shell's thread sync, so
 // the shell seeds its reducer with this instead of blocking first paint on the
@@ -155,11 +155,15 @@ export function PrTabApp(): ReactElement {
 
     const [originalSourcesByFile, setOriginalSourcesByFile] = useState<Record<string, string>>({});
 
+    // A PR shown from this browser's cache, while ADO's version loads.
+    const [checkingForUpdates, setCheckingForUpdates] = useState(false);
+
     // Show the PR (as cached, or as ADO has it) at the route's targets.
     const showPr = useCallback(
         (context: PrContext, route: Record<string, string>, cached: boolean) => {
             notePrShown(context, cached, bootLog);
             setCtx(context);
+            setCheckingForUpdates(cached);
             setUser(commentAuthorFromUser(SDK.getUser()));
 
             const seed = resolvePrTabRouteSeed(
@@ -206,6 +210,7 @@ export function PrTabApp(): ReactElement {
 
                 if (shown && prRevision(shown) === prRevision(context)) {
                     setCtx(context);
+                    setCheckingForUpdates(false);
 
                     return;
                 }
@@ -217,6 +222,7 @@ export function PrTabApp(): ReactElement {
             } catch (err: unknown) {
                 const refresh = await detectSessionRefreshing(err, readHostToken);
                 if (superseded()) return;
+                setCheckingForUpdates(false);
 
                 if (refresh) {
                     console.warn("[PrTabApp] ADO session refreshing", refresh.grantState);
@@ -584,6 +590,7 @@ export function PrTabApp(): ReactElement {
                             />
                         }
                         loadFileSource={loadFileSource}
+                        hostActivity={checkingForUpdates ? CHECKING_FOR_UPDATES : undefined}
                         resolveDocumentImage={resolveDocumentImage}
                         diffsByFile={diffsByFile}
                         originalSourcesByFile={originalSourcesByFile}

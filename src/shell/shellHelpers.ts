@@ -27,8 +27,11 @@ export function buildReaderActivities(input: {
     fileRefreshing: boolean;
     historicalLoading: boolean;
     documentLoading: boolean;
+    hostActivity?: ReaderActivity;
 }): ReaderActivity[] {
     const activities = [...input.navigationActivities];
+
+    if (input.hostActivity) activities.push(input.hostActivity);
 
     if (input.commentSyncing) {
         activities.push({

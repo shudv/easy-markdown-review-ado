@@ -38,7 +38,7 @@ The extension never sends document or file contents, file or repository
 names, comment text, search text, user names, email addresses, or access
 tokens.
 
-**Turning it off.** Click the bar-chart icon next to the bug icon in the
+**Turning it off.** Click the pulse icon next to the bug icon in the
 reader's status bar ("Send usage data"); it is struck through while off. The
 setting applies to this browser. When it is off the extension sends nothing,
 discards anything not yet sent, and deletes its random browser ID.

@@ -67,7 +67,7 @@ const meta = {
         iterationBaseCommit: "abcdef1234567890",
         iterationRange: { fromUpdate: 0, toUpdate: 3 },
         onIterationRangeChange: fn(),
-        feedbackHref: "mailto:x@microsoft.com",
+        feedbackHref: "mailto:x@example.com",
         onRefresh: fn(),
         // `refreshLabel` intentionally omitted — exercises the "Refresh" fallback.
     },

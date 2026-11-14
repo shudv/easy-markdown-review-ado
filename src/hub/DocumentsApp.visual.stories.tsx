@@ -147,6 +147,8 @@ const meta = {
             return src;
         },
         loadThreadsFor: async () => threadsFor(),
+        // The shipped status bar includes the "Send usage data" toggle.
+        usageDataToggle: true,
     },
 } satisfies Meta<typeof DocumentsApp>;
 

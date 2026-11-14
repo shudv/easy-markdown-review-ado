@@ -12,7 +12,7 @@
 // identically across operating systems — text anti-aliasing is done by the OS
 // font stack (DirectWrite/Windows, FreeType/Linux, CoreText/macOS). So instead
 // of a baseline per platform, this suite renders in ONE fixed environment
-// everywhere: the pinned `mcr.microsoft.com/playwright:v1.61.1-jammy` container.
+// everywhere: the pinned `mcr.microsoft.com/playwright:v1.62.1-jammy` container.
 // CI runs the job inside it, and contributors regenerate baselines by running
 // the SAME image locally (`npm run test:visual:update`, a thin Docker wrapper).
 // Renders are byte-identical, so a SINGLE committed baseline set

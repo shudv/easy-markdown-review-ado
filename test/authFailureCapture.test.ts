@@ -14,7 +14,7 @@ import {
 describe("isAdoApiUrl", () => {
     it.each([
         ["https://dev.azure.com/org/proj/_apis/git/x", true],
-        ["https://office.visualstudio.com/p/_apis/git/x", true],
+        ["https://fabrikam.visualstudio.com/p/_apis/git/x", true],
         ["https://dev.azure.com/org/_git/repo", false],
         ["https://example.com/foo", false],
     ])("treats %s as an ADO REST call: %s", (url, expected) => {
@@ -24,7 +24,7 @@ describe("isAdoApiUrl", () => {
 
 describe("isLegacyHost", () => {
     it.each([
-        ["https://office.visualstudio.com/p/_apis/git/x", true],
+        ["https://fabrikam.visualstudio.com/p/_apis/git/x", true],
         ["https://dev.azure.com/office/p/_apis/git/x", false],
         ["https://almsearch.dev.azure.com/o/_apis/x", false],
     ])("treats %s as a legacy {org}.visualstudio.com host: %s", (url, expected) => {
@@ -36,7 +36,7 @@ describe("apiAreaOf", () => {
     it.each([
         {
             name: "drops a numeric id and lowercases the controller",
-            url: "https://office.visualstudio.com/p/_apis/git/pullRequests/5345858",
+            url: "https://fabrikam.visualstudio.com/p/_apis/git/pullRequests/5345858",
             expected: "git.pullrequests",
         },
         {
@@ -76,7 +76,7 @@ describe("authFailureInput", () => {
         const get = (n: string) => headers[n.toLowerCase()] ?? null;
 
         const out = authFailureInput(
-            "https://office.visualstudio.com/p/_apis/git/pullRequests/1",
+            "https://fabrikam.visualstudio.com/p/_apis/git/pullRequests/1",
             401,
             get,
         );

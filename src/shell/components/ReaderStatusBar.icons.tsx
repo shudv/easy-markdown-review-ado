@@ -186,14 +186,12 @@ export function IconRefresh(): ReactElement {
     );
 }
 
-/** Usage data: a small bar chart, struck through when sending is off. */
+/** Usage data: a pulse line (activity), struck through when sending is off. */
 export function IconUsageData(props: Readonly<{ off: boolean }>): ReactElement {
     return (
         <RoundStrokeSvg>
-            <path d="M5 20v-6" />
-            <path d="M12 20V9" />
-            <path d="M19 20V4" />
-            {props.off ? <path d="M3 3l18 18" /> : null}
+            <path d="M3 12h3.8l2.4-5.5 4.6 11 2.4-5.5H21" />
+            {props.off ? <path d="M3.5 3.5l17 17" /> : null}
         </RoundStrokeSvg>
     );
 }

@@ -186,4 +186,6 @@ export interface DocumentsAppProps {
     onLoadMoreRepos?: () => void | Promise<void>;
     /** Re-query the repo list with a server-side name filter (debounced by the picker). */
     onFilterRepos?: (keyword: string) => void | Promise<void>;
+    /** Show the "Send usage data" toggle. Defaults to whether this build sends telemetry. */
+    usageDataToggle?: boolean;
 }

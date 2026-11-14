@@ -536,7 +536,7 @@ async function capture(page, plan) {
         progress: { index: 2, total: PROG, appear: 1 },
     }));
 
-    /* -- Act 5: why it matters, and where it already runs ------------------- */
+    /* -- Act 5: why it matters ---------------------------------------------- */
 
     const a11 = fade("value", 0.55, 0.45);
     await run("value", (t) => ({
@@ -548,34 +548,6 @@ async function capture(page, plan) {
             title: "Reviewers stop skipping the docs.",
             sub: "Feedback gets specific, and it sticks to the words it was written about.",
             appear: a11(t),
-        },
-    }));
-
-    const traction = scene("traction");
-    const a12 = fade("traction", 0.5, 0.45);
-    const TILES = [
-        { value: "15", label: "Azure DevOps organizations" },
-        { value: "100s", label: "developers using it every day" },
-    ];
-    await run("traction", (t) => ({
-        dim: 0.88,
-        spot: null,
-        ...brandOn,
-        card: {
-            anchor: "high",
-            kicker: "Not a prototype",
-            title: "Shipped, and running at Microsoft today.",
-            appear: a12(t),
-        },
-        stats: {
-            items: TILES.map((item, i) => {
-                // Stagger the tiles in after the headline has landed.
-                const delay = traction.lead + 0.9 + i * 0.4;
-                return {
-                    ...item,
-                    appear: envelope(t - delay, traction.dur - delay, 0.45, 0.45),
-                };
-            }),
         },
     }));
 
